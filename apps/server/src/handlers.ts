@@ -802,12 +802,14 @@ const HobLive = HttpApiBuilder.group(
 /**
  * The campaign's cast.
  *
- * Every handler mints the `CampaignCreatorActor` proof first and hands it to a
- * repository whose methods take nothing else — so a player, a stranger and a
- * revoked member get the campaign's ordinary `NotFound` from the gate, before
- * any NPC row is read. `rehearse` is `hob.ask`'s ordering: the `Effect` half
- * resolves the proof, the NPC and the thread, so a denial is a real 404 and an
- * unconfigured server a real 503 before the response body opens.
+ * Creator Cast/profile/knowledge/memory/proposal handlers mint the
+ * `CampaignCreatorActor` proof first. Player-direct and session-shared handlers
+ * deliberately do not: they go through the player projection and thread
+ * predicates, so Talk privately remains one player's own transcript and Open at
+ * the table remains the live-session thread. `rehearse`, `talk` and
+ * `sessionTalk` keep `hob.ask`'s ordering: the `Effect` half resolves reach, the
+ * NPC and the thread before the stream opens, so a denial is a real 404 and an
+ * unconfigured server a real 503.
  */
 const NpcsLive = HttpApiBuilder.group(
   TavernsApi,

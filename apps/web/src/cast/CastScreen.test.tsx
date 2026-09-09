@@ -151,6 +151,19 @@ describe("CastScreen", () => {
     );
   }, 20_000);
 
+  it("explains Library-to-Cast copy semantics before copying a source", async () => {
+    await renderCast();
+    await screen.findByRole("link", { name: "Cazril" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Add from Library" }));
+
+    expect(await screen.findByText(/Choose a reusable NPC source/)).toBeInTheDocument();
+    expect(screen.getByText(/independent Cast snapshot/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/another creator's group-shared secrets are not copied/),
+    ).toBeInTheDocument();
+  });
+
   it("refuses to create a nameless NPC, in the form, before any request", async () => {
     await renderCast();
     await screen.findByRole("link", { name: "Cazril" });

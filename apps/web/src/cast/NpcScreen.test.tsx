@@ -83,6 +83,7 @@ describe("NpcScreen", () => {
     expect(
       await within(panel).findByText(/No model is configured behind Cazril/),
     ).toBeInTheDocument();
+    expect(within(panel).getByText(/profile, knowledge and memory/)).toBeInTheDocument();
     expect(within(panel).queryByRole("textbox")).toBeNull();
     // Nothing on the panel says Hob.
     expect(within(panel).queryByText(/Hob/)).toBeNull();

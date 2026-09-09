@@ -111,9 +111,9 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
   if (shareable.length === 0) {
     return (
       <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <h3 className="text-title-s font-semibold text-foreground">NPC conversations</h3>
+        <h3 className="text-title-s font-semibold text-foreground">Open at the table</h3>
         <p className="mt-2 text-body-s text-muted-foreground">
-          Share an NPC with the campaign before opening a table conversation.
+          Make an NPC player-facing in Cast before opening them at the table.
         </p>
       </section>
     );
@@ -124,9 +124,9 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
     <section className="rounded-card border border-hairline bg-surface-card p-card">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-title-s font-semibold text-foreground">NPC conversations</h3>
+          <h3 className="text-title-s font-semibold text-foreground">Open at the table</h3>
           <p className="text-caption text-muted-foreground">
-            Open a shared chat on this live table.
+            Start the shared live-session conversation players see at the table.
           </p>
         </div>
         <Button
@@ -148,7 +148,7 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
             );
           }}
         >
-          Share
+          Open at the table
         </Button>
       </div>
       <select

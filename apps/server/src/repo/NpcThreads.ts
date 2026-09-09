@@ -32,23 +32,23 @@ import {
 } from "./visibility.js";
 
 /**
- * The rehearsal transcript — `npc_thread` and `npc_turn`, as rows.
+ * NPC transcripts — `npc_thread` and `npc_turn`, as rows.
  *
- * A thread hangs off its NPC and a turn off its thread, so **this repository
- * writes no predicate of its own**: it is `repo/visibility.ts`'s containment
- * chain, `npc_turn → npc_thread → npc → campaign`, walked by
- * `containedChildWritable`. The *writable* chain rather than the readable one,
- * deliberately and everywhere, including the reads — a rehearsal is the
- * creator's conversation with their own NPC and no other member's to read.
- * That is what makes "a revoked member with a remembered thread id gets
- * `NotFound`" a property of the shape: the base case is `rowWritable` on
- * `npc`, whose campaign half is `campaignWritableById`.
+ * The three channels are separate modes, not authorization models: `rehearsal`
+ * is the creator's Rehearse transcript, `player_direct` is one player's Talk
+ * privately transcript, and `session_shared` is the Open at the table
+ * live-session transcript. A thread hangs off its NPC and a turn off its
+ * thread, so this repository composes the existing containment and player
+ * projection predicates instead of inventing a second reach rule.
  *
- * Every method takes the `CampaignCreatorActor` proof, for `Npcs`'s reason.
+ * Creator rehearsal methods take the `CampaignCreatorActor` proof. Player and
+ * session methods use the account/session gates underneath: private chats never
+ * create proposal rows, and session-shared chats may create proposals that the
+ * creator reviews later in Cast.
  *
- * Turn ids are **generated in TypeScript** (`NpcAgent.rehearse`), as Hob's are:
- * the client is told which turn the reply will be saved as before there is a
- * reply, so a dropped stream keeps the line the creator already read.
+ * Turn ids are **generated in TypeScript** (`NpcAgent`), as Hob's are: the
+ * client is told which turn the reply will be saved as before there is a reply,
+ * so a dropped stream keeps the line the reader already saw.
  */
 
 export const NPC: Containment = inCampaign("npc");

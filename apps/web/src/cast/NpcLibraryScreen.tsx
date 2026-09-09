@@ -138,8 +138,8 @@ function SourceDialog({
             {source === undefined ? "New NPC source" : `Edit ${source.name}`}
           </DialogTitle>
           <DialogDescription>
-            Write a reusable original. Adding it to a campaign makes a snapshot; later edits here do
-            not rewrite copies.
+            Write a reusable original. Adding it to a campaign makes an independent Cast snapshot;
+            later edits here do not rewrite copies.
           </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto px-gutter py-3">
@@ -295,7 +295,7 @@ function SourceDialog({
 
               <SourceSection
                 title="Private material"
-                lede="Only the source owner can copy this into a campaign. Group-shared copies get none of it."
+                lede="Only the source owner can copy this into a campaign. When another creator copies a group-shared source, secrets and instructions are left out."
                 tone="private"
               >
                 <Field label="Secrets" htmlFor="npc-source-secrets">
@@ -393,8 +393,8 @@ function AddToCampaignDialog({
         <DialogHeader>
           <DialogTitle>Add {source.name}</DialogTitle>
           <DialogDescription>
-            This makes a campaign snapshot. Private source material copies only into campaigns you
-            create.
+            This makes an independent campaign Cast snapshot. Later source edits do not update it;
+            if another creator shared the source with your group, their secrets are not copied.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 px-gutter py-3">
@@ -462,7 +462,7 @@ function ShareDialog({
           <DialogTitle>Share {source.name}</DialogTitle>
           <DialogDescription>
             Sharing grants a group permission to add snapshots to its campaigns. The original stays
-            in your Library.
+            in your Library, and another creator's copy does not receive your private material.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 px-gutter py-3">

@@ -25,7 +25,10 @@ export function PlayerNpcChatScreen() {
     <AppShell
       campaignName={undefined}
       topBar={
-        <TopBar title={npc?.name ?? "An NPC"} subtitle="Private chat with a player-facing NPC">
+        <TopBar
+          title={npc?.name ?? "An NPC"}
+          subtitle="Talk privately · only you can read this transcript"
+        >
           <Button
             size="sm"
             variant="ghost"
@@ -55,10 +58,11 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
           <RehearsalPanel
             name={npc.name}
             rehearsal={chat}
-            subtitle="Private chat · only you can read this transcript"
+            subtitle="Talk privately · only you can read this transcript"
             emptyTitle={`Talk to ${npc.name}`}
             emptyBody="Ask in character. Your DM can see that this NPC is available, but not this private transcript or its usage metadata. This chat does not change campaign canon or create NPC memory."
             label={`Say something to ${npc.name}`}
+            ariaLabel={`Talk privately with ${npc.name}`}
           />
         </div>
         <Card tone="sunken" className="gap-4 p-card">
@@ -85,10 +89,13 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
           <DetailSection title="Privacy boundary">
             <div className="flex flex-col gap-2 text-body-s leading-body text-muted-foreground">
               <p>
-                <Badge variant="outline">Private</Badge> Your transcript belongs to you. Other
-                players and the campaign creator do not get a transcript reader in this slice.
+                <Badge variant="outline">Talk privately</Badge> Your transcript belongs to you.
+                Other players and the campaign creator do not get a transcript reader in this slice.
               </p>
-              <p>Only player-safe facts and approved memories can be included in replies.</p>
+              <p>
+                Only player-safe facts and approved memories can be included in replies. This chat
+                does not automatically create or approve NPC memory.
+              </p>
             </div>
           </DetailSection>
         </Card>

@@ -223,7 +223,8 @@ describe("PlayerTableScreen", () => {
 
     await renderTable();
 
-    await screen.findByText("Talk to an NPC");
+    await screen.findByText("Open at the table");
+    expect(screen.getByText(/shared live-session conversation/)).toBeTruthy();
     await screen.findByText("Cazril, the reeds are moving.");
     expect(screen.getByText("Pim")).toBeTruthy();
     await waitFor(() => {

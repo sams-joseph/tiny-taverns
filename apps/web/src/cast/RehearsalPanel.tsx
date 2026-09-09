@@ -18,7 +18,7 @@ import type { Rehearsal } from "./rehearsal";
 export function RehearsalPanel({
   name,
   rehearsal,
-  subtitle = "Rehearsal · only you can see this",
+  subtitle = "Rehearse · only the creator can read this",
   emptyTitle = `Rehearse with ${name}`,
   emptyBody = "Say something in the scene and hear how they answer. Nothing here reaches your players, and nothing they say changes the campaign.",
   label = `Say something to ${name}`,

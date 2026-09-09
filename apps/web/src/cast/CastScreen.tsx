@@ -63,7 +63,9 @@ function AddNpcFromLibraryDialog({
         <DialogHeader>
           <DialogTitle>Add from Library</DialogTitle>
           <DialogDescription>
-            Choose a reusable NPC source. The copy in this campaign is a snapshot.
+            Choose a reusable NPC source. Add from Library creates an independent Cast snapshot:
+            later source edits do not update it, and another creator's group-shared secrets are not
+            copied.
           </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
@@ -163,8 +165,8 @@ export function CastScreen() {
             {npcs.length === 0 ? (
               <EmptyState icon="user-round" title="Nobody in the cast yet">
                 The ferryman, the patron, the innkeeper who knows too much. Write one with{" "}
-                <span className="text-heading">New NPC</span> above, then rehearse them before the
-                night.
+                <span className="text-heading">New NPC</span> above, add reusable sources from the
+                Library, then Rehearse them before the night.
               </EmptyState>
             ) : shown.length === 0 ? (
               <EmptyState icon="search" title="Nothing matches">

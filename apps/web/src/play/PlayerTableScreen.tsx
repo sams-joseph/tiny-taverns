@@ -146,9 +146,9 @@ function SessionNpcConversation({
     <RehearsalPanel
       name={npc.name}
       rehearsal={chat}
-      subtitle="At the table · shared with active participants"
+      subtitle="Open at the table · shared with active participants"
       emptyTitle={`Talk to ${npc.name}`}
-      emptyBody="Everyone in this shared live-session channel can read the exchange. The NPC cannot change the campaign or remember this automatically."
+      emptyBody="Open at the table is the shared live-session conversation. Everyone in this channel can read the exchange; the NPC cannot change the campaign or remember this automatically."
       label={`Say something to ${npc.name}`}
       ariaLabel={`Talk to ${npc.name}`}
     />
@@ -175,7 +175,7 @@ function SessionNpcCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>NPCs at the table</CardTitle>
+          <CardTitle>Open at the table</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-body-s text-muted-foreground">Looking for shared NPCs…</p>
@@ -187,7 +187,7 @@ function SessionNpcCard({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>NPCs at the table</CardTitle>
+          <CardTitle>Open at the table</CardTitle>
         </CardHeader>
         <CardContent>
           <FailureNotice failure={resource.failure} onRetry={reload} />
@@ -206,7 +206,7 @@ function SessionNpcCard({
         </CardHeader>
         <CardContent>
           <p className="text-body-s leading-body text-muted-foreground">
-            The DM has not shared an NPC conversation with this live session.
+            The DM has not opened an NPC at the table for this live session.
           </p>
         </CardContent>
       </Card>
@@ -216,7 +216,10 @@ function SessionNpcCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Talk to an NPC</CardTitle>
+        <CardTitle>Open at the table</CardTitle>
+        <p className="text-body-s leading-body text-muted-foreground">
+          This is the shared live-session conversation for active table participants.
+        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {npcs.length > 1 && (

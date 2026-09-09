@@ -81,6 +81,8 @@ describe("a table you sit at", () => {
     // A player talks to Hob only from the character-drafting composer. The DM's
     // docked session-writing panel is not offered on this overview.
     expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
+    expect(screen.getByText(/Only you can read that transcript/)).toBeTruthy();
+    expect(screen.getByText(/does not automatically update NPC memory/)).toBeTruthy();
     const talk = screen.getByRole("button", { name: /Talk privately/ });
     expect(talk.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/cast/${npcId}/talk`);
   });

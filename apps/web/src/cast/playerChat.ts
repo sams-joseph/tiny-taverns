@@ -39,7 +39,7 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<Rehearsal
       : [{ id: turn.id, who: turn.who, text: turn.text, speakerName: turn.speakerName }],
   );
 
-/** Private player↔NPC chat: own thread only, no tools, no proposals, no memory writes. */
+/** Talk privately: one player-owned thread, no tools, no proposals, no memory writes. */
 export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: string): Rehearsal {
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<RehearsalTurn>>([]);
@@ -197,14 +197,14 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
         ? undefined
         : status === undefined
           ? `Checking whether ${name} can answer…`
-          : `No model is configured behind ${name}. Your DM can still share the NPC, but chat is unavailable until the server is configured.`,
+          : `No model is configured behind ${name}. The profile, knowledge and approved memory still help your DM play them by hand; Talk privately is unavailable until the server is configured.`,
     status: undefined,
     lastPrompt: undefined,
     reset: turns.length > 0 ? reset : undefined,
   };
 }
 
-/** Shared live-session NPC chat: one session thread visible to table participants. */
+/** Open at the table: one live-session thread visible to active table participants. */
 export function useNpcSessionChat(
   campaignId: CampaignId,
   sessionId: SessionId,
@@ -338,7 +338,7 @@ export function useNpcSessionChat(
         ? undefined
         : status === undefined
           ? `Checking whether ${name} can answer…`
-          : `No model is configured behind ${name}.`,
+          : `No model is configured behind ${name}. Your DM can still use their profile, knowledge and memory to play them by hand; this table chat is unavailable until the server is configured.`,
     status: undefined,
     lastPrompt: undefined,
     reset: undefined,

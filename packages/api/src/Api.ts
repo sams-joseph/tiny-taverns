@@ -1748,22 +1748,22 @@ class HobGroup extends HttpApiGroup.make("hob")
   .middleware(Authorization) {}
 
 /**
- * The campaign's cast: structured NPCs, and the creator's rehearsal with each.
+ * The campaign's cast: structured NPCs, creator rehearsal, player-direct chat,
+ * and shared live-session conversation.
  *
- * **Creator-only, in every endpoint.** An NPC row carries creator-only private
- * material, and this slice has no player projection at all, so the whole group
- * answers through the `CampaignCreatorActor` path: a player, a stranger and a
- * revoked member all get the campaign's ordinary `NotFound`. When a player
- * channel arrives it will be a *distinct schema on a distinct path* — the
- * `PlayerSessionRecap` rule — never a field filter over `Npc`.
+ * The creator endpoints answer through `CampaignCreatorActor`: campaign Cast
+ * rows carry private material, knowledge, memory and proposal review. Player
+ * endpoints are distinct schemas on distinct paths (`PlayerNpc`, player thread
+ * reads, and session thread reads), never field filters over `Npc`; private
+ * player chat owns its transcript and creates no proposals, while session
+ * shared chat is the table-visible conversation opened by the creator.
  *
- * `rehearse` is `hob.ask`'s protocol without the tools: a `POST` that answers a
- * stream, authorised before a byte of body so a denial is a 404 and an
- * unconfigured server a 503 (`HobUnavailable`, the same class, so one client
- * classifier covers both surfaces). `rehearsal` is the status read the screen
- * makes before it offers a composer, and it carries the prompt metadata the
- * inspector shows — the template version and a token estimate, never the
- * prompt. `archive` and `restore` are the reversible soft delete: transcripts
+ * `rehearse`, `talk` and `sessionTalk` are `hob.ask`'s stream shape without
+ * Hob's campaign toolkit. Authorization resolves before a byte of body so a
+ * denial is a real 404 and an unconfigured model is a real 503
+ * (`HobUnavailable`). Creator rehearsal and session-shared NPC replies may
+ * create review proposals; accepting a proposal materialises the server-stored
+ * content only. `archive` and `restore` are reversible soft delete: transcripts
  * hang off an NPC and are worth keeping.
  */
 class NpcsGroup extends HttpApiGroup.make("npcs")

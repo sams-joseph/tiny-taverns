@@ -89,6 +89,9 @@ describe("NpcLibraryScreen", () => {
     await screen.findByText("Cazril");
 
     await userEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(
+      await screen.findByText(/another creator's copy does not receive your private material/),
+    ).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "The Salt Road's group" }));
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/groups/${groupId}/library`)).toEqual({
@@ -98,6 +101,8 @@ describe("NpcLibraryScreen", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Add to campaign" }));
+    expect(await screen.findByText(/independent campaign Cast snapshot/)).toBeInTheDocument();
+    expect(screen.getByText(/their secrets are not copied/)).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "The Salt Road" }));
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/campaigns/${campaignId}/npcs/sources/`)).toEqual({}),

@@ -267,7 +267,7 @@ export function useNpcRehearsal(
         ? undefined
         : status === undefined
           ? `Checking whether a model is behind ${name}…`
-          : `No model is configured behind ${name}. Set HOB_API_URL and HOB_MODEL in apps/server/.env.local, then restart the server.`,
+          : `No model is configured behind ${name}. You can still use the profile, knowledge and memory to puppet them yourself; set HOB_API_URL and HOB_MODEL in apps/server/.env.local when you want Rehearse to answer.`,
     status,
     lastPrompt,
     reset: turns.length > 0 ? reset : undefined,

@@ -204,6 +204,10 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
 
               {view.npcs.length > 0 && (
                 <Section title="People you can talk to">
+                  <p className="text-body-s leading-body text-muted-foreground">
+                    Talk privately opens your own conversation with a player-facing NPC. Only you
+                    can read that transcript, and it does not automatically update NPC memory.
+                  </p>
                   <div className="grid gap-4 @3xl:grid-cols-2">
                     {view.npcs.map((npc) => (
                       <Card key={npc.id}>

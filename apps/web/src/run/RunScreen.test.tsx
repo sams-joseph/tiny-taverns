@@ -13,6 +13,7 @@ import {
   session,
   sessionEvent,
 } from "./run.fixtures";
+import { cazril } from "../campaign/campaign.fixtures";
 import { reads } from "../api/keys";
 import { combatantWrites } from "./load";
 
@@ -162,6 +163,39 @@ describe("the runner", () => {
     await screen.findByText(/Round 1 · Goblin Boss is up/);
     // Bound to a button and to the space bar, so a repeat must be safe.
     expect((bodyOf(server, "POST", "/next-turn") as { requestId: string }).requestId).toMatch(/.+/);
+  });
+
+  it("labels opening an NPC as Open at the table", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${cazril.id}/sessions/${session.id}/open`,
+      {
+        status: 200,
+        body: {
+          id: "2b1f2a1e-0000-4000-8000-00000000e901",
+          npcId: cazril.id,
+          channel: "session_shared",
+          sessionId: session.id,
+          title: "Cazril",
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+        },
+      },
+    );
+
+    await renderRunner();
+    await screen.findByRole("heading", { name: "Ambush in the reeds" });
+
+    expect(screen.getAllByText("Open at the table").length).toBeGreaterThan(0);
+    expect(screen.getByText(/shared live-session conversation players see/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Open at the table" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/npcs/${cazril.id}/sessions/${session.id}/open`)).toEqual({}),
+    );
   });
 
   it("says which of the two visibility levels is in force, and never implies more", async () => {
