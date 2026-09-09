@@ -403,7 +403,7 @@ describe("the scope, counted", () => {
   const files = (): ReadonlyArray<string> =>
     readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
 
-  it("gates thirty-five methods and leaves every other actor-scoped read and write alone", () => {
+  it("keeps the creator-gated seams counted and leaves every other actor-scoped read and write alone", () => {
     // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
     // `src/repo`. Two corrections, both measured here rather than argued:
     //
@@ -449,16 +449,15 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    // Twenty-five through sixty-four are the cast: `Npcs`, `NpcKnowledge`,
-    // `NpcMemories`, `NpcThreads` and `NpcProposals`, gated from the day the
-    // endpoints were declared, because an NPC row and its context carry
-    // creator-only material and the creator actions that open, pause, resume,
-    // close and monitor a shared session channel are still the campaign
-    // creator's acts. The three after are inner helpers in those files
-    // restating their own methods' first parameter (`one`, `threadReachable`,
-    // `ensureThread`), which this occurrence count sees exactly as it sees
-    // `Proposals.ts`'s duplicate below.
-    expect(gated).toBe(67);
+    // Twenty-five through seventy-eight are the cast: `Npcs`, `NpcKnowledge`,
+    // `NpcMemories`, `NpcAwareness`, `NpcThreads` and `NpcProposals`, gated from
+    // the day the endpoints were declared, because an NPC row and its context
+    // carry creator-only material and the creator actions that open, pause,
+    // resume, close, monitor a shared session channel and curate Hob awareness
+    // are still the campaign creator's acts. This is an occurrence count rather
+    // than a method count: inner helpers in those files restate their own
+    // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
+    expect(gated).toBe(78);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

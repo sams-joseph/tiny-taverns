@@ -2,6 +2,7 @@ import type {
   CampaignId,
   Npc,
   NpcId,
+  NpcAwarenessCandidate,
   NpcKnowledgeFact,
   NpcMemory,
   NpcProposal,
@@ -41,6 +42,7 @@ export interface NpcDetail {
   readonly knowledge: ReadonlyArray<NpcKnowledgeFact>;
   readonly memories: ReadonlyArray<NpcMemory>;
   readonly proposals: ReadonlyArray<NpcProposal>;
+  readonly awarenessCandidates: ReadonlyArray<NpcAwarenessCandidate>;
 }
 
 const npcRowAtom = Atom.family((at: OneNpc) =>
@@ -60,6 +62,13 @@ const npcMemoriesAtom = Atom.family((at: OneNpc) =>
 
 export const npcProposalsAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.proposals({ params: at }), [reads.npcProposals(at.npcId)]),
+);
+
+const npcAwarenessCandidatesAtom = Atom.family((at: OneNpc) =>
+  apiAtom(
+    (client) => client.npcs.awarenessCandidates({ params: at }),
+    [reads.npcAwarenessCandidates(at.npcId)],
+  ),
 );
 
 export const npcPendingProposalCountAtom = Atom.family((at: OneNpc) =>
@@ -123,6 +132,7 @@ export const npcAtom = Atom.family((at: OneNpc) =>
         knowledge: get(npcKnowledgeAtom(at)),
         memories: get(npcMemoriesAtom(at)),
         proposals: get(npcProposalsAtom(at)),
+        awarenessCandidates: get(npcAwarenessCandidatesAtom(at)),
       }),
     ),
   ),

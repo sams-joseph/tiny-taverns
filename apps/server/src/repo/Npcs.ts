@@ -320,8 +320,8 @@ export class Npcs extends Context.Service<
                 `;
                 yield* sql`
                   insert into npc_memory
-                    (npc_id, body, status, approved_at, visibility)
-                  select ${copy.id}, body, status, approved_at, visibility
+                    (npc_id, body, status, source_kind, source_id, source_label, approved_at, visibility)
+                  select ${copy.id}, body, status, source_kind, source_id, source_label, approved_at, visibility
                   from npc_memory
                   where npc_id = ${sourceId}
                     and status = 'approved'

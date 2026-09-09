@@ -387,12 +387,13 @@ instruction. The `NpcAgent` may read only the NPC, its transcript, its facts and
 memories — no campaign-wide repositories — and the status/`began` event carry inclusion counts for
 the inspector.
 
-The Cast detail route now composes four atoms (`npc`, `npcKnowledge`, `npcMemories`,
-`npcProposals`) so fact, memory and proposal writes refresh their lists and rehearsal metadata
-without re-reading the profile. `NpcScreen` is tabbed through `CampaignChrome`'s `tabs` slot:
-Profile / Rehearsal / Knowledge / Memory / Proposals. The tabs are on their own row, and the
-add/approve/retire/reset/accept/reject verbs live inside their tab content. NPC Library sources,
-group sharing and autonomous tools remain absent, not stubbed.
+The Cast detail route now composes five atoms (`npc`, `npcKnowledge`, `npcMemories`,
+`npcAwareness`, `npcProposals`) so fact, memory, awareness and proposal writes refresh their lists
+and rehearsal metadata without re-reading the profile. `NpcScreen` is tabbed through
+`CampaignChrome`'s `tabs` slot: Profile / Rehearsal / Knowledge / Memory / Hob research /
+Proposals. The tabs are on their own row, and the add/approve/retire/reset/accept/reject verbs live
+inside their tab content. NPC Library sources, group sharing and autonomous tools remain absent, not
+stubbed.
 
 ### NPC builder slice 6 — bounded proposals, human review only
 
@@ -408,6 +409,22 @@ and materialises through the ordinary repos and creator proof: memory proposals 
 session or conflict if none is open. Repeat decisions are `Conflict`; accepted/rejected proposal rows
 are the audit record. The web Proposals tab only lists, accepts and rejects those rows, and its
 accept body is `{}` by design.
+
+### NPC builder slice 7 — Hob researches awareness, Cast curates it
+
+`0045_npc_awareness_candidates.ts` adds `npc_awareness_candidate`, owned by `npc_id` only — no
+`campaign_id`, because the NPC is the containment answer. Campaign Hob's DM-only toolkit gained
+`proposeNpcAwareness`; player, group and NPC-agent toolkits did not. The tool closes over the
+campaign creator proof and validates source ids against the NPC's own campaign or group before it
+queues a **review row only**. Hob saves its assistant turn first, then records queued candidates with
+that `assistant_turn_id`; candidates count as useful output for the ran-out/silence logic.
+
+Approval/update/reject all use `expectedVersion`. Approval takes no replacement prose and
+materialises the stored row content only: `knowledge` creates `npc_knowledge_fact`, `memory` creates
+a **draft** `npc_memory`. Source ids are provenance snapshots, never read-through; the durable copied
+fields are `body`, `sourceKind`, `sourceId`, `sourceLabel`, `sourceExcerpt` and `rationale`, with the
+last two stored as non-null strings (`""` when empty). The Cast _Hob research_ tab is the only review
+surface.
 
 ## The design system: what is canonical, and how it reaches Tailwind
 

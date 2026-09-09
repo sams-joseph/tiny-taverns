@@ -36,6 +36,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcProposals } from "../src/repo/NpcProposals.js";
+import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { Party } from "../src/repo/Party.js";
@@ -299,6 +300,7 @@ const runtime = ManagedRuntime.make(
     Notes.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -353,6 +355,7 @@ const makeFixture = Effect.gen(function* () {
   const notes = yield* Notes;
   const npcKnowledge = yield* NpcKnowledge;
   const npcMemories = yield* NpcMemories;
+  const npcAwareness = yield* NpcAwareness;
   const npcProposals = yield* NpcProposals;
   const npcs = yield* Npcs;
   const npcThreads = yield* NpcThreads;
@@ -548,6 +551,24 @@ const makeFixture = Effect.gen(function* () {
     sourceLabel: "Membership fixture",
   });
   yield* npcMemories.draft(asDm, npc.id, { body: "The party asked Cazril about the crossing." });
+  const awarenessTurnId = randomUUID() as AssistantTurnId;
+  yield* as(
+    hob.append("dm", campaign.id, thread.id, {
+      id: awarenessTurnId,
+      who: "hob",
+      text: "Cazril should know the hag's ferryman rite.",
+    }),
+  );
+  yield* npcAwareness.recordFromHob(asDm, awarenessTurnId, {
+    npcId: npc.id,
+    kind: "knowledge",
+    body: "Cazril knows the hag's ferryman rite.",
+    sourceKind: "manual",
+    sourceLabel: "Membership fixture",
+    sourceId: null,
+    sourceExcerpt: "",
+    rationale: "",
+  });
   const npcThread = yield* npcThreads.start(asDm, npc.id, "What is your price?");
   yield* npcThreads.append(asDm, npc.id, npcThread.id, {
     id: randomUUID() as NpcTurnId,
@@ -621,6 +642,7 @@ const READS: Record<
     | Notes
     | NpcKnowledge
     | NpcMemories
+    | NpcAwareness
     | NpcProposals
     | Npcs
     | NpcThreads
@@ -717,6 +739,10 @@ const READS: Record<
   npc_knowledge_fact: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(NpcKnowledge, (r) => r.list(dm, f.npc.id)),
+    ),
+  npc_awareness_candidate: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(NpcAwareness, (r) => r.list(dm, f.npc.id)),
     ),
   npc_memory: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>

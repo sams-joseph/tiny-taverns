@@ -10,6 +10,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { anAccount, createCampaign } from "./support/actors.js";
@@ -26,6 +27,7 @@ const runtime = ManagedRuntime.make(
     Npcs.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
     NpcThreads.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npc_library"))),
 );

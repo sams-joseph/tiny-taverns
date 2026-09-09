@@ -45,6 +45,7 @@ import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
+import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -819,6 +820,7 @@ const NpcsLive = HttpApiBuilder.group(
     const knowledge = yield* NpcKnowledge;
     const memories = yield* NpcMemories;
     const proposals = yield* NpcProposals;
+    const awareness = yield* NpcAwareness;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
@@ -916,6 +918,24 @@ const NpcsLive = HttpApiBuilder.group(
       .handle("rejectProposal", ({ params, payload }) =>
         asCreator(params.campaignId, (creator) =>
           proposals.reject(creator, params.npcId, params.proposalId, payload),
+        ),
+      )
+      .handle("awarenessCandidates", ({ params }) =>
+        asCreator(params.campaignId, (creator) => awareness.list(creator, params.npcId)),
+      )
+      .handle("updateAwarenessCandidate", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          awareness.update(creator, params.npcId, params.candidateId, payload),
+        ),
+      )
+      .handle("approveAwarenessCandidate", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          awareness.approve(creator, params.npcId, params.candidateId, payload),
+        ),
+      )
+      .handle("rejectAwarenessCandidate", ({ params, payload }) =>
+        asCreator(params.campaignId, (creator) =>
+          awareness.reject(creator, params.npcId, params.candidateId, payload),
         ),
       )
       .handle("playerList", ({ params }) => npcs.playerList(params.campaignId))

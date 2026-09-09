@@ -586,6 +586,7 @@ describe("the runner", () => {
 
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
+    expect(screen.getByRole("heading", { name: "Open at the table" })).toBeInTheDocument();
     expect(screen.queryByText("NPC proposals waiting")).toBeNull();
     await waitFor(() => expect(server.open()).toBeGreaterThan(0));
 

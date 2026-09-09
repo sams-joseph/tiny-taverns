@@ -49,6 +49,7 @@ import { Notes } from "./repo/Notes.js";
 import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
+import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -164,6 +165,7 @@ export const assistantFromConfig: Layer.Layer<
   | HobThreads
   | NpcKnowledge
   | NpcMemories
+  | NpcAwareness
   | Npcs
   | Options
   | Recap
@@ -276,6 +278,7 @@ export const servicesOver = <E>(
     | HobThreads
     | NpcKnowledge
     | NpcMemories
+    | NpcAwareness
     | Npcs
     | Options
     | Recap
@@ -320,6 +323,7 @@ export const servicesOver = <E>(
   | NpcKnowledge
   | NpcMemories
   | NpcProposals
+  | NpcAwareness
   | Npcs
   | NpcThreads
   // A campaign's rules vocabulary, and the Library originals behind it. An
@@ -398,6 +402,7 @@ export const servicesOver = <E>(
     Npcs.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -507,6 +512,7 @@ export const servicesOver = <E>(
         Npcs.layer,
         NpcKnowledge.layer,
         NpcMemories.layer,
+        NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
         HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of
@@ -574,6 +580,7 @@ export const applicationOver = <E>(
     | NpcKnowledge
     | NpcMemories
     | NpcProposals
+    | NpcAwareness
     | Npcs
     | NpcThreads
     | Options

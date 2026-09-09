@@ -128,7 +128,7 @@ beforeAll(async () => {
     .sort();
 }, 60_000);
 
-describe("the group architecture's two structural absences", () => {
+describe("the group architecture's structural absences", () => {
   it("gives campaign_member no role column — the creator is the campaign's one DM", () => {
     // The participation decision of 2026-09-01: `campaign.creator_account_id`
     // is the whole answer to who runs a table, and a role column here would be
@@ -145,6 +145,13 @@ describe("the group architecture's two structural absences", () => {
     expect(columnFor("character", "campaign_id")).toBeUndefined();
     const owner = columnFor("character", "account_id");
     expect(owner?.is_nullable).toBe("NO");
+  });
+
+  it("gives NPC awareness candidates no campaign_id — the NPC is the container", () => {
+    // The curation row hangs off an NPC. A denormalised campaign_id here would
+    // be a second containment answer that can disagree with the NPC's own
+    // campaign, the same nested-table trap prep_item and beat avoid.
+    expect(columnFor("npc_awareness_candidate", "campaign_id")).toBeUndefined();
   });
 });
 
@@ -186,6 +193,7 @@ describe("every content-bearing table", () => {
       // own turns are `origin = 'assistant'` pointing at no Hob turn; see
       // 0037_npcs.ts for why that one check is relaxed there.
       "npc",
+      "npc_awareness_candidate",
       "npc_knowledge_fact",
       "npc_memory",
       "npc_proposal",

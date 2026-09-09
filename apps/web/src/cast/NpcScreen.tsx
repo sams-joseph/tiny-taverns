@@ -1,5 +1,6 @@
 import type {
   Npc,
+  NpcAwarenessCandidate,
   NpcKnowledgeFact,
   NpcMemory,
   NpcMemoryStatus,
@@ -47,13 +48,14 @@ import { RehearsalPanel } from "./RehearsalPanel";
  * still renders it, with *Restore* where *Archive* was, and the rehearsal
  * composer replaced by the reason.
  */
-type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory" | "proposals";
+type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory" | "awareness" | "proposals";
 
 const NPC_TABS: ReadonlyArray<{ readonly id: NpcTab; readonly label: string }> = [
   { id: "profile", label: "Profile" },
   { id: "rehearsal", label: "Rehearsal" },
   { id: "knowledge", label: "Knowledge" },
   { id: "memory", label: "Memory" },
+  { id: "awareness", label: "Hob research" },
   { id: "proposals", label: "Proposals" },
 ];
 
@@ -150,7 +152,7 @@ function NpcBody({
   readonly active: NpcTab;
   readonly currentSessionId?: SessionId;
 }) {
-  const { npc, knowledge, memories, proposals } = detail;
+  const { npc, knowledge, memories, proposals, awarenessCandidates } = detail;
   const invalidate = useInvalidate();
   const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name, () => {
     invalidate([reads.npcProposals(npc.id), reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)]);
@@ -178,6 +180,9 @@ function NpcBody({
 
   if (active === "knowledge") return <KnowledgePanel npc={npc} facts={knowledge} />;
   if (active === "memory") return <MemoryPanel npc={npc} memories={memories} />;
+  if (active === "awareness") {
+    return <AwarenessPanel npc={npc} candidates={awarenessCandidates} />;
+  }
   if (active === "proposals") return <ProposalPanel npc={npc} proposals={proposals} />;
 
   return (
@@ -272,6 +277,290 @@ function NpcDetailOpenBadge({
       <Icon name="mic" size={11} />
       Open at table
     </Badge>
+  );
+}
+
+function AwarenessPanel({
+  npc,
+  candidates,
+}: {
+  readonly npc: Npc;
+  readonly candidates: ReadonlyArray<NpcAwarenessCandidate>;
+}) {
+  const pending = candidates.filter((candidate) => candidate.state === "pending");
+  const decided = candidates.filter((candidate) => candidate.state !== "pending");
+
+  return (
+    <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+      <Card className="gap-4 p-card">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-title leading-title font-semibold text-heading">
+              Hob research candidates
+            </h2>
+            <p className="text-body-s leading-body text-muted-foreground">
+              Campaign Hob can research notes, beats, recaps and Cast context for you. These rows
+              are only candidates until you approve them here.
+            </p>
+          </div>
+          <Badge variant="outline">{pending.length} pending</Badge>
+        </div>
+        <AwarenessList npc={npc} candidates={pending} empty="No Hob research waiting." />
+      </Card>
+
+      <Card tone="sunken" className="gap-4 p-card">
+        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+          Reviewed
+        </h3>
+        <AwarenessList
+          npc={npc}
+          candidates={decided}
+          empty="No research candidates reviewed yet."
+        />
+      </Card>
+    </div>
+  );
+}
+
+function AwarenessList({
+  npc,
+  candidates,
+  empty,
+}: {
+  readonly npc: Npc;
+  readonly candidates: ReadonlyArray<NpcAwarenessCandidate>;
+  readonly empty: string;
+}) {
+  if (candidates.length === 0) {
+    return <p className="text-body-s leading-body text-muted-foreground">{empty}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {candidates.map((candidate) => (
+        <AwarenessRow key={candidate.id} npc={npc} candidate={candidate} />
+      ))}
+    </div>
+  );
+}
+
+function AwarenessRow({
+  npc,
+  candidate,
+}: {
+  readonly npc: Npc;
+  readonly candidate: NpcAwarenessCandidate;
+}) {
+  const [current, setCurrent] = useState(candidate);
+  const [editing, setEditing] = useState(false);
+  const [body, setBody] = useState(candidate.body);
+  const [sourceLabel, setSourceLabel] = useState(candidate.sourceLabel);
+  const [sourceExcerpt, setSourceExcerpt] = useState(candidate.sourceExcerpt);
+  const [rationale, setRationale] = useState(candidate.rationale);
+  const { busy, failure, submit } = useMutation();
+  const params = {
+    campaignId: npc.campaignId,
+    npcId: npc.id,
+    candidateId: current.id,
+  };
+  const invalidate = [
+    reads.npcAwarenessCandidates(npc.id),
+    reads.npcKnowledge(npc.id),
+    reads.npcMemories(npc.id),
+    reads.npcRehearsal(npc.id),
+  ];
+
+  useEffect(() => {
+    if (editing) return;
+    setCurrent((held) =>
+      held.id !== candidate.id || candidate.version >= held.version ? candidate : held,
+    );
+  }, [candidate, editing]);
+
+  const resetDraft = (next: NpcAwarenessCandidate) => {
+    setBody(next.body);
+    setSourceLabel(next.sourceLabel);
+    setSourceExcerpt(next.sourceExcerpt);
+    setRationale(next.rationale);
+  };
+
+  const save = async () => {
+    const saved = await submit(
+      (client) =>
+        client.npcs.updateAwarenessCandidate({
+          params,
+          payload: {
+            expectedVersion: current.version,
+            body: body.trim(),
+            sourceLabel: sourceLabel.trim(),
+            sourceExcerpt: sourceExcerpt.trim(),
+            rationale: rationale.trim(),
+          },
+        }),
+      invalidate,
+    );
+    if (Result.isSuccess(saved)) {
+      setCurrent(saved.success);
+      resetDraft(saved.success);
+      setEditing(false);
+    }
+  };
+
+  const approve = async () => {
+    const saved = await submit(
+      (client) =>
+        client.npcs.approveAwarenessCandidate({
+          params,
+          payload: { expectedVersion: current.version },
+        }),
+      invalidate,
+    );
+    if (Result.isSuccess(saved)) setCurrent(saved.success);
+  };
+
+  const reject = async () => {
+    const saved = await submit(
+      (client) =>
+        client.npcs.rejectAwarenessCandidate({
+          params,
+          payload: {
+            expectedVersion: current.version,
+            reason: "Rejected from the Cast screen.",
+          },
+        }),
+      invalidate,
+    );
+    if (Result.isSuccess(saved)) setCurrent(saved.success);
+  };
+
+  return (
+    <div className="rounded-card border border-subtle bg-surface-card p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+            {current.kind} · {current.state} · {current.sourceKind}
+            {current.sourceLabel === "" ? "" : ` · ${current.sourceLabel}`}
+          </p>
+          {editing ? (
+            <form
+              className="mt-3 flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void save();
+              }}
+            >
+              <Field label="Candidate" htmlFor={`awareness-body-${current.id}`}>
+                <Textarea
+                  id={`awareness-body-${current.id}`}
+                  rows={5}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                />
+              </Field>
+              <Field label="Source label" htmlFor={`awareness-source-${current.id}`}>
+                <Input
+                  id={`awareness-source-${current.id}`}
+                  value={sourceLabel}
+                  onChange={(event) => setSourceLabel(event.target.value)}
+                />
+              </Field>
+              <Field label="Copied source excerpt" htmlFor={`awareness-excerpt-${current.id}`}>
+                <Textarea
+                  id={`awareness-excerpt-${current.id}`}
+                  rows={3}
+                  value={sourceExcerpt}
+                  onChange={(event) => setSourceExcerpt(event.target.value)}
+                />
+              </Field>
+              <Field label="Why Hob proposed it" htmlFor={`awareness-rationale-${current.id}`}>
+                <Textarea
+                  id={`awareness-rationale-${current.id}`}
+                  rows={3}
+                  value={rationale}
+                  onChange={(event) => setRationale(event.target.value)}
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" size="sm" disabled={busy}>
+                  Save edits
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    resetDraft(current);
+                    setEditing(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <p className="mt-1 text-body-s leading-body whitespace-pre-wrap text-foreground">
+                {current.body}
+              </p>
+              {current.sourceExcerpt !== "" && (
+                <p className="mt-2 text-caption leading-body whitespace-pre-wrap text-muted-foreground">
+                  Source copy: {current.sourceExcerpt}
+                </p>
+              )}
+              {current.rationale !== "" && (
+                <p className="mt-2 text-caption leading-body text-muted-foreground">
+                  Rationale: {current.rationale}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        {current.state === "pending" && !editing && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Edit awareness candidate"
+              disabled={busy}
+              onClick={() => {
+                resetDraft(current);
+                setEditing(true);
+              }}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label="Approve awareness candidate"
+              disabled={busy}
+              onClick={() => void approve()}
+            >
+              Approve
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Reject awareness candidate"
+              disabled={busy}
+              onClick={() => void reject()}
+            >
+              Reject
+            </Button>
+          </div>
+        )}
+      </div>
+      {current.state === "approved" && (
+        <p className="mt-2 text-caption leading-body text-accent-ink">
+          Approved as {current.kind === "knowledge" ? "a knowledge fact" : "a memory draft"}.
+        </p>
+      )}
+      {current.state === "rejected" && (
+        <p className="mt-2 text-caption leading-body text-muted-foreground">
+          Rejected{current.rejectionReason === null ? "." : `: ${current.rejectionReason}`}
+        </p>
+      )}
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </div>
   );
 }
 

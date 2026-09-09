@@ -31,6 +31,7 @@ import { importSystemEquipment } from "../src/equipment/import.js";
 import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Party } from "../src/repo/Party.js";
@@ -89,6 +90,7 @@ const services = Layer.mergeAll(
   Npcs.layer,
   NpcKnowledge.layer,
   NpcMemories.layer,
+  NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
   Options.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Proposals.layer.pipe(

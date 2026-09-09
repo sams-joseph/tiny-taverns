@@ -23,6 +23,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -78,6 +79,7 @@ const services = Layer.mergeAll(
   Npcs.layer,
   NpcKnowledge.layer,
   NpcMemories.layer,
+  NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
   Options.layer,
   Recap.layer,
   Search.layer,
@@ -481,6 +483,7 @@ describe("the boundary — one table's words are in no other table's schema", ()
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
@@ -642,6 +645,7 @@ describe("a campaign with nothing written down", () => {
     Npcs.layer,
     NpcKnowledge.layer,
     NpcMemories.layer,
+    NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
     Options.layer,
     Recap.layer,
     Search.layer,

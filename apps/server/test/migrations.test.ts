@@ -185,6 +185,7 @@ describe("migrations", () => {
       "magic_school",
       "note",
       "npc",
+      "npc_awareness_candidate",
       "npc_knowledge_fact",
       "npc_memory",
       "npc_proposal",
@@ -262,6 +263,7 @@ describe("migrations", () => {
       { migration_id: 42, name: "npc_proposals" },
       { migration_id: 43, name: "npc_search" },
       { migration_id: 44, name: "npc_session_lifecycle" },
+      { migration_id: 45, name: "npc_awareness_candidates" },
     ]);
   }, 60_000);
 
@@ -315,6 +317,7 @@ describe("migrations", () => {
       { migration_id: 42, name: "npc_proposals" },
       { migration_id: 43, name: "npc_search" },
       { migration_id: 44, name: "npc_session_lifecycle" },
+      { migration_id: 45, name: "npc_awareness_candidates" },
     ]);
   }, 60_000);
 });

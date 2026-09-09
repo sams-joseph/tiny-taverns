@@ -1,7 +1,9 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import {
+  type AssistantTurnId,
   type CampaignId,
   type NpcId,
+  type NpcAwarenessCandidateId,
   type NpcKnowledgeFactId,
   type NpcMemoryId,
   type SessionId,
@@ -10,6 +12,7 @@ import {
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
+import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
@@ -198,6 +201,95 @@ describe("the npcs group", () => {
     expect(seen.memoriesAfter.every((memory) => memory.retiredAt !== null)).toBe(true);
   }, 60_000);
 
+  it("curates Hob-researched awareness candidates over HTTP", async () => {
+    const candidate = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const thread = yield* sql<{ readonly id: string }>`
+          insert into assistant_thread (campaign_id, title)
+          values (${campaignId}, 'awareness api test')
+          returning id
+        `;
+        const turn = yield* sql<{ readonly id: AssistantTurnId }>`
+          with made as (select gen_random_uuid() as id)
+          insert into assistant_turn (id, thread_id, who, body, origin, assistant_turn_id)
+          select made.id, ${thread[0]!.id}, 'hob', 'candidate', 'assistant', made.id from made
+          returning id
+        `;
+        const rows = yield* sql<{
+          readonly id: NpcAwarenessCandidateId;
+          readonly version: number;
+        }>`
+          insert into npc_awareness_candidate ${sql.insert({
+            npc_id: cazril,
+            kind: "knowledge",
+            body: "Cazril knows the secret ford price.",
+            source_kind: "recap",
+            source_label: "Session 4 recap",
+            source_excerpt: "The ford asks for a name.",
+            rationale: "The toll comes up in play.",
+            origin: "assistant",
+            assistant_turn_id: turn[0]!.id,
+          })}
+          returning id, version
+        `;
+        return rows[0]!;
+      }).pipe(Effect.orDie),
+    );
+
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(creator);
+        const listed = yield* dm.npcs.awarenessCandidates({
+          params: { campaignId, npcId: cazril },
+        });
+        const updated = yield* dm.npcs.updateAwarenessCandidate({
+          params: { campaignId, npcId: cazril, candidateId: candidate.id },
+          payload: {
+            expectedVersion: candidate.version,
+            body: "Cazril knows the ford's secret price.",
+            sourceLabel: "Kept recap copy",
+          },
+        });
+        const stale = yield* Effect.result(
+          dm.npcs.updateAwarenessCandidate({
+            params: { campaignId, npcId: cazril, candidateId: candidate.id },
+            payload: { expectedVersion: candidate.version, body: "stale" },
+          }),
+        );
+        const approved = yield* dm.npcs.approveAwarenessCandidate({
+          params: { campaignId, npcId: cazril, candidateId: candidate.id },
+          payload: { expectedVersion: updated.version },
+        });
+        const facts = yield* dm.npcs.knowledge({ params: { campaignId, npcId: cazril } });
+        return { listed, updated, stale, approved, facts };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.listed.map((row) => row.id)).toContain(candidate.id);
+    expect(seen.updated).toMatchObject({
+      body: "Cazril knows the ford's secret price.",
+      sourceLabel: "Kept recap copy",
+      version: candidate.version + 1,
+    });
+    expect(seen.stale._tag).toBe("Failure");
+    expect(seen.stale._tag === "Failure" && seen.stale.failure).toMatchObject({
+      _tag: "Conflict",
+    });
+    expect(seen.approved.acceptedKnowledgeFactId).not.toBeNull();
+    expect(seen.facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: seen.approved.acceptedKnowledgeFactId,
+          body: "Cazril knows the ford's secret price.",
+          sourceLabel: "Kept recap copy",
+          origin: "assistant",
+          assistantTurnId: seen.approved.assistantTurnId,
+        }),
+      ]),
+    );
+  }, 60_000);
+
   it("answers the rehearsal status as unavailable, with the prompt metadata, and no threads yet", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
@@ -234,6 +326,7 @@ describe("the npcs group", () => {
           const factId = "2b1f2a1e-0000-4000-8000-00000000a099" as NpcKnowledgeFactId;
           const memoryId = "2b1f2a1e-0000-4000-8000-00000000b099" as NpcMemoryId;
           const sessionId = "2b1f2a1e-0000-4000-8000-00000000c099" as SessionId;
+          const candidateId = "2b1f2a1e-0000-4000-8000-00000000c199" as NpcAwarenessCandidateId;
           const attempts: Record<string, Effect.Effect<unknown, unknown>> = {
             list: client.npcs.list({ params: { campaignId }, query: {} }),
             create: client.npcs.create({ params: { campaignId }, payload: { name: "Mine" } }),
@@ -289,6 +382,19 @@ describe("the npcs group", () => {
               payload: {},
             }),
             resetMemories: client.npcs.resetMemories({ params, payload: {} }),
+            awarenessCandidates: client.npcs.awarenessCandidates({ params }),
+            updateAwarenessCandidate: client.npcs.updateAwarenessCandidate({
+              params: { ...params, candidateId },
+              payload: { expectedVersion: 1, body: "mine" },
+            }),
+            approveAwarenessCandidate: client.npcs.approveAwarenessCandidate({
+              params: { ...params, candidateId },
+              payload: { expectedVersion: 1 },
+            }),
+            rejectAwarenessCandidate: client.npcs.rejectAwarenessCandidate({
+              params: { ...params, candidateId },
+              payload: { expectedVersion: 1 },
+            }),
           };
           return yield* Effect.all(
             Object.fromEntries(

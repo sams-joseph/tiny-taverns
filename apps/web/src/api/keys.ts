@@ -154,6 +154,9 @@ export const reads = {
   /** One NPC's pending, accepted and rejected proposals. */
   npcProposals: (npcId: NpcId): ReadKey => key`npc-proposals:${npcId}`,
 
+  /** Hob-researched facts or memories waiting for creator curation. */
+  npcAwarenessCandidates: (npcId: NpcId): ReadKey => key`npc-awareness:${npcId}`,
+
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,
 

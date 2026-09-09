@@ -39,6 +39,7 @@ import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirec
 import { HobThreads } from "../repo/HobThreads.js";
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
+import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import { Npcs } from "../repo/Npcs.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
@@ -47,6 +48,7 @@ import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
 import { Spells } from "../repo/Spells.js";
 import {
+  type AwarenessSlot,
   type CharacterVocabulary,
   dmBindWithDirect,
   dmHandlersFor,
@@ -201,6 +203,7 @@ export class Hob extends Context.Service<
     | HobThreads
     | NpcKnowledge
     | NpcMemories
+    | NpcAwareness
     | Npcs
     | LanguageModel.LanguageModel
     | Options
@@ -225,6 +228,7 @@ export class Hob extends Context.Service<
           npcs: yield* Npcs,
           npcKnowledge: yield* NpcKnowledge,
           npcMemories: yield* NpcMemories,
+          npcAwareness: yield* NpcAwareness,
           events: yield* SessionEvents,
           directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
           // The seventh, and the one no tool handler calls: a campaign's
@@ -338,6 +342,9 @@ export class Hob extends Context.Service<
                */
               const reachedForOne = yield* Ref.make(false);
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+              const awareness: AwarenessSlot = yield* Ref.make<ReadonlyArray<NpcAwarenessDraft>>(
+                [],
+              );
               const finished = yield* Ref.make("stop");
 
               /**
@@ -382,7 +389,12 @@ export class Hob extends Context.Service<
               const asked = <Tools extends AnyTools>(
                 tools: Effect.Effect<Toolkit.WithHandler<Tools>>,
                 system: string,
-              ) => conversation(tools, system, history, ask, finished, proposal);
+              ) =>
+                conversation(tools, system, history, ask, finished, {
+                  proposal,
+                  awareness,
+                  touchedDirect,
+                });
 
               /**
                * Which of the three surfaces answers, decided once.
@@ -404,7 +416,9 @@ export class Hob extends Context.Service<
                   ? directContext === undefined || directContext.targets.length === 0
                     ? asked(
                         Effect.flatMap(
-                          HobToolkit.toHandlers(dmHandlersFor(repositories, creator, proposal)),
+                          HobToolkit.toHandlers(
+                            dmHandlersFor(repositories, creator, proposal, awareness),
+                          ),
                           (bound) => Effect.provideContext(HobToolkit, bound),
                         ),
                         dmPrompt(campaign),
@@ -414,6 +428,7 @@ export class Hob extends Context.Service<
                           repositories,
                           creator,
                           proposal,
+                          awareness,
                           directContext,
                           thread.id,
                           answerId,
@@ -447,14 +462,24 @@ export class Hob extends Context.Service<
               const save = Effect.gen(function* () {
                 const text = yield* Ref.get(written);
                 const offered = yield* Ref.get(proposal);
+                const candidates = yield* Ref.get(awareness);
                 const touched = yield* Ref.get(touchedDirect);
-                if (text === "" && offered === undefined && !touched) return;
+                if (text === "" && offered === undefined && !touched && candidates.length === 0)
+                  return;
                 yield* threads.append(reach, campaignId, thread.id, {
                   id: answerId,
                   who: "hob",
                   text,
                   proposal: offered,
                 });
+                if (creator !== undefined) {
+                  yield* Effect.forEach(
+                    candidates,
+                    (candidate) =>
+                      repositories.npcAwareness.recordFromHob(creator, answerId, candidate),
+                    { discard: true },
+                  );
+                }
               }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
 
               /**
@@ -489,8 +514,9 @@ export class Hob extends Context.Service<
                     Ref.get(written),
                     Ref.get(reachedForOne),
                     Ref.get(touchedDirect),
+                    Ref.get(awareness),
                   ]),
-                  ([offered, reason, failed, text, reached, touched]) =>
+                  ([offered, reason, failed, text, reached, touched, candidates]) =>
                     Stream.fromIterable<HobEvent>([
                       ...(offered === undefined
                         ? []
@@ -502,9 +528,13 @@ export class Hob extends Context.Service<
                           ]),
                       ...(failed
                         ? []
-                        : text === "" && offered === undefined && !touched
+                        : text === "" &&
+                            offered === undefined &&
+                            !touched &&
+                            candidates.length === 0
                           ? [silence]
                           : offered === undefined &&
+                              candidates.length === 0 &&
                               !reached &&
                               wouldNotBuild(reach, ask.text, text)
                             ? [unbuilt(reach)]
@@ -610,7 +640,7 @@ export class Hob extends Context.Service<
                 history,
                 ask,
                 finished,
-                proposal,
+                { proposal },
               );
 
               const save = Effect.gen(function* () {
@@ -702,14 +732,20 @@ const conversation = <Tools extends AnyTools>(
   history: ReadonlyArray<HobTurn>,
   ask: HobAsk,
   finished: Ref.Ref<string>,
-  proposal: ProposalSlot,
+  outputs: OutputSlots,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
   Stream.unwrap(
     Effect.map(
       Effect.all([bind, Chat.fromPrompt(promptFor(system, history, ask))]),
-      ([toolkit, chat]) => round(chat, toolkit, MAX_ROUNDS, finished, proposal),
+      ([toolkit, chat]) => round(chat, toolkit, MAX_ROUNDS, finished, outputs),
     ),
   );
+
+interface OutputSlots {
+  readonly proposal: ProposalSlot;
+  readonly awareness?: AwarenessSlot;
+  readonly touchedDirect?: Ref.Ref<boolean>;
+}
 
 /**
  * How many provider round-trips one question may cost.
@@ -770,15 +806,14 @@ const round = <Tools extends AnyTools>(
   budget: number,
   finished: Ref.Ref<string>,
   /**
-   * What Hob has offered so far, read and never written here.
+   * What Hob has offered or changed so far, read and never written here.
    *
    * The only thing this loop asks of it is whether it is empty, and only when
-   * the budget has run out — see {@link exhausted}. It is a `Ref` rather than a
-   * boolean because it is filled by a tool handler *during* a round, so its
-   * value at the moment the budget is spent is the only one that answers the
-   * question.
+   * the budget has run out — see {@link exhausted}. It is made of `Ref`s rather
+   * than booleans because handlers fill them *during* a round, so their value at
+   * the moment the budget is spent is the only one that answers the question.
    */
-  proposal: ProposalSlot,
+  outputs: OutputSlots,
   /**
    * What to say before this round — empty for an ordinary one.
    *
@@ -834,7 +869,7 @@ const round = <Tools extends AnyTools>(
                 if (part.reason === "length") return Result.succeed(truncated);
                 if (yield* Ref.get(calledTool)) {
                   if (budget > 1) return Result.fail(part);
-                  return (yield* gotNowhere(proposal)) ? Result.succeed(ranOut) : Result.fail(part);
+                  return (yield* gotNowhere(outputs)) ? Result.succeed(ranOut) : Result.fail(part);
                 }
                 return Result.fail(part);
               }
@@ -851,7 +886,7 @@ const round = <Tools extends AnyTools>(
               // answer costs the DM four provider calls to reach the same place.
               ([used, reason]) =>
                 used && budget > 1 && reason !== "length"
-                  ? round(chat, toolkit, budget - 1, finished, proposal)
+                  ? round(chat, toolkit, budget - 1, finished, outputs)
                   : Stream.empty,
             ),
           ),
@@ -859,7 +894,7 @@ const round = <Tools extends AnyTools>(
         // Outside the recursion on purpose, so it also covers a later round: a
         // model that gets one call right and the next one wrong is the ordinary
         // case, and the budget is already decremented by the time we are here.
-        Stream.catch((error) => recover(chat, toolkit, budget, finished, proposal, error)),
+        Stream.catch((error) => recover(chat, toolkit, budget, finished, outputs, error)),
       ),
     ),
   );
@@ -892,8 +927,16 @@ const round = <Tools extends AnyTools>(
  * apology as two true things. "It never got to an answer" beside an answer is
  * the only pair that cannot both be true.
  */
-const gotNowhere = (proposal: ProposalSlot): Effect.Effect<boolean> =>
-  Effect.map(Ref.get(proposal), (offered) => offered === undefined);
+const gotNowhere = (outputs: OutputSlots): Effect.Effect<boolean> =>
+  Effect.map(
+    Effect.all([
+      Ref.get(outputs.proposal),
+      outputs.awareness === undefined ? Effect.succeed([]) : Ref.get(outputs.awareness),
+      outputs.touchedDirect === undefined ? Effect.succeed(false) : Ref.get(outputs.touchedDirect),
+    ]),
+    ([offered, candidates, touched]) =>
+      offered === undefined && candidates.length === 0 && !touched,
+  );
 
 /**
  * The model spent every round looking things up and never wrote a sentence.
@@ -942,7 +985,7 @@ const recover = <Tools extends AnyTools>(
   toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,
-  proposal: ProposalSlot,
+  outputs: OutputSlots,
   error: AiError.AiError | Schema.SchemaError,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> => {
   const detail = unreadableCall(error);
@@ -953,7 +996,7 @@ const recover = <Tools extends AnyTools>(
     // and then garbled one more call is a way to reach this that did not exist
     // before `recover` did.
     return Stream.unwrap(
-      Effect.map(gotNowhere(proposal), (nowhere) =>
+      Effect.map(gotNowhere(outputs), (nowhere) =>
         nowhere ? Stream.succeed(unreadable) : Stream.empty,
       ),
     );
@@ -965,7 +1008,7 @@ const recover = <Tools extends AnyTools>(
       // where whoever is running the model can see which parameter the endpoint
       // could not express.
       Effect.logWarning(`Hob could not read a tool call, and asked again: ${detail}`),
-      round(chat, toolkit, budget - 1, finished, proposal, [
+      round(chat, toolkit, budget - 1, finished, outputs, [
         {
           role: "user" as const,
           content:
@@ -1177,7 +1220,12 @@ const FENCED = /```[\s\S]*?```/g;
  * not make; `hob.test.ts` pins that each is really in a published schema, so
  * the fingerprint cannot quietly stop matching anything.
  */
-const BUILD_ARGUMENTS: ReadonlyArray<string> = ["creatureId", "abilityOrder", "readAloud"];
+const BUILD_ARGUMENTS: ReadonlyArray<string> = [
+  "creatureId",
+  "abilityOrder",
+  "readAloud",
+  "sourceExcerpt",
+];
 
 /**
  * Signature 1: the model wrote the tool call out instead of making it.
@@ -1466,7 +1514,9 @@ const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string
     "",
     "When the DM asks you to make something new — an encounter, a note, read-aloud text,",
     "a line about what just happened — write it and offer it with proposeEncounter,",
-    "proposeNote or proposeBeat. Nothing you offer is saved until the DM accepts it, so",
+    "proposeNote or proposeBeat. When your research shows an existing campaign NPC should",
+    "explicitly know or remember something, offer a Cast review row with proposeNpcAwareness.",
+    "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
     "offer it rather than asking permission first. Offer one thing at a time, and say",
     "one short line about it: the DM is already looking at it.",
     "",

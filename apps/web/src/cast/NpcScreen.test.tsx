@@ -53,6 +53,31 @@ const openRehearsal = async () => {
   return await screen.findByRole("region", { name: "Rehearse with Cazril" });
 };
 
+const awarenessCandidate = {
+  id: "2b1f2a1e-0000-4000-8000-00000000f501",
+  campaignId,
+  npcId,
+  kind: "knowledge",
+  body: "Cazril knows the ford asks for names.",
+  sourceKind: "recap",
+  sourceId: null,
+  sourceLabel: "Session 4 recap",
+  sourceExcerpt: "The ford asked Brannoc for a true name.",
+  rationale: "This is the toll Cazril explains.",
+  version: 7,
+  state: "pending",
+  decidedByAccountId: null,
+  decidedAt: null,
+  rejectionReason: null,
+  acceptedKnowledgeFactId: null,
+  acceptedMemoryId: null,
+  visibility: "dm",
+  createdAt: cazril.createdAt,
+  updatedAt: cazril.updatedAt,
+  origin: "assistant",
+  assistantTurnId: "2b1f2a1e-0000-4000-8000-00000000e201",
+};
+
 const proposal = {
   id: "2b1f2a1e-0000-4000-8000-00000000f601",
   campaignId,
@@ -221,6 +246,104 @@ describe("NpcScreen", () => {
     expect(await screen.findByText("The party promised Cazril a true name.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(bodyOf(server, "POST", "/approve")).toEqual({});
+  });
+
+  it("edits and approves Hob research candidates from the Cast review tab", async () => {
+    const candidateId = awarenessCandidate.id;
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/awareness-candidates`, {
+      status: 200,
+      body: [awarenessCandidate],
+    });
+    server.routes.set(
+      `PATCH /campaigns/${campaignId}/npcs/${npcId}/awareness-candidates/${candidateId}`,
+      {
+        status: 200,
+        body: {
+          ...awarenessCandidate,
+          body: "Cazril knows the true toll.",
+          sourceLabel: "Copied recap",
+          version: 8,
+        },
+      },
+    );
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${npcId}/awareness-candidates/${candidateId}/approve`,
+      {
+        status: 200,
+        body: {
+          ...awarenessCandidate,
+          body: "Cazril knows the true toll.",
+          sourceLabel: "Copied recap",
+          state: "approved",
+          version: 9,
+          decidedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+          decidedAt: cazril.updatedAt,
+          acceptedKnowledgeFactId: "2b1f2a1e-0000-4000-8000-00000000a701",
+        },
+      },
+    );
+
+    await renderNpc();
+    await userEvent.click(await screen.findByRole("button", { name: "Hob research" }));
+    expect(await screen.findByText("Cazril knows the ford asks for names.")).toBeInTheDocument();
+    expect(screen.getByText(/Source copy: The ford asked Brannoc/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit awareness candidate" }));
+    const candidate = screen.getByLabelText("Candidate");
+    await userEvent.clear(candidate);
+    await userEvent.type(candidate, "Cazril knows the true toll.");
+    const sourceLabel = screen.getByLabelText("Source label");
+    await userEvent.clear(sourceLabel);
+    await userEvent.type(sourceLabel, "Copied recap");
+    await userEvent.click(screen.getByRole("button", { name: "Save edits" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/awareness-candidates/${candidateId}`)).toEqual({
+        expectedVersion: 7,
+        body: "Cazril knows the true toll.",
+        sourceLabel: "Copied recap",
+        sourceExcerpt: "The ford asked Brannoc for a true name.",
+        rationale: "This is the toll Cazril explains.",
+      }),
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Approve awareness candidate" }),
+    );
+    expect(bodyOf(server, "POST", `/awareness-candidates/${candidateId}/approve`)).toEqual({
+      expectedVersion: 8,
+    });
+  }, 20_000);
+
+  it("rejects Hob research candidates with only the stored row identity", async () => {
+    const candidateId = awarenessCandidate.id;
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/awareness-candidates`, {
+      status: 200,
+      body: [awarenessCandidate],
+    });
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${npcId}/awareness-candidates/${candidateId}/reject`,
+      {
+        status: 200,
+        body: {
+          ...awarenessCandidate,
+          state: "rejected",
+          version: 8,
+          decidedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+          decidedAt: cazril.updatedAt,
+          rejectionReason: "Rejected from the Cast screen.",
+        },
+      },
+    );
+
+    await renderNpc();
+    await userEvent.click(await screen.findByRole("button", { name: "Hob research" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Reject awareness candidate" }),
+    );
+    expect(bodyOf(server, "POST", `/awareness-candidates/${candidateId}/reject`)).toEqual({
+      expectedVersion: 7,
+      reason: "Rejected from the Cast screen.",
+    });
   });
 
   it("reviews NPC proposals without sending replacement content on accept", async () => {

@@ -14,7 +14,15 @@ import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { playerNpcReadable } from "./Npcs.js";
 import { NPC } from "./NpcThreads.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   containedChildWritable,
   ensureContainedRowWritable,
@@ -69,6 +77,7 @@ export class NpcKnowledge extends Context.Service<
       creator: CampaignCreatorActor,
       npcId: NpcId,
       payload: NpcKnowledgeFactCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<NpcKnowledgeFact, NotFound, never>;
     readonly update: (
       creator: CampaignCreatorActor,
@@ -122,7 +131,7 @@ export class NpcKnowledge extends Context.Service<
             }),
           ),
 
-        create: (creator, npcId, payload) =>
+        create: (creator, npcId, payload, from) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
@@ -135,6 +144,7 @@ export class NpcKnowledge extends Context.Service<
                     source_id: payload.sourceId,
                     source_label: payload.sourceLabel,
                     visibility: payload.visibility,
+                    ...assistantColumns(from),
                   }),
                 )}
                 returning *

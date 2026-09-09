@@ -6,6 +6,7 @@ import {
   type NpcMemoryId,
   type NpcMemoryStatus,
   type NpcMemoryUpdate,
+  type NpcKnowledgeSourceKind,
   type NpcId,
   type NpcThreadId,
   type NpcTurnId,
@@ -16,7 +17,15 @@ import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { playerNpcReadable } from "./Npcs.js";
 import { NPC, NPC_THREADS } from "./NpcThreads.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   containedChildWritable,
   ensureContainedRowWritable,
@@ -41,6 +50,9 @@ interface MemoryRow extends ProvenanceColumns {
   readonly status: NpcMemoryStatus;
   readonly source_thread_id: NpcThreadId | null;
   readonly source_turn_id: NpcTurnId | null;
+  readonly source_kind: NpcKnowledgeSourceKind;
+  readonly source_id: string | null;
+  readonly source_label: string;
   readonly approved_at: Date | null;
   readonly retired_at: Date | null;
 }
@@ -53,6 +65,9 @@ export const toNpcMemory = (row: MemoryRow): NpcMemory =>
     status: row.status,
     sourceThreadId: row.source_thread_id,
     sourceTurnId: row.source_turn_id,
+    sourceKind: row.source_kind,
+    sourceId: row.source_id,
+    sourceLabel: row.source_label,
     approvedAt: row.approved_at === null ? null : DateTime.fromDateUnsafe(row.approved_at),
     retiredAt: row.retired_at === null ? null : DateTime.fromDateUnsafe(row.retired_at),
     ...provenanceOf(row),
@@ -73,6 +88,7 @@ export class NpcMemories extends Context.Service<
       creator: CampaignCreatorActor,
       npcId: NpcId,
       payload: NpcMemoryCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<NpcMemory, NotFound, never>;
     readonly update: (
       creator: CampaignCreatorActor,
@@ -171,7 +187,7 @@ export class NpcMemories extends Context.Service<
             }),
           ),
 
-        draft: (creator, npcId, payload) =>
+        draft: (creator, npcId, payload, from) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
@@ -183,7 +199,11 @@ export class NpcMemories extends Context.Service<
                     body: payload.body,
                     source_thread_id: payload.sourceThreadId,
                     source_turn_id: payload.sourceTurnId,
+                    source_kind: payload.sourceKind,
+                    source_id: payload.sourceId,
+                    source_label: payload.sourceLabel,
                     visibility: payload.visibility,
+                    ...assistantColumns(from),
                   }),
                 )}
                 returning *
@@ -198,7 +218,13 @@ export class NpcMemories extends Context.Service<
               const rows = yield* sql<MemoryRow>`
                 update npc_memory set ${setClause(
                   sql,
-                  defined({ body: patch.body, visibility: patch.visibility }),
+                  defined({
+                    body: patch.body,
+                    source_kind: patch.sourceKind,
+                    source_id: patch.sourceId,
+                    source_label: patch.sourceLabel,
+                    visibility: patch.visibility,
+                  }),
                 )}
                 where npc_memory.id = ${id}
                   and npc_memory.status <> 'retired'
@@ -265,6 +291,9 @@ export class NpcMemories extends Context.Service<
                        npc_memory.status,
                        null::uuid as source_thread_id,
                        null::uuid as source_turn_id,
+                       npc_memory.source_kind,
+                       null::uuid as source_id,
+                       npc_memory.source_label,
                        npc_memory.approved_at,
                        npc_memory.retired_at,
                        npc_memory.visibility,

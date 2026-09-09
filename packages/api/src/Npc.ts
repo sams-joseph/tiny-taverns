@@ -9,6 +9,7 @@ import {
   NpcKnowledgeFactId,
   NpcMemoryId,
   NpcProposalId,
+  NpcAwarenessCandidateId,
   NpcThreadId,
   NpcTurnId,
 } from "./Ids.js";
@@ -273,6 +274,9 @@ export const NpcKnowledgeSourceKind = Schema.Literals([
   "manual",
   "note",
   "beat",
+  "character",
+  "creature",
+  "npc",
   "group_history",
   "recap",
 ]);
@@ -337,6 +341,10 @@ export class NpcMemory extends Schema.Class<NpcMemory>("NpcMemory")({
   status: NpcMemoryStatus,
   sourceThreadId: Schema.NullOr(NpcThreadId),
   sourceTurnId: Schema.NullOr(NpcTurnId),
+  /** Copied provenance for memories that came from Hob's campaign research rather than an NPC chat turn. */
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(Schema.String),
   approvedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   retiredAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   visibility: Visibility,
@@ -349,12 +357,18 @@ export const NpcMemoryCreate = Schema.Struct({
   body: memoryBody,
   sourceThreadId: Schema.optional(Schema.NullOr(NpcThreadId)),
   sourceTurnId: Schema.optional(Schema.NullOr(NpcTurnId)),
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(sourceLabel),
   visibility: Schema.optional(Visibility),
 });
 export type NpcMemoryCreate = typeof NpcMemoryCreate.Type;
 
 export const NpcMemoryUpdate = Schema.Struct({
   body: Schema.optional(memoryBody),
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(sourceLabel),
   visibility: Schema.optional(Visibility),
 });
 export type NpcMemoryUpdate = typeof NpcMemoryUpdate.Type;
@@ -411,6 +425,73 @@ export const NpcProposalReject = Schema.Struct({
   reason: Schema.optional(Schema.String.check(Schema.isMaxLength(400))),
 });
 export type NpcProposalReject = typeof NpcProposalReject.Type;
+
+export const NpcAwarenessCandidateKind = Schema.Literals(["knowledge", "memory"]);
+export type NpcAwarenessCandidateKind = typeof NpcAwarenessCandidateKind.Type;
+
+export const NpcAwarenessCandidateState = Schema.Literals(["pending", "approved", "rejected"]);
+export type NpcAwarenessCandidateState = typeof NpcAwarenessCandidateState.Type;
+
+const awarenessRationale = Schema.String.check(Schema.isMaxLength(2000));
+const sourceExcerpt = Schema.String.check(Schema.isMaxLength(2000));
+
+/**
+ * A Hob-researched fact or memory candidate for one campaign NPC.
+ *
+ * Hob's broad campaign tools may create this **review row only** in a creator's
+ * campaign conversation. The NPC agent never sees those tools. Approval later
+ * materialises the stored body through `npc_knowledge_fact` or `npc_memory`, by
+ * id and version only; no accept payload can substitute different content.
+ */
+export class NpcAwarenessCandidate extends Schema.Class<NpcAwarenessCandidate>(
+  "NpcAwarenessCandidate",
+)({
+  id: NpcAwarenessCandidateId,
+  campaignId: CampaignId,
+  npcId: NpcId,
+  kind: NpcAwarenessCandidateKind,
+  body: Schema.String,
+  sourceKind: NpcKnowledgeSourceKind,
+  sourceId: Schema.NullOr(sourceId),
+  sourceLabel: Schema.String,
+  /** A copied excerpt or summary of the source as Hob saw it; never read through. */
+  sourceExcerpt: Schema.String,
+  rationale: Schema.String,
+  version: Schema.Int,
+  state: NpcAwarenessCandidateState,
+  decidedByAccountId: Schema.NullOr(AccountId),
+  decidedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  rejectionReason: Schema.NullOr(Schema.String),
+  acceptedKnowledgeFactId: Schema.NullOr(NpcKnowledgeFactId),
+  acceptedMemoryId: Schema.NullOr(NpcMemoryId),
+  visibility: Visibility,
+  ...provenanceFields,
+  createdAt: Schema.DateTimeUtcFromString,
+  updatedAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export const NpcAwarenessCandidateUpdate = Schema.Struct({
+  expectedVersion: Schema.Int,
+  body: Schema.optional(knowledgeBody),
+  sourceKind: Schema.optional(NpcKnowledgeSourceKind),
+  sourceId: Schema.optional(Schema.NullOr(sourceId)),
+  sourceLabel: Schema.optional(sourceLabel),
+  sourceExcerpt: Schema.optional(sourceExcerpt),
+  rationale: Schema.optional(awarenessRationale),
+  visibility: Schema.optional(Visibility),
+});
+export type NpcAwarenessCandidateUpdate = typeof NpcAwarenessCandidateUpdate.Type;
+
+export const NpcAwarenessCandidateApprove = Schema.Struct({
+  expectedVersion: Schema.Int,
+});
+export type NpcAwarenessCandidateApprove = typeof NpcAwarenessCandidateApprove.Type;
+
+export const NpcAwarenessCandidateReject = Schema.Struct({
+  expectedVersion: Schema.Int,
+  reason: Schema.optional(Schema.String.check(Schema.isMaxLength(400))),
+});
+export type NpcAwarenessCandidateReject = typeof NpcAwarenessCandidateReject.Type;
 
 /**
  * Whether a model is behind the rehearsal, and the prompt metadata the

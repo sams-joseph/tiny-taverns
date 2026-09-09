@@ -22,6 +22,7 @@ import {
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
+  NpcKnowledgeSourceKind,
   isClassOption,
   isRaceOption,
   modifierFor,
@@ -67,6 +68,7 @@ import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import type { NpcMemories } from "../repo/NpcMemories.js";
 import type { Npcs } from "../repo/Npcs.js";
+import type { NpcAwareness, NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import type { Options } from "../repo/Options.js";
 import type { Recap } from "../repo/Recap.js";
 import type { Search } from "../repo/Search.js";
@@ -105,14 +107,15 @@ import type { Spells } from "../repo/Spells.js";
  * which is precisely what the product says a player must not have, whether or
  * not the predicate underneath would refuse it.
  *
- * So {@link HobToolkit} is the DM's nine and {@link PlayerToolkit} is two —
- * `searchCampaign`, which composes `rowReadable` and therefore reaches the
- * `shared` notes and beats a player is entitled to and nothing else, and
- * `proposeCharacter`. `dmHandlersFor` takes a `CampaignCreatorActor`; `playerHandlersFor`
- * takes a plain `Actor` and the campaign, because there is no DM-ness to prove
- * and the player tools it binds need none. **The campaign is closed over in all of them**,
- * so the grounding property is untouched: it is still not a parameter of any
- * tool, and a model still cannot express a call into another campaign.
+ * So {@link HobToolkit} is the DM's campaign toolkit and {@link PlayerToolkit}
+ * is the character-drafting one — `searchCampaign`, which composes
+ * `rowReadable` and therefore reaches the `shared` notes and beats a player is
+ * entitled to and nothing else, plus the character draft tools. `dmHandlersFor`
+ * takes a `CampaignCreatorActor`; `playerHandlersFor` takes a plain `Actor` and
+ * the campaign, because there is no DM-ness to prove and the player tools it
+ * binds need none. **The campaign is closed over in all of them**, so the
+ * grounding property is untouched: it is still not a parameter of any tool, and
+ * a model still cannot express a call into another campaign.
  *
  * ### The campaign is not a parameter, and that is the point
  *
@@ -366,9 +369,9 @@ const nameSentence = (noun: string, plural: string, names: ReadonlyArray<string>
  *
  * The list is the vocabulary and its plausible casings, and nothing else. It is
  * safe precisely because it is only ever reached through {@link optional}, and
- * **no optional parameter in this toolkit is free text** — they are two enums,
- * two integers, a boolean and an array of tags. A model that means the literal
- * word "none" as a *value* has nowhere here to say it.
+ * **no optional parameter in this toolkit is free text** — they are enums,
+ * UUIDs, integers, a boolean and an array of tags. A model that means the
+ * literal word "none" as a *value* has nowhere here to say it.
  */
 const ABSENT_WORDS = ["", "null", "Null", "NULL", "none", "None", "NONE"] as const;
 
@@ -599,6 +602,30 @@ export const GetNpc = Tool.make("getNpc", {
   parameters: Schema.Struct({ npcId: NpcId }),
   success: NpcContext,
   failure: NotFound,
+  failureMode: "return",
+});
+
+export const ProposeNpcAwareness = Tool.make("proposeNpcAwareness", {
+  description:
+    "Offer the DM a durable knowledge or memory candidate for one campaign NPC, " +
+    "based on the campaign research you just performed. This creates only a " +
+    "review row for the Cast screen; it does not change the NPC prompt, and the " +
+    "NPC agent never receives your broad campaign tools. Use kind 'knowledge' " +
+    "for stable facts the NPC knows; use kind 'memory' for something the NPC " +
+    "will remember after creator approval. Copy the relevant source excerpt or " +
+    "summary into sourceExcerpt because approval never reads through sourceId.",
+  parameters: Schema.Struct({
+    npcId: NpcId,
+    kind: Schema.Literals(["knowledge", "memory"]),
+    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    sourceKind: NpcKnowledgeSourceKind,
+    sourceId: optional(Schema.String.check(Schema.isUUID())),
+    sourceLabel: Schema.String.check(Schema.isLengthBetween(0, 200)),
+    sourceExcerpt: Schema.String.check(Schema.isLengthBetween(0, 2000)),
+    rationale: Schema.String.check(Schema.isLengthBetween(0, 2000)),
+  }),
+  success: Schema.String,
+  failure: toolFailure,
   failureMode: "return",
 });
 
@@ -1105,26 +1132,26 @@ export const ListStartingSpells = Tool.make("listStartingSpells", {
 });
 
 /**
- * Six reads and three proposals.
+ * The DM's campaign toolkit.
  *
- * The reads began as five — search, the session list, the recap, a creature and
- * the log — because each is a shipped repository method that already carries
- * the visibility seam. A read that would need new SQL is a decision for whoever
- * owns the repositories.
+ * Its reads are shipped repository methods that already carry the visibility
+ * seam: search, the session list, the recap, creatures, NPCs, the combat log
+ * and group chronicle reads. A read that would need new SQL is a decision for
+ * whoever owns the repositories.
  *
- * **`listCreatures` is the sixth, and it is a defect fix rather than a
- * capability.** Until it existed there was no way to ask what a campaign
- * *has*: the only reach into the bestiary was lexical and needed a word, so a
- * model told to build an encounter guessed nouns off the campaign's name, got
- * nothing back every time, and concluded — correctly, per the tool
- * descriptions it had been given — that it could not propose one. That is
- * measured, on two models, and it is the reason "build me an encounter" came
- * back as prose. `Creatures.list` was already shipped and already predicated;
- * only the tool was missing.
+ * **`listCreatures` is a defect fix rather than a capability.** Until it
+ * existed there was no way to ask what a campaign *has*: the only reach into
+ * the bestiary was lexical and needed a word, so a model told to build an
+ * encounter guessed nouns off the campaign's name, got nothing back every time,
+ * and concluded — correctly, per the tool descriptions it had been given — that
+ * it could not propose one. That is measured, on two models, and it is the
+ * reason "build me an encounter" came back as prose. `Creatures.list` was
+ * already shipped and already predicated; only the tool was missing.
  *
- * The proposals are the DM's three accept targets and nothing else. Both halves
- * are listed in `apps/server/test/hob.test.ts`, so a tenth tool is a visible
- * edit — and so is a third one on {@link PlayerToolkit}.
+ * The write-shaped tools are review only: campaign proposals go through the
+ * ordinary Hob accept path, and NPC awareness lands in Cast for creator review.
+ * Both halves are listed in `apps/server/test/hob.test.ts`, so changing the
+ * toolkit is a visible edit — as is changing {@link PlayerToolkit}.
  */
 const DirectResourceSpendResult = Schema.Struct({ message: Schema.NonEmptyString });
 
@@ -1163,6 +1190,8 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ListCreatures,
     ReadRecap,
     GetCreature,
+    GetNpc,
+    ProposeNpcAwareness,
     ReadSessionLog,
     SearchGroupHistory,
     ReadGroupSummary,
@@ -1180,6 +1209,7 @@ export const HobToolkit = Toolkit.make(
   ReadRecap,
   GetCreature,
   GetNpc,
+  ProposeNpcAwareness,
   ReadSessionLog,
   // The group context, read-only: what the group has agreed happened, so a
   // campaign's Hob can answer "what happened at the other table" exactly as
@@ -1272,6 +1302,7 @@ export interface HobRepositories {
   readonly npcs: (typeof Npcs)["Service"];
   readonly npcKnowledge: (typeof NpcKnowledge)["Service"];
   readonly npcMemories: (typeof NpcMemories)["Service"];
+  readonly npcAwareness: (typeof NpcAwareness)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
   /** Slice 6's audited direct counter write, reached only by the conditional DM toolkit. */
   readonly directWrites?: (typeof HobDirectWrites)["Service"] | undefined;
@@ -1457,10 +1488,13 @@ const summaryWith =
         : summary.text,
     );
 
+export type AwarenessSlot = Ref.Ref<ReadonlyArray<NpcAwarenessDraft>>;
+
 export const dmHandlersFor = (
   repositories: HobRepositories,
   dm: CampaignCreatorActor,
   proposal: ProposalSlot,
+  awareness: AwarenessSlot,
 ) => {
   const { actor, campaign: campaignId } = dm;
   const { as, offer } = bind(actor, proposal);
@@ -1555,6 +1589,24 @@ export const dmHandlersFor = (
     sessionLog: ({ sessionId, since }) =>
       repositories.events.list(dm, sessionId, { since: absent(since), limit: LOG_LIMIT }),
 
+    proposeNpcAwareness: (params) => {
+      const draft: NpcAwarenessDraft = {
+        npcId: params.npcId,
+        kind: params.kind,
+        body: params.body,
+        sourceKind: params.sourceKind,
+        sourceId: absent(params.sourceId) ?? null,
+        sourceLabel: params.sourceLabel,
+        sourceExcerpt: params.sourceExcerpt,
+        rationale: params.rationale,
+      };
+      return Effect.gen(function* () {
+        const valid = yield* repositories.npcAwareness.validateDraft(dm, draft);
+        yield* Ref.update(awareness, (items) => [...items, valid]);
+        return `Queued a ${valid.kind} candidate for this NPC. The Cast screen will ask the DM to approve, edit or reject it.`;
+      });
+    },
+
     // The group context, keyed on the proof's own group — not a parameter, for
     // the same reason the campaign is not one.
     searchGroupHistory: searchHistoryWith(repositories.history, dm.group, as),
@@ -1606,6 +1658,7 @@ export const dmBindWithDirect = (
   repositories: HobRepositories,
   dm: CampaignCreatorActor,
   proposal: ProposalSlot,
+  awareness: AwarenessSlot,
   context: HobDirectResourceContext,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
@@ -1620,7 +1673,7 @@ export const dmBindWithDirect = (
   return Effect.flatMap(
     toolkit.toHandlers(
       toolkit.of({
-        ...dmHandlersFor(repositories, dm, proposal),
+        ...dmHandlersFor(repositories, dm, proposal, awareness),
         spendCharacterResource: (params, call) => {
           const { target, amount } = params as { readonly target: string; readonly amount: number };
           const resolved = targetByKey.get(target);

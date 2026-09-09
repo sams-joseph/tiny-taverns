@@ -239,3 +239,7 @@ export type NpcMemoryId = typeof NpcMemoryId.Type;
 /** One bounded NPC suggestion waiting for a human decision. */
 export const NpcProposalId = id("NpcProposalId");
 export type NpcProposalId = typeof NpcProposalId.Type;
+
+/** One Hob-researched candidate fact or memory awaiting a campaign creator's review. */
+export const NpcAwarenessCandidateId = id("NpcAwarenessCandidateId");
+export type NpcAwarenessCandidateId = typeof NpcAwarenessCandidateId.Type;

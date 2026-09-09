@@ -38,6 +38,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
+import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Party } from "../src/repo/Party.js";
@@ -96,6 +97,7 @@ const services = Layer.mergeAll(
   Npcs.layer,
   NpcKnowledge.layer,
   NpcMemories.layer,
+  NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
   Options.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Recap.layer,
@@ -402,6 +404,7 @@ describe("answering", () => {
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
@@ -821,7 +824,7 @@ describe("a tool call the framework cannot read", () => {
   it("gives up in words when the model never learns to spell the call", async () => {
     // The budget is not infinite and a free retry would be a loop with no
     // ceiling, so a run of unreadable calls ends — as a sentence about the
-    // model, never as the schema error that names all nine of our tools.
+    // model, never as the schema error that names the campaign toolkit.
     const bad = toolCallChunks("searchCampaign", { query: "ferryman", limit: "lots" });
     const { events, requests } = await ask(fixture.dm, fixture.campaign.id, {
       rounds: [bad, bad, bad, bad, bad] as never,
@@ -1097,10 +1100,11 @@ describe("the boundary — proven, not argued", () => {
     // refuse but something that could not be constructed.
     //
     // What is still true is the half that was doing the work. `dmHandlersFor`
-    // still takes the proof, and a player still cannot obtain one — so the nine
-    // tools that include the combat log and a stat block remain unbuildable for
-    // them. What replaced the refusal is a *second, smaller* toolkit rather
-    // than a weaker proof, which is the distinction the block below measures.
+    // still takes the proof, and a player still cannot obtain one — so the
+    // campaign toolkit that includes the combat log and a stat block remains
+    // unbuildable for them. What replaced the refusal is a *second, smaller*
+    // toolkit rather than a weaker proof, which is the distinction the block
+    // below measures.
     const refused = await runtime.runPromise(
       Effect.flip(asDm(fixture.player, fixture.campaign.id)).pipe(Effect.orDie),
     );
@@ -1123,7 +1127,7 @@ describe("the boundary — proven, not argued", () => {
     expect(shown).not.toContain(fixture.crateNote.id);
   }, 60_000);
 
-  it("answers a player, and offers them three tools rather than nine", async () => {
+  it("answers a player, and offers them the character toolkit rather than the campaign toolkit", async () => {
     // The reversal, measured at the one place it is visible: the toolkit is
     // what the provider is *shown*, so a player who was bound to the DM's
     // handlers with a narrower predicate underneath would still be offered
@@ -1640,6 +1644,7 @@ describe("what counts as asking for a build", () => {
     const dmTools = JSON.stringify(requests[0]?.tools ?? []);
     expect(dmTools).toContain("creatureId");
     expect(dmTools).toContain("readAloud");
+    expect(dmTools).toContain("sourceExcerpt");
     const drafting: { readonly parametersSchema: { readonly fields: object } } =
       playerToolkitOver(NO_VOCABULARY).tools.proposeCharacter;
     expect(Object.keys(drafting.parametersSchema.fields)).toContain("abilityOrder");
@@ -1656,6 +1661,7 @@ describe("what counts as asking for a build", () => {
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      "proposeNpcAwareness",
     ]);
     expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
     // And nothing that builds is spelled another way: every remaining tool is a
@@ -1719,6 +1725,7 @@ describe("the assistant seam", () => {
       "proposeBeat",
       "proposeEncounter",
       "proposeNote",
+      "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
