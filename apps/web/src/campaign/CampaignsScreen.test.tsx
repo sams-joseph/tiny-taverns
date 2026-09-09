@@ -30,7 +30,7 @@ describe("the campaign-first home", () => {
     expect(screen.getByRole("button", { name: "The Salt Company" }).getAttribute("href")).toBe(
       `/#/worlds/${group.id}`,
     );
-    expect(screen.getByRole("button", { name: /Open/ }).getAttribute("href")).toBe(
+    expect(screen.getByRole("button", { name: "Open" }).getAttribute("href")).toBe(
       `/#/campaigns/${campaignId}`,
     );
   });
@@ -67,12 +67,34 @@ describe("the campaign-first home", () => {
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`));
   });
 
+  it("starts a connected campaign in a Shared World from the primary flow", async () => {
+    server.routes.set(`POST /groups/${group.id}/campaigns`, { status: 200, body: campaign });
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.click(screen.getByRole("combobox", { name: "Campaign context" }));
+    await userEvent.click(await screen.findByRole("option", { name: "The Salt Company" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/groups/${group.id}/campaigns`)).toEqual({
+        name: "The Long Winter",
+      }),
+    );
+    expect(
+      server.calls.some((call) => call.method === "POST" && call.pathname === "/campaigns"),
+    ).toBe(false);
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`));
+  });
+
   it("makes the empty state about campaigns rather than containers", async () => {
     server.routes.set("GET /me/campaigns", { status: 200, body: [] });
     await renderCampaigns("/campaigns", mintingSession());
 
     expect(await screen.findByText("No campaign yet")).toBeTruthy();
     expect(screen.getByText(/follow an invitation/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Shared World The Salt Company" })).toBeTruthy();
     expect(screen.queryByText(/group/i)).toBeNull();
   });
 });

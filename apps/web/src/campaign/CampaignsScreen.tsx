@@ -15,6 +15,11 @@ import {
   DialogTitle,
   Icon,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -178,11 +183,14 @@ function SharedWorldDialog({
   );
 }
 
-function NewCampaign() {
+const STANDALONE = "standalone";
+
+function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembership> }) {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [target, setTarget] = useState(STANDALONE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -190,8 +198,15 @@ function NewCampaign() {
     setBusy(true);
     setError(undefined);
     const token = await fetchCredential();
+    const world = worlds.find((candidate) => candidate.group.id === target)?.group;
     const result = await runApiResult(
-      (client) => client.campaigns.create({ payload: { name: name.trim() } }),
+      (client) =>
+        world === undefined
+          ? client.campaigns.create({ payload: { name: name.trim() } })
+          : client.groups.createCampaign({
+              params: { groupId: world.id },
+              payload: { name: name.trim() },
+            }),
       token,
     );
 
@@ -206,11 +221,12 @@ function NewCampaign() {
     }
 
     invalidate([reads.myCampaigns]);
+    if (world !== undefined) invalidate([reads.group(world.id)]);
     await navigate({
       to: "/campaigns/$campaignId",
       params: { campaignId: result.success.id },
     });
-  }, [fetchCredential, invalidate, name, navigate]);
+  }, [fetchCredential, invalidate, name, navigate, target, worlds]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -222,6 +238,28 @@ function NewCampaign() {
           onChange={(event) => setName(event.target.value)}
           className="max-w-xs"
         />
+        {worlds.length > 0 && (
+          <Select value={target} onValueChange={(value) => setTarget(String(value))}>
+            <SelectTrigger aria-label="Campaign context" className="w-56">
+              <SelectValue>
+                {(value) =>
+                  value === STANDALONE
+                    ? "Standalone campaign"
+                    : (worlds.find((candidate) => candidate.group.id === value)?.group.name ??
+                      "Shared World")
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={STANDALONE}>Standalone campaign</SelectItem>
+              {worlds.map(({ group }) => (
+                <SelectItem key={group.id} value={group.id}>
+                  {group.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
           {busy ? "Working…" : "Start a campaign"}
         </Button>
@@ -235,6 +273,37 @@ function NewCampaign() {
   );
 }
 
+function SharedWorldDirectory({ worlds }: { readonly worlds: ReadonlyArray<GroupMembership> }) {
+  if (worlds.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-2" aria-label="Shared Worlds">
+      <span className="text-label leading-snug font-semibold text-heading">Shared Worlds</span>
+      <div className="flex flex-wrap gap-2">
+        {worlds.map(({ group, isOwner }) => (
+          <Button
+            key={group.id}
+            variant="secondary"
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link
+                to="/worlds/$groupId"
+                params={{ groupId: group.id }}
+                aria-label={`Open Shared World ${group.name}`}
+              />
+            }
+          >
+            <Icon name="map" size={14} />
+            {group.name}
+            {isOwner && <Badge variant="outline">Yours</Badge>}
+          </Button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
   const [worldsResource] = useApiAtom(groupsAtom);
@@ -242,6 +311,7 @@ export function CampaignsScreen() {
   const [promoting, setPromoting] = useState<CampaignMembership | undefined>();
   const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
+  const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
 
   return (
     <AppShell
@@ -258,7 +328,7 @@ export function CampaignsScreen() {
         )}
         {memberships !== undefined && (
           <>
-            <NewCampaign />
+            <NewCampaign worlds={worlds} />
             {memberships.length === 0 ? (
               <EmptyState icon="book-open" title="No campaign yet">
                 Start one above, or follow an invitation from somebody running a game.
@@ -298,6 +368,7 @@ export function CampaignsScreen() {
               <Icon name="history" size={14} />
               Archived campaigns
             </Button>
+            <SharedWorldDirectory worlds={worlds} />
           </>
         )}
       </div>

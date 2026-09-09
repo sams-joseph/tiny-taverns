@@ -64,6 +64,11 @@ ordinary campaign work must not require navigating or owning that container.
   backing context until promotion. Campaign reach continues through
   `groupInScope`, and Group Hob's conversation predicate uses the explicit
   world gate too, so this boundary hides no campaign and has no thread bypass.
+- The campaign-first create form offers `Standalone campaign` by default and,
+  when the account belongs to explicit worlds, those Shared Worlds as optional
+  targets through the existing `groups.createCampaign` authorization seam.
+  The campaign home also lists every Shared World independently of campaign
+  participation, so a world-only member is never left without a route into it.
 
 ## The group architecture of 2026-09-01: what supersedes what
 
