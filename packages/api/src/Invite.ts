@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
+import { CampaignId, CampaignInviteId, GroupId } from "./Ids.js";
 
 /**
  * An invitation to join a campaign.
@@ -58,14 +58,11 @@ export type InviteStatus = typeof InviteStatus.Type;
  * One invitation, as the campaign creator sees it. **The token is not on this
  * shape and never will be** — the server stores only a digest.
  */
-export class GroupInvite extends Schema.Class<GroupInvite>("GroupInvite")({
-  id: GroupInviteId,
+export class CampaignInvite extends Schema.Class<CampaignInvite>("CampaignInvite")({
+  id: CampaignInviteId,
   groupId: GroupId,
-  /**
-   * The campaign this invitation admits to. Nullable only for legacy stored
-   * group-only rows, which no management list returns.
-   */
-  campaignId: Schema.NullOr(CampaignId),
+  /** The campaign this invitation admits to. */
+  campaignId: CampaignId,
   /** Who it is for, in the owner's words. */
   label: Schema.String,
   status: InviteStatus,
@@ -80,11 +77,11 @@ export class GroupInvite extends Schema.Class<GroupInvite>("GroupInvite")({
 /**
  * A freshly minted invitation and the one time its token exists in plaintext.
  *
- * Nested rather than a `token` field on `GroupInvite`, so the type itself says
+ * Nested rather than a `token` field on `CampaignInvite`, so the type itself says
  * which read carries the secret.
  */
 export class IssuedInvite extends Schema.Class<IssuedInvite>("IssuedInvite")({
-  invite: GroupInvite,
+  invite: CampaignInvite,
   /** 32 random bytes, base64url. Shown once; the server keeps only its digest. */
   token: Schema.String,
 }) {}

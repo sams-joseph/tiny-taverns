@@ -82,6 +82,10 @@ ordinary campaign work must not require navigating or owning that container.
 - The repository matches that boundary: `Invites` has only campaign-scoped
   list/create/revoke plus token preview/redeem; `Groups.removeMember`,
   `removeFromGroup`, and the cross-group participation revoker are gone.
+- The public invitation contract is `CampaignInvite` / `CampaignInviteId`, and
+  its `campaignId` is required. Nullable campaign ids exist only on the private
+  repository row so legacy group-only tokens can expire or redeem; `group_invite`
+  and `group_id` remain persistence names, not product governance concepts.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

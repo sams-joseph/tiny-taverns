@@ -1,4 +1,4 @@
-import type { Campaign, GroupInvite, InviteStatus } from "@taverns/api";
+import type { Campaign, CampaignInvite, InviteStatus } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -77,7 +77,7 @@ const STATUS: Record<
  * worked. Measured in a browser against a real revoked-after-accepted row,
  * which is the only state that shows it.
  */
-const sentenceFor = (invite: GroupInvite): string => {
+const sentenceFor = (invite: CampaignInvite): string => {
   if (invite.status === "revoked") {
     return invite.redeemedByName === null
       ? "Withdrawn. The link it carried is inert."
@@ -137,7 +137,7 @@ function InviteRow({
   invite,
   campaign,
 }: {
-  readonly invite: GroupInvite;
+  readonly invite: CampaignInvite;
   readonly campaign: Campaign;
 }) {
   const { busy, failure, submit } = useMutation();

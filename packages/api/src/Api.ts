@@ -103,7 +103,7 @@ import {
   EquipmentId,
   FeatId,
   GroupId,
-  GroupInviteId,
+  CampaignInviteId,
   HobDirectResourceUpdateId,
   MagicItemId,
   NpcId,
@@ -121,7 +121,7 @@ import {
 } from "./Ids.js";
 import {
   CampaignInviteCreate,
-  GroupInvite,
+  CampaignInvite,
   InvitePreview,
   InviteRedeemed,
   InviteToken,
@@ -741,7 +741,7 @@ class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
   .add(
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
-      success: Schema.Array(GroupInvite),
+      success: Schema.Array(CampaignInvite),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
@@ -751,9 +751,9 @@ class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
       error: NotFound,
     }),
     HttpApiEndpoint.post("revoke", "/:inviteId/revoke", {
-      params: { campaignId: CampaignId, inviteId: GroupInviteId },
+      params: { campaignId: CampaignId, inviteId: CampaignInviteId },
       payload: Schema.Struct({}),
-      success: GroupInvite,
+      success: CampaignInvite,
       error: NotFound,
     }),
   )

@@ -1,4 +1,4 @@
-import type { CampaignId, CampaignMember, GroupInvite } from "@taverns/api";
+import type { CampaignId, CampaignInvite, CampaignMember } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { campaignInvitesAtom, membersAtom } from "../campaign/load";
 
@@ -53,7 +53,7 @@ export interface PartyRoster {
    * already rendered — including the withdrawn-before-taken precedence, which
    * this screen must not restate.
    */
-  readonly invites: ReadonlyArray<GroupInvite>;
+  readonly invites: ReadonlyArray<CampaignInvite>;
 }
 
 export const rosterAtom = Atom.family((campaignId: CampaignId) =>

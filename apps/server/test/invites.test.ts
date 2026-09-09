@@ -2,7 +2,7 @@ import {
   type Campaign,
   type CampaignId,
   CurrentActor,
-  type GroupInviteId,
+  type CampaignInviteId,
   NotFound,
 } from "@taverns/api";
 import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
@@ -134,7 +134,7 @@ const listInvites = (campaign: Campaign) =>
     }).pipe(Effect.orDie),
   );
 
-const revokeInvite = (campaign: Campaign, inviteId: GroupInviteId) =>
+const revokeInvite = (campaign: Campaign, inviteId: CampaignInviteId) =>
   runtime.runPromise(
     Effect.gen(function* () {
       const invites = yield* Invites;
@@ -536,7 +536,7 @@ describe("the lifetime rules", () => {
       Effect.gen(function* () {
         const invites = yield* Invites;
         const creator = yield* asDm(fixture.dm, fixture.campaign.id);
-        return yield* invites.revokeForCampaign(creator, randomUUID() as GroupInviteId);
+        return yield* invites.revokeForCampaign(creator, randomUUID() as CampaignInviteId);
       }).pipe(Effect.result),
     );
 

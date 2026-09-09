@@ -1349,7 +1349,6 @@ export const fullCampaign = (): Map<string, Answer> =>
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
     // roster lives, and it re-aims both.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
-    [`GET /groups/${groupId}/invites`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     // The group's chronicle — empty is the ordinary state of a young group.
     [`GET /groups/${groupId}/history`, { status: 200, body: [] }],

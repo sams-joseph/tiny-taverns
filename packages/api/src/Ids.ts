@@ -161,15 +161,15 @@ export const BeatId = id("BeatId");
 export type BeatId = typeof BeatId.Type;
 
 /**
- * One invitation to join a group — optionally admitting to one of its campaigns
- * in the same act.
+ * One invitation to join a campaign. Its Shared World eligibility row is
+ * persistence plumbing created during redemption.
  *
  * Names the *row*, never the token — the token is a secret the server only ever
- * stores as a digest, and it is what a person holds. This is what the group
- * owner revokes.
+ * stores as a digest, and it is what a person holds. The campaign creator
+ * revokes the invitation.
  */
-export const GroupInviteId = id("GroupInviteId");
-export type GroupInviteId = typeof GroupInviteId.Type;
+export const CampaignInviteId = id("CampaignInviteId");
+export type CampaignInviteId = typeof CampaignInviteId.Type;
 
 /**
  * One character's place in one campaign's party — the join row, not the

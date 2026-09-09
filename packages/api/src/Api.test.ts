@@ -5,6 +5,7 @@ import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterOwnCreate } from "./Character.js";
+import { CampaignInvite } from "./Invite.js";
 import { CampaignCharacter, PartyJoin } from "./Party.js";
 import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
@@ -50,6 +51,25 @@ const groups = Object.values(TavernsApi.groups) as unknown as ReadonlyArray<Grou
 const endpointsOf = (group: GroupShape) => Object.values(group.endpoints);
 
 describe("the API declaration", () => {
+  it("exposes only invitations that belong to a campaign", () => {
+    const decode = Schema.decodeUnknownSync(CampaignInvite);
+    const invitation = {
+      id: "2b1f2a1e-0000-4000-8000-00000000a001",
+      groupId: "2b1f2a1e-0000-4000-8000-00000000a002",
+      campaignId: "2b1f2a1e-0000-4000-8000-00000000a003",
+      label: "Ilse",
+      status: "live",
+      expiresAt: "2026-09-23T12:00:00.000Z",
+      revokedAt: null,
+      redeemedAt: null,
+      redeemedByName: null,
+      createdAt: "2026-09-09T12:00:00.000Z",
+    };
+
+    expect(decode(invitation).campaignId).toBe(invitation.campaignId);
+    expect(() => decode({ ...invitation, campaignId: null })).toThrow();
+  });
+
   it("puts every campaign-scoped endpoint behind Authorization", () => {
     // The fail-closed guard for the transport: a group added without
     // `.middleware(Authorization)` is an unauthenticated endpoint, and the only

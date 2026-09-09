@@ -2,10 +2,10 @@ import {
   type AccountId,
   type CampaignId,
   type CampaignInviteCreate,
+  CampaignInvite,
+  type CampaignInviteId,
   CurrentActor,
   type GroupId,
-  GroupInvite,
-  type GroupInviteId,
   InvitePreview,
   InviteRedeemed,
   type InviteStatus,
@@ -63,7 +63,7 @@ export const INVITE_TTL_DAYS = 14;
 const TOKEN_BYTES = 32;
 
 interface InviteRow {
-  readonly id: GroupInviteId;
+  readonly id: CampaignInviteId;
   readonly group_id: GroupId;
   readonly campaign_id: CampaignId | null;
   readonly label: string;
@@ -77,7 +77,16 @@ interface InviteRow {
   readonly granted_campaign_membership: boolean;
 }
 
-interface ListedInviteRow extends InviteRow {
+/**
+ * Rows reached through campaign management always have a campaign. The
+ * nullable base row remains private to token preview/redemption so old
+ * group-only links can expire without weakening the public contract.
+ */
+interface CampaignInviteRow extends InviteRow {
+  readonly campaign_id: CampaignId;
+}
+
+interface ListedCampaignInviteRow extends CampaignInviteRow {
   readonly redeemed_by_name: string | null;
 }
 
@@ -95,8 +104,8 @@ const statusOf = (row: InviteRow): InviteStatus =>
         ? "expired"
         : "live";
 
-const toInvite = (row: ListedInviteRow): GroupInvite =>
-  new GroupInvite({
+const toInvite = (row: ListedCampaignInviteRow): CampaignInvite =>
+  new CampaignInvite({
     id: row.id,
     groupId: row.group_id,
     campaignId: row.campaign_id,
@@ -123,7 +132,7 @@ export class Invites extends Context.Service<
     /** Campaign creator's list, containing only invitations to this table. */
     readonly listForCampaign: (
       creator: CampaignCreatorActor,
-    ) => Effect.Effect<ReadonlyArray<GroupInvite>, never>;
+    ) => Effect.Effect<ReadonlyArray<CampaignInvite>, never>;
     /** Mints a campaign seat; its group is an internal fact on the proof. */
     readonly createForCampaign: (
       creator: CampaignCreatorActor,
@@ -132,8 +141,8 @@ export class Invites extends Context.Service<
     /** Withdraws only this campaign invitation and the seat it granted. */
     readonly revokeForCampaign: (
       creator: CampaignCreatorActor,
-      inviteId: GroupInviteId,
-    ) => Effect.Effect<GroupInvite, NotFound>;
+      inviteId: CampaignInviteId,
+    ) => Effect.Effect<CampaignInvite, NotFound>;
     /** What the holder of a live invitation is told before signing in. */
     readonly preview: (token: string) => Effect.Effect<InvitePreview, NotFound>;
     /** Accepts one, for the account that is signed in and no other. */
@@ -196,7 +205,7 @@ export class Invites extends Context.Service<
         listForCampaign: (creator) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const rows = yield* sql<ListedInviteRow>`
+              const rows = yield* sql<ListedCampaignInviteRow>`
                 select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
                 from group_invite
                 left join account on account.id = group_invite.redeemed_by
@@ -221,7 +230,7 @@ export class Invites extends Context.Service<
 
               const token = randomBytes(TOKEN_BYTES).toString("base64url");
               const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
-              const rows = yield* sql<InviteRow>`
+              const rows = yield* sql<CampaignInviteRow>`
                 insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
                 values (${creator.group}, ${creator.campaign}, ${hashToken(token)},
                         ${payload.label ?? ""}, ${expiresAt})
@@ -238,7 +247,7 @@ export class Invites extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const rows = yield* sql<InviteRow>`
+                const rows = yield* sql<CampaignInviteRow>`
                   update group_invite
                   set revoked_at = coalesce(group_invite.revoked_at, now())
                   where group_invite.id = ${inviteId}
