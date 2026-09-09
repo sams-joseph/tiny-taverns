@@ -77,7 +77,8 @@ ordinary campaign work must not require navigating or owning that container.
   controls and needs no `/me` identity read: campaign invitations are the one
   onboarding lifecycle, and they establish group eligibility as persistence
   plumbing. The old `/groups/:groupId/invites` API group is gone; preview and
-  redemption remain token-scoped, and invitation management is campaign-only.
+  redemption remain token-scoped, invitation management is campaign-only, and
+  `/groups/:groupId/members` exposes only `GET`—never a cross-campaign delete.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

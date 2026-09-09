@@ -129,6 +129,24 @@ describe("the API declaration", () => {
     ]);
   });
 
+  it("keeps the Shared World roster informational", () => {
+    const groupMembers = groups.find((group) => group.identifier === "groupMembers");
+
+    expect(
+      endpointsOf(groupMembers as GroupShape).map(({ identifier, method, path }) => ({
+        identifier,
+        method,
+        path,
+      })),
+    ).toEqual([
+      {
+        identifier: "list",
+        method: "GET",
+        path: "/groups/:groupId/members",
+      },
+    ]);
+  });
+
   it("declares the groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "beats",

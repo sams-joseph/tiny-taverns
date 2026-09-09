@@ -244,9 +244,7 @@ const GroupMembersLive = HttpApiBuilder.group(
   "groupMembers",
   Effect.fnUntraced(function* (handlers) {
     const groups = yield* Groups;
-    return handlers
-      .handle("list", ({ params }) => groups.members(params.groupId))
-      .handle("remove", ({ params }) => groups.removeMember(params.groupId, params.accountId));
+    return handlers.handle("list", ({ params }) => groups.members(params.groupId));
   }),
 );
 

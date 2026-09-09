@@ -720,17 +720,17 @@ class GroupLibraryGroup extends HttpApiGroup.make("groupLibrary")
   .prefix("/groups/:groupId/library")
   .middleware(Authorization) {}
 
+/**
+ * Who shares this world — an informational roster for every live member.
+ * Participation changes at one table through `MembersGroup`; there is no
+ * world-level write that can silently remove somebody from several campaigns.
+ */
 class GroupMembersGroup extends HttpApiGroup.make("groupMembers")
   .add(
     HttpApiEndpoint.get("list", "/", {
       params: { groupId: GroupId },
       success: Schema.Array(GroupMember),
       error: NotFound,
-    }),
-    HttpApiEndpoint.delete("remove", "/:accountId", {
-      params: { groupId: GroupId, accountId: AccountId },
-      success: Schema.Void,
-      error: [NotFound, Conflict],
     }),
   )
   .prefix("/groups/:groupId/members")
