@@ -13,12 +13,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient, runApiResult } from "../api/client";
 import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
-import type { Rehearsal, RehearsalTurn } from "./rehearsal";
+import { rateLimitedSentence, type Rehearsal, type RehearsalTurn } from "./rehearsal";
 
 const sentenceFor = (name: string, failure: ApiFailure): string => {
   switch (failure.kind) {
     case "rate-limited":
-      return failure.message;
+      return rateLimitedSentence(failure);
     case "unavailable":
       return failure.message;
     case "unauthorized":
@@ -46,6 +46,7 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
   const [status, setStatus] = useState<NpcPlayerStatus | undefined>(undefined);
   const [asking, setAsking] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
   const nextId = useRef(0);
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
   const credentialRef = useRef(fetchCredential);
@@ -129,6 +130,7 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
       append({ id: `you-${String(nextId.current++)}`, who: "user", text });
       setAsking(true);
       setWriting(false);
+      setNotice(undefined);
 
       const receive = (event: NpcEvent) => {
         switch (event.event) {
@@ -163,10 +165,13 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
           setWriting(false);
           answering.current = undefined;
           if (Result.isFailure(outcome)) {
+            const failure = classifyFailure(outcome.failure);
+            const text = sentenceFor(name, failure);
+            if (failure.kind === "rate-limited") setNotice(text);
             append({
               id: `npc-${String(nextId.current++)}`,
               who: "npc",
-              text: sentenceFor(name, classifyFailure(outcome.failure)),
+              text,
             });
           }
         }),
@@ -185,12 +190,14 @@ export function useNpcPlayerChat(campaignId: CampaignId, npcId: NpcId, name: str
     setTurns([]);
     setAsking(false);
     setWriting(false);
+    setNotice(undefined);
   }, []);
 
   return {
     turns,
     proposals: [],
     thinking: asking && !writing,
+    notice,
     send: status?.available === true ? send : undefined,
     unavailable:
       status?.available === true
@@ -211,16 +218,20 @@ export function useNpcSessionChat(
   npcId: NpcId,
   name: string,
   refreshToken = 0,
+  onProposal?: () => void,
 ): Rehearsal {
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<RehearsalTurn>>([]);
   const [status, setStatus] = useState<NpcPlayerStatus | undefined>(undefined);
   const [asking, setAsking] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
   const nextId = useRef(0);
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
   const askingRef = useRef(false);
   const writingRef = useRef(false);
+  const onProposalRef = useRef(onProposal);
+  onProposalRef.current = onProposal;
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
 
@@ -281,6 +292,7 @@ export function useNpcSessionChat(
       writingRef.current = false;
       setAsking(true);
       setWriting(false);
+      setNotice(undefined);
       const requestId = globalThis.crypto?.randomUUID?.() ?? `npc-${String(Date.now())}`;
 
       const receive = (event: NpcEvent) => {
@@ -290,6 +302,9 @@ export function useNpcSessionChat(
             return;
           case "failed":
             append({ id: `npc-${String(nextId.current++)}`, who: "npc", text: event.data.message });
+            return;
+          case "proposal":
+            onProposalRef.current?.();
             return;
           default:
             return;
@@ -314,10 +329,13 @@ export function useNpcSessionChat(
           setWriting(false);
           answering.current = undefined;
           if (Result.isFailure(outcome)) {
+            const failure = classifyFailure(outcome.failure);
+            const text = sentenceFor(name, failure);
+            if (failure.kind === "rate-limited") setNotice(text);
             append({
               id: `npc-${String(nextId.current++)}`,
               who: "npc",
-              text: sentenceFor(name, classifyFailure(outcome.failure)),
+              text,
             });
           }
         }),
@@ -332,6 +350,7 @@ export function useNpcSessionChat(
     turns,
     proposals: [],
     thinking: asking && !writing,
+    notice,
     send: status?.available === true ? send : undefined,
     unavailable:
       status?.available === true

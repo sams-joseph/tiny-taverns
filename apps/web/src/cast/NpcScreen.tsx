@@ -5,18 +5,19 @@ import type {
   NpcMemoryStatus,
   NpcProposal,
   NpcProposalContent,
+  SessionId,
 } from "@taverns/api";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, cn, Icon, Input, tabsTriggerVariants } from "@taverns/ui";
 import { Result } from "effect";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
-import { useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { DetailFacts, DetailSection } from "../ui/detail";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import { npcAtom, type NpcDetail } from "./load";
+import { npcAtom, sessionNpcsAtom, type NpcDetail } from "./load";
 import { NpcAvatar } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { useNpcRehearsal } from "./rehearsal";
@@ -56,10 +57,19 @@ const NPC_TABS: ReadonlyArray<{ readonly id: NpcTab; readonly label: string }> =
   { id: "proposals", label: "Proposals" },
 ];
 
+const tabForHash = (hash: string): NpcTab =>
+  NPC_TABS.some((item) => item.id === hash) ? (hash as NpcTab) : "profile";
+
 export function NpcScreen() {
   const { campaignId, npcId } = useParams({ from: "/campaigns/$campaignId/cast/$npcId" });
+  const locationHash = useLocation({ select: (location) => location.hash });
   const [editing, setEditing] = useState(false);
-  const [tab, setTab] = useState<NpcTab>("profile");
+  const [tab, setTab] = useState<NpcTab>(() => tabForHash(locationHash));
+
+  useEffect(() => {
+    const next = tabForHash(locationHash);
+    if (next !== "profile") setTab(next);
+  }, [locationHash]);
 
   return (
     <CampaignChrome
@@ -89,9 +99,9 @@ export function NpcScreen() {
         </>
       )}
     >
-      {({ extra }) => (
+      {({ view, extra }) => (
         <>
-          <NpcBody detail={extra} active={tab} />
+          <NpcBody detail={extra} active={tab} currentSessionId={view.session?.id} />
           {editing && (
             <NpcDialog
               campaignId={campaignId}
@@ -131,7 +141,15 @@ function NpcTabs({
   );
 }
 
-function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly active: NpcTab }) {
+function NpcBody({
+  detail,
+  active,
+  currentSessionId,
+}: {
+  readonly detail: NpcDetail;
+  readonly active: NpcTab;
+  readonly currentSessionId?: SessionId;
+}) {
   const { npc, knowledge, memories, proposals } = detail;
   const invalidate = useInvalidate();
   const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name, () => {
@@ -149,7 +167,11 @@ function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly acti
   if (active === "rehearsal") {
     return (
       <div className="flex min-h-[34rem] flex-col">
-        <RehearsalPanel name={npc.name} rehearsal={usableRehearsal} />
+        <RehearsalPanel
+          name={npc.name}
+          rehearsal={usableRehearsal}
+          reviewTarget={{ campaignId: npc.campaignId, npcId: npc.id }}
+        />
       </div>
     );
   }
@@ -172,7 +194,7 @@ function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly acti
                 <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
               )}
             </div>
-            {archived && <Badge variant="outline">Archived</Badge>}
+            <NpcDetailStatus npc={npc} proposals={proposals} currentSessionId={currentSessionId} />
           </div>
 
           <Persona npc={npc} />
@@ -181,6 +203,75 @@ function NpcBody({ detail, active }: { readonly detail: NpcDetail; readonly acti
         <Inspector npc={npc} rehearsal={rehearsal} />
       </div>
     </div>
+  );
+}
+
+function NpcDetailStatus({
+  npc,
+  proposals,
+  currentSessionId,
+}: {
+  readonly npc: Npc;
+  readonly proposals: ReadonlyArray<NpcProposal>;
+  readonly currentSessionId?: SessionId;
+}) {
+  const pending = proposals.filter((proposal) => proposal.state === "pending").length;
+  return (
+    <div className="flex flex-wrap justify-end gap-1.5">
+      {npc.archivedAt !== null ? (
+        <Badge variant="outline">Archived</Badge>
+      ) : npc.visibility === "shared" ? (
+        <Badge variant="secondary">
+          <Icon name="users" size={11} />
+          Player-facing
+        </Badge>
+      ) : (
+        <Badge variant="outline">
+          <Icon name="eye-off" size={11} />
+          Cast only
+        </Badge>
+      )}
+      {currentSessionId !== undefined && (
+        <NpcDetailOpenBadge npc={npc} sessionId={currentSessionId} />
+      )}
+      {pending > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-caption text-accent-ink"
+          nativeButton={false}
+          render={
+            <Link
+              to="/campaigns/$campaignId/cast/$npcId"
+              params={{ campaignId: npc.campaignId, npcId: npc.id }}
+              hash="proposals"
+            />
+          }
+        >
+          <Icon name="sparkles" size={11} />
+          {pending} pending
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function NpcDetailOpenBadge({
+  npc,
+  sessionId,
+}: {
+  readonly npc: Npc;
+  readonly sessionId: SessionId;
+}) {
+  const [sessionNpcs] = useApiAtom(sessionNpcsAtom({ campaignId: npc.campaignId, sessionId }));
+  if (sessionNpcs.state !== "ready" || !sessionNpcs.value.some((row) => row.id === npc.id)) {
+    return null;
+  }
+  return (
+    <Badge variant="secondary">
+      <Icon name="mic" size={11} />
+      Open at table
+    </Badge>
   );
 }
 

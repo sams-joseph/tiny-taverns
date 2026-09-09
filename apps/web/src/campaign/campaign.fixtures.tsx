@@ -1314,6 +1314,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     // and no thread yet — the ordinary state on a server without a model.
     [`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [cazril] }],
     [`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [playerCazril] }],
+    [`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/player`, { status: 200, body: playerCazril }],
     [

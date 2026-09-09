@@ -5,7 +5,10 @@ import type {
   NpcKnowledgeFact,
   NpcMemory,
   NpcProposal,
+  PlayerNpc,
+  SessionId,
 } from "@taverns/api";
+import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -55,8 +58,55 @@ const npcMemoriesAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.memories({ params: at }), [reads.npcMemories(at.npcId)]),
 );
 
-const npcProposalsAtom = Atom.family((at: OneNpc) =>
+export const npcProposalsAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.proposals({ params: at }), [reads.npcProposals(at.npcId)]),
+);
+
+export const npcPendingProposalCountAtom = Atom.family((at: OneNpc) =>
+  apiAtom(
+    (client) =>
+      Effect.map(
+        client.npcs.proposals({ params: at }),
+        (proposals) => proposals.filter((proposal) => proposal.state === "pending").length,
+      ),
+    [reads.npcProposals(at.npcId)],
+  ),
+);
+
+interface SessionNpcsKey {
+  readonly campaignId: CampaignId;
+  readonly sessionId: SessionId;
+}
+
+export const sessionNpcsAtom = Atom.family((at: SessionNpcsKey) =>
+  apiAtom((client) => client.npcs.sessionList({ params: at }), [reads.sessionNpcs(at.sessionId)]),
+);
+
+export interface SessionNpcProposalSummary {
+  readonly npc: PlayerNpc;
+  readonly pendingProposals: number;
+}
+
+export const sessionNpcProposalSummaryAtom = Atom.family((at: SessionNpcsKey) =>
+  apiAtom(
+    (client) =>
+      Effect.flatMap(client.npcs.sessionList({ params: at }), (sessionNpcs) =>
+        Effect.all(
+          sessionNpcs.map((npc) =>
+            Effect.map(
+              client.npcs.proposals({ params: { campaignId: at.campaignId, npcId: npc.id } }),
+              (proposals): SessionNpcProposalSummary => ({
+                npc,
+                pendingProposals: proposals.filter((proposal) => proposal.state === "pending")
+                  .length,
+              }),
+            ),
+          ),
+          { concurrency: 4 },
+        ),
+      ),
+    [reads.sessionNpcs(at.sessionId)],
+  ),
 );
 
 /**

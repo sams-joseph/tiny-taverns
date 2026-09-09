@@ -1823,7 +1823,7 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       params: { campaignId: CampaignId, npcId: NpcId },
       payload: NpcRehearse,
       success: HttpApiSchema.StreamSse({ events: NpcEvent }),
-      error: [NotFound, HobUnavailable],
+      error: [NotFound, HobUnavailable, RateLimited],
     }),
     HttpApiEndpoint.get("threads", "/:npcId/threads", {
       params: { campaignId: CampaignId, npcId: NpcId },
@@ -1966,7 +1966,7 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       params: { campaignId: CampaignId, npcId: NpcId, sessionId: SessionId },
       payload: NpcSessionTalk,
       success: HttpApiSchema.StreamSse({ events: NpcEvent }),
-      error: [NotFound, HobUnavailable],
+      error: [NotFound, HobUnavailable, RateLimited],
     }),
   )
   .prefix("/campaigns/:campaignId/npcs")

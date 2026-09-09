@@ -10,6 +10,7 @@ import {
   installStubServer,
   noSession,
   npcId,
+  sessionId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 
@@ -36,6 +37,29 @@ const renderCast = async (): Promise<void> => {
   ));
 };
 
+const pendingProposal = {
+  id: "2b1f2a1e-0000-4000-8000-00000000f601",
+  campaignId,
+  npcId,
+  threadId: "2b1f2a1e-0000-4000-8000-00000000e0c1",
+  npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+  proposedByAccountId: null,
+  kind: "memory",
+  content: { kind: "memory", body: "The party promised Cazril a true name." },
+  state: "pending",
+  decidedByAccountId: null,
+  decidedAt: null,
+  rejectionReason: null,
+  acceptedMemoryId: null,
+  acceptedNoteId: null,
+  acceptedBeatId: null,
+  visibility: "dm",
+  origin: "assistant",
+  assistantTurnId: null,
+  createdAt: cazril.createdAt,
+  updatedAt: cazril.updatedAt,
+};
+
 describe("CastScreen", () => {
   it("draws the cast as cards, on the campaign row, with the private-material mark", async () => {
     await renderCast();
@@ -47,7 +71,7 @@ describe("CastScreen", () => {
     expect(card).not.toBeNull();
     expect(within(card!).getByText("the ferryman at the crossing")).toBeInTheDocument();
     expect(within(card!).getByText(/takes names instead of coin/)).toBeInTheDocument();
-    // The one badge worth drawing on a row every one of which is `dm`.
+    expect(within(card!).getByText("Cast only")).toBeInTheDocument();
     expect(within(card!).getByText("Private material")).toBeInTheDocument();
     // Both ways in point at the NPC's own screen.
     expect(screen.getByRole("link", { name: "Cazril" })).toHaveAttribute(
@@ -61,6 +85,32 @@ describe("CastScreen", () => {
     // And *Cast* is the lit item on the campaign row.
     const row = screen.getByRole("navigation", { name: "This campaign" });
     expect(within(row).getByRole("link", { name: "Cast" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("derives player-facing, current-session and pending-proposal cues from existing reads", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
+      status: 200,
+      body: [
+        { id: npcId, campaignId, name: "Cazril", role: "the ferryman", persona: cazril.persona },
+      ],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
+      status: 200,
+      body: [pendingProposal],
+    });
+
+    await renderCast();
+
+    const card = (await screen.findByRole("link", { name: "Cazril" })).closest("li");
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText("Player-facing")).toBeInTheDocument();
+    expect(within(card!).getByText("Open at table")).toBeInTheDocument();
+    const review = within(card!).getByRole("button", { name: "1 pending" });
+    expect(review).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
   });
 
   it("says what to do next when the cast is empty, and when nothing matches", async () => {

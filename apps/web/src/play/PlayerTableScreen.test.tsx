@@ -36,6 +36,29 @@ const sharedNpc = {
   persona: { identity: { summary: "Takes names, not coin." } },
 };
 
+const sharedProposal = {
+  id: "2b1f2a1e-0000-4000-8000-00000000f601",
+  campaignId,
+  npcId: sharedNpcId,
+  threadId: sharedNpcThreadId,
+  npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+  proposedByAccountId: null,
+  kind: "memory",
+  content: { kind: "memory", body: "The party promised Cazril a true name." },
+  state: "pending",
+  decidedByAccountId: null,
+  decidedAt: null,
+  rejectionReason: null,
+  acceptedMemoryId: null,
+  acceptedNoteId: null,
+  acceptedBeatId: null,
+  visibility: "dm",
+  origin: "assistant",
+  assistantTurnId: null,
+  createdAt: "2026-08-04T19:05:00.000Z",
+  updatedAt: "2026-08-04T19:05:00.000Z",
+};
+
 const sharedNpcLine = {
   id: "2b1f2a1e-0000-4000-8000-00000000e101",
   threadId: sharedNpcThreadId,
@@ -233,6 +256,81 @@ describe("PlayerTableScreen", () => {
       );
       expect(reads.length).toBeGreaterThan(1);
     });
+  });
+
+  it("does not disclose session NPC proposal review controls to players", async () => {
+    server.routes.set(...playing(campaignId));
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
+      status: 200,
+      body: [sharedNpc],
+    });
+    server.routes.set(
+      `GET /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/status`,
+      { status: 200, body: { available: true, npc: "Cazril" } },
+    );
+    server.routes.set(sharedNpcTurnsPath, { status: 200, body: [] });
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/talk`,
+      {
+        status: 200,
+        sse:
+          `event: began\ndata: ${JSON.stringify({ threadId: sharedNpcThreadId, turnId: sharedProposal.npcTurnId })}\n\n` +
+          `event: proposal\ndata: ${JSON.stringify({ proposal: sharedProposal })}\n\n` +
+          'event: done\ndata: {"reason":"stop"}\n\n',
+      },
+    );
+
+    await renderTable();
+    const chat = await screen.findByRole("region", { name: "Talk to Cazril" });
+    await userEvent.type(
+      within(chat).getByRole("textbox", { name: "Say something to Cazril" }),
+      "We will pay in names.{enter}",
+    );
+
+    await waitFor(() =>
+      expect(
+        server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/talk")),
+      ).toBe(true),
+    );
+    expect(within(chat).queryByRole("button", { name: "Review in Cast" })).toBeNull();
+    expect(within(chat).queryByRole("button", { name: /Accept/i })).toBeNull();
+    expect(screen.queryByText(/proposal.*waiting/i)).toBeNull();
+  });
+
+  it("renders session NPC rate-limit messages with retry timing", async () => {
+    server.routes.set(...playing(campaignId));
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
+      status: 200,
+      body: [sharedNpc],
+    });
+    server.routes.set(
+      `GET /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/status`,
+      { status: 200, body: { available: true, npc: "Cazril" } },
+    );
+    server.routes.set(sharedNpcTurnsPath, { status: 200, body: [] });
+    server.routes.set(
+      `POST /campaigns/${campaignId}/npcs/${sharedNpcId}/sessions/${sessionId}/talk`,
+      {
+        status: 429,
+        body: {
+          _tag: "RateLimited",
+          message:
+            "You have sent too many messages to NPCs in the last minute. Wait a moment, then try again.",
+          retryAfterSeconds: 60,
+        },
+      },
+    );
+
+    await renderTable();
+    const chat = await screen.findByRole("region", { name: "Talk to Cazril" });
+    await userEvent.type(
+      within(chat).getByRole("textbox", { name: "Say something to Cazril" }),
+      "Again.{enter}",
+    );
+
+    expect(await within(chat).findByRole("alert")).toHaveTextContent(
+      "You have sent too many messages to NPCs in the last minute. Wait a moment, then try again. Retry after 60 seconds.",
+    );
   });
 
   it("sends the sheet action to the new table route", async () => {

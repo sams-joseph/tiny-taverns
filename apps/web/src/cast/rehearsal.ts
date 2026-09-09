@@ -43,6 +43,8 @@ export interface Rehearsal {
   readonly send: ((text: string) => void) | undefined;
   /** Why `send` is undefined, in a sentence with the fix in it. */
   readonly unavailable: string | undefined;
+  /** A temporary composer-level notice, e.g. the server's typed rate-limit message. */
+  readonly notice: string | undefined;
   /** Proposal records streamed by the answer before the proposals tab refreshes. */
   readonly proposals: ReadonlyArray<NpcProposal>;
   /** The template version and token estimate — the inspector's facts, never the prompt. */
@@ -58,6 +60,10 @@ export interface Rehearsal {
   readonly reset: (() => void) | undefined;
 }
 
+export const rateLimitedSentence = (
+  failure: Extract<ApiFailure, { readonly kind: "rate-limited" }>,
+): string => `${failure.message} Retry after ${String(failure.retryAfterSeconds)} seconds.`;
+
 const sentenceFor = (name: string, failure: ApiFailure): string => {
   switch (failure.kind) {
     case "unavailable":
@@ -69,7 +75,7 @@ const sentenceFor = (name: string, failure: ApiFailure): string => {
     case "unreachable":
       return `${name} could not answer: the server did not respond.`;
     case "rate-limited":
-      return failure.message;
+      return rateLimitedSentence(failure);
     default:
       return `${name} could not answer: ${failure.kind === "conflict" ? failure.message : failure.detail}`;
   }
@@ -95,6 +101,7 @@ export function useNpcRehearsal(
   const [writing, setWriting] = useState(false);
   const [lastPrompt, setLastPrompt] = useState<Rehearsal["lastPrompt"]>(undefined);
   const [proposals, setProposals] = useState<ReadonlyArray<NpcProposal>>([]);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   const nextId = useRef(0);
   const answering = useRef<Fiber.Fiber<unknown, unknown> | undefined>(undefined);
@@ -181,6 +188,7 @@ export function useNpcRehearsal(
       append({ id: `you-${String(nextId.current++)}`, who: "user", text });
       setAsking(true);
       setWriting(false);
+      setNotice(undefined);
 
       const receive = (event: NpcEvent) => {
         switch (event.event) {
@@ -231,10 +239,13 @@ export function useNpcRehearsal(
           setWriting(false);
           answering.current = undefined;
           if (Result.isFailure(outcome)) {
+            const failure = classifyFailure(outcome.failure);
+            const text = sentenceFor(name, failure);
+            if (failure.kind === "rate-limited") setNotice(text);
             append({
               id: `npc-${String(nextId.current++)}`,
               who: "npc",
-              text: sentenceFor(name, classifyFailure(outcome.failure)),
+              text,
             });
           }
         }),
@@ -255,6 +266,7 @@ export function useNpcRehearsal(
     setWriting(false);
     setLastPrompt(undefined);
     setProposals([]);
+    setNotice(undefined);
   }, []);
 
   return {
@@ -262,6 +274,7 @@ export function useNpcRehearsal(
     proposals,
     thinking: asking && !writing,
     send: status?.available === true ? send : undefined,
+    notice,
     unavailable:
       status?.available === true
         ? undefined

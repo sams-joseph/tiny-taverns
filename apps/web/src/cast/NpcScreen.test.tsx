@@ -53,6 +53,34 @@ const openRehearsal = async () => {
   return await screen.findByRole("region", { name: "Rehearse with Cazril" });
 };
 
+const proposal = {
+  id: "2b1f2a1e-0000-4000-8000-00000000f601",
+  campaignId,
+  npcId,
+  threadId: npcThreadId,
+  npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+  proposedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
+  kind: "note",
+  content: {
+    kind: "note",
+    title: "Cazril's price",
+    body: "Pearls sink first.",
+    noteKind: "note",
+  },
+  state: "pending",
+  decidedByAccountId: null,
+  decidedAt: null,
+  rejectionReason: null,
+  acceptedMemoryId: null,
+  acceptedNoteId: null,
+  acceptedBeatId: null,
+  visibility: "dm",
+  createdAt: cazril.createdAt,
+  updatedAt: cazril.updatedAt,
+  origin: "assistant",
+  assistantTurnId: null,
+};
+
 describe("NpcScreen", () => {
   it("draws the persona, marks the private half, and shows prompt metadata rather than a prompt", async () => {
     await renderNpc();
@@ -196,38 +224,10 @@ describe("NpcScreen", () => {
   });
 
   it("reviews NPC proposals without sending replacement content on accept", async () => {
-    const proposalId = "2b1f2a1e-0000-4000-8000-00000000f601";
+    const proposalId = proposal.id;
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
       status: 200,
-      body: [
-        {
-          id: proposalId,
-          campaignId,
-          npcId,
-          threadId: npcThreadId,
-          npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
-          proposedByAccountId: "2b1f2a1e-0000-4000-8000-0000000000aa",
-          kind: "note",
-          content: {
-            kind: "note",
-            title: "Cazril's price",
-            body: "Pearls sink first.",
-            noteKind: "note",
-          },
-          state: "pending",
-          decidedByAccountId: null,
-          decidedAt: null,
-          rejectionReason: null,
-          acceptedMemoryId: null,
-          acceptedNoteId: null,
-          acceptedBeatId: null,
-          visibility: "dm",
-          createdAt: cazril.createdAt,
-          updatedAt: cazril.updatedAt,
-          origin: "assistant",
-          assistantTurnId: null,
-        },
-      ],
+      body: [proposal],
     });
     server.routes.set(
       `POST /campaigns/${campaignId}/npcs/${npcId}/proposals/${proposalId}/accept`,
@@ -270,6 +270,87 @@ describe("NpcScreen", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(bodyOf(server, "POST", `/proposals/${proposalId}/accept`)).toEqual({});
+  });
+
+  it("opens the Proposals tab from a Cast review link", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
+      status: 200,
+      body: [proposal],
+    });
+    await renderAt(`/campaigns/${campaignId}/cast/${npcId}#proposals`, (screen) => (
+      <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    ));
+
+    expect(await screen.findByRole("heading", { name: "Pending proposals" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Proposals" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("acknowledges streamed rehearsal proposals and refreshes the pending proposal state", async () => {
+    withModel();
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
+      status: 200,
+      body: () => {
+        const reads = server.calls.filter(
+          (call) => call.method === "GET" && call.pathname.endsWith(`/npcs/${npcId}/proposals`),
+        );
+        return reads.length < 2 ? [] : [proposal];
+      },
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/rehearse`, {
+      status: 200,
+      sse:
+        frame("began", {
+          threadId: npcThreadId,
+          turnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+          templateVersion: "npc-prompt/1.1.0",
+          estimatedTokens: 312,
+        }) +
+        frame("proposal", { proposal }) +
+        frame("done", { reason: "stop" }),
+    });
+
+    await renderNpc();
+    const panel = await openRehearsal();
+    await userEvent.type(
+      await within(panel).findByRole("textbox", { name: "Say something to Cazril" }),
+      "Remember this.{enter}",
+    );
+
+    expect(await within(panel).findByText(/proposal is waiting/)).toBeInTheDocument();
+    const review = within(panel).getByRole("button", { name: "Review in Cast" });
+    expect(review).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
+    await waitFor(() => {
+      const reads = server.calls.filter(
+        (call) => call.method === "GET" && call.pathname.endsWith(`/npcs/${npcId}/proposals`),
+      );
+      expect(reads.length).toBeGreaterThan(1);
+    });
+  });
+
+  it("renders the exact typed rate-limit message and retry timing at the composer", async () => {
+    withModel();
+    server.routes.set(`POST /campaigns/${campaignId}/npcs/${npcId}/rehearse`, {
+      status: 429,
+      body: {
+        _tag: "RateLimited",
+        message: "This campaign has reached today's NPC chat limit. Try again tomorrow.",
+        retryAfterSeconds: 3720,
+      },
+    });
+
+    await renderNpc();
+    const panel = await openRehearsal();
+    await userEvent.type(
+      await within(panel).findByRole("textbox", { name: "Say something to Cazril" }),
+      "Again.{enter}",
+    );
+
+    expect(await within(panel).findByRole("alert")).toHaveTextContent(
+      "This campaign has reached today's NPC chat limit. Try again tomorrow. Retry after 3720 seconds.",
+    );
   });
 
   it("resumes the newest thread on open, so a reload keeps the rehearsal", async () => {

@@ -8,9 +8,11 @@ import {
   brannoc,
   campaign,
   campaignId,
+  cazril,
   goblin,
   goblinBoss,
   liveRun,
+  npcId,
   runId as runIdRaw,
   session,
   sessionId as sessionIdRaw,
@@ -35,10 +37,13 @@ export {
   brannoc,
   campaign,
   campaignId,
+  cazril,
   goblin,
   goblinBoss,
   hag,
   liveRun,
+  npcId,
+  playerCazril,
   session,
 } from "../campaign/campaign.fixtures";
 
@@ -105,6 +110,16 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${runBase}`, { status: 200, body: liveRun }],
     [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
+    [`GET ${base}/npcs`, { status: 200, body: [cazril] }],
+    [`GET ${base}/npcs/-/sessions/${sessionIdRaw}`, { status: 200, body: [] }],
+    [`GET ${base}/npcs/${npcId}/proposals`, { status: 200, body: [] }],
+    [
+      `GET ${base}/table/sessions/${sessionIdRaw}/events`,
+      {
+        status: 200,
+        sse: 'event: tick\ndata: {"cursor":"0"}\n\n',
+      },
+    ],
     [`GET ${runBase}/hob-direct-updates`, { status: 200, body: [] }],
     // Damage is a delta, so the answer a test wants back depends on the test.
     // The default takes five off the goblin, matching the prototype's button.
@@ -251,6 +266,21 @@ export const installRunServer = (): RunStubServer => {
       body: init?.body === undefined ? "" : new TextDecoder().decode(init.body as Uint8Array),
     });
 
+    if (pathname.includes("/table/sessions/") && pathname.endsWith("/events")) {
+      const found = server.routes.get(`${method} ${pathname}`) ?? {
+        status: 404,
+        body: { _tag: "NotFound", resource: "session", id: sessionIdRaw },
+      };
+      return Promise.resolve(
+        new Response(found.sse ?? (found.status === 204 ? null : JSON.stringify(found.body)), {
+          status: found.status,
+          headers: {
+            "content-type": found.sse === undefined ? "application/json" : "text/event-stream",
+          },
+        }),
+      );
+    }
+
     if (pathname.endsWith("/events")) {
       server.cursors.push(Number(new URLSearchParams(search).get("since") ?? "0"));
       if (server.denyStream) {
@@ -283,7 +313,8 @@ export const installRunServer = (): RunStubServer => {
         status: 404,
         body: { _tag: "NotFound", resource: "encounter_run", id: runIdRaw },
       };
-      return new Response(found.status === 204 ? null : JSON.stringify(found.body), {
+      const body = typeof found.body === "function" ? found.body() : found.body;
+      return new Response(found.status === 204 ? null : JSON.stringify(body), {
         status: found.status,
         headers: { "content-type": "application/json" },
       });

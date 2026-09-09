@@ -5,10 +5,13 @@ import {
   bodyOf,
   brannoc,
   campaignId,
+  cazril,
   directUpdate,
   goblinBoss,
   installRunServer,
   liveRun,
+  npcId,
+  playerCazril,
   renderRunner,
   session,
   sessionEvent,
@@ -420,6 +423,60 @@ describe("the runner", () => {
     // list this write hands the seam. `api/invalidation.test.tsx` is what says
     // the seam then does something with it.
     expect(combatantWrites(campaignId)).toEqual([reads.party(campaignId)]);
+  });
+
+  it("surfaces live NPC proposal cues only as DM review links", async () => {
+    let proposed = false;
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, visibility: "shared" }],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${session.id}`, {
+      status: 200,
+      body: [playerCazril],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
+      status: 200,
+      body: () =>
+        proposed
+          ? [
+              {
+                id: "2b1f2a1e-0000-4000-8000-00000000f601",
+                campaignId,
+                npcId,
+                threadId: "2b1f2a1e-0000-4000-8000-00000000e0c1",
+                npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
+                proposedByAccountId: null,
+                kind: "memory",
+                content: { kind: "memory", body: "The party promised Cazril a true name." },
+                state: "pending",
+                decidedByAccountId: null,
+                decidedAt: null,
+                rejectionReason: null,
+                acceptedMemoryId: null,
+                acceptedNoteId: null,
+                acceptedBeatId: null,
+                visibility: "dm",
+                origin: "assistant",
+                assistantTurnId: null,
+                createdAt: cazril.createdAt,
+                updatedAt: cazril.updatedAt,
+              },
+            ]
+          : [],
+    });
+
+    await renderRunner();
+    expect(await screen.findByRole("heading", { name: "NPC conversations" })).toBeInTheDocument();
+    expect(screen.queryByText("NPC proposals waiting")).toBeNull();
+    await waitFor(() => expect(server.open()).toBeGreaterThan(0));
+
+    proposed = true;
+    server.emit(sessionEvent(10, "beat-added"));
+
+    expect(await screen.findByText("NPC proposals waiting")).toBeInTheDocument();
+    const link = screen.getByRole("button", { name: "Cazril · 1 pending" });
+    expect(link).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
   });
 
   it("says where to get a credential rather than looking broken", async () => {

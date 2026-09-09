@@ -22,7 +22,7 @@ import {
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
@@ -30,6 +30,7 @@ import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
+import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { EndRunDialog } from "./EndRunDialog";
@@ -91,6 +92,75 @@ const rollFaces = (roll: Roll): string => {
 
 const rollByline = (roll: Roll): string =>
   [roll.accountName, roll.characterName].filter((part) => part !== null && part !== "").join(" · ");
+
+function SessionNpcProposalWatch({
+  path,
+  refreshToken,
+}: {
+  readonly path: RunPath;
+  readonly refreshToken: number;
+}) {
+  const [resource, reload] = useApiAtom(sessionNpcProposalSummaryAtom(path));
+  const lastTotal = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (refreshToken > 0) reload();
+  }, [refreshToken, reload]);
+
+  const rows = resource.state === "ready" ? resource.value : [];
+  const pending = rows.reduce((total, row) => total + row.pendingProposals, 0);
+
+  useEffect(() => {
+    if (resource.state !== "ready") return;
+    const before = lastTotal.current;
+    lastTotal.current = pending;
+    if (before !== undefined && pending > before) {
+      toast.add({
+        type: "magic",
+        title: "NPC proposal waiting",
+        description: "Review it from the Cast NPC's Proposals tab after the table settles.",
+      });
+    }
+  }, [pending, resource.state]);
+
+  if (resource.state !== "ready" || pending === 0) return null;
+
+  return (
+    <section className="rounded-card border border-accent/40 bg-accent-soft p-card text-accent-ink">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Icon name="sparkles" size={15} />
+          <h3 className="text-title-s font-semibold">NPC proposals waiting</h3>
+        </div>
+        <p className="text-body-s leading-body">
+          {pending} {pending === 1 ? "proposal needs" : "proposals need"} creator review. Nothing
+          has been written to the campaign yet.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {rows
+            .filter((row) => row.pendingProposals > 0)
+            .map((row) => (
+              <Button
+                key={row.npc.id}
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/campaigns/$campaignId/cast/$npcId"
+                    params={{ campaignId: path.campaignId, npcId: row.npc.id }}
+                    hash="proposals"
+                  />
+                }
+              >
+                {row.npc.name} · {row.pendingProposals} pending
+              </Button>
+            ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function ShareNpcCard({ path }: { readonly path: RunPath }) {
   const [resource, reload] = useApiAtom(runNpcsAtom(path));
@@ -321,6 +391,7 @@ export function RunScreen() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Combatant | undefined>();
   const [ending, setEnding] = useState(false);
+  const [npcProposalRefreshToken, setNpcProposalRefreshToken] = useState(0);
 
   const turn = useMutation();
   const share = useMutation();
@@ -338,6 +409,7 @@ export function RunScreen() {
       );
       refresh();
       reloadRolls();
+      setNpcProposalRefreshToken((token) => token + 1);
     },
     [refresh, reloadRolls],
   );
@@ -355,6 +427,7 @@ export function RunScreen() {
     onReconnected: () => {
       refresh();
       reloadRolls();
+      setNpcProposalRefreshToken((token) => token + 1);
     },
   });
 
@@ -669,6 +742,9 @@ export function RunScreen() {
                   onUndo={(update) => void undoDirectUpdate(update)}
                 />
                 {!over && <ShareNpcCard path={path} />}
+                {!over && (
+                  <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
+                )}
                 <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
                 <SessionLog
                   events={log}

@@ -178,7 +178,11 @@ export function CastScreen() {
                 <ul className="grid list-none grid-cols-1 gap-4 p-0 @lg:grid-cols-2 @3xl:grid-cols-3">
                   {shown.map((npc) => (
                     <li key={npc.id} className="min-w-0">
-                      <NpcCard npc={npc} onEdit={() => setEditing({ npc })} />
+                      <NpcCard
+                        npc={npc}
+                        currentSessionId={view.session?.id}
+                        onEdit={() => setEditing({ npc })}
+                      />
                     </li>
                   ))}
                 </ul>

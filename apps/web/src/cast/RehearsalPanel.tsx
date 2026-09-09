@@ -1,4 +1,6 @@
-import { Button, Icon } from "@taverns/ui";
+import type { CampaignId, NpcId } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
+import { Badge, Button, Icon } from "@taverns/ui";
 import { useEffect, useRef } from "react";
 import { Composer, NothingListens, UserTurn } from "../hob/ChatParts";
 import { NpcAvatar } from "./NpcCard";
@@ -23,6 +25,7 @@ export function RehearsalPanel({
   emptyBody = "Say something in the scene and hear how they answer. Nothing here reaches your players, and nothing they say changes the campaign.",
   label = `Say something to ${name}`,
   ariaLabel = `Rehearse with ${name}`,
+  reviewTarget,
 }: {
   readonly name: string;
   readonly rehearsal: Rehearsal;
@@ -31,6 +34,7 @@ export function RehearsalPanel({
   readonly emptyBody?: string;
   readonly label?: string;
   readonly ariaLabel?: string;
+  readonly reviewTarget?: { readonly campaignId: CampaignId; readonly npcId: NpcId };
 }) {
   const thread = useRef<HTMLDivElement>(null);
 
@@ -96,9 +100,24 @@ export function RehearsalPanel({
             </span>
           </div>
         )}
+        {rehearsal.proposals.length > 0 && reviewTarget !== undefined && (
+          <ProposalNotice
+            count={rehearsal.proposals.length}
+            campaignId={reviewTarget.campaignId}
+            npcId={reviewTarget.npcId}
+          />
+        )}
       </div>
 
       <div className="shrink-0">
+        {rehearsal.notice !== undefined && (
+          <p
+            role="alert"
+            className="border-t border-hairline px-3.5 py-2 text-caption text-accent-ink"
+          >
+            {rehearsal.notice}
+          </p>
+        )}
         {rehearsal.send === undefined ? (
           <NothingListens reason={rehearsal.unavailable} />
         ) : (
@@ -111,6 +130,45 @@ export function RehearsalPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function ProposalNotice({
+  count,
+  campaignId,
+  npcId,
+}: {
+  readonly count: number;
+  readonly campaignId: CampaignId;
+  readonly npcId: NpcId;
+}) {
+  return (
+    <div
+      role="status"
+      className="flex shrink-0 flex-wrap items-center gap-2 rounded-card border border-accent/40 bg-accent-soft px-3 py-2 text-caption text-accent-ink"
+    >
+      <Badge variant="outline">
+        <Icon name="sparkles" size={11} />
+        {count} {count === 1 ? "proposal" : "proposals"}
+      </Badge>
+      <span className="min-w-0 flex-1">
+        {count === 1 ? "A proposal is" : "Proposals are"} waiting for creator review.
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        nativeButton={false}
+        render={
+          <Link
+            to="/campaigns/$campaignId/cast/$npcId"
+            params={{ campaignId, npcId }}
+            hash="proposals"
+          />
+        }
+      >
+        Review in Cast
+      </Button>
+    </div>
   );
 }
 
