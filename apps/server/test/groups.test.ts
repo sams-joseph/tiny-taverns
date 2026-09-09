@@ -375,6 +375,67 @@ describe("cross-group isolation", () => {
 });
 
 describe("the group's own lifecycle", () => {
+  it("keeps a standalone campaign's context off every Shared World surface until promotion", async () => {
+    const journey = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const invites = yield* Invites;
+        const founder = yield* anAccount("Wayfarer");
+        const campaign = yield* as(founder)(
+          campaigns.createStandalone({ name: "A Road of Its Own" }),
+        );
+
+        // The backing row still does its campaign job. What it cannot do is
+        // answer any endpoint that presents it as a Shared World.
+        const campaignBefore = yield* Effect.result(as(founder)(campaigns.findById(campaign.id)));
+        const groupBefore = yield* Effect.result(as(founder)(groups.findById(campaign.groupId)));
+        const rosterBefore = yield* Effect.result(as(founder)(groups.members(campaign.groupId)));
+        const directoryBefore = yield* Effect.result(
+          as(founder)(groups.campaigns(campaign.groupId)),
+        );
+        const inviteBefore = yield* Effect.result(
+          as(founder)(invites.create(campaign.groupId, { label: "Too soon" })),
+        );
+        const secondCampaignBefore = yield* Effect.result(
+          as(founder)(campaigns.create(campaign.groupId, { name: "Too soon" })),
+        );
+
+        const creator = yield* asDm(founder, campaign.id);
+        const promoted = yield* groups.promote(creator, { name: "The Roads Between" });
+        const groupAfter = yield* as(founder)(groups.findById(campaign.groupId));
+        const directoryAfter = yield* as(founder)(groups.campaigns(campaign.groupId));
+
+        return {
+          campaignBefore,
+          groupBefore,
+          rosterBefore,
+          directoryBefore,
+          inviteBefore,
+          secondCampaignBefore,
+          promoted,
+          groupAfter,
+          directoryAfter,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(journey.campaignBefore._tag).toBe("Success");
+    for (const refusal of [
+      journey.groupBefore,
+      journey.rosterBefore,
+      journey.directoryBefore,
+      journey.inviteBefore,
+      journey.secondCampaignBefore,
+    ]) {
+      expect(refusal._tag).toBe("Failure");
+      if (refusal._tag === "Failure") expect(refusal.failure).toBeInstanceOf(NotFound);
+    }
+    expect(journey.promoted.isSharedWorld).toBe(true);
+    expect(journey.groupAfter.name).toBe("The Roads Between");
+    expect(journey.directoryAfter.map((campaign) => campaign.name)).toEqual(["A Road of Its Own"]);
+  }, 60_000);
+
   it("does not let a campaign creator promote somebody else's group", async () => {
     const refused = await runtime.runPromise(
       Effect.gen(function* () {

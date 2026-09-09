@@ -101,19 +101,45 @@ describe("campaign, session, character and note CRUD", () => {
           payload: { name: "The Direct Road", playerCount: 3 },
         });
         const groupsBefore = yield* client.groups.list();
+        const hiddenSurfaces = yield* Effect.all({
+          group: Effect.result(client.groups.findById({ params: { groupId: campaign.groupId } })),
+          campaigns: Effect.result(
+            client.groups.campaigns({ params: { groupId: campaign.groupId } }),
+          ),
+          members: Effect.result(
+            client.groupMembers.list({ params: { groupId: campaign.groupId } }),
+          ),
+          invites: Effect.result(client.invites.list({ params: { groupId: campaign.groupId } })),
+          history: Effect.result(
+            client.groupHistory.list({ params: { groupId: campaign.groupId } }),
+          ),
+          library: Effect.result(
+            client.groupLibrary.list({ params: { groupId: campaign.groupId } }),
+          ),
+          hob: Effect.result(client.hobGroup.threads({ params: { groupId: campaign.groupId } })),
+        });
         const world = yield* client.campaigns.promoteSharedWorld({
           params: { campaignId: campaign.id },
           payload: { name: "The Roads Between" },
         });
         const groupsAfter = yield* client.groups.list();
         const memberships = yield* client.me.campaigns();
-        return { campaign, groupsBefore, world, groupsAfter, memberships };
+        return { campaign, groupsBefore, hiddenSurfaces, world, groupsAfter, memberships };
       }).pipe(Effect.orDie),
     );
 
     expect(seen.campaign.name).toBe("The Direct Road");
     expect(seen.campaign.playerCount).toBe(3);
     expect(seen.groupsBefore).toEqual([]);
+    expect(Object.values(seen.hiddenSurfaces).map((result) => result._tag)).toEqual([
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+    ]);
     expect(seen.world).toMatchObject({
       id: seen.campaign.groupId,
       name: "The Roads Between",

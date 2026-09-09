@@ -59,6 +59,11 @@ ordinary campaign work must not require navigating or owning that container.
   creator proof and ownership of its context, then promotes it in place. The
   campaign home offers that opt-in and links explicit worlds at `/worlds/:id`;
   `/groups/:id` remains a compatibility route.
+- `groupReadable` / `groupWritable` include `is_shared_world`; every Shared
+  World surface therefore answers `NotFound` for a standalone campaign's
+  backing context until promotion. Campaign reach continues through
+  `groupInScope`, and Group Hob's conversation predicate uses the explicit
+  world gate too, so this boundary hides no campaign and has no thread bypass.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

@@ -322,16 +322,23 @@ export const groupInScope = (
   sql.and([memberOfGroup(sql, group, actor.accountId), scopeAllowsGroup(sql, actor, group)]);
 
 /**
- * Rows of `play_group` this actor may read — every live member reads the
- * group. There is no visibility column and no master toggle at this level: a
- * group *is* its members' shared context, and what stays private is decided
- * one level down, per campaign.
+ * Rows of `play_group` this actor may read as a Shared World. Every live member
+ * reads an explicit world; the automatic context behind a standalone campaign
+ * does not exist on this surface until its owner promotes it. Campaign
+ * predicates continue to use `groupInScope` directly, so hiding the container
+ * never takes away the campaign it supports.
  */
 export const groupReadable = (
   sql: SqlClient.SqlClient,
   actor: Actor,
   group: GroupRef = correlatedGroup(sql),
-): Statement.Fragment => groupInScope(sql, actor, group);
+): Statement.Fragment =>
+  sql.and([
+    groupInScope(sql, actor, group),
+    sql`exists (select 1 from play_group as shared_world
+                where shared_world.id = ${group}
+                  and shared_world.is_shared_world)`,
+  ]);
 
 /**
  * Rows of `play_group` this actor may write — the owner, and nobody else.
@@ -348,7 +355,7 @@ export const groupWritable = (
   group: GroupRef = correlatedGroup(sql),
 ): Statement.Fragment =>
   sql.and([
-    groupInScope(sql, actor, group),
+    groupReadable(sql, actor, group),
     sql`exists (select 1 from play_group as group_authority
                 where group_authority.id = ${group}
                   and group_authority.owner_account_id = ${actor.accountId})`,
@@ -620,7 +627,7 @@ export const conversationReachable = (
         sql.and([
           sql`${sql(table)}.group_id = ${scopeId}`,
           sql`${sql(table)}.account_id is null`,
-          groupInScope(sql, actor, scopeId as GroupId),
+          groupReadable(sql, actor, scopeId as GroupId),
         ])
       : sql.and([
           rowWritable(sql, table, scopeId as CampaignId, actor),
