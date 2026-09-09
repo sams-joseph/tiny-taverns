@@ -7,6 +7,10 @@ import {
   useSignOutForgetsMachineToken,
 } from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
+import { hostedAuthNavigation } from "./navigation";
+import { router } from "../routes";
+
+const navigation = hostedAuthNavigation(router.history);
 
 /**
  * Signing out forgets the pasted machine token as well.
@@ -122,7 +126,7 @@ export function AuthProvider({ children }: PropsWithChildren): ReactNode {
   }
 
   return (
-    <ClerkProvider publishableKey={key}>
+    <ClerkProvider publishableKey={key} {...navigation}>
       <HostedSessionBridge>{children}</HostedSessionBridge>
     </ClerkProvider>
   );
