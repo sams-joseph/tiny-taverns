@@ -50,7 +50,7 @@ describe("CampaignScreen", () => {
       "href",
       `/#/worlds/${sharedWorld.id}`,
     );
-    expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/groups")).toBe(
+    expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/worlds")).toBe(
       false,
     );
     // The subtitle is assembled from two rows: the session's number, the

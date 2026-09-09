@@ -5,42 +5,45 @@ import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 
 /**
- * The group reads, cut the way the screens want them.
+ * The Shared World reads, cut the way the screens want them.
  *
- * `groupsAtom` is the home list — every group this account is a live member
- * of, with `isOwner` on each row. `groupViewAtom` is one group's whole screen:
+ * `sharedWorldsAtom` is every explicit world this account is a live member of,
+ * with `isOwner` on each row. `sharedWorldViewAtom` is one world's whole screen:
  * the row, the campaign directory and the roster, one value with three states,
  * because founding a campaign moves the directory and — for the founder — the
  * relation on its card. The roster is informational; campaign invitations are
  * the product's onboarding surface.
  */
 
-export const groupsAtom = apiAtom((client) => client.groups.list(), [reads.myGroups]);
+export const sharedWorldsAtom = apiAtom(
+  (client) => client.sharedWorlds.list(),
+  [reads.mySharedWorlds],
+);
 
-export interface GroupView {
+export interface SharedWorldView {
   readonly group: Group;
   readonly campaigns: ReadonlyArray<GroupCampaignCard>;
   readonly members: ReadonlyArray<GroupMember>;
 }
 
-export const groupViewAtom = Atom.family((groupId: GroupId) =>
+export const sharedWorldViewAtom = Atom.family((worldId: GroupId) =>
   apiAtom(
     (client) =>
       Effect.map(
         Effect.all(
           {
-            group: client.groups.findById({ params: { groupId } }),
-            campaigns: client.groups.campaigns({ params: { groupId } }),
-            members: client.groupMembers.list({ params: { groupId } }),
+            group: client.sharedWorlds.findById({ params: { worldId } }),
+            campaigns: client.sharedWorlds.campaigns({ params: { worldId } }),
+            members: client.sharedWorldMembers.list({ params: { worldId } }),
           },
           { concurrency: "unbounded" },
         ),
-        ({ group, campaigns, members }): GroupView => ({
+        ({ group, campaigns, members }): SharedWorldView => ({
           group,
           campaigns,
           members,
         }),
       ),
-    [reads.group(groupId), reads.myGroups],
+    [reads.sharedWorld(worldId), reads.mySharedWorlds],
   ),
 );

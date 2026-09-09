@@ -27,7 +27,7 @@ const server = installStubServer();
 installMemoryStorage();
 
 const aimDirectory = (relation: "creator" | "player" | "none") =>
-  server.routes.set(`GET /groups/${groupId}/campaigns`, {
+  server.routes.set(`GET /worlds/${groupId}/campaigns`, {
     status: 200,
     body: [
       {
@@ -60,7 +60,7 @@ describe("the Shared Worlds list", () => {
   });
 
   it("founds a group with one field, and re-reads the list", async () => {
-    server.routes.set("POST /groups", { status: 200, body: group });
+    server.routes.set("POST /worlds", { status: 200, body: group });
     await renderCampaigns("/worlds", mintingSession());
     await screen.findByText("The Salt Company");
 
@@ -68,12 +68,12 @@ describe("the Shared Worlds list", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", "/groups")).toEqual({ name: "The Hag's Bargain Co" }),
+      expect(bodyOf(server, "POST", "/worlds")).toEqual({ name: "The Hag's Bargain Co" }),
     );
   });
 
   it("says what an empty list means, without a mode to blame", async () => {
-    server.routes.set("GET /groups", { status: 200, body: [] });
+    server.routes.set("GET /worlds", { status: 200, body: [] });
     await renderCampaigns("/worlds", mintingSession());
 
     expect(await screen.findByText("No Shared World yet")).toBeTruthy();
@@ -112,7 +112,7 @@ describe("one Shared World's screen", () => {
   });
 
   it("starts a campaign in this group, and the founder runs it", async () => {
-    server.routes.set(`POST /groups/${groupId}/campaigns`, { status: 200, body: campaign });
+    server.routes.set(`POST /worlds/${groupId}/campaigns`, { status: 200, body: campaign });
     await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
 
@@ -120,7 +120,7 @@ describe("one Shared World's screen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/groups/${groupId}/campaigns`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${groupId}/campaigns`)).toEqual({
         name: "The Long Winter",
       }),
     );

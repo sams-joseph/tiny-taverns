@@ -100,36 +100,40 @@ describe("campaign, session, character and note CRUD", () => {
         const campaign = yield* client.campaigns.create({
           payload: { name: "The Direct Road", playerCount: 3 },
         });
-        const groupsBefore = yield* client.groups.list();
+        const worldsBefore = yield* client.sharedWorlds.list();
         const hiddenSurfaces = yield* Effect.all({
-          group: Effect.result(client.groups.findById({ params: { groupId: campaign.groupId } })),
+          group: Effect.result(
+            client.sharedWorlds.findById({ params: { worldId: campaign.groupId } }),
+          ),
           campaigns: Effect.result(
-            client.groups.campaigns({ params: { groupId: campaign.groupId } }),
+            client.sharedWorlds.campaigns({ params: { worldId: campaign.groupId } }),
           ),
           members: Effect.result(
-            client.groupMembers.list({ params: { groupId: campaign.groupId } }),
+            client.sharedWorldMembers.list({ params: { worldId: campaign.groupId } }),
           ),
           history: Effect.result(
-            client.groupHistory.list({ params: { groupId: campaign.groupId } }),
+            client.sharedWorldHistory.list({ params: { worldId: campaign.groupId } }),
           ),
           library: Effect.result(
-            client.groupLibrary.list({ params: { groupId: campaign.groupId } }),
+            client.sharedWorldLibrary.list({ params: { worldId: campaign.groupId } }),
           ),
-          hob: Effect.result(client.hobGroup.threads({ params: { groupId: campaign.groupId } })),
+          hob: Effect.result(
+            client.sharedWorldHob.threads({ params: { worldId: campaign.groupId } }),
+          ),
         });
         const world = yield* client.campaigns.promoteSharedWorld({
           params: { campaignId: campaign.id },
           payload: { name: "The Roads Between" },
         });
-        const groupsAfter = yield* client.groups.list();
+        const worldsAfter = yield* client.sharedWorlds.list();
         const memberships = yield* client.me.campaigns();
-        return { campaign, groupsBefore, hiddenSurfaces, world, groupsAfter, memberships };
+        return { campaign, worldsBefore, hiddenSurfaces, world, worldsAfter, memberships };
       }).pipe(Effect.orDie),
     );
 
     expect(seen.campaign.name).toBe("The Direct Road");
     expect(seen.campaign.playerCount).toBe(3);
-    expect(seen.groupsBefore).toEqual([]);
+    expect(seen.worldsBefore).toEqual([]);
     expect(Object.values(seen.hiddenSurfaces).map((result) => result._tag)).toEqual([
       "Failure",
       "Failure",
@@ -143,7 +147,7 @@ describe("campaign, session, character and note CRUD", () => {
       name: "The Roads Between",
       isSharedWorld: true,
     });
-    expect(seen.groupsAfter.map((row) => row.group.id)).toEqual([seen.campaign.groupId]);
+    expect(seen.worldsAfter.map((row) => row.group.id)).toEqual([seen.campaign.groupId]);
     expect(seen.memberships.find((row) => row.campaign.id === seen.campaign.id)?.relation).toBe(
       "creator",
     );

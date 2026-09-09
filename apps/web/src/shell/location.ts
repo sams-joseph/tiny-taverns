@@ -131,7 +131,7 @@ export function useCampaignRelation(
 /**
  * The user-facing world surrounding this campaign, when it has one.
  *
- * This deliberately reads the membership row rather than `/groups`: campaign
+ * This deliberately reads the membership row rather than `/worlds`: campaign
  * chrome already holds this atom for its relation, and a nullable summary on
  * that row keeps the way to cross-campaign context available on every screen
  * without mounting another request. A standalone campaign's hidden integrity

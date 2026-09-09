@@ -69,7 +69,7 @@ describe("NpcLibraryScreen", () => {
   });
 
   it("shares a source with a group and copies it into a campaign as a snapshot", async () => {
-    server.routes.set(`POST /groups/${groupId}/library`, {
+    server.routes.set(`POST /worlds/${groupId}/library`, {
       status: 200,
       body: {
         groupId,
@@ -94,7 +94,7 @@ describe("NpcLibraryScreen", () => {
     ).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "The Salt Road's group" }));
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/groups/${groupId}/library`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${groupId}/library`)).toEqual({
         kind: "npc",
         resourceId: cazrilSource.id,
       }),

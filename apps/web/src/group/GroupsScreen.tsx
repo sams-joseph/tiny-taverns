@@ -11,7 +11,7 @@ import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { groupsAtom } from "./load";
+import { sharedWorldsAtom } from "./load";
 
 /**
  * Every explicit Shared World this account belongs to. Campaigns remain home;
@@ -73,7 +73,7 @@ function NewSharedWorld() {
     setError(undefined);
     const token = await fetchCredential();
     const result = await runApiResult(
-      (client) => client.groups.create({ payload: { name: name.trim() } }),
+      (client) => client.sharedWorlds.create({ payload: { name: name.trim() } }),
       token,
     );
 
@@ -87,7 +87,7 @@ function NewSharedWorld() {
       return;
     }
     setName("");
-    invalidate([reads.myGroups]);
+    invalidate([reads.mySharedWorlds]);
   }, [fetchCredential, invalidate, name]);
 
   return (
@@ -114,7 +114,7 @@ function NewSharedWorld() {
 }
 
 export function SharedWorldsScreen() {
-  const [resource, retry] = useApiAtom(groupsAtom);
+  const [resource, retry] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
 

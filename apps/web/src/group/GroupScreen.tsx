@@ -12,7 +12,7 @@ import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { GroupChronicle } from "./GroupChronicle";
-import { groupViewAtom } from "./load";
+import { sharedWorldViewAtom } from "./load";
 
 /**
  * One Shared World: its campaign directory, and its people.
@@ -114,7 +114,10 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
     const token = await fetchCredential();
     const result = await runApiResult(
       (client) =>
-        client.groups.createCampaign({ params: { groupId }, payload: { name: name.trim() } }),
+        client.sharedWorlds.createCampaign({
+          params: { worldId: groupId },
+          payload: { name: name.trim() },
+        }),
       token,
     );
 
@@ -131,7 +134,7 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
     // The directory gains a card, and the founder gains a membership row — the
     // creator's participation is written in the same transaction, which is
     // what the campaign chrome reads the relation from.
-    invalidate([reads.group(groupId), reads.myCampaigns]);
+    invalidate([reads.sharedWorld(groupId), reads.myCampaigns]);
   }, [fetchCredential, groupId, invalidate, name]);
 
   return (
@@ -169,7 +172,7 @@ function MemberRow({ member }: { readonly member: GroupMember }) {
 }
 
 export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
-  const [resource, retry] = useApiAtom(groupViewAtom(groupId));
+  const [resource, retry] = useApiAtom(sharedWorldViewAtom(groupId));
   const [archiving, setArchiving] = useState<GroupCampaignCard | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
@@ -235,7 +238,7 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
       {archiving !== undefined && (
         <ArchiveDialog
           campaign={{ id: archiving.id, name: archiving.name }}
-          alsoInvalidates={[reads.group(groupId)]}
+          alsoInvalidates={[reads.sharedWorld(groupId)]}
           onClose={() => setArchiving(undefined)}
           onArchived={() => setArchiving(undefined)}
         />

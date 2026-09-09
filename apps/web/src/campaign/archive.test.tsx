@@ -62,7 +62,7 @@ const card = (relation: "creator" | "player" | "none", archivedAt: string | null
 });
 
 const aimDirectory = (relation: "creator" | "player" | "none", archivedAt: string | null = null) =>
-  server.routes.set(`GET /groups/${groupId}/campaigns`, {
+  server.routes.set(`GET /worlds/${groupId}/campaigns`, {
     status: 200,
     body: [card(relation, archivedAt)],
   });

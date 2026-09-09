@@ -26,7 +26,7 @@ export type CampaignRelation = typeof CampaignRelation.Type;
  * integrity, but that implementation detail is deliberately absent here. A
  * value means the group has been promoted to a user-facing Shared World and
  * gives campaign chrome the complete, stable destination it needs without a
- * second `/groups` read.
+ * second `/worlds` read.
  */
 export class CampaignSharedWorld extends Schema.Class<CampaignSharedWorld>("CampaignSharedWorld")({
   id: GroupId,

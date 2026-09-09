@@ -1273,10 +1273,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     // may, and one shared server has to be able to answer them.
     // Who is reading — the group view derives `isOwner` from it.
     ["GET /me", { status: 200, body: { id: theDmAccountId, name: "Wren Alderby" } }],
-    ["GET /groups", { status: 200, body: [{ group, isOwner: true, joinedAt: stamps.createdAt }] }],
-    [`GET /groups/${groupId}`, { status: 200, body: group }],
+    ["GET /worlds", { status: 200, body: [{ group, isOwner: true, joinedAt: stamps.createdAt }] }],
+    [`GET /worlds/${groupId}`, { status: 200, body: group }],
     [
-      `GET /groups/${groupId}/campaigns`,
+      `GET /worlds/${groupId}/campaigns`,
       {
         status: 200,
         body: [
@@ -1294,7 +1294,7 @@ export const fullCampaign = (): Map<string, Answer> =>
       },
     ],
     [
-      `GET /groups/${groupId}/members`,
+      `GET /worlds/${groupId}/members`,
       {
         status: 200,
         body: [
@@ -1351,8 +1351,8 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     // The group's chronicle — empty is the ordinary state of a young group.
-    [`GET /groups/${groupId}/history`, { status: 200, body: [] }],
-    [`GET /groups/${groupId}/history/summary`, { status: 200, body: null }],
+    [`GET /worlds/${groupId}/history`, { status: 200, body: [] }],
+    [`GET /worlds/${groupId}/history/summary`, { status: 200, body: null }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],

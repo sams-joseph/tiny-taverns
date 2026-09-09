@@ -22,8 +22,8 @@ import { FailureNotice, Loading } from "../ui/states";
 
 const historyAtom = Atom.family((groupId: GroupId) =>
   apiAtom(
-    (client) => client.groupHistory.list({ params: { groupId } }),
-    [reads.groupHistory(groupId)],
+    (client) => client.sharedWorldHistory.list({ params: { worldId: groupId } }),
+    [reads.sharedWorldHistory(groupId)],
   ),
 );
 
@@ -58,8 +58,12 @@ function Composer({ groupId }: { readonly groupId: GroupId }) {
     const trimmed = body.trim();
     if (trimmed === "") return;
     const done = await submit(
-      (client) => client.groupHistory.create({ params: { groupId }, payload: { body: trimmed } }),
-      [reads.groupHistory(groupId)],
+      (client) =>
+        client.sharedWorldHistory.create({
+          params: { worldId: groupId },
+          payload: { body: trimmed },
+        }),
+      [reads.sharedWorldHistory(groupId)],
     );
     if (done._tag === "Success") setBody("");
   };

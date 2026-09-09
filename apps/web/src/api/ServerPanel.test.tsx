@@ -138,7 +138,7 @@ describe("ServerPanel", () => {
     routes.set("/health", { status: "ok", uptime: 1 });
     // A campaign lives in a group now, so the panel founds one to hold it —
     // two writes on the way in, both with fresh tokens.
-    routes.set("/groups", {
+    routes.set("/worlds", {
       id: groupId,
       name: "The Salt Road group",
       ownerAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
@@ -147,7 +147,7 @@ describe("ServerPanel", () => {
       createdAt: "2026-08-04T13:03:28.035Z",
       updatedAt: "2026-08-04T13:03:28.035Z",
     });
-    routes.set(`/groups/${groupId}/campaigns`, campaignJson("The Salt Road"));
+    routes.set(`/worlds/${groupId}/campaigns`, campaignJson("The Salt Road"));
 
     render(
       <HostedSessionContext value={session}>
@@ -160,9 +160,9 @@ describe("ServerPanel", () => {
     await user.click(screen.getByRole("button", { name: "Create campaign" }));
 
     expect(await screen.findByText("The Salt Road")).toBeInTheDocument();
-    const founded = calls.find((call) => call.pathname === "/groups")!;
+    const founded = calls.find((call) => call.pathname === "/worlds")!;
     expect(JSON.parse(founded.body)).toEqual({ name: "The Salt Road group" });
-    const created = calls.find((call) => call.pathname === `/groups/${groupId}/campaigns`)!;
+    const created = calls.find((call) => call.pathname === `/worlds/${groupId}/campaigns`)!;
     expect(created.authorization).toBe("Bearer session-token-2");
     expect(JSON.parse(created.body)).toEqual({ name: "The Salt Road" });
   });

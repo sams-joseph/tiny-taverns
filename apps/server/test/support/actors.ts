@@ -274,26 +274,27 @@ export const createCampaign = (
   });
 
 /**
- * The HTTP spelling of `aCampaignBy`: found a group over the wire, then create
- * the campaign in it — for the endpoint-level suites, whose actor is a derived
+ * The HTTP spelling of `aCampaignBy`: found a Shared World over the wire, then
+ * create the campaign in it — for endpoint-level suites whose actor is a derived
  * client rather than an `Actor`. Structural on purpose: the derived client's
  * full type does not cross module boundaries well (TS7056), and these two
  * methods are all this needs.
  */
 export const campaignVia = <EG, EC, RG, RC>(
   client: {
-    readonly groups: {
+    readonly sharedWorlds: {
       readonly create: (options: {
         readonly payload: { readonly name: string };
       }) => Effect.Effect<{ readonly id: GroupId }, EG, RG>;
       readonly createCampaign: (options: {
-        readonly params: { readonly groupId: GroupId };
+        readonly params: { readonly worldId: GroupId };
         readonly payload: CampaignCreate;
       }) => Effect.Effect<Campaign, EC, RC>;
     };
   },
   payload: CampaignCreate,
 ): Effect.Effect<Campaign, EG | EC, RG | RC> =>
-  Effect.flatMap(client.groups.create({ payload: { name: `${payload.name} group` } }), (group) =>
-    client.groups.createCampaign({ params: { groupId: group.id }, payload }),
+  Effect.flatMap(
+    client.sharedWorlds.create({ payload: { name: `${payload.name} world` } }),
+    (world) => client.sharedWorlds.createCampaign({ params: { worldId: world.id }, payload }),
   );

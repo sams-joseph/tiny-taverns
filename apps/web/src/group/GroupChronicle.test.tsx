@@ -14,7 +14,7 @@ import {
  * The chronicle section on the Shared World screen — read-only plus the composer.
  *
  * What is pinned is the boundary's client half: the section draws only what
- * `GET /groups/:g/history` answered (copies, admitted on purpose), and the
+ * `GET /worlds/:w/history` answered (copies, admitted on purpose), and the
  * composer's write names the one resource it changes. The server-side
  * boundary — who may read, what a recap copy survives — is
  * `apps/server/test/group-history.test.ts`'s.
@@ -23,7 +23,7 @@ import {
 const server = installStubServer();
 installMemoryStorage();
 
-const historyPath = `/groups/${groupId}/history`;
+const historyPath = `/worlds/${groupId}/history`;
 
 const entry = {
   id: "7a1e2b3c-0000-4000-8000-00000000f001",

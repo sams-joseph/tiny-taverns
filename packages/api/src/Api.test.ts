@@ -150,10 +150,10 @@ describe("the API declaration", () => {
   });
 
   it("keeps the Shared World roster informational", () => {
-    const groupMembers = groups.find((group) => group.identifier === "groupMembers");
+    const worldMembers = groups.find((group) => group.identifier === "sharedWorldMembers");
 
     expect(
-      endpointsOf(groupMembers as GroupShape).map(({ identifier, method, path }) => ({
+      endpointsOf(worldMembers as GroupShape).map(({ identifier, method, path }) => ({
         identifier,
         method,
         path,
@@ -162,12 +162,30 @@ describe("the API declaration", () => {
       {
         identifier: "list",
         method: "GET",
-        path: "/groups/:groupId/members",
+        path: "/worlds/:worldId/members",
       },
     ]);
   });
 
-  it("declares the groups the product has today, and no more", () => {
+  it("uses Shared World names and URLs for every world-facing API group", () => {
+    const worldGroups = groups.filter((group) => group.identifier.startsWith("sharedWorld"));
+
+    expect(worldGroups.map((group) => group.identifier).sort()).toEqual([
+      "sharedWorldHistory",
+      "sharedWorldHob",
+      "sharedWorldLibrary",
+      "sharedWorldMembers",
+      "sharedWorlds",
+    ]);
+    expect(
+      worldGroups.flatMap(endpointsOf).every((endpoint) => endpoint.path.startsWith("/worlds")),
+    ).toBe(true);
+    expect(
+      groups.flatMap(endpointsOf).some((endpoint) => endpoint.path.startsWith("/groups")),
+    ).toBe(false);
+  });
+
+  it("declares the API groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "beats",
       "campaignInvites",
@@ -181,23 +199,8 @@ describe("the API declaration", () => {
       "creatures",
       "encounterCreatures",
       "encounters",
-      // Groups: the top-level container for connected play, and where a
-      // campaign is created — a campaign belongs to exactly one group.
-      // `groupHistory` is its chronicle: copies admitted on purpose, the
-      // group-Hob boundary's data half.
-      "groupHistory",
-      // The explicit Library share layer — grants to use, never widened
-      // predicates. The 2026-09-01 Library decision's surface, and since the
-      // 2026-09-02 instancing decision the one act that puts an original in
-      // front of a group's campaigns.
-      "groupLibrary",
-      "groupMembers",
-      "groups",
       "health",
       "hob",
-      // Group Hob: the assistant over the group's canonical record — the
-      // group-Hob boundary decision's surface.
-      "hobGroup",
       "invitePreview",
       "join",
       // The Library: where every corpus original is authored and managed, read
@@ -228,6 +231,14 @@ describe("the API declaration", () => {
       "runs",
       "search",
       "sessions",
+      // Shared Worlds are the explicit cross-campaign context. Their history,
+      // Library grants, informational roster and Hob conversation each keep a
+      // separate authorization boundary under the same `/worlds` namespace.
+      "sharedWorldHistory",
+      "sharedWorldHob",
+      "sharedWorldLibrary",
+      "sharedWorldMembers",
+      "sharedWorlds",
       // What is live at one table, to a player: the read behind the character
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.

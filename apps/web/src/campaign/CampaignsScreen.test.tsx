@@ -36,7 +36,7 @@ describe("the campaign-first home", () => {
   });
 
   it("promotes a standalone campaign into a named Shared World", async () => {
-    server.routes.set("GET /groups", { status: 200, body: [] });
+    server.routes.set("GET /worlds", { status: 200, body: [] });
     server.routes.set("GET /me/campaigns", {
       status: 200,
       body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
@@ -72,7 +72,7 @@ describe("the campaign-first home", () => {
   });
 
   it("starts a connected campaign in a Shared World from the primary flow", async () => {
-    server.routes.set(`POST /groups/${group.id}/campaigns`, { status: 200, body: campaign });
+    server.routes.set(`POST /worlds/${group.id}/campaigns`, { status: 200, body: campaign });
     await renderCampaigns("/campaigns", mintingSession());
     await screen.findByText("The Salt Road");
 
@@ -82,7 +82,7 @@ describe("the campaign-first home", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/groups/${group.id}/campaigns`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${group.id}/campaigns`)).toEqual({
         name: "The Long Winter",
       }),
     );

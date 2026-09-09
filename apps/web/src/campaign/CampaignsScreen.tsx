@@ -30,7 +30,7 @@ import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { groupsAtom } from "../group/load";
+import { sharedWorldsAtom } from "../group/load";
 import { ArchivedDialog } from "./ArchivedDialog";
 import { membershipsAtom } from "./load";
 
@@ -142,7 +142,7 @@ function SharedWorldDialog({
       setError("That did not save. Try it again.");
       return;
     }
-    invalidate([reads.myGroups]);
+    invalidate([reads.mySharedWorlds]);
     onClose();
     await navigate({ to: "/worlds/$groupId", params: { groupId: result.success.id } });
   };
@@ -203,8 +203,8 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembershi
       (client) =>
         world === undefined
           ? client.campaigns.create({ payload: { name: name.trim() } })
-          : client.groups.createCampaign({
-              params: { groupId: world.id },
+          : client.sharedWorlds.createCampaign({
+              params: { worldId: world.id },
               payload: { name: name.trim() },
             }),
       token,
@@ -221,7 +221,7 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembershi
     }
 
     invalidate([reads.myCampaigns]);
-    if (world !== undefined) invalidate([reads.group(world.id)]);
+    if (world !== undefined) invalidate([reads.sharedWorld(world.id)]);
     await navigate({
       to: "/campaigns/$campaignId",
       params: { campaignId: result.success.id },
@@ -306,7 +306,7 @@ function SharedWorldDirectory({ worlds }: { readonly worlds: ReadonlyArray<Group
 
 export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
-  const [worldsResource] = useApiAtom(groupsAtom);
+  const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [promoting, setPromoting] = useState<CampaignMembership | undefined>();
   const hob = useHobPanel({ initialOpen: false });

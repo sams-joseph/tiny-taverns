@@ -48,7 +48,7 @@ export const GroupUpdate = Schema.Struct({
 export type GroupUpdate = typeof GroupUpdate.Type;
 
 /**
- * A group this account belongs to — the answer `GET /groups` gives.
+ * A Shared World this account belongs to — the answer `GET /worlds` gives.
  *
  * `isOwner` is the one fact about the pair (this account, this group) that the
  * group row cannot carry, exactly as `CampaignMembership.relation` is for a
@@ -74,7 +74,7 @@ export type GroupCampaignRelation = typeof GroupCampaignRelation.Type;
 
 /**
  * One campaign in the group's directory — the answer
- * `GET /groups/:groupId/campaigns` gives to every live member.
+ * `GET /worlds/:worldId/campaigns` gives to every live member.
  *
  * **Deliberately narrower than `Campaign`.** A member who does not participate
  * in a campaign gets its card — name, who runs it, their own relation — and
@@ -96,7 +96,7 @@ export class GroupCampaignCard extends Schema.Class<GroupCampaignCard>("GroupCam
 }) {}
 
 /**
- * Somebody in the group — the answer `GET /groups/:groupId/members` gives.
+ * Somebody in the Shared World — the answer `GET /worlds/:worldId/members` gives.
  *
  * Readable by every live member, unlike a campaign's member list: a group is
  * the social container, and who is in your group is exactly what a group is.

@@ -160,8 +160,8 @@ export const reads = {
   /** Who is at this table. Withdrawing an accepted invitation takes a row out of it. */
   members: (campaignId: CampaignId): ReadKey => key`members:${campaignId}`,
 
-  /** The group's chronicle — entries and the accepted summary, one key. */
-  groupHistory: (groupId: GroupId): ReadKey => key`group-history:${groupId}`,
+  /** The Shared World's chronicle — entries and accepted summary, one key. */
+  sharedWorldHistory: (worldId: GroupId): ReadKey => key`shared-world-history:${worldId}`,
 
   /**
    * What this campaign can build an encounter from: the bundle, the caller's
@@ -217,11 +217,11 @@ export const reads = {
    */
   myCampaigns: "me:campaigns" as ReadKey,
 
-  /** The groups this account belongs to. */
-  myGroups: "me:groups" as ReadKey,
+  /** The explicit Shared Worlds this account belongs to. */
+  mySharedWorlds: "me:shared-worlds" as ReadKey,
 
-  /** One group: its row, its campaign directory and its roster. */
-  group: (groupId: GroupId): ReadKey => key`group:${groupId}`,
+  /** One Shared World: its row, campaign directory and roster. */
+  sharedWorld: (worldId: GroupId): ReadKey => key`shared-world:${worldId}`,
 
   /** The characters this account plays, across every table. */
   myCharacters: "me:characters" as ReadKey,

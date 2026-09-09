@@ -446,8 +446,8 @@ function ShareDialog({
   const share = async (groupId: (typeof groups)[number]["groupId"]) => {
     const saved = await submit(
       (client) =>
-        client.groupLibrary.share({
-          params: { groupId },
+        client.sharedWorldLibrary.share({
+          params: { worldId: groupId },
           payload: { kind: "npc", resourceId: source.id },
         }),
       [],

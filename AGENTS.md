@@ -79,7 +79,11 @@ ordinary campaign work must not require navigating or owning that container.
   onboarding lifecycle, and they establish group eligibility as persistence
   plumbing. The old `/groups/:groupId/invites` API group is gone; preview and
   redemption remain token-scoped, invitation management is campaign-only, and
-  `/groups/:groupId/members` exposes only `GET`—never a cross-campaign delete.
+  `/worlds/:worldId/members` exposes only `GET`—never a cross-campaign delete.
+- Every public Shared World HTTP surface is canonical under `/worlds`, and the
+  generated client groups are `sharedWorlds`, `sharedWorldMembers`,
+  `sharedWorldHistory`, `sharedWorldLibrary`, and `sharedWorldHob`. `/groups`
+  remains only as a browser compatibility redirect; it is not an API alias.
 - The repository matches that boundary: `Invites` has only campaign-scoped
   list/create/revoke plus token preview/redeem; `Groups.removeMember`,
   `removeFromGroup`, and the cross-group participation revoker are gone.
