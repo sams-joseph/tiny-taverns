@@ -8,11 +8,8 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchiveDialog } from "../campaign/ArchiveDialog";
-import { InviteDialog } from "../campaign/InviteDialog";
 import { Hob, useHobPanel } from "../hob";
-import { useMutation } from "../api/mutation";
 import { AppShell, TopBar } from "../shell/AppShell";
-import { SaveFailure } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { GroupChronicle } from "./GroupChronicle";
 import { groupViewAtom } from "./load";
@@ -28,9 +25,9 @@ import { groupViewAtom } from "./load";
  * relation gets no *Open* — a link that lands on a 404 is worse than none.
  *
  * **Founding a campaign is any live member's act** (the governance decision),
- * and it makes the founder its creator and sole DM. Managing the group —
- * invitations, removals, the name — is the owner's alone, so that chrome is
- * keyed on `isOwner` and absent for everybody else.
+ * and it makes the founder its creator and sole DM. The roster is context,
+ * not a second onboarding workflow: people enter through campaign invitations,
+ * which also establish the eligibility rows this screen reads.
  */
 
 const relationBadge = (relation: GroupCampaignCard["relation"]) => {
@@ -160,49 +157,19 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
   );
 }
 
-function MemberRow({
-  member,
-  groupId,
-  removable,
-}: {
-  readonly member: GroupMember;
-  readonly groupId: GroupId;
-  /** The owner's control, absent for everybody else and for the owner's own row. */
-  readonly removable: boolean;
-}) {
-  const { busy, failure, submit } = useMutation();
-
-  const remove = async () => {
-    await submit(
-      (client) => client.groupMembers.remove({ params: { groupId, accountId: member.accountId } }),
-      // Removal retires their campaign participations in the same transaction,
-      // so every roster this account was on moved with it.
-      [reads.group(groupId), reads.myCampaigns],
-    );
-  };
-
+function MemberRow({ member }: { readonly member: GroupMember }) {
   return (
-    <div className="flex flex-col gap-1 border-b border-hairline py-2.5 last:border-b-0">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground">
-          {member.name}
-        </span>
-        {member.isOwner && <Badge variant="secondary">Owner</Badge>}
-        {removable && (
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => void remove()}>
-            <Icon name="x" size={14} />
-            Remove
-          </Button>
-        )}
-      </div>
-      {failure !== undefined && <SaveFailure failure={failure} />}
+    <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0">
+      <span className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground">
+        {member.name}
+      </span>
+      {member.isOwner && <Badge variant="secondary">Owner</Badge>}
     </div>
   );
 }
 
 export function GroupScreen({ groupId }: { readonly groupId: GroupId }) {
   const [resource, retry] = useApiAtom(groupViewAtom(groupId));
-  const [inviting, setInviting] = useState(false);
   const [archiving, setArchiving] = useState<GroupCampaignCard | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
@@ -220,18 +187,11 @@ export function GroupScreen({ groupId }: { readonly groupId: GroupId }) {
               ? undefined
               : `${view.members.length} ${view.members.length === 1 ? "member" : "members"} · ${view.campaigns.length} ${view.campaigns.length === 1 ? "campaign" : "campaigns"}`
           }
-        >
-          {view?.isOwner === true && (
-            <Button variant="secondary" size="sm" onClick={() => setInviting(true)}>
-              <Icon name="user-plus" size={14} />
-              Invite
-            </Button>
-          )}
-        </TopBar>
+        />
       }
     >
       <div className="flex flex-col gap-8">
-        {resource.state === "loading" && <Loading label="Reading the group…" />}
+        {resource.state === "loading" && <Loading label="Reading the Shared World…" />}
         {resource.state === "failed" && (
           <FailureNotice failure={resource.failure} onRetry={retry} />
         )}
@@ -265,21 +225,13 @@ export function GroupScreen({ groupId }: { readonly groupId: GroupId }) {
                 Members
               </span>
               {view.members.map((member) => (
-                <MemberRow
-                  key={member.accountId}
-                  member={member}
-                  groupId={groupId}
-                  removable={view.isOwner && !member.isOwner}
-                />
+                <MemberRow key={member.accountId} member={member} />
               ))}
             </section>
           </>
         )}
       </div>
 
-      {inviting && view !== undefined && (
-        <InviteDialog groupId={groupId} onClose={() => setInviting(false)} />
-      )}
       {archiving !== undefined && (
         <ArchiveDialog
           campaign={{ id: archiving.id, name: archiving.name }}

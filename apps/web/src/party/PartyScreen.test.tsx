@@ -158,7 +158,7 @@ describe("the creator's seat verbs", () => {
  * mentions: revoking a *spent* invitation revokes the membership it granted, in
  * the same transaction (`repo/Invites.ts`), so the roster loses a person while
  * the response carries only an invitation. That is why `InviteDialog` names
- * `reads.members` beside `reads.invites`, and it is what this pins.
+ * `reads.members` beside `reads.campaignInvites`, and it is what this pins.
  *
  * Minting is the mirror and pins the other half: it names the invitations
  * alone, so the members are *not* re-read. Both counts would have been the same

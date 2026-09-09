@@ -73,6 +73,10 @@ ordinary campaign work must not require navigating or owning that container.
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen
   links to its explicit Shared World—and Group Hob—without a `/groups` request.
+- A Shared World's member list is informational. It has no Invite or Remove
+  controls and needs no `/me` identity read: campaign invitations are the one
+  onboarding lifecycle, and they establish group eligibility as persistence
+  plumbing. The old group invitation API remains compatibility-only.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

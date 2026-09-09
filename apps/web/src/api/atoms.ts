@@ -138,8 +138,8 @@ class Api extends AtomHttpApi.Service<Api>()("TavernsAtomApi", {
  *
  * ```ts
  * const invitesAtom = Atom.family((campaignId: CampaignId) =>
- *   apiAtom((client) => client.invites.list({ params: { campaignId } }), [
- *     reads.invites(campaignId),
+ *   apiAtom((client) => client.campaignInvites.list({ params: { campaignId } }), [
+ *     reads.campaignInvites(campaignId),
  *   ]),
  * );
  * ```

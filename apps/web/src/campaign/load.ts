@@ -11,7 +11,6 @@ import type {
   Session,
   SessionId,
   PageCursor,
-  GroupId,
 } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
@@ -151,18 +150,6 @@ const prepAtom = Atom.family((night: Night) =>
 
 const runsAtom = Atom.family((night: Night) =>
   apiAtom((client) => client.runs.list({ params: night }), [reads.runs(night.sessionId)]),
-);
-
-/**
- * Two campaign reads that are not part of the view, and live here for the same
- * reason the eight above do: **one resource, one atom.**
- *
- * The two invitation scopes stay separate during the transition: the legacy
- * group screen reads the owner's world links, while campaign screens share the
- * creator-governed campaign atom below.
- */
-export const invitesAtom = Atom.family((groupId: GroupId) =>
-  apiAtom((client) => client.invites.list({ params: { groupId } }), [reads.invites(groupId)]),
 );
 
 /** The creator-governed invitation list for one campaign. */

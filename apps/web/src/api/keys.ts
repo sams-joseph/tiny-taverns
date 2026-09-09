@@ -126,12 +126,6 @@ export const reads = {
    */
   sessions: (campaignId: CampaignId): ReadKey => key`sessions:${campaignId}`,
 
-  /**
-   * Live invitations and spent ones — group-scoped since the group
-   * architecture: the owner's list, and the party screen's third status.
-   */
-  invites: (groupId: GroupId): ReadKey => key`invites:${groupId}`,
-
   /** Invitations that grant a seat at one campaign. */
   campaignInvites: (campaignId: CampaignId): ReadKey => key`campaign-invites:${campaignId}`,
 

@@ -127,27 +127,20 @@ describe("one group's screen", () => {
     );
   });
 
-  it("shows the roster to every member, and the owner's controls to the owner", async () => {
+  it("keeps the roster informational and leaves onboarding with campaigns", async () => {
     await renderGroup(mintingSession());
 
     expect(await screen.findByText("Wren Alderby")).toBeTruthy();
     expect(screen.getByText("Owner")).toBeTruthy();
-    // The fixture reader owns the group, so the invitation control is theirs.
-    expect(screen.getByRole("button", { name: /Invite/ })).toBeTruthy();
-    // …and the owner's own row carries no Remove: a group cannot lose its
-    // owner, so the control would be a press that can only fail.
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-  });
-
-  it("keeps the owner's controls off a member's screen", async () => {
-    server.routes.set("GET /me", {
-      status: 200,
-      body: { id: "2b1f2a1e-0000-4000-8000-00000000feed", name: "Pim" },
-    });
-    await renderGroup(mintingSession());
-
-    expect(await screen.findByText("Wren Alderby")).toBeTruthy();
+    // Campaign links are the one onboarding act. The Shared World is context,
+    // so it neither offers a competing invitation nor a broad removal that
+    // could silently affect several tables.
     expect(screen.queryByRole("button", { name: /Invite/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    // With no owner-only chrome left, the screen no longer asks who the
+    // current account is; group reach has already been proven by each read.
+    expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/me")).toBe(
+      false,
+    );
   });
 });
