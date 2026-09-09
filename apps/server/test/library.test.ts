@@ -169,9 +169,9 @@ const makeFixture = Effect.gen(function* () {
   yield* asJo.library.remove({ params: { creatureId: crateOriginal.id } });
 
   /** A real player at Jo's table, minted the way a person is. */
-  const issued = yield* asJo.invites.create({
-    params: { groupId: saltRoad.groupId },
-    payload: { label: "Pim", campaignId: saltRoad.id },
+  const issued = yield* asJo.campaignInvites.create({
+    params: { campaignId: saltRoad.id },
+    payload: { label: "Pim" },
   });
   const pim = yield* accounts.issue("Pim");
   yield* Effect.flatMap(clientFor(pim.token), (asThem) =>

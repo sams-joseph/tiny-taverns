@@ -161,7 +161,6 @@ describe("the API declaration", () => {
       // group-Hob boundary decision's surface.
       "hobGroup",
       "invitePreview",
-      "invites",
       "join",
       // The Library: where every corpus original is authored and managed, read
       // with no campaign in the path. The campaign-scoped spells / equipment /

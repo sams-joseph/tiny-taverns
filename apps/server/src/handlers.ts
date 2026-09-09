@@ -250,18 +250,6 @@ const GroupMembersLive = HttpApiBuilder.group(
   }),
 );
 
-const InvitesLive = HttpApiBuilder.group(
-  TavernsApi,
-  "invites",
-  Effect.fnUntraced(function* (handlers) {
-    const invites = yield* Invites;
-    return handlers
-      .handle("list", ({ params }) => invites.list(params.groupId))
-      .handle("create", ({ params, payload }) => invites.create(params.groupId, payload))
-      .handle("revoke", ({ params }) => invites.revoke(params.groupId, params.inviteId));
-  }),
-);
-
 const CampaignInvitesLive = HttpApiBuilder.group(
   TavernsApi,
   "campaignInvites",
@@ -1280,7 +1268,6 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     JoinLive,
     CampaignsLive,
     MembersLive,
-    InvitesLive,
     CampaignInvitesLive,
     SessionsLive,
     PartyLive,

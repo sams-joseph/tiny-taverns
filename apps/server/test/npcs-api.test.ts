@@ -70,9 +70,9 @@ beforeAll(async () => {
       const dm = yield* clientFor(creator);
       const campaign = yield* campaignVia(dm, { name: "The Salt Road", visibility: "shared" });
       // A real player, through a real invitation.
-      const issued = yield* dm.invites.create({
-        params: { groupId: campaign.groupId },
-        payload: { label: "Pim", campaignId: campaign.id },
+      const issued = yield* dm.campaignInvites.create({
+        params: { campaignId: campaign.id },
+        payload: { label: "Pim" },
       });
       const pim = yield* clientFor(player);
       yield* pim.join.redeem({ payload: { token: issued.token } });

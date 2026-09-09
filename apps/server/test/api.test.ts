@@ -109,7 +109,6 @@ describe("campaign, session, character and note CRUD", () => {
           members: Effect.result(
             client.groupMembers.list({ params: { groupId: campaign.groupId } }),
           ),
-          invites: Effect.result(client.invites.list({ params: { groupId: campaign.groupId } })),
           history: Effect.result(
             client.groupHistory.list({ params: { groupId: campaign.groupId } }),
           ),
@@ -132,7 +131,6 @@ describe("campaign, session, character and note CRUD", () => {
     expect(seen.campaign.playerCount).toBe(3);
     expect(seen.groupsBefore).toEqual([]);
     expect(Object.values(seen.hiddenSurfaces).map((result) => result._tag)).toEqual([
-      "Failure",
       "Failure",
       "Failure",
       "Failure",
@@ -367,9 +365,9 @@ describe("campaign, session, character and note CRUD", () => {
         // A real player, through a real invitation — the only way this product
         // mints one, so the refusal is about a person who can exist.
         const accounts = yield* Accounts;
-        const issued = yield* dm.invites.create({
-          params: { groupId: campaign.groupId },
-          payload: { label: "Pim", campaignId },
+        const issued = yield* dm.campaignInvites.create({
+          params: { campaignId },
+          payload: { label: "Pim" },
         });
         const player = yield* clientFor((yield* accounts.issue("Pim")).token);
         yield* player.join.redeem({ payload: { token: issued.token } });

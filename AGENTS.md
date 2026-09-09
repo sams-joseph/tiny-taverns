@@ -76,7 +76,8 @@ ordinary campaign work must not require navigating or owning that container.
 - A Shared World's member list is informational. It has no Invite or Remove
   controls and needs no `/me` identity read: campaign invitations are the one
   onboarding lifecycle, and they establish group eligibility as persistence
-  plumbing. The old group invitation API remains compatibility-only.
+  plumbing. The old `/groups/:groupId/invites` API group is gone; preview and
+  redemption remain token-scoped, and invitation management is campaign-only.
 
 ## The group architecture of 2026-09-01: what supersedes what
 
@@ -3677,7 +3678,7 @@ The five modules and what each owns:
 
 ```ts
 const invitesAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom((client) => client.invites.list({ params: { campaignId } })),
+  apiAtom((client) => client.campaignInvites.list({ params: { campaignId } })),
 );
 // in the component:
 const [resource, reload] = useApiAtom(invitesAtom(campaignId));

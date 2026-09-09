@@ -122,7 +122,6 @@ import {
 import {
   CampaignInviteCreate,
   GroupInvite,
-  InviteCreate,
   InvitePreview,
   InviteRedeemed,
   InviteToken,
@@ -735,46 +734,6 @@ class GroupMembersGroup extends HttpApiGroup.make("groupMembers")
     }),
   )
   .prefix("/groups/:groupId/members")
-  .middleware(Authorization) {}
-
-/**
- * Inviting somebody into the group — the owner's half.
- *
- * Group-scoped and owner-only, through `groupWritable`: the governance
- * decision puts membership and invitations in the owner's hands. An invitation
- * may also name one of the group's campaigns to seat the redeemer at in the
- * same act. See `GroupInvite` for the four lifetime rules.
- *
- * `create` is the only endpoint in the product that answers with a secret, and
- * it answers with it exactly once — the server keeps a digest, so a list can
- * never show it again. `revoke` is a `POST` rather than a `DELETE` because
- * nothing is deleted: the row survives with `revokedAt` set, which is what
- * makes a withdrawn invitation legible in the list rather than simply absent
- * from it.
- */
-class InvitesGroup extends HttpApiGroup.make("invites")
-  .add(
-    HttpApiEndpoint.get("list", "/", {
-      params: { groupId: GroupId },
-      success: Schema.Array(GroupInvite),
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("create", "/", {
-      params: { groupId: GroupId },
-      payload: InviteCreate,
-      success: IssuedInvite,
-      error: NotFound,
-    }),
-    HttpApiEndpoint.post("revoke", "/:inviteId/revoke", {
-      params: { groupId: GroupId, inviteId: GroupInviteId },
-      payload: Schema.Struct({}),
-      success: GroupInvite,
-      // `Conflict`: the redeemer created a campaign in the group since, which
-      // pins their membership — nothing is withdrawn, and the answer says why.
-      error: [NotFound, Conflict],
-    }),
-  )
-  .prefix("/groups/:groupId/invites")
   .middleware(Authorization) {}
 
 /** Campaign-local invitations, governed by that campaign's creator. */
@@ -2373,7 +2332,6 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(GroupMembersGroup)
   .add(CampaignsGroup)
   .add(MembersGroup)
-  .add(InvitesGroup)
   .add(CampaignInvitesGroup)
   .add(SessionsGroup)
   .add(PartyGroup)
