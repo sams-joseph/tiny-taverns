@@ -1512,7 +1512,7 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  * per campaign instead of by a second `/play` route.
  */
 export const renderCampaigns = async (
-  path: "/groups" | "/" = "/groups",
+  path: "/campaigns" | "/groups" | "/" = "/campaigns",
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(path, (screen) => (

@@ -93,6 +93,29 @@ describe("authorization", () => {
 });
 
 describe("campaign, session, character and note CRUD", () => {
+  it("creates a campaign directly with its private group in one request", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({
+          payload: { name: "The Direct Road", playerCount: 3 },
+        });
+        const groups = yield* client.groups.list();
+        const memberships = yield* client.me.campaigns();
+        return { campaign, groups, memberships };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.campaign.name).toBe("The Direct Road");
+    expect(seen.campaign.playerCount).toBe(3);
+    expect(seen.groups.find((row) => row.group.id === seen.campaign.groupId)?.group.name).toBe(
+      "The Direct Road",
+    );
+    expect(seen.memberships.find((row) => row.campaign.id === seen.campaign.id)?.relation).toBe(
+      "creator",
+    );
+  });
+
   it("round-trips a campaign and everything hanging off it", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {

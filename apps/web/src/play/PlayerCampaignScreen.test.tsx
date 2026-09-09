@@ -90,7 +90,7 @@ describe("a table you sit at", () => {
   it("keeps the DM's nav off the player's bar", async () => {
     await renderScreen();
 
-    expect(await screen.findByRole("link", { name: /Groups/ })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /Campaigns/ })).toBeTruthy();
     // Bestiary and the DM party-management screen are not player destinations;
     // a nav item that goes nowhere is the same lie as a stubbed field.
     expect(screen.queryByRole("link", { name: /Bestiary/ })).toBeNull();

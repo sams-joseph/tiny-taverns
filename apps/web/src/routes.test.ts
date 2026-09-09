@@ -69,6 +69,7 @@ describe("the route table", () => {
     // this is the same round trip the old `parseRoute(hrefFor(route))` was:
     // build the URL for a screen, and land back on that screen.
     const screens = [
+      { to: "/campaigns", at: "/campaigns" },
       { to: "/groups", at: "/groups" },
       { to: "/library", at: "/library" },
       { to: "/gallery", at: "/gallery" },

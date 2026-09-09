@@ -68,6 +68,29 @@ const addOwnerMember = (
   );
 
 /**
+ * Creates the group row and its structurally required owner membership inside
+ * the caller's transaction.
+ *
+ * Exported for `Campaigns.createStandalone`: the campaign-first façade still
+ * uses a private one-campaign group until Shared Worlds replace the group
+ * schema, but the group membership table keeps one writer module throughout
+ * that transition.
+ */
+export const foundGroup = (
+  sql: SqlClient.SqlClient,
+  name: string,
+  ownerAccountId: AccountId,
+): Effect.Effect<Group, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<GroupRow>`
+      insert into play_group ${sql.insert(defined({ owner_account_id: ownerAccountId, name }))}
+      returning *
+    `;
+    yield* addOwnerMember(sql, rows[0]!.id, ownerAccountId);
+    return toGroup(rows[0]!);
+  });
+
+/**
  * Puts an account in a group. Reinstates a revoked membership rather than
  * erroring, so redeeming a fresh invitation after leaving works, and admitting
  * a live member is a no-op.
@@ -259,14 +282,7 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const rows = yield* sql<GroupRow>`
-                  insert into play_group ${sql.insert(
-                    defined({ owner_account_id: actor.accountId, name: payload.name }),
-                  )}
-                  returning *
-                `;
-                yield* addOwnerMember(sql, rows[0]!.id, actor.accountId);
-                return toGroup(rows[0]!);
+                return yield* foundGroup(sql, payload.name, actor.accountId);
               }),
             ),
           ),

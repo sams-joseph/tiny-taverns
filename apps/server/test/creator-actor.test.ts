@@ -537,6 +537,12 @@ describe("the scope, counted", () => {
     // most — one account's Library is neither readable nor writable by another,
     // and no path in the product writes a bundled row.
     //
+    // Campaign-first `Campaigns.createStandalone` adds one ordinary
+    // actor-scoped write. It cannot take a creator proof because the campaign
+    // does not exist yet; `CurrentActor` supplies the creator identity and the
+    // transaction writes the private group, campaign and required membership
+    // rows together.
+    //
     // The seventieth is `Campaigns.restore` — `POST /campaigns/:c/restore`, the
     // mirror of `archive`. Ungated for the reason `Characters.assign` is: it is
     // a **write**, so `campaignWritable` already requires `isDm`, and a proof on
@@ -672,7 +678,7 @@ describe("the scope, counted", () => {
     // finding, reading turns, appending and building prompt context for the
     // shared live-session channel. They deliberately read through active table
     // presence, not a creator proof; only opening the channel is creator-gated.
-    expect(ungated).toBe(155);
+    expect(ungated).toBe(156);
   });
 });
 

@@ -79,8 +79,8 @@ interface NavItem {
  * The global row: everything that is above any campaign, and the same four
  * items for every account — there is no mode left to branch on.
  *
- * `Groups` leads: the group is the top-level container for connected play, and
- * a campaign is reached through the group that holds it. `Characters` is
+ * `Campaigns` leads: the table is the primary thing somebody came here to
+ * create or join. `Characters` is
  * account-owned and campaign-scoped nowhere — `GET /me/characters` is the one
  * read on `character` with no campaign in its path. `Library` is the
  * account-owned originals (monsters, rules, spells, equipment, magic items),
@@ -88,9 +88,7 @@ interface NavItem {
  * Library, so there is no relation to gate it on.
  */
 const globalNav: ReadonlyArray<NavItem> = [
-  // The group is home: the container your people, campaigns and shared
-  // history live in. `layers`, the glyph the campaign list wore.
-  { label: "Groups", icon: "layers", link: { to: "/groups" }, section: "groups" },
+  { label: "Campaigns", icon: "layers", link: { to: "/campaigns" }, section: "campaigns" },
   // Account-owned and campaign-scoped nowhere: `GET /me/characters` is the one
   // read on `character` with no campaign in its path.
   { label: "Characters", icon: "user", link: { to: "/characters" }, section: "characters" },

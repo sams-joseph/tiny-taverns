@@ -8,6 +8,7 @@ import {
 import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
+import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CastScreen } from "./cast/CastScreen";
@@ -138,6 +139,13 @@ const groupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/groups",
   component: GroupsScreen,
+});
+
+/** The campaign-first home. Groups remain reachable as compatibility routes. */
+const campaignsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/campaigns",
+  component: CampaignsScreen,
 });
 
 /**
@@ -555,17 +563,18 @@ const galleryRoute = createRoute({
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
-  component: GroupsScreen,
+  component: CampaignsScreen,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: GroupsScreen,
+  component: CampaignsScreen,
 });
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
+  campaignsRoute,
   groupsRoute,
   groupRoute.addChildren([groupIndexRoute, groupSplatRoute]),
   libraryRoute,
@@ -628,6 +637,7 @@ declare module "@tanstack/react-router" {
  * string literal it could get wrong.
  */
 export const routes = {
+  campaigns: campaignsRoute,
   groups: groupsRoute,
   group: groupRoute,
   library: libraryRoute,

@@ -54,6 +54,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
 
   "/": "/",
   "/$": "/nothing-like-a-route",
+  "/campaigns": "/campaigns",
   "/groups": "/groups",
   "/groups/$groupId/": `/groups/${groupId}`,
   "/groups/$groupId/$": `/groups/${groupId}/a-section-we-do-not-serve`,
@@ -118,13 +119,13 @@ describe("the shell's top bar", () => {
     // One row for every account — there is no mode left to branch on, so the
     // four items are the four items everywhere, join page and gallery included.
     expect(links.map((link) => link.textContent)).toEqual([
-      "Groups",
+      "Campaigns",
       "Characters",
       "Library",
       "Components",
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/#/groups",
+      "/#/campaigns",
       "/#/characters",
       "/#/library",
       "/#/gallery",
@@ -139,12 +140,14 @@ describe("the shell's top bar", () => {
     expect(within(nav()).getByText("Characters").closest("a")?.getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(within(nav()).getByText("Groups").closest("a")?.getAttribute("aria-current")).toBeNull();
+    expect(
+      within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current"),
+    ).toBeNull();
   });
 
-  it("lights Groups from a group, because a group is within Groups", async () => {
+  it("keeps compatibility group routes within Campaigns", async () => {
     await renderAt(`/groups/${groupId}`);
-    expect(within(nav()).getByText("Groups").closest("a")?.getAttribute("aria-current")).toBe(
+    expect(within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current")).toBe(
       "page",
     );
     expect(noCampaignNav()).toBeNull();
@@ -164,7 +167,7 @@ describe("the shell's top bar", () => {
           within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
         ).toBe("page");
         expect(
-          within(nav()).getByRole("link", { name: "Groups" }).getAttribute("aria-current"),
+          within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
         ).toBeNull();
         expect(within(nav()).queryByRole("link", { name: "Rules" })).toBeNull();
         expect(noCampaignNav()).toBeNull();
@@ -191,7 +194,7 @@ describe("the shell's top bar", () => {
   });
 
   it("keeps Ask Hob on the bar above any campaign", async () => {
-    await renderAt("/groups");
+    await renderAt("/campaigns");
     expect(screen.getByRole("button", { name: /Ask Hob/ })).toBeTruthy();
   });
 
@@ -214,6 +217,7 @@ describe("the shell's top bar", () => {
   describe("two tiers", () => {
     it("has no campaign row above a campaign", async () => {
       for (const path of [
+        "/campaigns",
         "/groups",
         `/groups/${groupId}`,
         "/library",

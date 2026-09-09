@@ -252,6 +252,14 @@ class GroupsGroup extends HttpApiGroup.make("groups")
 class CampaignsGroup extends HttpApiGroup.make("campaigns")
   .add(
     HttpApiEndpoint.get("list", "/", { success: Schema.Array(Campaign) }),
+    /**
+     * Campaign-first creation. Until the Shared World schema lands, the
+     * server creates a private one-campaign group in the same transaction.
+     */
+    HttpApiEndpoint.post("create", "/", {
+      payload: CampaignCreate,
+      success: Campaign,
+    }),
     HttpApiEndpoint.get("findById", "/:campaignId", {
       params: { campaignId: CampaignId },
       success: Campaign,

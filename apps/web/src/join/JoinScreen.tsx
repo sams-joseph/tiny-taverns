@@ -85,8 +85,8 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
               Your seat at {redeemed.campaignName ?? "the table"} is kept, and it fills in the
               moment its creator shares the campaign. The group is yours to see now.
             </p>
-            <Button variant="secondary" nativeButton={false} render={<Link to="/groups" />}>
-              Your groups
+            <Button variant="secondary" nativeButton={false} render={<Link to="/campaigns" />}>
+              Your campaigns
               <Icon name="chevron-right" size={15} />
             </Button>
           </>
@@ -96,8 +96,8 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
               You are a member now: the group’s campaigns and shared history are yours to see, and a
               campaign’s own content follows when its creator seats you at it.
             </p>
-            <Button variant="secondary" nativeButton={false} render={<Link to="/groups" />}>
-              Your groups
+            <Button variant="secondary" nativeButton={false} render={<Link to="/campaigns" />}>
+              Your campaigns
               <Icon name="chevron-right" size={15} />
             </Button>
           </>

@@ -112,6 +112,7 @@ const CampaignsLive = HttpApiBuilder.group(
     const campaigns = yield* Campaigns;
     return handlers
       .handle("list", () => campaigns.list)
+      .handle("create", ({ payload }) => campaigns.createStandalone(payload))
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId))

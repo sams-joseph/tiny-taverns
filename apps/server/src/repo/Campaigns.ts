@@ -14,6 +14,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { addCreator } from "./Memberships.js";
+import { foundGroup } from "./Groups.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   campaignReadable,
@@ -69,6 +70,10 @@ export class Campaigns extends Context.Service<
       groupId: GroupId,
       payload: CampaignCreate,
     ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    /** Campaign-first creation; its private group is transitional plumbing. */
+    readonly createStandalone: (
+      payload: CampaignCreate,
+    ) => Effect.Effect<Campaign, never, CurrentActor>;
     readonly update: (
       id: CampaignId,
       patch: CampaignUpdate,
@@ -126,6 +131,25 @@ export class Campaigns extends Context.Service<
           ? Effect.fail(new NotFound({ resource: "campaign", id }))
           : Effect.succeed(toCampaign(rows[0]!));
 
+      const insert = (groupId: GroupId, payload: CampaignCreate, actor: Actor) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<CampaignRow>`
+            insert into campaign ${sql.insert(
+              defined({
+                group_id: groupId,
+                creator_account_id: actor.accountId,
+                name: payload.name,
+                party_name: payload.partyName,
+                player_count: payload.playerCount,
+                visibility: payload.visibility,
+              }),
+            )}
+            returning *
+          `;
+          yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
+          return toCampaign(rows[0]!);
+        });
+
       return {
         list: dieOnSqlError(
           Effect.gen(function* () {
@@ -170,21 +194,23 @@ export class Campaigns extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureGroupReadable(sql, groupId, actor);
-                const rows = yield* sql<CampaignRow>`
-                  insert into campaign ${sql.insert(
-                    defined({
-                      group_id: groupId,
-                      creator_account_id: actor.accountId,
-                      name: payload.name,
-                      party_name: payload.partyName,
-                      player_count: payload.playerCount,
-                      visibility: payload.visibility,
-                    }),
-                  )}
-                  returning *
-                `;
-                yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
-                return toCampaign(rows[0]!);
+                return yield* insert(groupId, payload, actor);
+              }),
+            ),
+          ),
+
+        /**
+         * The campaign-first path. The private group is deliberately named
+         * after the campaign: it is hidden by the new surface, and old group
+         * routes remain an honest fallback while Shared Worlds are built.
+         */
+        createStandalone: (payload) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const group = yield* foundGroup(sql, payload.name, actor.accountId);
+                return yield* insert(group.id, payload, actor);
               }),
             ),
           ),
