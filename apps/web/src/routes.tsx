@@ -4,6 +4,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
 } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
@@ -25,8 +26,8 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { LegacyGroupRouteScreen, WorldRouteScreen } from "./group/GroupRouteScreen";
-import { GroupsScreen } from "./group/GroupsScreen";
+import { SharedWorldRouteScreen } from "./group/GroupRouteScreen";
+import { SharedWorldsScreen } from "./group/GroupsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerTableScreen } from "./play/PlayerTableScreen";
@@ -127,21 +128,14 @@ const asToken = (raw: string | undefined): string | undefined =>
  */
 const rootRoute = createRootRoute({ component: SignedOutGate });
 
-/**
- * The groups this account belongs to — the whole of what `#/` means.
- *
- * The group is the top-level container for connected play, so home is the
- * list of your groups, and a campaign is reached through the group that holds
- * it. There is no `/play` half any more and no mode: the relation is per
- * campaign, derived where the campaign is rendered.
- */
-const groupsRoute = createRoute({
+/** Every explicit Shared World this account belongs to. */
+const worldsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/groups",
-  component: GroupsScreen,
+  path: "/worlds",
+  component: SharedWorldsScreen,
 });
 
-/** The campaign-first home. Groups remain reachable as compatibility routes. */
+/** The campaign-first home. Legacy group URLs redirect to Shared Worlds. */
 const campaignsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/campaigns",
@@ -149,38 +143,10 @@ const campaignsRoute = createRoute({
 });
 
 /**
- * One group: its campaign directory, its people, and — as the later stages
- * land — its shared history and its Hob. One `params.parse`, exactly as the
- * campaign's parent does it, so a bad id is a bad link that falls back to the
- * groups list.
+ * One Shared World: its campaign directory, people, history and Hob. One
+ * `params.parse`, exactly as the campaign's parent does it, so a bad id is a
+ * bad link that falls back to the campaign home.
  */
-const groupRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/groups/$groupId",
-  params: {
-    parse: ({ groupId }) => {
-      const decoded = asGroupId(groupId);
-      return decoded === undefined ? false : { groupId: decoded };
-    },
-  },
-});
-
-const groupIndexRoute = createRoute({
-  getParentRoute: () => groupRoute,
-  path: "/",
-  component: LegacyGroupRouteScreen,
-  remountDeps: ({ params }) => params.groupId,
-});
-
-/** An unknown section under a legible group is that group. */
-const groupSplatRoute = createRoute({
-  getParentRoute: () => groupRoute,
-  path: "$",
-  component: LegacyGroupRouteScreen,
-  remountDeps: ({ params }) => params.groupId,
-});
-
-/** The user-facing Shared World URL. `/groups/:id` remains compatible. */
 const worldRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/worlds/$groupId",
@@ -190,8 +156,42 @@ const worldRoute = createRoute({
       return decoded === undefined ? false : { groupId: decoded };
     },
   },
-  component: WorldRouteScreen,
+  component: SharedWorldRouteScreen,
   remountDeps: ({ params }) => params.groupId,
+});
+
+/** Old bookmarks are repaired before an obsolete screen can render or fetch. */
+const legacyGroupsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/groups",
+  beforeLoad: () => {
+    throw redirect({ to: "/worlds", replace: true });
+  },
+});
+
+/** The same compatibility seam for one world's old URL, including old suffixes. */
+const legacyGroupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/groups/$groupId",
+  params: {
+    parse: ({ groupId }) => {
+      const decoded = asGroupId(groupId);
+      return decoded === undefined ? false : { groupId: decoded };
+    },
+  },
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/worlds/$groupId", params: { groupId: params.groupId }, replace: true });
+  },
+});
+
+const legacyGroupIndexRoute = createRoute({
+  getParentRoute: () => legacyGroupRoute,
+  path: "/",
+});
+
+const legacyGroupSplatRoute = createRoute({
+  getParentRoute: () => legacyGroupRoute,
+  path: "$",
 });
 
 /**
@@ -567,7 +567,7 @@ const galleryRoute = createRoute({
 });
 
 /**
- * Anything else is the groups list.
+ * Anything else is the campaign home.
  *
  * The last resort of the fall-back chain, and the reason a mangled id, a
  * mangled invitation token and a URL nobody ever minted all land somewhere
@@ -589,9 +589,10 @@ const indexRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   campaignsRoute,
-  groupsRoute,
-  groupRoute.addChildren([groupIndexRoute, groupSplatRoute]),
+  worldsRoute,
   worldRoute,
+  legacyGroupsRoute,
+  legacyGroupRoute.addChildren([legacyGroupIndexRoute, legacyGroupSplatRoute]),
   libraryRoute,
   libraryRulesRoute,
   libraryCompendiumRoute,
@@ -653,8 +654,7 @@ declare module "@tanstack/react-router" {
  */
 export const routes = {
   campaigns: campaignsRoute,
-  groups: groupsRoute,
-  group: groupRoute,
+  worlds: worldsRoute,
   world: worldRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,

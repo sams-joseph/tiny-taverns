@@ -19,8 +19,8 @@ describe("hosted authentication navigation", () => {
   it("preserves push navigation in the hash history", async () => {
     const navigation = hostedAuthNavigation(createHashHistory());
 
-    navigation.routerPush("/groups");
+    navigation.routerPush("/worlds");
 
-    await waitFor(() => expect(globalThis.location.hash).toBe("#/groups"));
+    await waitFor(() => expect(globalThis.location.hash).toBe("#/worlds"));
   });
 });

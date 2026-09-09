@@ -78,7 +78,8 @@ export function useSection(): Section {
   // a fight, the character create form, and the splat a half-typed section
   // falls back through.
   if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
-  // Campaigns is home. The old group routes stay within this destination.
+  // Campaigns is home. Shared Worlds and their legacy redirects stay within
+  // this destination.
   return "campaigns";
 }
 

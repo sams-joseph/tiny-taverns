@@ -1514,11 +1514,11 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  * The list of campaigns — the way in, and where a campaign is shelved and
  * brought back.
  *
- * Group home is the only campaign directory now; campaign relation is derived
- * per campaign instead of by a second `/play` route.
+ * Campaigns are home; the Shared World directory is the optional view across
+ * connected campaigns.
  */
 export const renderCampaigns = async (
-  path: "/campaigns" | "/groups" | "/" = "/campaigns",
+  path: "/campaigns" | "/worlds" | "/" = "/campaigns",
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(path, (screen) => (
@@ -1526,9 +1526,9 @@ export const renderCampaigns = async (
   ));
 };
 
-/** The group above the fixture campaign — the directory and the roster. */
-export const renderGroup = async (hosted: HostedSession = noSession): Promise<void> => {
-  await renderAt(`/groups/${groupId}`, (screen) => (
+/** The Shared World above the fixture campaign — its directory and roster. */
+export const renderSharedWorld = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/worlds/${groupId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

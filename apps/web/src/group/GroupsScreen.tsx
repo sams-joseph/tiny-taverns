@@ -14,20 +14,17 @@ import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { groupsAtom } from "./load";
 
 /**
- * The way in: every group this account belongs to — and home, because the
- * group is the top-level container for connected play.
+ * Every explicit Shared World this account belongs to. Campaigns remain home;
+ * this is the optional cross-campaign context directory.
  *
- * The one write on the way in is founding a group, because a list that cannot
- * create is a dead end on a fresh database. Founding one makes you its owner
- * and first member in one transaction (`Groups.create`), and campaigns are
- * created inside a group, on its own screen.
+ * Founding one makes you its owner and first member in one transaction
+ * (`Groups.create`), and campaigns can then be started inside it.
  *
- * There is no mode and no filter: an account's groups are its groups, and what
- * it is inside each one — owner, campaign creator, player — is per group and
- * per campaign, said where those are rendered.
+ * There is no mode and no filter: an account's Shared Worlds are the explicit
+ * contexts it belongs to, independently of its relation to any campaign.
  */
 
-function GroupRow({ membership }: { readonly membership: GroupMembership }) {
+function SharedWorldRow({ membership }: { readonly membership: GroupMembership }) {
   const group = membership.group;
   return (
     <Card>
@@ -63,8 +60,8 @@ function GroupRow({ membership }: { readonly membership: GroupMembership }) {
   );
 }
 
-/** Names a new group. Everything else about it has a column default. */
-function NewGroup() {
+/** Names a new Shared World. Everything else about it has a column default. */
+function NewSharedWorld() {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
@@ -116,7 +113,7 @@ function NewGroup() {
   );
 }
 
-export function GroupsScreen() {
+export function SharedWorldsScreen() {
   const [resource, retry] = useApiAtom(groupsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
@@ -141,7 +138,7 @@ export function GroupsScreen() {
         )}
         {memberships !== undefined && (
           <>
-            <NewGroup />
+            <NewSharedWorld />
             {memberships.length === 0 ? (
               <EmptyState icon="map" title="No Shared World yet">
                 Create one when two campaigns should share history and Hob's memory.
@@ -149,7 +146,7 @@ export function GroupsScreen() {
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <GroupRow key={membership.group.id} membership={membership} />
+                  <SharedWorldRow key={membership.group.id} membership={membership} />
                 ))}
               </div>
             )}

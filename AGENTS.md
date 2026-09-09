@@ -57,8 +57,9 @@ ordinary campaign work must not require navigating or owning that container.
   automatic context behind a standalone campaign. `Groups.mine` lists only the
   explicit kind; `POST /campaigns/:id/shared-world` requires both the campaign
   creator proof and ownership of its context, then promotes it in place. The
-  campaign home offers that opt-in and links explicit worlds at `/worlds/:id`;
-  `/groups/:id` remains a compatibility route.
+  campaign home offers that opt-in and links explicit worlds at `/worlds/:id`.
+  `/worlds` and `/worlds/:id` are the only URLs the app generates;
+  `/groups` and `/groups/:id` are redirect-only compatibility seams.
 - `groupReadable` / `groupWritable` include `is_shared_world`; every Shared
   World surface therefore answers `NotFound` for a standalone campaign's
   backing context until promotion. Campaign reach continues through

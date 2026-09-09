@@ -15,10 +15,10 @@ import { GroupChronicle } from "./GroupChronicle";
 import { groupViewAtom } from "./load";
 
 /**
- * One group: its campaign directory, and its people.
+ * One Shared World: its campaign directory, and its people.
  *
- * **The directory is every campaign in the group, with this reader's own
- * relation on each card** — `Created by you`, `Playing`, or a plain group
+ * **The directory is every campaign in the Shared World, with this reader's own
+ * relation on each card** — `Created by you`, `Playing`, or a plain world
  * campaign they do not participate in. That last card is the participation
  * decision on screen: a member sees that the campaign exists and who runs it,
  * and nothing of its content until its creator seats them. So a card without a
@@ -100,7 +100,7 @@ function CampaignCard({
   );
 }
 
-/** Names a new campaign in this group; the founder becomes its creator. */
+/** Names a new campaign in this Shared World; the founder becomes its creator. */
 function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
@@ -168,7 +168,7 @@ function MemberRow({ member }: { readonly member: GroupMember }) {
   );
 }
 
-export function GroupScreen({ groupId }: { readonly groupId: GroupId }) {
+export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
   const [resource, retry] = useApiAtom(groupViewAtom(groupId));
   const [archiving, setArchiving] = useState<GroupCampaignCard | undefined>();
   const hob = useHobPanel({ initialOpen: false });

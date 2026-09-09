@@ -1,12 +1,7 @@
 import { useParams } from "@tanstack/react-router";
-import { GroupScreen } from "./GroupScreen";
+import { SharedWorldScreen } from "./GroupScreen";
 
-export function LegacyGroupRouteScreen() {
-  const { groupId } = useParams({ from: "/groups/$groupId" });
-  return <GroupScreen groupId={groupId} />;
-}
-
-export function WorldRouteScreen() {
+export function SharedWorldRouteScreen() {
   const { groupId } = useParams({ from: "/worlds/$groupId" });
-  return <GroupScreen groupId={groupId} />;
+  return <SharedWorldScreen groupId={groupId} />;
 }

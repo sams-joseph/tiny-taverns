@@ -11,15 +11,14 @@ import {
   installStubServer,
   mintingSession,
   renderCampaigns,
-  renderGroup,
+  renderSharedWorld,
 } from "../campaign/campaign.fixtures";
 
 /**
- * The way in, under the group architecture: home is the groups you belong to,
- * and one group's screen is its campaign directory and its people.
+ * The Shared World directory and one world's campaign directory and people.
  *
  * What replaced the old campaign list's role filter is the **relation on each
- * card**: `Created by you`, `Playing`, or a plain group campaign — a member
+ * card**: `Created by you`, `Playing`, or a plain world campaign — a member
  * sees that a campaign exists and who runs it, and gets no way in until its
  * creator seats them. That last card is the participation decision on screen.
  */
@@ -49,9 +48,9 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-describe("the groups list", () => {
-  it("lists the groups this account belongs to, and opens one", async () => {
-    await renderCampaigns("/groups", mintingSession());
+describe("the Shared Worlds list", () => {
+  it("lists the Shared Worlds this account belongs to, and opens one", async () => {
+    await renderCampaigns("/worlds", mintingSession());
 
     expect(await screen.findByText("The Salt Company")).toBeTruthy();
     // The owner's own group says so; a group you were invited into would not.
@@ -62,7 +61,7 @@ describe("the groups list", () => {
 
   it("founds a group with one field, and re-reads the list", async () => {
     server.routes.set("POST /groups", { status: 200, body: group });
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
     await screen.findByText("The Salt Company");
 
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Hag's Bargain Co");
@@ -75,16 +74,16 @@ describe("the groups list", () => {
 
   it("says what an empty list means, without a mode to blame", async () => {
     server.routes.set("GET /groups", { status: 200, body: [] });
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
 
     expect(await screen.findByText("No Shared World yet")).toBeTruthy();
     expect(screen.getByText(/share history and Hob's memory/)).toBeTruthy();
   });
 });
 
-describe("one group's screen", () => {
+describe("one Shared World's screen", () => {
   it("draws the directory with this reader's relation on each card", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.getByText("Created by you")).toBeTruthy();
@@ -95,7 +94,7 @@ describe("one group's screen", () => {
     // The participation decision on screen: the card names the campaign and
     // who runs it, and a link that lands on a 404 is worse than none.
     aimDirectory("none");
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
@@ -104,7 +103,7 @@ describe("one group's screen", () => {
 
   it("links a card you play at to the same campaign URL its creator uses", async () => {
     aimDirectory("player");
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("Playing")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Open/ }).getAttribute("href")).toBe(
@@ -114,7 +113,7 @@ describe("one group's screen", () => {
 
   it("starts a campaign in this group, and the founder runs it", async () => {
     server.routes.set(`POST /groups/${groupId}/campaigns`, { status: 200, body: campaign });
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
 
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
@@ -128,7 +127,7 @@ describe("one group's screen", () => {
   });
 
   it("keeps the roster informational and leaves onboarding with campaigns", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("Wren Alderby")).toBeTruthy();
     expect(screen.getByText("Owner")).toBeTruthy();

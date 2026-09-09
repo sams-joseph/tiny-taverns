@@ -55,6 +55,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/": "/",
   "/$": "/nothing-like-a-route",
   "/campaigns": "/campaigns",
+  "/worlds": "/worlds",
   "/groups": "/groups",
   "/groups/$groupId/": `/groups/${groupId}`,
   "/groups/$groupId/$": `/groups/${groupId}/a-section-we-do-not-serve`,
@@ -146,8 +147,9 @@ describe("the shell's top bar", () => {
     ).toBeNull();
   });
 
-  it("keeps compatibility group routes within Campaigns", async () => {
+  it("repairs a compatibility group URL and keeps it within Campaigns", async () => {
     await renderAt(`/groups/${groupId}`);
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${groupId}`));
     expect(within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current")).toBe(
       "page",
     );
@@ -219,8 +221,8 @@ describe("the shell's top bar", () => {
     it("has no campaign row above a campaign", async () => {
       for (const path of [
         "/campaigns",
-        "/groups",
-        `/groups/${groupId}`,
+        "/worlds",
+        `/worlds/${groupId}`,
         "/library",
         "/library/rules",
         "/library/spells",
