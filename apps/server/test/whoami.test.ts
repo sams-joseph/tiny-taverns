@@ -4,6 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, describe, expect, it } from "vitest";
 import { Accounts, DEFAULT_ACCOUNT_NAME } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
@@ -24,9 +25,13 @@ import { migratedDatabase } from "./support/database.js";
  */
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Groups.layer, Invites.layer).pipe(
-    Layer.provideMerge(migratedDatabase("taverns_test_whoami")),
-  ),
+  Layer.mergeAll(
+    Accounts.layer,
+    Campaigns.layer,
+    CampaignCreatorActors.layer,
+    Groups.layer,
+    Invites.layer,
+  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_whoami"))),
 );
 afterAll(() => runtime.dispose());
 
@@ -36,7 +41,11 @@ const asActor =
     Effect.provideService(effect, CurrentActor, actor);
 
 const run = <A, E>(
-  effect: Effect.Effect<A, E, Accounts | Campaigns | Groups | Invites | SqlClient.SqlClient>,
+  effect: Effect.Effect<
+    A,
+    E,
+    Accounts | Campaigns | CampaignCreatorActors | Groups | Invites | SqlClient.SqlClient
+  >,
 ) => runtime.runPromise(effect as Effect.Effect<A, E, never>);
 
 describe("who am I", () => {

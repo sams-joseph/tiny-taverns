@@ -10,13 +10,14 @@ import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
-import { anAccount, createCampaign } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -36,6 +37,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Creatures.layer,
     EncounterCreatures.layer,
     Encounters.layer,
@@ -63,17 +65,12 @@ const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
-  const invites = yield* Invites;
 
   const jo = yield* anAccount("Jo");
   const saltRoad = yield* withActor(jo)(createCampaign({ name: "The Salt Road" }));
   const groupId = saltRoad.groupId;
 
-  const wren = yield* anAccount("Wren");
-  const issued = yield* withActor(jo)(invites.create(groupId, { label: "Wren" })).pipe(
-    Effect.orDie,
-  );
-  yield* withActor(wren)(invites.redeem(issued.token)).pipe(Effect.orDie);
+  const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hagsBargain = yield* withActor(wren)(
     campaigns.create(groupId, { name: "The Hag's Bargain" }),
   ).pipe(Effect.orDie);

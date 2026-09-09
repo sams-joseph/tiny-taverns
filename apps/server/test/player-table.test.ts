@@ -293,9 +293,9 @@ describe("who is absent or refused", () => {
   it("refuses a member whose membership has been revoked", async () => {
     const gone = await asActor(() => fixture.dm)(
       Effect.gen(function* () {
-        const listed = yield* invites.list(fixture.campaign.groupId);
+        const listed = yield* invites.listForCampaign(fixture.asDm);
         const wren = listed.find((invite) => invite.label === "Wren")!;
-        return yield* invites.revoke(fixture.campaign.groupId, wren.id);
+        return yield* invites.revokeForCampaign(fixture.asDm, wren.id);
       }),
     );
     expect(gone.status).toBe("revoked");

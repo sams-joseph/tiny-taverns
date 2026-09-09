@@ -468,13 +468,11 @@ describe("the scope, counted", () => {
     // counted as methods, which is why this is an occurrence count with two
     // named exceptions rather than a method count.
     //
-    // It was 55 before the invite: `Invites` adds four (`list`, `create`,
-    // `revoke`, `redeem` — `preview` is the one read in the product that
-    // requires no actor at all, deliberately, because it answers before its
-    // reader has an account) and `Memberships.mine` adds the fifth. None is
-    // gated, and none should be: an invitation is a DM's own resource behind
-    // `campaignWritable`, and `mine` returns the campaigns this credential
-    // already reaches.
+    // Campaign invitation list/create/revoke are proof-gated above. `redeem`
+    // remains actor-scoped and `preview` deliberately requires no actor because
+    // it answers before its reader has an account. Removing the three legacy
+    // group invitation methods and `Groups.removeMember` took four ungated
+    // occurrences out of the previous count.
     //
     // `Memberships.list` did not move it either, which is the arithmetic to
     // notice a second time: it takes the proof and requires no `CurrentActor`,
@@ -621,12 +619,11 @@ describe("the scope, counted", () => {
     // campaign half either returns the same schema to a player who can read the
     // row or writes through `rowWritable` / `ensureCampaignWritable`, where
     // DM-ness is already the predicate underneath.
-    // The nine newest are `Groups` — mine, findById, create, update, archive,
-    // restore, members, removeMember and the campaign directory. None takes
-    // the proof and none should: a `CampaignCreatorActor` proves a fact about
-    // one campaign, and every one of these is about the group above it. What
-    // bounds them is `groupReadable`/`groupWritable`, whose authority half is
-    // `play_group.owner_account_id` — the governance decision in a predicate.
+    // The eight group operations are mine, findById, create, update, archive,
+    // restore, members and the campaign directory. None takes the proof and
+    // none should: a `CampaignCreatorActor` proves a fact about one campaign,
+    // and every one of these is about the Shared World above it. Reads compose
+    // `groupReadable`; the remaining settings writes compose `groupWritable`.
     //
     // `GroupHistory` adds four: `list`, `create`, `summary` and `fromRecap`
     // itself, which appears in *both* counts — it takes the creator proof for
@@ -681,7 +678,7 @@ describe("the scope, counted", () => {
     // finding, reading turns, appending and building prompt context for the
     // shared live-session channel. They deliberately read through active table
     // presence, not a creator proof; only opening the channel is creator-gated.
-    expect(ungated).toBe(156);
+    expect(ungated).toBe(152);
   });
 });
 

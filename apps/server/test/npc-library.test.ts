@@ -13,7 +13,7 @@ import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
-import { anAccount, createCampaign } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 const runtime = ManagedRuntime.make(
@@ -44,7 +44,6 @@ const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
 
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
-  const invites = yield* Invites;
   const npcs = yield* Npcs;
   const sql = yield* SqlClient.SqlClient;
 
@@ -57,11 +56,7 @@ const makeFixture = Effect.gen(function* () {
     CampaignCreatorActors.pipe(Effect.flatMap((c) => c.of(saltRoad.id))),
   );
 
-  const wren = yield* anAccount("Wren");
-  const issued = yield* withActor(jo)(invites.create(groupId, { label: "Wren" })).pipe(
-    Effect.orDie,
-  );
-  yield* withActor(wren)(invites.redeem(issued.token)).pipe(Effect.orDie);
+  const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hag = yield* withActor(wren)(
     campaigns.create(groupId, { name: "The Hag's Bargain", visibility: "shared" }),
   ).pipe(Effect.orDie);

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { crSortFor, Creatures } from "../src/repo/Creatures.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
@@ -29,6 +30,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Groups.layer,
     Creatures.layer,
     EncounterCreatures.layer,

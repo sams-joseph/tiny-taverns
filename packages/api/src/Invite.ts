@@ -2,13 +2,12 @@ import { Schema } from "effect";
 import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
 
 /**
- * An invitation to join a group — and, optionally, one of its campaigns in the
- * same act.
+ * An invitation to join a campaign.
  *
  * **A link is an invitation to join, not a way in.** Following one requires
  * signing in or signing up; its whole effect is to grant a `group_member` row
- * (and, when the invitation names a campaign, a `campaign_member` row in the
- * same transaction) to the account that accepts it. It is explicitly *not* a
+ * and a `campaign_member` row in the same transaction to the account that
+ * accepts it. It is explicitly *not* a
  * bearer credential that reaches group data on its own, not a guest account
  * with no identity, and not a second credential kind with an actor shape of
  * its own — that last one is "a second way to be reachable, which is exactly
@@ -24,8 +23,8 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  * quietly ensures that prerequisite before granting the seat. The hidden row
  * is persistence plumbing, not another decision the inviter or player makes.
  *
- * A group invitation is minted by its owner. A campaign invitation is minted
- * by that campaign's creator, including a creator who does not own its group.
+ * It is minted by the campaign's creator, including a creator who does not own
+ * its underlying group.
  *
  * ### It is still a credential, so it has a lifetime
  *
@@ -35,10 +34,9 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  *   same transaction that writes the membership.
  * - **Expiring, on a fixed server-set clock.** `expiresAt` is `createdAt` plus
  *   `INVITE_TTL_DAYS` and never client-supplied.
- * - **Revocable before acceptance — and after it.** A group revoke removes the
- *   group membership it granted; a campaign revoke removes only the campaign
- *   seat it actually granted. Both happen in the same transaction as the
- *   withdrawal.
+ * - **Revocable before acceptance — and after it.** Revocation removes only
+ *   the campaign seat this invitation actually granted. Shared World
+ *   eligibility and other campaign memberships remain.
  * - **Forwarded is granted.** Whoever holds the token and signs in gets the
  *   membership; `redeemedByName` makes the wrong person visible, and one press
  *   undoes them.
@@ -57,16 +55,15 @@ export const InviteStatus = Schema.Literals(["live", "redeemed", "revoked", "exp
 export type InviteStatus = typeof InviteStatus.Type;
 
 /**
- * One invitation, as the group owner sees it. **The token is not on this shape
- * and never will be** — the server stores only a digest.
+ * One invitation, as the campaign creator sees it. **The token is not on this
+ * shape and never will be** — the server stores only a digest.
  */
 export class GroupInvite extends Schema.Class<GroupInvite>("GroupInvite")({
   id: GroupInviteId,
   groupId: GroupId,
   /**
-   * The campaign this invitation admits to as well, or `null` for the group
-   * alone. Named at mint time by the owner; the campaign must be in the group,
-   * which the schema enforces with a composite foreign key.
+   * The campaign this invitation admits to. Nullable only for legacy stored
+   * group-only rows, which no management list returns.
    */
   campaignId: Schema.NullOr(CampaignId),
   /** Who it is for, in the owner's words. */
@@ -91,17 +88,6 @@ export class IssuedInvite extends Schema.Class<IssuedInvite>("IssuedInvite")({
   /** 32 random bytes, base64url. Shown once; the server keeps only its digest. */
   token: Schema.String,
 }) {}
-
-/**
- * Minting one. There is no role field — an invitation admits a member, and a
- * member is a member. `campaignId` optionally names one of the group's own
- * campaigns to admit the redeemer to in the same transaction.
- */
-export const InviteCreate = Schema.Struct({
-  label: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
-  campaignId: Schema.optional(CampaignId),
-});
-export type InviteCreate = typeof InviteCreate.Type;
 
 /** Minting a seat at one campaign. The campaign comes from the URL. */
 export const CampaignInviteCreate = Schema.Struct({

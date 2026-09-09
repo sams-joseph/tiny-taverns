@@ -38,7 +38,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
-import { anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./support/model.js";
 
@@ -115,7 +115,6 @@ const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
-  const invites = yield* Invites;
   const notes = yield* Notes;
   const prep = yield* PrepItems;
   const sessions = yield* Sessions;
@@ -126,11 +125,7 @@ const makeFixture = Effect.gen(function* () {
   const groupId = saltRoad.groupId;
 
   // Wren: a live member who created the second campaign in Jo's group.
-  const wren = yield* anAccount("Wren");
-  const issued = yield* withActor(jo)(invites.create(groupId, { label: "Wren" })).pipe(
-    Effect.orDie,
-  );
-  yield* withActor(wren)(invites.redeem(issued.token)).pipe(Effect.orDie);
+  const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hagsBargain = yield* withActor(wren)(
     campaigns.create(groupId, { name: "The Hag's Bargain" }),
   ).pipe(Effect.orDie);

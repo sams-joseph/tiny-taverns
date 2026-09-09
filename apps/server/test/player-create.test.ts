@@ -12,11 +12,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Party } from "../src/repo/Party.js";
-import { accountWide, admittedTo, aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
+import {
+  accountWide,
+  admittedTo,
+  aPlayerAt,
+  anAccount,
+  asDm,
+  createCampaign,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -55,6 +63,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Groups.layer,
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -277,8 +286,9 @@ describe("an owner creating their character", () => {
 
         // The shipped path: withdrawing the invitation revokes the membership
         // it granted; any seats would be retired in the same transaction.
-        const issued = yield* asJo(invites.list(scratch.groupId));
-        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
+        const creator = yield* asDm(fixture.jo, scratch.id);
+        const issued = yield* invites.listForCampaign(creator);
+        yield* invites.revokeForCampaign(creator, issued[0]!.id);
 
         const after = yield* withActor(kofi)(
           characters.createOwn(scratch.id, { name: "Kofi's second" }),

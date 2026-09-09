@@ -200,10 +200,10 @@ const makeFixture = Effect.gen(function* () {
   yield* withActor(player)(hob.start("own", campaign.id, `${PLAYER_THREAD} draft me a ranger`));
 
   const revoked = yield* aPlayerAt(campaign.id, "Odd");
-  const issued = yield* as(invites.list(campaign.groupId));
+  const issued = yield* invites.listForCampaign(creator);
   const odd = issued.find((invite) => invite.label === "Odd");
   if (odd === undefined) throw new Error("no invitation for Odd");
-  yield* as(invites.revoke(campaign.groupId, odd.id));
+  yield* invites.revokeForCampaign(creator, odd.id);
 
   const stranger = yield* anAccount("Someone else");
   yield* withActor(stranger)(createCampaign({ name: "A different table" }));

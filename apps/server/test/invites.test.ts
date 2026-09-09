@@ -24,7 +24,7 @@ import { Memberships } from "../src/repo/Memberships.js";
 import { Notes } from "../src/repo/Notes.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -114,14 +114,33 @@ beforeAll(async () => {
 }, 60_000);
 
 /**
- * Mints one, as the group's owner, naming the campaign — the shape a "come and
- * play at this table" link is. Returns the plaintext token and the row.
+ * Mints one as the campaign creator. Returns the plaintext token and the row.
  */
 const mint = (campaign: Campaign, label: string) =>
   runtime.runPromise(
-    Effect.flatMap(Invites, (invites) =>
-      as(fixture.dm)(invites.create(campaign.groupId, { label, campaignId: campaign.id })),
-    ).pipe(Effect.orDie),
+    Effect.gen(function* () {
+      const invites = yield* Invites;
+      const creator = yield* asDm(fixture.dm, campaign.id);
+      return yield* invites.createForCampaign(creator, { label });
+    }).pipe(Effect.orDie),
+  );
+
+const listInvites = (campaign: Campaign) =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const invites = yield* Invites;
+      const creator = yield* asDm(fixture.dm, campaign.id);
+      return yield* invites.listForCampaign(creator);
+    }).pipe(Effect.orDie),
+  );
+
+const revokeInvite = (campaign: Campaign, inviteId: GroupInviteId) =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const invites = yield* Invites;
+      const creator = yield* asDm(fixture.dm, campaign.id);
+      return yield* invites.revokeForCampaign(creator, inviteId);
+    }).pipe(Effect.orDie),
   );
 
 /** Redeems one as a fresh account, and hands back that account's actor. */
@@ -207,39 +226,18 @@ describe("what an invitation grants", () => {
     expect(account.scope).toEqual({ _tag: "campaign", campaignId: fixture.otherTable.id });
   }, 60_000);
 
-  it("is the owner's act to mint, list or revoke — a member cannot", async () => {
-    // An invitation is a credential, so the owner side is gated by
-    // `groupWritable` and a mere member gets the ordinary `NotFound`.
+  it("is the campaign creator's act — a member cannot manage invitations", async () => {
     const issued = await mint(fixture.campaign, "Rin");
     const { account: player } = await joinAs("Rin", issued.token, fixture.campaign.id);
+    const refused = await runtime.runPromise(asDm(player, fixture.campaign.id).pipe(Effect.result));
 
-    const minted = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(player)(invites.create(fixture.campaign.groupId, { label: "a friend of mine" })),
-      ).pipe(Effect.result),
-    );
-    const listed = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) => as(player)(invites.list(fixture.campaign.groupId))).pipe(
-        Effect.result,
-      ),
-    );
-    const revoked = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(player)(invites.revoke(fixture.campaign.groupId, issued.invite.id)),
-      ).pipe(Effect.result),
-    );
-
-    for (const refusal of [minted, listed, revoked]) {
-      expect(refusal._tag).toBe("Failure");
-      expect(refusal._tag === "Failure" && refusal.failure).toBeInstanceOf(NotFound);
-    }
+    expect(refused._tag).toBe("Failure");
+    expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 
-  it("refuses a stranger's group outright", async () => {
+  it("refuses a stranger's campaign outright", async () => {
     const refused = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.stranger)(invites.create(fixture.campaign.groupId, { label: "let me in" })),
-      ).pipe(Effect.result),
+      asDm(fixture.stranger, fixture.campaign.id).pipe(Effect.result),
     );
 
     expect(refused._tag).toBe("Failure");
@@ -257,11 +255,7 @@ describe("campaign-local invitations", () => {
 
         // Fen becomes an ordinary member of Ada's world, then founds two
         // campaigns there. Fen is their creator but not the world owner.
-        const fen = yield* anAccount("Fen the campaign inviter");
-        const fenLink = yield* as(fixture.dm)(
-          invites.create(fixture.campaign.groupId, { label: "Fen" }),
-        );
-        yield* as(fen)(invites.redeem(fenLink.token));
+        const fen = yield* aGroupMemberAt(fixture.campaign.id, "Fen the campaign inviter");
         const first = yield* as(fen)(
           campaigns.create(fixture.campaign.groupId, {
             name: "Fen's first table",
@@ -455,22 +449,14 @@ describe("the lifetime rules", () => {
       invented._tag === "Failure" ? invented.failure : undefined,
     );
 
-    const listed = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.list(fixture.campaign.groupId)),
-      ).pipe(Effect.orDie),
-    );
+    const listed = await listInvites(fixture.campaign);
     // The DM, who may see it, sees why.
     expect(listed.find((invite) => invite.id === issued.invite.id)?.status).toBe("expired");
   }, 60_000);
 
   it("is revocable before anybody accepts it", async () => {
     const issued = await mint(fixture.campaign, "Withdrawn");
-    const revoked = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.revoke(fixture.campaign.groupId, issued.invite.id)),
-      ).pipe(Effect.orDie),
-    );
+    const revoked = await revokeInvite(fixture.campaign, issued.invite.id);
 
     const preview = await runtime.runPromise(
       Effect.flatMap(Invites, (invites) => invites.preview(issued.token)).pipe(Effect.result),
@@ -504,17 +490,9 @@ describe("the lifetime rules", () => {
         as(wrongPerson)(items(repo.list(fixture.campaign.id, {}))),
       ).pipe(Effect.result),
     );
-    const listedBefore = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.list(fixture.campaign.groupId)),
-      ).pipe(Effect.orDie),
-    );
+    const listedBefore = await listInvites(fixture.campaign);
 
-    const revoked = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.revoke(fixture.campaign.groupId, issued.invite.id)),
-      ).pipe(Effect.orDie),
-    );
+    const revoked = await revokeInvite(fixture.campaign, issued.invite.id);
 
     const after = await runtime.runPromise(
       Effect.flatMap(Notes, (repo) =>
@@ -539,7 +517,7 @@ describe("the lifetime rules", () => {
       is_creator: false,
       revoked: true,
     });
-    // …and the creator is untouched, which `revokeAllInGroupFor`'s
+    // …and the creator is untouched, which `revokeMemberAt`'s
     // not-the-creator clause makes structural rather than incidental.
     expect(rows.find((row) => row.name === "Ada")?.revoked).toBe(false);
   }, 60_000);
@@ -548,14 +526,18 @@ describe("the lifetime rules", () => {
     // The invite id in a path is a client claim like every other parent id here.
     const issued = await mint(fixture.otherTable, "somewhere else");
     const refused = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.revoke(fixture.campaign.groupId, issued.invite.id)),
-      ).pipe(Effect.result),
+      Effect.gen(function* () {
+        const invites = yield* Invites;
+        const creator = yield* asDm(fixture.dm, fixture.campaign.id);
+        return yield* invites.revokeForCampaign(creator, issued.invite.id);
+      }).pipe(Effect.result),
     );
     const invented = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.revoke(fixture.campaign.groupId, randomUUID() as GroupInviteId)),
-      ).pipe(Effect.result),
+      Effect.gen(function* () {
+        const invites = yield* Invites;
+        const creator = yield* asDm(fixture.dm, fixture.campaign.id);
+        return yield* invites.revokeForCampaign(creator, randomUUID() as GroupInviteId);
+      }).pipe(Effect.result),
     );
 
     expect(refused._tag).toBe("Failure");
@@ -693,11 +675,7 @@ describe("what an invitation cannot do to the campaign it names", () => {
         `,
       ).pipe(Effect.orDie),
     );
-    const listed = await runtime.runPromise(
-      Effect.flatMap(Invites, (invites) =>
-        as(fixture.dm)(invites.list(fixture.campaign.groupId)),
-      ).pipe(Effect.orDie),
-    );
+    const listed = await listInvites(fixture.campaign);
 
     expect(stored[0]!.token_hash).not.toBe(issued.token);
     expect(stored[0]!.token_hash).toMatch(/^[0-9a-f]{64}$/);

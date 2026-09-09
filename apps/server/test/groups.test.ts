@@ -1,11 +1,11 @@
-import { type Actor, Conflict, CurrentActor, NotFound } from "@taverns/api";
+import { type Actor, CurrentActor, NotFound } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
-import { Groups } from "../src/repo/Groups.js";
+import { admitToGroup, Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Memberships } from "../src/repo/Memberships.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -21,8 +21,8 @@ import { items } from "./support/paging.js";
  *    sees the group — its card directory, its roster — and reads *nothing* of
  *    a campaign's content, shared or not, until that campaign's creator names
  *    them a participant.
- * 2. **The owner manages membership and invitations; members create
- *    campaigns.** Every group write except founding one is the owner's act.
+ * 2. **Campaigns govern participation; members create campaigns.** The Shared
+ *    World roster is context, not a second onboarding or removal surface.
  * 3. **Cross-group isolation is absolute.** Another group answers `NotFound`
  *    to everything, whatever this account is elsewhere.
  */
@@ -53,18 +53,17 @@ const as =
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const groups = yield* Groups;
-  const invites = yield* Invites;
   const notes = yield* Notes;
+  const sql = yield* SqlClient.SqlClient;
 
   const owner = yield* anAccount("Ada");
   const group = yield* as(owner)(groups.create({ name: "The Salt Company" }));
 
-  // A second member, admitted through a real group invitation, who then
-  // creates a campaign of their own in the group — the governance rule that
-  // live members may create, exercised by somebody who is not the owner.
-  const creatorIssued = yield* as(owner)(invites.create(group.id, { label: "Fen" }));
+  // Seed eligibility directly: campaign invitations are tested end to end in
+  // invites.test, while this fixture needs a member before their first table
+  // exists in this already-created Shared World.
   const creator = yield* anAccount("Fen");
-  yield* as(creator)(invites.redeem(creatorIssued.token));
+  yield* admitToGroup(sql, group.id, creator.accountId);
   const campaign = yield* as(creator)(
     campaigns.create(group.id, { name: "The Salt Road", visibility: "shared" }),
   );
@@ -220,7 +219,7 @@ describe("membership is eligibility, not participation", () => {
   }, 60_000);
 });
 
-describe("governance: the owner manages, members play", () => {
+describe("Shared World membership is context", () => {
   it("lets every live member read the group and its roster", async () => {
     const roster = await runtime.runPromise(
       Effect.flatMap(Groups, (repo) => as(fixture.bystander)(repo.members(fixture.group.id))).pipe(
@@ -235,69 +234,14 @@ describe("governance: the owner manages, members play", () => {
     ]);
   }, 60_000);
 
-  it("refuses group settings, invitations and removals to everybody but the owner", async () => {
+  it("still reserves Shared World settings for the owner", async () => {
     const renamed = await runtime.runPromise(
       Effect.flatMap(Groups, (repo) =>
         as(fixture.creator)(repo.update(fixture.group.id, { name: "Fen's Company" })),
       ).pipe(Effect.result),
     );
-    const minted = await runtime.runPromise(
-      Effect.flatMap(Invites, (repo) =>
-        as(fixture.creator)(repo.create(fixture.group.id, { label: "a friend" })),
-      ).pipe(Effect.result),
-    );
-    const removed = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) =>
-        as(fixture.creator)(repo.removeMember(fixture.group.id, fixture.player.accountId)),
-      ).pipe(Effect.result),
-    );
-
-    for (const refusal of [renamed, minted, removed]) {
-      expect(refusal._tag).toBe("Failure");
-      expect(refusal._tag === "Failure" && refusal.failure).toBeInstanceOf(NotFound);
-    }
-  }, 60_000);
-
-  it("removes a member and their participations in one act, and refuses the pinned ones", async () => {
-    const journey = await runtime.runPromise(
-      Effect.gen(function* () {
-        const groups = yield* Groups;
-        const sql = yield* SqlClient.SqlClient;
-
-        // Pim participates; removing them from the group must retire the
-        // participation in the same transaction, or the deferred key refuses.
-        yield* as(fixture.owner)(groups.removeMember(fixture.group.id, fixture.player.accountId));
-        const rows = yield* sql<{ readonly live_group: number; readonly live_campaign: number }>`
-          select
-            (select count(*)::int from group_member
-             where account_id = ${fixture.player.accountId} and revoked_at is null) as live_group,
-            (select count(*)::int from campaign_member
-             where account_id = ${fixture.player.accountId} and revoked_at is null) as live_campaign
-        `;
-
-        // The owner cannot be removed — a group without its owner-member is
-        // unrepresentable — and neither can a campaign creator, whose campaign
-        // pins their membership.
-        const ownerGone = yield* Effect.result(
-          as(fixture.owner)(groups.removeMember(fixture.group.id, fixture.owner.accountId)),
-        );
-        const creatorGone = yield* Effect.result(
-          as(fixture.owner)(groups.removeMember(fixture.group.id, fixture.creator.accountId)),
-        );
-
-        return { rows: rows[0]!, ownerGone, creatorGone };
-      }).pipe(Effect.orDie),
-    );
-
-    expect(journey.rows).toEqual({ live_group: 0, live_campaign: 0 });
-    expect(journey.ownerGone._tag).toBe("Failure");
-    expect(journey.ownerGone._tag === "Failure" && journey.ownerGone.failure).toBeInstanceOf(
-      Conflict,
-    );
-    expect(journey.creatorGone._tag).toBe("Failure");
-    expect(journey.creatorGone._tag === "Failure" && journey.creatorGone.failure).toBeInstanceOf(
-      Conflict,
-    );
+    expect(renamed._tag).toBe("Failure");
+    expect(renamed._tag === "Failure" && renamed.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 });
 
@@ -395,15 +339,13 @@ describe("the group's own lifecycle", () => {
         const directoryBefore = yield* Effect.result(
           as(founder)(groups.campaigns(campaign.groupId)),
         );
-        const inviteBefore = yield* Effect.result(
-          as(founder)(invites.create(campaign.groupId, { label: "Too soon" })),
-        );
+        const creator = yield* asDm(founder, campaign.id);
+        const inviteBefore = yield* invites.createForCampaign(creator, { label: "A player" });
         const secondCampaignBefore = yield* Effect.result(
           as(founder)(campaigns.create(campaign.groupId, { name: "Too soon" })),
         );
         const membershipBefore = yield* as(founder)(memberships.mine("live"));
 
-        const creator = yield* asDm(founder, campaign.id);
         const promoted = yield* groups.promote(creator, { name: "The Roads Between" });
         const groupAfter = yield* as(founder)(groups.findById(campaign.groupId));
         const directoryAfter = yield* as(founder)(groups.campaigns(campaign.groupId));
@@ -430,12 +372,14 @@ describe("the group's own lifecycle", () => {
       journey.groupBefore,
       journey.rosterBefore,
       journey.directoryBefore,
-      journey.inviteBefore,
       journey.secondCampaignBefore,
     ]) {
       expect(refusal._tag).toBe("Failure");
       if (refusal._tag === "Failure") expect(refusal.failure).toBeInstanceOf(NotFound);
     }
+    expect(journey.inviteBefore.invite.campaignId).toBe(
+      journey.campaignBefore._tag === "Success" ? journey.campaignBefore.success.id : undefined,
+    );
     expect(journey.promoted.isSharedWorld).toBe(true);
     expect(journey.groupAfter.name).toBe("The Roads Between");
     expect(journey.directoryAfter.map((campaign) => campaign.name)).toEqual(["A Road of Its Own"]);
@@ -480,9 +424,8 @@ describe("the group's own lifecycle", () => {
   }, 60_000);
 
   it("lets a campaign creator run their table while the owner runs the group", async () => {
-    // The everyday split, end to end: Fen shares, invites are Ada's, the
-    // roster is Fen's, and each is refused the other's act above. Here the
-    // positive halves — Fen's member list works with the proof:
+    // The everyday split, end to end: Fen runs the table while Ada owns the
+    // Shared World. Fen's campaign member list works with the proof:
     const roster = await runtime.runPromise(
       Effect.gen(function* () {
         const memberships = yield* Memberships;

@@ -288,8 +288,9 @@ describe("the grant: the owner edits the shared sheet", () => {
         );
         yield* withActor(kofi)(party.join(scratch.id, { characterId: made.id }));
 
-        const issued = yield* asJo(invites.list(scratch.groupId));
-        yield* asJo(invites.revoke(scratch.groupId, issued[0]!.id));
+        const creator = yield* asDm(fixture.jo, scratch.id);
+        const issued = yield* invites.listForCampaign(creator);
+        yield* invites.revokeForCampaign(creator, issued[0]!.id);
 
         const after = yield* withActor(accountWide(kofi))(
           characters.updateOwn(made.id, { level: 3 }),

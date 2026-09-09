@@ -158,7 +158,7 @@ export const aCharacterAt = (
  * A player at somebody else's table — **minted by the product, through a real
  * invitation.**
  *
- * The group owner mints an invitation naming the campaign (`Invites.create`),
+ * The campaign creator mints an invitation (`Invites.createForCampaign`),
  * a fresh account redeems it (`Invites.redeem`), and the group membership and
  * campaign participation that result are the same rows a person following a
  * link gets. So every player in this suite exercises the shipped path rather
@@ -166,9 +166,8 @@ export const aCharacterAt = (
  * of a *real* player fails somewhere instead of staying green against a state
  * nobody can reach.
  *
- * The owner is looked up rather than passed, so call sites did not have to
- * change when invitations moved to the group: a campaign's group has exactly
- * one owner, which is who may mint.
+ * The creator is looked up rather than passed, so call sites describe the
+ * player they need rather than reconstructing invitation authority.
  *
  * The credential is scoped to the campaign, because that is what a player's
  * credential should be, and the tests assert both narrowings separately.
@@ -176,15 +175,12 @@ export const aCharacterAt = (
 export const aPlayerAt = (
   campaignId: CampaignId,
   name: string,
-): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
+): Effect.Effect<Actor, never, Accounts | CampaignCreatorActors | Invites | SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const invites = yield* Invites;
-    const { owner, groupId } = yield* ownerOf(campaignId);
-    const issued = yield* Effect.provideService(
-      invites.create(groupId, { label: name, campaignId }),
-      CurrentActor,
-      owner,
-    );
+    const creator = yield* creatorOf(campaignId);
+    const proof = yield* asDm(creator, campaignId);
+    const issued = yield* invites.createForCampaign(proof, { label: name });
     const account = yield* anAccount(name);
     yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
     return scopedTo(account, campaignId);
@@ -200,68 +196,51 @@ export const admittedTo = (
   campaignId: CampaignId,
   account: Actor,
   label = "an existing member",
-): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
+): Effect.Effect<Actor, never, Accounts | CampaignCreatorActors | Invites | SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const invites = yield* Invites;
-    const { owner, groupId } = yield* ownerOf(campaignId);
-    const issued = yield* Effect.provideService(
-      invites.create(groupId, { label, campaignId }),
-      CurrentActor,
-      owner,
-    );
+    const creator = yield* creatorOf(campaignId);
+    const proof = yield* asDm(creator, campaignId);
+    const issued = yield* invites.createForCampaign(proof, { label });
     yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
     return scopedTo(account, campaignId);
   }).pipe(Effect.orDie);
 
 /**
  * A live group member who does **not** participate in the campaign — the
- * boundary the participation decision draws, minted through a group-only
- * invitation so the path is the shipped one here too.
+ * boundary the participation decision draws. A campaign invitation admits the
+ * account, then its creator withdraws that seat; Shared World eligibility
+ * deliberately remains.
  */
 export const aGroupMemberAt = (
   campaignId: CampaignId,
   name: string,
-): Effect.Effect<Actor, never, Accounts | Invites | SqlClient.SqlClient> =>
+): Effect.Effect<Actor, never, Accounts | CampaignCreatorActors | Invites | SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const invites = yield* Invites;
-    const { owner, groupId } = yield* ownerOf(campaignId);
-    const issued = yield* Effect.provideService(
-      invites.create(groupId, { label: name }),
-      CurrentActor,
-      owner,
-    );
+    const creator = yield* creatorOf(campaignId);
+    const proof = yield* asDm(creator, campaignId);
+    const issued = yield* invites.createForCampaign(proof, { label: name });
     const account = yield* anAccount(name);
     yield* Effect.provideService(invites.redeem(issued.token), CurrentActor, account);
+    yield* invites.revokeForCampaign(proof, issued.invite.id);
     return account;
   }).pipe(Effect.orDie);
 
 /**
- * The campaign's group and that group's owner, as an actor — who a test has to
- * be in order to invite somebody. A fact lookup, not a reach path; the grep in
+ * The campaign's creator as an actor — who a test has to be in order to invite
+ * somebody. A fact lookup, not a reach path; the grep in
  * `membership.test.ts` governs `src`, which is where the rule matters.
  */
-const ownerOf = (
-  campaignId: CampaignId,
-): Effect.Effect<
-  { readonly owner: Actor; readonly groupId: GroupId },
-  never,
-  SqlClient.SqlClient
-> =>
+const creatorOf = (campaignId: CampaignId): Effect.Effect<Actor, never, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql<{
-      readonly owner_account_id: AccountId;
-      readonly group_id: GroupId;
-    }>`
-      select play_group.owner_account_id, campaign.group_id
+    const rows = yield* sql<{ readonly creator_account_id: AccountId }>`
+      select campaign.creator_account_id
       from campaign
-      join play_group on play_group.id = campaign.group_id
       where campaign.id = ${campaignId}
     `;
-    return {
-      owner: new Actor({ accountId: rows[0]!.owner_account_id, scope: { _tag: "account" } }),
-      groupId: rows[0]!.group_id,
-    };
+    return new Actor({ accountId: rows[0]!.creator_account_id, scope: { _tag: "account" } });
   }).pipe(Effect.orDie);
 
 /**

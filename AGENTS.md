@@ -51,8 +51,8 @@ ordinary campaign work must not require navigating or owning that container.
   that seat and its party joins; it preserves group membership, other campaign
   memberships, and a seat the invitee already held before accepting the link.
 - The Party screen and invitation dialog read one campaign-local list and use
-  `reads.campaignInvites(campaignId)`. The old group invitation API remains only
-  as a compatibility seam for the existing group screen during the transition.
+  `reads.campaignInvites(campaignId)`. There is no group invitation management
+  surface.
 - `play_group.is_shared_world` distinguishes explicit Shared Worlds from the
   automatic context behind a standalone campaign. `Groups.mine` lists only the
   explicit kind; `POST /campaigns/:id/shared-world` requires both the campaign
@@ -79,6 +79,9 @@ ordinary campaign work must not require navigating or owning that container.
   plumbing. The old `/groups/:groupId/invites` API group is gone; preview and
   redemption remain token-scoped, invitation management is campaign-only, and
   `/groups/:groupId/members` exposes only `GET`—never a cross-campaign delete.
+- The repository matches that boundary: `Invites` has only campaign-scoped
+  list/create/revoke plus token preview/redeem; `Groups.removeMember`,
+  `removeFromGroup`, and the cross-group participation revoker are gone.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

@@ -19,7 +19,14 @@ import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aGroupBy, anAccount, asDm, createCampaign, scopedToGroup } from "./support/actors.js";
+import {
+  aGroupBy,
+  aGroupMemberAt,
+  anAccount,
+  asDm,
+  createCampaign,
+  scopedToGroup,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -67,7 +74,6 @@ const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
  */
 const makeFixture = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const invites = yield* Invites;
   const campaigns = yield* Campaigns;
   const sessions = yield* Sessions;
   const beats = yield* Beats;
@@ -78,11 +84,7 @@ const makeFixture = Effect.gen(function* () {
 
   // Wren joins the group through a real invitation and creates a campaign in
   // it — eligibility (group membership) becoming a table of their own.
-  const wren = yield* anAccount("Wren");
-  const issued = yield* withActor(jo)(
-    Effect.flatMap(Invites, (i) => i.create(groupId, { label: "Wren" })),
-  ).pipe(Effect.orDie);
-  yield* withActor(wren)(invites.redeem(issued.token)).pipe(Effect.orDie);
+  const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hagsBargain = yield* withActor(wren)(
     campaigns.create(groupId, { name: "The Hag's Bargain" }),
   ).pipe(Effect.orDie);

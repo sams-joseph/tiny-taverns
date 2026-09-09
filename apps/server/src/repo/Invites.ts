@@ -2,12 +2,10 @@ import {
   type AccountId,
   type CampaignId,
   type CampaignInviteCreate,
-  Conflict,
   CurrentActor,
   type GroupId,
   GroupInvite,
   type GroupInviteId,
-  type InviteCreate,
   InvitePreview,
   InviteRedeemed,
   type InviteStatus,
@@ -18,15 +16,14 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../Accounts.js";
-import { admitToGroup, removeFromGroup } from "./Groups.js";
+import { admitToGroup } from "./Groups.js";
 import { admitTo, revokeMemberAt } from "./Memberships.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { dieOnSqlError } from "./rows.js";
-import { campaignWritableById, ensureGroupWritable } from "./visibility.js";
+import { campaignWritableById } from "./visibility.js";
 
 /**
- * Invitations: group-owner links for a world and campaign-creator links for a
- * table, sharing one single-use token lifecycle.
+ * Campaign invitations, with one single-use token lifecycle.
  *
  * **A link is an invitation to join, not a way in.** Redeeming grants an
  * ordinary `group_member` row (and, when the invitation names a campaign, an
@@ -41,12 +38,12 @@ import { campaignWritableById, ensureGroupWritable } from "./visibility.js";
  *
  * **It writes no `group_member` or `campaign_member` SQL.** `repo/Groups.ts`
  * and `repo/Memberships.ts` own those tables; the grants this file exists to
- * make go through `admitToGroup` and `admitTo`, and the revocation through
- * `removeFromGroup` — all inside this file's transactions.
+ * make go through `admitToGroup` and `admitTo`, and campaign revocation goes
+ * through `revokeMemberAt` — all inside this file's transactions.
  *
- * **Authority follows the surface.** Group operations use `groupWritable`;
- * campaign operations require a `CampaignCreatorActor`. A creator therefore
- * never needs ownership of the hidden group to invite their players.
+ * **Authority follows the campaign.** Management requires a
+ * `CampaignCreatorActor`, so a creator never needs ownership of the hidden
+ * group to invite their players.
  *
  * **`preview` and `redeem` read names outside the visibility seam, and the
  * token is what scopes them.** They have to: the whole point of an invitation
@@ -123,25 +120,6 @@ const INVITE_COLUMNS = (sql: SqlClient.SqlClient) =>
 export class Invites extends Context.Service<
   Invites,
   {
-    /** The owner's list, newest first. Never carries a token — there is none to carry. */
-    readonly list: (
-      groupId: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupInvite>, NotFound, CurrentActor>;
-    /** Mints one. The only response in the product that contains a secret. */
-    readonly create: (
-      groupId: GroupId,
-      payload: InviteCreate,
-    ) => Effect.Effect<IssuedInvite, NotFound, CurrentActor>;
-    /**
-     * Withdraws one — and, if it has already been accepted, ends the
-     * membership it granted (campaign participations included), in the same
-     * transaction. `Conflict` when the redeemer cannot be removed — they
-     * created a campaign in the group since, which pins their membership.
-     */
-    readonly revoke: (
-      groupId: GroupId,
-      inviteId: GroupInviteId,
-    ) => Effect.Effect<GroupInvite, NotFound | Conflict, CurrentActor>;
     /** Campaign creator's list, containing only invitations to this table. */
     readonly listForCampaign: (
       creator: CampaignCreatorActor,
@@ -215,102 +193,6 @@ export class Invites extends Context.Service<
       const noSuchInvitation = () => new NotFound({ resource: "invite", id: "" });
 
       return {
-        list: (groupId) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              // An invitation is a credential, so reading the list is the
-              // owner's act and not merely a read of the group.
-              yield* ensureGroupWritable(sql, groupId, actor);
-              const rows = yield* sql<ListedInviteRow>`
-                select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
-                from group_invite
-                left join account on account.id = group_invite.redeemed_by
-                where group_invite.group_id = ${groupId}
-                order by group_invite.created_at desc
-              `;
-              return rows.map(toInvite);
-            }),
-          ),
-
-        create: (groupId, payload) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureGroupWritable(sql, groupId, actor);
-
-              // A named campaign is a claim, bound to this group before it is
-              // written: the composite foreign key would refuse it anyway,
-              // but a typed 404 naming the campaign beats a defect.
-              if (payload.campaignId !== undefined) {
-                const inGroup = yield* sql<{ readonly ok: boolean }>`
-                  select exists (select 1 from campaign
-                                 where campaign.id = ${payload.campaignId}
-                                   and campaign.group_id = ${groupId}) as ok
-                `;
-                if (inGroup[0]?.ok !== true) {
-                  return yield* new NotFound({ resource: "campaign", id: payload.campaignId });
-                }
-              }
-
-              // The same 32 bytes of `randomBytes` a machine token is, stored
-              // the same way. The plaintext exists in this function and in the
-              // one response, and nowhere else ever again.
-              const token = randomBytes(TOKEN_BYTES).toString("base64url");
-              const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
-
-              const rows = yield* sql<InviteRow>`
-                insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
-                values (${groupId}, ${payload.campaignId ?? null}, ${hashToken(token)},
-                        ${payload.label ?? ""}, ${expiresAt})
-                returning ${INVITE_COLUMNS(sql)}
-              `;
-              return new IssuedInvite({
-                invite: toInvite({ ...rows[0]!, redeemed_by_name: null }),
-                token,
-              });
-            }),
-          ),
-
-        revoke: (groupId, inviteId) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureGroupWritable(sql, groupId, actor);
-
-                // Idempotent: revoking a withdrawn invitation keeps the first
-                // `revoked_at`.
-                const rows = yield* sql<InviteRow>`
-                  update group_invite
-                  set revoked_at = coalesce(group_invite.revoked_at, now())
-                  where group_invite.id = ${inviteId}
-                    and group_invite.group_id = ${groupId}
-                  returning ${INVITE_COLUMNS(sql)}
-                `;
-                const row = rows[0];
-                if (row === undefined) {
-                  return yield* new NotFound({ resource: "invite", id: inviteId });
-                }
-
-                // **Revoking an accepted invitation takes the membership
-                // back** — group membership and every campaign participation
-                // under it, in this same transaction. It is the owner's only
-                // remedy for a link that reached the wrong person. It cannot
-                // touch the owner's own row, and it refuses (Conflict) when
-                // the redeemer created a campaign in the group since.
-                if (row.redeemed_by !== null) {
-                  yield* removeFromGroup(sql, groupId, row.redeemed_by);
-                }
-
-                const named = yield* sql<{ readonly name: string }>`
-                  select account.name from account where account.id = ${row.redeemed_by}
-                `;
-                return toInvite({ ...row, redeemed_by_name: named[0]?.name ?? null });
-              }),
-            ),
-          ),
-
         listForCampaign: (creator) =>
           dieOnSqlError(
             Effect.gen(function* () {

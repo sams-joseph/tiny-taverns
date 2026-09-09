@@ -53,10 +53,10 @@ import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibil
  *   named, checked against live group membership first). Reinstates a revoked
  *   row rather than erroring, so being invited back after leaving works and a
  *   double admit is a no-op.
- * - `revokeMemberAt` / `revokeAllInGroupFor` — the `where` structurally
- *   excludes any row whose account is the campaign's creator, so no bug
- *   upstream can turn "remove a player" into "unseat the DM". The composite
- *   key would refuse that anyway; this is the belt to its braces.
+ * - `revokeMemberAt` — the `where` structurally excludes any row whose account
+ *   is the campaign's creator, so no bug upstream can turn "remove a player"
+ *   into "unseat the DM". The composite key would refuse that anyway; this is
+ *   the belt to its braces.
  */
 
 /**
@@ -147,40 +147,6 @@ export const revokeMemberAt = (
       `;
     }
     return rows.length;
-  });
-
-/**
- * Revokes every live participation an account holds across one group's
- * campaigns — the campaign half of removing somebody from a group, run in the
- * same transaction as the `group_member` revoke so the deferred key holds.
- *
- * Creator rows are excluded by the same clause as everywhere else; the caller
- * (`repo/Groups.ts`) refuses the whole removal first when the account created
- * a campaign in the group, because `campaign_creator_in_group` would refuse it
- * at COMMIT anyway and a `Conflict` naming the reason beats a defect.
- */
-export const revokeAllInGroupFor = (
-  sql: SqlClient.SqlClient,
-  groupId: GroupId,
-  accountId: AccountId,
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.gen(function* () {
-    yield* sql`
-      update campaign_member set revoked_at = now()
-      where campaign_member.group_id = ${groupId}
-        and campaign_member.account_id = ${accountId}
-        and campaign_member.revoked_at is null
-        and ${notTheCreator(sql)}
-    `;
-    // Seats retire with the memberships — `revokeMemberAt`'s clause, across
-    // the group. Scoped by `group_id` on the seat itself, which is the
-    // campaign's own value by the composite key into `campaign`.
-    yield* sql`
-      update campaign_character set left_at = now(), updated_at = now()
-      where campaign_character.group_id = ${groupId}
-        and campaign_character.account_id = ${accountId}
-        and campaign_character.left_at is null
-    `;
   });
 
 /**
