@@ -45,6 +45,7 @@ const nothingLive = () => server.routes.set("GET /me/campaigns", { status: 200, 
 const membership = (relation: "creator" | "player", row: unknown = campaign) => ({
   campaign: row,
   relation,
+  sharedWorld: null,
   joinedAt: "2026-06-01T10:00:00.000Z",
 });
 

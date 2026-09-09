@@ -5,7 +5,13 @@ import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/u
 import type { ReactNode } from "react";
 import { SignInSurface } from "../auth/SignInSurface";
 import { HobRegion } from "../hob/HobDock";
-import { useCampaignId, useCampaignRelation, useSection, type Section } from "./location";
+import {
+  useCampaignId,
+  useCampaignRelation,
+  useCampaignSharedWorld,
+  useSection,
+  type Section,
+} from "./location";
 
 /**
  * The fixed shell: **two nav rows**, a per-screen bar under them, a scrolling
@@ -352,6 +358,30 @@ function CampaignRowNav({
   );
 }
 
+/** The route back out to this table's cross-campaign context, when explicit. */
+function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: CampaignId }) {
+  const world = useCampaignSharedWorld(campaignId);
+  if (world === undefined || world === null) return null;
+
+  return (
+    <Link
+      to="/worlds/$groupId"
+      params={{ groupId: world.id }}
+      activeProps={{}}
+      title={`${world.name} — Shared World`}
+      aria-label={`${world.name} — Shared World`}
+      className={cn(
+        "flex min-w-6 shrink-0 items-center gap-1.5 rounded-control px-1.5 py-1",
+        "text-caption leading-none font-medium whitespace-nowrap text-muted-foreground",
+        "transition-control hover:bg-surface-sunken hover:text-foreground",
+      )}
+    >
+      <Icon name="map" size={14} className="shrink-0 text-accent-ink" />
+      <span className="hidden max-w-32 truncate @5xl:block">{world.name}</span>
+    </Link>
+  );
+}
+
 function TopNav({
   campaignName,
   campaignBadge,
@@ -427,6 +457,7 @@ function TopNav({
       {campaignId !== undefined && (
         <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
           <CampaignHome campaignId={campaignId} name={campaignName} />
+          <CampaignSharedWorldLink campaignId={campaignId} />
           {/* The badge is this row's decoration, so it is the second thing to
               give way — the campaign's own screens say which night it is in
               their subtitle, and a narrow bar has to keep its controls. */}

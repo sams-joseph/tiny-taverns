@@ -381,6 +381,7 @@ describe("the group's own lifecycle", () => {
         const campaigns = yield* Campaigns;
         const groups = yield* Groups;
         const invites = yield* Invites;
+        const memberships = yield* Memberships;
         const founder = yield* anAccount("Wayfarer");
         const campaign = yield* as(founder)(
           campaigns.createStandalone({ name: "A Road of Its Own" }),
@@ -400,11 +401,13 @@ describe("the group's own lifecycle", () => {
         const secondCampaignBefore = yield* Effect.result(
           as(founder)(campaigns.create(campaign.groupId, { name: "Too soon" })),
         );
+        const membershipBefore = yield* as(founder)(memberships.mine("live"));
 
         const creator = yield* asDm(founder, campaign.id);
         const promoted = yield* groups.promote(creator, { name: "The Roads Between" });
         const groupAfter = yield* as(founder)(groups.findById(campaign.groupId));
         const directoryAfter = yield* as(founder)(groups.campaigns(campaign.groupId));
+        const membershipAfter = yield* as(founder)(memberships.mine("live"));
 
         return {
           campaignBefore,
@@ -413,9 +416,11 @@ describe("the group's own lifecycle", () => {
           directoryBefore,
           inviteBefore,
           secondCampaignBefore,
+          membershipBefore,
           promoted,
           groupAfter,
           directoryAfter,
+          membershipAfter,
         };
       }).pipe(Effect.orDie),
     );
@@ -434,6 +439,11 @@ describe("the group's own lifecycle", () => {
     expect(journey.promoted.isSharedWorld).toBe(true);
     expect(journey.groupAfter.name).toBe("The Roads Between");
     expect(journey.directoryAfter.map((campaign) => campaign.name)).toEqual(["A Road of Its Own"]);
+    expect(journey.membershipBefore[0]?.sharedWorld).toBeNull();
+    expect(journey.membershipAfter[0]?.sharedWorld).toEqual({
+      id: journey.promoted.id,
+      name: "The Roads Between",
+    });
   }, 60_000);
 
   it("does not let a campaign creator promote somebody else's group", async () => {

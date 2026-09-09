@@ -37,6 +37,10 @@ describe("the campaign-first home", () => {
 
   it("promotes a standalone campaign into a named Shared World", async () => {
     server.routes.set("GET /groups", { status: 200, body: [] });
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
+    });
     server.routes.set(`POST /campaigns/${campaignId}/shared-world`, {
       status: 200,
       body: { ...group, name: "The Roads Between", isSharedWorld: true },

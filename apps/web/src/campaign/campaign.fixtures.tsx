@@ -98,6 +98,8 @@ export const group = {
   updatedAt: "2026-06-01T10:00:00.000Z",
 };
 
+export const sharedWorld = { id: groupId, name: group.name };
+
 export const campaign = {
   id: campaignId,
   groupId,
@@ -1261,7 +1263,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     // render the participant projection.
     [
       "GET /me/campaigns",
-      { status: 200, body: [{ campaign, relation: "creator", joinedAt: stamps.createdAt }] },
+      {
+        status: 200,
+        body: [{ campaign, relation: "creator", sharedWorld, joinedAt: stamps.createdAt }],
+      },
     ],
     // The group above the campaign: the directory, the roster, the list. The
     // campaign screens do not read these, but the group screen and the shell

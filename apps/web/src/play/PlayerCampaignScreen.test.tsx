@@ -36,7 +36,14 @@ const renderScreen = async (): Promise<void> => {
   // projection — the same URL the creator opens, chosen by relation.
   server.routes.set("GET /me/campaigns", {
     status: 200,
-    body: [{ campaign, relation: "player", joinedAt: "2026-06-01T10:00:00.000Z" }],
+    body: [
+      {
+        campaign,
+        relation: "player",
+        sharedWorld: null,
+        joinedAt: "2026-06-01T10:00:00.000Z",
+      },
+    ],
   });
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
     <HostedSessionScope session={session}>{screen}</HostedSessionScope>

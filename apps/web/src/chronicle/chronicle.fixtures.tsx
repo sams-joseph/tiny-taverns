@@ -265,7 +265,10 @@ export const fullChronicle = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
     [
       "GET /me/campaigns",
-      { status: 200, body: [{ campaign, relation: "creator", joinedAt: stamps.createdAt }] },
+      {
+        status: 200,
+        body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: stamps.createdAt }],
+      },
     ],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) }],

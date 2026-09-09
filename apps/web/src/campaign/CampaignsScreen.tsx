@@ -1,4 +1,4 @@
-import type { CampaignMembership, GroupMembership } from "@taverns/api";
+import type { CampaignMembership, CampaignSharedWorld, GroupMembership } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Badge,
@@ -49,7 +49,7 @@ function CampaignRow({
   onPromote,
 }: {
   readonly membership: CampaignMembership;
-  readonly world: GroupMembership | undefined;
+  readonly world: CampaignSharedWorld | null;
   readonly onPromote: (() => void) | undefined;
 }) {
   const campaign = membership.campaign;
@@ -77,16 +77,16 @@ function CampaignRow({
             {campaign.partyName}
           </span>
         )}
-        {world !== undefined ? (
+        {world !== null ? (
           <Button
             variant="ghost"
             size="sm"
             className="text-link"
             nativeButton={false}
-            render={<Link to="/worlds/$groupId" params={{ groupId: world.group.id }} />}
+            render={<Link to="/worlds/$groupId" params={{ groupId: world.id }} />}
           >
             <Icon name="map" size={14} />
-            {world.group.name}
+            {world.name}
           </Button>
         ) : (
           onPromote !== undefined && (
@@ -339,19 +339,11 @@ export function CampaignsScreen() {
                   <CampaignRow
                     key={membership.campaign.id}
                     membership={membership}
-                    world={
-                      worldsResource.state === "ready"
-                        ? worldsResource.value.find(
-                            (candidate) => candidate.group.id === membership.campaign.groupId,
-                          )
-                        : undefined
-                    }
+                    world={membership.sharedWorld}
                     onPromote={
                       worldsResource.state === "ready" &&
                       membership.relation === "creator" &&
-                      !worldsResource.value.some(
-                        (candidate) => candidate.group.id === membership.campaign.groupId,
-                      )
+                      membership.sharedWorld === null
                         ? () => setPromoting(membership)
                         : undefined
                     }

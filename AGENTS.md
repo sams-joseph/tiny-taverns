@@ -69,6 +69,10 @@ ordinary campaign work must not require navigating or owning that container.
   targets through the existing `groups.createCampaign` authorization seam.
   The campaign home also lists every Shared World independently of campaign
   participation, so a world-only member is never left without a route into it.
+- `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
+  hides a standalone campaign's backing group. Campaign chrome reads that same
+  membership atom it already needs for `relation`, so every campaign screen
+  links to its explicit Shared World—and Group Hob—without a `/groups` request.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

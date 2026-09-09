@@ -1,4 +1,4 @@
-import type { CampaignId, CampaignRelation, GroupId } from "@taverns/api";
+import type { CampaignId, CampaignRelation, CampaignSharedWorld, GroupId } from "@taverns/api";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
@@ -125,4 +125,22 @@ export function useCampaignRelation(
   if (campaignId === undefined || resource.state === "loading") return undefined;
   if (resource.state === "failed") return "creator";
   return resource.value.find((row) => row.campaign.id === campaignId)?.relation ?? "creator";
+}
+
+/**
+ * The user-facing world surrounding this campaign, when it has one.
+ *
+ * This deliberately reads the membership row rather than `/groups`: campaign
+ * chrome already holds this atom for its relation, and a nullable summary on
+ * that row keeps the way to cross-campaign context available on every screen
+ * without mounting another request. A standalone campaign's hidden integrity
+ * group is represented as `null`, never as a destination.
+ */
+export function useCampaignSharedWorld(
+  campaignId: CampaignId | undefined,
+): CampaignSharedWorld | null | undefined {
+  const [resource] = useApiAtom(membershipsAtom);
+  if (campaignId === undefined || resource.state === "loading") return undefined;
+  if (resource.state === "failed") return undefined;
+  return resource.value.find((row) => row.campaign.id === campaignId)?.sharedWorld;
 }

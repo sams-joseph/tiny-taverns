@@ -4,6 +4,7 @@ import {
   CampaignMember,
   CampaignMembership,
   type CampaignRelation,
+  CampaignSharedWorld,
   Conflict,
   CurrentActor,
   type GroupId,
@@ -193,6 +194,8 @@ export type CampaignShelf = "live" | "archived";
 interface MembershipRow extends CampaignRow {
   readonly is_creator: boolean;
   readonly joined_at: Date;
+  readonly is_shared_world: boolean;
+  readonly shared_world_name: string;
 }
 
 interface MemberRow {
@@ -301,8 +304,11 @@ export class Memberships extends Context.Service<
               const rows = yield* sql<MembershipRow>`
                 select campaign.*,
                        (campaign.creator_account_id = ${actor.accountId}) as is_creator,
-                       campaign_member.created_at as joined_at
+                       campaign_member.created_at as joined_at,
+                       play_group.is_shared_world,
+                       play_group.name as shared_world_name
                 from campaign
+                join play_group on play_group.id = campaign.group_id
                 join campaign_member
                   on campaign_member.campaign_id = campaign.id
                  and campaign_member.account_id = ${actor.accountId}
@@ -315,6 +321,12 @@ export class Memberships extends Context.Service<
                   new CampaignMembership({
                     campaign: toCampaign(row),
                     relation: relationOf(row.is_creator),
+                    sharedWorld: row.is_shared_world
+                      ? new CampaignSharedWorld({
+                          id: row.group_id,
+                          name: row.shared_world_name,
+                        })
+                      : null,
                     joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                   }),
               );

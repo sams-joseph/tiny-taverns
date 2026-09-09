@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { Campaign } from "./Campaign.js";
-import { AccountId } from "./Ids.js";
+import { AccountId, GroupId } from "./Ids.js";
 
 /**
  * What somebody is at a table — **derived, never stored**.
@@ -20,6 +20,20 @@ export const CampaignRelation = Schema.Literals(["creator", "player"]);
 export type CampaignRelation = typeof CampaignRelation.Type;
 
 /**
+ * The optional cross-campaign context surrounding a table.
+ *
+ * Standalone campaigns still have a private backing `play_group` row for
+ * integrity, but that implementation detail is deliberately absent here. A
+ * value means the group has been promoted to a user-facing Shared World and
+ * gives campaign chrome the complete, stable destination it needs without a
+ * second `/groups` read.
+ */
+export class CampaignSharedWorld extends Schema.Class<CampaignSharedWorld>("CampaignSharedWorld")({
+  id: GroupId,
+  name: Schema.String,
+}) {}
+
+/**
  * A table you are at, and what you are at it — the answer `GET /me/campaigns`
  * gives.
  *
@@ -37,6 +51,8 @@ export type CampaignRelation = typeof CampaignRelation.Type;
 export class CampaignMembership extends Schema.Class<CampaignMembership>("CampaignMembership")({
   campaign: Campaign,
   relation: CampaignRelation,
+  /** Null while this is a standalone campaign with only its hidden context. */
+  sharedWorld: Schema.NullOr(CampaignSharedWorld),
   /** When this account joined — for the creator, when they created the campaign. */
   joinedAt: Schema.DateTimeUtcFromString,
 }) {}
