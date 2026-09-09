@@ -3,6 +3,7 @@ import {
   type AssistantTurnId,
   type CampaignId,
   type NpcId,
+  type NpcProposalId,
   type NpcAwarenessCandidateId,
   type NpcKnowledgeFactId,
   type NpcMemoryId,
@@ -290,7 +291,187 @@ describe("the npcs group", () => {
     );
   }, 60_000);
 
-  it("answers the rehearsal status as unavailable, with the prompt metadata, and no threads yet", async () => {
+  it("aggregates campaign NPC follow-up without private transcripts and keeps memory accepts draft", async () => {
+    const seeded = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(creator);
+        const archived = yield* dm.npcs.create({
+          params: { campaignId },
+          payload: { name: "Marta", role: "retired innkeeper" },
+        });
+        yield* dm.npcs.archive({ params: { campaignId, npcId: archived.id }, payload: {} });
+        const otherCampaign = yield* campaignVia(dm, { name: "Other Salt", visibility: "shared" });
+        const otherNpc = yield* dm.npcs.create({
+          params: { campaignId: otherCampaign.id },
+          payload: { name: "Other Cazril" },
+        });
+        const sql = yield* SqlClient.SqlClient;
+        const session = yield* sql<{ readonly id: SessionId }>`
+          insert into session (campaign_id, number, title, visibility)
+          values (${campaignId}, 7, 'The toll at dusk', 'shared')
+          returning id
+        `;
+        const rehearsalThread = yield* sql<{ readonly id: string }>`
+          insert into npc_thread (npc_id, channel, title)
+          values (${cazril}, 'rehearsal', 'creator rehearsal')
+          returning id
+        `;
+        const rehearsalTurn = yield* sql<{ readonly id: string }>`
+          insert into npc_turn (thread_id, who, body, origin)
+          values (${rehearsalThread[0]!.id}, 'npc', 'PRIVATE_REHEARSAL_TRANSCRIPT_SENTINEL', 'assistant')
+          returning id
+        `;
+        const memoryProposal = yield* sql<{ readonly id: NpcProposalId }>`
+          insert into npc_proposal ${sql.insert({
+            campaign_id: campaignId,
+            npc_id: cazril,
+            thread_id: rehearsalThread[0]!.id,
+            npc_turn_id: rehearsalTurn[0]!.id,
+            proposed_by_account_id: null,
+            kind: "memory",
+            content: JSON.stringify({ kind: "memory", body: "The party promised Cazril a name." }),
+            origin: "assistant",
+          })}
+          returning id
+        `;
+        const sessionThread = yield* sql<{ readonly id: string }>`
+          insert into npc_thread (npc_id, channel, session_id, title, visibility)
+          values (${cazril}, 'session_shared', ${session[0]!.id}, 'table talk', 'shared')
+          returning id
+        `;
+        const sessionTurn = yield* sql<{ readonly id: string }>`
+          insert into npc_turn (thread_id, who, body, origin)
+          values (${sessionThread[0]!.id}, 'npc', 'SESSION_SHARED_TRANSCRIPT_SENTINEL', 'assistant')
+          returning id
+        `;
+        yield* sql`
+          insert into npc_proposal ${sql.insert({
+            campaign_id: campaignId,
+            npc_id: cazril,
+            thread_id: sessionThread[0]!.id,
+            npc_turn_id: sessionTurn[0]!.id,
+            proposed_by_account_id: null,
+            kind: "beat",
+            content: JSON.stringify({ kind: "beat", body: "Cazril raised the ferry chain." }),
+            origin: "assistant",
+          })}
+        `;
+        const pim = yield* sql<{ readonly id: string }>`
+          select id from account where name = 'Pim' limit 1
+        `;
+        const privateThread = yield* sql<{ readonly id: string }>`
+          insert into npc_thread (npc_id, channel, account_id, title)
+          values (${cazril}, 'player_direct', ${pim[0]!.id}, 'private player chat')
+          returning id
+        `;
+        yield* sql`
+          insert into npc_turn (thread_id, who, body, account_id)
+          values (${privateThread[0]!.id}, 'user', 'PLAYER_DIRECT_TRANSCRIPT_SENTINEL', ${pim[0]!.id})
+        `;
+        const awarenessTurn = yield* sql<{ readonly id: AssistantTurnId }>`
+          with thread as (
+            insert into assistant_thread (campaign_id, title)
+            values (${campaignId}, 'follow up awareness')
+            returning id
+          ), made as (select gen_random_uuid() as id)
+          insert into assistant_turn (id, thread_id, who, body, origin, assistant_turn_id)
+          select made.id, thread.id, 'hob', 'candidate', 'assistant', made.id from made, thread
+          returning id
+        `;
+        const candidate = yield* sql<{ readonly id: NpcAwarenessCandidateId }>`
+          insert into npc_awareness_candidate ${sql.insert({
+            npc_id: archived.id,
+            kind: "memory",
+            body: "Marta remembers the hag's copper key.",
+            source_kind: "recap",
+            source_label: "Session 7 recap",
+            source_excerpt: "A copper key changed hands.",
+            rationale: "Hob connected the key to Marta.",
+            origin: "assistant",
+            assistant_turn_id: awarenessTurn[0]!.id,
+          })}
+          returning id
+        `;
+        const otherAwarenessTurn = yield* sql<{ readonly id: AssistantTurnId }>`
+          with thread as (
+            insert into assistant_thread (campaign_id, title)
+            values (${otherCampaign.id}, 'other awareness')
+            returning id
+          ), made as (select gen_random_uuid() as id)
+          insert into assistant_turn (id, thread_id, who, body, origin, assistant_turn_id)
+          select made.id, thread.id, 'hob', 'candidate', 'assistant', made.id from made, thread
+          returning id
+        `;
+        yield* sql`
+          insert into npc_awareness_candidate ${sql.insert({
+            npc_id: otherNpc.id,
+            kind: "knowledge",
+            body: "Wrong campaign awareness.",
+            source_kind: "manual",
+            source_label: "Other",
+            origin: "assistant",
+            assistant_turn_id: otherAwarenessTurn[0]!.id,
+          })}
+        `;
+        return { memoryProposalId: memoryProposal[0]!.id, candidateId: candidate[0]!.id };
+      }).pipe(Effect.orDie),
+    );
+
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const dm = yield* clientFor(creator);
+        const before = yield* dm.npcs.followUp({ params: { campaignId } });
+        const accepted = yield* dm.npcs.acceptProposal({
+          params: { campaignId, npcId: cazril, proposalId: seeded.memoryProposalId },
+          payload: {},
+        });
+        const repeated = yield* Effect.result(
+          dm.npcs.acceptProposal({
+            params: { campaignId, npcId: cazril, proposalId: seeded.memoryProposalId },
+            payload: {},
+          }),
+        );
+        const memories = yield* dm.npcs.memories({ params: { campaignId, npcId: cazril } });
+        const after = yield* dm.npcs.followUp({ params: { campaignId } });
+        return { before, accepted, repeated, memories, after };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.before.proposalCount).toBe(2);
+    expect(seen.before.awarenessCount).toBe(1);
+    expect(seen.before.items.map((item) => item.npc.name)).toEqual(
+      expect.arrayContaining(["Cazril", "Marta"]),
+    );
+    expect(seen.before.items.map((item) => item.itemKind)).toEqual(
+      expect.arrayContaining(["proposal", "awareness"]),
+    );
+    expect(JSON.stringify(seen.before)).not.toContain("PLAYER_DIRECT_TRANSCRIPT_SENTINEL");
+    expect(JSON.stringify(seen.before)).not.toContain("PRIVATE_REHEARSAL_TRANSCRIPT_SENTINEL");
+    expect(JSON.stringify(seen.before)).not.toContain("Wrong campaign awareness");
+    expect(
+      seen.before.items.find(
+        (item) => item.itemKind === "proposal" && item.proposal.id === seeded.memoryProposalId,
+      ),
+    ).toMatchObject({ source: { channel: "rehearsal", label: "Creator rehearsal" } });
+    expect(
+      seen.before.items.find(
+        (item) => item.itemKind === "awareness" && item.candidate.id === seeded.candidateId,
+      ),
+    ).toMatchObject({ npc: { name: "Marta" } });
+    expect(seen.accepted.acceptedMemoryId).not.toBeNull();
+    expect(seen.memories).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: seen.accepted.acceptedMemoryId, status: "draft" }),
+      ]),
+    );
+    expect(seen.after.proposalCount).toBe(1);
+    expect(seen.repeated._tag).toBe("Failure");
+    expect(seen.repeated._tag === "Failure" && seen.repeated.failure).toMatchObject({
+      _tag: "Conflict",
+    });
+  }, 60_000);
+
+  it("answers the rehearsal status as unavailable, with the prompt metadata, and a thread list", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const dm = yield* clientFor(creator);
@@ -310,7 +491,7 @@ describe("the npcs group", () => {
       templateVersion: NPC_PROMPT_TEMPLATE_VERSION,
     });
     expect(seen.status.estimatedTokens).toBeGreaterThan(0);
-    expect(seen.threads).toEqual([]);
+    expect(seen.threads).toEqual(expect.any(Array));
     expect(seen.rehearse._tag).toBe("Failure");
     expect(seen.rehearse._tag === "Failure" && seen.rehearse.failure).toMatchObject({
       _tag: "HobUnavailable",
@@ -329,6 +510,7 @@ describe("the npcs group", () => {
           const candidateId = "2b1f2a1e-0000-4000-8000-00000000c199" as NpcAwarenessCandidateId;
           const attempts: Record<string, Effect.Effect<unknown, unknown>> = {
             list: client.npcs.list({ params: { campaignId }, query: {} }),
+            followUp: client.npcs.followUp({ params: { campaignId } }),
             create: client.npcs.create({ params: { campaignId }, payload: { name: "Mine" } }),
             find: client.npcs.findById({ params }),
             update: client.npcs.update({ params, payload: { name: "Renamed" } }),

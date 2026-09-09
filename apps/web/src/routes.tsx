@@ -11,6 +11,7 @@ import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CastScreen } from "./cast/CastScreen";
+import { NpcFollowUpScreen } from "./cast/NpcFollowUpScreen";
 import { NpcLibraryScreen } from "./cast/NpcLibraryScreen";
 import { NpcScreen } from "./cast/NpcScreen";
 import { PlayerNpcChatScreen } from "./cast/PlayerNpcChatScreen";
@@ -244,6 +245,13 @@ const castRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "cast",
   component: CastScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+const npcFollowUpRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "cast/follow-up",
+  component: NpcFollowUpScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -572,6 +580,7 @@ export const routeTree = rootRoute.addChildren([
     encountersRoute,
     notesRoute,
     castRoute,
+    npcFollowUpRoute,
     playerNpcTalkRoute,
     npcRoute,
     castSplatRoute,
@@ -631,6 +640,7 @@ export const routes = {
   encounters: encountersRoute,
   notes: notesRoute,
   cast: castRoute,
+  npcFollowUp: npcFollowUpRoute,
   npc: npcRoute,
   chronicle: chronicleRoute,
   party: partyRoute,

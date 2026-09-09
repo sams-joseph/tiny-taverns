@@ -60,8 +60,31 @@ const pendingProposal = {
   updatedAt: cazril.updatedAt,
 };
 
+const followUpWithProposal = {
+  campaignId,
+  proposalCount: 1,
+  awarenessCount: 0,
+  items: [
+    {
+      itemKind: "proposal",
+      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null },
+      proposal: pendingProposal,
+      source: {
+        channel: "rehearsal",
+        sessionId: null,
+        sessionNumber: null,
+        label: "Creator rehearsal",
+      },
+    },
+  ],
+};
+
 describe("CastScreen", () => {
   it("draws the cast as cards, on the campaign row, with the private-material mark", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/follow-up`, {
+      status: 200,
+      body: followUpWithProposal,
+    });
     await renderCast();
 
     expect(await screen.findByRole("heading", { name: "Cast" })).toBeInTheDocument();
@@ -82,6 +105,9 @@ describe("CastScreen", () => {
       "href",
       `/#/campaigns/${campaignId}/cast/${npcId}`,
     );
+    const followUp = screen.getByRole("button", { name: /NPC follow-up/ });
+    expect(followUp).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/follow-up`);
+    expect(within(followUp).getByText("1")).toBeInTheDocument();
     // And *Cast* is the lit item on the campaign row.
     const row = screen.getByRole("navigation", { name: "This campaign" });
     expect(within(row).getByRole("link", { name: "Cast" })).toHaveAttribute("aria-current", "page");

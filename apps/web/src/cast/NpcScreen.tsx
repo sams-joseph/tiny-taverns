@@ -155,7 +155,12 @@ function NpcBody({
   const { npc, knowledge, memories, proposals, awarenessCandidates } = detail;
   const invalidate = useInvalidate();
   const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name, () => {
-    invalidate([reads.npcProposals(npc.id), reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)]);
+    invalidate([
+      reads.npcProposals(npc.id),
+      reads.npcFollowUp(npc.campaignId),
+      reads.npcMemories(npc.id),
+      reads.npcRehearsal(npc.id),
+    ]);
   });
   const archived = npc.archivedAt !== null;
   const usableRehearsal = archived
@@ -364,6 +369,7 @@ function AwarenessRow({
   };
   const invalidate = [
     reads.npcAwarenessCandidates(npc.id),
+    reads.npcFollowUp(npc.campaignId),
     reads.npcKnowledge(npc.id),
     reads.npcMemories(npc.id),
     reads.npcRehearsal(npc.id),
@@ -628,6 +634,7 @@ function ProposalRow({ npc, proposal }: { readonly npc: Npc; readonly proposal: 
   const params = { campaignId: npc.campaignId, npcId: npc.id, proposalId: proposal.id };
   const invalidate = [
     reads.npcProposals(npc.id),
+    reads.npcFollowUp(npc.campaignId),
     reads.npcMemories(npc.id),
     reads.npcRehearsal(npc.id),
     reads.notes(npc.campaignId),

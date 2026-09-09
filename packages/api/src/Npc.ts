@@ -493,6 +493,46 @@ export const NpcAwarenessCandidateReject = Schema.Struct({
 });
 export type NpcAwarenessCandidateReject = typeof NpcAwarenessCandidateReject.Type;
 
+export class NpcFollowUpNpc extends Schema.Class<NpcFollowUpNpc>("NpcFollowUpNpc")({
+  id: NpcId,
+  name: npcName,
+  role: npcRole,
+  archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+}) {}
+
+export const NpcFollowUpProposalSource = Schema.Struct({
+  channel: NpcChannel,
+  sessionId: Schema.NullOr(SessionId),
+  sessionNumber: Schema.NullOr(Schema.Int),
+  label: Schema.String,
+});
+export type NpcFollowUpProposalSource = typeof NpcFollowUpProposalSource.Type;
+
+export class NpcFollowUpProposal extends Schema.Class<NpcFollowUpProposal>("NpcFollowUpProposal")({
+  itemKind: Schema.Literal("proposal"),
+  npc: NpcFollowUpNpc,
+  proposal: NpcProposal,
+  source: NpcFollowUpProposalSource,
+}) {}
+
+export class NpcFollowUpAwarenessCandidate extends Schema.Class<NpcFollowUpAwarenessCandidate>(
+  "NpcFollowUpAwarenessCandidate",
+)({
+  itemKind: Schema.Literal("awareness"),
+  npc: NpcFollowUpNpc,
+  candidate: NpcAwarenessCandidate,
+}) {}
+
+export const NpcFollowUpItem = Schema.Union([NpcFollowUpProposal, NpcFollowUpAwarenessCandidate]);
+export type NpcFollowUpItem = typeof NpcFollowUpItem.Type;
+
+export class NpcFollowUp extends Schema.Class<NpcFollowUp>("NpcFollowUp")({
+  campaignId: CampaignId,
+  proposalCount: Schema.Int,
+  awarenessCount: Schema.Int,
+  items: Schema.Array(NpcFollowUpItem),
+}) {}
+
 /**
  * Whether a model is behind the rehearsal, and the prompt metadata the
  * inspector shows — the template version and an estimate of the prompt's

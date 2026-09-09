@@ -50,6 +50,7 @@ import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
+import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -324,6 +325,7 @@ export const servicesOver = <E>(
   | NpcMemories
   | NpcProposals
   | NpcAwareness
+  | NpcFollowUps
   | Npcs
   | NpcThreads
   // A campaign's rules vocabulary, and the Library originals behind it. An
@@ -403,6 +405,7 @@ export const servicesOver = <E>(
     NpcKnowledge.layer,
     NpcMemories.layer,
     NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+    NpcFollowUps.layer,
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -581,6 +584,7 @@ export const applicationOver = <E>(
     | NpcMemories
     | NpcProposals
     | NpcAwareness
+    | NpcFollowUps
     | Npcs
     | NpcThreads
     | Options

@@ -46,6 +46,7 @@ import { NpcKnowledge } from "./repo/NpcKnowledge.js";
 import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
+import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -821,6 +822,7 @@ const NpcsLive = HttpApiBuilder.group(
     const memories = yield* NpcMemories;
     const proposals = yield* NpcProposals;
     const awareness = yield* NpcAwareness;
+    const followUps = yield* NpcFollowUps;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
@@ -842,6 +844,9 @@ const NpcsLive = HttpApiBuilder.group(
       )
       .handle("copyFromSource", ({ params }) =>
         asCreator(params.campaignId, (creator) => npcs.copyFromSource(creator, params.sourceNpcId)),
+      )
+      .handle("followUp", ({ params }) =>
+        asCreator(params.campaignId, (creator) => followUps.pending(creator)),
       )
       .handle("findById", ({ params }) =>
         asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),

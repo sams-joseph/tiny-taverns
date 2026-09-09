@@ -449,15 +449,15 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    // Twenty-five through seventy-eight are the cast: `Npcs`, `NpcKnowledge`,
-    // `NpcMemories`, `NpcAwareness`, `NpcThreads` and `NpcProposals`, gated from
+    // Twenty-five through seventy-nine are the cast: `Npcs`, `NpcKnowledge`,
+    // `NpcMemories`, `NpcAwareness`, `NpcFollowUps`, `NpcThreads` and `NpcProposals`, gated from
     // the day the endpoints were declared, because an NPC row and its context
     // carry creator-only material and the creator actions that open, pause,
     // resume, close, monitor a shared session channel and curate Hob awareness
     // are still the campaign creator's acts. This is an occurrence count rather
     // than a method count: inner helpers in those files restate their own
     // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
-    expect(gated).toBe(78);
+    expect(gated).toBe(79);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

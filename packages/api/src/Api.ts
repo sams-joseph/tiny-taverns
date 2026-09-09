@@ -133,6 +133,7 @@ import {
   Npc,
   NpcCreate,
   NpcEvent,
+  NpcFollowUp,
   NpcKnowledgeFact,
   NpcKnowledgeFactCreate,
   NpcKnowledgeFactUpdate,
@@ -1795,6 +1796,11 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       params: { campaignId: CampaignId, sourceNpcId: NpcId },
       payload: Schema.Struct({}),
       success: Npc,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("followUp", "/-/follow-up", {
+      params: { campaignId: CampaignId },
+      success: NpcFollowUp,
       error: NotFound,
     }),
     HttpApiEndpoint.get("findById", "/:npcId", {

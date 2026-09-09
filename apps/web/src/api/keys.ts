@@ -154,6 +154,9 @@ export const reads = {
   /** One NPC's pending, accepted and rejected proposals. */
   npcProposals: (npcId: NpcId): ReadKey => key`npc-proposals:${npcId}`,
 
+  /** Campaign-level NPC follow-up over pending proposals and awareness candidates. */
+  npcFollowUp: (campaignId: CampaignId): ReadKey => key`npc-follow-up:${campaignId}`,
+
   /** Hob-researched facts or memories waiting for creator curation. */
   npcAwarenessCandidates: (npcId: NpcId): ReadKey => key`npc-awareness:${npcId}`,
 

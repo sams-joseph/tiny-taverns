@@ -1,6 +1,7 @@
-import type { CampaignId, Npc, NpcSource } from "@taverns/api";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import type { CampaignId, Npc, NpcFollowUp, NpcSource } from "@taverns/api";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
+  Badge,
   Button,
   Dialog,
   DialogContent,
@@ -21,7 +22,7 @@ import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { SaveFailure } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { npcsAtom } from "./load";
+import { npcFollowUpAtom, npcsAtom } from "./load";
 import { NpcCard } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { npcMatches } from "./persona";
@@ -37,6 +38,26 @@ const sourceDescription = (source: NpcSource): string => {
 const npcSourcesAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom((client) => client.npcs.sources({ params: { campaignId } }), [reads.libraryNpcs]),
 );
+
+const pendingFollowUp = (followUp: NpcFollowUp): number =>
+  followUp.proposalCount + followUp.awarenessCount;
+
+function FollowUpLink({ campaignId }: { readonly campaignId: CampaignId }) {
+  const [resource] = useApiAtom(npcFollowUpAtom(campaignId));
+  const count = resource.state === "ready" ? pendingFollowUp(resource.value) : 0;
+  return (
+    <Button
+      variant={count > 0 ? "secondary" : "outline"}
+      size="sm"
+      nativeButton={false}
+      render={<Link to="/campaigns/$campaignId/cast/follow-up" params={{ campaignId }} />}
+    >
+      <Icon name="sparkles" size={14} />
+      NPC follow-up
+      {count > 0 && <Badge variant="outline">{count}</Badge>}
+    </Button>
+  );
+}
 
 function AddNpcFromLibraryDialog({
   campaignId,
@@ -140,6 +161,7 @@ export function CastScreen() {
       }
       actions={() => (
         <>
+          <FollowUpLink campaignId={campaignId} />
           <FilterInput
             label="Search the cast"
             value={filter}
