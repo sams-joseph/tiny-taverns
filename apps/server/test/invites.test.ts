@@ -246,6 +246,71 @@ describe("what an invitation grants", () => {
   }, 60_000);
 });
 
+describe("campaign-local invitations", () => {
+  it("lets a campaign creator invite without owning the group, and revokes only that table", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const invites = yield* Invites;
+        const campaigns = yield* Campaigns;
+        const creators = yield* CampaignCreatorActors;
+        const memberships = yield* Memberships;
+
+        // Fen becomes an ordinary member of Ada's world, then founds two
+        // campaigns there. Fen is their creator but not the world owner.
+        const fen = yield* anAccount("Fen the campaign inviter");
+        const fenLink = yield* as(fixture.dm)(
+          invites.create(fixture.campaign.groupId, { label: "Fen" }),
+        );
+        yield* as(fen)(invites.redeem(fenLink.token));
+        const first = yield* as(fen)(
+          campaigns.create(fixture.campaign.groupId, {
+            name: "Fen's first table",
+            visibility: "shared",
+          }),
+        );
+        const second = yield* as(fen)(
+          campaigns.create(fixture.campaign.groupId, {
+            name: "Fen's second table",
+            visibility: "shared",
+          }),
+        );
+        const firstCreator = yield* as(fen)(creators.of(first.id));
+        const secondCreator = yield* as(fen)(creators.of(second.id));
+
+        const issued = yield* invites.createForCampaign(firstCreator, { label: "Mara" });
+        const listed = yield* invites.listForCampaign(firstCreator);
+        const mara = yield* anAccount("Mara the campaign guest");
+        yield* as(mara)(invites.redeem(issued.token));
+
+        // A second seat has independent provenance and must survive taking
+        // back the first campaign's invitation.
+        yield* memberships.add(secondCreator, mara.accountId);
+        const revoked = yield* invites.revokeForCampaign(firstCreator, issued.invite.id);
+        const redundant = yield* invites.createForCampaign(secondCreator, {
+          label: "Mara again",
+        });
+        yield* as(mara)(invites.redeem(redundant.token));
+        yield* invites.revokeForCampaign(secondCreator, redundant.invite.id);
+        const groupStillReadable = yield* as(mara)(
+          Effect.flatMap(Groups, (groups) => groups.findById(first.groupId)),
+        );
+
+        return { first, second, listed, revoked, groupStillReadable };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.listed.map((invite) => invite.id)).toContain(seen.revoked.id);
+    expect(seen.revoked.status).toBe("revoked");
+    expect(seen.groupStillReadable.id).toBe(fixture.campaign.groupId);
+    expect(
+      (await membershipRows(seen.first.id)).find((row) => row.name.startsWith("Mara")),
+    ).toEqual(expect.objectContaining({ revoked: true }));
+    expect(
+      (await membershipRows(seen.second.id)).find((row) => row.name.startsWith("Mara")),
+    ).toEqual(expect.objectContaining({ revoked: false }));
+  }, 60_000);
+});
+
 describe("the first player actor, and what it reaches", () => {
   it("reads the shared row and not the DM's, at its own table and no other", async () => {
     const issued = await mint(fixture.campaign, "Sova");
@@ -607,6 +672,7 @@ describe("what an invitation cannot do to the campaign it names", () => {
       "campaign_id",
       "created_at",
       "expires_at",
+      "granted_campaign_membership",
       "group_id",
       "id",
       "label",

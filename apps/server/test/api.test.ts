@@ -887,9 +887,9 @@ describe("inviting a player, over the wire", () => {
         });
         const campaignId = campaign.id;
 
-        const issued = yield* dm.invites.create({
-          params: { groupId: campaign.groupId },
-          payload: { label: "Ilse", campaignId },
+        const issued = yield* dm.campaignInvites.create({
+          params: { campaignId },
+          payload: { label: "Ilse" },
         });
         const preview = yield* Effect.flatMap(anonymous, (client) =>
           client.invitePreview.read({ payload: { token: issued.token } }),
@@ -905,18 +905,18 @@ describe("inviting a player, over the wire", () => {
         const redeemed = yield* player.join.redeem({ payload: { token: issued.token } });
         const after = yield* player.me.campaigns();
 
-        const listed = yield* dm.invites.list({ params: { groupId: campaign.groupId } });
+        const listed = yield* dm.campaignInvites.list({ params: { campaignId } });
         // The player may read the campaign's shared half and may not write it.
         const refusedWrite = yield* Effect.result(
           player.notes.create({ params: { campaignId }, payload: { title: "mine now" } }),
         );
         // …and the invitation list is a DM's own resource.
         const refusedList = yield* Effect.result(
-          player.invites.list({ params: { groupId: campaign.groupId } }),
+          player.campaignInvites.list({ params: { campaignId } }),
         );
 
-        const revoked = yield* dm.invites.revoke({
-          params: { groupId: campaign.groupId, inviteId: issued.invite.id },
+        const revoked = yield* dm.campaignInvites.revoke({
+          params: { campaignId, inviteId: issued.invite.id },
           payload: {},
         });
         const afterRevoke = yield* player.me.campaigns();

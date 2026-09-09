@@ -34,6 +34,26 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
 
+## Shared World transition, 2026-09-09: campaigns first, invitations follow them
+
+This transition supersedes the invitation-governance prose below where it
+disagrees. Groups still back Shared Worlds and their context internally, but
+ordinary campaign work must not require navigating or owning that container.
+
+- Campaign invitation management is `/campaigns/:campaignId/invites` and takes
+  `CampaignCreatorActor`. A campaign creator may list, mint and revoke their
+  table's invitations even when another account owns the underlying group.
+- Redemption still ensures a live `group_member` before `campaign_member`
+  because the deferred eligibility foreign key requires it. That is persistence
+  plumbing, not a second user-facing join decision.
+- `group_invite.granted_campaign_membership` records whether redemption
+  actually inserted or restored the seat. Campaign revocation retires only
+  that seat and its party joins; it preserves group membership, other campaign
+  memberships, and a seat the invitee already held before accepting the link.
+- The Party screen and invitation dialog read one campaign-local list and use
+  `reads.campaignInvites(campaignId)`. The old group invitation API remains only
+  as a compatibility seam for the existing group screen during the transition.
+
 ## The group architecture of 2026-09-01: what supersedes what
 
 Six captain decisions landed as one clean-reset rewrite (branch

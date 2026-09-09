@@ -132,6 +132,9 @@ export const reads = {
    */
   invites: (groupId: GroupId): ReadKey => key`invites:${groupId}`,
 
+  /** Invitations that grant a seat at one campaign. */
+  campaignInvites: (campaignId: CampaignId): ReadKey => key`campaign-invites:${campaignId}`,
+
   /**
    * The campaign's cast — live NPCs and the archived shelf, one key. Archiving
    * moves a row from one list to the other, so a key per list would be a

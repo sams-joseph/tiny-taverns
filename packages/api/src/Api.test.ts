@@ -132,6 +132,7 @@ describe("the API declaration", () => {
   it("declares the groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "beats",
+      "campaignInvites",
       "campaigns",
       "combatants",
       // The creatures a campaign can *use* — the encounter picker's read, plus

@@ -1,6 +1,7 @@
 import {
   type AccountId,
   type CampaignId,
+  type CampaignInviteCreate,
   Conflict,
   CurrentActor,
   type GroupId,
@@ -18,13 +19,14 @@ import { SqlClient } from "effect/unstable/sql";
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../Accounts.js";
 import { admitToGroup, removeFromGroup } from "./Groups.js";
-import { admitTo } from "./Memberships.js";
+import { admitTo, revokeMemberAt } from "./Memberships.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { dieOnSqlError } from "./rows.js";
-import { ensureGroupWritable } from "./visibility.js";
+import { campaignWritableById, ensureGroupWritable } from "./visibility.js";
 
 /**
- * Invitations: how an account that belongs to no group comes to join one — and
- * optionally to a seat at one of its tables in the same act.
+ * Invitations: group-owner links for a world and campaign-creator links for a
+ * table, sharing one single-use token lifecycle.
  *
  * **A link is an invitation to join, not a way in.** Redeeming grants an
  * ordinary `group_member` row (and, when the invitation names a campaign, an
@@ -42,9 +44,9 @@ import { ensureGroupWritable } from "./visibility.js";
  * make go through `admitToGroup` and `admitTo`, and the revocation through
  * `removeFromGroup` — all inside this file's transactions.
  *
- * **The owner side is gated by `groupWritable` and nothing new.** Listing,
- * minting and revoking are owner acts (the governance decision); a member who
- * is not the owner gets the ordinary `NotFound`.
+ * **Authority follows the surface.** Group operations use `groupWritable`;
+ * campaign operations require a `CampaignCreatorActor`. A creator therefore
+ * never needs ownership of the hidden group to invite their players.
  *
  * **`preview` and `redeem` read names outside the visibility seam, and the
  * token is what scopes them.** They have to: the whole point of an invitation
@@ -75,6 +77,7 @@ interface InviteRow {
   readonly redeemed_at: Date | null;
   /** Computed by the database, so one clock decides. */
   readonly expired: boolean;
+  readonly granted_campaign_membership: boolean;
 }
 
 interface ListedInviteRow extends InviteRow {
@@ -139,6 +142,20 @@ export class Invites extends Context.Service<
       groupId: GroupId,
       inviteId: GroupInviteId,
     ) => Effect.Effect<GroupInvite, NotFound | Conflict, CurrentActor>;
+    /** Campaign creator's list, containing only invitations to this table. */
+    readonly listForCampaign: (
+      creator: CampaignCreatorActor,
+    ) => Effect.Effect<ReadonlyArray<GroupInvite>, never>;
+    /** Mints a campaign seat; its group is an internal fact on the proof. */
+    readonly createForCampaign: (
+      creator: CampaignCreatorActor,
+      payload: CampaignInviteCreate,
+    ) => Effect.Effect<IssuedInvite, NotFound>;
+    /** Withdraws only this campaign invitation and the seat it granted. */
+    readonly revokeForCampaign: (
+      creator: CampaignCreatorActor,
+      inviteId: GroupInviteId,
+    ) => Effect.Effect<GroupInvite, NotFound>;
     /** What the holder of a live invitation is told before signing in. */
     readonly preview: (token: string) => Effect.Effect<InvitePreview, NotFound>;
     /** Accepts one, for the account that is signed in and no other. */
@@ -294,6 +311,77 @@ export class Invites extends Context.Service<
             ),
           ),
 
+        listForCampaign: (creator) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<ListedInviteRow>`
+                select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
+                from group_invite
+                left join account on account.id = group_invite.redeemed_by
+                where group_invite.campaign_id = ${creator.campaign}
+                  and group_invite.group_id = ${creator.group}
+                  and ${campaignWritableById(sql, creator.campaign, creator.actor)}
+                order by group_invite.created_at desc
+              `;
+              return rows.map(toInvite);
+            }),
+          ),
+
+        createForCampaign: (creator, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const writable = yield* sql<{ readonly ok: boolean }>`
+                select ${campaignWritableById(sql, creator.campaign, creator.actor)} as ok
+              `;
+              if (writable[0]?.ok !== true) {
+                return yield* new NotFound({ resource: "campaign", id: creator.campaign });
+              }
+
+              const token = randomBytes(TOKEN_BYTES).toString("base64url");
+              const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
+              const rows = yield* sql<InviteRow>`
+                insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
+                values (${creator.group}, ${creator.campaign}, ${hashToken(token)},
+                        ${payload.label ?? ""}, ${expiresAt})
+                returning ${INVITE_COLUMNS(sql)}
+              `;
+              return new IssuedInvite({
+                invite: toInvite({ ...rows[0]!, redeemed_by_name: null }),
+                token,
+              });
+            }),
+          ),
+
+        revokeForCampaign: (creator, inviteId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const rows = yield* sql<InviteRow>`
+                  update group_invite
+                  set revoked_at = coalesce(group_invite.revoked_at, now())
+                  where group_invite.id = ${inviteId}
+                    and group_invite.campaign_id = ${creator.campaign}
+                    and group_invite.group_id = ${creator.group}
+                    and ${campaignWritableById(sql, creator.campaign, creator.actor)}
+                  returning ${INVITE_COLUMNS(sql)}
+                `;
+                const row = rows[0];
+                if (row === undefined) {
+                  return yield* new NotFound({ resource: "invite", id: inviteId });
+                }
+
+                if (row.redeemed_by !== null && row.granted_campaign_membership) {
+                  yield* revokeMemberAt(sql, creator.campaign, row.redeemed_by);
+                }
+
+                const named = yield* sql<{ readonly name: string }>`
+                  select account.name from account where account.id = ${row.redeemed_by}
+                `;
+                return toInvite({ ...row, redeemed_by_name: named[0]?.name ?? null });
+              }),
+            ),
+          ),
+
         preview: (token) =>
           dieOnSqlError(
             Effect.gen(function* () {
@@ -346,12 +434,15 @@ export class Invites extends Context.Service<
                   // account id from a payload, no ids from a path, no role
                   // from anywhere.
                   yield* admitToGroup(sql, invite.group_id, actor.accountId);
-                  if (invite.campaign_id !== null) {
-                    yield* admitTo(sql, invite.campaign_id, invite.group_id, actor.accountId);
-                  }
+                  const grantedCampaignMembership =
+                    invite.campaign_id === null
+                      ? false
+                      : yield* admitTo(sql, invite.campaign_id, invite.group_id, actor.accountId);
                   yield* sql`
                     update group_invite
-                    set redeemed_by = ${actor.accountId}, redeemed_at = now()
+                    set redeemed_by = ${actor.accountId},
+                        redeemed_at = now(),
+                        granted_campaign_membership = ${grantedCampaignMembership}
                     where group_invite.id = ${invite.id}
                   `;
                 }

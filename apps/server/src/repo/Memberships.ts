@@ -100,15 +100,17 @@ export const admitTo = (
   campaignId: CampaignId,
   groupId: GroupId,
   accountId: AccountId,
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.asVoid(
-    sql`
+): Effect.Effect<boolean, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly campaign_id: CampaignId }>`
       insert into campaign_member (campaign_id, group_id, account_id)
       values (${campaignId}, ${groupId}, ${accountId})
       on conflict (campaign_id, account_id) do update
         set revoked_at = null
         where campaign_member.revoked_at is not null
+      returning campaign_id
     `,
+    (rows) => rows.length > 0,
   );
 
 /**

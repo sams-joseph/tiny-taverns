@@ -257,6 +257,25 @@ const InvitesLive = HttpApiBuilder.group(
   }),
 );
 
+const CampaignInvitesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "campaignInvites",
+  Effect.fnUntraced(function* (handlers) {
+    const invites = yield* Invites;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => invites.listForCampaign(creator)),
+      )
+      .handle("create", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => invites.createForCampaign(creator, payload)),
+      )
+      .handle("revoke", ({ params }) =>
+        asDm(params.campaignId, (creator) => invites.revokeForCampaign(creator, params.inviteId)),
+      );
+  }),
+);
+
 /**
  * The invitation page's read, and the only handler in the product outside
  * `health` with no actor above it.
@@ -1257,6 +1276,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CampaignsLive,
     MembersLive,
     InvitesLive,
+    CampaignInvitesLive,
     SessionsLive,
     PartyLive,
     NotesLive,

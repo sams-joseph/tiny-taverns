@@ -1344,6 +1344,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     // roster lives, and it re-aims both.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
     [`GET /groups/${groupId}/invites`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
     // The group's chronicle — empty is the ordinary state of a young group.
     [`GET /groups/${groupId}/history`, { status: 200, body: [] }],
     [`GET /groups/${groupId}/history/summary`, { status: 200, body: null }],

@@ -18,16 +18,14 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  * rows, indistinguishable from one admitted any other way. This needs **no new
  * predicate, no new base case and no change to `Authorization`**.
  *
- * **Group-first, structurally.** Campaign participation cannot exist for a
- * non-group member (`campaign_member` carries a foreign key into
- * `group_member`), so an invitation that admits to a campaign grants the group
- * membership first and the participation second, in one transaction. There is
- * no campaign-only invitation.
+ * **Campaign-first to the user, group-first internally.** Campaign
+ * participation cannot exist for a non-group member (`campaign_member`
+ * carries a foreign key into `group_member`), so accepting a campaign link
+ * quietly ensures that prerequisite before granting the seat. The hidden row
+ * is persistence plumbing, not another decision the inviter or player makes.
  *
- * **Minting is the group owner's act** — the governance decision of
- * 2026-09-01: the owner manages membership and invitations. A campaign creator
- * who is not the owner adds *existing group members* to their campaign through
- * the campaign's own participation endpoint instead.
+ * A group invitation is minted by its owner. A campaign invitation is minted
+ * by that campaign's creator, including a creator who does not own its group.
  *
  * ### It is still a credential, so it has a lifetime
  *
@@ -37,9 +35,10 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  *   same transaction that writes the membership.
  * - **Expiring, on a fixed server-set clock.** `expiresAt` is `createdAt` plus
  *   `INVITE_TTL_DAYS` and never client-supplied.
- * - **Revocable before acceptance — and after it.** Revoking a spent
- *   invitation revokes the group membership it granted (and every campaign
- *   participation and party join under it) in the same transaction.
+ * - **Revocable before acceptance — and after it.** A group revoke removes the
+ *   group membership it granted; a campaign revoke removes only the campaign
+ *   seat it actually granted. Both happen in the same transaction as the
+ *   withdrawal.
  * - **Forwarded is granted.** Whoever holds the token and signs in gets the
  *   membership; `redeemedByName` makes the wrong person visible, and one press
  *   undoes them.
@@ -103,6 +102,12 @@ export const InviteCreate = Schema.Struct({
   campaignId: Schema.optional(CampaignId),
 });
 export type InviteCreate = typeof InviteCreate.Type;
+
+/** Minting a seat at one campaign. The campaign comes from the URL. */
+export const CampaignInviteCreate = Schema.Struct({
+  label: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
+});
+export type CampaignInviteCreate = typeof CampaignInviteCreate.Type;
 
 /**
  * The token, in a payload rather than a path.

@@ -457,7 +457,9 @@ describe("the scope, counted", () => {
     // are still the campaign creator's acts. This is an occurrence count rather
     // than a method count: inner helpers in those files restate their own
     // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
-    expect(gated).toBe(79);
+    // Campaign invitations add three creator-gated operations: list, mint and
+    // revoke. Their authority follows the campaign, not its hidden group.
+    expect(gated).toBe(82);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

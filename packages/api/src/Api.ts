@@ -120,6 +120,7 @@ import {
   SessionId,
 } from "./Ids.js";
 import {
+  CampaignInviteCreate,
   GroupInvite,
   InviteCreate,
   InvitePreview,
@@ -768,6 +769,30 @@ class InvitesGroup extends HttpApiGroup.make("invites")
     }),
   )
   .prefix("/groups/:groupId/invites")
+  .middleware(Authorization) {}
+
+/** Campaign-local invitations, governed by that campaign's creator. */
+class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(GroupInvite),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: CampaignInviteCreate,
+      success: IssuedInvite,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("revoke", "/:inviteId/revoke", {
+      params: { campaignId: CampaignId, inviteId: GroupInviteId },
+      payload: Schema.Struct({}),
+      success: GroupInvite,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/invites")
   .middleware(Authorization) {}
 
 /**
@@ -2343,6 +2368,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CampaignsGroup)
   .add(MembersGroup)
   .add(InvitesGroup)
+  .add(CampaignInvitesGroup)
   .add(SessionsGroup)
   .add(PartyGroup)
   .add(NotesGroup)
