@@ -261,6 +261,12 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       payload: CampaignCreate,
       success: Campaign,
     }),
+    HttpApiEndpoint.post("promoteSharedWorld", "/:campaignId/shared-world", {
+      params: { campaignId: CampaignId },
+      payload: GroupCreate,
+      success: Group,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("findById", "/:campaignId", {
       params: { campaignId: CampaignId },
       success: Campaign,

@@ -53,6 +53,12 @@ ordinary campaign work must not require navigating or owning that container.
 - The Party screen and invitation dialog read one campaign-local list and use
   `reads.campaignInvites(campaignId)`. The old group invitation API remains only
   as a compatibility seam for the existing group screen during the transition.
+- `play_group.is_shared_world` distinguishes explicit Shared Worlds from the
+  automatic context behind a standalone campaign. `Groups.mine` lists only the
+  explicit kind; `POST /campaigns/:id/shared-world` requires both the campaign
+  creator proof and ownership of its context, then promotes it in place. The
+  campaign home offers that opt-in and links explicit worlds at `/worlds/:id`;
+  `/groups/:id` remains a compatibility route.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

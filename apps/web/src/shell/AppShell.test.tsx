@@ -58,6 +58,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/groups": "/groups",
   "/groups/$groupId/": `/groups/${groupId}`,
   "/groups/$groupId/$": `/groups/${groupId}/a-section-we-do-not-serve`,
+  "/worlds/$groupId": `/worlds/${groupId}`,
   "/library": "/library",
   "/library/rules": "/library/rules",
   "/library/compendium": "/library/compendium",

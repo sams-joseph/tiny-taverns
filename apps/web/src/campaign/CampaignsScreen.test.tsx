@@ -5,6 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
+  group,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -26,9 +27,30 @@ describe("the campaign-first home", () => {
 
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.getByText("Created by you")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "The Salt Company" }).getAttribute("href")).toBe(
+      `/#/worlds/${group.id}`,
+    );
     expect(screen.getByRole("button", { name: /Open/ }).getAttribute("href")).toBe(
       `/#/campaigns/${campaignId}`,
     );
+  });
+
+  it("promotes a standalone campaign into a named Shared World", async () => {
+    server.routes.set("GET /groups", { status: 200, body: [] });
+    server.routes.set(`POST /campaigns/${campaignId}/shared-world`, {
+      status: 200,
+      body: { ...group, name: "The Roads Between", isSharedWorld: true },
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Create Shared World" }));
+    await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/shared-world")).toEqual({ name: "The Roads Between" }),
+    );
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${group.id}`));
   });
 
   it("creates from one name and opens the campaign", async () => {

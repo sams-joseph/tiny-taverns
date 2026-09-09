@@ -265,6 +265,7 @@ describe("migrations", () => {
       { migration_id: 44, name: "npc_session_lifecycle" },
       { migration_id: 45, name: "npc_awareness_candidates" },
       { migration_id: 46, name: "campaign_invites" },
+      { migration_id: 47, name: "shared_worlds" },
     ]);
   }, 60_000);
 
@@ -320,6 +321,7 @@ describe("migrations", () => {
       { migration_id: 44, name: "npc_session_lifecycle" },
       { migration_id: 45, name: "npc_awareness_candidates" },
       { migration_id: 46, name: "campaign_invites" },
+      { migration_id: 47, name: "shared_worlds" },
     ]);
   }, 60_000);
 });

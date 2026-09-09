@@ -95,6 +95,7 @@ describe("the route table", () => {
       },
       { to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" }, at: "/join/$token" },
       { to: "/groups/$groupId", params: { groupId: GROUP_ID }, at: "/groups/$groupId/" },
+      { to: "/worlds/$groupId", params: { groupId: GROUP_ID }, at: "/worlds/$groupId" },
       { to: "/characters", at: "/characters/" },
       {
         to: "/characters/$characterId",

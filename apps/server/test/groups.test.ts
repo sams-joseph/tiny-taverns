@@ -375,6 +375,19 @@ describe("cross-group isolation", () => {
 });
 
 describe("the group's own lifecycle", () => {
+  it("does not let a campaign creator promote somebody else's group", async () => {
+    const refused = await runtime.runPromise(
+      Effect.gen(function* () {
+        const groups = yield* Groups;
+        const creator = yield* asDm(fixture.creator, fixture.campaign.id);
+        return yield* groups.promote(creator, { name: "Not Fen's World" });
+      }).pipe(Effect.result),
+    );
+
+    expect(refused._tag).toBe("Failure");
+    if (refused._tag === "Failure") expect(refused.failure).toBeInstanceOf(NotFound);
+  });
+
   it("archives and restores as one column, owner-only", async () => {
     const journey = await runtime.runPromise(
       Effect.gen(function* () {

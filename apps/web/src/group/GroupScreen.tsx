@@ -1,5 +1,5 @@
 import type { GroupCampaignCard, GroupId, GroupMember } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -200,8 +200,7 @@ function MemberRow({
   );
 }
 
-export function GroupScreen() {
-  const { groupId } = useParams({ from: "/groups/$groupId" });
+export function GroupScreen({ groupId }: { readonly groupId: GroupId }) {
   const [resource, retry] = useApiAtom(groupViewAtom(groupId));
   const [inviting, setInviting] = useState(false);
   const [archiving, setArchiving] = useState<GroupCampaignCard | undefined>();
@@ -215,7 +214,7 @@ export function GroupScreen() {
       panel={<Hob hob={hob} />}
       topBar={
         <TopBar
-          title={view?.group.name ?? "Group"}
+          title={view?.group.name ?? "Shared World"}
           subtitle={
             view === undefined
               ? undefined

@@ -57,7 +57,7 @@ describe("the groups list", () => {
     // The owner's own group says so; a group you were invited into would not.
     expect(screen.getByText("Yours")).toBeTruthy();
     const open = screen.getByRole("button", { name: /Open/ });
-    expect(open.getAttribute("href")).toBe(`/#/groups/${groupId}`);
+    expect(open.getAttribute("href")).toBe(`/#/worlds/${groupId}`);
   });
 
   it("founds a group with one field, and re-reads the list", async () => {
@@ -65,8 +65,8 @@ describe("the groups list", () => {
     await renderCampaigns("/groups", mintingSession());
     await screen.findByText("The Salt Company");
 
-    await userEvent.type(screen.getByLabelText("New group name"), "The Hag's Bargain Co");
-    await userEvent.click(screen.getByRole("button", { name: "Found a group" }));
+    await userEvent.type(screen.getByLabelText("Shared World name"), "The Hag's Bargain Co");
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/groups")).toEqual({ name: "The Hag's Bargain Co" }),
@@ -77,8 +77,8 @@ describe("the groups list", () => {
     server.routes.set("GET /groups", { status: 200, body: [] });
     await renderCampaigns("/groups", mintingSession());
 
-    expect(await screen.findByText("No group yet")).toBeTruthy();
-    expect(screen.getByText(/follow the link somebody sends you/)).toBeTruthy();
+    expect(await screen.findByText("No Shared World yet")).toBeTruthy();
+    expect(screen.getByText(/share history and Hob's memory/)).toBeTruthy();
   });
 });
 

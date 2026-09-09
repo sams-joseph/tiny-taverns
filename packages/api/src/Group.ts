@@ -22,6 +22,8 @@ import { AccountId, CampaignId, GroupId } from "./Ids.js";
 export class Group extends Schema.Class<Group>("Group")({
   id: GroupId,
   name: Schema.String,
+  /** False for the automatic context behind a standalone campaign. */
+  isSharedWorld: Schema.Boolean,
   /**
    * Who owns the group — the one account that manages membership and
    * invitations. On the wire because relation-derived chrome needs it: the

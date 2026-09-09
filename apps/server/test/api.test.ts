@@ -100,17 +100,26 @@ describe("campaign, session, character and note CRUD", () => {
         const campaign = yield* client.campaigns.create({
           payload: { name: "The Direct Road", playerCount: 3 },
         });
-        const groups = yield* client.groups.list();
+        const groupsBefore = yield* client.groups.list();
+        const world = yield* client.campaigns.promoteSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { name: "The Roads Between" },
+        });
+        const groupsAfter = yield* client.groups.list();
         const memberships = yield* client.me.campaigns();
-        return { campaign, groups, memberships };
+        return { campaign, groupsBefore, world, groupsAfter, memberships };
       }).pipe(Effect.orDie),
     );
 
     expect(seen.campaign.name).toBe("The Direct Road");
     expect(seen.campaign.playerCount).toBe(3);
-    expect(seen.groups.find((row) => row.group.id === seen.campaign.groupId)?.group.name).toBe(
-      "The Direct Road",
-    );
+    expect(seen.groupsBefore).toEqual([]);
+    expect(seen.world).toMatchObject({
+      id: seen.campaign.groupId,
+      name: "The Roads Between",
+      isSharedWorld: true,
+    });
+    expect(seen.groupsAfter.map((row) => row.group.id)).toEqual([seen.campaign.groupId]);
     expect(seen.memberships.find((row) => row.campaign.id === seen.campaign.id)?.relation).toBe(
       "creator",
     );

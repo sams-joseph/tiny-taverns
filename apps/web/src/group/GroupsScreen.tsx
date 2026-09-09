@@ -35,7 +35,7 @@ function GroupRow({ membership }: { readonly membership: GroupMembership }) {
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
             <Link
-              to="/groups/$groupId"
+              to="/worlds/$groupId"
               params={{ groupId: group.id }}
               className="text-heading no-underline hover:text-link-hover"
             >
@@ -52,7 +52,7 @@ function GroupRow({ membership }: { readonly membership: GroupMembership }) {
             size="sm"
             className="text-link"
             nativeButton={false}
-            render={<Link to="/groups/$groupId" params={{ groupId: group.id }} />}
+            render={<Link to="/worlds/$groupId" params={{ groupId: group.id }} />}
           >
             Open
             <Icon name="chevron-right" size={15} />
@@ -97,14 +97,14 @@ function NewGroup() {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          aria-label="New group name"
+          aria-label="Shared World name"
           placeholder="The Salt Company"
           value={name}
           onChange={(event) => setName(event.target.value)}
           className="max-w-xs"
         />
         <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
-          {busy ? "Working…" : "Found a group"}
+          {busy ? "Working…" : "Create Shared World"}
         </Button>
       </div>
       {error !== undefined && (
@@ -129,13 +129,13 @@ export function GroupsScreen() {
       panel={<Hob hob={hob} />}
       topBar={
         <TopBar
-          title="Groups"
-          subtitle="The people you play with. A group holds its campaigns and the history they share."
+          title="Shared Worlds"
+          subtitle="Connected campaigns with one history and a shared memory for Hob."
         />
       }
     >
       <div className="flex flex-col gap-6">
-        {resource.state === "loading" && <Loading label="Looking for your groups…" />}
+        {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
           <FailureNotice failure={resource.failure} onRetry={retry} />
         )}
@@ -143,9 +143,8 @@ export function GroupsScreen() {
           <>
             <NewGroup />
             {memberships.length === 0 ? (
-              <EmptyState icon="users" title="No group yet">
-                Found one above and your campaigns live inside it — or follow the link somebody
-                sends you and their group appears here.
+              <EmptyState icon="map" title="No Shared World yet">
+                Create one when two campaigns should share history and Hob's memory.
               </EmptyState>
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">

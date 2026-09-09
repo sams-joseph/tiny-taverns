@@ -25,7 +25,7 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { GroupScreen } from "./group/GroupScreen";
+import { LegacyGroupRouteScreen, WorldRouteScreen } from "./group/GroupRouteScreen";
 import { GroupsScreen } from "./group/GroupsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
@@ -168,7 +168,7 @@ const groupRoute = createRoute({
 const groupIndexRoute = createRoute({
   getParentRoute: () => groupRoute,
   path: "/",
-  component: GroupScreen,
+  component: LegacyGroupRouteScreen,
   remountDeps: ({ params }) => params.groupId,
 });
 
@@ -176,7 +176,21 @@ const groupIndexRoute = createRoute({
 const groupSplatRoute = createRoute({
   getParentRoute: () => groupRoute,
   path: "$",
-  component: GroupScreen,
+  component: LegacyGroupRouteScreen,
+  remountDeps: ({ params }) => params.groupId,
+});
+
+/** The user-facing Shared World URL. `/groups/:id` remains compatible. */
+const worldRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/worlds/$groupId",
+  params: {
+    parse: ({ groupId }) => {
+      const decoded = asGroupId(groupId);
+      return decoded === undefined ? false : { groupId: decoded };
+    },
+  },
+  component: WorldRouteScreen,
   remountDeps: ({ params }) => params.groupId,
 });
 
@@ -577,6 +591,7 @@ export const routeTree = rootRoute.addChildren([
   campaignsRoute,
   groupsRoute,
   groupRoute.addChildren([groupIndexRoute, groupSplatRoute]),
+  worldRoute,
   libraryRoute,
   libraryRulesRoute,
   libraryCompendiumRoute,
@@ -640,6 +655,7 @@ export const routes = {
   campaigns: campaignsRoute,
   groups: groupsRoute,
   group: groupRoute,
+  world: worldRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,

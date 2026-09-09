@@ -110,9 +110,14 @@ const CampaignsLive = HttpApiBuilder.group(
   "campaigns",
   Effect.fnUntraced(function* (handlers) {
     const campaigns = yield* Campaigns;
+    const groups = yield* Groups;
+    const asDm = yield* asDmOf;
     return handlers
       .handle("list", () => campaigns.list)
       .handle("create", ({ payload }) => campaigns.createStandalone(payload))
+      .handle("promoteSharedWorld", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => groups.promote(creator, payload)),
+      )
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId))

@@ -1,6 +1,21 @@
-import type { CampaignMembership } from "@taverns/api";
+import type { CampaignMembership, GroupMembership } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Icon,
+  Input,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -10,6 +25,7 @@ import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { groupsAtom } from "../group/load";
 import { ArchivedDialog } from "./ArchivedDialog";
 import { membershipsAtom } from "./load";
 
@@ -22,7 +38,15 @@ import { membershipsAtom } from "./load";
  * belongs in this screen or in the user's first decision.
  */
 
-function CampaignRow({ membership }: { readonly membership: CampaignMembership }) {
+function CampaignRow({
+  membership,
+  world,
+  onPromote,
+}: {
+  readonly membership: CampaignMembership;
+  readonly world: GroupMembership | undefined;
+  readonly onPromote: (() => void) | undefined;
+}) {
   const campaign = membership.campaign;
   return (
     <Card>
@@ -48,6 +72,25 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
             {campaign.partyName}
           </span>
         )}
+        {world !== undefined ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-link"
+            nativeButton={false}
+            render={<Link to="/worlds/$groupId" params={{ groupId: world.group.id }} />}
+          >
+            <Icon name="map" size={14} />
+            {world.group.name}
+          </Button>
+        ) : (
+          onPromote !== undefined && (
+            <Button variant="ghost" size="sm" onClick={onPromote}>
+              <Icon name="map" size={14} />
+              Create Shared World
+            </Button>
+          )
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -60,6 +103,78 @@ function CampaignRow({ membership }: { readonly membership: CampaignMembership }
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function SharedWorldDialog({
+  campaign,
+  onClose,
+}: {
+  readonly campaign: CampaignMembership["campaign"];
+  readonly onClose: () => void;
+}) {
+  const fetchCredential = useCredential();
+  const invalidate = useInvalidate();
+  const navigate = useNavigate();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const promote = async () => {
+    setBusy(true);
+    setError(undefined);
+    const token = await fetchCredential();
+    const result = await runApiResult(
+      (client) =>
+        client.campaigns.promoteSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { name: name.trim() },
+        }),
+      token,
+    );
+    setBusy(false);
+    if (Result.isFailure(result)) {
+      setError("That did not save. Try it again.");
+      return;
+    }
+    invalidate([reads.myGroups]);
+    onClose();
+    await navigate({ to: "/worlds/$groupId", params: { groupId: result.success.id } });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Create Shared World">
+        <DialogHeader>
+          <DialogTitle>Create a Shared World</DialogTitle>
+          <DialogDescription>
+            Give connected campaigns a shared history and a place where Hob can remember across
+            them. {campaign.name} becomes its first campaign.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-gutter py-3">
+          <Input
+            aria-label="Shared World name"
+            placeholder="The Salt Marches"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          {error !== undefined && (
+            <p role="alert" className="pt-2 text-body-s leading-body text-danger">
+              {error}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={busy || name.trim() === ""} onClick={() => void promote()}>
+            {busy ? "Creating…" : "Create Shared World"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -122,7 +237,9 @@ function NewCampaign() {
 
 export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
+  const [worldsResource] = useApiAtom(groupsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
+  const [promoting, setPromoting] = useState<CampaignMembership | undefined>();
   const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
 
@@ -149,7 +266,26 @@ export function CampaignsScreen() {
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <CampaignRow key={membership.campaign.id} membership={membership} />
+                  <CampaignRow
+                    key={membership.campaign.id}
+                    membership={membership}
+                    world={
+                      worldsResource.state === "ready"
+                        ? worldsResource.value.find(
+                            (candidate) => candidate.group.id === membership.campaign.groupId,
+                          )
+                        : undefined
+                    }
+                    onPromote={
+                      worldsResource.state === "ready" &&
+                      membership.relation === "creator" &&
+                      !worldsResource.value.some(
+                        (candidate) => candidate.group.id === membership.campaign.groupId,
+                      )
+                        ? () => setPromoting(membership)
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             )}
@@ -167,6 +303,9 @@ export function CampaignsScreen() {
       </div>
 
       {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
+      {promoting !== undefined && (
+        <SharedWorldDialog campaign={promoting.campaign} onClose={() => setPromoting(undefined)} />
+      )}
     </AppShell>
   );
 }

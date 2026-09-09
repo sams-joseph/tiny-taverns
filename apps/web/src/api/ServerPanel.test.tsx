@@ -142,6 +142,7 @@ describe("ServerPanel", () => {
       id: groupId,
       name: "The Salt Road group",
       ownerAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
+      isSharedWorld: true,
       archivedAt: null,
       createdAt: "2026-08-04T13:03:28.035Z",
       updatedAt: "2026-08-04T13:03:28.035Z",

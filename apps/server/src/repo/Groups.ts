@@ -17,6 +17,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import { revokeAllInGroupFor } from "./Memberships.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
 import {
   ensureGroupReadable,
@@ -80,10 +81,13 @@ export const foundGroup = (
   sql: SqlClient.SqlClient,
   name: string,
   ownerAccountId: AccountId,
+  isSharedWorld = false,
 ): Effect.Effect<Group, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows = yield* sql<GroupRow>`
-      insert into play_group ${sql.insert(defined({ owner_account_id: ownerAccountId, name }))}
+      insert into play_group ${sql.insert(
+        defined({ owner_account_id: ownerAccountId, name, is_shared_world: isSharedWorld }),
+      )}
       returning *
     `;
     yield* addOwnerMember(sql, rows[0]!.id, ownerAccountId);
@@ -157,6 +161,7 @@ interface GroupRow {
   readonly id: GroupId;
   readonly owner_account_id: AccountId;
   readonly name: string;
+  readonly is_shared_world: boolean;
   readonly archived_at: Date | null;
   readonly created_at: Date;
   readonly updated_at: Date;
@@ -167,6 +172,7 @@ export const toGroup = (row: GroupRow): Group =>
   new Group({
     id: row.id,
     name: row.name,
+    isSharedWorld: row.is_shared_world,
     ownerAccountId: row.owner_account_id,
     archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
     createdAt: DateTime.fromDateUnsafe(row.created_at),
@@ -203,6 +209,11 @@ export class Groups extends Context.Service<
     readonly findById: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
     /** Anybody may found a group; they become its owner and first member. */
     readonly create: (payload: GroupCreate) => Effect.Effect<Group, never, CurrentActor>;
+    /** Turns a standalone campaign's hidden context into an explicit Shared World. */
+    readonly promote: (
+      creator: CampaignCreatorActor,
+      payload: GroupCreate,
+    ) => Effect.Effect<Group, NotFound>;
     readonly update: (
       id: GroupId,
       patch: GroupUpdate,
@@ -251,7 +262,9 @@ export class Groups extends Context.Service<
                 on group_member.group_id = play_group.id
                and group_member.account_id = ${actor.accountId}
                and group_member.revoked_at is null
-              where ${groupReadable(sql, actor)} and play_group.archived_at is null
+              where ${groupReadable(sql, actor)}
+                and play_group.archived_at is null
+                and play_group.is_shared_world
               order by play_group.created_at desc
             `;
             return rows.map(
@@ -282,9 +295,24 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                return yield* foundGroup(sql, payload.name, actor.accountId);
+                return yield* foundGroup(sql, payload.name, actor.accountId, true);
               }),
             ),
+          ),
+
+        promote: (creator, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<GroupRow>`
+                update play_group
+                set name = ${payload.name}, is_shared_world = true, updated_at = now()
+                where play_group.id = ${creator.group}
+                  and play_group.owner_account_id = ${creator.actor.accountId}
+                  and play_group.archived_at is null
+                returning *
+              `;
+              return yield* one(rows, creator.group);
+            }),
           ),
 
         update: (id, patch) =>
