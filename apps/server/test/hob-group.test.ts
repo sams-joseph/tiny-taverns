@@ -434,6 +434,123 @@ describe("the chronicle proposal", () => {
   }, 60_000);
 });
 
+describe("Story So Far", () => {
+  it("uses only accepted memory and keeps the exact proposal-time coverage boundary", async () => {
+    const asked = await askSharedWorld(fixture.jo, fixture.groupId, {
+      rounds: [
+        toolCallChunks("readStorySoFarSources", {}),
+        toolCallChunks("proposeStorySoFar", {
+          text: "The hag took the lantern, and the reeds ambush was resolved.",
+        }),
+        textChunks("I offered a Story So Far for the world to review."),
+      ],
+      text: "Refresh our Story So Far.",
+    });
+    const proposed = asked.events.find((event) => event.event === "proposal");
+    if (proposed?.event !== "proposal") throw new Error("no proposal event");
+    if (proposed.data.proposal.target !== "sharedWorldSummary") {
+      throw new Error("wrong proposal target");
+    }
+    const began = asked.events.find((event) => event.event === "began");
+    if (began?.event !== "began") throw new Error("no began event");
+
+    // The source tool is a provider-wire boundary: canonical copies are in;
+    // every planted kind of unshared preparation is absent.
+    const shown = shownTo(asked.requests);
+    expect(shown).toContain("CANONBEAT");
+    expect(shown).not.toContain("SECRETNOTE");
+    expect(shown).not.toContain("SECRETPREP");
+    expect(shown).not.toContain("SECRETENCOUNTER");
+    expect(shown).not.toContain("SECRETDRAFT");
+
+    const coveredWhenProposed = proposed.data.proposal.lastWorldSeq;
+    const concurrent = await runtime.runPromise(
+      Effect.flatMap(GroupHistory, (history) =>
+        history.create(fixture.groupId, { body: "A bell rang after Hob finished drafting." }),
+      ).pipe(withActor(fixture.jo)),
+    );
+    expect(concurrent.worldSeq).toBeGreaterThan(coveredWhenProposed);
+
+    // Another live member can approve it. The concurrent line is deliberately
+    // not claimed: the accepted text stays intact and is immediately stale.
+    const accepted = await runtime.runPromise(
+      Effect.flatMap(Proposals, (proposals) =>
+        proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
+      ).pipe(withActor(fixture.wren)),
+    );
+    if (accepted.accepted !== "sharedWorldSummary") throw new Error("wrong accept arm");
+    expect(accepted.summary.lastWorldSeq).toBe(coveredWhenProposed);
+    expect(accepted.summary.text).toContain("hag took the lantern");
+
+    const current = await runtime.runPromise(
+      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
+        withActor(fixture.jo),
+      ),
+    );
+    expect(current?.id).toBe(accepted.summary.id);
+    expect(current?.lastWorldSeq).toBeLessThan(concurrent.worldSeq);
+
+    // A later accepted proposal replaces the current row and advances only to
+    // the source batch it actually read.
+    const refreshed = await askSharedWorld(fixture.wren, fixture.groupId, {
+      rounds: [
+        toolCallChunks("readStorySoFarSources", {}),
+        toolCallChunks("proposeStorySoFar", {
+          text: "The hag took the lantern; later, a bell rang across the marsh.",
+        }),
+        textChunks("I offered the refreshed Story So Far."),
+      ],
+      text: "Bring the Story So Far up to date.",
+    });
+    const refreshedProposal = refreshed.events.find((event) => event.event === "proposal");
+    const refreshedBegan = refreshed.events.find((event) => event.event === "began");
+    if (
+      refreshedProposal?.event !== "proposal" ||
+      refreshedProposal.data.proposal.target !== "sharedWorldSummary" ||
+      refreshedBegan?.event !== "began"
+    ) {
+      throw new Error("no refreshed summary proposal");
+    }
+    expect(shownTo(refreshed.requests)).toContain(accepted.summary.text);
+    expect(refreshedProposal.data.proposal.lastWorldSeq).toBe(concurrent.worldSeq);
+    const replacement = await runtime.runPromise(
+      Effect.flatMap(Proposals, (proposals) =>
+        proposals.acceptSharedWorld(
+          fixture.groupId,
+          refreshedBegan.data.threadId,
+          refreshedBegan.data.turnId,
+        ),
+      ).pipe(withActor(fixture.jo)),
+    );
+    if (replacement.accepted !== "sharedWorldSummary") throw new Error("wrong replacement arm");
+    expect(replacement.summary.id).not.toBe(accepted.summary.id);
+    expect(replacement.summary.lastWorldSeq).toBe(concurrent.worldSeq);
+    const afterReplacement = await runtime.runPromise(
+      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
+        withActor(fixture.jo),
+      ),
+    );
+    expect(afterReplacement?.id).toBe(replacement.summary.id);
+
+    // An abandoned proposal remains transcript only and changes no accepted
+    // world memory.
+    await askSharedWorld(fixture.jo, fixture.groupId, {
+      rounds: [
+        toolCallChunks("readStorySoFarSources", {}),
+        toolCallChunks("proposeStorySoFar", { text: "An unapproved rewrite." }),
+        textChunks("This is waiting for review."),
+      ],
+      text: "Try another version.",
+    });
+    const afterAbandon = await runtime.runPromise(
+      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
+        withActor(fixture.wren),
+      ),
+    );
+    expect(afterAbandon?.id).toBe(replacement.summary.id);
+  }, 60_000);
+});
+
 describe("the campaign panel's group context", () => {
   it("reads the chronicle and the summary, and still cannot name another table's prep", async () => {
     // Jo asks their own campaign's Hob; the model reaches for the two group

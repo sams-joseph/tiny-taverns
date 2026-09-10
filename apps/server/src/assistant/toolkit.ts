@@ -685,6 +685,31 @@ export const ReadSharedWorldSummary = Tool.make("readSharedWorldSummary", {
 });
 
 /**
+ * The only source reader for a Story So Far refresh. Its result is already
+ * copied into the Shared World Chronicle, and the handler remembers the exact
+ * final sequence returned so the subsequent proposal cannot over-claim.
+ */
+export const ReadStorySoFarSources = Tool.make("readStorySoFarSources", {
+  description:
+    "Read the accepted Story So Far and every newer accepted Chronicle entry " +
+    "in sequence. Call this immediately before proposing a Story So Far. This " +
+    "contains no campaign prep, notes, plans, or draft conversations.",
+  success: Schema.Struct({
+    current: Schema.NullOr(Schema.String),
+    entries: Schema.Array(
+      Schema.Struct({
+        worldSeq: Schema.Int,
+        title: Schema.NullOr(Schema.String),
+        body: Schema.String,
+        when: Schema.String,
+      }),
+    ),
+  }),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/**
  * The group toolkit's own reads: the campaigns, the played timeline, and one
  * night's canonical story. These are the decision's *canonical events* made
  * reachable — played sessions, story beats, combat outcomes — and nothing of
@@ -764,6 +789,19 @@ export const ProposeSharedWorldEntry = Tool.make("proposeSharedWorldEntry", {
     // rescues an unset enum would eat one genuinely called "None".
     title: optionalText(200),
     body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+  }),
+  success: Schema.String,
+  failure: toolFailure,
+  failureMode: "return",
+});
+
+export const ProposeStorySoFar = Tool.make("proposeStorySoFar", {
+  description:
+    "Offer a concise replacement for the Shared World's Story So Far. Call " +
+    "readStorySoFarSources first and use only its accepted summary and Chronicle " +
+    "entries. Nothing is remembered unless a member accepts the proposal.",
+  parameters: Schema.Struct({
+    text: Schema.String.check(Schema.isLengthBetween(1, 6000)),
   }),
   success: Schema.String,
   failure: toolFailure,
@@ -1233,10 +1271,12 @@ export const HobToolkit = Toolkit.make(
 export const SharedWorldToolkit = Toolkit.make(
   SearchSharedWorldHistory,
   ReadSharedWorldSummary,
+  ReadStorySoFarSources,
   ListSharedWorldCampaigns,
   ListPlayedNights,
   NightStory,
   ProposeSharedWorldEntry,
+  ProposeStorySoFar,
 );
 
 /**
@@ -1354,6 +1394,7 @@ export interface SharedWorldHobRepositories {
  * roster the DM was about to read is worse than telling the model to wait.
  */
 export type ProposalSlot = Ref.Ref<HobProposal | undefined>;
+export type SummaryCoverageSlot = Ref.Ref<number | undefined>;
 
 const alreadyProposed = new Conflict({
   message:
@@ -1710,12 +1751,25 @@ export const groupHandlersFor = (
   actor: Actor,
   groupId: Parameters<(typeof GroupHistory)["Service"]["search"]>[0],
   proposal: ProposalSlot,
+  summaryCoverage: SummaryCoverageSlot,
 ) => {
   const { as, offer } = bind(actor, proposal);
 
   return SharedWorldToolkit.of({
     searchSharedWorldHistory: searchHistoryWith(repositories.history, groupId, as),
     readSharedWorldSummary: summaryWith(repositories.history, groupId, as),
+    readStorySoFarSources: () =>
+      Effect.flatMap(as(repositories.history.summarySources(groupId)), (sources) =>
+        Effect.as(Ref.set(summaryCoverage, sources.lastWorldSeq), {
+          current: sources.summary?.text ?? null,
+          entries: sources.entries.map((entry) => ({
+            worldSeq: entry.worldSeq,
+            title: entry.title,
+            body: entry.body,
+            when: (entry.occurredAt ?? entry.acceptedAt).toString(),
+          })),
+        }),
+      ),
     listSharedWorldCampaigns: () =>
       Effect.map(as(repositories.groups.campaigns(groupId)), (cards) =>
         cards.map((card) => ({
@@ -1752,6 +1806,20 @@ export const groupHandlersFor = (
         { target: "sharedWorldHistory", title: blank(title) ?? null, body },
         "Offered the Shared World a line for its chronicle. Nothing is saved unless a " +
           "member accepts it; say one short line about it and stop.",
+      ),
+    proposeStorySoFar: ({ text }) =>
+      Effect.flatMap(Ref.get(summaryCoverage), (lastWorldSeq) =>
+        lastWorldSeq === undefined
+          ? Effect.fail(
+              new Conflict({
+                message: "readStorySoFarSources before proposing the Story So Far",
+              }),
+            )
+          : offer(
+              { target: "sharedWorldSummary", text, lastWorldSeq },
+              "Offered a Story So Far. Nothing is saved unless a Shared World member " +
+                "accepts it; say one short line about it and stop.",
+            ),
       ),
   });
 };

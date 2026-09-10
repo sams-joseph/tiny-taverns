@@ -189,9 +189,11 @@ const installHobServer = (): HobStub => {
       stub.accepts.push(pathname);
       return Promise.resolve(
         stub.acceptStatus === undefined
-          ? pathname.startsWith("/worlds/")
-            ? json({ accepted: "sharedWorldHistory", entry: aHistoryRow })
-            : json({ accepted: "note", note: aNoteRow })
+          ? stub.acceptBody !== undefined
+            ? json(stub.acceptBody)
+            : pathname.startsWith("/worlds/")
+              ? json({ accepted: "sharedWorldHistory", entry: aHistoryRow })
+              : json({ accepted: "note", note: aNoteRow })
           : new Response(JSON.stringify(stub.acceptBody), {
               status: stub.acceptStatus,
               headers: { "content-type": "application/json" },
@@ -805,5 +807,43 @@ describe("Shared World Hob", () => {
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(screen.getByText("In the Shared World Chronicle")).toBeInTheDocument();
+  });
+
+  it("draws and accepts a Story So Far replacement", async () => {
+    const summaryProposal = {
+      target: "sharedWorldSummary",
+      text: "The lantern roads have gone dark, and both tables are hunting the hag.",
+      lastWorldSeq: 7,
+    };
+    server.acceptBody = {
+      accepted: "sharedWorldSummary",
+      summary: {
+        id: "0b9d3d1e-71ba-48e5-b2f1-f2cdd6ca893d",
+        worldId,
+        status: "accepted",
+        lastWorldSeq: 7,
+        text: summaryProposal.text,
+        origin: "assistant",
+        assistantTurnId: turnId,
+        acceptedAt: stamp,
+        createdAt: stamp,
+      },
+    };
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, summaryProposal),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob({ world: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Refresh the Story So Far.{Enter}");
+
+    expect(await screen.findByText(summaryProposal.text)).toBeInTheDocument();
+    expect(screen.getByText("Through Chronicle entry 7")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keep as Story So Far" }));
+
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+    expect(screen.getByText("Current for this Shared World")).toBeInTheDocument();
   });
 });

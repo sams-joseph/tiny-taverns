@@ -126,6 +126,7 @@ const ACTIVITY: Record<string, string> = {
   proposeBeat: "Writing down what happened",
   searchSharedWorldHistory: "Searching the Shared World Chronicle",
   readSharedWorldSummary: "Reading the Shared World summary",
+  readStorySoFarSources: "Reading the Story So Far sources",
   listSharedWorldCampaigns: "Looking across the campaigns",
   listPlayedNights: "Looking through the played nights",
   nightStory: "Reading back a played night",

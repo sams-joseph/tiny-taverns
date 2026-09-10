@@ -39,6 +39,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
 
+## Shared World Story So Far, 2026-09-10: accepted memory with an exact boundary
+
+- Shared World Hob refreshes Story So Far through two world-only tools:
+  `readStorySoFarSources` returns the current accepted summary plus accepted Chronicle entries
+  after its marker, then `proposeStorySoFar` records the reader's exact `lastWorldSeq` in the
+  transcript proposal. The model and accepting client never supply that boundary.
+- Accepting a `sharedWorldSummary` proposal atomically supersedes the prior accepted
+  `group_history_summary` and inserts its replacement. A Chronicle entry admitted after the
+  proposal therefore makes the accepted replacement visibly stale; it is never silently claimed
+  as covered. Unaccepted proposals remain transcript only and do not change world memory.
+- The Shared World screen reads the existing summary endpoint, renders Story So Far above the
+  Chronicle, compares it with the newest `worldSeq`, and invalidates the shared history read key
+  after acceptance so both text and staleness refresh together.
+
 ## Shared World transition, 2026-09-09: campaigns first, invitations follow them
 
 This transition supersedes the invitation-governance prose below where it

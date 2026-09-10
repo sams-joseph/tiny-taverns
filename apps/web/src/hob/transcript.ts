@@ -44,6 +44,7 @@ export const ARTIFACT_KINDS = {
   note: { icon: "pencil", label: "Note", variant: "secondary" },
   beat: { icon: "flag", label: "Beat", variant: "default" },
   chronicle: { icon: "history", label: "Chronicle", variant: "default" },
+  story: { icon: "book-open", label: "Story So Far", variant: "info" },
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
@@ -98,6 +99,7 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "note"; readonly text: string })
   | (ArtifactBase & { readonly kind: "beat"; readonly text: string })
   | (ArtifactBase & { readonly kind: "chronicle"; readonly text: string })
+  | (ArtifactBase & { readonly kind: "story"; readonly text: string })
   | (ArtifactBase & {
       readonly kind: "npc";
       readonly race: string;
@@ -160,6 +162,15 @@ export const artifactFrom = (
         ...(proposal.title === null ? {} : { title: proposal.title }),
         chips: [],
         text: proposal.body,
+      };
+    case "sharedWorldSummary":
+      return {
+        id: turnId,
+        kind: "story",
+        title: "Story So Far",
+        meta: `Through Chronicle entry ${String(proposal.lastWorldSeq)}`,
+        chips: [],
+        text: proposal.text,
       };
     /**
      * **A character draft has no card here, and that is not an omission.**

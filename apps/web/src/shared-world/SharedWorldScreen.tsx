@@ -240,7 +240,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
               )}
             </section>
 
-            <SharedWorldChronicle worldId={worldId} />
+            <SharedWorldChronicle worldId={worldId} onAskHob={hob.show} />
 
             <section className="flex max-w-2xl flex-col" aria-label="Members">
               <span className="pb-1 text-label leading-snug font-semibold text-heading">

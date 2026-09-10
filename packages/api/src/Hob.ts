@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Character, CharacterSheet } from "./Character.js";
 import { Difficulty, Encounter } from "./Encounter.js";
-import { SharedWorldHistoryEntry } from "./SharedWorldHistory.js";
+import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
 import {
   AssistantThreadId,
   AssistantTurnId,
@@ -265,6 +265,16 @@ export const HobProposal = Schema.Union([
     title: Schema.NullOr(Schema.String),
     body: Schema.String,
   }),
+  /**
+   * A proposed replacement for the Shared World's accepted Story So Far.
+   * `lastWorldSeq` is captured by the server from the exact source batch Hob
+   * read; it is never supplied by the model or the accepting client.
+   */
+  Schema.Struct({
+    target: Schema.Literal("sharedWorldSummary"),
+    text: Schema.String,
+    lastWorldSeq: Schema.Int,
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -496,6 +506,11 @@ export const HobAccepted = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("character"), character: Character }),
   /** The chronicle line a Shared World member kept — world Hob's one accept. */
   Schema.Struct({ accepted: Schema.Literal("sharedWorldHistory"), entry: SharedWorldHistoryEntry }),
+  /** The Story So Far a Shared World member approved as its current summary. */
+  Schema.Struct({
+    accepted: Schema.Literal("sharedWorldSummary"),
+    summary: SharedWorldHistorySummary,
+  }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 

@@ -217,6 +217,7 @@ export class Proposals extends Context.Service<
             );
 
           case "sharedWorldHistory":
+          case "sharedWorldSummary":
             // Only a group thread ever carries one — the group toolkit is the
             // only producer, and it writes into group threads alone — so this
             // arm is unreachable through the campaign accept. The refusal
@@ -271,7 +272,10 @@ export class Proposals extends Context.Service<
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.accepted_at !== null) return yield* alreadyAccepted;
-                if (turn.proposal.target !== "sharedWorldHistory") {
+                if (
+                  turn.proposal.target !== "sharedWorldHistory" &&
+                  turn.proposal.target !== "sharedWorldSummary"
+                ) {
                   // The mirror of the campaign arm's refusal: a campaign
                   // proposal reached through a group accept would write a row
                   // into a place its card never named.
@@ -279,16 +283,30 @@ export class Proposals extends Context.Service<
                     message: "that belongs to a campaign — accept it there",
                   });
                 }
-                const entry = yield* sharedWorldHistory.create(
-                  groupId,
-                  {
-                    body: turn.proposal.body,
-                    ...(turn.proposal.title === null ? {} : { title: turn.proposal.title }),
-                  },
-                  { assistantTurnId: turnId },
-                );
+                const accepted =
+                  turn.proposal.target === "sharedWorldHistory"
+                    ? {
+                        accepted: "sharedWorldHistory" as const,
+                        entry: yield* sharedWorldHistory.create(
+                          groupId,
+                          {
+                            body: turn.proposal.body,
+                            ...(turn.proposal.title === null ? {} : { title: turn.proposal.title }),
+                          },
+                          { assistantTurnId: turnId },
+                        ),
+                      }
+                    : {
+                        accepted: "sharedWorldSummary" as const,
+                        summary: yield* sharedWorldHistory.acceptSummary(
+                          groupId,
+                          turn.proposal.text,
+                          turn.proposal.lastWorldSeq,
+                          { assistantTurnId: turnId },
+                        ),
+                      };
                 yield* markAccepted(sql, turnId);
-                return { accepted: "sharedWorldHistory" as const, entry };
+                return accepted;
               }),
             ),
           ),
