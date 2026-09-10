@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -25,6 +25,9 @@ import {
 
 const server = installStubServer();
 installMemoryStorage();
+
+const frame = (event: string, data: unknown): string =>
+  `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 const aimDirectory = (relation: "creator" | "player" | "none") =>
   server.routes.set(`GET /worlds/${groupId}/campaigns`, {
@@ -141,5 +144,82 @@ describe("one Shared World's screen", () => {
     expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/me")).toBe(
       false,
     );
+  });
+
+  it("opens Shared World Hob and refreshes the Chronicle when a proposal is kept", async () => {
+    const threadId = "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d";
+    const turnId = "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60";
+    const historyId = "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61";
+    const entry = {
+      id: historyId,
+      groupId,
+      campaignId: null,
+      sessionId: null,
+      sourceKind: "manual",
+      groupSeq: 1,
+      occurredAt: null,
+      acceptedAt: campaign.createdAt,
+      title: "The roads remember",
+      body: "Every lantern went dark on the same night.",
+      facts: {},
+      origin: "assistant",
+      assistantTurnId: turnId,
+      createdByAccountId: null,
+      createdAt: campaign.createdAt,
+    };
+    server.routes.set(`GET /worlds/${groupId}/hob`, {
+      status: 200,
+      body: { available: true, model: "local", group: group.name },
+    });
+    server.routes.set(`GET /worlds/${groupId}/hob/threads`, { status: 200, body: [] });
+    server.routes.set(`POST /worlds/${groupId}/hob/ask`, {
+      status: 200,
+      sse:
+        frame("began", { threadId, turnId }) +
+        frame("proposal", {
+          turnId,
+          proposal: {
+            target: "groupHistory",
+            title: entry.title,
+            body: entry.body,
+          },
+        }) +
+        frame("done", { reason: "stop" }),
+    });
+    server.routes.set(`POST /worlds/${groupId}/hob/threads/${threadId}/turns/${turnId}/accept`, {
+      status: 200,
+      body: { accepted: "groupHistory", entry },
+    });
+    server.routes.set(`GET /worlds/${groupId}/history`, {
+      status: 200,
+      body: () => {
+        const reads = server.calls.filter(
+          (call) => call.method === "GET" && call.pathname === `/worlds/${groupId}/history`,
+        );
+        return reads.length < 2 ? [] : [entry];
+      },
+    });
+
+    await renderSharedWorld(mintingSession());
+    await screen.findByText("The Salt Road");
+    await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
+
+    expect(await screen.findByText("What should we remember together?")).toBeInTheDocument();
+    const ask = await screen.findByRole("textbox", { name: "Ask Hob" });
+    await userEvent.type(ask, "Remember the night the lanterns failed.{Enter}");
+    await userEvent.click(await screen.findByRole("button", { name: "Add to Chronicle" }));
+
+    await waitFor(() =>
+      expect(
+        server.calls.filter(
+          (call) => call.method === "GET" && call.pathname === `/worlds/${groupId}/history`,
+        ),
+      ).toHaveLength(2),
+    );
+    expect(
+      await within(screen.getByRole("region", { name: "Chronicle" })).findByText(
+        "Every lantern went dark on the same night.",
+      ),
+    ).toBeInTheDocument();
   });
 });

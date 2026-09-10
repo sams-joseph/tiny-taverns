@@ -1,6 +1,7 @@
-import type { CampaignId } from "@taverns/api";
+import type { CampaignId, GroupId } from "@taverns/api";
 import { HobDock } from "./HobDock";
-import { useHobConversation } from "./conversation";
+import { useHobConversation, type HobScope } from "./conversation";
+import { SHARED_WORLD_HOB_STARTERS } from "./hob.fixtures";
 import type { HobPanelState } from "./useHobPanel";
 
 /**
@@ -8,14 +9,13 @@ import type { HobPanelState } from "./useHobPanel";
  *
  * Three things, and no more: it asks `conversation.ts` for a conversation, it
  * hands `HobDock` the open/inline decision the shell already owns, and it
- * passes on the campaign in view. Everything else — the parts, the states, the
- * 1020px threshold, the layering — lives below it, and the shell needs to know
- * none of it.
+ * passes on the campaign or Shared World in view. Everything else — the parts,
+ * the states, the 1020px threshold, the layering — lives below it, and the
+ * shell needs to know none of it.
  *
- * **`campaignId` is optional, and its absence is a real state**: Hob's tools
- * all hang off a campaign, so on the campaign list there is nothing for it to
- * read and the panel says so rather than offering a composer. Same rule as
- * *Bestiary* in the nav, and for the same reason.
+ * The two id props are mutually exclusive: a panel is bound to one campaign or
+ * one Shared World, never both. Their absence is a real state on global screens,
+ * where the panel says there is no context instead of offering a composer.
  *
  * ```tsx
  * const hob = useHobPanel();
@@ -26,14 +26,21 @@ import type { HobPanelState } from "./useHobPanel";
  * </HobRegion>
  * ```
  */
-export function Hob({
-  hob,
-  campaignId,
-}: {
-  readonly hob: HobPanelState;
-  readonly campaignId?: CampaignId;
-}) {
-  const conversation = useHobConversation(campaignId, hob.open);
+type HobProps = { readonly hob: HobPanelState } & (
+  | { readonly campaignId: CampaignId; readonly worldId?: never }
+  | { readonly worldId: GroupId; readonly campaignId?: never }
+  | { readonly campaignId?: never; readonly worldId?: never }
+);
+
+export function Hob({ hob, campaignId, worldId }: HobProps) {
+  const scope: HobScope | undefined =
+    campaignId !== undefined
+      ? { type: "campaign", id: campaignId }
+      : worldId !== undefined
+        ? { type: "sharedWorld", id: worldId }
+        : undefined;
+  const conversation = useHobConversation(scope, hob.open);
+  const sharedWorld = worldId !== undefined;
 
   return (
     <HobDock
@@ -47,6 +54,13 @@ export function Hob({
       savedArtifactIds={conversation.savedArtifactIds}
       onSend={conversation.send}
       unavailable={conversation.unavailable}
+      emptyTitle={sharedWorld ? "What should we remember together?" : undefined}
+      emptyDescription={
+        sharedWorld
+          ? "I know the Chronicle and the played history shared across this world."
+          : undefined
+      }
+      starters={sharedWorld ? SHARED_WORLD_HOB_STARTERS : undefined}
       onSave={conversation.save}
       onDiscard={conversation.discard}
       onRetry={conversation.retry}

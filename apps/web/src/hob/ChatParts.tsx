@@ -306,19 +306,27 @@ export function StarterGrid({
 }
 
 /** The centred block above the starter grid. `ChatLayouts.jsx:142-148`. */
-export function EmptyThread({ onPick }: { readonly onPick?: (title: string) => void }) {
+export function EmptyThread({
+  onPick,
+  title = "What are we building tonight?",
+  description = "I have your party, your notes and the eleven sessions behind you.",
+  starters,
+}: {
+  readonly onPick?: (title: string) => void;
+  readonly title?: string;
+  readonly description?: string;
+  readonly starters?: ReadonlyArray<HobStarter>;
+}) {
   return (
     <div className="flex shrink-0 flex-col gap-3.5">
       <div className="flex flex-col items-center px-2 pt-6 pb-1 text-center">
         <HobAvatar size={44} />
         <h3 className="mt-3 font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-          What are we building tonight?
+          {title}
         </h3>
-        <p className="mt-1.5 text-body-s leading-body text-muted-foreground">
-          I have your party, your notes and the eleven sessions behind you.
-        </p>
+        <p className="mt-1.5 text-body-s leading-body text-muted-foreground">{description}</p>
       </div>
-      <StarterGrid onPick={onPick} />
+      <StarterGrid starters={starters} onPick={onPick} />
     </div>
   );
 }

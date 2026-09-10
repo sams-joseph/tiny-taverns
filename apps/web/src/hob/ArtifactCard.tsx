@@ -64,15 +64,19 @@ function ReadAloudBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
 }
 
 /**
- * A note or a beat: prose Hob wrote, in the app's own voice.
+ * A note, beat or Chronicle entry: prose Hob wrote, in the app's own voice.
  *
  * Not the read-aloud blockquote, and the difference is the point of having two.
  * Read-aloud is serif and italic because it is meant to be *spoken at the
- * table*; a prep note and a beat are the DM's record and are set like every
- * other body of text in the product. The delivery has no body for either — it
- * draws neither kind — so this is the smallest thing that could be right.
+ * table*; these three are records and are set like every other body of text in
+ * the product. The delivery has no body for them, so this is the smallest thing
+ * that could be right.
  */
-function ProseBody({ artifact }: { readonly artifact: HobArtifact & { kind: "note" | "beat" } }) {
+function ProseBody({
+  artifact,
+}: {
+  readonly artifact: HobArtifact & { kind: "note" | "beat" | "chronicle" };
+}) {
   return (
     <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">{artifact.text}</p>
   );
@@ -142,6 +146,7 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <ReadAloudBody artifact={artifact} />;
     case "note":
     case "beat":
+    case "chronicle":
       return <ProseBody artifact={artifact} />;
     case "npc":
       return <NpcBody artifact={artifact} />;
@@ -173,6 +178,7 @@ export function ArtifactCard({
   readonly onOpen?: (artifact: HobArtifact) => void;
 }) {
   const meta = ARTIFACT_KINDS[artifact.kind];
+  const chronicle = artifact.kind === "chronicle";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -267,14 +273,14 @@ export function ArtifactCard({
               Open it
             </Button>
             <span className="ml-auto text-caption leading-none text-faint">
-              In tonight&rsquo;s session
+              {chronicle ? "In the Shared World Chronicle" : "In tonight’s session"}
             </span>
           </>
         ) : (
           <>
             {isSaveable(artifact) && (
               <Button size="sm" disabled={onSave === undefined} onClick={() => onSave?.(artifact)}>
-                Save to session
+                {chronicle ? "Add to Chronicle" : "Save to session"}
               </Button>
             )}
             <Button

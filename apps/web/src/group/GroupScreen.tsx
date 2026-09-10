@@ -181,7 +181,7 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
   return (
     <AppShell
       onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
+      panel={<Hob hob={hob} worldId={groupId} />}
       topBar={
         <TopBar
           title={view?.group.name ?? "Shared World"}

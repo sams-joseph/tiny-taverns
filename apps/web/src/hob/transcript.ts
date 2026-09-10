@@ -4,9 +4,9 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Three kinds of artifact are produced here** — `encounter`, `note` and
- * `beat` — and they are exactly the three things a *DM's* accept can
- * materialise. The rest of the union is the delivered specimen set, rendered
+ * **Four kinds of artifact are produced here** — `encounter`, `note`, `beat`
+ * and `chronicle`. The first three are what campaign Hob can materialise; the
+ * last is Shared World Hob's one proposal. The rest of the union is the delivered specimen set, rendered
  * only by the gallery: nothing produces an `npc`, a `checklist` or a `rules`
  * card, because there is no table for one to be saved into and a *Save to
  * session* button that could only fail is worse than a kind that cannot be
@@ -43,6 +43,7 @@ export const ARTIFACT_KINDS = {
   readaloud: { icon: "scroll-text", label: "Read-aloud", variant: "info" },
   note: { icon: "pencil", label: "Note", variant: "secondary" },
   beat: { icon: "flag", label: "Beat", variant: "default" },
+  chronicle: { icon: "history", label: "Chronicle", variant: "default" },
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
@@ -96,6 +97,7 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "readaloud"; readonly text: string })
   | (ArtifactBase & { readonly kind: "note"; readonly text: string })
   | (ArtifactBase & { readonly kind: "beat"; readonly text: string })
+  | (ArtifactBase & { readonly kind: "chronicle"; readonly text: string })
   | (ArtifactBase & {
       readonly kind: "npc";
       readonly race: string;
@@ -151,6 +153,14 @@ export const artifactFrom = (
       };
     case "beat":
       return { id: turnId, kind: "beat", chips: [], text: proposal.body };
+    case "groupHistory":
+      return {
+        id: turnId,
+        kind: "chronicle",
+        ...(proposal.title === null ? {} : { title: proposal.title }),
+        chips: [],
+        text: proposal.body,
+      };
     /**
      * **A character draft has no card here, and that is not an omission.**
      *

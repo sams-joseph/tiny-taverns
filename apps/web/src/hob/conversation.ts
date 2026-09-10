@@ -2,8 +2,8 @@ import type {
   AssistantThreadId,
   AssistantTurnId,
   CampaignId,
+  GroupId,
   HobEvent,
-  HobStatus,
   HobTurn as RecordedTurn,
 } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
@@ -52,12 +52,24 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  * shipped way of saying "not given", and it is honest where a handler that
  * silently did nothing would not be.
  *
- * ### It still refuses to pretend outside a campaign
+ * ### Scope is explicit
  *
- * Hob's tools all hang off one — the same reason `navFor` shows *Bestiary* only
- * inside a campaign — so on the campaign list `send` is undefined and the panel
- * says nothing is behind it. That is the honest state, not a degraded one.
+ * Campaign Hob and Shared World Hob have different server toolkits and accept
+ * targets. The caller supplies exactly one scope, and this seam selects one API
+ * group for the whole conversation. A screen with neither scope gets no
+ * composer and makes no request.
  */
+export type HobScope =
+  | { readonly type: "campaign"; readonly id: CampaignId }
+  | { readonly type: "sharedWorld"; readonly id: GroupId };
+
+interface ConversationStatus {
+  readonly available: boolean;
+  readonly model: string | null;
+  readonly label: string;
+  readonly type: HobScope["type"];
+}
+
 export interface HobConversation {
   /** Newest last. Empty renders the starter grid. */
   readonly turns: ReadonlyArray<HobTurn>;
@@ -78,7 +90,7 @@ export interface HobConversation {
    * nothing here, a grounded question looks like a hang.
    */
   readonly activity: string | undefined;
-  /** Turn ids of the proposals that are already rows in the campaign. */
+  /** Turn ids of proposals already accepted into their scoped record. */
   readonly savedArtifactIds: ReadonlyArray<string>;
   /**
    * The *"Knows"* strip, and every chip in it is true or absent.
@@ -90,11 +102,11 @@ export interface HobConversation {
    * them true. Empty renders no strip at all rather than an empty one.
    */
   readonly context: ReadonlyArray<HobContextChip>;
-  /** Undefined when no campaign is in view or no model is configured. */
+  /** Undefined when no Hob scope is in view or no model is configured. */
   readonly send: ((text: string) => void) | undefined;
   /** Why `send` is undefined, said in the panel where the composer would be. */
   readonly unavailable: string | undefined;
-  /** Accepts a proposal into the campaign. The only write on this surface. */
+  /** Accepts a proposal into the scoped record. The only write on this surface. */
   readonly save: ((artifact: HobArtifact) => void) | undefined;
   readonly discard: ((artifact: HobArtifact) => void) | undefined;
   readonly retry: ((artifact: HobArtifact) => void) | undefined;
@@ -112,6 +124,12 @@ const ACTIVITY: Record<string, string> = {
   proposeEncounter: "Building an encounter",
   proposeNote: "Writing a note",
   proposeBeat: "Writing down what happened",
+  searchGroupHistory: "Searching the Shared World Chronicle",
+  readGroupSummary: "Reading the Shared World summary",
+  listGroupCampaigns: "Looking across the campaigns",
+  listPlayedNights: "Looking through the played nights",
+  nightStory: "Reading back a played night",
+  proposeGroupEntry: "Writing a Chronicle entry",
 };
 
 const activityFor = (name: string, detail: string): string => {
@@ -135,7 +153,7 @@ const sentenceFor = (failure: ApiFailure): string => {
     case "unauthorized":
       return "Hob could not answer: this browser has no credential the server accepts.";
     case "missing":
-      return "Hob could not answer: this campaign is not reachable with this credential.";
+      return "Hob could not answer: this context is not reachable with this credential.";
     case "unreachable":
       return "Hob could not answer: the server did not respond.";
     case "rate-limited":
@@ -175,10 +193,9 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
 /**
  * Attach the panel to the server.
  *
- * @param campaignId The campaign in view, or `undefined` on a screen that has
- *   none. Hob's tools are bound to it server-side, so this is also the whole of
- *   what the client says about scope — there is no campaign in a payload and
- *   none in a tool parameter.
+ * @param scope The campaign or explicit Shared World in view. Hob's tools are
+ *   bound to it server-side, so there is no scope id in a payload or tool
+ *   parameter.
  * @param open Whether the panel is showing. **Nothing is requested until it
  *   is**: the panel is closed on every screen by default, so asking whether a
  *   model is configured at mount would put a request on every page load for a
@@ -186,10 +203,9 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
  *   — a server restarted with a model configured is then one panel toggle away
  *   from working, rather than a page reload.
  */
-export function useHobConversation(
-  campaignId: CampaignId | undefined,
-  open: boolean,
-): HobConversation {
+export function useHobConversation(scope: HobScope | undefined, open: boolean): HobConversation {
+  const campaignId = scope?.type === "campaign" ? scope.id : undefined;
+  const worldId = scope?.type === "sharedWorld" ? scope.id : undefined;
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<HobTurn>>([]);
   const [saved, setSaved] = useState<ReadonlyArray<string>>([]);
@@ -204,7 +220,7 @@ export function useHobConversation(
    */
   const [writing, setWriting] = useState(false);
   const [activity, setActivity] = useState<string | undefined>(undefined);
-  const [status, setStatus] = useState<HobStatus | undefined>(undefined);
+  const [status, setStatus] = useState<ConversationStatus | undefined>(undefined);
 
   /** Monotonic, so a turn's key is stable and no environment API is needed. */
   const nextId = useRef(0);
@@ -227,7 +243,7 @@ export function useHobConversation(
   // quiet panel and not a broken one. The thread is what makes the panel worth
   // reopening: the evening is still there.
   useEffect(() => {
-    if (campaignId === undefined) {
+    if (campaignId === undefined && worldId === undefined) {
       setStatus(undefined);
       return;
     }
@@ -235,31 +251,80 @@ export function useHobConversation(
     let live = true;
     void (async () => {
       const token = await credentialRef.current();
-      const result = await runApiResult(
-        (client) =>
-          Effect.all(
-            {
-              status: client.hob.status({ params: { campaignId } }),
-              threads: client.hob.threads({ params: { campaignId } }),
-            },
-            { concurrency: 2 },
-          ).pipe(
-            Effect.flatMap(({ status: current, threads }) => {
-              const newest = threads[0];
-              return newest === undefined
-                ? Effect.succeed({ status: current, threadId: undefined, recorded: [] })
-                : Effect.map(
-                    client.hob.turns({ params: { campaignId, threadId: newest.id } }),
-                    (recorded) => ({
-                      status: current,
-                      threadId: newest.id as AssistantThreadId | undefined,
-                      recorded,
-                    }),
-                  );
-            }),
-          ),
-        token,
-      );
+      const result = await runApiResult((client) => {
+        const head =
+          campaignId !== undefined
+            ? Effect.all(
+                {
+                  status: client.hob.status({ params: { campaignId } }),
+                  threads: client.hob.threads({ params: { campaignId } }),
+                },
+                { concurrency: 2 },
+              ).pipe(
+                Effect.map(
+                  ({
+                    status: current,
+                    threads,
+                  }): {
+                    readonly status: ConversationStatus;
+                    readonly threads: typeof threads;
+                  } => ({
+                    status: {
+                      available: current.available,
+                      model: current.model,
+                      label: current.campaign,
+                      type: "campaign",
+                    },
+                    threads,
+                  }),
+                ),
+              )
+            : Effect.all(
+                {
+                  status: client.sharedWorldHob.status({ params: { worldId: worldId! } }),
+                  threads: client.sharedWorldHob.threads({ params: { worldId: worldId! } }),
+                },
+                { concurrency: 2 },
+              ).pipe(
+                Effect.map(
+                  ({
+                    status: current,
+                    threads,
+                  }): {
+                    readonly status: ConversationStatus;
+                    readonly threads: typeof threads;
+                  } => ({
+                    status: {
+                      available: current.available,
+                      model: current.model,
+                      label: current.group,
+                      type: "sharedWorld",
+                    },
+                    threads,
+                  }),
+                ),
+              );
+
+        return head.pipe(
+          Effect.flatMap(({ status: current, threads }) => {
+            const newest = threads[0];
+            return newest === undefined
+              ? Effect.succeed({ status: current, threadId: undefined, recorded: [] })
+              : Effect.map(
+                  campaignId !== undefined
+                    ? client.hob.turns({ params: { campaignId, threadId: newest.id } })
+                    : client.sharedWorldHob.turns({
+                        params: { worldId: worldId!, threadId: newest.id },
+                      }),
+                  (recorded) => ({
+                    status: current,
+                    threadId: newest.id as AssistantThreadId | undefined,
+                    recorded,
+                  }),
+                );
+          }),
+        );
+      }, token);
       if (!live || Result.isFailure(result)) {
         // A failed read leaves the panel exactly as it was: `status` undefined
         // renders the *nothing is behind this* line, which is the honest thing
@@ -283,7 +348,7 @@ export function useHobConversation(
     return () => {
       live = false;
     };
-  }, [campaignId, open]);
+  }, [campaignId, open, worldId]);
 
   /** A half-written answer is abandoned, not left running, when this unmounts. */
   useEffect(
@@ -309,7 +374,7 @@ export function useHobConversation(
 
   const send = useCallback(
     (text: string) => {
-      if (campaignId === undefined || asking) return;
+      if ((campaignId === undefined && worldId === undefined) || asking) return;
 
       append({ id: `you-${nextId.current++}`, who: "user", text });
       setAsking(true);
@@ -359,14 +424,15 @@ export function useHobConversation(
         const token = yield* Effect.promise(() => credentialRef.current());
         const client = yield* makeClient(token);
         const continuing = thread.current;
-        const stream = yield* client.hob.ask({
-          params: { campaignId },
+        const payload =
           // The key is *omitted* when there is no thread, not sent as
           // `undefined`: the derived client encodes an absent optional as
           // `null`, and `Schema.optional` refuses a null on the way back in —
           // a 400 on the first question of every conversation.
-          payload: continuing === undefined ? { text } : { threadId: continuing, text },
-        });
+          continuing === undefined ? { text } : { threadId: continuing, text };
+        const stream = yield* campaignId !== undefined
+          ? client.hob.ask({ params: { campaignId }, payload })
+          : client.sharedWorldHob.ask({ params: { worldId: worldId! }, payload });
         yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
       }).pipe(
         Effect.provide(FetchHttpClient.layer),
@@ -389,11 +455,11 @@ export function useHobConversation(
 
       answering.current = Effect.runFork(answer);
     },
-    [append, asking, campaignId, say],
+    [append, asking, campaignId, say, worldId],
   );
 
   /**
-   * Accept a proposal into the campaign — the one write on this surface.
+   * Accept a proposal into the scoped record — the one write on this surface.
    *
    * It sends no content, only the ids: the note, the beat or the encounter is
    * materialised from the proposal the *server* stored on that turn. That is
@@ -425,18 +491,28 @@ export function useHobConversation(
   const save = useCallback(
     (artifact: HobArtifact) => {
       const threadId = thread.current;
-      if (campaignId === undefined || threadId === undefined) return;
+      if ((campaignId === undefined && worldId === undefined) || threadId === undefined) return;
       const turnId = artifact.id as AssistantTurnId;
 
       void (async () => {
         const token = await credentialRef.current();
         const result = await runApiResult(
-          (client) => client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
+          (client) =>
+            campaignId !== undefined
+              ? client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} })
+              : client.sharedWorldHob.accept({
+                  params: { worldId: worldId!, threadId, turnId },
+                  payload: {},
+                }),
           token,
         );
         if (Result.isSuccess(result)) {
           setSaved((current) => [...current, turnId]);
-          invalidate([reads.notes(campaignId), reads.encounters(campaignId)]);
+          invalidate(
+            campaignId !== undefined
+              ? [reads.notes(campaignId), reads.encounters(campaignId)]
+              : [reads.sharedWorldHistory(worldId!)],
+          );
           return;
         }
         // In the thread, where the card is, for the reason `SaveFailure` sits
@@ -448,7 +524,7 @@ export function useHobConversation(
         });
       })();
     },
-    [append, campaignId, invalidate],
+    [append, campaignId, invalidate, worldId],
   );
 
   const reset = useCallback(() => {
@@ -474,7 +550,11 @@ export function useHobConversation(
       status === undefined
         ? []
         : [
-            { icon: "book-open" as const, label: status.campaign, live: true },
+            {
+              icon: status.type === "campaign" ? ("book-open" as const) : ("map" as const),
+              label: status.label,
+              live: true,
+            },
             ...(status.model === null ? [] : [{ icon: "sparkles" as const, label: status.model }]),
           ],
     send: status?.available === true ? send : undefined,
@@ -482,10 +562,10 @@ export function useHobConversation(
     unavailable:
       status?.available === true
         ? undefined
-        : campaignId === undefined
-          ? "Hob reads one campaign's record, and there is no campaign in view. Open one and ask again."
+        : campaignId === undefined && worldId === undefined
+          ? "Hob needs a campaign or Shared World in view. Open one and ask again."
           : "No model is configured behind Hob. Set HOB_API_URL and HOB_MODEL in apps/server/.env.local, then restart the server.",
-    save: campaignId === undefined ? undefined : save,
+    save: campaignId === undefined && worldId === undefined ? undefined : save,
     discard: undefined,
     retry: undefined,
     reset: turns.length > 0 ? reset : undefined,
