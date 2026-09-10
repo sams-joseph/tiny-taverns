@@ -36,12 +36,12 @@ export const prepItemId = "2b1f2a1e-0000-4000-8000-000000000701";
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
 
-export const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
+export const worldId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 export const dmAccountId = "2b1f2a1e-0000-4000-8000-00000000d000";
 
 export const campaign = {
   id: campaignId,
-  groupId,
+  contextId: worldId,
   creatorAccountId: dmAccountId,
   name: "The Salt Road",
   partyName: "The Gilded Spoon",
@@ -265,7 +265,10 @@ export const fullChronicle = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
     [
       "GET /me/campaigns",
-      { status: 200, body: [{ campaign, relation: "creator", joinedAt: stamps.createdAt }] },
+      {
+        status: 200,
+        body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: stamps.createdAt }],
+      },
     ],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) }],

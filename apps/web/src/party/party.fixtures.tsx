@@ -9,7 +9,7 @@ import {
   dmAccountId,
   dmMember,
   fullCampaign,
-  groupId,
+  worldId,
   ilseAccountId,
   partySeat,
   type Answer,
@@ -142,7 +142,7 @@ export const pellSeat = {
  */
 export const liveInvite = {
   id: inviteId,
-  groupId,
+  worldId,
   campaignId,
   label: "Hal",
   status: "live",
@@ -176,7 +176,7 @@ export const takenInvite = {
 export const fullParty = (): Map<string, Answer> => {
   const routes = fullCampaign();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
-  routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [liveInvite, takenInvite] });
+  routes.set(`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] });
   routes.set(`GET ${base}/party`, {
     status: 200,
     body: [brannocSeat, sorrelSeat, pellSeat],
@@ -189,11 +189,11 @@ export const fullParty = (): Map<string, Answer> => {
     body: { ...brannocSeat, seat: { ...brannocSeat.seat, visibility: "shared" } },
   });
   routes.set(`DELETE ${base}/party/${sorrelSeatId}`, { status: 204, body: undefined });
-  routes.set(`POST /groups/${groupId}/invites`, {
+  routes.set(`POST ${base}/invites`, {
     status: 200,
     body: { invite: liveInvite, token: "a-token" },
   });
-  routes.set(`POST /groups/${groupId}/invites/${inviteId}/revoke`, {
+  routes.set(`POST ${base}/invites/${inviteId}/revoke`, {
     status: 200,
     body: { ...liveInvite, status: "revoked", revokedAt: "2026-08-13T10:00:00Z" },
   });
@@ -204,7 +204,7 @@ export const fullParty = (): Map<string, Answer> => {
 export const emptyParty = (): Map<string, Answer> => {
   const routes = fullParty();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember] });
-  routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [] });
+  routes.set(`GET ${base}/invites`, { status: 200, body: [] });
   routes.set(`GET ${base}/party`, { status: 200, body: [] });
   return routes;
 };

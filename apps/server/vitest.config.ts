@@ -60,6 +60,22 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
+    /**
+     * Every server test file owns a database and applies the complete migration
+     * ledger when its runtime is first built. PostgreSQL sizes its shared lock
+     * table for ordinary transaction concurrency, not dozens of simultaneous
+     * schema builds: on a 32-thread workstation Vitest started 30 files at
+     * once and migrations failed with SQLSTATE 53200 (`out of shared memory`,
+     * with PostgreSQL's `max_locks_per_transaction` hint). Connection usage was
+     * still well below `max_connections`, so changing pool sizes or timeouts
+     * cannot address it.
+     *
+     * Eight concurrent ledgers keep the suite parallel while bounding the
+     * number of DDL locks independently of host core count. Keep this in the
+     * checked-in runner rather than requiring every developer and CI service
+     * to tune PostgreSQL for the topology of this test suite.
+     */
+    maxWorkers: 8,
     testTimeout: 60_000,
     /**
      * The same budget for the same work. Nothing relies on this today — every

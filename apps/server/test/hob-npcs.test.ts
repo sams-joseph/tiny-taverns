@@ -144,9 +144,7 @@ const makeFixture = Effect.gen(function* () {
     privateMaterial: { secrets: "SIXPENCE_CROSS_CAMPAIGN_SECRET" },
   });
 
-  const issued = yield* as(
-    invites.create(campaign.groupId, { label: "Pim", campaignId: campaign.id }),
-  );
+  const issued = yield* invites.createForCampaign(creator, { label: "Pim" });
   const playerAccount = yield* anAccount("Pim");
   yield* withActor(playerAccount)(invites.redeem(issued.token));
   const player = scopedTo(playerAccount, campaign.id);
@@ -301,10 +299,10 @@ describe("campaign NPC context", () => {
       Effect.gen(function* () {
         const invites = yield* Invites;
         const hob = yield* Hob;
-        const rows = yield* withActor(fixture.dm)(invites.list(fixture.creator.group));
+        const rows = yield* invites.listForCampaign(fixture.creator);
         const pim = rows.find((row) => row.redeemedByName === "Pim");
         if (pim === undefined) throw new Error("missing invitation to revoke");
-        yield* withActor(fixture.dm)(invites.revoke(fixture.creator.group, pim.id));
+        yield* invites.revokeForCampaign(fixture.creator, pim.id);
         return yield* Effect.result(hob.ask(fixture.campaignId, { text: "Who is Cazril?" }));
       }).pipe(
         withActor(fixture.player),

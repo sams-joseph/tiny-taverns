@@ -4,6 +4,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
@@ -12,9 +13,14 @@ import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Campaigns.layer, Groups.layer, Invites.layer, Notes.layer).pipe(
-    Layer.provideMerge(migratedDatabase("taverns_test_visibility")),
-  ),
+  Layer.mergeAll(
+    Accounts.layer,
+    Campaigns.layer,
+    CampaignCreatorActors.layer,
+    Groups.layer,
+    Invites.layer,
+    Notes.layer,
+  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_visibility"))),
 );
 afterAll(() => runtime.dispose());
 

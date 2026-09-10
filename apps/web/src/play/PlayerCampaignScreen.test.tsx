@@ -36,7 +36,14 @@ const renderScreen = async (): Promise<void> => {
   // projection — the same URL the creator opens, chosen by relation.
   server.routes.set("GET /me/campaigns", {
     status: 200,
-    body: [{ campaign, relation: "player", joinedAt: "2026-06-01T10:00:00.000Z" }],
+    body: [
+      {
+        campaign,
+        relation: "player",
+        sharedWorld: null,
+        joinedAt: "2026-06-01T10:00:00.000Z",
+      },
+    ],
   });
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
     <HostedSessionScope session={session}>{screen}</HostedSessionScope>
@@ -90,7 +97,7 @@ describe("a table you sit at", () => {
   it("keeps the DM's nav off the player's bar", async () => {
     await renderScreen();
 
-    expect(await screen.findByRole("link", { name: /Groups/ })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /Campaigns/ })).toBeTruthy();
     // Bestiary and the DM party-management screen are not player destinations;
     // a nav item that goes nowhere is the same lie as a stubbed field.
     expect(screen.queryByRole("link", { name: /Bestiary/ })).toBeNull();

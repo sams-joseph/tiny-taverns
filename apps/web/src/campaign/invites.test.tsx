@@ -5,7 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -24,14 +24,14 @@ import {
 const server = installStubServer();
 installMemoryStorage();
 
-const invitesPath = `/groups/${groupId}/invites`;
+const invitesPath = `/campaigns/${campaignId}/invites`;
 
 const inviteId = "2b1f2a1e-0000-4000-8000-000000000e01";
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z" };
 
 const waiting = {
   id: inviteId,
-  groupId,
+  worldId,
   campaignId,
   label: "Ilse",
   status: "live",
@@ -92,7 +92,7 @@ describe("inviting a player", () => {
     expect(link.textContent).toContain(`#/join/${TOKEN}`);
     expect(screen.getByText("Copy this now — it is shown once")).toBeTruthy();
 
-    expect(bodyOf(server, "POST", "/invites")).toEqual({ label: "Ilse", campaignId });
+    expect(bodyOf(server, "POST", "/invites")).toEqual({ label: "Ilse" });
   });
 
   /**
@@ -190,7 +190,9 @@ describe("inviting a player", () => {
 
     await openInvites();
 
-    expect(await screen.findByText("Withdrawn. Ilse no longer reaches this group.")).toBeTruthy();
+    expect(
+      await screen.findByText("Withdrawn. Ilse no longer has a seat in this campaign."),
+    ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   });
 

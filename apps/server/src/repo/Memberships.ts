@@ -4,9 +4,10 @@ import {
   CampaignMember,
   CampaignMembership,
   type CampaignRelation,
+  CampaignSharedWorld,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -52,10 +53,10 @@ import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibil
  *   named, checked against live group membership first). Reinstates a revoked
  *   row rather than erroring, so being invited back after leaving works and a
  *   double admit is a no-op.
- * - `revokeMemberAt` / `revokeAllInGroupFor` — the `where` structurally
- *   excludes any row whose account is the campaign's creator, so no bug
- *   upstream can turn "remove a player" into "unseat the DM". The composite
- *   key would refuse that anyway; this is the belt to its braces.
+ * - `revokeMemberAt` — the `where` structurally excludes any row whose account
+ *   is the campaign's creator, so no bug upstream can turn "remove a player"
+ *   into "unseat the DM". The composite key would refuse that anyway; this is
+ *   the belt to its braces.
  */
 
 /**
@@ -77,7 +78,7 @@ const notTheCreator = (sql: SqlClient.SqlClient): Statement.Fragment =>
 export const addCreator = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
@@ -98,17 +99,35 @@ export const addCreator = (
 export const admitTo = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.asVoid(
-    sql`
+): Effect.Effect<boolean, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly campaign_id: CampaignId }>`
       insert into campaign_member (campaign_id, group_id, account_id)
       values (${campaignId}, ${groupId}, ${accountId})
       on conflict (campaign_id, account_id) do update
         set revoked_at = null
         where campaign_member.revoked_at is not null
+      returning campaign_id
     `,
+    (rows) => rows.length > 0,
+  );
+
+/** The live participants whose eligibility follows a campaign to a new context. */
+export const liveMemberAccountIds = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+): Effect.Effect<ReadonlyArray<AccountId>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly account_id: AccountId }>`
+      select campaign_member.account_id
+      from campaign_member
+      where campaign_member.campaign_id = ${campaignId}
+        and campaign_member.revoked_at is null
+      order by campaign_member.created_at, campaign_member.account_id
+    `,
+    (rows) => rows.map((row) => row.account_id),
   );
 
 /**
@@ -147,40 +166,6 @@ export const revokeMemberAt = (
   });
 
 /**
- * Revokes every live participation an account holds across one group's
- * campaigns — the campaign half of removing somebody from a group, run in the
- * same transaction as the `group_member` revoke so the deferred key holds.
- *
- * Creator rows are excluded by the same clause as everywhere else; the caller
- * (`repo/Groups.ts`) refuses the whole removal first when the account created
- * a campaign in the group, because `campaign_creator_in_group` would refuse it
- * at COMMIT anyway and a `Conflict` naming the reason beats a defect.
- */
-export const revokeAllInGroupFor = (
-  sql: SqlClient.SqlClient,
-  groupId: GroupId,
-  accountId: AccountId,
-): Effect.Effect<void, SqlError.SqlError> =>
-  Effect.gen(function* () {
-    yield* sql`
-      update campaign_member set revoked_at = now()
-      where campaign_member.group_id = ${groupId}
-        and campaign_member.account_id = ${accountId}
-        and campaign_member.revoked_at is null
-        and ${notTheCreator(sql)}
-    `;
-    // Seats retire with the memberships — `revokeMemberAt`'s clause, across
-    // the group. Scoped by `group_id` on the seat itself, which is the
-    // campaign's own value by the composite key into `campaign`.
-    yield* sql`
-      update campaign_character set left_at = now(), updated_at = now()
-      where campaign_character.group_id = ${groupId}
-        and campaign_character.account_id = ${accountId}
-        and campaign_character.left_at is null
-    `;
-  });
-
-/**
  * Which shelf `mine` reads — the live tables, or the archived ones.
  *
  * Not on the wire, and that is the point: which shelf a caller gets is decided
@@ -191,6 +176,8 @@ export type CampaignShelf = "live" | "archived";
 interface MembershipRow extends CampaignRow {
   readonly is_creator: boolean;
   readonly joined_at: Date;
+  readonly is_shared_world: boolean;
+  readonly shared_world_name: string;
 }
 
 interface MemberRow {
@@ -299,8 +286,11 @@ export class Memberships extends Context.Service<
               const rows = yield* sql<MembershipRow>`
                 select campaign.*,
                        (campaign.creator_account_id = ${actor.accountId}) as is_creator,
-                       campaign_member.created_at as joined_at
+                       campaign_member.created_at as joined_at,
+                       play_group.is_shared_world,
+                       play_group.name as shared_world_name
                 from campaign
+                join play_group on play_group.id = campaign.group_id
                 join campaign_member
                   on campaign_member.campaign_id = campaign.id
                  and campaign_member.account_id = ${actor.accountId}
@@ -313,6 +303,12 @@ export class Memberships extends Context.Service<
                   new CampaignMembership({
                     campaign: toCampaign(row),
                     relation: relationOf(row.is_creator),
+                    sharedWorld: row.is_shared_world
+                      ? new CampaignSharedWorld({
+                          id: row.group_id,
+                          name: row.shared_world_name,
+                        })
+                      : null,
                     joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                   }),
               );

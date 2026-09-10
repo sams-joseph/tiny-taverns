@@ -1,11 +1,11 @@
 import { Schema } from "effect";
-import { AccountId, CampaignId, GroupId, SessionId } from "./Ids.js";
+import { AccountId, CampaignId, SharedWorldId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 export class Campaign extends Schema.Class<Campaign>("Campaign")({
   id: CampaignId,
-  /** The group this campaign belongs to. Every campaign is in exactly one. */
-  groupId: GroupId,
+  /** Private-context identity used by server integrity; never presented as a Shared World. */
+  contextId: SharedWorldId,
   /**
    * Who created the campaign — its sole DM, by the captain's decision of
    * 2026-09-01. Not a mutable role: creator-ness is this column, and every

@@ -1,17 +1,17 @@
 import { Context, Schema } from "effect";
 import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi";
-import { AccountId, CampaignId, GroupId } from "./Ids.js";
+import { AccountId, CampaignId, SharedWorldId } from "./Ids.js";
 
 /**
- * How far a credential reaches — the whole account, one group, or one campaign.
+ * How far a credential reaches — the whole account, one Shared World, or one campaign.
  *
  * A tagged union rather than a pair of nullable ids, because a nullable
- * `groupId` beside a nullable `campaignId` admits combinations that mean
+ * `worldId` beside a nullable `campaignId` admits combinations that mean
  * nothing (both set, disagreeing) and every predicate would have to refuse
  * them. Scope is one decision, made when the credential is minted, and the
  * union makes it exactly one.
  *
- * This is *scope*, not reach: membership decides which groups and campaigns
+ * This is *scope*, not reach: membership decides which Shared Worlds and campaigns
  * the account touches at all, and scope narrows that set further. Without it a
  * credential minted for one table would reach every campaign the same account
  * belongs to, so a person running two tables would leak table A's shared rows
@@ -19,7 +19,7 @@ import { AccountId, CampaignId, GroupId } from "./Ids.js";
  */
 export const ActorScope = Schema.Union([
   Schema.Struct({ _tag: Schema.tag("account") }),
-  Schema.Struct({ _tag: Schema.tag("group"), groupId: GroupId }),
+  Schema.Struct({ _tag: Schema.tag("sharedWorld"), worldId: SharedWorldId }),
   Schema.Struct({ _tag: Schema.tag("campaign"), campaignId: CampaignId }),
 ]);
 export type ActorScope = typeof ActorScope.Type;
@@ -27,8 +27,11 @@ export type ActorScope = typeof ActorScope.Type;
 /** The whole-account scope — what `token:issue` and hosted sign-in mint. */
 export const accountScope: ActorScope = { _tag: "account" };
 
-/** A credential narrowed to one group. */
-export const groupScope = (groupId: GroupId): ActorScope => ({ _tag: "group", groupId });
+/** A credential narrowed to one Shared World. */
+export const sharedWorldScope = (worldId: SharedWorldId): ActorScope => ({
+  _tag: "sharedWorld",
+  worldId,
+});
 
 /** A credential narrowed to one campaign. */
 export const campaignScope = (campaignId: CampaignId): ActorScope => ({

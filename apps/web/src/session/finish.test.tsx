@@ -55,7 +55,7 @@ const alsoAnswerTheCampaignView = (over: boolean) => {
   // DM's screen to draw at all.
   server.routes.set("GET /me/campaigns", {
     status: 200,
-    body: [{ campaign, relation: "creator", joinedAt: campaign.createdAt }],
+    body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
   });
   server.routes.set(`GET ${base}/encounters`, { status: 200, body: page([encounter]) });
   server.routes.set(`GET ${base}/notes`, { status: 200, body: page([readAloud]) });

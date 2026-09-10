@@ -1,4 +1,4 @@
-import type { GroupMembership } from "@taverns/api";
+import type { SharedWorldMembership } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
@@ -11,35 +11,33 @@ import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { groupsAtom } from "./load";
+import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
+import { sharedWorldsAtom } from "./load";
 
 /**
- * The way in: every group this account belongs to — and home, because the
- * group is the top-level container for connected play.
+ * Every explicit Shared World this account belongs to. Campaigns remain home;
+ * this is the optional cross-campaign context directory.
  *
- * The one write on the way in is founding a group, because a list that cannot
- * create is a dead end on a fresh database. Founding one makes you its owner
- * and first member in one transaction (`Groups.create`), and campaigns are
- * created inside a group, on its own screen.
+ * Founding one makes you its owner and first member in one transaction
+ * (`sharedWorlds.create`), and campaigns can then be started inside it.
  *
- * There is no mode and no filter: an account's groups are its groups, and what
- * it is inside each one — owner, campaign creator, player — is per group and
- * per campaign, said where those are rendered.
+ * There is no mode and no filter: an account's Shared Worlds are the explicit
+ * contexts it belongs to, independently of its relation to any campaign.
  */
 
-function GroupRow({ membership }: { readonly membership: GroupMembership }) {
-  const group = membership.group;
+function SharedWorldRow({ membership }: { readonly membership: SharedWorldMembership }) {
+  const sharedWorld = membership.sharedWorld;
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
             <Link
-              to="/groups/$groupId"
-              params={{ groupId: group.id }}
+              to="/worlds/$worldId"
+              params={{ worldId: sharedWorld.id }}
               className="text-heading no-underline hover:text-link-hover"
             >
-              {group.name}
+              {sharedWorld.name}
             </Link>
           </CardTitle>
           {membership.isOwner && <Badge variant="secondary">Yours</Badge>}
@@ -52,7 +50,7 @@ function GroupRow({ membership }: { readonly membership: GroupMembership }) {
             size="sm"
             className="text-link"
             nativeButton={false}
-            render={<Link to="/groups/$groupId" params={{ groupId: group.id }} />}
+            render={<Link to="/worlds/$worldId" params={{ worldId: sharedWorld.id }} />}
           >
             Open
             <Icon name="chevron-right" size={15} />
@@ -63,8 +61,8 @@ function GroupRow({ membership }: { readonly membership: GroupMembership }) {
   );
 }
 
-/** Names a new group. Everything else about it has a column default. */
-function NewGroup() {
+/** Names a new Shared World. Everything else about it has a column default. */
+function NewSharedWorld() {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
@@ -76,7 +74,7 @@ function NewGroup() {
     setError(undefined);
     const token = await fetchCredential();
     const result = await runApiResult(
-      (client) => client.groups.create({ payload: { name: name.trim() } }),
+      (client) => client.sharedWorlds.create({ payload: { name: name.trim() } }),
       token,
     );
 
@@ -90,21 +88,21 @@ function NewGroup() {
       return;
     }
     setName("");
-    invalidate([reads.myGroups]);
+    invalidate([reads.mySharedWorlds]);
   }, [fetchCredential, invalidate, name]);
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          aria-label="New group name"
+          aria-label="Shared World name"
           placeholder="The Salt Company"
           value={name}
           onChange={(event) => setName(event.target.value)}
           className="max-w-xs"
         />
         <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
-          {busy ? "Working…" : "Found a group"}
+          {busy ? "Working…" : "Create Shared World"}
         </Button>
       </div>
       {error !== undefined && (
@@ -116,9 +114,10 @@ function NewGroup() {
   );
 }
 
-export function GroupsScreen() {
-  const [resource, retry] = useApiAtom(groupsAtom);
-  const [shelfOpen, setShelfOpen] = useState(false);
+export function SharedWorldsScreen() {
+  const [resource, retry] = useApiAtom(sharedWorldsAtom);
+  const [worldShelfOpen, setWorldShelfOpen] = useState(false);
+  const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
@@ -129,47 +128,58 @@ export function GroupsScreen() {
       panel={<Hob hob={hob} />}
       topBar={
         <TopBar
-          title="Groups"
-          subtitle="The people you play with. A group holds its campaigns and the history they share."
+          title="Shared Worlds"
+          subtitle="Connected campaigns with one history and a shared memory for Hob."
         />
       }
     >
       <div className="flex flex-col gap-6">
-        {resource.state === "loading" && <Loading label="Looking for your groups…" />}
+        {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
           <FailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {memberships !== undefined && (
           <>
-            <NewGroup />
+            <NewSharedWorld />
             {memberships.length === 0 ? (
-              <EmptyState icon="users" title="No group yet">
-                Found one above and your campaigns live inside it — or follow the link somebody
-                sends you and their group appears here.
+              <EmptyState icon="map" title="No Shared World yet">
+                Create one when two campaigns should share history and Hob's memory.
               </EmptyState>
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <GroupRow key={membership.group.id} membership={membership} />
+                  <SharedWorldRow key={membership.sharedWorld.id} membership={membership} />
                 ))}
               </div>
             )}
             {/* The way back for shelved tables, and deliberately the quietest
                 thing on the page. It requests nothing until it is opened. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start text-muted-foreground"
-              onClick={() => setShelfOpen(true)}
-            >
-              <Icon name="history" size={14} />
-              Archived campaigns
-            </Button>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setWorldShelfOpen(true)}
+              >
+                <Icon name="history" size={14} />
+                Archived Shared Worlds
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setCampaignShelfOpen(true)}
+              >
+                <Icon name="history" size={14} />
+                Archived campaigns
+              </Button>
+            </div>
           </>
         )}
       </div>
 
-      {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
+      {worldShelfOpen && <ArchivedSharedWorldsDialog onClose={() => setWorldShelfOpen(false)} />}
+      {campaignShelfOpen && <ArchivedDialog onClose={() => setCampaignShelfOpen(false)} />}
     </AppShell>
   );
 }

@@ -1,10 +1,10 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
-import type { CampaignId } from "@taverns/api";
+import type { CampaignId, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
-import { campaignId } from "../campaign/campaign.fixtures";
+import { campaignId, worldId } from "../campaign/campaign.fixtures";
 import { Hob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
 
@@ -90,6 +90,24 @@ const aNoteRow = {
   updatedAt: stamp,
 };
 
+const aHistoryRow = {
+  id: "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61",
+  worldId,
+  campaignId: null,
+  sessionId: null,
+  sourceKind: "manual",
+  worldSeq: 7,
+  occurredAt: null,
+  acceptedAt: stamp,
+  title: "The roads remember",
+  body: "Every lantern went dark on the same night.",
+  facts: {},
+  origin: "assistant",
+  assistantTurnId: "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60",
+  createdByAccountId: null,
+  createdAt: stamp,
+};
+
 const installHobServer = (): HobStub => {
   const encoder = new TextEncoder();
   const frameOf = (frame: Frame): Uint8Array =>
@@ -171,7 +189,9 @@ const installHobServer = (): HobStub => {
       stub.accepts.push(pathname);
       return Promise.resolve(
         stub.acceptStatus === undefined
-          ? json({ accepted: "note", note: aNoteRow })
+          ? pathname.startsWith("/worlds/")
+            ? json({ accepted: "sharedWorldHistory", entry: aHistoryRow })
+            : json({ accepted: "note", note: aNoteRow })
           : new Response(JSON.stringify(stub.acceptBody), {
               status: stub.acceptStatus,
               headers: { "content-type": "application/json" },
@@ -185,11 +205,17 @@ const installHobServer = (): HobStub => {
 
     if (pathname.endsWith("/hob"))
       return Promise.resolve(
-        json({
-          available: stub.available,
-          model: stub.available ? "local" : null,
-          campaign: "The Salt Road",
-        }),
+        pathname.startsWith("/worlds/")
+          ? json({
+              available: stub.available,
+              model: stub.available ? "local" : null,
+              sharedWorld: "The Salt Company",
+            })
+          : json({
+              available: stub.available,
+              model: stub.available ? "local" : null,
+              campaign: "The Salt Road",
+            }),
       );
 
     return Promise.resolve(new Response("{}", { status: 404 }));
@@ -216,13 +242,21 @@ const panelState = (open: boolean): HobPanelState => ({
 });
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
-const renderHob = (options?: { readonly open?: boolean; readonly campaign?: boolean }): void => {
+const renderHob = (options?: {
+  readonly open?: boolean;
+  readonly campaign?: boolean;
+  readonly world?: boolean;
+}): void => {
+  const hob = panelState(options?.open ?? true);
   render(
     <HostedSessionScope session={noSession}>
-      <Hob
-        hob={panelState(options?.open ?? true)}
-        campaignId={options?.campaign === false ? undefined : (campaignId as CampaignId)}
-      />
+      {options?.world === true ? (
+        <Hob hob={hob} worldId={worldId as SharedWorldId} />
+      ) : options?.campaign === false ? (
+        <Hob hob={hob} />
+      ) : (
+        <Hob hob={hob} campaignId={campaignId as CampaignId} />
+      )}
     </HostedSessionScope>,
   );
 };
@@ -257,8 +291,17 @@ const aThread = (title: string) => ({
   id: threadId,
   campaignId,
   // A campaign thread's other scope is null — `assistant_thread_one_scope`
-  // (`0031`): a thread is a campaign's or a group's, never both.
-  groupId: null,
+  // (`0031`): a thread is a campaign's or a Shared World's, never both.
+  worldId: null,
+  title,
+  createdAt: stamp,
+  updatedAt: stamp,
+});
+
+const aWorldThread = (title: string) => ({
+  id: threadId,
+  campaignId: null,
+  worldId,
   title,
   createdAt: stamp,
   updatedAt: stamp,
@@ -295,12 +338,12 @@ describe("what the panel offers", () => {
     expect(server.paths).toEqual([]);
   });
 
-  it("offers no composer outside a campaign, and says to open one", async () => {
+  it("offers no composer outside a scoped context, and says to open one", async () => {
     renderHob({ campaign: false });
 
     expect(composer()).toBeNull();
-    expect(screen.getByText(/no campaign in view/)).toBeInTheDocument();
-    // Nothing is asked either: there is no campaign to ask about.
+    expect(screen.getByText(/needs a campaign or Shared World in view/)).toBeInTheDocument();
+    // Nothing is asked either: there is no scoped record to ask about.
     expect(server.paths).toEqual([]);
   });
 
@@ -682,5 +725,85 @@ describe("what Hob offers, and the one thing that writes", () => {
     );
     // And the card does not claim to be saved.
     expect(screen.queryByText("Saved")).toBeNull();
+  });
+});
+
+describe("Shared World Hob", () => {
+  const chronicleProposal = {
+    target: "sharedWorldHistory",
+    title: "The roads remember",
+    body: "Every lantern went dark on the same night.",
+  };
+
+  it("loads and resumes the world's conversation, with world-specific context", async () => {
+    server.threads = [aWorldThread("What connects the roads?")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Every road passed through the lantern district.",
+        proposal: null,
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob({ world: true });
+
+    expect(
+      await screen.findByText("Every road passed through the lantern district."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("What Hob knows")).toHaveTextContent("The Salt Company");
+    expect(server.paths).toContain(`/worlds/${worldId}/hob`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/threads`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/threads/${threadId}/turns`);
+    expect(server.paths.some((path) => path.startsWith(`/campaigns/${campaignId}/hob`))).toBe(
+      false,
+    );
+  });
+
+  it("streams a question through the world's thread", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      delta("The lanterns connect them."),
+      {
+        event: "done",
+        data: { reason: "stop" },
+      },
+    ];
+    renderHob({ world: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "What connects these campaigns?{Enter}");
+
+    expect(await screen.findByText("The lanterns connect them.")).toBeInTheDocument();
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/ask`);
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "What connects these campaigns?" });
+  });
+
+  it("draws Hob's Chronicle proposal and accepts it into the Shared World", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, chronicleProposal),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob({ world: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Remember the night the lanterns failed.{Enter}");
+
+    expect(await screen.findByText("The roads remember")).toBeInTheDocument();
+    expect(screen.getByText("Chronicle")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Add to Chronicle" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/worlds/${worldId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("In the Shared World Chronicle")).toBeInTheDocument();
   });
 });

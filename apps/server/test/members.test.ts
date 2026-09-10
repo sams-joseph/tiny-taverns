@@ -83,6 +83,7 @@ const makeFixture = Effect.gen(function* () {
   // player membership at all.
   const playing = yield* aPlayerAt(campaign.id, "Ilse");
   const seated = yield* aPlayerAt(campaign.id, "Marta");
+  const creator = yield* asDm(dm, campaign.id);
 
   // Ilse writes her own character down and explicitly seats it — the shipped
   // path, and what the fourth block below needs: a member with a live seat
@@ -94,9 +95,7 @@ const makeFixture = Effect.gen(function* () {
 
   // Outstanding: minted, never redeemed. It is what *"invited, hasn't opened
   // it"* is, and it is on `campaign_invite` rather than anywhere near this list.
-  const outstanding = yield* as(dm)(
-    invites.create(campaign.groupId, { label: "Pell", campaignId: campaign.id }),
-  );
+  const outstanding = yield* invites.createForCampaign(creator, { label: "Pell" });
 
   return {
     dm,
@@ -228,13 +227,14 @@ describe("what the list leaves out", () => {
         const campaign = yield* as(fixture.dm)(createCampaign({ name: "A table to leave" }));
         const guest = yield* aPlayerAt(campaign.id, "Pim");
 
-        const before = yield* Effect.flatMap(asDm(fixture.dm, campaign.id), (dm) =>
-          Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
+        const creator = yield* asDm(fixture.dm, campaign.id);
+        const before = yield* Effect.flatMap(Memberships, (memberships) =>
+          memberships.list(creator),
         );
-        const issued = yield* as(fixture.dm)(invites.list(campaign.groupId));
-        yield* as(fixture.dm)(invites.revoke(campaign.groupId, issued[0]!.id));
-        const after = yield* Effect.flatMap(asDm(fixture.dm, campaign.id), (dm) =>
-          Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
+        const issued = yield* invites.listForCampaign(creator);
+        yield* invites.revokeForCampaign(creator, issued[0]!.id);
+        const after = yield* Effect.flatMap(Memberships, (memberships) =>
+          memberships.list(creator),
         );
 
         return {
@@ -242,7 +242,7 @@ describe("what the list leaves out", () => {
           after: after.map((member) => member.name),
           guest: guest.accountId,
           // The invitation is still there and still says what happened.
-          status: (yield* as(fixture.dm)(invites.list(campaign.groupId)))[0]!.status,
+          status: (yield* invites.listForCampaign(creator))[0]!.status,
         };
       }).pipe(Effect.orDie),
     );
@@ -278,9 +278,7 @@ describe("the seat vocabulary, derived", () => {
         const seats = yield* as(fixture.dm)(
           Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
         );
-        const invites = yield* as(fixture.dm)(
-          Effect.flatMap(Invites, (i) => i.list(fixture.campaign.groupId)),
-        );
+        const invites = yield* Effect.flatMap(Invites, (i) => i.listForCampaign(dm));
 
         const owned = new Set(seats.map((row) => row.seat.accountId));
         const players = members.filter((member) => member.relation === "player");

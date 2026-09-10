@@ -176,21 +176,15 @@ function HostedSessionCampaigns() {
     setBusy(true);
     setError(undefined);
     try {
-      // A second, independent token fetch rather than reusing the one above:
-      // the previous call may have been minutes ago.
+      // Read immediately before the one write. The previous call may have
+      // been minutes ago, and short-lived session tokens must not be cached.
       const token = await fetchToken();
-      // A campaign lives in a group now, so the panel founds one to hold it —
-      // the two acts a fresh account takes on the way in.
-      const group = await runApi(
-        (client) => client.groups.create({ payload: { name: `${name} group` } }),
-        token,
-      );
-      // A fresh token for the second write too — the panel's whole point is
-      // that a credential is fetched immediately before each call.
+      // The same campaign-first path as the product home. Its backing context
+      // is private persistence plumbing; creating an explicit Shared World is
+      // a separate user decision.
       const created = await runApi(
-        (client) =>
-          client.groups.createCampaign({ params: { groupId: group.id }, payload: { name } }),
-        await fetchToken(),
+        (client) => client.campaigns.create({ payload: { name } }),
+        token,
       );
       setName("");
       setCampaigns((listed) => (listed === undefined ? [created] : [...listed, created]));

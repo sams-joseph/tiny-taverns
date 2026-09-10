@@ -287,6 +287,7 @@ export const partySeatAnswer = (row: typeof brannoc, at: string = campaignId): A
 const membership = (of: unknown, joinedAt: string, relation = "player") => ({
   campaign: of,
   relation,
+  sharedWorld: null,
   joinedAt,
 });
 

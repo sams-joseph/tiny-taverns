@@ -3,24 +3,24 @@ import {
   type CampaignId,
   Conflict,
   CurrentActor,
-  Group,
-  GroupCampaignCard,
-  type GroupCampaignRelation,
-  type GroupCreate,
-  type GroupId,
-  GroupMember,
-  GroupMembership,
-  type GroupUpdate,
+  SharedWorld,
+  SharedWorldCampaignCard,
+  type SharedWorldCampaignRelation,
+  type SharedWorldCreate,
+  type SharedWorldId,
+  SharedWorldMember,
+  SharedWorldMembership,
+  type SharedWorldUpdate,
   NotFound,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
-import { revokeAllInGroupFor } from "./Memberships.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { liveMemberAccountIds } from "./Memberships.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
 import {
   ensureGroupReadable,
-  ensureGroupWritable,
   groupReadable,
   groupWritable,
   memberOfCampaign,
@@ -30,18 +30,10 @@ import {
  * `play_group` and `group_member` — the group and who is in it.
  *
  * This module and `repo/visibility.ts` are the only two in `src` that may name
- * `group_member`, the same rule `campaign_member` lives under and for the same
+ * `group_member`, the same rule campaign participation lives under and for the same
  * reason: group membership is the thing that decides what an account is
  * eligible to reach, and a third writer is where the next leak lives.
  * `membership.test.ts` enforces it.
- *
- * ### Governance, structurally
- *
- * The owner manages membership and invitations (the captain's decision of
- * 2026-09-01) — so every write here except `create` composes `groupWritable`,
- * whose authority half is `play_group.owner_account_id`. There is no admin
- * role, no role column, and no way to delegate; when delegation is wanted it
- * must arrive as its own deliberate act.
  *
  * ### Membership writers
  *
@@ -49,23 +41,46 @@ import {
  *   transaction; `play_group_owner_is_member` refuses a group without it.
  * - `admitToGroup` — everybody else, called by `Invites.redeem` and reinstating
  *   a revoked row so an invited-back member is a member again.
- * - `removeFromGroup` — the one remover, used by member removal and by
- *   revoking a spent invitation. It revokes campaign participations in the
- *   same transaction (the deferred keys demand it) and **refuses** when the
- *   account created a campaign in the group: their campaigns pin their
- *   membership — `campaign_creator_in_group` would refuse at COMMIT anyway,
- *   and a typed `Conflict` naming the reason beats a defect.
+ * There is no world-level remover: campaign creators govern participation at
+ * their own tables, and eligibility remains while any Shared World context may
+ * still refer to the account.
  */
 
 /** The owner's membership, in `create`'s transaction. */
 const addOwnerMember = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
     sql`insert into group_member (group_id, account_id) values (${groupId}, ${accountId})`,
   );
+
+/**
+ * Creates the group row and its structurally required owner membership inside
+ * the caller's transaction.
+ *
+ * Exported for `Campaigns.createStandalone`: the campaign-first façade still
+ * uses a private one-campaign group until Shared Worlds replace the group
+ * schema, but the group membership table keeps one writer module throughout
+ * that transition.
+ */
+export const foundGroup = (
+  sql: SqlClient.SqlClient,
+  name: string,
+  ownerAccountId: AccountId,
+  isSharedWorld = false,
+): Effect.Effect<SharedWorld, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const rows = yield* sql<GroupRow>`
+      insert into play_group ${sql.insert(
+        defined({ owner_account_id: ownerAccountId, name, is_shared_world: isSharedWorld }),
+      )}
+      returning *
+    `;
+    yield* addOwnerMember(sql, rows[0]!.id, ownerAccountId);
+    return toGroup(rows[0]!);
+  });
 
 /**
  * Puts an account in a group. Reinstates a revoked membership rather than
@@ -74,7 +89,7 @@ const addOwnerMember = (
  */
 export const admitToGroup = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
@@ -86,62 +101,19 @@ export const admitToGroup = (
     `,
   );
 
-/**
- * Ends a membership: campaign participations first, then the group row, one
- * transaction (the caller's — this runs inside `sql.withTransaction`).
- *
- * Refuses the group owner and any campaign creator with a `Conflict`: the
- * schema pins both (`play_group_owner_is_member`, `campaign_creator_in_group`),
- * so the refusal here is the typed spelling of what COMMIT would refuse
- * anyway. Answers how many memberships moved, so a caller can tell "removed"
- * from "was not a member".
- */
-export const removeFromGroup = (
-  sql: SqlClient.SqlClient,
-  groupId: GroupId,
-  accountId: AccountId,
-): Effect.Effect<number, SqlError.SqlError | Conflict> =>
-  Effect.gen(function* () {
-    const pinned = yield* sql<{ readonly owner: boolean; readonly creator: boolean }>`
-      select
-        exists (select 1 from play_group
-                where play_group.id = ${groupId}
-                  and play_group.owner_account_id = ${accountId}) as owner,
-        exists (select 1 from campaign
-                where campaign.group_id = ${groupId}
-                  and campaign.creator_account_id = ${accountId}) as creator
-    `;
-    if (pinned[0]?.owner === true) {
-      return yield* new Conflict({ message: "a group cannot lose its owner" });
-    }
-    if (pinned[0]?.creator === true) {
-      return yield* new Conflict({
-        message: "they created a campaign in this group, which keeps them a member",
-      });
-    }
-    yield* revokeAllInGroupFor(sql, groupId, accountId);
-    const rows = yield* sql<{ readonly group_id: GroupId }>`
-      update group_member set revoked_at = now()
-      where group_member.group_id = ${groupId}
-        and group_member.account_id = ${accountId}
-        and group_member.revoked_at is null
-      returning group_member.group_id
-    `;
-    return rows.length;
-  });
-
 interface GroupRow {
-  readonly id: GroupId;
+  readonly id: SharedWorldId;
   readonly owner_account_id: AccountId;
   readonly name: string;
+  readonly is_shared_world: boolean;
   readonly archived_at: Date | null;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
 
 /** One mapper per table — imported wherever a second read needs it. */
-export const toGroup = (row: GroupRow): Group =>
-  new Group({
+export const toGroup = (row: GroupRow): SharedWorld =>
+  new SharedWorld({
     id: row.id,
     name: row.name,
     ownerAccountId: row.owner_account_id,
@@ -163,11 +135,11 @@ interface GroupMemberRow {
 
 interface CampaignCardRow {
   readonly id: CampaignId;
-  readonly group_id: GroupId;
+  readonly group_id: SharedWorldId;
   readonly creator_account_id: AccountId;
   readonly creator_name: string;
   readonly name: string;
-  readonly relation: GroupCampaignRelation;
+  readonly relation: SharedWorldCampaignRelation;
   readonly archived_at: Date | null;
   readonly created_at: Date;
 }
@@ -176,45 +148,61 @@ export class Groups extends Context.Service<
   Groups,
   {
     /** Every group this account is a live member of. */
-    readonly mine: Effect.Effect<ReadonlyArray<GroupMembership>, never, CurrentActor>;
-    readonly findById: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
+    readonly mine: Effect.Effect<ReadonlyArray<SharedWorldMembership>, never, CurrentActor>;
+    /** Archived explicit worlds owned by this account, for restoration. */
+    readonly archived: Effect.Effect<ReadonlyArray<SharedWorld>, never, CurrentActor>;
+    readonly findById: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /** Anybody may found a group; they become its owner and first member. */
-    readonly create: (payload: GroupCreate) => Effect.Effect<Group, never, CurrentActor>;
+    readonly create: (
+      payload: SharedWorldCreate,
+    ) => Effect.Effect<SharedWorld, never, CurrentActor>;
+    /** Turns a standalone campaign's hidden context into an explicit Shared World. */
+    readonly promote: (
+      creator: CampaignCreatorActor,
+      payload: SharedWorldCreate,
+    ) => Effect.Effect<SharedWorld, NotFound>;
+    /** Moves a standalone campaign into an existing Shared World owned by its creator. */
+    readonly connect: (
+      creator: CampaignCreatorActor,
+      worldId: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound>;
+    /** Moves a connected campaign directly into another owned Shared World. */
+    readonly move: (
+      creator: CampaignCreatorActor,
+      worldId: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound>;
     readonly update: (
-      id: GroupId,
-      patch: GroupUpdate,
-    ) => Effect.Effect<Group, NotFound, CurrentActor>;
-    readonly archive: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
-    readonly restore: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
+      id: SharedWorldId,
+      patch: SharedWorldUpdate,
+    ) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
+    readonly archive: (
+      id: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound | Conflict, CurrentActor>;
+    readonly restore: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /**
      * The group's roster — every live member's read, unlike a campaign's,
      * because the group is the social container and its roster is what it is.
      */
     readonly members: (
-      id: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupMember>, NotFound, CurrentActor>;
-    /** The owner ends somebody's membership. See `removeFromGroup`. */
-    readonly removeMember: (
-      id: GroupId,
-      accountId: AccountId,
-    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
+      id: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldMember>, NotFound, CurrentActor>;
     /**
      * The directory: every campaign in the group, as a narrow card, to every
      * live member — with this reader's own relation to each. Content still
-     * goes through `campaignReadable`; see `GroupCampaignCard`.
+     * goes through `campaignReadable`; see `SharedWorldCampaignCard`.
      */
     readonly campaigns: (
-      id: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupCampaignCard>, NotFound, CurrentActor>;
+      id: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldCampaignCard>, NotFound, CurrentActor>;
   }
 >()("Groups") {
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const one = (rows: ReadonlyArray<GroupRow>, id: GroupId) =>
+      const one = (rows: ReadonlyArray<GroupRow>, id: SharedWorldId) =>
         rows.length === 0
-          ? Effect.fail(new NotFound({ resource: "group", id }))
+          ? Effect.fail(new NotFound({ resource: "shared-world", id }))
           : Effect.succeed(toGroup(rows[0]!));
 
       return {
@@ -228,17 +216,34 @@ export class Groups extends Context.Service<
                 on group_member.group_id = play_group.id
                and group_member.account_id = ${actor.accountId}
                and group_member.revoked_at is null
-              where ${groupReadable(sql, actor)} and play_group.archived_at is null
+              where ${groupReadable(sql, actor)}
+                and play_group.archived_at is null
+                and play_group.is_shared_world
               order by play_group.created_at desc
             `;
             return rows.map(
               (row) =>
-                new GroupMembership({
-                  group: toGroup(row),
+                new SharedWorldMembership({
+                  sharedWorld: toGroup(row),
                   isOwner: row.owner_account_id === actor.accountId,
                   joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                 }),
             );
+          }),
+        ),
+
+        archived: dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            const rows = yield* sql<GroupRow>`
+              select * from play_group
+              where play_group.owner_account_id = ${actor.accountId}
+                and ${groupReadable(sql, actor)}
+                and play_group.is_shared_world
+                and play_group.archived_at is not null
+              order by play_group.archived_at desc, play_group.created_at desc
+            `;
+            return rows.map(toGroup);
           }),
         ),
 
@@ -259,14 +264,133 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const rows = yield* sql<GroupRow>`
-                  insert into play_group ${sql.insert(
-                    defined({ owner_account_id: actor.accountId, name: payload.name }),
-                  )}
-                  returning *
+                return yield* foundGroup(sql, payload.name, actor.accountId, true);
+              }),
+            ),
+          ),
+
+        promote: (creator, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<GroupRow>`
+                update play_group
+                set name = ${payload.name}, is_shared_world = true, updated_at = now()
+                where play_group.id = ${creator.group}
+                  and play_group.owner_account_id = ${creator.actor.accountId}
+                  and play_group.archived_at is null
+                returning *
+              `;
+              return yield* one(rows, creator.group);
+            }),
+          ),
+
+        connect: (creator, worldId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const destinations = yield* sql<GroupRow>`
+                  select destination.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  cross join play_group as destination
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.owner_account_id = ${creator.actor.accountId}
+                    and not source.is_shared_world
+                    and source.archived_at is null
+                    and destination.id = ${worldId}
+                    and destination.owner_account_id = ${creator.actor.accountId}
+                    and destination.is_shared_world
+                    and destination.archived_at is null
+                  for update of campaign, source, destination
                 `;
-                yield* addOwnerMember(sql, rows[0]!.id, actor.accountId);
-                return toGroup(rows[0]!);
+                if (destinations.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: worldId });
+                }
+
+                // Participation is the set that follows the campaign. World
+                // eligibility remains plumbing, so every live participant is
+                // admitted (or restored) before the deferred keys inspect the
+                // moved rows at commit.
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, worldId, accountId),
+                  { discard: true },
+                );
+
+                const moved = yield* sql<{ readonly id: CampaignId }>`
+                  update campaign
+                  set group_id = ${worldId}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                  returning campaign.id
+                `;
+                if (moved.length === 0) {
+                  return yield* new NotFound({ resource: "campaign", id: creator.campaign });
+                }
+
+                // Automatic contexts contain one campaign by construction.
+                // Once it has moved, the context and its eligibility rows are
+                // no longer product state.
+                yield* sql`
+                  delete from play_group
+                  where play_group.id = ${creator.group}
+                    and not play_group.is_shared_world
+                    and not exists (
+                      select 1 from campaign where campaign.group_id = play_group.id
+                    )
+                `;
+
+                return toGroup(destinations[0]!);
+              }),
+            ),
+          ),
+
+        move: (creator, worldId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const destinations = yield* sql<GroupRow>`
+                  select destination.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  cross join play_group as destination
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.is_shared_world
+                    and destination.id = ${worldId}
+                    and destination.id <> source.id
+                    and destination.owner_account_id = ${creator.actor.accountId}
+                    and destination.is_shared_world
+                    and destination.archived_at is null
+                  for update of campaign, source, destination
+                `;
+                if (destinations.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: worldId });
+                }
+
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, worldId, accountId),
+                  { discard: true },
+                );
+
+                const moved = yield* sql<{ readonly id: CampaignId }>`
+                  update campaign
+                  set group_id = ${worldId}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                  returning campaign.id
+                `;
+                if (moved.length === 0) {
+                  return yield* new NotFound({ resource: "campaign", id: creator.campaign });
+                }
+
+                return toGroup(destinations[0]!);
               }),
             ),
           ),
@@ -287,15 +411,37 @@ export class Groups extends Context.Service<
 
         archive: (id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<GroupRow>`
-                update play_group set archived_at = now(), updated_at = now()
-                where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning *
-              `;
-              return yield* one(rows, id);
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const worlds = yield* sql<GroupRow>`
+                  select * from play_group
+                  where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
+                  for update
+                `;
+                if (worlds.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id });
+                }
+
+                const campaigns = yield* sql<{ readonly exists: boolean }>`
+                  select exists (
+                    select 1 from campaign where campaign.group_id = ${id}
+                  ) as exists
+                `;
+                if (campaigns[0]!.exists) {
+                  return yield* new Conflict({
+                    message: "move every campaign out of this Shared World before archiving it",
+                  });
+                }
+
+                const rows = yield* sql<GroupRow>`
+                  update play_group set archived_at = now(), updated_at = now()
+                  where play_group.id = ${id}
+                  returning *
+                `;
+                return toGroup(rows[0]!);
+              }),
+            ),
           ),
 
         restore: (id) =>
@@ -332,7 +478,7 @@ export class Groups extends Context.Service<
               `;
               return rows.map(
                 (row) =>
-                  new GroupMember({
+                  new SharedWorldMember({
                     accountId: row.account_id,
                     name: row.name,
                     isOwner: row.is_owner,
@@ -340,20 +486,6 @@ export class Groups extends Context.Service<
                   }),
               );
             }),
-          ),
-
-        removeMember: (id, accountId) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                yield* ensureGroupWritable(sql, id, actor);
-                const removed = yield* removeFromGroup(sql, id, accountId);
-                if (removed === 0) {
-                  return yield* new NotFound({ resource: "member", id: accountId });
-                }
-              }),
-            ),
           ),
 
         campaigns: (id) =>
@@ -381,9 +513,9 @@ export class Groups extends Context.Service<
               `;
               return rows.map(
                 (row) =>
-                  new GroupCampaignCard({
+                  new SharedWorldCampaignCard({
                     id: row.id,
-                    groupId: row.group_id,
+                    worldId: row.group_id,
                     creatorAccountId: row.creator_account_id,
                     creatorName: row.creator_name,
                     name: row.name,

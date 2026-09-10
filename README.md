@@ -356,7 +356,9 @@ Vitest runs in every workspace project. Each has at least one real, passing test
 schema is Postgres dialect and a stand-in would not exercise it — and each test file creates
 its own throwaway database. If the database is not running they fail with a message saying
 so, rather than skipping: a silently-skipped database test is a green build that proves
-nothing.
+nothing. The server suite runs at most eight files concurrently because each fresh database
+applies the complete DDL ledger; leaving worker count proportional to host cores can exhaust
+Postgres's shared lock table even while its connection limit has ample room.
 
 No Playwright E2E is included: for boilerplate the value did not justify the extra CI
 weight. Add it later under `apps/web` if an end-to-end smoke test becomes useful.

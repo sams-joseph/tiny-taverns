@@ -93,6 +93,175 @@ describe("authorization", () => {
 });
 
 describe("campaign, session, character and note CRUD", () => {
+  it("creates a campaign directly with its private group in one request", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const campaign = yield* client.campaigns.create({
+          payload: { name: "The Direct Road", playerCount: 3 },
+        });
+        const worldsBefore = yield* client.sharedWorlds.list();
+        const hiddenSurfaces = yield* Effect.all({
+          group: Effect.result(
+            client.sharedWorlds.findById({ params: { worldId: campaign.contextId } }),
+          ),
+          campaigns: Effect.result(
+            client.sharedWorlds.campaigns({ params: { worldId: campaign.contextId } }),
+          ),
+          members: Effect.result(
+            client.sharedWorldMembers.list({ params: { worldId: campaign.contextId } }),
+          ),
+          history: Effect.result(
+            client.sharedWorldHistory.list({ params: { worldId: campaign.contextId } }),
+          ),
+          library: Effect.result(
+            client.sharedWorldLibrary.list({ params: { worldId: campaign.contextId } }),
+          ),
+          hob: Effect.result(
+            client.sharedWorldHob.threads({ params: { worldId: campaign.contextId } }),
+          ),
+        });
+        const world = yield* client.campaigns.promoteSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { name: "The Roads Between" },
+        });
+        const worldsAfter = yield* client.sharedWorlds.list();
+        const memberships = yield* client.me.campaigns();
+        return { campaign, worldsBefore, hiddenSurfaces, world, worldsAfter, memberships };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.campaign.name).toBe("The Direct Road");
+    expect(seen.campaign.playerCount).toBe(3);
+    expect(seen.worldsBefore).toEqual([]);
+    expect(Object.values(seen.hiddenSurfaces).map((result) => result._tag)).toEqual([
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+      "Failure",
+    ]);
+    expect(seen.world).toMatchObject({
+      id: seen.campaign.contextId,
+      name: "The Roads Between",
+    });
+    expect(seen.worldsAfter.map((row) => row.sharedWorld.id)).toEqual([seen.campaign.contextId]);
+    expect(seen.memberships.find((row) => row.campaign.id === seen.campaign.id)?.relation).toBe(
+      "creator",
+    );
+  });
+
+  it("connects a standalone campaign to an existing owned Shared World", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const world = yield* client.sharedWorlds.create({
+          payload: { name: "The Atlas of Roads" },
+        });
+        const campaign = yield* client.campaigns.create({
+          payload: { name: "The Unmapped Road" },
+        });
+        const connected = yield* client.campaigns.connectSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { worldId: world.id },
+        });
+        const destination = yield* client.sharedWorlds.create({
+          payload: { name: "The New Atlas of Roads" },
+        });
+        const moved = yield* client.campaigns.moveSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { worldId: destination.id },
+        });
+        const disconnected = yield* client.campaigns.disconnectSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: {},
+        });
+        const campaigns = yield* client.me.campaigns();
+        const directory = yield* client.sharedWorlds.campaigns({ params: { worldId: world.id } });
+        return {
+          world,
+          destination,
+          campaign,
+          connected,
+          moved,
+          disconnected,
+          campaigns,
+          directory,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.connected.id).toBe(seen.world.id);
+    expect(seen.moved.id).toBe(seen.destination.id);
+    expect(seen.disconnected.contextId).not.toBe(seen.destination.id);
+    expect(
+      seen.campaigns.find((membership) => membership.campaign.id === seen.campaign.id)?.sharedWorld,
+    ).toBeNull();
+    expect(seen.directory.map((campaign) => campaign.id)).not.toContain(seen.campaign.id);
+  }, 60_000);
+
+  it("renames, safely retires, discovers and restores an empty Shared World", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const world = yield* client.sharedWorlds.create({
+          payload: { name: "The World Ready for a Shelf" },
+        });
+        const renamed = yield* client.sharedWorlds.update({
+          params: { worldId: world.id },
+          payload: { name: "The Quiet Atlas" },
+        });
+        const archived = yield* client.sharedWorlds.archive({
+          params: { worldId: world.id },
+        });
+        const activeWhileArchived = yield* client.sharedWorlds.list();
+        const shelf = yield* client.sharedWorlds.archived();
+        const restored = yield* client.sharedWorlds.restore({
+          params: { worldId: world.id },
+          payload: {},
+        });
+        const activeAfterRestore = yield* client.sharedWorlds.list();
+        const shelfAfterRestore = yield* client.sharedWorlds.archived();
+
+        const occupied = yield* client.sharedWorlds.create({
+          payload: { name: "The Atlas with a Table" },
+        });
+        yield* client.sharedWorlds.createCampaign({
+          params: { worldId: occupied.id },
+          payload: { name: "A Table Still Here" },
+        });
+        const occupiedArchive = yield* client.sharedWorlds
+          .archive({ params: { worldId: occupied.id } })
+          .pipe(Effect.result);
+
+        return {
+          world,
+          renamed,
+          archived,
+          activeWhileArchived,
+          shelf,
+          restored,
+          activeAfterRestore,
+          shelfAfterRestore,
+          occupiedArchive,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.renamed.name).toBe("The Quiet Atlas");
+    expect(seen.archived.archivedAt).not.toBeNull();
+    expect(seen.activeWhileArchived.map((row) => row.sharedWorld.id)).not.toContain(seen.world.id);
+    expect(seen.shelf.map((world) => world.id)).toContain(seen.world.id);
+    expect(seen.restored.archivedAt).toBeNull();
+    expect(seen.activeAfterRestore.map((row) => row.sharedWorld.id)).toContain(seen.world.id);
+    expect(seen.shelfAfterRestore.map((world) => world.id)).not.toContain(seen.world.id);
+    expect(seen.occupiedArchive._tag).toBe("Failure");
+    if (seen.occupiedArchive._tag === "Failure") {
+      expect(seen.occupiedArchive.failure._tag).toBe("Conflict");
+    }
+  }, 60_000);
+
   it("round-trips a campaign and everything hanging off it", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
@@ -309,9 +478,9 @@ describe("campaign, session, character and note CRUD", () => {
         // A real player, through a real invitation — the only way this product
         // mints one, so the refusal is about a person who can exist.
         const accounts = yield* Accounts;
-        const issued = yield* dm.invites.create({
-          params: { groupId: campaign.groupId },
-          payload: { label: "Pim", campaignId },
+        const issued = yield* dm.campaignInvites.create({
+          params: { campaignId },
+          payload: { label: "Pim" },
         });
         const player = yield* clientFor((yield* accounts.issue("Pim")).token);
         yield* player.join.redeem({ payload: { token: issued.token } });
@@ -864,9 +1033,9 @@ describe("inviting a player, over the wire", () => {
         });
         const campaignId = campaign.id;
 
-        const issued = yield* dm.invites.create({
-          params: { groupId: campaign.groupId },
-          payload: { label: "Ilse", campaignId },
+        const issued = yield* dm.campaignInvites.create({
+          params: { campaignId },
+          payload: { label: "Ilse" },
         });
         const preview = yield* Effect.flatMap(anonymous, (client) =>
           client.invitePreview.read({ payload: { token: issued.token } }),
@@ -882,18 +1051,18 @@ describe("inviting a player, over the wire", () => {
         const redeemed = yield* player.join.redeem({ payload: { token: issued.token } });
         const after = yield* player.me.campaigns();
 
-        const listed = yield* dm.invites.list({ params: { groupId: campaign.groupId } });
+        const listed = yield* dm.campaignInvites.list({ params: { campaignId } });
         // The player may read the campaign's shared half and may not write it.
         const refusedWrite = yield* Effect.result(
           player.notes.create({ params: { campaignId }, payload: { title: "mine now" } }),
         );
         // …and the invitation list is a DM's own resource.
         const refusedList = yield* Effect.result(
-          player.invites.list({ params: { groupId: campaign.groupId } }),
+          player.campaignInvites.list({ params: { campaignId } }),
         );
 
-        const revoked = yield* dm.invites.revoke({
-          params: { groupId: campaign.groupId, inviteId: issued.invite.id },
+        const revoked = yield* dm.campaignInvites.revoke({
+          params: { campaignId, inviteId: issued.invite.id },
           payload: {},
         });
         const afterRevoke = yield* player.me.campaigns();
@@ -920,13 +1089,17 @@ describe("inviting a player, over the wire", () => {
     expect(seen.issued.token).not.toBe("");
 
     // Previewed with no `Authorization` header at all.
-    expect(seen.preview.campaignName).toBe("The Ferry at Dusk");
-    expect(seen.preview.ownerName).toBe("Jo");
+    expect(seen.preview.kind).toBe("campaign");
+    expect(seen.preview.kind === "campaign" && seen.preview.campaignName).toBe("The Ferry at Dusk");
+    expect(seen.preview.kind === "campaign" && seen.preview.creatorName).toBe("Jo");
 
     // Joined. The account went from no tables to exactly this one, as a player.
     expect(seen.before).toEqual([]);
-    expect(seen.redeemed.campaignName).toBe("The Ferry at Dusk");
-    expect(seen.redeemed.shared).toBe(true);
+    expect(seen.redeemed.kind).toBe("campaign");
+    expect(seen.redeemed.kind === "campaign" && seen.redeemed.campaignName).toBe(
+      "The Ferry at Dusk",
+    );
+    expect(seen.redeemed.kind === "campaign" && seen.redeemed.shared).toBe(true);
     expect(seen.after.map((row) => [row.campaign.name, row.relation])).toEqual([
       ["The Ferry at Dusk", "player"],
     ]);

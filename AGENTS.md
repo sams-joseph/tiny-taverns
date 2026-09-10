@@ -13,6 +13,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   checks anything and CI has to name it as its own step. It did not, and six files had drifted
   by the time anyone looked. `.prettierignore` holds the two read-only trees out
   (`packages/design-system`, `.repos/`), so a formatting pass never reaches either.
+- **The server Vitest suite is capped at eight workers.** Every test file owns a database and
+  applies the full migration ledger; core-count-derived parallelism started 30 simultaneous DDL
+  transactions and exhausted PostgreSQL's shared lock table (`53200`, `max_locks_per_transaction`)
+  while connections were still plentiful. Keep the cap in `apps/server/vitest.config.ts` instead
+  of requiring a specially tuned developer or CI database.
 - **Vite/Vitest versions must stay aligned.** Vitest 2 pulls Vite 5 while `@vitejs/plugin-react`
   uses Vite 6; mixing them produces duplicate-`vite` type errors. The workspace pins Vitest 3 +
   Vite 6 together across `apps/web` and `packages/ui`. Keep them in lockstep when bumping.
@@ -33,6 +38,138 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   reference. Start with `.repos/effect/MIGRATION.md` and `.repos/effect/migration/*.md`, then
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
+
+## Shared World transition, 2026-09-09: campaigns first, invitations follow them
+
+This transition supersedes the invitation-governance prose below where it
+disagrees. Groups still back Shared Worlds and their context internally, but
+ordinary campaign work must not require navigating or owning that container.
+
+There were no deployed users at this cutover, so it is deliberately not a
+compatibility layer. Public contracts use `SharedWorld*`, `sharedWorld`,
+`worldId`, `worldSeq`, and `lastWorldSeq`; a campaign calls its hidden backing
+container `contextId`. The database and repositories may retain `group_*` and
+`Groups` as persistence vocabulary. Existing development databases must be
+reset after pulling the rewritten baseline migrations.
+
+- Campaign invitation management is `/campaigns/:campaignId/invites` and takes
+  `CampaignCreatorActor`. A campaign creator may list, mint and revoke their
+  table's invitations even when another account owns the underlying group.
+- Redemption still ensures a live `group_member` before `campaign_member`
+  because the deferred eligibility foreign key requires it. That is persistence
+  plumbing, not a second user-facing join decision.
+- `group_invite.granted_campaign_membership` records whether redemption
+  actually inserted or restored the seat. Campaign revocation retires only
+  that seat and its party joins; it preserves group membership, other campaign
+  memberships, and a seat the invitee already held before accepting the link.
+- The Party screen and invitation dialog read one campaign-local list and use
+  `reads.campaignInvites(campaignId)`. There is no group invitation management
+  surface.
+- `play_group.is_shared_world` distinguishes explicit Shared Worlds from the
+  automatic context behind a standalone campaign. `Groups.mine` lists only the
+  explicit kind; `POST /campaigns/:id/shared-world` requires both the campaign
+  creator proof and ownership of its context, then promotes it in place. The
+  campaign home offers that opt-in and links explicit worlds at `/worlds/:id`.
+  `/worlds` and `/worlds/:id` are the only URLs the app recognizes; `/groups`
+  and `/groups/:id` do not route or redirect.
+- `groupReadable` / `groupWritable` include `is_shared_world`; every Shared
+  World surface therefore answers `NotFound` for a standalone campaign's
+  backing context until promotion. Campaign reach continues through
+  `groupInScope`, and Group Hob's conversation predicate uses the explicit
+  world gate too, so this boundary hides no campaign and has no thread bypass.
+- The campaign-first create form offers `Standalone campaign` by default and,
+  when the account belongs to explicit worlds, those Shared Worlds as optional
+  targets through the existing `groups.createCampaign` authorization seam.
+  The campaign home also lists every Shared World independently of campaign
+  participation, so a world-only member is never left without a route into it.
+- Every unqualified campaign create—including the live API call in the Server
+  gallery—uses `campaigns.create` and mints only the hidden backing context.
+  `sharedWorlds.createCampaign` is reserved for a world the user explicitly
+  selected or the campaign composer mounted inside a Shared World.
+- A creator may later connect their standalone campaign to an existing Shared
+  World they own with `POST /campaigns/:campaignId/shared-world/connect`. The
+  transaction restores destination eligibility for every live participant,
+  updates the campaign's context, cascades the denormalized context id through
+  campaign memberships, seats and invitations, then deletes the empty automatic
+  context. Chronicle campaign ids are provenance and never follow a context
+  move. Campaign ids and content do not move. The UI
+  offers only owned worlds and explains that participants join the world while
+  campaign content remains participation-gated. Connecting an already-connected
+  campaign or targeting another owner's world answers `NotFound`.
+- A campaign creator may make a connected campaign standalone with
+  `POST /campaigns/:campaignId/shared-world/disconnect`; Shared World ownership
+  is irrelevant because the campaign creator governs their table. The atomic
+  move creates a fresh hidden context, admits every live participant, and
+  cascades memberships, seats and invitations with the campaign. Existing
+  Shared World membership is not revoked, accepted Chronicle copies stay in
+  the former world with their campaign provenance, and campaign content and Hob
+  threads keep their ids. World-shared Library sources stop being usable while
+  already-minted instances stand. Disconnecting an already-standalone campaign
+  answers `NotFound`.
+- A connected campaign can move directly to another Shared World its creator
+  owns with `POST /campaigns/:campaignId/shared-world/move`. This is one atomic
+  move rather than a public disconnect/connect composition: live participants
+  are admitted to the destination before memberships, seats and invitations
+  cascade with the campaign. The source world retains its memberships and
+  Chronicle copies; destination Library shares become usable and source shares
+  stop being usable, while existing instances stand. The source need not be
+  owned by the campaign creator, so another owner's world cannot trap their
+  table. A standalone source, the current world, another owner's destination or
+  an archived destination answers `NotFound`.
+- Shared World retirement is reversible and owner-only. `DELETE /worlds/:worldId`
+  archives a world only when it contains no campaigns at all, including archived
+  campaigns; otherwise it answers `Conflict` and the owner must move or disconnect
+  those tables first. The archive transaction and campaign creation lock the same
+  world row, so a table cannot race onto a retiring world. Archiving changes only
+  the world row: memberships, Chronicle history, Hob threads and Library shares
+  remain. Active lists and every destination/share picker exclude archived worlds;
+  `GET /worlds/archived` is an owner-only restoration shelf, and restore puts the
+  same world back. The world screen exposes rename and archive only to its owner.
+- Campaign context changes use one `Change Shared World` dialog: another owned
+  world performs the direct move, while `Standalone campaign` disconnects it.
+  Standalone campaigns use the companion connect/create flow. Hob's prompts, tool
+  descriptions and public conflict messages consistently say `Shared World`; the
+  remaining `group_*` names are persistence and repository vocabulary only.
+- `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
+  hides a standalone campaign's backing group. Campaign chrome reads that same
+  membership atom it already needs for `relation`, so every campaign screen
+  links to its explicit Shared World—and Group Hob—without a `/groups` request.
+- A Shared World's member list is informational. It has no Invite or Remove
+  controls and needs no `/me` identity read: campaign invitations are the one
+  onboarding lifecycle, and they establish group eligibility as persistence
+  plumbing. The old `/groups/:groupId/invites` API group is gone; preview and
+  redemption remain token-scoped, invitation management is campaign-only, and
+  `/worlds/:worldId/members` exposes only `GET`—never a cross-campaign delete.
+- Every public Shared World HTTP surface is canonical under `/worlds`, and the
+  generated client groups are `sharedWorlds`, `sharedWorldMembers`,
+  `sharedWorldHistory`, `sharedWorldLibrary`, and `sharedWorldHob`. There is no
+  browser or API alias under `/groups`.
+- The NPC Library share picker reads `sharedWorlds.list` directly and offers
+  only rows where `isOwner` is true, matching `sharedWorldLibrary.share`'s
+  authority. It never derives worlds from campaign memberships: that would
+  leak standalone backing contexts, omit world-only owners, and offer actions
+  to campaign creators who do not own the Shared World.
+- The Shared World screen binds its Hob panel to `sharedWorldHob`, not campaign
+  Hob: it resumes the world's one thread, streams against `/worlds/:worldId/hob`,
+  renders the world toolkit's `sharedWorldHistory` proposal as a Chronicle card, and
+  refreshes `reads.sharedWorldHistory(worldId)` when a member keeps it. Global
+  screens still mount an unscoped, inert Hob panel.
+- Shared World Hob's provider tools are `searchSharedWorldHistory`,
+  `readSharedWorldSummary`, `listSharedWorldCampaigns`, and
+  `proposeSharedWorldEntry`; its conversation reach is `sharedWorld`. Old
+  `GroupHob`/`groupHistory` names are not accepted aliases.
+- The repository matches that boundary: `Invites` has only campaign-scoped
+  list/create/revoke plus token preview/redeem; `Groups.removeMember`,
+  `removeFromGroup`, and the cross-group participation revoker are gone.
+- The public invitation contract is `CampaignInvite` / `CampaignInviteId`, and
+  its `campaignId` is required in both the public contract and repository row.
+  `group_invite.campaign_id` is non-null and cascades with its campaign;
+  `group_invite` and `group_id` remain persistence names, not product governance
+  concepts.
+- Token preview and redemption are campaign-only results. They name the
+  campaign creator, require the campaign id/name, and carry an optional
+  `sharedWorld` reference only when the backing context is explicit. There is
+  no group-only or Shared-World-only invitation variant.
 
 ## The group architecture of 2026-09-01: what supersedes what
 
@@ -3633,7 +3770,7 @@ The five modules and what each owns:
 
 ```ts
 const invitesAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom((client) => client.invites.list({ params: { campaignId } })),
+  apiAtom((client) => client.campaignInvites.list({ params: { campaignId } })),
 );
 // in the component:
 const [resource, reload] = useApiAtom(invitesAtom(campaignId));

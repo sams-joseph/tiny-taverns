@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
@@ -25,6 +26,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Groups.layer,
     Encounters.layer,
     Invites.layer,

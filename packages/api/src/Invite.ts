@@ -1,15 +1,15 @@
 import { Schema } from "effect";
-import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
+import { CampaignId, CampaignInviteId } from "./Ids.js";
+import { CampaignSharedWorld } from "./Membership.js";
 
 /**
- * An invitation to join a group — and, optionally, one of its campaigns in the
- * same act.
+ * An invitation to join a campaign.
  *
  * **A link is an invitation to join, not a way in.** Following one requires
  * signing in or signing up; its whole effect is to grant a `group_member` row
- * (and, when the invitation names a campaign, a `campaign_member` row in the
- * same transaction) to the account that accepts it. It is explicitly *not* a
- * bearer credential that reaches group data on its own, not a guest account
+ * and a `campaign_member` row in the same transaction to the account that
+ * accepts it. It is explicitly *not* a
+ * bearer credential that reaches Shared World data on its own, not a guest account
  * with no identity, and not a second credential kind with an actor shape of
  * its own — that last one is "a second way to be reachable, which is exactly
  * where the next leak lives".
@@ -18,16 +18,14 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  * rows, indistinguishable from one admitted any other way. This needs **no new
  * predicate, no new base case and no change to `Authorization`**.
  *
- * **Group-first, structurally.** Campaign participation cannot exist for a
- * non-group member (`campaign_member` carries a foreign key into
- * `group_member`), so an invitation that admits to a campaign grants the group
- * membership first and the participation second, in one transaction. There is
- * no campaign-only invitation.
+ * **Campaign-first to the user, eligibility-first internally.** Campaign
+ * participation cannot exist without its backing membership (`campaign_member`
+ * carries a foreign key into `group_member`), so accepting a campaign link
+ * quietly ensures that prerequisite before granting the seat. The hidden row
+ * is persistence plumbing, not another decision the inviter or player makes.
  *
- * **Minting is the group owner's act** — the governance decision of
- * 2026-09-01: the owner manages membership and invitations. A campaign creator
- * who is not the owner adds *existing group members* to their campaign through
- * the campaign's own participation endpoint instead.
+ * It is minted by the campaign's creator, including a creator who does not own
+ * its underlying context.
  *
  * ### It is still a credential, so it has a lifetime
  *
@@ -37,9 +35,9 @@ import { CampaignId, GroupId, GroupInviteId } from "./Ids.js";
  *   same transaction that writes the membership.
  * - **Expiring, on a fixed server-set clock.** `expiresAt` is `createdAt` plus
  *   `INVITE_TTL_DAYS` and never client-supplied.
- * - **Revocable before acceptance — and after it.** Revoking a spent
- *   invitation revokes the group membership it granted (and every campaign
- *   participation and party join under it) in the same transaction.
+ * - **Revocable before acceptance — and after it.** Revocation removes only
+ *   the campaign seat this invitation actually granted. Shared World
+ *   eligibility and other campaign memberships remain.
  * - **Forwarded is granted.** Whoever holds the token and signs in gets the
  *   membership; `redeemedByName` makes the wrong person visible, and one press
  *   undoes them.
@@ -58,18 +56,13 @@ export const InviteStatus = Schema.Literals(["live", "redeemed", "revoked", "exp
 export type InviteStatus = typeof InviteStatus.Type;
 
 /**
- * One invitation, as the group owner sees it. **The token is not on this shape
- * and never will be** — the server stores only a digest.
+ * One invitation, as the campaign creator sees it. **The token is not on this
+ * shape and never will be** — the server stores only a digest.
  */
-export class GroupInvite extends Schema.Class<GroupInvite>("GroupInvite")({
-  id: GroupInviteId,
-  groupId: GroupId,
-  /**
-   * The campaign this invitation admits to as well, or `null` for the group
-   * alone. Named at mint time by the owner; the campaign must be in the group,
-   * which the schema enforces with a composite foreign key.
-   */
-  campaignId: Schema.NullOr(CampaignId),
+export class CampaignInvite extends Schema.Class<CampaignInvite>("CampaignInvite")({
+  id: CampaignInviteId,
+  /** The campaign this invitation admits to. */
+  campaignId: CampaignId,
   /** Who it is for, in the owner's words. */
   label: Schema.String,
   status: InviteStatus,
@@ -84,25 +77,20 @@ export class GroupInvite extends Schema.Class<GroupInvite>("GroupInvite")({
 /**
  * A freshly minted invitation and the one time its token exists in plaintext.
  *
- * Nested rather than a `token` field on `GroupInvite`, so the type itself says
+ * Nested rather than a `token` field on `CampaignInvite`, so the type itself says
  * which read carries the secret.
  */
 export class IssuedInvite extends Schema.Class<IssuedInvite>("IssuedInvite")({
-  invite: GroupInvite,
+  invite: CampaignInvite,
   /** 32 random bytes, base64url. Shown once; the server keeps only its digest. */
   token: Schema.String,
 }) {}
 
-/**
- * Minting one. There is no role field — an invitation admits a member, and a
- * member is a member. `campaignId` optionally names one of the group's own
- * campaigns to admit the redeemer to in the same transaction.
- */
-export const InviteCreate = Schema.Struct({
+/** Minting a seat at one campaign. The campaign comes from the URL. */
+export const CampaignInviteCreate = Schema.Struct({
   label: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
-  campaignId: Schema.optional(CampaignId),
 });
-export type InviteCreate = typeof InviteCreate.Type;
+export type CampaignInviteCreate = typeof CampaignInviteCreate.Type;
 
 /**
  * The token, in a payload rather than a path.
@@ -121,34 +109,44 @@ export type InviteToken = typeof InviteToken.Type;
  * A deliberate, minimal disclosure to whoever holds the capability — which is
  * the same trade the invitation itself is.
  */
-export class InvitePreview extends Schema.Class<InvitePreview>("InvitePreview")({
-  groupName: Schema.String,
-  /** The group owner's own name, so the page can say who is asking. */
-  ownerName: Schema.String,
-  /** The campaign this invitation also seats you at, when it names one. */
-  campaignName: Schema.NullOr(Schema.String),
+export class CampaignInvitePreview extends Schema.Class<CampaignInvitePreview>(
+  "CampaignInvitePreview",
+)({
+  kind: Schema.Literal("campaign"),
+  campaignName: Schema.String,
+  /** The campaign creator who minted the invitation. */
+  creatorName: Schema.String,
+  /** Null when the campaign has only its invisible standalone context. */
+  sharedWorldName: Schema.NullOr(Schema.String),
   expiresAt: Schema.DateTimeUtcFromString,
 }) {}
+
+export const InvitePreview = CampaignInvitePreview;
+export type InvitePreview = typeof InvitePreview.Type;
 
 /**
  * What redeeming answers with.
  *
- * Deliberately not the `Group` or the `Campaign`: the id and the names are
- * what the join page needs to say "you are in The Salt Company" and to link
- * onwards.
+ * Campaign-first and deliberately narrow: enough to explain the new seat and
+ * link onwards. The backing context is absent; an explicit Shared World is an
+ * optional named destination instead.
  */
-export class InviteRedeemed extends Schema.Class<InviteRedeemed>("InviteRedeemed")({
-  groupId: GroupId,
-  groupName: Schema.String,
-  /** The campaign this invitation seated you at, when it named one. */
-  campaignId: Schema.NullOr(CampaignId),
-  campaignName: Schema.NullOr(Schema.String),
+export class CampaignInviteRedeemed extends Schema.Class<CampaignInviteRedeemed>(
+  "CampaignInviteRedeemed",
+)({
+  kind: Schema.Literal("campaign"),
+  campaignId: CampaignId,
+  campaignName: Schema.String,
+  /** Null when the campaign has only its invisible standalone context. */
+  sharedWorld: Schema.NullOr(CampaignSharedWorld),
   /**
-   * Whether that campaign is shared with its participants yet. `false` also
-   * when the invitation named no campaign. A campaign starts `dm`, so the
-   * ordinary outcome of joining is a screen with nothing on it; saying so at
-   * the moment of joining is the difference between "the creator has not
-   * shared this table yet" and "this product is broken".
+   * Whether that campaign is shared with its participants yet. A campaign
+   * starts `dm`, so the ordinary outcome of joining is a screen with nothing
+   * on it; saying so at the moment of joining is the difference between "the
+   * creator has not shared this table yet" and "this product is broken".
    */
   shared: Schema.Boolean,
 }) {}
+
+export const InviteRedeemed = CampaignInviteRedeemed;
+export type InviteRedeemed = typeof InviteRedeemed.Type;

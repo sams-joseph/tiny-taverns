@@ -11,7 +11,6 @@ import type {
   Session,
   SessionId,
   PageCursor,
-  GroupId,
 } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
@@ -153,22 +152,12 @@ const runsAtom = Atom.family((night: Night) =>
   apiAtom((client) => client.runs.list({ params: night }), [reads.runs(night.sessionId)]),
 );
 
-/**
- * Two campaign reads that are not part of the view, and live here for the same
- * reason the eight above do: **one resource, one atom.**
- *
- * The invitations are read by the DM's invitation dialog *and* by the party
- * roster, which are commonly on screen together — the dialog opens over the
- * roster. Two atoms for one list would be two requests and, worse, two things a
- * mint would have to remember to refresh.
- */
-/**
- * The group's invitations — group-scoped since invitations moved to the group,
- * and keyed on the group so the campaign dialog and the group screen share one
- * list. A campaign surface filters to the rows that name its campaign.
- */
-export const invitesAtom = Atom.family((groupId: GroupId) =>
-  apiAtom((client) => client.invites.list({ params: { groupId } }), [reads.invites(groupId)]),
+/** The creator-governed invitation list for one campaign. */
+export const campaignInvitesAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.campaignInvites.list({ params: { campaignId } }),
+    [reads.campaignInvites(campaignId)],
+  ),
 );
 
 export const membersAtom = Atom.family((campaignId: CampaignId) =>

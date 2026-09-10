@@ -1,7 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { groupId } from "../campaign/campaign.fixtures";
 import {
   brannocSeat,
   campaignId,
@@ -159,7 +158,7 @@ describe("the creator's seat verbs", () => {
  * mentions: revoking a *spent* invitation revokes the membership it granted, in
  * the same transaction (`repo/Invites.ts`), so the roster loses a person while
  * the response carries only an invitation. That is why `InviteDialog` names
- * `reads.members` beside `reads.invites`, and it is what this pins.
+ * `reads.members` beside `reads.campaignInvites`, and it is what this pins.
  *
  * Minting is the mirror and pins the other half: it names the invitations
  * alone, so the members are *not* re-read. Both counts would have been the same
@@ -209,13 +208,13 @@ describe("what an invitation write refreshes", () => {
    * screen used to need and no longer passes.
    */
   it("shows a minted invitation on the roster underneath, from the one read", async () => {
-    server.routes.set(`GET /groups/${groupId}/invites`, { status: 200, body: [] });
+    server.routes.set(`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] });
     await renderParty();
     await screen.findByText("Ilse Vantar");
     await userEvent.click(screen.getByRole("button", { name: /Invite a player/ }));
     await screen.findByRole("button", { name: /Make a link/ });
 
-    server.routes.set(`GET /groups/${groupId}/invites`, {
+    server.routes.set(`GET /campaigns/${campaignId}/invites`, {
       status: 200,
       body: [liveInvite],
     });
@@ -243,7 +242,7 @@ describe("the invitations", () => {
 
     // `InviteDialog`, reused whole: its own copy, its own list, its own
     // withdrawn-before-taken precedence.
-    expect(await screen.findByText(/A link is an invitation to join, not a way in/)).toBeVisible();
+    expect(await screen.findByText(/gets a seat in this campaign/)).toBeVisible();
     expect(screen.getByRole("button", { name: /Make a link/ })).toBeInTheDocument();
     // The drawn reusable link is not a thing this product has.
     expect(screen.queryByText(/uses/i)).not.toBeInTheDocument();

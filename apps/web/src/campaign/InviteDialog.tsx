@@ -1,4 +1,4 @@
-import type { Campaign, GroupId, GroupInvite, InviteStatus } from "@taverns/api";
+import type { Campaign, CampaignInvite, InviteStatus } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -17,7 +17,7 @@ import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
-import { invitesAtom } from "./load";
+import { campaignInvitesAtom } from "./load";
 import { useRouter, type RegisteredRouter } from "@tanstack/react-router";
 import { Field, SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -77,14 +77,14 @@ const STATUS: Record<
  * worked. Measured in a browser against a real revoked-after-accepted row,
  * which is the only state that shows it.
  */
-const sentenceFor = (invite: GroupInvite): string => {
+const sentenceFor = (invite: CampaignInvite): string => {
   if (invite.status === "revoked") {
     return invite.redeemedByName === null
       ? "Withdrawn. The link it carried is inert."
-      : `Withdrawn. ${invite.redeemedByName} no longer reaches this group.`;
+      : `Withdrawn. ${invite.redeemedByName} no longer has a seat in this campaign.`;
   }
   if (invite.status === "redeemed") {
-    return `Taken by ${invite.redeemedByName ?? "somebody"}. Removing it takes their membership back.`;
+    return `Taken by ${invite.redeemedByName ?? "somebody"}. Removing it takes this campaign seat back.`;
   }
   if (invite.status === "expired") return `Ran out on ${dayOf(invite.expiresAt)}. Make another.`;
   return `Good until ${dayOf(invite.expiresAt)}, and only once.`;
@@ -133,7 +133,13 @@ const linkFor = (router: RegisteredRouter, token: string): string => {
   return url.toString();
 };
 
-function InviteRow({ invite }: { readonly invite: GroupInvite }) {
+function InviteRow({
+  invite,
+  campaign,
+}: {
+  readonly invite: CampaignInvite;
+  readonly campaign: Campaign;
+}) {
   const { busy, failure, submit } = useMutation();
   const status = STATUS[invite.status];
   const gone = invite.status === "revoked" || invite.status === "expired";
@@ -141,20 +147,14 @@ function InviteRow({ invite }: { readonly invite: GroupInvite }) {
   const withdraw = async () => {
     await submit(
       (client) =>
-        client.invites.revoke({
-          params: { groupId: invite.groupId, inviteId: invite.id },
+        client.campaignInvites.revoke({
+          params: { campaignId: campaign.id, inviteId: invite.id },
           payload: {},
         }),
-      // **Withdrawing an accepted invitation revokes the group membership and
-      // every participation it granted, in the same transaction** — so this
-      // write moves rows on screens it has never seen: the group roster and
-      // any party roster the account was on. Naming the resources rather than
-      // the screens is what reaches them.
-      [
-        reads.invites(invite.groupId),
-        reads.group(invite.groupId),
-        ...(invite.campaignId === null ? [] : [reads.members(invite.campaignId)]),
-      ],
+      // The campaign seat and its roster move together. Eligibility in the
+      // surrounding Shared World remains plumbing and is deliberately not
+      // treated as a second membership lifecycle here.
+      [reads.campaignInvites(campaign.id), reads.members(campaign.id)],
     );
   };
 
@@ -179,20 +179,13 @@ function InviteRow({ invite }: { readonly invite: GroupInvite }) {
 }
 
 export function InviteDialog({
-  groupId,
   campaign,
   onClose,
 }: {
-  readonly groupId: GroupId;
-  /**
-   * The table the invitation also seats the redeemer at, when this dialog is
-   * opened from a campaign. Without one it invites into the group alone —
-   * the group screen's form.
-   */
-  readonly campaign?: Campaign;
+  readonly campaign: Campaign;
   readonly onClose: () => void;
 }) {
-  const [resource, retry] = useApiAtom(invitesAtom(groupId));
+  const [resource, retry] = useApiAtom(campaignInvitesAtom(campaign.id));
   const router = useRouter();
   const { busy, failure, submit } = useMutation();
   const [label, setLabel] = useState("");
@@ -202,16 +195,13 @@ export function InviteDialog({
   const mint = async () => {
     const issued = await submit(
       (client) =>
-        client.invites.create({
-          params: { groupId },
-          payload:
-            campaign === undefined
-              ? { label: label.trim() }
-              : { label: label.trim(), campaignId: campaign.id },
+        client.campaignInvites.create({
+          params: { campaignId: campaign.id },
+          payload: { label: label.trim() },
         }),
       // Only the list. A link nobody has followed grants nothing, so there is
       // no member, no character and no campaign of anybody's that moved.
-      [reads.invites(groupId)],
+      [reads.campaignInvites(campaign.id)],
     );
     if (Result.isSuccess(issued)) {
       setLink(linkFor(router, issued.success.token));
@@ -219,26 +209,18 @@ export function InviteDialog({
     }
   };
 
-  // The campaign's dialog shows the invitations that name this table (and it
-  // is what its roster derives "invited" from); the group's shows them all.
-  const invites =
-    resource.state === "ready"
-      ? campaign === undefined
-        ? resource.value
-        : resource.value.filter((invite) => invite.campaignId === campaign.id)
-      : undefined;
+  // The dialog shows the invitations that name this table, which is also what
+  // its roster derives "invited" from.
+  const invites = resource.state === "ready" ? resource.value : undefined;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label={campaign === undefined ? "Invite somebody" : "Invite a player"}>
+      <DialogContent aria-label="Invite a player">
         <DialogHeader>
-          <DialogTitle>
-            {campaign === undefined ? "Invite somebody" : "Invite a player"}
-          </DialogTitle>
+          <DialogTitle>Invite a player</DialogTitle>
           <DialogDescription>
-            {campaign === undefined
-              ? "A link is an invitation to join, not a way in — whoever follows it signs in first, and what they get is a place in this group."
-              : "A link is an invitation to join, not a way in — whoever follows it signs in first, and what they get is the group and a seat at this table. Minting is the group owner's act."}
+            Whoever follows this link signs in first, then gets a seat in this campaign. You can
+            withdraw it here at any time.
           </DialogDescription>
         </DialogHeader>
 
@@ -293,11 +275,13 @@ export function InviteDialog({
                   back.
                 </span>
               ) : (
-                invites.map((invite) => <InviteRow key={invite.id} invite={invite} />)
+                invites.map((invite) => (
+                  <InviteRow key={invite.id} invite={invite} campaign={campaign} />
+                ))
               ))}
           </div>
 
-          {campaign !== undefined && campaign.visibility !== "shared" && (
+          {campaign.visibility !== "shared" && (
             // The master toggle, named where it matters: a player who joins an
             // unshared campaign can read nothing in it, so an invitation sent
             // before it is shared lands somebody on a blank page. The control

@@ -395,7 +395,7 @@ export function CampaignChrome<Extra = undefined>({
         // withdrawing another — so it has no `onSaved` at all: what a revoke
         // changes about the table underneath is `reads.members`, which the
         // dialog itself names.
-        <InviteDialog groupId={view.campaign.groupId} campaign={view.campaign} onClose={close} />
+        <InviteDialog campaign={view.campaign} onClose={close} />
       )}
       {finishing && view?.session !== undefined && (
         <FinishSessionDialog

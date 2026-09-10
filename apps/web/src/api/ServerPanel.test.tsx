@@ -35,7 +35,7 @@ vi.stubGlobal("fetch", (url: string | URL, init: RequestInit | undefined) => {
 
 const campaignJson = (name: string) => ({
   id: "2b1f2a1e-0000-4000-8000-00000000c0de",
-  groupId: "5a1e2b3c-0000-4000-8000-00000000aaa1",
+  contextId: "5a1e2b3c-0000-4000-8000-00000000aaa1",
   creatorAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
   name,
   partyName: "The Ferrymen",
@@ -134,19 +134,8 @@ describe("ServerPanel", () => {
   it("creates a campaign with a session token and shows it in the list", async () => {
     const user = userEvent.setup();
     const session = mintingSession();
-    const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
     routes.set("/health", { status: "ok", uptime: 1 });
-    // A campaign lives in a group now, so the panel founds one to hold it —
-    // two writes on the way in, both with fresh tokens.
-    routes.set("/groups", {
-      id: groupId,
-      name: "The Salt Road group",
-      ownerAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
-      archivedAt: null,
-      createdAt: "2026-08-04T13:03:28.035Z",
-      updatedAt: "2026-08-04T13:03:28.035Z",
-    });
-    routes.set(`/groups/${groupId}/campaigns`, campaignJson("The Salt Road"));
+    routes.set("/campaigns", campaignJson("The Salt Road"));
 
     render(
       <HostedSessionContext value={session}>
@@ -159,11 +148,12 @@ describe("ServerPanel", () => {
     await user.click(screen.getByRole("button", { name: "Create campaign" }));
 
     expect(await screen.findByText("The Salt Road")).toBeInTheDocument();
-    const founded = calls.find((call) => call.pathname === "/groups")!;
-    expect(JSON.parse(founded.body)).toEqual({ name: "The Salt Road group" });
-    const created = calls.find((call) => call.pathname === `/groups/${groupId}/campaigns`)!;
-    expect(created.authorization).toBe("Bearer session-token-2");
+    const created = calls.find((call) => call.pathname === "/campaigns")!;
+    expect(created.authorization).toBe("Bearer session-token-1");
     expect(JSON.parse(created.body)).toEqual({ name: "The Salt Road" });
+    expect(calls.filter((call) => call.pathname === "/campaigns")).toHaveLength(1);
+    expect(calls.some((call) => call.pathname.startsWith("/worlds"))).toBe(false);
+    expect(session.minted()).toBe(1);
   });
 
   it("disables the hosted controls until someone signs in", async () => {

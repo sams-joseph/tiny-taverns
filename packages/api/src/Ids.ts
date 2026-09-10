@@ -12,13 +12,9 @@ const id = <const Name extends string>(name: Name) =>
 export const AccountId = id("AccountId");
 export type AccountId = typeof AccountId.Type;
 
-/**
- * The top-level social container for connected play — the table's group of
- * people, holding campaigns and the history they share. `play_group` in SQL,
- * because `group` is a keyword; a group everywhere else.
- */
-export const GroupId = id("GroupId");
-export type GroupId = typeof GroupId.Type;
+/** One explicit Shared World, or the private backing context of a standalone campaign. */
+export const SharedWorldId = id("SharedWorldId");
+export type SharedWorldId = typeof SharedWorldId.Type;
 
 export const CampaignId = id("CampaignId");
 export type CampaignId = typeof CampaignId.Type;
@@ -161,15 +157,15 @@ export const BeatId = id("BeatId");
 export type BeatId = typeof BeatId.Type;
 
 /**
- * One invitation to join a group — optionally admitting to one of its campaigns
- * in the same act.
+ * One invitation to join a campaign. Its Shared World eligibility row is
+ * persistence plumbing created during redemption.
  *
  * Names the *row*, never the token — the token is a secret the server only ever
- * stores as a digest, and it is what a person holds. This is what the group
- * owner revokes.
+ * stores as a digest, and it is what a person holds. The campaign creator
+ * revokes the invitation.
  */
-export const GroupInviteId = id("GroupInviteId");
-export type GroupInviteId = typeof GroupInviteId.Type;
+export const CampaignInviteId = id("CampaignInviteId");
+export type CampaignInviteId = typeof CampaignInviteId.Type;
 
 /**
  * One character's place in one campaign's party — the join row, not the
@@ -180,13 +176,13 @@ export type GroupInviteId = typeof GroupInviteId.Type;
 export const CampaignCharacterId = id("CampaignCharacterId");
 export type CampaignCharacterId = typeof CampaignCharacterId.Type;
 
-/** One canonical fact admitted to a group's shared history. */
-export const GroupHistoryEntryId = id("GroupHistoryEntryId");
-export type GroupHistoryEntryId = typeof GroupHistoryEntryId.Type;
+/** One canonical fact admitted to a Shared World's history. */
+export const SharedWorldHistoryEntryId = id("SharedWorldHistoryEntryId");
+export type SharedWorldHistoryEntryId = typeof SharedWorldHistoryEntryId.Type;
 
-/** One derived summary over a group's history entries. */
-export const GroupHistorySummaryId = id("GroupHistorySummaryId");
-export type GroupHistorySummaryId = typeof GroupHistorySummaryId.Type;
+/** One derived summary over a Shared World's history entries. */
+export const SharedWorldHistorySummaryId = id("SharedWorldHistorySummaryId");
+export type SharedWorldHistorySummaryId = typeof SharedWorldHistorySummaryId.Type;
 
 /** One conversation with Hob — a thread of turns, scoped to one campaign. */
 export const AssistantThreadId = id("AssistantThreadId");

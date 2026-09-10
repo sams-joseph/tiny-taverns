@@ -1,4 +1,11 @@
-import { CampaignId, CharacterId, EncounterRunId, GroupId, NpcId, SessionId } from "@taverns/api";
+import {
+  CampaignId,
+  CharacterId,
+  EncounterRunId,
+  SharedWorldId,
+  NpcId,
+  SessionId,
+} from "@taverns/api";
 import {
   createHashHistory,
   createRootRoute,
@@ -8,6 +15,7 @@ import {
 import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
+import { CampaignsScreen } from "./campaign/CampaignsScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CastScreen } from "./cast/CastScreen";
@@ -24,8 +32,8 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { GroupScreen } from "./group/GroupScreen";
-import { GroupsScreen } from "./group/GroupsScreen";
+import { SharedWorldRouteScreen } from "./shared-world/SharedWorldRouteScreen";
+import { SharedWorldsScreen } from "./shared-world/SharedWorldsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerTableScreen } from "./play/PlayerTableScreen";
@@ -96,7 +104,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 };
 
 const asCampaignId = decoder(CampaignId);
-const asGroupId = decoder(GroupId);
+const asWorldId = decoder(SharedWorldId);
 const asCharacterId = decoder(CharacterId);
 const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
@@ -126,50 +134,36 @@ const asToken = (raw: string | undefined): string | undefined =>
  */
 const rootRoute = createRootRoute({ component: SignedOutGate });
 
-/**
- * The groups this account belongs to — the whole of what `#/` means.
- *
- * The group is the top-level container for connected play, so home is the
- * list of your groups, and a campaign is reached through the group that holds
- * it. There is no `/play` half any more and no mode: the relation is per
- * campaign, derived where the campaign is rendered.
- */
-const groupsRoute = createRoute({
+/** Every explicit Shared World this account belongs to. */
+const worldsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/groups",
-  component: GroupsScreen,
+  path: "/worlds",
+  component: SharedWorldsScreen,
+});
+
+/** The campaign-first home. */
+const campaignsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/campaigns",
+  component: CampaignsScreen,
 });
 
 /**
- * One group: its campaign directory, its people, and — as the later stages
- * land — its shared history and its Hob. One `params.parse`, exactly as the
- * campaign's parent does it, so a bad id is a bad link that falls back to the
- * groups list.
+ * One Shared World: its campaign directory, people, history and Hob. One
+ * `params.parse`, exactly as the campaign's parent does it, so a bad id is a
+ * bad link that falls back to the campaign home.
  */
-const groupRoute = createRoute({
+const worldRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/groups/$groupId",
+  path: "/worlds/$worldId",
   params: {
-    parse: ({ groupId }) => {
-      const decoded = asGroupId(groupId);
-      return decoded === undefined ? false : { groupId: decoded };
+    parse: ({ worldId }) => {
+      const decoded = asWorldId(worldId);
+      return decoded === undefined ? false : { worldId: decoded };
     },
   },
-});
-
-const groupIndexRoute = createRoute({
-  getParentRoute: () => groupRoute,
-  path: "/",
-  component: GroupScreen,
-  remountDeps: ({ params }) => params.groupId,
-});
-
-/** An unknown section under a legible group is that group. */
-const groupSplatRoute = createRoute({
-  getParentRoute: () => groupRoute,
-  path: "$",
-  component: GroupScreen,
-  remountDeps: ({ params }) => params.groupId,
+  component: SharedWorldRouteScreen,
+  remountDeps: ({ params }) => params.worldId,
 });
 
 /**
@@ -545,7 +539,7 @@ const galleryRoute = createRoute({
 });
 
 /**
- * Anything else is the groups list.
+ * Anything else is the campaign home.
  *
  * The last resort of the fall-back chain, and the reason a mangled id, a
  * mangled invitation token and a URL nobody ever minted all land somewhere
@@ -555,19 +549,20 @@ const galleryRoute = createRoute({
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
-  component: GroupsScreen,
+  component: CampaignsScreen,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: GroupsScreen,
+  component: CampaignsScreen,
 });
 
 export const routeTree = rootRoute.addChildren([
   indexRoute,
-  groupsRoute,
-  groupRoute.addChildren([groupIndexRoute, groupSplatRoute]),
+  campaignsRoute,
+  worldsRoute,
+  worldRoute,
   libraryRoute,
   libraryRulesRoute,
   libraryCompendiumRoute,
@@ -628,8 +623,9 @@ declare module "@tanstack/react-router" {
  * string literal it could get wrong.
  */
 export const routes = {
-  groups: groupsRoute,
-  group: groupRoute,
+  campaigns: campaignsRoute,
+  worlds: worldsRoute,
+  world: worldRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,

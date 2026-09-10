@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
@@ -15,6 +16,7 @@ import {
   admittedTo,
   anAccount,
   aPlayerAt,
+  asDm,
   createCampaign,
   scopedTo,
 } from "./support/actors.js";
@@ -43,6 +45,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Groups.layer,
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -99,13 +102,14 @@ const makeFixture = Effect.gen(function* () {
   const pell = yield* aCharacterAt(saltRoad.id, jo, { name: "Sister Pell" });
 
   // The guest: at the table long enough to write a character down, then
-  // removed — through the shipped path, by withdrawing the invitation that
-  // admitted them, which retires their seats in the same transaction.
+  // removed — through the shipped path, by withdrawing the campaign invitation
+  // that admitted them, which retires their seats in the same transaction.
   const guest = yield* aPlayerAt(saltRoad.id, "Guest");
   const guestsOwn = yield* aCharacterAt(saltRoad.id, guest, { name: "Guest's Own" });
-  const issued = yield* asJo(invites.list(saltRoad.groupId));
+  const saltRoadCreator = yield* asDm(jo, saltRoad.id);
+  const issued = yield* invites.listForCampaign(saltRoadCreator);
   const guestInvite = issued.find((invite) => invite.label === "Guest");
-  yield* asJo(invites.revoke(saltRoad.groupId, guestInvite!.id));
+  yield* invites.revokeForCampaign(saltRoadCreator, guestInvite!.id);
 
   return {
     jo,

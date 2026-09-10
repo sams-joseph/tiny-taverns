@@ -5,12 +5,12 @@ import {
   archivedCampaign,
   campaign,
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
-  renderGroup,
+  renderSharedWorld,
 } from "./campaign.fixtures";
 
 /**
@@ -45,13 +45,14 @@ const nothingLive = () => server.routes.set("GET /me/campaigns", { status: 200, 
 const membership = (relation: "creator" | "player", row: unknown = campaign) => ({
   campaign: row,
   relation,
+  sharedWorld: null,
   joinedAt: "2026-06-01T10:00:00.000Z",
 });
 
 /** The directory card, re-aimed per test. */
 const card = (relation: "creator" | "player" | "none", archivedAt: string | null = null) => ({
   id: campaignId,
-  groupId,
+  worldId,
   creatorAccountId: campaign.creatorAccountId,
   creatorName: "Wren Alderby",
   name: campaign.name,
@@ -61,7 +62,7 @@ const card = (relation: "creator" | "player" | "none", archivedAt: string | null
 });
 
 const aimDirectory = (relation: "creator" | "player" | "none", archivedAt: string | null = null) =>
-  server.routes.set(`GET /groups/${groupId}/campaigns`, {
+  server.routes.set(`GET /worlds/${worldId}/campaigns`, {
     status: 200,
     body: [card(relation, archivedAt)],
   });
@@ -76,7 +77,7 @@ beforeEach(() => {
 
 describe("archiving a campaign", () => {
   it("confirms with the campaign's own name before anything is sent", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
@@ -88,7 +89,7 @@ describe("archiving a campaign", () => {
   });
 
   it("says the campaign is kept and can be brought back, because that is the trade", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText(/Nothing in it is deleted/)).toBeTruthy();
@@ -101,7 +102,7 @@ describe("archiving a campaign", () => {
     // non-null pointer is exactly "there is a night open here". The dialog
     // reads the campaign row itself: the card is a deliberate projection and
     // does not carry the pointer.
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText(/A night is still open here/)).toBeTruthy();
@@ -120,7 +121,7 @@ describe("archiving a campaign", () => {
       body: { ...campaign, currentSessionId: null },
     });
 
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
 
     expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
@@ -128,7 +129,7 @@ describe("archiving a campaign", () => {
   });
 
   it("re-reads the directory, and the card says Archived", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     // A structural write, so the screen re-reads rather than guessing: the
     // badge appears because the server says so.
@@ -140,7 +141,7 @@ describe("archiving a campaign", () => {
   });
 
   it("keeps it when the confirmation is declined", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     await userEvent.click(await screen.findByRole("button", { name: "Keep it here" }));
 
@@ -155,7 +156,7 @@ describe("archiving a campaign", () => {
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     });
 
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
@@ -168,7 +169,7 @@ describe("archiving a campaign", () => {
 
 describe("the shelf", () => {
   it("asks for nothing until it is opened", async () => {
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
     expect(await screen.findByText("The Salt Company")).toBeTruthy();
 
     // A count beside the opener would cost a second request on every load for
@@ -181,7 +182,7 @@ describe("the shelf", () => {
   });
 
   it("says the shelf is empty rather than looking broken", async () => {
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
 
     expect(await screen.findByText(/Nothing here\./)).toBeTruthy();
@@ -194,7 +195,7 @@ describe("the shelf", () => {
       body: [membership("creator", archivedCampaign)],
     });
 
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
     expect(await screen.findByText(/Archived 11 August 2026/)).toBeTruthy();
 
@@ -217,7 +218,7 @@ describe("the shelf", () => {
       ],
     });
 
-    await renderCampaigns("/groups", mintingSession());
+    await renderCampaigns("/worlds", mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /Archived campaigns/ }));
 
     expect(await screen.findByText("The Long Winter")).toBeTruthy();
@@ -229,12 +230,12 @@ describe("the shelf", () => {
 describe("somebody else's campaign", () => {
   it("offers no archive control on a card you play at or merely see", async () => {
     aimDirectory("player");
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
 
     aimDirectory("none");
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     expect(await screen.findByText("Run by Wren Alderby")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
   });

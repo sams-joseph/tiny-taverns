@@ -153,9 +153,9 @@ const makeFixture = Effect.gen(function* () {
   });
 
   /** A real player at Jo's table, minted the way a person is. */
-  const issued = yield* asJo.invites.create({
-    params: { groupId: saltRoad.groupId },
-    payload: { label: "Pim", campaignId: saltRoad.id },
+  const issued = yield* asJo.campaignInvites.create({
+    params: { campaignId: saltRoad.id },
+    payload: { label: "Pim" },
   });
   const pim = yield* accounts.issue("Pim");
   const asPim = yield* clientFor(pim.token);
@@ -704,8 +704,8 @@ describe("the group share, which is the whole of how a class reaches a player", 
     expect(named(before)).not.toContain(OPTIONS.bloodsworn);
 
     await as(fixture.jo.token, (client) =>
-      client.groupLibrary.share({
-        params: { groupId: fixture.saltRoad.groupId },
+      client.sharedWorldLibrary.share({
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
@@ -727,8 +727,8 @@ describe("the group share, which is the whole of how a class reaches a player", 
 
   it("stops reaching the picker when the grant is withdrawn", async () => {
     await as(fixture.jo.token, (client) =>
-      client.groupLibrary.unshare({
-        params: { groupId: fixture.saltRoad.groupId },
+      client.sharedWorldLibrary.unshare({
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
@@ -737,8 +737,8 @@ describe("the group share, which is the whole of how a class reaches a player", 
 
     // Put it back for the tests below.
     await as(fixture.jo.token, (client) =>
-      client.groupLibrary.share({
-        params: { groupId: fixture.saltRoad.groupId },
+      client.sharedWorldLibrary.share({
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );

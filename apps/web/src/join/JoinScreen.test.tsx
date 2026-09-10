@@ -23,12 +23,13 @@ import { type HostedSession } from "../auth/hostedSession";
 
 const TOKEN = "Nk9-b3JkZXJfb2ZfdGhlX2ZlcnJ5bWFu";
 const campaignId = "2b1f2a1e-0000-4000-8000-00000000c0de";
-const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
+const worldId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 
 const preview = {
-  groupName: "The Salt Company",
-  ownerName: "Ada",
+  kind: "campaign",
+  creatorName: "Ada",
   campaignName: "The Salt Road",
+  sharedWorldName: "The Salt Company",
   expiresAt: "2026-08-18T13:03:28.070Z",
 };
 
@@ -141,10 +142,10 @@ describe("following an invitation", () => {
     routes.set("POST /invites/redeem", {
       status: 200,
       body: {
-        groupId,
-        groupName: "The Salt Company",
+        kind: "campaign",
         campaignId,
         campaignName: "The Salt Road",
+        sharedWorld: { id: worldId, name: "The Salt Company" },
         shared: false,
       },
     });
@@ -152,11 +153,11 @@ describe("following an invitation", () => {
     await renderJoin();
     await userEvent.click(await screen.findByRole("button", { name: "Take your seat" }));
 
-    expect(await screen.findByText(/You are in The Salt Company/)).toBeTruthy();
+    expect(await screen.findByText(/Your seat at The Salt Road is ready/)).toBeTruthy();
     // The ordinary outcome of joining, and the moment to explain it — a
     // campaign starts private, so the alternative is a blank page with no
     // explanation anywhere.
-    expect(screen.getByText(/Your seat at The Salt Road is kept/)).toBeTruthy();
+    expect(screen.getByText(/Your seat is kept/)).toBeTruthy();
     expect(JSON.parse(calls.find((c) => c.pathname === "/invites/redeem")?.body ?? "{}")).toEqual({
       token: TOKEN,
     });
@@ -167,10 +168,10 @@ describe("following an invitation", () => {
     routes.set("POST /invites/redeem", {
       status: 200,
       body: {
-        groupId,
-        groupName: "The Salt Company",
+        kind: "campaign",
         campaignId,
         campaignName: "The Salt Road",
+        sharedWorld: { id: worldId, name: "The Salt Company" },
         shared: true,
       },
     });

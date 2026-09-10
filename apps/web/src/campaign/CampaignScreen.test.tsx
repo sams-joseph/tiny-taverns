@@ -11,6 +11,7 @@ import {
   renderEncounters,
   renderNotes,
   renderScreen,
+  sharedWorld,
   sessionId,
   page,
 } from "./campaign.fixtures";
@@ -45,6 +46,13 @@ describe("CampaignScreen", () => {
     const home = screen.getByTitle("Campaign home");
     expect(home).toHaveTextContent("The Salt Road");
     expect(home).toHaveAttribute("href", `/#/campaigns/${campaignId}`);
+    expect(screen.getByRole("link", { name: "The Salt Company — Shared World" })).toHaveAttribute(
+      "href",
+      `/#/worlds/${sharedWorld.id}`,
+    );
+    expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/worlds")).toBe(
+      false,
+    );
     // The subtitle is assembled from two rows: the session's number, the
     // campaign's party name, and how many are at the table — that last one moved
     // here from the rail's footer when the rail became a top bar.
@@ -60,6 +68,17 @@ describe("CampaignScreen", () => {
     expect(screen.getByText("6 creatures · 1 note")).toBeInTheDocument();
     // Null difficulty is its own state, not a missing badge.
     expect(screen.getByText("Unrated")).toBeInTheDocument();
+  });
+
+  it("does not expose a standalone campaign's backing context as a Shared World", async () => {
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
+    });
+
+    await renderScreen(mintingSession());
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Shared World/ })).toBeNull();
   });
 
   it("sets read-aloud prose apart, in the prose face", async () => {
@@ -227,7 +246,7 @@ describe("CampaignScreen", () => {
     // player may see, and break only on the press.
     server.routes.set("GET /me/campaigns", {
       status: 200,
-      body: [{ campaign, relation: "player", joinedAt: campaign.createdAt }],
+      body: [{ campaign, relation: "player", sharedWorld, joinedAt: campaign.createdAt }],
     });
 
     await renderScreen(mintingSession());

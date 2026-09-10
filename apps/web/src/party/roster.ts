@@ -1,4 +1,4 @@
-import type { GroupInvite, CampaignMember, Character, PartySeat } from "@taverns/api";
+import type { CampaignInvite, CampaignMember, Character, PartySeat } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 import { DateTime } from "effect";
 import { dayOf } from "../chronicle/format";
@@ -26,7 +26,7 @@ import { dayOf } from "../chronicle/format";
  * | -------------- | ------------------------------------------------------------- |
  * | `playing`      | a `player` member with a live seat at this table              |
  * | `no-character` | the same member with none                                     |
- * | `invited`      | a `GroupInvite` whose `status` is `live`                      |
+ * | `invited`      | a `CampaignInvite` whose `status` is `live`                   |
  * | `open`         | nothing — a seat cannot exist before a member                 |
  *
  * **Each line is a person**, which is what the single-use invitation contract
@@ -71,7 +71,7 @@ export type RosterRow =
       readonly seats: ReadonlyArray<PartySeat>;
     }
   | { readonly kind: "no-character"; readonly member: CampaignMember }
-  | { readonly kind: "invited"; readonly invite: GroupInvite };
+  | { readonly kind: "invited"; readonly invite: CampaignInvite };
 
 /** The key a row is rendered under, and the id it is really about. */
 export const keyOf = (row: RosterRow): string =>
@@ -116,7 +116,7 @@ export const initialsOf = (name: string): string => {
 export const rosterOf = (
   members: ReadonlyArray<CampaignMember>,
   party: ReadonlyArray<PartySeat>,
-  invites: ReadonlyArray<GroupInvite>,
+  invites: ReadonlyArray<CampaignInvite>,
 ): ReadonlyArray<RosterRow> => {
   const dms = members.filter((member) => member.relation === "creator");
   const players = members.filter((member) => member.relation === "player");

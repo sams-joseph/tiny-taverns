@@ -5,6 +5,7 @@ import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterOwnCreate } from "./Character.js";
+import { CampaignInvite, InvitePreview, InviteRedeemed } from "./Invite.js";
 import { CampaignCharacter, PartyJoin } from "./Party.js";
 import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
@@ -50,8 +51,67 @@ const groups = Object.values(TavernsApi.groups) as unknown as ReadonlyArray<Grou
 const endpointsOf = (group: GroupShape) => Object.values(group.endpoints);
 
 describe("the API declaration", () => {
+  it("exposes only invitations that belong to a campaign", () => {
+    const decode = Schema.decodeUnknownSync(CampaignInvite);
+    const invitation = {
+      id: "2b1f2a1e-0000-4000-8000-00000000a001",
+      campaignId: "2b1f2a1e-0000-4000-8000-00000000a003",
+      label: "Ilse",
+      status: "live",
+      expiresAt: "2026-09-23T12:00:00.000Z",
+      revokedAt: null,
+      redeemedAt: null,
+      redeemedByName: null,
+      createdAt: "2026-09-09T12:00:00.000Z",
+    };
+
+    expect(decode(invitation).campaignId).toBe(invitation.campaignId);
+    expect(() => decode({ ...invitation, campaignId: null })).toThrow();
+  });
+
+  it("keeps backing contexts out of campaign invitation responses", () => {
+    const decodePreview = Schema.decodeUnknownSync(InvitePreview);
+    const decodeRedeemed = Schema.decodeUnknownSync(InviteRedeemed);
+    const preview = {
+      kind: "campaign",
+      campaignName: "The Salt Road",
+      creatorName: "Ada",
+      sharedWorldName: null,
+      expiresAt: "2026-09-23T12:00:00.000Z",
+    };
+    const redeemed = {
+      kind: "campaign",
+      campaignId: "2b1f2a1e-0000-4000-8000-00000000a003",
+      campaignName: "The Salt Road",
+      sharedWorld: null,
+      shared: false,
+    };
+
+    expect(decodePreview(preview).kind).toBe("campaign");
+    expect(decodeRedeemed(redeemed).kind).toBe("campaign");
+    expect(() =>
+      decodePreview({
+        kind: "campaign",
+        groupName: "hidden",
+        ownerName: "Ada",
+        campaignName: "The Salt Road",
+        expiresAt: "2026-09-23T12:00:00.000Z",
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeRedeemed({
+        kind: "campaign",
+        groupId: "2b1f2a1e-0000-4000-8000-00000000a002",
+        groupName: "hidden",
+        campaignId: null,
+        campaignName: null,
+        shared: false,
+      }),
+    ).toThrow();
+  });
+
   it("puts every campaign-scoped endpoint behind Authorization", () => {
-    // The fail-closed guard for the transport: a group added without
+    // The fail-closed guard for the transport: an API group added without
     // `.middleware(Authorization)` is an unauthenticated endpoint, and the only
     // way to have one is to name it here.
     const unauthenticated = groups
@@ -81,7 +141,7 @@ describe("the API declaration", () => {
    *
    * A path parameter, a query parameter or a payload would each be a place for
    * a caller to name an account, and none of the three exists: the account is
-   * `CurrentActor`'s, resolved by the group's middleware from the bearer token.
+   * `CurrentActor`'s, resolved by the API group's middleware from the bearer token.
    * That is the same argument the `me` group makes about `updateCharacter` —
    * *it names no campaign, so there is none for a caller to claim* — with one
    * fewer thing to claim. Other people's identities are `members.list`, which
@@ -129,9 +189,65 @@ describe("the API declaration", () => {
     ]);
   });
 
-  it("declares the groups the product has today, and no more", () => {
+  it("keeps the Shared World roster informational", () => {
+    const worldMembers = groups.find((group) => group.identifier === "sharedWorldMembers");
+
+    expect(
+      endpointsOf(worldMembers as GroupShape).map(({ identifier, method, path }) => ({
+        identifier,
+        method,
+        path,
+      })),
+    ).toEqual([
+      {
+        identifier: "list",
+        method: "GET",
+        path: "/worlds/:worldId/members",
+      },
+    ]);
+  });
+
+  it("gives owners a canonical archived Shared World shelf", () => {
+    const worlds = groups.find((group) => group.identifier === "sharedWorlds");
+    const archived = endpointsOf(worlds as GroupShape).find(
+      (endpoint) => endpoint.identifier === "archived",
+    );
+
+    expect(
+      archived && {
+        identifier: archived.identifier,
+        method: archived.method,
+        path: archived.path,
+      },
+    ).toEqual({
+      identifier: "archived",
+      method: "GET",
+      path: "/worlds/archived",
+    });
+  });
+
+  it("uses Shared World names and URLs for every world-facing API group", () => {
+    const worldGroups = groups.filter((group) => group.identifier.startsWith("sharedWorld"));
+
+    expect(worldGroups.map((group) => group.identifier).sort()).toEqual([
+      "sharedWorldHistory",
+      "sharedWorldHob",
+      "sharedWorldLibrary",
+      "sharedWorldMembers",
+      "sharedWorlds",
+    ]);
+    expect(
+      worldGroups.flatMap(endpointsOf).every((endpoint) => endpoint.path.startsWith("/worlds")),
+    ).toBe(true);
+    expect(
+      groups.flatMap(endpointsOf).some((endpoint) => endpoint.path.startsWith("/groups")),
+    ).toBe(false);
+  });
+
+  it("declares the API groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
       "beats",
+      "campaignInvites",
       "campaigns",
       "combatants",
       // The creatures a campaign can *use* — the encounter picker's read, plus
@@ -142,25 +258,9 @@ describe("the API declaration", () => {
       "creatures",
       "encounterCreatures",
       "encounters",
-      // Groups: the top-level container for connected play, and where a
-      // campaign is created — a campaign belongs to exactly one group.
-      // `groupHistory` is its chronicle: copies admitted on purpose, the
-      // group-Hob boundary's data half.
-      "groupHistory",
-      // The explicit Library share layer — grants to use, never widened
-      // predicates. The 2026-09-01 Library decision's surface, and since the
-      // 2026-09-02 instancing decision the one act that puts an original in
-      // front of a group's campaigns.
-      "groupLibrary",
-      "groupMembers",
-      "groups",
       "health",
       "hob",
-      // Group Hob: the assistant over the group's canonical record — the
-      // group-Hob boundary decision's surface.
-      "hobGroup",
       "invitePreview",
-      "invites",
       "join",
       // The Library: where every corpus original is authored and managed, read
       // with no campaign in the path. The campaign-scoped spells / equipment /
@@ -190,6 +290,14 @@ describe("the API declaration", () => {
       "runs",
       "search",
       "sessions",
+      // Shared Worlds are the explicit cross-campaign context. Their history,
+      // Library grants, informational roster and Hob conversation each keep a
+      // separate authorization boundary under the same `/worlds` namespace.
+      "sharedWorldHistory",
+      "sharedWorldHob",
+      "sharedWorldLibrary",
+      "sharedWorldMembers",
+      "sharedWorlds",
       // What is live at one table, to a player: the read behind the character
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.

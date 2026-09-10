@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { CampaignId, CharacterId, EncounterRunId, GroupId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import type { RouteIds } from "@tanstack/react-router";
 import { Schema } from "effect";
 import type { routeTree } from "../routes";
@@ -30,7 +30,7 @@ import { renderAt } from "../test/renderRoute";
  * DM most needs the nav to still work.
  */
 
-const groupId = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
+const worldId = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
@@ -49,14 +49,13 @@ const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-0000
 const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   __root__: undefined,
   "/campaigns/$campaignId": undefined,
-  "/groups/$groupId": undefined,
   "/characters": undefined,
 
   "/": "/",
   "/$": "/nothing-like-a-route",
-  "/groups": "/groups",
-  "/groups/$groupId/": `/groups/${groupId}`,
-  "/groups/$groupId/$": `/groups/${groupId}/a-section-we-do-not-serve`,
+  "/campaigns": "/campaigns",
+  "/worlds": "/worlds",
+  "/worlds/$worldId": `/worlds/${worldId}`,
   "/library": "/library",
   "/library/rules": "/library/rules",
   "/library/compendium": "/library/compendium",
@@ -118,13 +117,13 @@ describe("the shell's top bar", () => {
     // One row for every account — there is no mode left to branch on, so the
     // four items are the four items everywhere, join page and gallery included.
     expect(links.map((link) => link.textContent)).toEqual([
-      "Groups",
+      "Campaigns",
       "Characters",
       "Library",
       "Components",
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/#/groups",
+      "/#/campaigns",
       "/#/characters",
       "/#/library",
       "/#/gallery",
@@ -139,15 +138,9 @@ describe("the shell's top bar", () => {
     expect(within(nav()).getByText("Characters").closest("a")?.getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(within(nav()).getByText("Groups").closest("a")?.getAttribute("aria-current")).toBeNull();
-  });
-
-  it("lights Groups from a group, because a group is within Groups", async () => {
-    await renderAt(`/groups/${groupId}`);
-    expect(within(nav()).getByText("Groups").closest("a")?.getAttribute("aria-current")).toBe(
-      "page",
-    );
-    expect(noCampaignNav()).toBeNull();
+    expect(
+      within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current"),
+    ).toBeNull();
   });
 
   describe("the Library item", () => {
@@ -164,7 +157,7 @@ describe("the shell's top bar", () => {
           within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
         ).toBe("page");
         expect(
-          within(nav()).getByRole("link", { name: "Groups" }).getAttribute("aria-current"),
+          within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
         ).toBeNull();
         expect(within(nav()).queryByRole("link", { name: "Rules" })).toBeNull();
         expect(noCampaignNav()).toBeNull();
@@ -191,7 +184,7 @@ describe("the shell's top bar", () => {
   });
 
   it("keeps Ask Hob on the bar above any campaign", async () => {
-    await renderAt("/groups");
+    await renderAt("/campaigns");
     expect(screen.getByRole("button", { name: /Ask Hob/ })).toBeTruthy();
   });
 
@@ -214,8 +207,9 @@ describe("the shell's top bar", () => {
   describe("two tiers", () => {
     it("has no campaign row above a campaign", async () => {
       for (const path of [
-        "/groups",
-        `/groups/${groupId}`,
+        "/campaigns",
+        "/worlds",
+        `/worlds/${worldId}`,
         "/library",
         "/library/rules",
         "/library/spells",

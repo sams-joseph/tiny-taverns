@@ -137,7 +137,14 @@ const sharedRecord = (): Map<string, Answer> =>
       "GET /me/campaigns",
       {
         status: 200,
-        body: [{ campaign, relation: "player", joinedAt: "2026-06-01T10:00:00.000Z" }],
+        body: [
+          {
+            campaign,
+            relation: "player",
+            sharedWorld: null,
+            joinedAt: "2026-06-01T10:00:00.000Z",
+          },
+        ],
       },
     ],
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],

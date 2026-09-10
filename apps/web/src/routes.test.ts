@@ -1,4 +1,4 @@
-import { CampaignId, CharacterId, EncounterRunId, SessionId, GroupId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import { createHashHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
@@ -23,7 +23,7 @@ import { routeTree } from "./routes";
  */
 
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
-const GROUP_ID = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
+const WORLD_ID = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
 const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
@@ -69,7 +69,8 @@ describe("the route table", () => {
     // this is the same round trip the old `parseRoute(hrefFor(route))` was:
     // build the URL for a screen, and land back on that screen.
     const screens = [
-      { to: "/groups", at: "/groups" },
+      { to: "/campaigns", at: "/campaigns" },
+      { to: "/worlds", at: "/worlds" },
       { to: "/library", at: "/library" },
       { to: "/gallery", at: "/gallery" },
       {
@@ -93,7 +94,7 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
       },
       { to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" }, at: "/join/$token" },
-      { to: "/groups/$groupId", params: { groupId: GROUP_ID }, at: "/groups/$groupId/" },
+      { to: "/worlds/$worldId", params: { worldId: WORLD_ID }, at: "/worlds/$worldId" },
       { to: "/characters", at: "/characters/" },
       {
         to: "/characters/$characterId",
@@ -226,17 +227,16 @@ describe("the route table", () => {
     });
   });
 
-  it("hangs a group's screen off its id, and falls back to the groups list on a bad one", () => {
-    // The group is the top-level container, and there is no mode anywhere in
+  it("hangs a Shared World's screen off its id", () => {
+    // The Shared World is optional cross-campaign context, and there is no mode anywhere in
     // the URL any more: the same campaign URL renders creator or participant
     // chrome from the relation, which is data rather than a path segment.
-    expect(landsOn(`/groups/${GROUP_ID}`)).toEqual({
-      at: "/groups/$groupId/",
-      params: { groupId: GROUP_ID },
+    expect(landsOn(`/worlds/${WORLD_ID}`)).toEqual({
+      at: "/worlds/$worldId",
+      params: { worldId: WORLD_ID },
     });
-    expect(landsOn(`/groups/${GROUP_ID}/a-section-we-do-not-serve`).at).toBe("/groups/$groupId/$");
-    expect(landsOn("/groups/not-a-uuid").at).toBe("/$");
-    expect(linkTo("/", { to: "/groups" })).toBe("/groups");
+    expect(landsOn("/worlds/not-a-uuid").at).toBe("/$");
+    expect(linkTo("/", { to: "/worlds" })).toBe("/worlds");
   });
 
   it("reads the character routes, which name no campaign at all", () => {
@@ -268,7 +268,9 @@ describe("the route table", () => {
     // refused — and `params.parse` returning `false` is what makes the refusal
     // a link that does not match rather than an error boundary mid-render.
     expect(landsOn("/campaigns/not-a-uuid").at).toBe("/$");
-    expect(landsOn("/groups").at).toBe("/groups");
+    expect(landsOn(`/groups/${WORLD_ID}`).at).toBe("/$");
+    expect(landsOn("/groups").at).toBe("/$");
+    expect(landsOn("/worlds").at).toBe("/worlds");
     expect(landsOn("/").at).toBe("/");
   });
 
@@ -289,6 +291,7 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/$",
       },
       { path: "/groups/nope", at: "/$" },
+      { path: "/worlds/nope", at: "/$" },
       { path: "/characters/nope", at: "/characters/$" },
       { path: "/join/not a token", at: "/$" },
     ];

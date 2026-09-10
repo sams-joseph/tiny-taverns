@@ -11,7 +11,7 @@ import {
   Thinking,
   UserTurn,
 } from "./ChatParts";
-import type { HobArtifact, HobContextChip, HobTurn } from "./transcript";
+import type { HobArtifact, HobContextChip, HobStarter, HobTurn } from "./transcript";
 
 /**
  * The Hob chat panel — Option A of the designers' three, and the one that ships.
@@ -54,6 +54,10 @@ export interface HobPanelProps {
   readonly onSend?: (text: string) => void;
   /** Why, when `onSend` is absent. One or two sentences, ending in what to do. */
   readonly unavailable?: string;
+  /** Copy and prompts for the empty scoped conversation. */
+  readonly emptyTitle?: string;
+  readonly emptyDescription?: string;
+  readonly starters?: ReadonlyArray<HobStarter>;
   readonly onSave?: (artifact: HobArtifact) => void;
   readonly onDiscard?: (artifact: HobArtifact) => void;
   readonly onRetry?: (artifact: HobArtifact) => void;
@@ -73,6 +77,9 @@ export function HobPanel({
   savedArtifactIds = [],
   onSend,
   unavailable,
+  emptyTitle,
+  emptyDescription,
+  starters,
   onSave,
   onDiscard,
   onRetry,
@@ -134,7 +141,12 @@ export function HobPanel({
         className="gap-3.5 p-3.5 [scrollbar-width:auto] [&::-webkit-scrollbar]:block"
       >
         {turns.length === 0 && !thinking ? (
-          <EmptyThread onPick={onSend} />
+          <EmptyThread
+            onPick={onSend}
+            title={emptyTitle}
+            description={emptyDescription}
+            starters={starters}
+          />
         ) : (
           turns.map((turn) => {
             switch (turn.who) {

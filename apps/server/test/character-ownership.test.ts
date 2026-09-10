@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
@@ -14,6 +15,7 @@ import {
   accountWide,
   anAccount,
   aPlayerAt,
+  asDm,
   createCampaign,
   scopedTo,
 } from "./support/actors.js";
@@ -56,6 +58,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Characters.layer,
     Groups.layer,
     Invites.layer,
@@ -255,13 +258,14 @@ describe("the seat: a campaign's only reach into the shared row", () => {
     expect(await found(guest, scratch.id, "Wrenkin")).toEqual(["Wrenkin"]);
 
     // Withdraw the invitation they took — the shipped path, which revokes the
-    // membership it granted and retires their seats in the same transaction.
+    // campaign seat it granted and retires their party seats in the same act.
     await run(
       withActor(fixture.jo)(
         Effect.gen(function* () {
           const invites = yield* Invites;
-          const issued = yield* invites.list(scratch.groupId);
-          yield* invites.revoke(scratch.groupId, issued[0]!.id);
+          const creator = yield* asDm(fixture.jo, scratch.id);
+          const issued = yield* invites.listForCampaign(creator);
+          yield* invites.revokeForCampaign(creator, issued[0]!.id);
         }),
       ),
     );

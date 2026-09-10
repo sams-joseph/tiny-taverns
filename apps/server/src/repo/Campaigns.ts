@@ -7,13 +7,15 @@ import {
   type CampaignUpdate,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
   type SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { addCreator } from "./Memberships.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { admitToGroup, foundGroup } from "./Groups.js";
+import { addCreator, liveMemberAccountIds } from "./Memberships.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   campaignReadable,
@@ -31,7 +33,7 @@ import {
  */
 export interface CampaignRow extends ProvenanceColumns {
   readonly id: CampaignId;
-  readonly group_id: GroupId;
+  readonly group_id: SharedWorldId;
   readonly creator_account_id: AccountId;
   readonly name: string;
   readonly party_name: string | null;
@@ -43,7 +45,7 @@ export interface CampaignRow extends ProvenanceColumns {
 export const toCampaign = (row: CampaignRow): Campaign =>
   new Campaign({
     id: row.id,
-    groupId: row.group_id,
+    contextId: row.group_id,
     creatorAccountId: row.creator_account_id,
     name: row.name,
     partyName: row.party_name,
@@ -66,9 +68,17 @@ export class Campaigns extends Context.Service<
     readonly list: Effect.Effect<ReadonlyArray<Campaign>, never, CurrentActor>;
     readonly findById: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     readonly create: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       payload: CampaignCreate,
     ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    /** Campaign-first creation; its private group is transitional plumbing. */
+    readonly createStandalone: (
+      payload: CampaignCreate,
+    ) => Effect.Effect<Campaign, never, CurrentActor>;
+    /** Moves a connected campaign into a new automatic context of its own. */
+    readonly disconnectSharedWorld: (
+      creator: CampaignCreatorActor,
+    ) => Effect.Effect<Campaign, NotFound>;
     readonly update: (
       id: CampaignId,
       patch: CampaignUpdate,
@@ -126,6 +136,25 @@ export class Campaigns extends Context.Service<
           ? Effect.fail(new NotFound({ resource: "campaign", id }))
           : Effect.succeed(toCampaign(rows[0]!));
 
+      const insert = (groupId: SharedWorldId, payload: CampaignCreate, actor: Actor) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<CampaignRow>`
+            insert into campaign ${sql.insert(
+              defined({
+                group_id: groupId,
+                creator_account_id: actor.accountId,
+                name: payload.name,
+                party_name: payload.partyName,
+                player_count: payload.playerCount,
+                visibility: payload.visibility,
+              }),
+            )}
+            returning *
+          `;
+          yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
+          return toCampaign(rows[0]!);
+        });
+
       return {
         list: dieOnSqlError(
           Effect.gen(function* () {
@@ -170,21 +199,76 @@ export class Campaigns extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureGroupReadable(sql, groupId, actor);
+                // Coordinate with `Groups.archive`: both lifecycle operations
+                // lock the world before deciding whether it is empty/active,
+                // so a new campaign cannot race retirement and land in an
+                // archived Shared World.
+                const active = yield* sql<{ readonly id: SharedWorldId }>`
+                  select play_group.id from play_group
+                  where play_group.id = ${groupId}
+                    and play_group.archived_at is null
+                  for update
+                `;
+                if (active.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: groupId });
+                }
+                return yield* insert(groupId, payload, actor);
+              }),
+            ),
+          ),
+
+        /**
+         * The campaign-first path. The private group is deliberately named
+         * after the campaign and remains hidden until explicitly promoted.
+         */
+        createStandalone: (payload) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const group = yield* foundGroup(sql, payload.name, actor.accountId);
+                return yield* insert(group.id, payload, actor);
+              }),
+            ),
+          ),
+
+        disconnectSharedWorld: (creator) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const sources = yield* sql<CampaignRow>`
+                  select campaign.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.is_shared_world
+                  for update of campaign, source
+                `;
+                if (sources.length === 0) {
+                  return yield* new NotFound({
+                    resource: "campaign",
+                    id: creator.campaign,
+                  });
+                }
+
+                const context = yield* foundGroup(sql, sources[0]!.name, creator.actor.accountId);
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, context.id, accountId),
+                  { discard: true },
+                );
+
                 const rows = yield* sql<CampaignRow>`
-                  insert into campaign ${sql.insert(
-                    defined({
-                      group_id: groupId,
-                      creator_account_id: actor.accountId,
-                      name: payload.name,
-                      party_name: payload.partyName,
-                      player_count: payload.playerCount,
-                      visibility: payload.visibility,
-                    }),
-                  )}
+                  update campaign
+                  set group_id = ${context.id}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
                   returning *
                 `;
-                yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
-                return toCampaign(rows[0]!);
+                return yield* one(rows, creator.campaign);
               }),
             ),
           ),

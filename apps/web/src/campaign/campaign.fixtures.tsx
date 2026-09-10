@@ -85,11 +85,11 @@ export const page = (
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
 
-/** The group the fixture campaign lives in — one per shared server. */
-export const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
+/** The Shared World the fixture campaign lives in — one per shared server. */
+export const worldId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 
-export const group = {
-  id: groupId,
+export const sharedWorldDetails = {
+  id: worldId,
   name: "The Salt Company",
   ownerAccountId: theDmAccountId,
   archivedAt: null,
@@ -97,9 +97,11 @@ export const group = {
   updatedAt: "2026-06-01T10:00:00.000Z",
 };
 
+export const sharedWorld = { id: worldId, name: sharedWorldDetails.name };
+
 export const campaign = {
   id: campaignId,
-  groupId,
+  contextId: worldId,
   creatorAccountId: theDmAccountId,
   name: "The Salt Road",
   partyName: "The Gilded Spoon",
@@ -895,7 +897,7 @@ export const elfOption = { ...bundledRace[2]!, id: elfOptionId };
 
 /**
  * *Bloodsworn, d10, unarmoured AC DEX + CON* — the DM's own original, reaching
- * this table's vocabulary through the group share (the instancing decision of
+ * this table's vocabulary through the Shared World share (the instancing decision of
  * 2026-09-02: a table's homebrew offering is shared originals, never campaign
  * copies).
  */
@@ -1260,23 +1262,32 @@ export const fullCampaign = (): Map<string, Answer> =>
     // render the participant projection.
     [
       "GET /me/campaigns",
-      { status: 200, body: [{ campaign, relation: "creator", joinedAt: stamps.createdAt }] },
+      {
+        status: 200,
+        body: [{ campaign, relation: "creator", sharedWorld, joinedAt: stamps.createdAt }],
+      },
     ],
-    // The group above the campaign: the directory, the roster, the list. The
-    // campaign screens do not read these, but the group screen and the shell
+    // The Shared World above the campaign: the directory, the roster, the list. The
+    // campaign screens do not read these, but the Shared World screen and the shell
     // may, and one shared server has to be able to answer them.
-    // Who is reading — the group view derives `isOwner` from it.
+    // Who is reading — the Shared World view derives `isOwner` from it.
     ["GET /me", { status: 200, body: { id: theDmAccountId, name: "Wren Alderby" } }],
-    ["GET /groups", { status: 200, body: [{ group, isOwner: true, joinedAt: stamps.createdAt }] }],
-    [`GET /groups/${groupId}`, { status: 200, body: group }],
     [
-      `GET /groups/${groupId}/campaigns`,
+      "GET /worlds",
+      {
+        status: 200,
+        body: [{ sharedWorld: sharedWorldDetails, isOwner: true, joinedAt: stamps.createdAt }],
+      },
+    ],
+    [`GET /worlds/${worldId}`, { status: 200, body: sharedWorldDetails }],
+    [
+      `GET /worlds/${worldId}/campaigns`,
       {
         status: 200,
         body: [
           {
             id: campaignId,
-            groupId,
+            worldId,
             creatorAccountId: theDmAccountId,
             creatorName: "Wren Alderby",
             name: campaign.name,
@@ -1288,7 +1299,7 @@ export const fullCampaign = (): Map<string, Answer> =>
       },
     ],
     [
-      `GET /groups/${groupId}/members`,
+      `GET /worlds/${worldId}/members`,
       {
         status: 200,
         body: [
@@ -1343,10 +1354,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     // nothing outstanding — `party/party.fixtures.tsx` is where a populated
     // roster lives, and it re-aims both.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
-    [`GET /groups/${groupId}/invites`, { status: 200, body: [] }],
-    // The group's chronicle — empty is the ordinary state of a young group.
-    [`GET /groups/${groupId}/history`, { status: 200, body: [] }],
-    [`GET /groups/${groupId}/history/summary`, { status: 200, body: null }],
+    [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
+    // The Shared World's chronicle — empty is the ordinary state of a young world.
+    [`GET /worlds/${worldId}/history`, { status: 200, body: [] }],
+    [`GET /worlds/${worldId}/history/summary`, { status: 200, body: null }],
     [`GET /campaigns/${campaignId}/creatures`, { status: 200, body: page([goblin, hag]) }],
     ["GET /library/spells", { status: 200, body: page([fireball]) }],
     ["GET /library/equipment", { status: 200, body: page([hempRope]) }],
@@ -1357,7 +1368,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
     // The rules vocabulary this table builds characters from — the create
     // form's pickers: the shared bundle plus what reaches this table through
-    // its group. The Library list beside it is this account's originals.
+    // its Shared World. The Library list beside it is this account's originals.
     [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
     ["GET /library/options", { status: 200, body: libraryOptions }],
     ["GET /library/options/vocabulary", { status: 200, body: optionVocabulary }],
@@ -1508,11 +1519,11 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  * The list of campaigns — the way in, and where a campaign is shelved and
  * brought back.
  *
- * Group home is the only campaign directory now; campaign relation is derived
- * per campaign instead of by a second `/play` route.
+ * Campaigns are home; the Shared World directory is the optional view across
+ * connected campaigns.
  */
 export const renderCampaigns = async (
-  path: "/groups" | "/" = "/groups",
+  path: "/campaigns" | "/worlds" | "/" = "/campaigns",
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(path, (screen) => (
@@ -1520,9 +1531,9 @@ export const renderCampaigns = async (
   ));
 };
 
-/** The group above the fixture campaign — the directory and the roster. */
-export const renderGroup = async (hosted: HostedSession = noSession): Promise<void> => {
-  await renderAt(`/groups/${groupId}`, (screen) => (
+/** The Shared World above the fixture campaign — its directory and roster. */
+export const renderSharedWorld = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt(`/worlds/${worldId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

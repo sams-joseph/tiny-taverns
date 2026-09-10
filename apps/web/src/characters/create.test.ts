@@ -30,6 +30,7 @@ const table = (id: string, name: string, relation: "creator" | "player"): Campai
   ({
     campaign: { id, name },
     relation,
+    sharedWorld: null,
     joinedAt: "2026-07-02T10:00:00.000Z",
   }) as unknown as CampaignMembership;
 

@@ -110,8 +110,23 @@ const CampaignsLive = HttpApiBuilder.group(
   "campaigns",
   Effect.fnUntraced(function* (handlers) {
     const campaigns = yield* Campaigns;
+    const groups = yield* Groups;
+    const asDm = yield* asDmOf;
     return handlers
       .handle("list", () => campaigns.list)
+      .handle("create", ({ payload }) => campaigns.createStandalone(payload))
+      .handle("promoteSharedWorld", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => groups.promote(creator, payload)),
+      )
+      .handle("connectSharedWorld", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => groups.connect(creator, payload.worldId)),
+      )
+      .handle("disconnectSharedWorld", ({ params }) =>
+        asDm(params.campaignId, (creator) => campaigns.disconnectSharedWorld(creator)),
+      )
+      .handle("moveSharedWorld", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => groups.move(creator, payload.worldId)),
+      )
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
@@ -215,44 +230,50 @@ const MembersLive = HttpApiBuilder.group(
  * `repo/visibility.ts`, and campaign creation inside one is `Campaigns.create`
  * with the group from the path as its claim.
  */
-const GroupsLive = HttpApiBuilder.group(
+const SharedWorldsLive = HttpApiBuilder.group(
   TavernsApi,
-  "groups",
+  "sharedWorlds",
   Effect.fnUntraced(function* (handlers) {
     const groups = yield* Groups;
     const campaigns = yield* Campaigns;
     return handlers
       .handle("list", () => groups.mine)
+      .handle("archived", () => groups.archived)
       .handle("create", ({ payload }) => groups.create(payload))
-      .handle("findById", ({ params }) => groups.findById(params.groupId))
-      .handle("update", ({ params, payload }) => groups.update(params.groupId, payload))
-      .handle("archive", ({ params }) => groups.archive(params.groupId))
-      .handle("restore", ({ params }) => groups.restore(params.groupId))
-      .handle("campaigns", ({ params }) => groups.campaigns(params.groupId))
-      .handle("createCampaign", ({ params, payload }) => campaigns.create(params.groupId, payload));
+      .handle("findById", ({ params }) => groups.findById(params.worldId))
+      .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))
+      .handle("archive", ({ params }) => groups.archive(params.worldId))
+      .handle("restore", ({ params }) => groups.restore(params.worldId))
+      .handle("campaigns", ({ params }) => groups.campaigns(params.worldId))
+      .handle("createCampaign", ({ params, payload }) => campaigns.create(params.worldId, payload));
   }),
 );
 
-const GroupMembersLive = HttpApiBuilder.group(
+const SharedWorldMembersLive = HttpApiBuilder.group(
   TavernsApi,
-  "groupMembers",
+  "sharedWorldMembers",
   Effect.fnUntraced(function* (handlers) {
     const groups = yield* Groups;
-    return handlers
-      .handle("list", ({ params }) => groups.members(params.groupId))
-      .handle("remove", ({ params }) => groups.removeMember(params.groupId, params.accountId));
+    return handlers.handle("list", ({ params }) => groups.members(params.worldId));
   }),
 );
 
-const InvitesLive = HttpApiBuilder.group(
+const CampaignInvitesLive = HttpApiBuilder.group(
   TavernsApi,
-  "invites",
+  "campaignInvites",
   Effect.fnUntraced(function* (handlers) {
     const invites = yield* Invites;
+    const asDm = yield* asDmOf;
     return handlers
-      .handle("list", ({ params }) => invites.list(params.groupId))
-      .handle("create", ({ params, payload }) => invites.create(params.groupId, payload))
-      .handle("revoke", ({ params }) => invites.revoke(params.groupId, params.inviteId));
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => invites.listForCampaign(creator)),
+      )
+      .handle("create", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => invites.createForCampaign(creator, payload)),
+      )
+      .handle("revoke", ({ params }) =>
+        asDm(params.campaignId, (creator) => invites.revokeForCampaign(creator, params.inviteId)),
+      );
   }),
 );
 
@@ -313,21 +334,21 @@ const SessionsLive = HttpApiBuilder.group(
  * campaign becomes a `CampaignCreatorActor` exactly as the live groups do it,
  * and the repository checks the proof's group against the path.
  */
-const GroupHistoryLive = HttpApiBuilder.group(
+const SharedWorldHistoryLive = HttpApiBuilder.group(
   TavernsApi,
-  "groupHistory",
+  "sharedWorldHistory",
   Effect.fnUntraced(function* (handlers) {
     const history = yield* GroupHistory;
     const asDm = yield* asDmOf;
     return handlers
-      .handle("list", ({ params }) => history.list(params.groupId))
-      .handle("create", ({ params, payload }) => history.create(params.groupId, payload))
+      .handle("list", ({ params }) => history.list(params.worldId))
+      .handle("create", ({ params, payload }) => history.create(params.worldId, payload))
       .handle("fromRecap", ({ params, payload }) =>
         asDm(payload.campaignId, (creator) =>
-          history.fromRecap(params.groupId, creator, payload.sessionId),
+          history.fromRecap(params.worldId, creator, payload.sessionId),
         ),
       )
-      .handle("summary", ({ params }) => history.summary(params.groupId));
+      .handle("summary", ({ params }) => history.summary(params.worldId));
   }),
 );
 
@@ -994,37 +1015,39 @@ const NpcsLive = HttpApiBuilder.group(
 /**
  * Group Hob's handlers — the same five as the campaign surface, with one
  * reach: the group's conversation is the group's, so there is no proof to
- * resolve and no two sets to tell apart. `conversationReachable`'s `"group"`
+ * resolve and no two sets to tell apart. `conversationReachable`'s `"sharedWorld"`
  * arm gates every thread read on live membership underneath.
  */
-/** The group's shared Library shelf. Reads and writes are the repository's whole story. */
-const GroupLibraryLive = HttpApiBuilder.group(
+/** The Shared World's Library shelf. Reads and writes are the repository's whole story. */
+const SharedWorldLibraryLive = HttpApiBuilder.group(
   TavernsApi,
-  "groupLibrary",
+  "sharedWorldLibrary",
   Effect.fnUntraced(function* (handlers) {
     const shares = yield* LibraryShares;
     return handlers
-      .handle("list", ({ params }) => shares.list(params.groupId))
-      .handle("share", ({ params, payload }) => shares.share(params.groupId, payload))
-      .handle("unshare", ({ params, payload }) => shares.unshare(params.groupId, payload));
+      .handle("list", ({ params }) => shares.list(params.worldId))
+      .handle("share", ({ params, payload }) => shares.share(params.worldId, payload))
+      .handle("unshare", ({ params, payload }) => shares.unshare(params.worldId, payload));
   }),
 );
 
-const HobGroupLive = HttpApiBuilder.group(
+const SharedWorldHobLive = HttpApiBuilder.group(
   TavernsApi,
-  "hobGroup",
+  "sharedWorldHob",
   Effect.fnUntraced(function* (handlers) {
     const hob = yield* Hob;
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
 
     return handlers
-      .handle("status", ({ params }) => hob.groupStatus(params.groupId))
-      .handle("ask", ({ params, payload }) => hob.askGroup(params.groupId, payload))
-      .handle("threads", ({ params }) => threads.list("group", params.groupId))
-      .handle("turns", ({ params }) => threads.turns("group", params.groupId, params.threadId))
+      .handle("status", ({ params }) => hob.sharedWorldStatus(params.worldId))
+      .handle("ask", ({ params, payload }) => hob.askSharedWorld(params.worldId, payload))
+      .handle("threads", ({ params }) => threads.list("sharedWorld", params.worldId))
+      .handle("turns", ({ params }) =>
+        threads.turns("sharedWorld", params.worldId, params.threadId),
+      )
       .handle("accept", ({ params }) =>
-        proposals.acceptGroup(params.groupId, params.threadId, params.turnId),
+        proposals.acceptSharedWorld(params.worldId, params.threadId, params.turnId),
       );
   }),
 );
@@ -1247,15 +1270,15 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
   Layer.provide([
     HealthLive,
     MeLive,
-    GroupsLive,
-    GroupHistoryLive,
-    GroupLibraryLive,
-    GroupMembersLive,
+    SharedWorldsLive,
+    SharedWorldHistoryLive,
+    SharedWorldLibraryLive,
+    SharedWorldMembersLive,
     InvitePreviewLive,
     JoinLive,
     CampaignsLive,
     MembersLive,
-    InvitesLive,
+    CampaignInvitesLive,
     SessionsLive,
     PartyLive,
     NotesLive,
@@ -1269,7 +1292,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     RollsLive,
     SearchLive,
     HobLive,
-    HobGroupLive,
+    SharedWorldHobLive,
     NpcsLive,
     RunsLive,
     CombatantsLive,

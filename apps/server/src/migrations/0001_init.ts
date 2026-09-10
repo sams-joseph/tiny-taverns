@@ -197,7 +197,7 @@ export default Effect.gen(function* () {
       constraint campaign_member_active_key unique (campaign_id, account_id, is_active),
       constraint campaign_member_campaign_fkey
         foreign key (campaign_id, group_id)
-        references campaign (id, group_id) on delete cascade,
+        references campaign (id, group_id) on update cascade on delete cascade,
       constraint campaign_member_requires_group_member
         foreign key (group_id, account_id, in_group)
         references group_member (group_id, account_id, is_active)
@@ -325,7 +325,7 @@ export default Effect.gen(function* () {
         check ((origin = 'assistant') = (assistant_turn_id is not null)),
       constraint campaign_character_campaign_fkey
         foreign key (campaign_id, group_id)
-        references campaign (id, group_id) on delete cascade,
+        references campaign (id, group_id) on update cascade on delete cascade,
       constraint campaign_character_character_fkey
         foreign key (character_id, account_id)
         references character (id, account_id) on delete set null (character_id),

@@ -4,12 +4,12 @@ import {
   type CampaignId,
   Conflict,
   CurrentActor,
-  type GroupHistoryEntryCreate,
-  GroupHistoryEntry,
-  type GroupHistoryEntryId,
-  GroupHistorySummary,
-  type GroupHistorySummaryId,
-  type GroupId,
+  type SharedWorldHistoryEntryCreate,
+  SharedWorldHistoryEntry,
+  type SharedWorldHistoryEntryId,
+  SharedWorldHistorySummary,
+  type SharedWorldHistorySummaryId,
+  type SharedWorldId,
   NotFound,
   type Origin,
   type SessionId,
@@ -47,11 +47,11 @@ import { ensureGroupReadable } from "./visibility.js";
  */
 
 interface EntryRow {
-  readonly id: GroupHistoryEntryId;
-  readonly group_id: GroupId;
+  readonly id: SharedWorldHistoryEntryId;
+  readonly group_id: SharedWorldId;
   readonly campaign_id: CampaignId | null;
   readonly session_id: SessionId | null;
-  readonly source_kind: GroupHistoryEntry["sourceKind"];
+  readonly source_kind: SharedWorldHistoryEntry["sourceKind"];
   readonly source_id: string | null;
   /** `bigint`, so `pg` hands it back as a string — narrowed here, once. */
   readonly group_seq: string;
@@ -66,14 +66,14 @@ interface EntryRow {
   readonly created_at: Date;
 }
 
-const toEntry = (row: EntryRow): GroupHistoryEntry =>
-  new GroupHistoryEntry({
+const toEntry = (row: EntryRow): SharedWorldHistoryEntry =>
+  new SharedWorldHistoryEntry({
     id: row.id,
-    groupId: row.group_id,
+    worldId: row.group_id,
     campaignId: row.campaign_id,
     sessionId: row.session_id,
     sourceKind: row.source_kind,
-    groupSeq: Number(row.group_seq),
+    worldSeq: Number(row.group_seq),
     occurredAt: row.occurred_at === null ? null : DateTime.fromDateUnsafe(row.occurred_at),
     acceptedAt: DateTime.fromDateUnsafe(row.accepted_at),
     title: row.title,
@@ -86,9 +86,9 @@ const toEntry = (row: EntryRow): GroupHistoryEntry =>
   });
 
 interface SummaryRow {
-  readonly id: GroupHistorySummaryId;
-  readonly group_id: GroupId;
-  readonly status: GroupHistorySummary["status"];
+  readonly id: SharedWorldHistorySummaryId;
+  readonly group_id: SharedWorldId;
+  readonly status: SharedWorldHistorySummary["status"];
   readonly last_group_seq: string;
   readonly text: string;
   readonly origin: "authored" | "assistant";
@@ -97,12 +97,12 @@ interface SummaryRow {
   readonly created_at: Date;
 }
 
-const toSummary = (row: SummaryRow): GroupHistorySummary =>
-  new GroupHistorySummary({
+const toSummary = (row: SummaryRow): SharedWorldHistorySummary =>
+  new SharedWorldHistorySummary({
     id: row.id,
-    groupId: row.group_id,
+    worldId: row.group_id,
     status: row.status,
-    lastGroupSeq: Number(row.last_group_seq),
+    lastWorldSeq: Number(row.last_group_seq),
     text: row.text,
     origin: row.origin,
     assistantTurnId: row.assistant_turn_id,
@@ -210,18 +210,18 @@ export class GroupHistory extends Context.Service<
   GroupHistory,
   {
     readonly list: (
-      groupId: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupHistoryEntry>, NotFound, CurrentActor>;
+      groupId: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldHistoryEntry>, NotFound, CurrentActor>;
     /**
      * A member writing the chronicle by hand — `source_kind: 'manual'` — or,
      * with `from`, group Hob's accepted proposal: the same statement, one
      * extra argument, the `Proposals` rule one table across.
      */
     readonly create: (
-      groupId: GroupId,
-      payload: GroupHistoryEntryCreate,
+      groupId: SharedWorldId,
+      payload: SharedWorldHistoryEntryCreate,
       from?: AssistantOrigin,
-    ) => Effect.Effect<GroupHistoryEntry, NotFound, CurrentActor>;
+    ) => Effect.Effect<SharedWorldHistoryEntry, NotFound, CurrentActor>;
     /**
      * The campaign creator sharing a played night. Takes the **proof** rather
      * than a campaign id — it is the one write that turns campaign-private
@@ -234,14 +234,14 @@ export class GroupHistory extends Context.Service<
      * admits what has *happened*, and a session with no `startedAt` has not.
      */
     readonly fromRecap: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       creator: CampaignCreatorActor,
       sessionId: SessionId,
-    ) => Effect.Effect<GroupHistoryEntry, NotFound | Conflict, CurrentActor>;
+    ) => Effect.Effect<SharedWorldHistoryEntry, NotFound | Conflict, CurrentActor>;
     /** The current accepted summary, or `null` — the ordinary state of a young group. */
     readonly summary: (
-      groupId: GroupId,
-    ) => Effect.Effect<GroupHistorySummary | null, NotFound, CurrentActor>;
+      groupId: SharedWorldId,
+    ) => Effect.Effect<SharedWorldHistorySummary | null, NotFound, CurrentActor>;
     /**
      * Lexical search over the chronicle — group Hob's grounding read. `ILIKE`
      * over title and body, newest admitted first; the corpus is bounded (a
@@ -249,9 +249,9 @@ export class GroupHistory extends Context.Service<
      * `0008_beats.ts`'s rule, an index nothing reads is worse than none.
      */
     readonly search: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       q: string,
-    ) => Effect.Effect<ReadonlyArray<GroupHistoryEntry>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<SharedWorldHistoryEntry>, NotFound, CurrentActor>;
     /**
      * Every **played** night across the group's campaigns — the canonical
      * timeline the group-Hob boundary decision grants: what has happened is
@@ -259,7 +259,7 @@ export class GroupHistory extends Context.Service<
      * session is prep and does not exist here, whoever asks.
      */
     readonly playedNights: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
     ) => Effect.Effect<ReadonlyArray<PlayedNight>, NotFound, CurrentActor>;
     /**
      * One played night's canonical story: the beats verbatim and the fights
@@ -272,7 +272,7 @@ export class GroupHistory extends Context.Service<
      * ordinary `NotFound`, because unplayed prep does not exist at this level.
      */
     readonly nightStory: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       campaignId: CampaignId,
       sessionId: SessionId,
     ) => Effect.Effect<NightStory, NotFound, CurrentActor>;

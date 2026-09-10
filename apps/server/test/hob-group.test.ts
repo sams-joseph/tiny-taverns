@@ -2,7 +2,7 @@ import {
   type Actor,
   type Campaign,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type HobEvent,
   NotFound,
   type SessionId,
@@ -38,7 +38,7 @@ import { Search } from "../src/repo/Search.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { Spells } from "../src/repo/Spells.js";
-import { anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./support/model.js";
 
@@ -115,7 +115,6 @@ const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const creatures = yield* Creatures;
   const encounters = yield* Encounters;
-  const invites = yield* Invites;
   const notes = yield* Notes;
   const prep = yield* PrepItems;
   const sessions = yield* Sessions;
@@ -123,14 +122,10 @@ const makeFixture = Effect.gen(function* () {
 
   const jo = yield* anAccount("Jo");
   const saltRoad = yield* withActor(jo)(createCampaign({ name: "The Salt Road" }));
-  const groupId = saltRoad.groupId;
+  const groupId = saltRoad.contextId;
 
   // Wren: a live member who created the second campaign in Jo's group.
-  const wren = yield* anAccount("Wren");
-  const issued = yield* withActor(jo)(invites.create(groupId, { label: "Wren" })).pipe(
-    Effect.orDie,
-  );
-  yield* withActor(wren)(invites.redeem(issued.token)).pipe(Effect.orDie);
+  const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hagsBargain = yield* withActor(wren)(
     campaigns.create(groupId, { name: "The Hag's Bargain" }),
   ).pipe(Effect.orDie);
@@ -205,7 +200,7 @@ interface Fixture {
   readonly wren: Actor;
   readonly pim: Actor;
   readonly fen: Actor;
-  readonly groupId: GroupId;
+  readonly groupId: SharedWorldId;
   readonly saltRoad: Campaign;
   readonly hagsBargain: Campaign;
   readonly elsewhere: Campaign;
@@ -224,9 +219,9 @@ interface Asked {
 }
 
 /** Ask group Hob with a scripted model; capture everything sent to it. */
-const askGroup = (
+const askSharedWorld = (
   actor: Actor,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   options?: {
     readonly rounds?: ReadonlyArray<ReadonlyArray<object | string>>;
     readonly text?: string;
@@ -244,7 +239,7 @@ const askGroup = (
   return runtime.runPromise(
     Effect.gen(function* () {
       const hob = yield* Hob;
-      const stream = yield* hob.askGroup(groupId, {
+      const stream = yield* hob.askSharedWorld(groupId, {
         text: options?.text ?? "What has happened across the group so far?",
         ...(options?.threadId === undefined ? {} : { threadId: options.threadId as never }),
       });
@@ -264,14 +259,14 @@ describe("what the model is shown", () => {
     // Jo asks — a member who did NOT create the Hag's Bargain — and the
     // scripted model walks the whole canonical surface: the timeline, the
     // night's story, the chronicle.
-    const { requests } = await askGroup(fixture.jo, fixture.groupId, {
+    const { requests } = await askSharedWorld(fixture.jo, fixture.groupId, {
       rounds: [
         toolCallChunks("listPlayedNights", {}),
         toolCallChunks("nightStory", {
           campaignId: fixture.hagsBargain.id,
           sessionId: fixture.played.id,
         }),
-        toolCallChunks("searchGroupHistory", { query: "lantern" }),
+        toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
         textChunks("The hag took the lantern, and the reeds ambush was fought to a finish."),
       ],
     });
@@ -301,7 +296,7 @@ describe("what the model is shown", () => {
   it("refuses the planned night through the tool, as the ordinary not-found", async () => {
     // The model asks for the *unplayed* session's story — the exact probe the
     // boundary exists for — and gets a NotFound it can read, never the prep.
-    const { requests } = await askGroup(fixture.jo, fixture.groupId, {
+    const { requests } = await askSharedWorld(fixture.jo, fixture.groupId, {
       rounds: [
         toolCallChunks("nightStory", {
           campaignId: fixture.hagsBargain.id,
@@ -319,7 +314,7 @@ describe("what the model is shown", () => {
     const refused = await runtime.runPromise(
       Effect.gen(function* () {
         const hob = yield* Hob;
-        return yield* Effect.flip(hob.askGroup(fixture.groupId, { text: "anything" }));
+        return yield* Effect.flip(hob.askSharedWorld(fixture.groupId, { text: "anything" }));
       }).pipe(
         withActor(fixture.fen),
         Effect.provide(
@@ -337,7 +332,7 @@ describe("what the model is shown", () => {
 
 describe("the group's one shared conversation", () => {
   it("is resumable by another member, and partitioned from every campaign thread", async () => {
-    const first = await askGroup(fixture.jo, fixture.groupId, {
+    const first = await askSharedWorld(fixture.jo, fixture.groupId, {
       rounds: [textChunks("Noted.")],
       text: "Remember the lantern.",
     });
@@ -347,19 +342,19 @@ describe("the group's one shared conversation", () => {
 
     // Wren resumes Jo's thread: the group's conversation is the group's.
     const listed = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.list("group", fixture.groupId)).pipe(
+      Effect.flatMap(HobThreads, (threads) => threads.list("sharedWorld", fixture.groupId)).pipe(
         withActor(fixture.wren),
       ),
     );
     expect(listed.map((thread) => thread.id)).toContain(threadId);
-    expect(listed[0]?.groupId).toBe(fixture.groupId);
+    expect(listed[0]?.worldId).toBe(fixture.groupId);
     expect(listed[0]?.campaignId).toBeNull();
 
     // ...and Pim, a mere player at one table, reads it too — group membership
     // is the whole gate, the chronicle's own audience.
     const forPim = await runtime.runPromise(
       Effect.flatMap(HobThreads, (threads) =>
-        threads.turns("group", fixture.groupId, threadId),
+        threads.turns("sharedWorld", fixture.groupId, threadId),
       ).pipe(withActor(fixture.pim)),
     );
     expect(forPim.some((turn) => turn.text === "Remember the lantern.")).toBe(true);
@@ -377,7 +372,7 @@ describe("the group's one shared conversation", () => {
     // A stranger gets the ordinary 404.
     const refused = await runtime.runPromise(
       Effect.flip(
-        Effect.flatMap(HobThreads, (threads) => threads.list("group", fixture.groupId)),
+        Effect.flatMap(HobThreads, (threads) => threads.list("sharedWorld", fixture.groupId)),
       ).pipe(withActor(fixture.fen)),
     );
     expect(refused).toBeInstanceOf(NotFound);
@@ -386,9 +381,9 @@ describe("the group's one shared conversation", () => {
 
 describe("the chronicle proposal", () => {
   it("is offered by the model, kept by a different member, and once only", async () => {
-    const asked = await askGroup(fixture.jo, fixture.groupId, {
+    const asked = await askSharedWorld(fixture.jo, fixture.groupId, {
       rounds: [
-        toolCallChunks("proposeGroupEntry", {
+        toolCallChunks("proposeSharedWorldEntry", {
           title: "The lantern",
           body: "Both tables now know the hag holds the lantern.",
         }),
@@ -405,10 +400,10 @@ describe("the chronicle proposal", () => {
     // same audience a hand-written entry has.
     const accepted = await runtime.runPromise(
       Effect.flatMap(Proposals, (proposals) =>
-        proposals.acceptGroup(fixture.groupId, began.data.threadId, began.data.turnId),
+        proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
       ).pipe(withActor(fixture.wren)),
     );
-    if (accepted.accepted !== "groupHistory") throw new Error("wrong accept arm");
+    if (accepted.accepted !== "sharedWorldHistory") throw new Error("wrong accept arm");
     expect(accepted.entry.origin).toBe("assistant");
     expect(accepted.entry.assistantTurnId).toBe(began.data.turnId);
     expect(accepted.entry.body).toContain("the hag holds the lantern");
@@ -423,7 +418,7 @@ describe("the chronicle proposal", () => {
     const again = await runtime.runPromise(
       Effect.flip(
         Effect.flatMap(Proposals, (proposals) =>
-          proposals.acceptGroup(fixture.groupId, began.data.threadId, began.data.turnId),
+          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
         ),
       ).pipe(withActor(fixture.jo)),
     );
@@ -431,7 +426,7 @@ describe("the chronicle proposal", () => {
     const stranger = await runtime.runPromise(
       Effect.flip(
         Effect.flatMap(Proposals, (proposals) =>
-          proposals.acceptGroup(fixture.groupId, began.data.threadId, began.data.turnId),
+          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
         ),
       ).pipe(withActor(fixture.fen)),
     );
@@ -447,8 +442,8 @@ describe("the campaign panel's group context", () => {
       model: "scripted-local",
       maxTokens: 4096,
       rounds: [
-        toolCallChunks("searchGroupHistory", { query: "lantern" }),
-        toolCallChunks("readGroupSummary", {}),
+        toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
+        toolCallChunks("readSharedWorldSummary", {}),
         textChunks("The group's record has the lantern night."),
       ] as never,
     });

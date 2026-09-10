@@ -408,9 +408,9 @@ describe("answering", () => {
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
-      "readGroupSummary",
+      "readSharedWorldSummary",
       "searchCampaign",
-      "searchGroupHistory",
+      "searchSharedWorldHistory",
       "sessionLog",
       "sessionRecap",
     ]);
@@ -1729,9 +1729,9 @@ describe("the assistant seam", () => {
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
-      "readGroupSummary",
+      "readSharedWorldSummary",
       "searchCampaign",
-      "searchGroupHistory",
+      "searchSharedWorldHistory",
       "sessionLog",
       "sessionRecap",
     ]);

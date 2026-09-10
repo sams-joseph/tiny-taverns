@@ -34,6 +34,25 @@ export const HOB_STARTERS: ReadonlyArray<HobStarter> = [
   { icon: "list-checks", title: "Prep tonight's session", sub: "From where session 11 left off" },
 ];
 
+/** The Shared World opening prompts: canonical history, never campaign prep. */
+export const SHARED_WORLD_HOB_STARTERS: ReadonlyArray<HobStarter> = [
+  {
+    icon: "history",
+    title: "What connects our campaigns?",
+    sub: "Look across the played history in this Shared World",
+  },
+  {
+    icon: "book-open",
+    title: "Summarize the story so far",
+    sub: "Use the Chronicle and what happened at every table",
+  },
+  {
+    icon: "flag",
+    title: "Remember this for everyone",
+    sub: "Draft a Chronicle entry for the Shared World to keep",
+  },
+];
+
 /** `chat-data.js:16`. The composer filters these as you type past a `/`. */
 export const HOB_COMMANDS: ReadonlyArray<string> = [
   "/encounter",

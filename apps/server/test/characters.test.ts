@@ -13,6 +13,7 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Party } from "../src/repo/Party.js";
@@ -56,6 +57,7 @@ const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignCreatorActors.layer,
     Groups.layer,
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),

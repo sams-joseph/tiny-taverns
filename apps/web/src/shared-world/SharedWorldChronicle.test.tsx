@@ -3,35 +3,35 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
-  renderGroup,
+  renderSharedWorld,
 } from "../campaign/campaign.fixtures";
 
 /**
- * The chronicle section on the group screen — read-only plus the composer.
+ * The chronicle section on the Shared World screen — read-only plus the composer.
  *
  * What is pinned is the boundary's client half: the section draws only what
- * `GET /groups/:g/history` answered (copies, admitted on purpose), and the
+ * `GET /worlds/:w/history` answered (copies, admitted on purpose), and the
  * composer's write names the one resource it changes. The server-side
  * boundary — who may read, what a recap copy survives — is
- * `apps/server/test/group-history.test.ts`'s.
+ * `apps/server/test/sharedWorld-history.test.ts`'s.
  */
 
 const server = installStubServer();
 installMemoryStorage();
 
-const historyPath = `/groups/${groupId}/history`;
+const historyPath = `/worlds/${worldId}/history`;
 
 const entry = {
   id: "7a1e2b3c-0000-4000-8000-00000000f001",
-  groupId,
+  worldId,
   campaignId,
   sessionId: null,
   sourceKind: "recap",
-  groupSeq: 2,
+  worldSeq: 2,
   occurredAt: "2026-08-20T19:00:00.000Z",
   acceptedAt: "2026-08-21T10:00:00.000Z",
   title: "Session 12 — The crossing",
@@ -47,7 +47,7 @@ const manual = {
   ...entry,
   id: "7a1e2b3c-0000-4000-8000-00000000f002",
   sourceKind: "manual",
-  groupSeq: 1,
+  worldSeq: 1,
   title: null,
   body: "Both parties reached the crossing the same night.",
 };
@@ -60,7 +60,7 @@ beforeEach(() => {
 describe("the chronicle section", () => {
   it("draws what was admitted, a recap copy badged as a played night", async () => {
     server.routes.set(`GET ${historyPath}`, { status: 200, body: [entry, manual] });
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("Session 12 — The crossing")).toBeTruthy();
     expect(screen.getByText("The ferryman is called Cazril.")).toBeTruthy();
@@ -70,13 +70,13 @@ describe("the chronicle section", () => {
   });
 
   it("says the empty state in words rather than looking broken", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     expect(await screen.findByText(/Nothing admitted yet/)).toBeTruthy();
   });
 
   it("writes a manual entry and re-reads the one resource it changed", async () => {
     server.routes.set(`POST ${historyPath}`, { status: 200, body: manual });
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
 
     const box = await screen.findByRole("textbox", { name: "Write the chronicle" });
     await userEvent.type(box, "It rained on both tables.");
@@ -98,7 +98,7 @@ describe("the chronicle section", () => {
   });
 
   it("offers nothing to press with nothing typed", async () => {
-    await renderGroup(mintingSession());
+    await renderSharedWorld(mintingSession());
     const button = await screen.findByRole("button", { name: "Write it down" });
     expect(button).toHaveProperty("disabled", true);
   });
