@@ -6,6 +6,7 @@ import {
   campaign,
   campaignId,
   sharedWorld,
+  sharedWorldDetails,
   worldId,
   installMemoryStorage,
   installStubServer,
@@ -82,6 +83,30 @@ describe("the Shared Worlds list", () => {
     expect(await screen.findByText("No Shared World yet")).toBeTruthy();
     expect(screen.getByText(/share history and Hob's memory/)).toBeTruthy();
   });
+
+  it("keeps archived Shared Worlds on a lazy shelf and restores one", async () => {
+    const archivedWorld = {
+      ...sharedWorldDetails,
+      name: "The Old Roads",
+      archivedAt: "2026-08-11T09:00:00.000Z",
+    };
+    server.routes.set("GET /worlds/archived", { status: 200, body: [archivedWorld] });
+    server.routes.set(`POST /worlds/${worldId}/restore`, {
+      status: 200,
+      body: { ...archivedWorld, archivedAt: null },
+    });
+    await renderCampaigns("/worlds", mintingSession());
+    await screen.findByText("The Salt Company");
+
+    expect(server.calls.some((call) => call.pathname === "/worlds/archived")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Archived Shared Worlds" }));
+
+    expect(await screen.findByText("The Old Roads")).toBeTruthy();
+    expect(screen.getByText(/shared memory and history are kept/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => expect(bodyOf(server, "POST", `/worlds/${worldId}/restore`)).toEqual({}));
+  });
 });
 
 describe("one Shared World's screen", () => {
@@ -144,6 +169,87 @@ describe("one Shared World's screen", () => {
     expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/me")).toBe(
       false,
     );
+  });
+
+  it("lets the owner rename the Shared World", async () => {
+    server.routes.set(`PATCH /worlds/${worldId}`, {
+      status: 200,
+      body: { ...sharedWorldDetails, name: "The Lantern Roads" },
+    });
+    await renderSharedWorld(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
+    const name = screen.getByRole("textbox", { name: "Name" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "The Lantern Roads");
+    await userEvent.click(screen.getByRole("button", { name: "Save name" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/worlds/${worldId}`)).toEqual({
+        name: "The Lantern Roads",
+      }),
+    );
+  });
+
+  it("shows no Shared World settings to a non-owner", async () => {
+    server.routes.set("GET /worlds", {
+      status: 200,
+      body: [
+        {
+          sharedWorld: sharedWorldDetails,
+          isOwner: false,
+          joinedAt: campaign.createdAt,
+        },
+      ],
+    });
+    await renderSharedWorld(mintingSession());
+
+    await screen.findByText("The Salt Road");
+    expect(screen.queryByRole("button", { name: "Shared World settings" })).toBeNull();
+  });
+
+  it("explains safe retirement and shows why a world with campaigns cannot be archived", async () => {
+    server.routes.set(`DELETE /worlds/${worldId}`, {
+      status: 409,
+      body: {
+        _tag: "Conflict",
+        message:
+          "Move or disconnect every campaign in this Shared World before archiving it. Archived campaigns count too.",
+      },
+    });
+    await renderSharedWorld(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive Shared World" }));
+
+    expect(screen.getByText(/no campaigns remain here, including archived campaigns/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Chronicle, Hob conversation, members, and Library shares are all preserved/,
+      ),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Archive it" }));
+    expect(
+      await screen.findByText(/Move or disconnect every campaign.*Archived campaigns count too/),
+    ).toBeTruthy();
+    expect(globalThis.location.hash).toBe(`#/worlds/${worldId}`);
+  });
+
+  it("returns to the directory after archiving an empty Shared World", async () => {
+    server.routes.set(`DELETE /worlds/${worldId}`, {
+      status: 200,
+      body: {
+        ...sharedWorldDetails,
+        archivedAt: "2026-09-09T14:00:00.000Z",
+      },
+    });
+    await renderSharedWorld(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive Shared World" }));
+    await userEvent.click(screen.getByRole("button", { name: "Archive it" }));
+
+    await waitFor(() => expect(globalThis.location.hash).toBe("#/worlds"));
   });
 
   it("opens Shared World Hob and refreshes the Chronicle when a proposal is kept", async () => {

@@ -201,6 +201,67 @@ describe("campaign, session, character and note CRUD", () => {
     expect(seen.directory.map((campaign) => campaign.id)).not.toContain(seen.campaign.id);
   }, 60_000);
 
+  it("renames, safely retires, discovers and restores an empty Shared World", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const world = yield* client.sharedWorlds.create({
+          payload: { name: "The World Ready for a Shelf" },
+        });
+        const renamed = yield* client.sharedWorlds.update({
+          params: { worldId: world.id },
+          payload: { name: "The Quiet Atlas" },
+        });
+        const archived = yield* client.sharedWorlds.archive({
+          params: { worldId: world.id },
+        });
+        const activeWhileArchived = yield* client.sharedWorlds.list();
+        const shelf = yield* client.sharedWorlds.archived();
+        const restored = yield* client.sharedWorlds.restore({
+          params: { worldId: world.id },
+          payload: {},
+        });
+        const activeAfterRestore = yield* client.sharedWorlds.list();
+        const shelfAfterRestore = yield* client.sharedWorlds.archived();
+
+        const occupied = yield* client.sharedWorlds.create({
+          payload: { name: "The Atlas with a Table" },
+        });
+        yield* client.sharedWorlds.createCampaign({
+          params: { worldId: occupied.id },
+          payload: { name: "A Table Still Here" },
+        });
+        const occupiedArchive = yield* client.sharedWorlds
+          .archive({ params: { worldId: occupied.id } })
+          .pipe(Effect.result);
+
+        return {
+          world,
+          renamed,
+          archived,
+          activeWhileArchived,
+          shelf,
+          restored,
+          activeAfterRestore,
+          shelfAfterRestore,
+          occupiedArchive,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.renamed.name).toBe("The Quiet Atlas");
+    expect(seen.archived.archivedAt).not.toBeNull();
+    expect(seen.activeWhileArchived.map((row) => row.sharedWorld.id)).not.toContain(seen.world.id);
+    expect(seen.shelf.map((world) => world.id)).toContain(seen.world.id);
+    expect(seen.restored.archivedAt).toBeNull();
+    expect(seen.activeAfterRestore.map((row) => row.sharedWorld.id)).toContain(seen.world.id);
+    expect(seen.shelfAfterRestore.map((world) => world.id)).not.toContain(seen.world.id);
+    expect(seen.occupiedArchive._tag).toBe("Failure");
+    if (seen.occupiedArchive._tag === "Failure") {
+      expect(seen.occupiedArchive.failure._tag).toBe("Conflict");
+    }
+  }, 60_000);
+
   it("round-trips a campaign and everything hanging off it", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {

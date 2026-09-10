@@ -1,4 +1,4 @@
-import { type Actor, CurrentActor, NotFound } from "@taverns/api";
+import { type Actor, Conflict, CurrentActor, NotFound } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -765,26 +765,138 @@ describe("the group's own lifecycle", () => {
     if (refused._tag === "Failure") expect(refused.failure).toBeInstanceOf(NotFound);
   });
 
-  it("archives and restores as one column, owner-only", async () => {
+  it("archives only an empty world, shelves it for its owner, and restores it", async () => {
     const journey = await runtime.runPromise(
       Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const campaigns = yield* Campaigns;
         const groups = yield* Groups;
         const founder = yield* anAccount("Shelver");
+        const member = yield* anAccount("Shelf Reader");
         const group = yield* as(founder)(groups.create({ name: "A Shelf-bound Company" }));
+        yield* admitToGroup(sql, group.id, member.accountId);
+        // Retirement is a reversible shelf, not deletion. Seed each durable
+        // world-owned family directly so this test notices a future cascade or
+        // cleanup disguised as archive.
+        yield* sql`
+          insert into group_history_entry
+            (group_id, source_kind, body, origin, created_by_account_id)
+          values (${group.id}, 'manual', 'Still remembered.', 'authored', ${founder.accountId})
+        `;
+        yield* sql`
+          insert into assistant_thread (group_id, title, visibility)
+          values (${group.id}, 'Still discussing', 'shared')
+        `;
+        yield* sql`
+          insert into group_library_share
+            (group_id, owner_account_id, resource_kind, resource_id, shared_by_account_id)
+          values
+            (${group.id}, ${founder.accountId}, 'creature', gen_random_uuid(), ${founder.accountId})
+        `;
+        const renamed = yield* as(founder)(groups.update(group.id, { name: "The Empty Shelf" }));
         const archived = yield* as(founder)(groups.archive(group.id));
-        const listedWhileShelved = yield* as(founder)(groups.mine);
+        const createWhileArchived = yield* as(founder)(
+          campaigns.create(group.id, { name: "Too late for the shelf" }),
+        ).pipe(Effect.result);
+        const preserved = yield* sql<{ readonly kind: string; readonly count: number }>`
+          select 'history' as kind, count(*)::int as count
+          from group_history_entry where group_id = ${group.id}
+          union all
+          select 'hob' as kind, count(*)::int as count
+          from assistant_thread where group_id = ${group.id}
+          union all
+          select 'library' as kind, count(*)::int as count
+          from group_library_share where group_id = ${group.id}
+          union all
+          select 'members' as kind, count(*)::int as count
+          from group_member where group_id = ${group.id} and revoked_at is null
+        `;
+        const ownerLive = yield* as(founder)(groups.mine);
+        const ownerShelf = yield* as(founder)(groups.archived);
+        const memberLive = yield* as(member)(groups.mine);
+        const memberShelf = yield* as(member)(groups.archived);
+        const refusedRestore = yield* as(member)(groups.restore(group.id)).pipe(Effect.result);
         const restored = yield* as(founder)(groups.restore(group.id));
         const listedBack = yield* as(founder)(groups.mine);
-        return { archived, listedWhileShelved, restored, listedBack };
+        const shelfBack = yield* as(founder)(groups.archived);
+        return {
+          renamed,
+          archived,
+          createWhileArchived,
+          preserved,
+          ownerLive,
+          ownerShelf,
+          memberLive,
+          memberShelf,
+          refusedRestore,
+          restored,
+          listedBack,
+          shelfBack,
+        };
       }).pipe(Effect.orDie),
     );
 
+    expect(journey.renamed.name).toBe("The Empty Shelf");
     expect(journey.archived.archivedAt).not.toBeNull();
-    expect(journey.listedWhileShelved.map((row) => row.sharedWorld.name)).toEqual([]);
-    expect(journey.restored.archivedAt).toBeNull();
-    expect(journey.listedBack.map((row) => row.sharedWorld.name)).toEqual([
-      "A Shelf-bound Company",
+    expect(journey.createWhileArchived._tag).toBe("Failure");
+    if (journey.createWhileArchived._tag === "Failure") {
+      expect(journey.createWhileArchived.failure).toBeInstanceOf(NotFound);
+    }
+    expect(journey.preserved).toEqual([
+      { kind: "history", count: 1 },
+      { kind: "hob", count: 1 },
+      { kind: "library", count: 1 },
+      { kind: "members", count: 2 },
     ]);
+    expect(journey.ownerLive.map((row) => row.sharedWorld.id)).not.toContain(journey.archived.id);
+    expect(journey.ownerShelf.map((world) => world.id)).toContain(journey.archived.id);
+    expect(journey.memberLive.map((row) => row.sharedWorld.id)).not.toContain(journey.archived.id);
+    expect(journey.memberShelf.map((world) => world.id)).not.toContain(journey.archived.id);
+    expect(journey.refusedRestore._tag).toBe("Failure");
+    if (journey.refusedRestore._tag === "Failure") {
+      expect(journey.refusedRestore.failure).toBeInstanceOf(NotFound);
+    }
+    expect(journey.restored.archivedAt).toBeNull();
+    expect(journey.listedBack.map((row) => row.sharedWorld.name)).toContain("The Empty Shelf");
+    expect(journey.shelfBack.map((world) => world.id)).not.toContain(journey.archived.id);
+  }, 60_000);
+
+  it("refuses retirement while any live or archived campaign remains", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const founder = yield* anAccount("Keeper of Tables");
+
+        const liveWorld = yield* as(founder)(groups.create({ name: "A Living World" }));
+        yield* as(founder)(
+          campaigns.create(liveWorld.id, { name: "The Living Table", visibility: "shared" }),
+        );
+        const live = yield* as(founder)(groups.archive(liveWorld.id)).pipe(Effect.result);
+
+        const archivedWorld = yield* as(founder)(
+          groups.create({ name: "A World with a Shelved Table" }),
+        );
+        const campaign = yield* as(founder)(
+          campaigns.create(archivedWorld.id, {
+            name: "The Shelved Table",
+            visibility: "shared",
+          }),
+        );
+        yield* as(founder)(campaigns.archive(campaign.id));
+        const archived = yield* as(founder)(groups.archive(archivedWorld.id)).pipe(Effect.result);
+
+        return { live, archived };
+      }).pipe(Effect.orDie),
+    );
+
+    for (const refusal of [seen.live, seen.archived]) {
+      expect(refusal._tag).toBe("Failure");
+      if (refusal._tag === "Failure") {
+        expect(refusal.failure).toBeInstanceOf(Conflict);
+        expect(refusal.failure.message).toContain("move every campaign");
+      }
+    }
   }, 60_000);
 
   it("lets a campaign creator run their table while the owner runs the group", async () => {

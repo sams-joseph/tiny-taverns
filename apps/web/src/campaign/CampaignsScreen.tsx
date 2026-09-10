@@ -47,14 +47,12 @@ function CampaignRow({
   membership,
   world,
   onConnect,
-  onDisconnect,
-  onMove,
+  onChangeWorld,
 }: {
   readonly membership: CampaignMembership;
   readonly world: CampaignSharedWorld | null;
   readonly onConnect: (() => void) | undefined;
-  readonly onDisconnect: (() => void) | undefined;
-  readonly onMove: (() => void) | undefined;
+  readonly onChangeWorld: (() => void) | undefined;
 }) {
   const campaign = membership.campaign;
   return (
@@ -93,14 +91,9 @@ function CampaignRow({
               <Icon name="map" size={14} />
               {world.name}
             </Button>
-            {onDisconnect !== undefined && (
-              <Button variant="ghost" size="sm" onClick={onDisconnect}>
-                Make standalone
-              </Button>
-            )}
-            {onMove !== undefined && (
-              <Button variant="ghost" size="sm" onClick={onMove}>
-                Move to another Shared World
+            {onChangeWorld !== undefined && (
+              <Button variant="ghost" size="sm" onClick={onChangeWorld}>
+                Change Shared World
               </Button>
             )}
           </>
@@ -127,172 +120,18 @@ function CampaignRow({
   );
 }
 
-function MoveSharedWorldDialog({
+const STANDALONE = "standalone";
+
+type SharedWorldTransition = "connect" | "change";
+
+function SharedWorldTransitionDialog({
+  mode,
   membership,
   worlds,
   onClose,
 }: {
+  readonly mode: SharedWorldTransition;
   readonly membership: CampaignMembership;
-  readonly worlds: ReadonlyArray<SharedWorldMembership>;
-  readonly onClose: () => void;
-}) {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const navigate = useNavigate();
-  const [target, setTarget] = useState(worlds[0]?.sharedWorld.id ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const source = membership.sharedWorld!;
-
-  const move = async () => {
-    const destination = worlds.find(
-      (candidate) => candidate.sharedWorld.id === target,
-    )?.sharedWorld;
-    if (destination === undefined) return;
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.campaigns.moveSharedWorld({
-          params: { campaignId: membership.campaign.id },
-          payload: { worldId: destination.id },
-        }),
-      token,
-    );
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError("That did not save. Try it again.");
-      return;
-    }
-    invalidate([
-      reads.myCampaigns,
-      reads.sharedWorld(source.id),
-      reads.sharedWorld(destination.id),
-    ]);
-    onClose();
-    await navigate({ to: "/worlds/$worldId", params: { worldId: destination.id } });
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Move campaign to another Shared World">
-        <DialogHeader>
-          <DialogTitle>Move {membership.campaign.name}?</DialogTitle>
-          <DialogDescription>
-            Participants join the destination Shared World, while everyone remains a member of
-            {` ${source.name}`}. History already accepted there stays there. The campaign keeps its
-            content, invitations, and Hob conversations, but switches to the destination world's
-            Library shares; existing encounter instances remain.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 px-gutter py-3">
-          <Select value={target} onValueChange={(value) => setTarget(String(value))}>
-            <SelectTrigger aria-label="Destination Shared World" className="min-w-56">
-              <SelectValue>
-                {(value) =>
-                  worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
-                    .name ?? "Choose a Shared World"
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {worlds.map(({ sharedWorld }) => (
-                <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
-                  {sharedWorld.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {error !== undefined && (
-            <p role="alert" className="text-body-s leading-body text-danger">
-              {error}
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={busy || target === ""} onClick={() => void move()}>
-            {busy ? "Moving…" : "Move campaign"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DisconnectSharedWorldDialog({
-  membership,
-  onClose,
-}: {
-  readonly membership: CampaignMembership;
-  readonly onClose: () => void;
-}) {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const world = membership.sharedWorld!;
-
-  const disconnect = async () => {
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.campaigns.disconnectSharedWorld({
-          params: { campaignId: membership.campaign.id },
-          payload: {},
-        }),
-      token,
-    );
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError("That did not save. Try it again.");
-      return;
-    }
-    invalidate([reads.myCampaigns, reads.sharedWorld(world.id)]);
-    onClose();
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Make campaign standalone">
-        <DialogHeader>
-          <DialogTitle>Make {membership.campaign.name} standalone?</DialogTitle>
-          <DialogDescription>
-            The campaign, its participants, invitations, and Hob conversations stay intact. History
-            already accepted into {world.name} stays in that Shared World, and its members remain
-            members there. This campaign will stop contributing future activity and can no longer
-            use Library sources shared through that world; existing encounter instances remain.
-          </DialogDescription>
-        </DialogHeader>
-        {error !== undefined && (
-          <p role="alert" className="px-gutter text-body-s leading-body text-danger">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => void disconnect()}>
-            {busy ? "Working…" : "Make standalone"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SharedWorldDialog({
-  campaign,
-  worlds,
-  onClose,
-}: {
-  readonly campaign: CampaignMembership["campaign"];
   readonly worlds: ReadonlyArray<SharedWorldMembership>;
   readonly onClose: () => void;
 }) {
@@ -300,36 +139,79 @@ function SharedWorldDialog({
   const invalidate = useInvalidate();
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [target, setTarget] = useState(worlds[0]?.sharedWorld.id ?? "");
+  const [target, setTarget] = useState(
+    mode === "change"
+      ? (worlds[0]?.sharedWorld.id ?? STANDALONE)
+      : (worlds[0]?.sharedWorld.id ?? ""),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const campaign = membership.campaign;
+  const source = membership.sharedWorld;
 
-  const finish = async (world: CampaignSharedWorld) => {
-    invalidate([reads.myCampaigns, reads.mySharedWorlds, reads.sharedWorld(world.id)]);
+  const finish = async (world?: CampaignSharedWorld) => {
+    invalidate([
+      reads.myCampaigns,
+      reads.mySharedWorlds,
+      ...(source === null ? [] : [reads.sharedWorld(source.id)]),
+      ...(world === undefined ? [] : [reads.sharedWorld(world.id)]),
+    ]);
     onClose();
-    await navigate({ to: "/worlds/$worldId", params: { worldId: world.id } });
+    if (world !== undefined) {
+      await navigate({ to: "/worlds/$worldId", params: { worldId: world.id } });
+    }
   };
 
-  const connect = async () => {
+  const submit = async () => {
     const world = worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
-    if (world === undefined) return;
+    const disconnecting = mode === "change" && target === STANDALONE;
+    if (!disconnecting && world === undefined) return;
     setBusy(true);
     setError(undefined);
     const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.campaigns.connectSharedWorld({
-          params: { campaignId: campaign.id },
-          payload: { worldId: world.id },
-        }),
-      token,
-    );
+    if (disconnecting) {
+      const result = await runApiResult(
+        (client) =>
+          client.campaigns.disconnectSharedWorld({
+            params: { campaignId: campaign.id },
+            payload: {},
+          }),
+        token,
+      );
+      setBusy(false);
+      if (Result.isFailure(result)) {
+        setError("That did not save. Try it again.");
+        return;
+      }
+      await finish();
+      return;
+    }
+    if (world === undefined) return;
+
+    const result =
+      mode === "change"
+        ? await runApiResult(
+            (client) =>
+              client.campaigns.moveSharedWorld({
+                params: { campaignId: campaign.id },
+                payload: { worldId: world.id },
+              }),
+            token,
+          )
+        : await runApiResult(
+            (client) =>
+              client.campaigns.connectSharedWorld({
+                params: { campaignId: campaign.id },
+                payload: { worldId: world.id },
+              }),
+            token,
+          );
     setBusy(false);
     if (Result.isFailure(result)) {
       setError("That did not save. Try it again.");
       return;
     }
-    await finish(result.success);
+    await finish(world);
   };
 
   const promote = async () => {
@@ -352,58 +234,88 @@ function SharedWorldDialog({
     await finish(result.success);
   };
 
+  const changing = mode === "change";
+  const disconnecting = changing && target === STANDALONE;
+  const title = changing ? `Change ${campaign.name}'s Shared World` : "Connect to a Shared World";
+  const label = changing ? "Change campaign Shared World" : "Connect to Shared World";
+  const submitLabel = changing
+    ? disconnecting
+      ? "Make standalone"
+      : "Move campaign"
+    : "Connect campaign";
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Connect to Shared World">
+      <DialogContent aria-label={label}>
         <DialogHeader>
-          <DialogTitle>Connect to a Shared World</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {campaign.name} keeps its table and becomes part of a shared history. Its current
-            participants join the Shared World, and other world members can see its name in the
-            campaign directory. Its campaign content remains visible only to its participants.
+            {changing ? (
+              <>
+                Choose another Shared World or make the campaign standalone. Participants join a new
+                destination, while everyone remains a member of {source?.name}. History already
+                accepted there stays there. The campaign keeps its content, invitations, Hob
+                conversations, and existing encounter instances.{" "}
+                {disconnecting ? (
+                  <>
+                    As a standalone campaign, it will stop contributing future activity and using
+                    Library sources shared through that world.
+                  </>
+                ) : (
+                  <>It will switch to the destination world's Library shares.</>
+                )}
+              </>
+            ) : (
+              <>
+                {campaign.name} keeps its table and becomes part of a shared history. Its current
+                participants join the Shared World, and other world members can see its name in the
+                campaign directory. Its campaign content remains visible only to its participants.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 px-gutter py-3">
-          {worlds.length > 0 && (
+          {(changing || worlds.length > 0) && (
             <div className="flex flex-col gap-2">
               <span className="text-label leading-snug font-semibold text-heading">
-                Existing Shared World
+                {changing ? "New connection" : "Existing Shared World"}
               </span>
-              <div className="flex flex-wrap gap-2">
-                <Select value={target} onValueChange={(value) => setTarget(String(value))}>
-                  <SelectTrigger aria-label="Existing Shared World" className="min-w-56">
-                    <SelectValue>
-                      {(value) =>
-                        worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
-                          .name ?? "Choose a Shared World"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {worlds.map(({ sharedWorld }) => (
-                      <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
-                        {sharedWorld.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" disabled={busy || target === ""} onClick={() => void connect()}>
-                  {busy ? "Connecting…" : "Connect campaign"}
-                </Button>
-              </div>
+              <Select value={target} onValueChange={(value) => setTarget(String(value))}>
+                <SelectTrigger
+                  aria-label={changing ? "New Shared World connection" : "Existing Shared World"}
+                  className="min-w-56"
+                >
+                  <SelectValue>
+                    {(value) =>
+                      worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
+                        .name ?? "Choose a Shared World"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {changing && <SelectItem value={STANDALONE}>Standalone campaign</SelectItem>}
+                  {worlds.map(({ sharedWorld }) => (
+                    <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
+                      {sharedWorld.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
-          <div className="flex flex-col gap-2 border-t border-border pt-4">
-            <span className="text-label leading-snug font-semibold text-heading">
-              {worlds.length > 0 ? "Or create a new Shared World" : "Create a Shared World"}
-            </span>
-            <Input
-              aria-label="Shared World name"
-              placeholder="The Salt Marches"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
+          {mode === "connect" && (
+            <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <span className="text-label leading-snug font-semibold text-heading">
+                {worlds.length > 0 ? "Or create a new Shared World" : "Create a Shared World"}
+              </span>
+              <Input
+                aria-label="Shared World name"
+                placeholder="The Salt Marches"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+          )}
           {error !== undefined && (
             <p role="alert" className="pt-2 text-body-s leading-body text-danger">
               {error}
@@ -414,16 +326,21 @@ function SharedWorldDialog({
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={busy || name.trim() === ""} onClick={() => void promote()}>
-            {busy ? "Creating…" : "Create Shared World"}
-          </Button>
+          {(changing || worlds.length > 0) && (
+            <Button size="sm" disabled={busy || target === ""} onClick={() => void submit()}>
+              {busy ? "Working…" : submitLabel}
+            </Button>
+          )}
+          {mode === "connect" && (
+            <Button size="sm" disabled={busy || name.trim() === ""} onClick={() => void promote()}>
+              {busy ? "Creating…" : "Create Shared World"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-const STANDALONE = "standalone";
 
 function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMembership> }) {
   const fetchCredential = useCredential();
@@ -518,32 +435,36 @@ function SharedWorldDirectory({
 }: {
   readonly worlds: ReadonlyArray<SharedWorldMembership>;
 }) {
-  if (worlds.length === 0) return null;
-
   return (
     <section className="flex flex-col gap-2" aria-label="Shared Worlds">
       <span className="text-label leading-snug font-semibold text-heading">Shared Worlds</span>
-      <div className="flex flex-wrap gap-2">
-        {worlds.map(({ sharedWorld, isOwner }) => (
-          <Button
-            key={sharedWorld.id}
-            variant="secondary"
-            size="sm"
-            nativeButton={false}
-            render={
-              <Link
-                to="/worlds/$worldId"
-                params={{ worldId: sharedWorld.id }}
-                aria-label={`Open Shared World ${sharedWorld.name}`}
-              />
-            }
-          >
-            <Icon name="map" size={14} />
-            {sharedWorld.name}
-            {isOwner && <Badge variant="outline">Yours</Badge>}
-          </Button>
-        ))}
-      </div>
+      {worlds.length === 0 ? (
+        <p className="text-body-s leading-body text-muted-foreground">
+          Shared Worlds you create or join will appear here.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {worlds.map(({ sharedWorld, isOwner }) => (
+            <Button
+              key={sharedWorld.id}
+              variant="secondary"
+              size="sm"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/worlds/$worldId"
+                  params={{ worldId: sharedWorld.id }}
+                  aria-label={`Open Shared World ${sharedWorld.name}`}
+                />
+              }
+            >
+              <Icon name="map" size={14} />
+              {sharedWorld.name}
+              {isOwner && <Badge variant="outline">Yours</Badge>}
+            </Button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -552,9 +473,9 @@ export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
-  const [connecting, setConnecting] = useState<CampaignMembership | undefined>();
-  const [disconnecting, setDisconnecting] = useState<CampaignMembership | undefined>();
-  const [moving, setMoving] = useState<CampaignMembership | undefined>();
+  const [transition, setTransition] = useState<
+    { readonly mode: SharedWorldTransition; readonly membership: CampaignMembership } | undefined
+  >();
   const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
@@ -590,22 +511,12 @@ export function CampaignsScreen() {
                       worldsResource.state === "ready" &&
                       membership.relation === "creator" &&
                       membership.sharedWorld === null
-                        ? () => setConnecting(membership)
+                        ? () => setTransition({ mode: "connect", membership })
                         : undefined
                     }
-                    onDisconnect={
+                    onChangeWorld={
                       membership.relation === "creator" && membership.sharedWorld !== null
-                        ? () => setDisconnecting(membership)
-                        : undefined
-                    }
-                    onMove={
-                      membership.relation === "creator" &&
-                      membership.sharedWorld !== null &&
-                      worlds.some(
-                        (world) =>
-                          world.isOwner && world.sharedWorld.id !== membership.sharedWorld?.id,
-                      )
-                        ? () => setMoving(membership)
+                        ? () => setTransition({ mode: "change", membership })
                         : undefined
                     }
                   />
@@ -627,26 +538,17 @@ export function CampaignsScreen() {
       </div>
 
       {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
-      {connecting !== undefined && (
-        <SharedWorldDialog
-          campaign={connecting.campaign}
-          worlds={worlds.filter((world) => world.isOwner)}
-          onClose={() => setConnecting(undefined)}
-        />
-      )}
-      {disconnecting !== undefined && (
-        <DisconnectSharedWorldDialog
-          membership={disconnecting}
-          onClose={() => setDisconnecting(undefined)}
-        />
-      )}
-      {moving !== undefined && moving.sharedWorld !== null && (
-        <MoveSharedWorldDialog
-          membership={moving}
+      {transition !== undefined && (
+        <SharedWorldTransitionDialog
+          mode={transition.mode}
+          membership={transition.membership}
           worlds={worlds.filter(
-            (world) => world.isOwner && world.sharedWorld.id !== moving.sharedWorld?.id,
+            (world) =>
+              world.isOwner &&
+              (transition.mode !== "change" ||
+                world.sharedWorld.id !== transition.membership.sharedWorld?.id),
           )}
-          onClose={() => setMoving(undefined)}
+          onClose={() => setTransition(undefined)}
         />
       )}
     </AppShell>

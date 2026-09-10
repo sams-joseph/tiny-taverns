@@ -1,6 +1,7 @@
 import {
   type AccountId,
   type CampaignId,
+  Conflict,
   CurrentActor,
   SharedWorld,
   SharedWorldCampaignCard,
@@ -148,6 +149,8 @@ export class Groups extends Context.Service<
   {
     /** Every group this account is a live member of. */
     readonly mine: Effect.Effect<ReadonlyArray<SharedWorldMembership>, never, CurrentActor>;
+    /** Archived explicit worlds owned by this account, for restoration. */
+    readonly archived: Effect.Effect<ReadonlyArray<SharedWorld>, never, CurrentActor>;
     readonly findById: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /** Anybody may found a group; they become its owner and first member. */
     readonly create: (
@@ -172,7 +175,9 @@ export class Groups extends Context.Service<
       id: SharedWorldId,
       patch: SharedWorldUpdate,
     ) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
-    readonly archive: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
+    readonly archive: (
+      id: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound | Conflict, CurrentActor>;
     readonly restore: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /**
      * The group's roster — every live member's read, unlike a campaign's,
@@ -224,6 +229,21 @@ export class Groups extends Context.Service<
                   joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                 }),
             );
+          }),
+        ),
+
+        archived: dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            const rows = yield* sql<GroupRow>`
+              select * from play_group
+              where play_group.owner_account_id = ${actor.accountId}
+                and ${groupReadable(sql, actor)}
+                and play_group.is_shared_world
+                and play_group.archived_at is not null
+              order by play_group.archived_at desc, play_group.created_at desc
+            `;
+            return rows.map(toGroup);
           }),
         ),
 
@@ -391,15 +411,37 @@ export class Groups extends Context.Service<
 
         archive: (id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<GroupRow>`
-                update play_group set archived_at = now(), updated_at = now()
-                where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning *
-              `;
-              return yield* one(rows, id);
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const worlds = yield* sql<GroupRow>`
+                  select * from play_group
+                  where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
+                  for update
+                `;
+                if (worlds.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id });
+                }
+
+                const campaigns = yield* sql<{ readonly exists: boolean }>`
+                  select exists (
+                    select 1 from campaign where campaign.group_id = ${id}
+                  ) as exists
+                `;
+                if (campaigns[0]!.exists) {
+                  return yield* new Conflict({
+                    message: "move every campaign out of this Shared World before archiving it",
+                  });
+                }
+
+                const rows = yield* sql<GroupRow>`
+                  update play_group set archived_at = now(), updated_at = now()
+                  where play_group.id = ${id}
+                  returning *
+                `;
+                return toGroup(rows[0]!);
+              }),
+            ),
           ),
 
         restore: (id) =>

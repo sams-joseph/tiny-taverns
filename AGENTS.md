@@ -116,6 +116,20 @@ reset after pulling the rewritten baseline migrations.
   owned by the campaign creator, so another owner's world cannot trap their
   table. A standalone source, the current world, another owner's destination or
   an archived destination answers `NotFound`.
+- Shared World retirement is reversible and owner-only. `DELETE /worlds/:worldId`
+  archives a world only when it contains no campaigns at all, including archived
+  campaigns; otherwise it answers `Conflict` and the owner must move or disconnect
+  those tables first. The archive transaction and campaign creation lock the same
+  world row, so a table cannot race onto a retiring world. Archiving changes only
+  the world row: memberships, Chronicle history, Hob threads and Library shares
+  remain. Active lists and every destination/share picker exclude archived worlds;
+  `GET /worlds/archived` is an owner-only restoration shelf, and restore puts the
+  same world back. The world screen exposes rename and archive only to its owner.
+- Campaign context changes use one `Change Shared World` dialog: another owned
+  world performs the direct move, while `Standalone campaign` disconnects it.
+  Standalone campaigns use the companion connect/create flow. Hob's prompts, tool
+  descriptions and public conflict messages consistently say `Shared World`; the
+  remaining `group_*` names are persistence and repository vocabulary only.
 - `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen

@@ -11,6 +11,7 @@ import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
 import { sharedWorldsAtom } from "./load";
 
 /**
@@ -115,7 +116,8 @@ function NewSharedWorld() {
 
 export function SharedWorldsScreen() {
   const [resource, retry] = useApiAtom(sharedWorldsAtom);
-  const [shelfOpen, setShelfOpen] = useState(false);
+  const [worldShelfOpen, setWorldShelfOpen] = useState(false);
+  const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
@@ -152,20 +154,32 @@ export function SharedWorldsScreen() {
             )}
             {/* The way back for shelved tables, and deliberately the quietest
                 thing on the page. It requests nothing until it is opened. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="self-start text-muted-foreground"
-              onClick={() => setShelfOpen(true)}
-            >
-              <Icon name="history" size={14} />
-              Archived campaigns
-            </Button>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setWorldShelfOpen(true)}
+              >
+                <Icon name="history" size={14} />
+                Archived Shared Worlds
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => setCampaignShelfOpen(true)}
+              >
+                <Icon name="history" size={14} />
+                Archived campaigns
+              </Button>
+            </div>
           </>
         )}
       </div>
 
-      {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
+      {worldShelfOpen && <ArchivedSharedWorldsDialog onClose={() => setWorldShelfOpen(false)} />}
+      {campaignShelfOpen && <ArchivedDialog onClose={() => setCampaignShelfOpen(false)} />}
     </AppShell>
   );
 }

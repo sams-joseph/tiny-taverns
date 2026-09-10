@@ -199,6 +199,19 @@ export class Campaigns extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureGroupReadable(sql, groupId, actor);
+                // Coordinate with `Groups.archive`: both lifecycle operations
+                // lock the world before deciding whether it is empty/active,
+                // so a new campaign cannot race retirement and land in an
+                // archived Shared World.
+                const active = yield* sql<{ readonly id: SharedWorldId }>`
+                  select play_group.id from play_group
+                  where play_group.id = ${groupId}
+                    and play_group.archived_at is null
+                  for update
+                `;
+                if (active.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: groupId });
+                }
                 return yield* insert(groupId, payload, actor);
               }),
             ),

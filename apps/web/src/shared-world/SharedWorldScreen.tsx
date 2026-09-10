@@ -1,5 +1,5 @@
 import type { SharedWorldCampaignCard, SharedWorldId, SharedWorldMember } from "@taverns/api";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -11,8 +11,10 @@ import { ArchiveDialog } from "../campaign/ArchiveDialog";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
+import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
-import { sharedWorldViewAtom } from "./load";
+import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
+import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
 
 /**
  * One Shared World: its campaign directory, and its people.
@@ -173,10 +175,19 @@ function MemberRow({ member }: { readonly member: SharedWorldMember }) {
 
 export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId }) {
   const [resource, retry] = useApiAtom(sharedWorldViewAtom(worldId));
+  const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [archiving, setArchiving] = useState<SharedWorldCampaignCard | undefined>();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [worldArchiveOpen, setWorldArchiveOpen] = useState(false);
   const hob = useHobPanel({ initialOpen: false });
+  const navigate = useNavigate();
 
   const view = resource.state === "ready" ? resource.value : undefined;
+  const ownsWorld =
+    worldsResource.state === "ready" &&
+    worldsResource.value.some(
+      (membership) => membership.sharedWorld.id === worldId && membership.isOwner,
+    );
 
   return (
     <AppShell
@@ -200,6 +211,14 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
         )}
         {view !== undefined && (
           <>
+            {ownsWorld && (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+                  <Icon name="pencil" size={14} />
+                  Shared World settings
+                </Button>
+              </div>
+            )}
             <section className="flex flex-col gap-4" aria-label="Campaigns">
               <NewCampaign worldId={worldId} />
               {view.campaigns.length === 0 ? (
@@ -241,6 +260,29 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
           alsoInvalidates={[reads.sharedWorld(worldId)]}
           onClose={() => setArchiving(undefined)}
           onArchived={() => setArchiving(undefined)}
+        />
+      )}
+
+      {settingsOpen && view !== undefined && (
+        <SharedWorldSettingsDialog
+          sharedWorld={view.sharedWorld}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => setSettingsOpen(false)}
+          onArchive={() => {
+            setSettingsOpen(false);
+            setWorldArchiveOpen(true);
+          }}
+        />
+      )}
+
+      {worldArchiveOpen && view !== undefined && (
+        <ArchiveSharedWorldDialog
+          sharedWorld={view.sharedWorld}
+          onClose={() => setWorldArchiveOpen(false)}
+          onArchived={() => {
+            setWorldArchiveOpen(false);
+            void navigate({ to: "/worlds" });
+          }}
         />
       )}
     </AppShell>

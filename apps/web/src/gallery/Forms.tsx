@@ -96,7 +96,7 @@ export function Forms() {
               onCheckedChange={(checked) => setPartial(Boolean(checked))}
             />
             <Label htmlFor="partial" className="font-normal text-body-s">
-              Prep the whole session {partial ? "" : "— partial group state"}
+              Prep the whole session {partial ? "" : "— partially selected"}
             </Label>
           </div>
           <div className="flex items-center gap-2.5">

@@ -207,6 +207,25 @@ describe("the API declaration", () => {
     ]);
   });
 
+  it("gives owners a canonical archived Shared World shelf", () => {
+    const worlds = groups.find((group) => group.identifier === "sharedWorlds");
+    const archived = endpointsOf(worlds as GroupShape).find(
+      (endpoint) => endpoint.identifier === "archived",
+    );
+
+    expect(
+      archived && {
+        identifier: archived.identifier,
+        method: archived.method,
+        path: archived.path,
+      },
+    ).toEqual({
+      identifier: "archived",
+      method: "GET",
+      path: "/worlds/archived",
+    });
+  });
+
   it("uses Shared World names and URLs for every world-facing API group", () => {
     const worldGroups = groups.filter((group) => group.identifier.startsWith("sharedWorld"));
 

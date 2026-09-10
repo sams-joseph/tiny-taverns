@@ -224,7 +224,7 @@ export class Proposals extends Context.Service<
             // not exist would silently mis-file the day that invariant moves.
             return Effect.fail(
               new Conflict({
-                message: "that belongs to the group's chronicle — accept it there",
+                message: "that belongs to the Shared World Chronicle — accept it there",
               }),
             );
         }

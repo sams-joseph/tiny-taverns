@@ -238,6 +238,7 @@ const SharedWorldsLive = HttpApiBuilder.group(
     const campaigns = yield* Campaigns;
     return handlers
       .handle("list", () => groups.mine)
+      .handle("archived", () => groups.archived)
       .handle("create", ({ payload }) => groups.create(payload))
       .handle("findById", ({ params }) => groups.findById(params.worldId))
       .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))

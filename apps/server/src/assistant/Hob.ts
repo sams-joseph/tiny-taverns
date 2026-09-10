@@ -712,7 +712,7 @@ export class Hob extends Context.Service<
                   Stream.unwrap(
                     Effect.as(
                       Effect.logWarning(
-                        `Hob's group answer failed: ${describe(Cause.squash(cause))}`,
+                        `Hob's Shared World answer failed: ${describe(Cause.squash(cause))}`,
                       ),
                       Stream.succeed(failure(apology(Cause.squash(cause)))),
                     ),
@@ -1546,19 +1546,19 @@ const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string
   ].join("\n");
 
 /**
- * What Hob is told on the **group** surface.
+ * What Hob is told on the **Shared World** surface.
  *
- * Voiced for a member of the whole group rather than for one table's DM, and
+ * Voiced for a member of the whole Shared World rather than for one table's DM, and
  * it says the boundary out loud so the model does not promise reads it does
- * not have: what it can see is what the group has agreed happened — shared
+ * not have: what it can see is what the world has agreed happened — shared
  * recaps, the played timeline, the chronicle — and never anybody's prep.
  */
 const groupPrompt = (groupName: string): string =>
   [
     "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping a member",
-    `of "${groupName}", a group of people playing tabletop campaigns together.`,
+    `of the Shared World "${groupName}", where several tabletop campaigns share context.`,
     "",
-    "You can see the group's shared record: the chronicle members have written, the",
+    "You can see the Shared World's record: the chronicle members have written, the",
     "running summary, which campaigns exist and who runs them, and every night that has",
     "actually been played — with its story beats and how its fights ended. You cannot",
     "see anybody's preparation, private notes or plans, and you should say so if asked.",

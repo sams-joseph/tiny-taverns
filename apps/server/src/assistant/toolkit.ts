@@ -542,7 +542,7 @@ const CreatureLine = Schema.Struct({
 export const ListCreatures = Tool.make("listCreatures", {
   description:
     "Every creature this campaign can put in a fight — the shared corpus, the " +
-    "DM's own Library, and what the group shares — by name. Use it to see what " +
+    "DM's own Library, and what the Shared World shares — by name. Use it to see what " +
     "is available before building an encounter, and take `creatureId` straight " +
     "to proposeEncounter. At most 50 are listed; if what you want is not here, " +
     "look for it by name with searchCampaign.",
@@ -655,7 +655,7 @@ export const ReadSessionLog = Tool.make("sessionLog", {
  */
 export const SearchSharedWorldHistory = Tool.make("searchSharedWorldHistory", {
   description:
-    "Search the group's shared chronicle — what the whole group has agreed " +
+    "Search the Shared World's chronicle — what its members have agreed " +
     "happened, across every campaign in it. Lexical: search for names and " +
     "words somebody would have written. Entries were shared on purpose; " +
     "campaign prep that was never shared is not in here.",
@@ -676,8 +676,8 @@ export const SearchSharedWorldHistory = Tool.make("searchSharedWorldHistory", {
 
 export const ReadSharedWorldSummary = Tool.make("readSharedWorldSummary", {
   description:
-    "The group's accepted running summary — the story so far across every " +
-    "campaign, as the group last agreed it. One paragraph or a sentence " +
+    "The Shared World's accepted running summary — the story so far across every " +
+    "campaign, as its members last agreed it. One paragraph or a sentence " +
     "saying there is none yet.",
   success: Schema.String,
   failure: NotFound,
@@ -694,7 +694,7 @@ export const ReadSharedWorldSummary = Tool.make("readSharedWorldSummary", {
  */
 export const ListSharedWorldCampaigns = Tool.make("listSharedWorldCampaigns", {
   description:
-    "The campaigns in this group, each with who runs it. Group-visible " +
+    "The campaigns in this Shared World, each with who runs it. World-visible " +
     "metadata only — a campaign's own content belongs to its table.",
   success: Schema.Array(
     Schema.Struct({
@@ -709,8 +709,8 @@ export const ListSharedWorldCampaigns = Tool.make("listSharedWorldCampaigns", {
 
 export const ListPlayedNights = Tool.make("listPlayedNights", {
   description:
-    "Every night that has actually been played, across all of this group's " +
-    "campaigns, oldest first — the group's canonical timeline. Planned " +
+    "Every night that has actually been played across this Shared World's " +
+    "campaigns, oldest first — the world's canonical timeline. Planned " +
     "sessions are not in it. Take campaignId and sessionId to nightStory " +
     "for what happened on one of them.",
   success: Schema.Array(
@@ -729,7 +729,7 @@ export const ListPlayedNights = Tool.make("listPlayedNights", {
 
 export const NightStory = Tool.make("nightStory", {
   description:
-    "What happened on one played night, anywhere in the group: the DM's " +
+    "What happened on one played night, anywhere in the Shared World: the DM's " +
     "story beats verbatim and each fight by name and outcome. No numbers and " +
     "no stat blocks — outcomes, not mechanics. Take the ids from " +
     "listPlayedNights.",
@@ -756,7 +756,7 @@ export const NightStory = Tool.make("nightStory", {
 
 export const ProposeSharedWorldEntry = Tool.make("proposeSharedWorldEntry", {
   description:
-    "Offer the group a line for its shared chronicle — a summary of events, " +
+    "Offer the Shared World a line for its chronicle — a summary of events, " +
     "a connection between campaigns, a fact worth keeping. Only a " +
     "suggestion: nothing enters the chronicle unless a member accepts it.",
   parameters: Schema.Struct({
@@ -1090,7 +1090,7 @@ const OptionLine = Schema.Struct({
 export const ListOptions = Tool.make("listOptions", {
   description:
     "Every class, race and background a character in this campaign can be built from — " +
-    "the shared bundle, plus what is shared to this table's group. Use it " +
+    "the shared bundle, plus what is shared to this table's Shared World. Use it " +
     "before proposeCharacter, and copy a `name` back exactly as it came.",
   success: Schema.Array(OptionLine),
   failure: NotFound,
@@ -1484,7 +1484,7 @@ const summaryWith =
   () =>
     Effect.map(as(history.summary(groupId)), (summary) =>
       summary === null
-        ? "The group has no accepted summary yet — the chronicle's entries are the record."
+        ? "The Shared World has no accepted summary yet — the chronicle's entries are the record."
         : summary.text,
     );
 
@@ -1750,7 +1750,7 @@ export const groupHandlersFor = (
     proposeSharedWorldEntry: ({ title, body }) =>
       offer(
         { target: "sharedWorldHistory", title: blank(title) ?? null, body },
-        "Offered the group a line for its chronicle. Nothing is saved unless a " +
+        "Offered the Shared World a line for its chronicle. Nothing is saved unless a " +
           "member accepts it; say one short line about it and stop.",
       ),
   });

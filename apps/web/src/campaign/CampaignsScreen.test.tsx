@@ -112,14 +112,16 @@ describe("the campaign-first home", () => {
     });
     await renderCampaigns("/campaigns", mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Make standalone" }));
-    expect(screen.getByText(/campaign, its participants, invitations, and Hob/)).toBeTruthy();
-    expect(screen.getByText(/History already accepted.*stays in that Shared World/)).toBeTruthy();
-    expect(screen.getByText(/members remain members there/)).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: "Change Shared World" }));
+    expect(screen.getByText(/campaign keeps its content, invitations, Hob/)).toBeTruthy();
+    expect(screen.getByText(/History already accepted there stays there/)).toBeTruthy();
+    expect(screen.getByText(/everyone remains a member/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("combobox", { name: "New Shared World connection" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Standalone campaign" }));
     expect(
-      screen.getByText(/can no longer use Library sources shared through that world/),
+      screen.getByText(/stop contributing future activity and using Library sources/),
     ).toBeTruthy();
-    expect(screen.getByText(/existing encounter instances remain/)).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).toContain("existing encounter instances");
     await userEvent.click(screen.getByRole("button", { name: "Make standalone" }));
 
     await waitFor(() => expect(bodyOf(server, "POST", "/shared-world/disconnect")).toEqual({}));
@@ -151,14 +153,14 @@ describe("the campaign-first home", () => {
     });
     await renderCampaigns("/campaigns", mintingSession());
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Move to another Shared World" }),
-    );
-    expect(screen.getByText(/Participants join the destination Shared World/)).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: "Change Shared World" }));
+    expect(screen.queryByRole("button", { name: "Make standalone" })).toBeNull();
+    expect(screen.getByText(/Participants join a new destination/)).toBeTruthy();
     expect(screen.getByText(/everyone remains a member/)).toBeTruthy();
     expect(screen.getByText(/History already accepted there stays there/)).toBeTruthy();
-    expect(screen.getByText(/switches to the destination world's Library shares/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("combobox", { name: "Destination Shared World" }));
+    expect(screen.getByText(/switch to the destination world's Library shares/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("combobox", { name: "New Shared World connection" }));
+    expect(await screen.findByRole("option", { name: "Standalone campaign" })).toBeTruthy();
     expect(await screen.findByRole("option", { name: destination.name })).toBeTruthy();
     expect(screen.queryByRole("option", { name: sharedWorldDetails.name })).toBeNull();
     expect(screen.queryByRole("option", { name: somebodyElsesWorld.name })).toBeNull();

@@ -622,9 +622,10 @@ describe("the scope, counted", () => {
     // campaign half either returns the same schema to a player who can read the
     // row or writes through `rowWritable` / `ensureCampaignWritable`, where
     // DM-ness is already the predicate underneath.
-    // The eight group operations are mine, findById, create, update, archive,
-    // restore, members and the campaign directory. None takes the proof and
-    // none should: a `CampaignCreatorActor` proves a fact about one campaign,
+    // The nine group operations are mine, the owner-only archived shelf,
+    // findById, create, update, archive, restore, members and the campaign
+    // directory. None takes the proof and none should: a
+    // `CampaignCreatorActor` proves a fact about one campaign,
     // and every one of these is about the Shared World above it. Reads compose
     // `groupReadable`; the remaining settings writes compose `groupWritable`.
     //
@@ -681,7 +682,7 @@ describe("the scope, counted", () => {
     // finding, reading turns, appending and building prompt context for the
     // shared live-session channel. They deliberately read through active table
     // presence, not a creator proof; only opening the channel is creator-gated.
-    expect(ungated).toBe(152);
+    expect(ungated).toBe(153);
   });
 });
 

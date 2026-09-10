@@ -198,6 +198,8 @@ class SharedWorldsGroup extends HttpApiGroup.make("sharedWorlds")
   .add(
     /** Every explicit Shared World this account is a live member of. */
     HttpApiEndpoint.get("list", "/", { success: Schema.Array(SharedWorldMembership) }),
+    /** Archived Shared Worlds owned by this account, for the restoration shelf. */
+    HttpApiEndpoint.get("archived", "/archived", { success: Schema.Array(SharedWorld) }),
     HttpApiEndpoint.post("create", "/", { payload: SharedWorldCreate, success: SharedWorld }),
     HttpApiEndpoint.get("findById", "/:worldId", {
       params: { worldId: SharedWorldId },
@@ -213,7 +215,7 @@ class SharedWorldsGroup extends HttpApiGroup.make("sharedWorlds")
     HttpApiEndpoint.delete("archive", "/:worldId", {
       params: { worldId: SharedWorldId },
       success: SharedWorld,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.post("restore", "/:worldId/restore", {
       params: { worldId: SharedWorldId },
