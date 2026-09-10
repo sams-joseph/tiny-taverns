@@ -70,6 +70,10 @@ ordinary campaign work must not require navigating or owning that container.
   targets through the existing `groups.createCampaign` authorization seam.
   The campaign home also lists every Shared World independently of campaign
   participation, so a world-only member is never left without a route into it.
+- Every unqualified campaign create—including the live API call in the Server
+  gallery—uses `campaigns.create` and mints only the hidden backing context.
+  `sharedWorlds.createCampaign` is reserved for a world the user explicitly
+  selected or the campaign composer mounted inside a Shared World.
 - `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen
