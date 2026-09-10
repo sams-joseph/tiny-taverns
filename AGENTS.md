@@ -13,6 +13,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   checks anything and CI has to name it as its own step. It did not, and six files had drifted
   by the time anyone looked. `.prettierignore` holds the two read-only trees out
   (`packages/design-system`, `.repos/`), so a formatting pass never reaches either.
+- **The server Vitest suite is capped at eight workers.** Every test file owns a database and
+  applies the full migration ledger; core-count-derived parallelism started 30 simultaneous DDL
+  transactions and exhausted PostgreSQL's shared lock table (`53200`, `max_locks_per_transaction`)
+  while connections were still plentiful. Keep the cap in `apps/server/vitest.config.ts` instead
+  of requiring a specially tuned developer or CI database.
 - **Vite/Vitest versions must stay aligned.** Vitest 2 pulls Vite 5 while `@vitejs/plugin-react`
   uses Vite 6; mixing them produces duplicate-`vite` type errors. The workspace pins Vitest 3 +
   Vite 6 together across `apps/web` and `packages/ui`. Keep them in lockstep when bumping.

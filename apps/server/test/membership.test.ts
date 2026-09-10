@@ -132,12 +132,16 @@ describe("the reach seam, enforced rather than asserted", () => {
     // captain's decision — so the honest guard is an inventory of who reads
     // it, kept short: the predicate (`isCreator` in `repo/visibility.ts`),
     // the row mapper and create (`repo/Campaigns.ts`), the derived relation
-    // and creator guard (`repo/Memberships.ts`), and the group directory and
-    // removal guard (`repo/Groups.ts`). A new file on this list is a new
-    // place DM-ness is decided, and should be looked at hard.
+    // and creator guard (`repo/Memberships.ts`), the group directory
+    // (`repo/Groups.ts`), and the invitation projection that names the
+    // campaign's creator (`repo/Invites.ts`). Invites only joins the account
+    // for display; it still receives creator authority as a proof. A new file
+    // on this list is a new place creator-ness may be interpreted, and should
+    // be looked at hard.
     expect(mentioning(/\bcreator_account_id\b/)).toEqual([
       "repo/Campaigns.ts",
       "repo/Groups.ts",
+      "repo/Invites.ts",
       "repo/Memberships.ts",
       "repo/visibility.ts",
     ]);
