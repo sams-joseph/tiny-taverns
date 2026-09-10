@@ -27,7 +27,7 @@ const model = scriptedModel({
   maxTokens: 4096,
   rounds: [
     toolCallChunks("listPlayedNights", {}),
-    toolCallChunks("searchGroupHistory", { query: "bridge" }),
+    toolCallChunks("searchSharedWorldHistory", { query: "bridge" }),
     textChunks("Both campaigns have changed the world around the bridge."),
   ],
 });
@@ -219,13 +219,14 @@ describe("Shared World lifecycle", () => {
     expect(seen.ownerWorldsBeforePromotion).toEqual([]);
     expect(seen.playerWorldsBeforeInvite).toEqual([]);
     expect(seen.world).toMatchObject({
-      id: seen.first.groupId,
+      id: seen.first.contextId,
       name: "The Cinder Marches",
-      isSharedWorld: true,
     });
-    expect(seen.second.groupId).toBe(seen.world.id);
+    expect(seen.second.contextId).toBe(seen.world.id);
 
-    expect(seen.playerWorldsAfterFirstInvite.map((row) => row.group.id)).toEqual([seen.world.id]);
+    expect(seen.playerWorldsAfterFirstInvite.map((row) => row.sharedWorld.id)).toEqual([
+      seen.world.id,
+    ]);
     expect(
       Object.fromEntries(
         seen.directoryAfterFirstInvite.map((campaign) => [campaign.id, campaign.relation]),

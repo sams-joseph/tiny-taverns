@@ -51,7 +51,7 @@ const makeFixture = Effect.gen(function* () {
   const saltRoad = yield* withActor(jo)(
     createCampaign({ name: "The Salt Road", visibility: "shared" }),
   );
-  const groupId = saltRoad.groupId;
+  const groupId = saltRoad.contextId;
   const joCreator = yield* withActor(jo)(
     CampaignCreatorActors.pipe(Effect.flatMap((c) => c.of(saltRoad.id))),
   );

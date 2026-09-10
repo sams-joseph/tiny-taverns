@@ -91,7 +91,7 @@ const makeFixture = Effect.gen(function* () {
       hp: 8,
     }),
   );
-  yield* as(shares.share(campaign.groupId, { kind: "creature", resourceId: sharedCreature.id }));
+  yield* as(shares.share(campaign.contextId, { kind: "creature", resourceId: sharedCreature.id }));
 
   const encounter = yield* as(
     encounters.create(campaign.id, { name: "Ambush in the reeds", difficulty: "Medium" }),
@@ -121,7 +121,10 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   yield* withActor(outsider)(
-    shares.share(outsiderCampaign.groupId, { kind: "creature", resourceId: creatureElsewhere.id }),
+    shares.share(outsiderCampaign.contextId, {
+      kind: "creature",
+      resourceId: creatureElsewhere.id,
+    }),
   );
 
   const player = yield* aPlayerAt(campaign.id, "Pim");

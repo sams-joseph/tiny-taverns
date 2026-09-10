@@ -1,4 +1,4 @@
-import type { GroupMembership } from "@taverns/api";
+import type { SharedWorldMembership } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
@@ -18,25 +18,25 @@ import { sharedWorldsAtom } from "./load";
  * this is the optional cross-campaign context directory.
  *
  * Founding one makes you its owner and first member in one transaction
- * (`Groups.create`), and campaigns can then be started inside it.
+ * (`sharedWorlds.create`), and campaigns can then be started inside it.
  *
  * There is no mode and no filter: an account's Shared Worlds are the explicit
  * contexts it belongs to, independently of its relation to any campaign.
  */
 
-function SharedWorldRow({ membership }: { readonly membership: GroupMembership }) {
-  const group = membership.group;
+function SharedWorldRow({ membership }: { readonly membership: SharedWorldMembership }) {
+  const sharedWorld = membership.sharedWorld;
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
             <Link
-              to="/worlds/$groupId"
-              params={{ groupId: group.id }}
+              to="/worlds/$worldId"
+              params={{ worldId: sharedWorld.id }}
               className="text-heading no-underline hover:text-link-hover"
             >
-              {group.name}
+              {sharedWorld.name}
             </Link>
           </CardTitle>
           {membership.isOwner && <Badge variant="secondary">Yours</Badge>}
@@ -49,7 +49,7 @@ function SharedWorldRow({ membership }: { readonly membership: GroupMembership }
             size="sm"
             className="text-link"
             nativeButton={false}
-            render={<Link to="/worlds/$groupId" params={{ groupId: group.id }} />}
+            render={<Link to="/worlds/$worldId" params={{ worldId: sharedWorld.id }} />}
           >
             Open
             <Icon name="chevron-right" size={15} />
@@ -146,7 +146,7 @@ export function SharedWorldsScreen() {
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <SharedWorldRow key={membership.group.id} membership={membership} />
+                  <SharedWorldRow key={membership.sharedWorld.id} membership={membership} />
                 ))}
               </div>
             )}

@@ -48,32 +48,6 @@ import { SaveFailure } from "../ui/form";
 
 /** What a person is told once they are in. */
 function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
-  if (redeemed.kind === "sharedWorld") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon name="circle-check" size={18} className="text-accent" />
-            You joined {redeemed.sharedWorld.name}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-start gap-4">
-          <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-            This older invitation welcomed you to the Shared World. Its Chronicle and campaigns are
-            ready whenever you are.
-          </p>
-          <Button
-            nativeButton={false}
-            render={<Link to="/worlds/$groupId" params={{ groupId: redeemed.sharedWorld.id }} />}
-          >
-            Open {redeemed.sharedWorld.name}
-            <Icon name="chevron-right" size={15} />
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -201,23 +175,16 @@ export function JoinScreen() {
         {preview !== undefined && redeemed === undefined && (
           <Card>
             <CardHeader>
-              <CardTitle>
-                {preview.kind === "campaign" ? preview.campaignName : preview.sharedWorldName}
-              </CardTitle>
+              <CardTitle>{preview.campaignName}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-start gap-4">
               <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-                <span className="text-heading">
-                  {preview.kind === "campaign" ? preview.creatorName : preview.inviterName}
-                </span>{" "}
-                has invited you to join{" "}
-                {preview.kind === "campaign"
-                  ? `${preview.campaignName}. Taking the seat gives you whatever its creator chooses to share — and nothing else.${
-                      preview.sharedWorldName === null
-                        ? ""
-                        : ` It is part of the ${preview.sharedWorldName} Shared World.`
-                    }`
-                  : `${preview.sharedWorldName}, a Shared World where campaigns and their Chronicle stay connected.`}
+                <span className="text-heading">{preview.creatorName}</span> has invited you to join{" "}
+                {preview.campaignName}. Taking the seat gives you whatever its creator chooses to
+                share — and nothing else.
+                {preview.sharedWorldName === null
+                  ? ""
+                  : ` It is part of the ${preview.sharedWorldName} Shared World.`}
               </p>
               <p className="flex items-center gap-1.5 text-caption leading-body text-faint">
                 <Icon name="clock" size={14} />

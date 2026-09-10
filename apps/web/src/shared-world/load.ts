@@ -1,4 +1,9 @@
-import type { Group, GroupCampaignCard, GroupId, GroupMember } from "@taverns/api";
+import type {
+  SharedWorld,
+  SharedWorldCampaignCard,
+  SharedWorldId,
+  SharedWorldMember,
+} from "@taverns/api";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom } from "../api/atoms";
@@ -21,25 +26,25 @@ export const sharedWorldsAtom = apiAtom(
 );
 
 export interface SharedWorldView {
-  readonly group: Group;
-  readonly campaigns: ReadonlyArray<GroupCampaignCard>;
-  readonly members: ReadonlyArray<GroupMember>;
+  readonly sharedWorld: SharedWorld;
+  readonly campaigns: ReadonlyArray<SharedWorldCampaignCard>;
+  readonly members: ReadonlyArray<SharedWorldMember>;
 }
 
-export const sharedWorldViewAtom = Atom.family((worldId: GroupId) =>
+export const sharedWorldViewAtom = Atom.family((worldId: SharedWorldId) =>
   apiAtom(
     (client) =>
       Effect.map(
         Effect.all(
           {
-            group: client.sharedWorlds.findById({ params: { worldId } }),
+            sharedWorld: client.sharedWorlds.findById({ params: { worldId } }),
             campaigns: client.sharedWorlds.campaigns({ params: { worldId } }),
             members: client.sharedWorldMembers.list({ params: { worldId } }),
           },
           { concurrency: "unbounded" },
         ),
-        ({ group, campaigns, members }): SharedWorldView => ({
-          group,
+        ({ sharedWorld, campaigns, members }): SharedWorldView => ({
+          sharedWorld,
           campaigns,
           members,
         }),

@@ -3,7 +3,7 @@ import {
   type Campaign,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
 } from "@taverns/api";
 import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
@@ -80,7 +80,7 @@ const makeFixture = Effect.gen(function* () {
 
   const jo = yield* anAccount("Jo");
   const saltRoad = yield* withActor(jo)(createCampaign({ name: "The Salt Road" }));
-  const groupId = saltRoad.groupId;
+  const groupId = saltRoad.contextId;
 
   // Wren joins the group through a real invitation and creates a campaign in
   // it — eligibility (group membership) becoming a table of their own.
@@ -117,7 +117,7 @@ interface Fixture {
   readonly jo: Actor;
   readonly wren: Actor;
   readonly fen: Actor;
-  readonly groupId: GroupId;
+  readonly groupId: SharedWorldId;
   readonly saltRoad: Campaign;
   readonly hagsBargain: Campaign;
   readonly elsewhere: Campaign;
@@ -144,11 +144,11 @@ describe("who may read the chronicle", () => {
       ),
     );
     expect(refused).toBeInstanceOf(NotFound);
-    expect((refused as NotFound).resource).toBe("group");
+    expect((refused as NotFound).resource).toBe("shared-world");
   });
 
   it("keeps a credential scoped to another group out", async () => {
-    const scoped = scopedToGroup(fixture.jo, fixture.elsewhere.groupId);
+    const scoped = scopedToGroup(fixture.jo, fixture.elsewhere.contextId);
     const refused = await run(
       withActor(scoped)(Effect.flatMap(GroupHistory, (h) => h.list(fixture.groupId))).pipe(
         Effect.flip,
@@ -324,7 +324,7 @@ describe("the summary", () => {
 
 describe("cross-group isolation", () => {
   it("keeps one group's chronicle out of another's entirely", async () => {
-    await history((h) => h.create(fixture.elsewhere.groupId, { body: "Fen's own" }), fixture.fen);
+    await history((h) => h.create(fixture.elsewhere.contextId, { body: "Fen's own" }), fixture.fen);
     const joSees = await history((h) => h.list(fixture.groupId), fixture.jo);
     expect(joSees.some((entry) => entry.body === "Fen's own")).toBe(false);
   });

@@ -3,8 +3,8 @@ import {
   type Campaign,
   type CampaignId,
   CurrentActor,
-  GroupHobStatus,
-  type GroupId,
+  SharedWorldHobStatus,
+  type SharedWorldId,
   type HobAsk,
   HobBegun,
   HobDelta,
@@ -53,7 +53,7 @@ import {
   dmBindWithDirect,
   dmHandlersFor,
   groupHandlersFor,
-  GroupToolkit,
+  SharedWorldToolkit,
   HobToolkit,
   NO_VOCABULARY,
   playerBindListing,
@@ -131,16 +131,16 @@ export class Hob extends Context.Service<
       ask: HobAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
     /** `status`, for the group surface — gated on live group membership. */
-    readonly groupStatus: (
-      groupId: GroupId,
-    ) => Effect.Effect<GroupHobStatus, NotFound, CurrentActor>;
+    readonly sharedWorldStatus: (
+      groupId: SharedWorldId,
+    ) => Effect.Effect<SharedWorldHobStatus, NotFound, CurrentActor>;
     /**
      * Group Hob answers — the canonical-record surface. Same protocol as
      * `ask`, over the group toolkit and the group's shared thread; see
      * `decision-group-hob-boundary.md` for what it may and may not know.
      */
-    readonly askGroup: (
-      groupId: GroupId,
+    readonly askSharedWorld: (
+      groupId: SharedWorldId,
       ask: HobAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
   }
@@ -172,12 +172,17 @@ export class Hob extends Context.Service<
         // Same shape as the campaign pair: the group is still resolved, so
         // "the assistant is off" is not a cheaper way to probe which groups
         // exist.
-        groupStatus: (groupId) =>
+        sharedWorldStatus: (groupId) =>
           Effect.map(
             groups.findById(groupId),
-            (group) => new GroupHobStatus({ available: false, model: null, group: group.name }),
+            (group) =>
+              new SharedWorldHobStatus({
+                available: false,
+                model: null,
+                sharedWorld: group.name,
+              }),
           ),
-        askGroup: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
+        askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
       };
     }),
   );
@@ -570,11 +575,15 @@ export class Hob extends Context.Service<
               );
             }),
 
-          groupStatus: (groupId) =>
+          sharedWorldStatus: (groupId) =>
             Effect.map(
               groups.findById(groupId),
               (group) =>
-                new GroupHobStatus({ available: true, model: options.model, group: group.name }),
+                new SharedWorldHobStatus({
+                  available: true,
+                  model: options.model,
+                  sharedWorld: group.name,
+                }),
             ),
 
           /**
@@ -593,7 +602,7 @@ export class Hob extends Context.Service<
            * duplicated is the assembly, and `hob-group.test.ts` measures the
            * result at the wire.
            */
-          askGroup: (groupId, ask) =>
+          askSharedWorld: (groupId, ask) =>
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               // The authorization gate, and the only thing read off the group
@@ -603,11 +612,11 @@ export class Hob extends Context.Service<
 
               const thread =
                 ask.threadId === undefined
-                  ? yield* threads.start("group", groupId, ask.text)
-                  : yield* threads.findById("group", groupId, ask.threadId);
-              const history = yield* threads.turns("group", groupId, thread.id);
+                  ? yield* threads.start("sharedWorld", groupId, ask.text)
+                  : yield* threads.findById("sharedWorld", groupId, ask.threadId);
+              const history = yield* threads.turns("sharedWorld", groupId, thread.id);
 
-              yield* threads.append("group", groupId, thread.id, {
+              yield* threads.append("sharedWorld", groupId, thread.id, {
                 id: yield* freshTurnId,
                 who: "user",
                 text: ask.text,
@@ -626,7 +635,7 @@ export class Hob extends Context.Service<
                 LanguageModel.LanguageModel
               > = conversation(
                 Effect.flatMap(
-                  GroupToolkit.toHandlers(
+                  SharedWorldToolkit.toHandlers(
                     groupHandlersFor(
                       { history: repositories.history, groups },
                       actor,
@@ -634,7 +643,7 @@ export class Hob extends Context.Service<
                       proposal,
                     ),
                   ),
-                  (bound) => Effect.provideContext(GroupToolkit, bound),
+                  (bound) => Effect.provideContext(SharedWorldToolkit, bound),
                 ),
                 groupPrompt(group.name),
                 history,
@@ -647,7 +656,7 @@ export class Hob extends Context.Service<
                 const text = yield* Ref.get(written);
                 const offered = yield* Ref.get(proposal);
                 if (text === "" && offered === undefined) return;
-                yield* threads.append("group", groupId, thread.id, {
+                yield* threads.append("sharedWorld", groupId, thread.id, {
                   id: answerId,
                   who: "hob",
                   text,
@@ -1560,7 +1569,7 @@ const groupPrompt = (groupName: string): string =>
     "rather than merging them.",
     "",
     "When a member asks you to record something — a summary of events, a connection",
-    "between campaigns — write it and offer it with proposeGroupEntry. Nothing you",
+    "between campaigns — write it and offer it with proposeSharedWorldEntry. Nothing you",
     "offer enters the chronicle unless a member accepts it. Offer one thing at a time,",
     "and say one short line about it.",
     "",

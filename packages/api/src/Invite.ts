@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignId, CampaignInviteId, GroupId } from "./Ids.js";
+import { CampaignId, CampaignInviteId } from "./Ids.js";
 import { CampaignSharedWorld } from "./Membership.js";
 
 /**
@@ -9,7 +9,7 @@ import { CampaignSharedWorld } from "./Membership.js";
  * signing in or signing up; its whole effect is to grant a `group_member` row
  * and a `campaign_member` row in the same transaction to the account that
  * accepts it. It is explicitly *not* a
- * bearer credential that reaches group data on its own, not a guest account
+ * bearer credential that reaches Shared World data on its own, not a guest account
  * with no identity, and not a second credential kind with an actor shape of
  * its own — that last one is "a second way to be reachable, which is exactly
  * where the next leak lives".
@@ -18,14 +18,14 @@ import { CampaignSharedWorld } from "./Membership.js";
  * rows, indistinguishable from one admitted any other way. This needs **no new
  * predicate, no new base case and no change to `Authorization`**.
  *
- * **Campaign-first to the user, group-first internally.** Campaign
- * participation cannot exist for a non-group member (`campaign_member`
+ * **Campaign-first to the user, eligibility-first internally.** Campaign
+ * participation cannot exist without its backing membership (`campaign_member`
  * carries a foreign key into `group_member`), so accepting a campaign link
  * quietly ensures that prerequisite before granting the seat. The hidden row
  * is persistence plumbing, not another decision the inviter or player makes.
  *
  * It is minted by the campaign's creator, including a creator who does not own
- * its underlying group.
+ * its underlying context.
  *
  * ### It is still a credential, so it has a lifetime
  *
@@ -61,7 +61,6 @@ export type InviteStatus = typeof InviteStatus.Type;
  */
 export class CampaignInvite extends Schema.Class<CampaignInvite>("CampaignInvite")({
   id: CampaignInviteId,
-  groupId: GroupId,
   /** The campaign this invitation admits to. */
   campaignId: CampaignId,
   /** Who it is for, in the owner's words. */
@@ -122,24 +121,14 @@ export class CampaignInvitePreview extends Schema.Class<CampaignInvitePreview>(
   expiresAt: Schema.DateTimeUtcFromString,
 }) {}
 
-/** Compatibility for a live group-only token minted before invitations followed campaigns. */
-export class SharedWorldInvitePreview extends Schema.Class<SharedWorldInvitePreview>(
-  "SharedWorldInvitePreview",
-)({
-  kind: Schema.Literal("sharedWorld"),
-  sharedWorldName: Schema.String,
-  inviterName: Schema.String,
-  expiresAt: Schema.DateTimeUtcFromString,
-}) {}
-
-export const InvitePreview = Schema.Union([CampaignInvitePreview, SharedWorldInvitePreview]);
+export const InvitePreview = CampaignInvitePreview;
 export type InvitePreview = typeof InvitePreview.Type;
 
 /**
  * What redeeming answers with.
  *
  * Campaign-first and deliberately narrow: enough to explain the new seat and
- * link onwards. The backing group is absent; an explicit Shared World is an
+ * link onwards. The backing context is absent; an explicit Shared World is an
  * optional named destination instead.
  */
 export class CampaignInviteRedeemed extends Schema.Class<CampaignInviteRedeemed>(
@@ -159,13 +148,5 @@ export class CampaignInviteRedeemed extends Schema.Class<CampaignInviteRedeemed>
   shared: Schema.Boolean,
 }) {}
 
-/** The successful answer for a still-live invitation from before campaign-scoped invites. */
-export class SharedWorldInviteRedeemed extends Schema.Class<SharedWorldInviteRedeemed>(
-  "SharedWorldInviteRedeemed",
-)({
-  kind: Schema.Literal("sharedWorld"),
-  sharedWorld: CampaignSharedWorld,
-}) {}
-
-export const InviteRedeemed = Schema.Union([CampaignInviteRedeemed, SharedWorldInviteRedeemed]);
+export const InviteRedeemed = CampaignInviteRedeemed;
 export type InviteRedeemed = typeof InviteRedeemed.Type;

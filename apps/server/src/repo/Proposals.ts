@@ -4,7 +4,7 @@ import {
   type CampaignId,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type HobAccepted,
   type HobProposal,
   NotFound,
@@ -104,8 +104,8 @@ export class Proposals extends Context.Service<
      * with the turn on it, so an accepted line is made by the same statement
      * a member's own is.
      */
-    readonly acceptGroup: (
-      groupId: GroupId,
+    readonly acceptSharedWorld: (
+      groupId: SharedWorldId,
       threadId: AssistantThreadId,
       turnId: AssistantTurnId,
     ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
@@ -120,7 +120,7 @@ export class Proposals extends Context.Service<
       const encounters = yield* Encounters;
       const encounterCreatures = yield* EncounterCreatures;
       const characters = yield* Characters;
-      const groupHistory = yield* GroupHistory;
+      const sharedWorldHistory = yield* GroupHistory;
 
       const materialise = (
         campaignId: CampaignId,
@@ -216,7 +216,7 @@ export class Proposals extends Context.Service<
               (character) => ({ accepted: "character" as const, character }),
             );
 
-          case "groupHistory":
+          case "sharedWorldHistory":
             // Only a group thread ever carries one — the group toolkit is the
             // only producer, and it writes into group threads alone — so this
             // arm is unreachable through the campaign accept. The refusal
@@ -256,16 +256,22 @@ export class Proposals extends Context.Service<
             ),
           ),
 
-        acceptGroup: (groupId, threadId, turnId) =>
+        acceptSharedWorld: (groupId, threadId, turnId) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const turn = yield* lockTurnForAccept(sql, "group", groupId, threadId, turnId);
+                const turn = yield* lockTurnForAccept(
+                  sql,
+                  "sharedWorld",
+                  groupId,
+                  threadId,
+                  turnId,
+                );
                 if (turn.proposal === null) {
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.accepted_at !== null) return yield* alreadyAccepted;
-                if (turn.proposal.target !== "groupHistory") {
+                if (turn.proposal.target !== "sharedWorldHistory") {
                   // The mirror of the campaign arm's refusal: a campaign
                   // proposal reached through a group accept would write a row
                   // into a place its card never named.
@@ -273,7 +279,7 @@ export class Proposals extends Context.Service<
                     message: "that belongs to a campaign — accept it there",
                   });
                 }
-                const entry = yield* groupHistory.create(
+                const entry = yield* sharedWorldHistory.create(
                   groupId,
                   {
                     body: turn.proposal.body,
@@ -282,7 +288,7 @@ export class Proposals extends Context.Service<
                   { assistantTurnId: turnId },
                 );
                 yield* markAccepted(sql, turnId);
-                return { accepted: "groupHistory" as const, entry };
+                return { accepted: "sharedWorldHistory" as const, entry };
               }),
             ),
           ),

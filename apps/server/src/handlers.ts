@@ -1005,7 +1005,7 @@ const NpcsLive = HttpApiBuilder.group(
 /**
  * Group Hob's handlers — the same five as the campaign surface, with one
  * reach: the group's conversation is the group's, so there is no proof to
- * resolve and no two sets to tell apart. `conversationReachable`'s `"group"`
+ * resolve and no two sets to tell apart. `conversationReachable`'s `"sharedWorld"`
  * arm gates every thread read on live membership underneath.
  */
 /** The Shared World's Library shelf. Reads and writes are the repository's whole story. */
@@ -1030,12 +1030,14 @@ const SharedWorldHobLive = HttpApiBuilder.group(
     const proposals = yield* Proposals;
 
     return handlers
-      .handle("status", ({ params }) => hob.groupStatus(params.worldId))
-      .handle("ask", ({ params, payload }) => hob.askGroup(params.worldId, payload))
-      .handle("threads", ({ params }) => threads.list("group", params.worldId))
-      .handle("turns", ({ params }) => threads.turns("group", params.worldId, params.threadId))
+      .handle("status", ({ params }) => hob.sharedWorldStatus(params.worldId))
+      .handle("ask", ({ params, payload }) => hob.askSharedWorld(params.worldId, payload))
+      .handle("threads", ({ params }) => threads.list("sharedWorld", params.worldId))
+      .handle("turns", ({ params }) =>
+        threads.turns("sharedWorld", params.worldId, params.threadId),
+      )
       .handle("accept", ({ params }) =>
-        proposals.acceptGroup(params.worldId, params.threadId, params.turnId),
+        proposals.acceptSharedWorld(params.worldId, params.threadId, params.turnId),
       );
   }),
 );

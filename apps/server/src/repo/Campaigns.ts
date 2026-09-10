@@ -7,7 +7,7 @@ import {
   type CampaignUpdate,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
   type SessionId,
 } from "@taverns/api";
@@ -32,7 +32,7 @@ import {
  */
 export interface CampaignRow extends ProvenanceColumns {
   readonly id: CampaignId;
-  readonly group_id: GroupId;
+  readonly group_id: SharedWorldId;
   readonly creator_account_id: AccountId;
   readonly name: string;
   readonly party_name: string | null;
@@ -44,7 +44,7 @@ export interface CampaignRow extends ProvenanceColumns {
 export const toCampaign = (row: CampaignRow): Campaign =>
   new Campaign({
     id: row.id,
-    groupId: row.group_id,
+    contextId: row.group_id,
     creatorAccountId: row.creator_account_id,
     name: row.name,
     partyName: row.party_name,
@@ -67,7 +67,7 @@ export class Campaigns extends Context.Service<
     readonly list: Effect.Effect<ReadonlyArray<Campaign>, never, CurrentActor>;
     readonly findById: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     readonly create: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       payload: CampaignCreate,
     ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     /** Campaign-first creation; its private group is transitional plumbing. */
@@ -131,7 +131,7 @@ export class Campaigns extends Context.Service<
           ? Effect.fail(new NotFound({ resource: "campaign", id }))
           : Effect.succeed(toCampaign(rows[0]!));
 
-      const insert = (groupId: GroupId, payload: CampaignCreate, actor: Actor) =>
+      const insert = (groupId: SharedWorldId, payload: CampaignCreate, actor: Actor) =>
         Effect.gen(function* () {
           const rows = yield* sql<CampaignRow>`
             insert into campaign ${sql.insert(
@@ -201,8 +201,7 @@ export class Campaigns extends Context.Service<
 
         /**
          * The campaign-first path. The private group is deliberately named
-         * after the campaign: it is hidden by the new surface, and old group
-         * routes remain an honest fallback while Shared Worlds are built.
+         * after the campaign and remains hidden until explicitly promoted.
          */
         createStandalone: (payload) =>
           dieOnSqlError(

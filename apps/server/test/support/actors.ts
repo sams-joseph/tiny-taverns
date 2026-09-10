@@ -8,7 +8,7 @@ import {
   type Character,
   type CharacterOwnCreate,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type NotFound,
   type Visibility,
 } from "@taverns/api";
@@ -57,8 +57,8 @@ export const scopedTo = (actor: Actor, campaignId: CampaignId): Actor =>
   new Actor({ accountId: actor.accountId, scope: { _tag: "campaign", campaignId } });
 
 /** The same account's credential, narrowed to one group. */
-export const scopedToGroup = (actor: Actor, groupId: GroupId): Actor =>
-  new Actor({ accountId: actor.accountId, scope: { _tag: "group", groupId } });
+export const scopedToGroup = (actor: Actor, groupId: SharedWorldId): Actor =>
+  new Actor({ accountId: actor.accountId, scope: { _tag: "sharedWorld", worldId: groupId } });
 
 /**
  * The same account's **account-wide** credential — what `aPlayerAt`'s scoped
@@ -73,7 +73,7 @@ export const accountWide = (actor: Actor): Actor =>
  * A fresh group founded by this actor — who becomes its owner and first
  * member, through the shipped `Groups.create` path.
  */
-export const aGroupBy = (actor: Actor, name: string): Effect.Effect<GroupId, never, Groups> =>
+export const aGroupBy = (actor: Actor, name: string): Effect.Effect<SharedWorldId, never, Groups> =>
   Effect.gen(function* () {
     const groups = yield* Groups;
     const group = yield* Effect.provideService(groups.create({ name }), CurrentActor, actor);
@@ -285,9 +285,9 @@ export const campaignVia = <EG, EC, RG, RC>(
     readonly sharedWorlds: {
       readonly create: (options: {
         readonly payload: { readonly name: string };
-      }) => Effect.Effect<{ readonly id: GroupId }, EG, RG>;
+      }) => Effect.Effect<{ readonly id: SharedWorldId }, EG, RG>;
       readonly createCampaign: (options: {
-        readonly params: { readonly worldId: GroupId };
+        readonly params: { readonly worldId: SharedWorldId };
         readonly payload: CampaignCreate;
       }) => Effect.Effect<Campaign, EC, RC>;
     };

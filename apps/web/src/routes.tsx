@@ -1,10 +1,16 @@
-import { CampaignId, CharacterId, EncounterRunId, GroupId, NpcId, SessionId } from "@taverns/api";
+import {
+  CampaignId,
+  CharacterId,
+  EncounterRunId,
+  SharedWorldId,
+  NpcId,
+  SessionId,
+} from "@taverns/api";
 import {
   createHashHistory,
   createRootRoute,
   createRoute,
   createRouter,
-  redirect,
 } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
@@ -26,8 +32,8 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { Gallery } from "./gallery/Gallery";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { SharedWorldRouteScreen } from "./group/GroupRouteScreen";
-import { SharedWorldsScreen } from "./group/GroupsScreen";
+import { SharedWorldRouteScreen } from "./shared-world/SharedWorldRouteScreen";
+import { SharedWorldsScreen } from "./shared-world/SharedWorldsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
 import { PlayerTableScreen } from "./play/PlayerTableScreen";
@@ -98,7 +104,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 };
 
 const asCampaignId = decoder(CampaignId);
-const asGroupId = decoder(GroupId);
+const asWorldId = decoder(SharedWorldId);
 const asCharacterId = decoder(CharacterId);
 const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
@@ -135,7 +141,7 @@ const worldsRoute = createRoute({
   component: SharedWorldsScreen,
 });
 
-/** The campaign-first home. Legacy group URLs redirect to Shared Worlds. */
+/** The campaign-first home. */
 const campaignsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/campaigns",
@@ -149,49 +155,15 @@ const campaignsRoute = createRoute({
  */
 const worldRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/worlds/$groupId",
+  path: "/worlds/$worldId",
   params: {
-    parse: ({ groupId }) => {
-      const decoded = asGroupId(groupId);
-      return decoded === undefined ? false : { groupId: decoded };
+    parse: ({ worldId }) => {
+      const decoded = asWorldId(worldId);
+      return decoded === undefined ? false : { worldId: decoded };
     },
   },
   component: SharedWorldRouteScreen,
-  remountDeps: ({ params }) => params.groupId,
-});
-
-/** Old bookmarks are repaired before an obsolete screen can render or fetch. */
-const legacyGroupsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/groups",
-  beforeLoad: () => {
-    throw redirect({ to: "/worlds", replace: true });
-  },
-});
-
-/** The same compatibility seam for one world's old URL, including old suffixes. */
-const legacyGroupRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/groups/$groupId",
-  params: {
-    parse: ({ groupId }) => {
-      const decoded = asGroupId(groupId);
-      return decoded === undefined ? false : { groupId: decoded };
-    },
-  },
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: "/worlds/$groupId", params: { groupId: params.groupId }, replace: true });
-  },
-});
-
-const legacyGroupIndexRoute = createRoute({
-  getParentRoute: () => legacyGroupRoute,
-  path: "/",
-});
-
-const legacyGroupSplatRoute = createRoute({
-  getParentRoute: () => legacyGroupRoute,
-  path: "$",
+  remountDeps: ({ params }) => params.worldId,
 });
 
 /**
@@ -591,8 +563,6 @@ export const routeTree = rootRoute.addChildren([
   campaignsRoute,
   worldsRoute,
   worldRoute,
-  legacyGroupsRoute,
-  legacyGroupRoute.addChildren([legacyGroupIndexRoute, legacyGroupSplatRoute]),
   libraryRoute,
   libraryRulesRoute,
   libraryCompendiumRoute,

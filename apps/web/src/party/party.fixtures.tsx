@@ -9,7 +9,7 @@ import {
   dmAccountId,
   dmMember,
   fullCampaign,
-  groupId,
+  worldId,
   ilseAccountId,
   partySeat,
   type Answer,
@@ -142,7 +142,7 @@ export const pellSeat = {
  */
 export const liveInvite = {
   id: inviteId,
-  groupId,
+  worldId,
   campaignId,
   label: "Hal",
   status: "live",

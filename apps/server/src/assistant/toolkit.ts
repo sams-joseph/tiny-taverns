@@ -653,7 +653,7 @@ export const ReadSessionLog = Tool.make("sessionLog", {
  * ever holding a read into another creator's campaign — the entry was copied
  * when its creator shared it, and there is nothing else to reach.
  */
-export const SearchGroupHistory = Tool.make("searchGroupHistory", {
+export const SearchSharedWorldHistory = Tool.make("searchSharedWorldHistory", {
   description:
     "Search the group's shared chronicle — what the whole group has agreed " +
     "happened, across every campaign in it. Lexical: search for names and " +
@@ -674,7 +674,7 @@ export const SearchGroupHistory = Tool.make("searchGroupHistory", {
   failureMode: "return",
 });
 
-export const ReadGroupSummary = Tool.make("readGroupSummary", {
+export const ReadSharedWorldSummary = Tool.make("readSharedWorldSummary", {
   description:
     "The group's accepted running summary — the story so far across every " +
     "campaign, as the group last agreed it. One paragraph or a sentence " +
@@ -692,7 +692,7 @@ export const ReadGroupSummary = Tool.make("readGroupSummary", {
  * it refuses a missing one, and no tool here can name a note, a prep item or
  * an encounter that never ran.
  */
-export const ListGroupCampaigns = Tool.make("listGroupCampaigns", {
+export const ListSharedWorldCampaigns = Tool.make("listSharedWorldCampaigns", {
   description:
     "The campaigns in this group, each with who runs it. Group-visible " +
     "metadata only — a campaign's own content belongs to its table.",
@@ -754,7 +754,7 @@ export const NightStory = Tool.make("nightStory", {
   failureMode: "return",
 });
 
-export const ProposeGroupEntry = Tool.make("proposeGroupEntry", {
+export const ProposeSharedWorldEntry = Tool.make("proposeSharedWorldEntry", {
   description:
     "Offer the group a line for its shared chronicle — a summary of events, " +
     "a connection between campaigns, a fact worth keeping. Only a " +
@@ -1193,8 +1193,8 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     GetNpc,
     ProposeNpcAwareness,
     ReadSessionLog,
-    SearchGroupHistory,
-    ReadGroupSummary,
+    SearchSharedWorldHistory,
+    ReadSharedWorldSummary,
     ProposeNote,
     ProposeBeat,
     ProposeEncounter,
@@ -1214,8 +1214,8 @@ export const HobToolkit = Toolkit.make(
   // The group context, read-only: what the group has agreed happened, so a
   // campaign's Hob can answer "what happened at the other table" exactly as
   // far as that table's creator shared it — and no further.
-  SearchGroupHistory,
-  ReadGroupSummary,
+  SearchSharedWorldHistory,
+  ReadSharedWorldSummary,
   ProposeNote,
   ProposeBeat,
   ProposeEncounter,
@@ -1228,15 +1228,15 @@ export const HobToolkit = Toolkit.make(
  * is: a toolkit is what the provider is shown. Group Hob has never heard of
  * `getCreature`, `sessionRecap` or any campaign write — its whole world is
  * what the group-Hob boundary decision grants, and the one thing it can offer
- * is a chronicle line, accepted by a member through `Proposals.acceptGroup`.
+ * is a chronicle line, accepted by a member through `Proposals.acceptSharedWorld`.
  */
-export const GroupToolkit = Toolkit.make(
-  SearchGroupHistory,
-  ReadGroupSummary,
-  ListGroupCampaigns,
+export const SharedWorldToolkit = Toolkit.make(
+  SearchSharedWorldHistory,
+  ReadSharedWorldSummary,
+  ListSharedWorldCampaigns,
   ListPlayedNights,
   NightStory,
-  ProposeGroupEntry,
+  ProposeSharedWorldEntry,
 );
 
 /**
@@ -1340,7 +1340,7 @@ export interface HobRepositories {
 }
 
 /** What group Hob's tools may reach. Read-only, every one, plus the slot. */
-export interface GroupHobRepositories {
+export interface SharedWorldHobRepositories {
   readonly history: (typeof GroupHistory)["Service"];
   readonly groups: (typeof Groups)["Service"];
 }
@@ -1451,7 +1451,7 @@ const searchWith =
           }),
         );
 
-/** `searchGroupHistory`, bound — shared by the DM's toolkit and the group's. */
+/** `searchSharedWorldHistory`, bound — shared by the DM's toolkit and the group's. */
 const searchHistoryWith =
   (
     history: (typeof GroupHistory)["Service"],
@@ -1463,8 +1463,8 @@ const searchHistoryWith =
       ? Effect.fail(
           new Conflict({
             message:
-              "searchGroupHistory needs a word to look for. To read the whole " +
-              "story so far, call readGroupSummary; for the timeline, listPlayedNights.",
+              "searchSharedWorldHistory needs a word to look for. To read the whole " +
+              "story so far, call readSharedWorldSummary; for the timeline, listPlayedNights.",
           }),
         )
       : Effect.map(as(history.search(groupId, query.trim())), (entries) =>
@@ -1609,8 +1609,8 @@ export const dmHandlersFor = (
 
     // The group context, keyed on the proof's own group — not a parameter, for
     // the same reason the campaign is not one.
-    searchGroupHistory: searchHistoryWith(repositories.history, dm.group, as),
-    readGroupSummary: summaryWith(repositories.history, dm.group, as),
+    searchSharedWorldHistory: searchHistoryWith(repositories.history, dm.group, as),
+    readSharedWorldSummary: summaryWith(repositories.history, dm.group, as),
 
     proposeNote: ({ title, body, readAloud }) =>
       offer(
@@ -1706,17 +1706,17 @@ export const dmBindWithDirect = (
 };
 
 export const groupHandlersFor = (
-  repositories: GroupHobRepositories,
+  repositories: SharedWorldHobRepositories,
   actor: Actor,
   groupId: Parameters<(typeof GroupHistory)["Service"]["search"]>[0],
   proposal: ProposalSlot,
 ) => {
   const { as, offer } = bind(actor, proposal);
 
-  return GroupToolkit.of({
-    searchGroupHistory: searchHistoryWith(repositories.history, groupId, as),
-    readGroupSummary: summaryWith(repositories.history, groupId, as),
-    listGroupCampaigns: () =>
+  return SharedWorldToolkit.of({
+    searchSharedWorldHistory: searchHistoryWith(repositories.history, groupId, as),
+    readSharedWorldSummary: summaryWith(repositories.history, groupId, as),
+    listSharedWorldCampaigns: () =>
       Effect.map(as(repositories.groups.campaigns(groupId)), (cards) =>
         cards.map((card) => ({
           campaignId: card.id,
@@ -1747,9 +1747,9 @@ export const groupHandlersFor = (
           outcome: fight.outcome,
         })),
       })),
-    proposeGroupEntry: ({ title, body }) =>
+    proposeSharedWorldEntry: ({ title, body }) =>
       offer(
-        { target: "groupHistory", title: blank(title) ?? null, body },
+        { target: "sharedWorldHistory", title: blank(title) ?? null, body },
         "Offered the group a line for its chronicle. Nothing is saved unless a " +
           "member accepts it; say one short line about it and stop.",
       ),

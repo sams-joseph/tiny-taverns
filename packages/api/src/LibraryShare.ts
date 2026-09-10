@@ -1,14 +1,14 @@
 import { Schema } from "effect";
-import { AccountId, GroupId } from "./Ids.js";
+import { AccountId, SharedWorldId } from "./Ids.js";
 
 /**
- * Explicit group Library sharing — the captain's decision of 2026-09-01.
+ * Explicit Shared World Library sharing — the captain's decision of 2026-09-01.
  *
  * A share is a **grant to copy**, never content and never a view: the
  * original stays account-owned in its owner's Library, a member's own Library
  * never shows a groupmate's rows, and what the grant changes is exactly one
  * thing — the shared original becomes a `derive` source for campaigns of that
- * group, landing as the ordinary snapshot when a creator copies it in. Group
+ * Shared World, landing as the ordinary snapshot when a creator copies it in. Shared World
  * membership alone never widens Library visibility; the row is the whole of
  * the reach, and its absence is the refusal.
  */
@@ -25,8 +25,10 @@ export const LibraryShareKind = Schema.Literals([
 ]);
 export type LibraryShareKind = typeof LibraryShareKind.Type;
 
-export class GroupLibraryShare extends Schema.Class<GroupLibraryShare>("GroupLibraryShare")({
-  groupId: GroupId,
+export class SharedWorldLibraryShare extends Schema.Class<SharedWorldLibraryShare>(
+  "SharedWorldLibraryShare",
+)({
+  worldId: SharedWorldId,
   ownerAccountId: AccountId,
   kind: LibraryShareKind,
   /** The shared original's own id, in whichever of the copyable Library tables `kind` names. */

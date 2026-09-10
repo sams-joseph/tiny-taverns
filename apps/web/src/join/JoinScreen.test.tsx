@@ -23,7 +23,7 @@ import { type HostedSession } from "../auth/hostedSession";
 
 const TOKEN = "Nk9-b3JkZXJfb2ZfdGhlX2ZlcnJ5bWFu";
 const campaignId = "2b1f2a1e-0000-4000-8000-00000000c0de";
-const groupId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
+const worldId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 
 const preview = {
   kind: "campaign",
@@ -145,7 +145,7 @@ describe("following an invitation", () => {
         kind: "campaign",
         campaignId,
         campaignName: "The Salt Road",
-        sharedWorld: { id: groupId, name: "The Salt Company" },
+        sharedWorld: { id: worldId, name: "The Salt Company" },
         shared: false,
       },
     });
@@ -171,7 +171,7 @@ describe("following an invitation", () => {
         kind: "campaign",
         campaignId,
         campaignName: "The Salt Road",
-        sharedWorld: { id: groupId, name: "The Salt Company" },
+        sharedWorld: { id: worldId, name: "The Salt Company" },
         shared: true,
       },
     });
@@ -188,35 +188,6 @@ describe("following an invitation", () => {
     // the `DmActor` gate, so `#/campaigns/:c` would have answered a brand new
     // player a 404 on the first thing they pressed in the product.
     expect(open.getAttribute("href")).toBe(`/#/campaigns/${campaignId}`);
-  });
-
-  it("keeps old Shared World-only invitations usable without calling them groups", async () => {
-    routes.set("POST /invites/preview", {
-      status: 200,
-      body: {
-        kind: "sharedWorld",
-        sharedWorldName: "The Salt Company",
-        inviterName: "Ada",
-        expiresAt: "2026-08-18T13:03:28.070Z",
-      },
-    });
-    routes.set("POST /invites/redeem", {
-      status: 200,
-      body: {
-        kind: "sharedWorld",
-        sharedWorld: { id: groupId, name: "The Salt Company" },
-      },
-    });
-
-    await renderJoin();
-    expect(await screen.findByText(/a Shared World where campaigns/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Take your seat" }));
-
-    expect(await screen.findByText("You joined The Salt Company")).toBeTruthy();
-    expect(screen.queryByText(/group/i)).toBeNull();
-    expect(screen.getByRole("button", { name: "Open The Salt Company" }).getAttribute("href")).toBe(
-      `/#/worlds/${groupId}`,
-    );
   });
 
   it("gives every dead link the same sentence", async () => {

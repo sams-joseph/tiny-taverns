@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -17,21 +17,21 @@ import {
  * `GET /worlds/:w/history` answered (copies, admitted on purpose), and the
  * composer's write names the one resource it changes. The server-side
  * boundary — who may read, what a recap copy survives — is
- * `apps/server/test/group-history.test.ts`'s.
+ * `apps/server/test/sharedWorld-history.test.ts`'s.
  */
 
 const server = installStubServer();
 installMemoryStorage();
 
-const historyPath = `/worlds/${groupId}/history`;
+const historyPath = `/worlds/${worldId}/history`;
 
 const entry = {
   id: "7a1e2b3c-0000-4000-8000-00000000f001",
-  groupId,
+  worldId,
   campaignId,
   sessionId: null,
   sourceKind: "recap",
-  groupSeq: 2,
+  worldSeq: 2,
   occurredAt: "2026-08-20T19:00:00.000Z",
   acceptedAt: "2026-08-21T10:00:00.000Z",
   title: "Session 12 — The crossing",
@@ -47,7 +47,7 @@ const manual = {
   ...entry,
   id: "7a1e2b3c-0000-4000-8000-00000000f002",
   sourceKind: "manual",
-  groupSeq: 1,
+  worldSeq: 1,
   title: null,
   body: "Both parties reached the crossing the same night.",
 };

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { Campaign } from "./Campaign.js";
-import { AccountId, GroupId } from "./Ids.js";
+import { AccountId, SharedWorldId } from "./Ids.js";
 
 /**
  * What somebody is at a table — **derived, never stored**.
@@ -24,12 +24,12 @@ export type CampaignRelation = typeof CampaignRelation.Type;
  *
  * Standalone campaigns still have a private backing `play_group` row for
  * integrity, but that implementation detail is deliberately absent here. A
- * value means the group has been promoted to a user-facing Shared World and
+ * value means the private context has been promoted to a Shared World and
  * gives campaign chrome the complete, stable destination it needs without a
  * second `/worlds` read.
  */
 export class CampaignSharedWorld extends Schema.Class<CampaignSharedWorld>("CampaignSharedWorld")({
-  id: GroupId,
+  id: SharedWorldId,
   name: Schema.String,
 }) {}
 
@@ -68,12 +68,11 @@ export class CampaignMembership extends Schema.Class<CampaignMembership>("Campai
  *
  * **That is why it is behind the `CampaignCreatorActor` gate.** A participant
  * list is other people's account names and the shape of the table; a player
- * does not enumerate who else is sitting at it. (The *group's* member list is
- * different — a group is the social container, and its roster is every live
- * member's to read. See `GroupMember`.)
+ * does not enumerate who else is sitting at it. A Shared World's informational
+ * roster is a separate projection; see `SharedWorldMember`.
  *
  * Live participants only; a revoked participation is absent rather than
- * flagged, exactly as before the group model.
+ * flagged.
  */
 export class CampaignMember extends Schema.Class<CampaignMember>("CampaignMember")({
   /** Who they are, and the key everything about them is joined on. */
@@ -87,13 +86,13 @@ export class CampaignMember extends Schema.Class<CampaignMember>("CampaignMember
 }) {}
 
 /**
- * The campaign creator naming an existing live group member as a participant —
+ * The campaign creator naming an eligible Shared World member as a participant —
  * `POST /campaigns/:c/members`.
  *
  * The one place an account id travels in a participation payload, and it is
  * bounded twice: the caller must be the campaign's creator, and the named
- * account must hold a live membership of the campaign's group — participation
- * cannot exist for a non-group member, structurally.
+ * account must hold the backing eligibility membership — participation cannot
+ * exist without it, structurally.
  */
 export const CampaignMemberAdd = Schema.Struct({
   accountId: AccountId,

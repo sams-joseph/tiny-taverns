@@ -5,7 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
-  group,
+  sharedWorldDetails,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -28,7 +28,7 @@ describe("the campaign-first home", () => {
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.getByText("Created by you")).toBeTruthy();
     expect(screen.getByRole("button", { name: "The Salt Company" }).getAttribute("href")).toBe(
-      `/#/worlds/${group.id}`,
+      `/#/worlds/${sharedWorldDetails.id}`,
     );
     expect(screen.getByRole("button", { name: "Open" }).getAttribute("href")).toBe(
       `/#/campaigns/${campaignId}`,
@@ -43,7 +43,7 @@ describe("the campaign-first home", () => {
     });
     server.routes.set(`POST /campaigns/${campaignId}/shared-world`, {
       status: 200,
-      body: { ...group, name: "The Roads Between", isSharedWorld: true },
+      body: { ...sharedWorldDetails, name: "The Roads Between" },
     });
     await renderCampaigns("/campaigns", mintingSession());
 
@@ -54,7 +54,7 @@ describe("the campaign-first home", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/shared-world")).toEqual({ name: "The Roads Between" }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${group.id}`));
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
   });
 
   it("creates from one name and opens the campaign", async () => {
@@ -72,7 +72,10 @@ describe("the campaign-first home", () => {
   });
 
   it("starts a connected campaign in a Shared World from the primary flow", async () => {
-    server.routes.set(`POST /worlds/${group.id}/campaigns`, { status: 200, body: campaign });
+    server.routes.set(`POST /worlds/${sharedWorldDetails.id}/campaigns`, {
+      status: 200,
+      body: campaign,
+    });
     await renderCampaigns("/campaigns", mintingSession());
     await screen.findByText("The Salt Road");
 
@@ -82,7 +85,7 @@ describe("the campaign-first home", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/worlds/${group.id}/campaigns`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${sharedWorldDetails.id}/campaigns`)).toEqual({
         name: "The Long Winter",
       }),
     );

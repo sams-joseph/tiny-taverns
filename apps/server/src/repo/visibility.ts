@@ -1,4 +1,10 @@
-import { type AccountId, type Actor, type CampaignId, type GroupId, NotFound } from "@taverns/api";
+import {
+  type AccountId,
+  type Actor,
+  type CampaignId,
+  type SharedWorldId,
+  NotFound,
+} from "@taverns/api";
 import { Effect } from "effect";
 import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
 
@@ -202,8 +208,8 @@ const scopeAllowsCampaign = (sql: SqlClient.SqlClient, actor: Actor): Statement.
       return sql`true`;
     case "campaign":
       return sql`campaign.id = ${actor.scope.campaignId}`;
-    case "group":
-      return sql`campaign.group_id = ${actor.scope.groupId}`;
+    case "sharedWorld":
+      return sql`campaign.group_id = ${actor.scope.worldId}`;
   }
 };
 
@@ -257,10 +263,10 @@ export const campaignWritable = (
   sql.and([campaignInScope(sql, actor, campaign), isCreator(sql, campaign, actor)]);
 
 /**
- * The group a membership question is asked about — a bound `GroupId` almost
+ * The group a membership question is asked about — a bound `SharedWorldId` almost
  * always, or the correlated `play_group.id` for the group list.
  */
-type GroupRef = GroupId | Statement.Identifier;
+type GroupRef = SharedWorldId | Statement.Identifier;
 
 /** The `play_group` row of the query this fragment lands in. */
 const correlatedGroup = (sql: SqlClient.SqlClient): Statement.Identifier => sql("play_group.id");
@@ -297,8 +303,8 @@ const scopeAllowsGroup = (
   switch (actor.scope._tag) {
     case "account":
       return sql`true`;
-    case "group":
-      return sql`${group} = ${actor.scope.groupId}`;
+    case "sharedWorld":
+      return sql`${group} = ${actor.scope.worldId}`;
     case "campaign":
       return sql`exists (select 1 from campaign as scope_campaign
                          where scope_campaign.id = ${actor.scope.campaignId}
@@ -364,12 +370,12 @@ export const groupWritable = (
 /** Whether the named group is readable — for list endpoints' 404s. */
 export const ensureGroupReadable = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(
     sql,
-    "group",
+    "shared-world",
     groupId,
     sql`exists (select 1 from play_group where play_group.id = ${groupId} and ${groupReadable(sql, actor, groupId)})`,
   );
@@ -377,12 +383,12 @@ export const ensureGroupReadable = (
 /** Whether the named group accepts writes from this actor — the owner's gate. */
 export const ensureGroupWritable = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(
     sql,
-    "group",
+    "shared-world",
     groupId,
     sql`exists (select 1 from play_group where play_group.id = ${groupId} and ${groupWritable(sql, actor, groupId)})`,
   );
@@ -572,7 +578,7 @@ export const ownRowWritable = (
  * them, and the discrimination is made once per request from the `CampaignCreatorActor`
  * proof rather than read off a row.
  */
-export type ConversationReach = "dm" | "own" | "group";
+export type ConversationReach = "dm" | "own" | "sharedWorld";
 
 /**
  * Threads of a conversation table this actor holds — **one fragment for reading
@@ -612,13 +618,13 @@ export const conversationReachable = (
   sql: SqlClient.SqlClient,
   table: string,
   reach: ConversationReach,
-  /** The campaign for `"dm"`/`"own"`, the **group** for `"group"`. */
-  scopeId: CampaignId | GroupId,
+  /** The campaign for `"dm"`/`"own"`, the **group** for `"sharedWorld"`. */
+  scopeId: CampaignId | SharedWorldId,
   actor: Actor,
 ): Statement.Fragment =>
   reach === "own"
     ? ownRowWritable(sql, table, scopeId as CampaignId, actor)
-    : reach === "group"
+    : reach === "sharedWorld"
       ? // The group's shared conversation: any live member, like the
         // chronicle. Pinning `group_id` is what makes the three arms a
         // partition — a campaign thread has none, so no thread answers two
@@ -627,7 +633,7 @@ export const conversationReachable = (
         sql.and([
           sql`${sql(table)}.group_id = ${scopeId}`,
           sql`${sql(table)}.account_id is null`,
-          groupReadable(sql, actor, scopeId as GroupId),
+          groupReadable(sql, actor, scopeId as SharedWorldId),
         ])
       : sql.and([
           rowWritable(sql, table, scopeId as CampaignId, actor),
@@ -660,7 +666,7 @@ export const conversationTurnReachable = (
   nested: NestedTable,
   reach: ConversationReach,
   parentId: string,
-  scopeId: CampaignId | GroupId,
+  scopeId: CampaignId | SharedWorldId,
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
@@ -1296,7 +1302,7 @@ export const ensureConversationReachable = (
   table: string,
   reach: ConversationReach,
   id: string,
-  scopeId: CampaignId | GroupId,
+  scopeId: CampaignId | SharedWorldId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(

@@ -1,8 +1,8 @@
-import { CampaignId, CharacterId, EncounterRunId, GroupId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import { createHashHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { routes, routeTree } from "./routes";
+import { routeTree } from "./routes";
 
 /**
  * The route table, asked the same questions the hand-rolled parser was asked.
@@ -23,7 +23,7 @@ import { routes, routeTree } from "./routes";
  */
 
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
-const GROUP_ID = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
+const WORLD_ID = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
 const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
@@ -48,13 +48,6 @@ const landsOn = (path: string): { readonly at: string; readonly params: unknown 
   // something a screen reads; dropping them keeps these assertions about ids.
   const { _splat, "*": _star, ...params } = leaf?.params as Record<string, unknown>;
   return { at: leaf?.routeId ?? "", params };
-};
-
-/** The location after route guards have repaired any compatibility URL. */
-const settlesAt = async (path: string): Promise<string> => {
-  const router = routerAt(path);
-  await router.load();
-  return router.latestLocation.pathname;
 };
 
 /** The link this app would render for a route, which is what a nav item is. */
@@ -101,7 +94,7 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
       },
       { to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" }, at: "/join/$token" },
-      { to: "/worlds/$groupId", params: { groupId: GROUP_ID }, at: "/worlds/$groupId" },
+      { to: "/worlds/$worldId", params: { worldId: WORLD_ID }, at: "/worlds/$worldId" },
       { to: "/characters", at: "/characters/" },
       {
         to: "/characters/$characterId",
@@ -238,23 +231,12 @@ describe("the route table", () => {
     // The Shared World is optional cross-campaign context, and there is no mode anywhere in
     // the URL any more: the same campaign URL renders creator or participant
     // chrome from the relation, which is data rather than a path segment.
-    expect(landsOn(`/worlds/${GROUP_ID}`)).toEqual({
-      at: "/worlds/$groupId",
-      params: { groupId: GROUP_ID },
+    expect(landsOn(`/worlds/${WORLD_ID}`)).toEqual({
+      at: "/worlds/$worldId",
+      params: { worldId: WORLD_ID },
     });
     expect(landsOn("/worlds/not-a-uuid").at).toBe("/$");
     expect(linkTo("/", { to: "/worlds" })).toBe("/worlds");
-  });
-
-  it("repairs legacy group bookmarks without exposing them as application routes", async () => {
-    await expect(settlesAt("/groups")).resolves.toBe("/worlds");
-    await expect(settlesAt(`/groups/${GROUP_ID}`)).resolves.toBe(`/worlds/${GROUP_ID}`);
-    await expect(settlesAt(`/groups/${GROUP_ID}/a-section-we-do-not-serve`)).resolves.toBe(
-      `/worlds/${GROUP_ID}`,
-    );
-
-    expect(Object.keys(routes)).not.toContain("groups");
-    expect(Object.keys(routes)).not.toContain("group");
   });
 
   it("reads the character routes, which name no campaign at all", () => {
@@ -286,6 +268,8 @@ describe("the route table", () => {
     // refused — and `params.parse` returning `false` is what makes the refusal
     // a link that does not match rather than an error boundary mid-render.
     expect(landsOn("/campaigns/not-a-uuid").at).toBe("/$");
+    expect(landsOn(`/groups/${WORLD_ID}`).at).toBe("/$");
+    expect(landsOn("/groups").at).toBe("/$");
     expect(landsOn("/worlds").at).toBe("/worlds");
     expect(landsOn("/").at).toBe("/");
   });

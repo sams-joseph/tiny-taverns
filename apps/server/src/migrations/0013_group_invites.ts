@@ -3,12 +3,11 @@ import { SqlClient } from "effect/unstable/sql";
 
 /**
  * The invitation: how an account that belongs to no group comes to join one —
- * and, when the invitation names a campaign, to a seat at one of its tables in
- * the same act.
+ * and to a seat at one of its tables in the same act.
  *
  * **A link is an invitation to join, not a way in.** Following one requires
  * signing in or signing up; its whole effect is to grant a `group_member` row
- * (and optionally a `campaign_member` row) to the account that accepts it. It
+ * and a `campaign_member` row to the account that accepts it. It
  * is not a bearer credential over group data, not a guest account, and not a
  * second credential kind — so this table needs **no new predicate, no new base
  * case and no change to `Authorization`**. `packages/api/src/Invite.ts` states
@@ -25,11 +24,8 @@ import { SqlClient } from "effect/unstable/sql";
  * campaign to *this* group — an invitation cannot seat somebody at another
  * group's table.
  *
- * `on delete set null (campaign_id)` (the Postgres 15+ column list, the
- * `note_encounter_fkey` trick): deleting the campaign turns the invitation
- * into a group-only one rather than killing it — the group half of the promise
- * still stands. A bare `set null` would null `group_id` too and hit its
- * not-null.
+ * Invitations have no meaning after their campaign is deleted, so the
+ * composite foreign key cascades the invitation with it.
  *
  * ### Three columns that are deliberately absent
  *
@@ -69,7 +65,7 @@ export default Effect.gen(function* () {
     create table group_invite (
       id           uuid primary key default gen_random_uuid(),
       group_id     uuid not null references play_group (id) on delete cascade,
-      campaign_id  uuid,
+      campaign_id  uuid not null,
       token_hash   text not null unique,
       label        text not null default '',
       created_at   timestamptz not null default now(),
@@ -79,7 +75,7 @@ export default Effect.gen(function* () {
       redeemed_at  timestamptz,
       constraint group_invite_campaign_fkey
         foreign key (campaign_id, group_id)
-        references campaign (id, group_id) on delete set null (campaign_id),
+        references campaign (id, group_id) on delete cascade,
       constraint group_invite_redeemer_was_a_redemption
         check (redeemed_by is null or redeemed_at is not null)
     )

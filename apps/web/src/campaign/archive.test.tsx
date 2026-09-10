@@ -5,7 +5,7 @@ import {
   archivedCampaign,
   campaign,
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -52,7 +52,7 @@ const membership = (relation: "creator" | "player", row: unknown = campaign) => 
 /** The directory card, re-aimed per test. */
 const card = (relation: "creator" | "player" | "none", archivedAt: string | null = null) => ({
   id: campaignId,
-  groupId,
+  worldId,
   creatorAccountId: campaign.creatorAccountId,
   creatorName: "Wren Alderby",
   name: campaign.name,
@@ -62,7 +62,7 @@ const card = (relation: "creator" | "player" | "none", archivedAt: string | null
 });
 
 const aimDirectory = (relation: "creator" | "player" | "none", archivedAt: string | null = null) =>
-  server.routes.set(`GET /worlds/${groupId}/campaigns`, {
+  server.routes.set(`GET /worlds/${worldId}/campaigns`, {
     status: 200,
     body: [card(relation, archivedAt)],
   });

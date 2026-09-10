@@ -55,7 +55,6 @@ describe("the API declaration", () => {
     const decode = Schema.decodeUnknownSync(CampaignInvite);
     const invitation = {
       id: "2b1f2a1e-0000-4000-8000-00000000a001",
-      groupId: "2b1f2a1e-0000-4000-8000-00000000a002",
       campaignId: "2b1f2a1e-0000-4000-8000-00000000a003",
       label: "Ilse",
       status: "live",
@@ -70,7 +69,7 @@ describe("the API declaration", () => {
     expect(() => decode({ ...invitation, campaignId: null })).toThrow();
   });
 
-  it("keeps hidden groups out of campaign invitation responses", () => {
+  it("keeps backing contexts out of campaign invitation responses", () => {
     const decodePreview = Schema.decodeUnknownSync(InvitePreview);
     const decodeRedeemed = Schema.decodeUnknownSync(InviteRedeemed);
     const preview = {
@@ -112,7 +111,7 @@ describe("the API declaration", () => {
   });
 
   it("puts every campaign-scoped endpoint behind Authorization", () => {
-    // The fail-closed guard for the transport: a group added without
+    // The fail-closed guard for the transport: an API group added without
     // `.middleware(Authorization)` is an unauthenticated endpoint, and the only
     // way to have one is to name it here.
     const unauthenticated = groups
@@ -142,7 +141,7 @@ describe("the API declaration", () => {
    *
    * A path parameter, a query parameter or a payload would each be a place for
    * a caller to name an account, and none of the three exists: the account is
-   * `CurrentActor`'s, resolved by the group's middleware from the bearer token.
+   * `CurrentActor`'s, resolved by the API group's middleware from the bearer token.
    * That is the same argument the `me` group makes about `updateCharacter` —
    * *it names no campaign, so there is none for a caller to claim* — with one
    * fewer thing to claim. Other people's identities are `members.list`, which

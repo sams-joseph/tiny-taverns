@@ -153,7 +153,7 @@ export const artifactFrom = (
       };
     case "beat":
       return { id: turnId, kind: "beat", chips: [], text: proposal.body };
-    case "groupHistory":
+    case "sharedWorldHistory":
       return {
         id: turnId,
         kind: "chronicle",

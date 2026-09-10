@@ -2,14 +2,14 @@ import {
   type AccountId,
   type CampaignId,
   CurrentActor,
-  Group,
-  GroupCampaignCard,
-  type GroupCampaignRelation,
-  type GroupCreate,
-  type GroupId,
-  GroupMember,
-  GroupMembership,
-  type GroupUpdate,
+  SharedWorld,
+  SharedWorldCampaignCard,
+  type SharedWorldCampaignRelation,
+  type SharedWorldCreate,
+  type SharedWorldId,
+  SharedWorldMember,
+  SharedWorldMembership,
+  type SharedWorldUpdate,
   NotFound,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -47,7 +47,7 @@ import {
 /** The owner's membership, in `create`'s transaction. */
 const addOwnerMember = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
@@ -68,7 +68,7 @@ export const foundGroup = (
   name: string,
   ownerAccountId: AccountId,
   isSharedWorld = false,
-): Effect.Effect<Group, SqlError.SqlError> =>
+): Effect.Effect<SharedWorld, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows = yield* sql<GroupRow>`
       insert into play_group ${sql.insert(
@@ -87,7 +87,7 @@ export const foundGroup = (
  */
 export const admitToGroup = (
   sql: SqlClient.SqlClient,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
@@ -100,7 +100,7 @@ export const admitToGroup = (
   );
 
 interface GroupRow {
-  readonly id: GroupId;
+  readonly id: SharedWorldId;
   readonly owner_account_id: AccountId;
   readonly name: string;
   readonly is_shared_world: boolean;
@@ -110,11 +110,10 @@ interface GroupRow {
 }
 
 /** One mapper per table — imported wherever a second read needs it. */
-export const toGroup = (row: GroupRow): Group =>
-  new Group({
+export const toGroup = (row: GroupRow): SharedWorld =>
+  new SharedWorld({
     id: row.id,
     name: row.name,
-    isSharedWorld: row.is_shared_world,
     ownerAccountId: row.owner_account_id,
     archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
     createdAt: DateTime.fromDateUnsafe(row.created_at),
@@ -134,11 +133,11 @@ interface GroupMemberRow {
 
 interface CampaignCardRow {
   readonly id: CampaignId;
-  readonly group_id: GroupId;
+  readonly group_id: SharedWorldId;
   readonly creator_account_id: AccountId;
   readonly creator_name: string;
   readonly name: string;
-  readonly relation: GroupCampaignRelation;
+  readonly relation: SharedWorldCampaignRelation;
   readonly archived_at: Date | null;
   readonly created_at: Date;
 }
@@ -147,45 +146,47 @@ export class Groups extends Context.Service<
   Groups,
   {
     /** Every group this account is a live member of. */
-    readonly mine: Effect.Effect<ReadonlyArray<GroupMembership>, never, CurrentActor>;
-    readonly findById: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
+    readonly mine: Effect.Effect<ReadonlyArray<SharedWorldMembership>, never, CurrentActor>;
+    readonly findById: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /** Anybody may found a group; they become its owner and first member. */
-    readonly create: (payload: GroupCreate) => Effect.Effect<Group, never, CurrentActor>;
+    readonly create: (
+      payload: SharedWorldCreate,
+    ) => Effect.Effect<SharedWorld, never, CurrentActor>;
     /** Turns a standalone campaign's hidden context into an explicit Shared World. */
     readonly promote: (
       creator: CampaignCreatorActor,
-      payload: GroupCreate,
-    ) => Effect.Effect<Group, NotFound>;
+      payload: SharedWorldCreate,
+    ) => Effect.Effect<SharedWorld, NotFound>;
     readonly update: (
-      id: GroupId,
-      patch: GroupUpdate,
-    ) => Effect.Effect<Group, NotFound, CurrentActor>;
-    readonly archive: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
-    readonly restore: (id: GroupId) => Effect.Effect<Group, NotFound, CurrentActor>;
+      id: SharedWorldId,
+      patch: SharedWorldUpdate,
+    ) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
+    readonly archive: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
+    readonly restore: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
     /**
      * The group's roster — every live member's read, unlike a campaign's,
      * because the group is the social container and its roster is what it is.
      */
     readonly members: (
-      id: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupMember>, NotFound, CurrentActor>;
+      id: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldMember>, NotFound, CurrentActor>;
     /**
      * The directory: every campaign in the group, as a narrow card, to every
      * live member — with this reader's own relation to each. Content still
-     * goes through `campaignReadable`; see `GroupCampaignCard`.
+     * goes through `campaignReadable`; see `SharedWorldCampaignCard`.
      */
     readonly campaigns: (
-      id: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupCampaignCard>, NotFound, CurrentActor>;
+      id: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldCampaignCard>, NotFound, CurrentActor>;
   }
 >()("Groups") {
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const one = (rows: ReadonlyArray<GroupRow>, id: GroupId) =>
+      const one = (rows: ReadonlyArray<GroupRow>, id: SharedWorldId) =>
         rows.length === 0
-          ? Effect.fail(new NotFound({ resource: "group", id }))
+          ? Effect.fail(new NotFound({ resource: "shared-world", id }))
           : Effect.succeed(toGroup(rows[0]!));
 
       return {
@@ -206,8 +207,8 @@ export class Groups extends Context.Service<
             `;
             return rows.map(
               (row) =>
-                new GroupMembership({
-                  group: toGroup(row),
+                new SharedWorldMembership({
+                  sharedWorld: toGroup(row),
                   isOwner: row.owner_account_id === actor.accountId,
                   joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                 }),
@@ -313,7 +314,7 @@ export class Groups extends Context.Service<
               `;
               return rows.map(
                 (row) =>
-                  new GroupMember({
+                  new SharedWorldMember({
                     accountId: row.account_id,
                     name: row.name,
                     isOwner: row.is_owner,
@@ -348,9 +349,9 @@ export class Groups extends Context.Service<
               `;
               return rows.map(
                 (row) =>
-                  new GroupCampaignCard({
+                  new SharedWorldCampaignCard({
                     id: row.id,
-                    groupId: row.group_id,
+                    worldId: row.group_id,
                     creatorAccountId: row.creator_account_id,
                     creatorName: row.creator_name,
                     name: row.name,

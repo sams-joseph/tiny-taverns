@@ -1,8 +1,8 @@
 import {
   type Actor,
   CurrentActor,
-  GroupLibraryShare,
-  type GroupId,
+  SharedWorldLibraryShare,
+  type SharedWorldId,
   type LibraryShareCreate,
   type LibraryShareKind,
   NotFound,
@@ -37,7 +37,7 @@ import { ensureGroupReadable } from "./visibility.js";
  */
 
 interface ShareRow {
-  readonly group_id: GroupId;
+  readonly group_id: SharedWorldId;
   readonly owner_account_id: string;
   readonly resource_kind: LibraryShareKind;
   readonly resource_id: string;
@@ -46,10 +46,10 @@ interface ShareRow {
   readonly created_at: Date;
 }
 
-const toShare = (row: ShareRow): GroupLibraryShare =>
-  new GroupLibraryShare({
-    groupId: row.group_id,
-    ownerAccountId: row.owner_account_id as GroupLibraryShare["ownerAccountId"],
+const toShare = (row: ShareRow): SharedWorldLibraryShare =>
+  new SharedWorldLibraryShare({
+    worldId: row.group_id,
+    ownerAccountId: row.owner_account_id as SharedWorldLibraryShare["ownerAccountId"],
     kind: row.resource_kind,
     resourceId: row.resource_id,
     name: row.name,
@@ -101,16 +101,16 @@ export class LibraryShares extends Context.Service<
   {
     /** Every grant in the group, newest first, with resolved names. */
     readonly list: (
-      groupId: GroupId,
-    ) => Effect.Effect<ReadonlyArray<GroupLibraryShare>, NotFound, CurrentActor>;
+      groupId: SharedWorldId,
+    ) => Effect.Effect<ReadonlyArray<SharedWorldLibraryShare>, NotFound, CurrentActor>;
     /** The owner grants their own original. Granting twice is the same success. */
     readonly share: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       payload: LibraryShareCreate,
-    ) => Effect.Effect<GroupLibraryShare, NotFound, CurrentActor>;
+    ) => Effect.Effect<SharedWorldLibraryShare, NotFound, CurrentActor>;
     /** The owner withdraws the grant. Copies already made are snapshots and stand. */
     readonly unshare: (
-      groupId: GroupId,
+      groupId: SharedWorldId,
       payload: LibraryShareCreate,
     ) => Effect.Effect<void, NotFound, CurrentActor>;
   }
@@ -119,7 +119,7 @@ export class LibraryShares extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const readShare = (groupId: GroupId, payload: LibraryShareCreate) =>
+      const readShare = (groupId: SharedWorldId, payload: LibraryShareCreate) =>
         sql<ShareRow>`
           select group_library_share.*,
                  account.name as shared_by_name,

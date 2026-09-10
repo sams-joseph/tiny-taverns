@@ -1,4 +1,4 @@
-import type { CampaignId, GroupId } from "@taverns/api";
+import type { CampaignId, SharedWorldId } from "@taverns/api";
 import { HobDock } from "./HobDock";
 import { useHobConversation, type HobScope } from "./conversation";
 import { SHARED_WORLD_HOB_STARTERS } from "./hob.fixtures";
@@ -28,7 +28,7 @@ import type { HobPanelState } from "./useHobPanel";
  */
 type HobProps = { readonly hob: HobPanelState } & (
   | { readonly campaignId: CampaignId; readonly worldId?: never }
-  | { readonly worldId: GroupId; readonly campaignId?: never }
+  | { readonly worldId: SharedWorldId; readonly campaignId?: never }
   | { readonly campaignId?: never; readonly worldId?: never }
 );
 

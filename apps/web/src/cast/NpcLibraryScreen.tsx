@@ -1,4 +1,4 @@
-import type { CampaignMembership, GroupMembership, NpcCreate, NpcSource } from "@taverns/api";
+import type { CampaignMembership, SharedWorldMembership, NpcCreate, NpcSource } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
   Badge,
@@ -25,7 +25,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Hob, useHobPanel } from "../hob";
 import { membershipsAtom } from "../campaign/load";
-import { sharedWorldsAtom } from "../group/load";
+import { sharedWorldsAtom } from "../shared-world/load";
 import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
@@ -434,7 +434,7 @@ function ShareDialog({
   onClose,
 }: {
   readonly source: NpcSource;
-  readonly worlds: ReadonlyArray<GroupMembership>;
+  readonly worlds: ReadonlyArray<SharedWorldMembership>;
   readonly onClose: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
@@ -443,7 +443,7 @@ function ShareDialog({
   // has no place in this decision: a world owner with no campaign seat may
   // share, while a campaign creator who does not own the world may not.
   const ownedWorlds = worlds.filter((membership) => membership.isOwner);
-  const share = async (worldId: (typeof ownedWorlds)[number]["group"]["id"]) => {
+  const share = async (worldId: (typeof ownedWorlds)[number]["sharedWorld"]["id"]) => {
     const saved = await submit(
       (client) =>
         client.sharedWorldLibrary.share({
@@ -472,16 +472,16 @@ function ShareDialog({
               Create or take ownership of a Shared World first.
             </p>
           ) : (
-            ownedWorlds.map(({ group }) => (
+            ownedWorlds.map(({ sharedWorld }) => (
               <Button
-                key={group.id}
+                key={sharedWorld.id}
                 variant="outline"
                 className="justify-start"
-                onClick={() => void share(group.id)}
+                onClick={() => void share(sharedWorld.id)}
                 disabled={busy}
               >
                 <Icon name="hand-helping" size={14} />
-                {group.name}
+                {sharedWorld.name}
               </Button>
             ))
           )}

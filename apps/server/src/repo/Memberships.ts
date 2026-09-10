@@ -7,7 +7,7 @@ import {
   CampaignSharedWorld,
   Conflict,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -78,7 +78,7 @@ const notTheCreator = (sql: SqlClient.SqlClient): Statement.Fragment =>
 export const addCreator = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<void, SqlError.SqlError> =>
   Effect.asVoid(
@@ -99,7 +99,7 @@ export const addCreator = (
 export const admitTo = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
-  groupId: GroupId,
+  groupId: SharedWorldId,
   accountId: AccountId,
 ): Effect.Effect<boolean, SqlError.SqlError> =>
   Effect.map(

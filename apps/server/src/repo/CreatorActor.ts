@@ -1,4 +1,10 @@
-import { type Actor, type CampaignId, CurrentActor, type GroupId, NotFound } from "@taverns/api";
+import {
+  type Actor,
+  type CampaignId,
+  CurrentActor,
+  type SharedWorldId,
+  NotFound,
+} from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { dieOnSqlError } from "./rows.js";
@@ -73,7 +79,7 @@ export interface CampaignCreatorActor {
   /** The campaign creator-ness was checked against, and the only one it spends on. */
   readonly campaign: CampaignId;
   /** That campaign's group — read in the same statement that proved the pair. */
-  readonly group: GroupId;
+  readonly group: SharedWorldId;
 }
 
 /**
@@ -104,7 +110,7 @@ export class CampaignCreatorActors extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly group_id: GroupId }>`
+              const rows = yield* sql<{ readonly group_id: SharedWorldId }>`
                 select campaign.group_id from campaign
                 where campaign.id = ${campaignId}
                   and ${campaignWritable(sql, actor, campaignId)}

@@ -103,22 +103,22 @@ describe("campaign, session, character and note CRUD", () => {
         const worldsBefore = yield* client.sharedWorlds.list();
         const hiddenSurfaces = yield* Effect.all({
           group: Effect.result(
-            client.sharedWorlds.findById({ params: { worldId: campaign.groupId } }),
+            client.sharedWorlds.findById({ params: { worldId: campaign.contextId } }),
           ),
           campaigns: Effect.result(
-            client.sharedWorlds.campaigns({ params: { worldId: campaign.groupId } }),
+            client.sharedWorlds.campaigns({ params: { worldId: campaign.contextId } }),
           ),
           members: Effect.result(
-            client.sharedWorldMembers.list({ params: { worldId: campaign.groupId } }),
+            client.sharedWorldMembers.list({ params: { worldId: campaign.contextId } }),
           ),
           history: Effect.result(
-            client.sharedWorldHistory.list({ params: { worldId: campaign.groupId } }),
+            client.sharedWorldHistory.list({ params: { worldId: campaign.contextId } }),
           ),
           library: Effect.result(
-            client.sharedWorldLibrary.list({ params: { worldId: campaign.groupId } }),
+            client.sharedWorldLibrary.list({ params: { worldId: campaign.contextId } }),
           ),
           hob: Effect.result(
-            client.sharedWorldHob.threads({ params: { worldId: campaign.groupId } }),
+            client.sharedWorldHob.threads({ params: { worldId: campaign.contextId } }),
           ),
         });
         const world = yield* client.campaigns.promoteSharedWorld({
@@ -143,11 +143,10 @@ describe("campaign, session, character and note CRUD", () => {
       "Failure",
     ]);
     expect(seen.world).toMatchObject({
-      id: seen.campaign.groupId,
+      id: seen.campaign.contextId,
       name: "The Roads Between",
-      isSharedWorld: true,
     });
-    expect(seen.worldsAfter.map((row) => row.group.id)).toEqual([seen.campaign.groupId]);
+    expect(seen.worldsAfter.map((row) => row.sharedWorld.id)).toEqual([seen.campaign.contextId]);
     expect(seen.memberships.find((row) => row.campaign.id === seen.campaign.id)?.relation).toBe(
       "creator",
     );

@@ -1,4 +1,4 @@
-import type { CampaignMembership, CampaignSharedWorld, GroupMembership } from "@taverns/api";
+import type { CampaignMembership, CampaignSharedWorld, SharedWorldMembership } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Badge,
@@ -30,7 +30,7 @@ import { useCredential } from "../auth/credential";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { sharedWorldsAtom } from "../group/load";
+import { sharedWorldsAtom } from "../shared-world/load";
 import { ArchivedDialog } from "./ArchivedDialog";
 import { membershipsAtom } from "./load";
 
@@ -83,7 +83,7 @@ function CampaignRow({
             size="sm"
             className="text-link"
             nativeButton={false}
-            render={<Link to="/worlds/$groupId" params={{ groupId: world.id }} />}
+            render={<Link to="/worlds/$worldId" params={{ worldId: world.id }} />}
           >
             <Icon name="map" size={14} />
             {world.name}
@@ -144,7 +144,7 @@ function SharedWorldDialog({
     }
     invalidate([reads.mySharedWorlds]);
     onClose();
-    await navigate({ to: "/worlds/$groupId", params: { groupId: result.success.id } });
+    await navigate({ to: "/worlds/$worldId", params: { worldId: result.success.id } });
   };
 
   return (
@@ -185,7 +185,7 @@ function SharedWorldDialog({
 
 const STANDALONE = "standalone";
 
-function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembership> }) {
+function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMembership> }) {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const navigate = useNavigate();
@@ -198,7 +198,7 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembershi
     setBusy(true);
     setError(undefined);
     const token = await fetchCredential();
-    const world = worlds.find((candidate) => candidate.group.id === target)?.group;
+    const world = worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
     const result = await runApiResult(
       (client) =>
         world === undefined
@@ -245,16 +245,16 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembershi
                 {(value) =>
                   value === STANDALONE
                     ? "Standalone campaign"
-                    : (worlds.find((candidate) => candidate.group.id === value)?.group.name ??
-                      "Shared World")
+                    : (worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
+                        .name ?? "Shared World")
                 }
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={STANDALONE}>Standalone campaign</SelectItem>
-              {worlds.map(({ group }) => (
-                <SelectItem key={group.id} value={group.id}>
-                  {group.name}
+              {worlds.map(({ sharedWorld }) => (
+                <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
+                  {sharedWorld.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -273,29 +273,33 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<GroupMembershi
   );
 }
 
-function SharedWorldDirectory({ worlds }: { readonly worlds: ReadonlyArray<GroupMembership> }) {
+function SharedWorldDirectory({
+  worlds,
+}: {
+  readonly worlds: ReadonlyArray<SharedWorldMembership>;
+}) {
   if (worlds.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-2" aria-label="Shared Worlds">
       <span className="text-label leading-snug font-semibold text-heading">Shared Worlds</span>
       <div className="flex flex-wrap gap-2">
-        {worlds.map(({ group, isOwner }) => (
+        {worlds.map(({ sharedWorld, isOwner }) => (
           <Button
-            key={group.id}
+            key={sharedWorld.id}
             variant="secondary"
             size="sm"
             nativeButton={false}
             render={
               <Link
-                to="/worlds/$groupId"
-                params={{ groupId: group.id }}
-                aria-label={`Open Shared World ${group.name}`}
+                to="/worlds/$worldId"
+                params={{ worldId: sharedWorld.id }}
+                aria-label={`Open Shared World ${sharedWorld.name}`}
               />
             }
           >
             <Icon name="map" size={14} />
-            {group.name}
+            {sharedWorld.name}
             {isOwner && <Badge variant="outline">Yours</Badge>}
           </Button>
         ))}

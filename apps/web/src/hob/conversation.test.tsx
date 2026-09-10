@@ -1,10 +1,10 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
-import type { CampaignId, GroupId } from "@taverns/api";
+import type { CampaignId, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
-import { campaignId, groupId } from "../campaign/campaign.fixtures";
+import { campaignId, worldId } from "../campaign/campaign.fixtures";
 import { Hob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
 
@@ -92,11 +92,11 @@ const aNoteRow = {
 
 const aHistoryRow = {
   id: "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61",
-  groupId,
+  worldId,
   campaignId: null,
   sessionId: null,
   sourceKind: "manual",
-  groupSeq: 7,
+  worldSeq: 7,
   occurredAt: null,
   acceptedAt: stamp,
   title: "The roads remember",
@@ -190,7 +190,7 @@ const installHobServer = (): HobStub => {
       return Promise.resolve(
         stub.acceptStatus === undefined
           ? pathname.startsWith("/worlds/")
-            ? json({ accepted: "groupHistory", entry: aHistoryRow })
+            ? json({ accepted: "sharedWorldHistory", entry: aHistoryRow })
             : json({ accepted: "note", note: aNoteRow })
           : new Response(JSON.stringify(stub.acceptBody), {
               status: stub.acceptStatus,
@@ -209,7 +209,7 @@ const installHobServer = (): HobStub => {
           ? json({
               available: stub.available,
               model: stub.available ? "local" : null,
-              group: "The Salt Company",
+              sharedWorld: "The Salt Company",
             })
           : json({
               available: stub.available,
@@ -251,7 +251,7 @@ const renderHob = (options?: {
   render(
     <HostedSessionScope session={noSession}>
       {options?.world === true ? (
-        <Hob hob={hob} worldId={groupId as GroupId} />
+        <Hob hob={hob} worldId={worldId as SharedWorldId} />
       ) : options?.campaign === false ? (
         <Hob hob={hob} />
       ) : (
@@ -291,8 +291,8 @@ const aThread = (title: string) => ({
   id: threadId,
   campaignId,
   // A campaign thread's other scope is null — `assistant_thread_one_scope`
-  // (`0031`): a thread is a campaign's or a group's, never both.
-  groupId: null,
+  // (`0031`): a thread is a campaign's or a Shared World's, never both.
+  worldId: null,
   title,
   createdAt: stamp,
   updatedAt: stamp,
@@ -301,7 +301,7 @@ const aThread = (title: string) => ({
 const aWorldThread = (title: string) => ({
   id: threadId,
   campaignId: null,
-  groupId,
+  worldId,
   title,
   createdAt: stamp,
   updatedAt: stamp,
@@ -730,7 +730,7 @@ describe("what Hob offers, and the one thing that writes", () => {
 
 describe("Shared World Hob", () => {
   const chronicleProposal = {
-    target: "groupHistory",
+    target: "sharedWorldHistory",
     title: "The roads remember",
     body: "Every lantern went dark on the same night.",
   };
@@ -755,9 +755,9 @@ describe("Shared World Hob", () => {
       await screen.findByText("Every road passed through the lantern district."),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("What Hob knows")).toHaveTextContent("The Salt Company");
-    expect(server.paths).toContain(`/worlds/${groupId}/hob`);
-    expect(server.paths).toContain(`/worlds/${groupId}/hob/threads`);
-    expect(server.paths).toContain(`/worlds/${groupId}/hob/threads/${threadId}/turns`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/threads`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/threads/${threadId}/turns`);
     expect(server.paths.some((path) => path.startsWith(`/campaigns/${campaignId}/hob`))).toBe(
       false,
     );
@@ -778,7 +778,7 @@ describe("Shared World Hob", () => {
     await userEvent.type(composer()!, "What connects these campaigns?{Enter}");
 
     expect(await screen.findByText("The lanterns connect them.")).toBeInTheDocument();
-    expect(server.paths).toContain(`/worlds/${groupId}/hob/ask`);
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/ask`);
     expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "What connects these campaigns?" });
   });
 
@@ -800,7 +800,7 @@ describe("Shared World Hob", () => {
 
     await waitFor(() =>
       expect(server.accepts).toEqual([
-        `/worlds/${groupId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+        `/worlds/${worldId}/hob/threads/${threadId}/turns/${turnId}/accept`,
       ]),
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();

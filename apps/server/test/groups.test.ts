@@ -87,7 +87,7 @@ const makeFixture = Effect.gen(function* () {
     player,
     bystander,
     stranger,
-    group,
+    sharedWorld: group,
     strangerGroup,
     campaign,
     secret,
@@ -107,7 +107,7 @@ describe("membership is eligibility, not participation", () => {
     // and Fen is not the owner. The stranger's half:
     const refused = await runtime.runPromise(
       Effect.flatMap(Campaigns, (repo) =>
-        as(fixture.stranger)(repo.create(fixture.group.id, { name: "Not my group" })),
+        as(fixture.stranger)(repo.create(fixture.sharedWorld.id, { name: "Not my group" })),
       ).pipe(Effect.result),
     );
     expect(refused._tag).toBe("Failure");
@@ -120,7 +120,7 @@ describe("membership is eligibility, not participation", () => {
     // means shared with the campaign's participants, not with the whole group.
     const cards = await runtime.runPromise(
       Effect.flatMap(Groups, (repo) =>
-        as(fixture.bystander)(repo.campaigns(fixture.group.id)),
+        as(fixture.bystander)(repo.campaigns(fixture.sharedWorld.id)),
       ).pipe(Effect.orDie),
     );
     const card = cards.find((row) => row.id === fixture.campaign.id);
@@ -169,7 +169,7 @@ describe("membership is eligibility, not participation", () => {
   it("derives the directory relation per reader", async () => {
     const relationSeenBy = (actor: Actor) =>
       runtime.runPromise(
-        Effect.flatMap(Groups, (repo) => as(actor)(repo.campaigns(fixture.group.id))).pipe(
+        Effect.flatMap(Groups, (repo) => as(actor)(repo.campaigns(fixture.sharedWorld.id))).pipe(
           Effect.map((cards) => cards.find((row) => row.id === fixture.campaign.id)?.relation),
           Effect.orDie,
         ),
@@ -222,9 +222,9 @@ describe("membership is eligibility, not participation", () => {
 describe("Shared World membership is context", () => {
   it("lets every live member read the group and its roster", async () => {
     const roster = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) => as(fixture.bystander)(repo.members(fixture.group.id))).pipe(
-        Effect.orDie,
-      ),
+      Effect.flatMap(Groups, (repo) =>
+        as(fixture.bystander)(repo.members(fixture.sharedWorld.id)),
+      ).pipe(Effect.orDie),
     );
     expect(roster.map((member) => [member.name, member.isOwner])).toEqual([
       ["Ada", true],
@@ -237,7 +237,7 @@ describe("Shared World membership is context", () => {
   it("still reserves Shared World settings for the owner", async () => {
     const renamed = await runtime.runPromise(
       Effect.flatMap(Groups, (repo) =>
-        as(fixture.creator)(repo.update(fixture.group.id, { name: "Fen's Company" })),
+        as(fixture.creator)(repo.update(fixture.sharedWorld.id, { name: "Fen's Company" })),
       ).pipe(Effect.result),
     );
     expect(renamed._tag).toBe("Failure");
@@ -250,19 +250,19 @@ describe("cross-group isolation", () => {
     // The owner of one group is a stranger at another — being an owner
     // anywhere grants nothing here.
     const read = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) => as(fixture.stranger)(repo.findById(fixture.group.id))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Groups, (repo) =>
+        as(fixture.stranger)(repo.findById(fixture.sharedWorld.id)),
+      ).pipe(Effect.result),
     );
     const roster = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) => as(fixture.stranger)(repo.members(fixture.group.id))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Groups, (repo) =>
+        as(fixture.stranger)(repo.members(fixture.sharedWorld.id)),
+      ).pipe(Effect.result),
     );
     const cards = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) => as(fixture.stranger)(repo.campaigns(fixture.group.id))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Groups, (repo) =>
+        as(fixture.stranger)(repo.campaigns(fixture.sharedWorld.id)),
+      ).pipe(Effect.result),
     );
 
     for (const refusal of [read, roster, cards]) {
@@ -273,7 +273,7 @@ describe("cross-group isolation", () => {
     const mine = await runtime.runPromise(
       Effect.flatMap(Groups, (repo) => as(fixture.owner)(repo.mine)).pipe(Effect.orDie),
     );
-    expect(mine.map((row) => row.group.name)).toEqual(["The Salt Company"]);
+    expect(mine.map((row) => row.sharedWorld.name)).toEqual(["The Salt Company"]);
     expect(mine[0]!.isOwner).toBe(true);
   }, 60_000);
 
@@ -282,7 +282,7 @@ describe("cross-group isolation", () => {
     // campaign-scoped case `visibility.test.ts` pins.
     const scoped = scopedToGroup(fixture.owner, fixture.strangerGroup.id);
     const ownGroup = await runtime.runPromise(
-      Effect.flatMap(Groups, (repo) => as(scoped)(repo.findById(fixture.group.id))).pipe(
+      Effect.flatMap(Groups, (repo) => as(scoped)(repo.findById(fixture.sharedWorld.id))).pipe(
         Effect.result,
       ),
     );
@@ -303,7 +303,9 @@ describe("cross-group isolation", () => {
       Effect.gen(function* () {
         const dmHere = yield* aPlayerAt(fixture.campaign.id, "Quill");
         const groups = yield* Groups;
-        const ownGroupCard = yield* Effect.result(as(dmHere)(groups.findById(fixture.group.id)));
+        const ownGroupCard = yield* Effect.result(
+          as(dmHere)(groups.findById(fixture.sharedWorld.id)),
+        );
         const otherGroup = yield* Effect.result(
           as(dmHere)(groups.findById(fixture.strangerGroup.id)),
         );
@@ -334,21 +336,21 @@ describe("the group's own lifecycle", () => {
         // The backing row still does its campaign job. What it cannot do is
         // answer any endpoint that presents it as a Shared World.
         const campaignBefore = yield* Effect.result(as(founder)(campaigns.findById(campaign.id)));
-        const groupBefore = yield* Effect.result(as(founder)(groups.findById(campaign.groupId)));
-        const rosterBefore = yield* Effect.result(as(founder)(groups.members(campaign.groupId)));
+        const groupBefore = yield* Effect.result(as(founder)(groups.findById(campaign.contextId)));
+        const rosterBefore = yield* Effect.result(as(founder)(groups.members(campaign.contextId)));
         const directoryBefore = yield* Effect.result(
-          as(founder)(groups.campaigns(campaign.groupId)),
+          as(founder)(groups.campaigns(campaign.contextId)),
         );
         const creator = yield* asDm(founder, campaign.id);
         const inviteBefore = yield* invites.createForCampaign(creator, { label: "A player" });
         const secondCampaignBefore = yield* Effect.result(
-          as(founder)(campaigns.create(campaign.groupId, { name: "Too soon" })),
+          as(founder)(campaigns.create(campaign.contextId, { name: "Too soon" })),
         );
         const membershipBefore = yield* as(founder)(memberships.mine("live"));
 
         const promoted = yield* groups.promote(creator, { name: "The Roads Between" });
-        const groupAfter = yield* as(founder)(groups.findById(campaign.groupId));
-        const directoryAfter = yield* as(founder)(groups.campaigns(campaign.groupId));
+        const groupAfter = yield* as(founder)(groups.findById(campaign.contextId));
+        const directoryAfter = yield* as(founder)(groups.campaigns(campaign.contextId));
         const membershipAfter = yield* as(founder)(memberships.mine("live"));
 
         return {
@@ -380,7 +382,6 @@ describe("the group's own lifecycle", () => {
     expect(journey.inviteBefore.invite.campaignId).toBe(
       journey.campaignBefore._tag === "Success" ? journey.campaignBefore.success.id : undefined,
     );
-    expect(journey.promoted.isSharedWorld).toBe(true);
     expect(journey.groupAfter.name).toBe("The Roads Between");
     expect(journey.directoryAfter.map((campaign) => campaign.name)).toEqual(["A Road of Its Own"]);
     expect(journey.membershipBefore[0]?.sharedWorld).toBeNull();
@@ -418,9 +419,11 @@ describe("the group's own lifecycle", () => {
     );
 
     expect(journey.archived.archivedAt).not.toBeNull();
-    expect(journey.listedWhileShelved.map((row) => row.group.name)).toEqual([]);
+    expect(journey.listedWhileShelved.map((row) => row.sharedWorld.name)).toEqual([]);
     expect(journey.restored.archivedAt).toBeNull();
-    expect(journey.listedBack.map((row) => row.group.name)).toEqual(["A Shelf-bound Company"]);
+    expect(journey.listedBack.map((row) => row.sharedWorld.name)).toEqual([
+      "A Shelf-bound Company",
+    ]);
   }, 60_000);
 
   it("lets a campaign creator run their table while the owner runs the group", async () => {

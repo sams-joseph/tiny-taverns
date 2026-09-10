@@ -9,7 +9,7 @@ import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Accounts, hashToken } from "../src/Accounts.js";
+import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
@@ -235,7 +235,7 @@ describe("what an invitation grants", () => {
         const invites = yield* Invites;
         const creator = yield* aGroupMemberAt(fixture.campaign.id, "Mara");
         const campaign = yield* as(creator)(
-          campaigns.create(fixture.campaign.groupId, { name: "Mara's Crossing" }),
+          campaigns.create(fixture.campaign.contextId, { name: "Mara's Crossing" }),
         );
         const proof = yield* asDm(creator, campaign.id);
         const issued = yield* invites.createForCampaign(proof, { label: "friend" });
@@ -272,35 +272,6 @@ describe("what an invitation grants", () => {
     expect(seen.redeemed.kind === "campaign" && seen.redeemed.sharedWorld).toBeNull();
   }, 60_000);
 
-  it("keeps old group-only tokens as explicit Shared World invitations", async () => {
-    const token = "legacy-shared-world-token";
-    const preview = await runtime.runPromise(
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const invites = yield* Invites;
-        yield* sql`
-          insert into group_invite (group_id, token_hash, label, expires_at)
-          values (${fixture.campaign.groupId}, ${hashToken(token)}, 'old link', now() + interval '1 day')
-        `;
-        return yield* invites.preview(token);
-      }).pipe(Effect.orDie),
-    );
-    const redeemed = await runtime.runPromise(
-      Effect.gen(function* () {
-        const invites = yield* Invites;
-        const account = yield* anAccount("Legacy guest");
-        return yield* as(account)(invites.redeem(token));
-      }).pipe(Effect.orDie),
-    );
-
-    expect(preview.kind).toBe("sharedWorld");
-    expect(preview.kind === "sharedWorld" && preview.sharedWorldName).toBe("The Salt Road group");
-    expect(redeemed.kind).toBe("sharedWorld");
-    expect(redeemed.kind === "sharedWorld" && redeemed.sharedWorld.name).toBe(
-      "The Salt Road group",
-    );
-  }, 60_000);
-
   it("is the campaign creator's act — a member cannot manage invitations", async () => {
     const issued = await mint(fixture.campaign, "Rin");
     const { account: player } = await joinAs("Rin", issued.token, fixture.campaign.id);
@@ -332,13 +303,13 @@ describe("campaign-local invitations", () => {
         // campaigns there. Fen is their creator but not the world owner.
         const fen = yield* aGroupMemberAt(fixture.campaign.id, "Fen the campaign inviter");
         const first = yield* as(fen)(
-          campaigns.create(fixture.campaign.groupId, {
+          campaigns.create(fixture.campaign.contextId, {
             name: "Fen's first table",
             visibility: "shared",
           }),
         );
         const second = yield* as(fen)(
-          campaigns.create(fixture.campaign.groupId, {
+          campaigns.create(fixture.campaign.contextId, {
             name: "Fen's second table",
             visibility: "shared",
           }),
@@ -361,7 +332,7 @@ describe("campaign-local invitations", () => {
         yield* as(mara)(invites.redeem(redundant.token));
         yield* invites.revokeForCampaign(secondCreator, redundant.invite.id);
         const groupStillReadable = yield* as(mara)(
-          Effect.flatMap(Groups, (groups) => groups.findById(first.groupId)),
+          Effect.flatMap(Groups, (groups) => groups.findById(first.contextId)),
         );
 
         return { first, second, listed, revoked, groupStillReadable };
@@ -370,7 +341,7 @@ describe("campaign-local invitations", () => {
 
     expect(seen.listed.map((invite) => invite.id)).toContain(seen.revoked.id);
     expect(seen.revoked.status).toBe("revoked");
-    expect(seen.groupStillReadable.id).toBe(fixture.campaign.groupId);
+    expect(seen.groupStillReadable.id).toBe(fixture.campaign.contextId);
     expect(
       (await membershipRows(seen.first.id)).find((row) => row.name.startsWith("Mara")),
     ).toEqual(expect.objectContaining({ revoked: true }));

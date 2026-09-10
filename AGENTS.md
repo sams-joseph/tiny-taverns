@@ -45,6 +45,13 @@ This transition supersedes the invitation-governance prose below where it
 disagrees. Groups still back Shared Worlds and their context internally, but
 ordinary campaign work must not require navigating or owning that container.
 
+There were no deployed users at this cutover, so it is deliberately not a
+compatibility layer. Public contracts use `SharedWorld*`, `sharedWorld`,
+`worldId`, `worldSeq`, and `lastWorldSeq`; a campaign calls its hidden backing
+container `contextId`. The database and repositories may retain `group_*` and
+`Groups` as persistence vocabulary. Existing development databases must be
+reset after pulling the rewritten baseline migrations.
+
 - Campaign invitation management is `/campaigns/:campaignId/invites` and takes
   `CampaignCreatorActor`. A campaign creator may list, mint and revoke their
   table's invitations even when another account owns the underlying group.
@@ -63,8 +70,8 @@ ordinary campaign work must not require navigating or owning that container.
   explicit kind; `POST /campaigns/:id/shared-world` requires both the campaign
   creator proof and ownership of its context, then promotes it in place. The
   campaign home offers that opt-in and links explicit worlds at `/worlds/:id`.
-  `/worlds` and `/worlds/:id` are the only URLs the app generates;
-  `/groups` and `/groups/:id` are redirect-only compatibility seams.
+  `/worlds` and `/worlds/:id` are the only URLs the app recognizes; `/groups`
+  and `/groups/:id` do not route or redirect.
 - `groupReadable` / `groupWritable` include `is_shared_world`; every Shared
   World surface therefore answers `NotFound` for a standalone campaign's
   backing context until promotion. Campaign reach continues through
@@ -91,8 +98,8 @@ ordinary campaign work must not require navigating or owning that container.
   `/worlds/:worldId/members` exposes only `GET`—never a cross-campaign delete.
 - Every public Shared World HTTP surface is canonical under `/worlds`, and the
   generated client groups are `sharedWorlds`, `sharedWorldMembers`,
-  `sharedWorldHistory`, `sharedWorldLibrary`, and `sharedWorldHob`. `/groups`
-  remains only as a browser compatibility redirect; it is not an API alias.
+  `sharedWorldHistory`, `sharedWorldLibrary`, and `sharedWorldHob`. There is no
+  browser or API alias under `/groups`.
 - The NPC Library share picker reads `sharedWorlds.list` directly and offers
   only rows where `isOwner` is true, matching `sharedWorldLibrary.share`'s
   authority. It never derives worlds from campaign memberships: that would
@@ -100,21 +107,25 @@ ordinary campaign work must not require navigating or owning that container.
   to campaign creators who do not own the Shared World.
 - The Shared World screen binds its Hob panel to `sharedWorldHob`, not campaign
   Hob: it resumes the world's one thread, streams against `/worlds/:worldId/hob`,
-  renders the world toolkit's `groupHistory` proposal as a Chronicle card, and
+  renders the world toolkit's `sharedWorldHistory` proposal as a Chronicle card, and
   refreshes `reads.sharedWorldHistory(worldId)` when a member keeps it. Global
   screens still mount an unscoped, inert Hob panel.
+- Shared World Hob's provider tools are `searchSharedWorldHistory`,
+  `readSharedWorldSummary`, `listSharedWorldCampaigns`, and
+  `proposeSharedWorldEntry`; its conversation reach is `sharedWorld`. Old
+  `GroupHob`/`groupHistory` names are not accepted aliases.
 - The repository matches that boundary: `Invites` has only campaign-scoped
   list/create/revoke plus token preview/redeem; `Groups.removeMember`,
   `removeFromGroup`, and the cross-group participation revoker are gone.
 - The public invitation contract is `CampaignInvite` / `CampaignInviteId`, and
-  its `campaignId` is required. Nullable campaign ids exist only on the private
-  repository row so legacy group-only tokens can expire or redeem; `group_invite`
-  and `group_id` remain persistence names, not product governance concepts.
-- Token preview and redemption are tagged campaign-first results: the campaign
-  variant names its creator (not the Shared World owner), requires the campaign
-  id/name, and carries an optional `sharedWorld` reference only when its backing
-  context is explicit. The `sharedWorld` variant exists solely so old group-only
-  tokens remain usable without putting “group” back into the join experience.
+  its `campaignId` is required in both the public contract and repository row.
+  `group_invite.campaign_id` is non-null and cascades with its campaign;
+  `group_invite` and `group_id` remain persistence names, not product governance
+  concepts.
+- Token preview and redemption are campaign-only results. They name the
+  campaign creator, require the campaign id/name, and carry an optional
+  `sharedWorld` reference only when the backing context is explicit. There is
+  no group-only or Shared-World-only invitation variant.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { CampaignId, CharacterId, EncounterRunId, GroupId, SessionId } from "@taverns/api";
+import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import type { RouteIds } from "@tanstack/react-router";
 import { Schema } from "effect";
 import type { routeTree } from "../routes";
@@ -30,7 +30,7 @@ import { renderAt } from "../test/renderRoute";
  * DM most needs the nav to still work.
  */
 
-const groupId = Schema.decodeSync(GroupId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
+const worldId = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
@@ -49,17 +49,13 @@ const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-0000
 const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   __root__: undefined,
   "/campaigns/$campaignId": undefined,
-  "/groups/$groupId": undefined,
   "/characters": undefined,
 
   "/": "/",
   "/$": "/nothing-like-a-route",
   "/campaigns": "/campaigns",
   "/worlds": "/worlds",
-  "/groups": "/groups",
-  "/groups/$groupId/": `/groups/${groupId}`,
-  "/groups/$groupId/$": `/groups/${groupId}/a-section-we-do-not-serve`,
-  "/worlds/$groupId": `/worlds/${groupId}`,
+  "/worlds/$worldId": `/worlds/${worldId}`,
   "/library": "/library",
   "/library/rules": "/library/rules",
   "/library/compendium": "/library/compendium",
@@ -147,15 +143,6 @@ describe("the shell's top bar", () => {
     ).toBeNull();
   });
 
-  it("repairs a compatibility group URL and keeps it within Campaigns", async () => {
-    await renderAt(`/groups/${groupId}`);
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${groupId}`));
-    expect(within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current")).toBe(
-      "page",
-    );
-    expect(noCampaignNav()).toBeNull();
-  });
-
   describe("the Library item", () => {
     it("is lit at every Library shelf, with Rules no longer a global peer", async () => {
       for (const path of [
@@ -222,7 +209,7 @@ describe("the shell's top bar", () => {
       for (const path of [
         "/campaigns",
         "/worlds",
-        `/worlds/${groupId}`,
+        `/worlds/${worldId}`,
         "/library",
         "/library/rules",
         "/library/spells",

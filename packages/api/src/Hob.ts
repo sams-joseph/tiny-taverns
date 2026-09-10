@@ -2,8 +2,14 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Character, CharacterSheet } from "./Character.js";
 import { Difficulty, Encounter } from "./Encounter.js";
-import { GroupHistoryEntry } from "./GroupHistory.js";
-import { AssistantThreadId, AssistantTurnId, CampaignId, CreatureId, GroupId } from "./Ids.js";
+import { SharedWorldHistoryEntry } from "./SharedWorldHistory.js";
+import {
+  AssistantThreadId,
+  AssistantTurnId,
+  CampaignId,
+  CreatureId,
+  SharedWorldId,
+} from "./Ids.js";
 import { Note, NoteKind } from "./Note.js";
 
 /**
@@ -75,14 +81,15 @@ export class HobStatus extends Schema.Class<HobStatus>("HobStatus")({
 }) {}
 
 /**
- * `HobStatus` for the group surface. Its own class rather than a renamed
- * field, because the *"Knows"* strip must be true and what group Hob is bound
- * to is a group — its canonical history, never any campaign's private prep.
+ * `HobStatus` for a Shared World. Its own class because the *"Knows"* strip
+ * names the world's canonical history, never any campaign's private prep.
  */
-export class GroupHobStatus extends Schema.Class<GroupHobStatus>("GroupHobStatus")({
+export class SharedWorldHobStatus extends Schema.Class<SharedWorldHobStatus>(
+  "SharedWorldHobStatus",
+)({
   available: Schema.Boolean,
   model: Schema.NullOr(Schema.String),
-  group: Schema.String,
+  sharedWorld: Schema.String,
 }) {}
 
 /**
@@ -123,7 +130,7 @@ export type HobRosterLine = typeof HobRosterLine.Type;
 /**
  * What Hob is offering to add, if the person who asked says yes.
  *
- * **One member per accept target**, five now with the group chronicle, each one
+ * **One member per accept target**, five now with the Shared World chronicle, each one
  * shipped table: a `note` (prep prose or read-aloud), a `beat` (the DM's line
  * about what happened), an `encounter` (a template and its roster), and a
  * `character` (a player's own, drafted for them). The union is discriminated on
@@ -245,16 +252,16 @@ export const HobProposal = Schema.Union([
     rationale: Schema.Array(Schema.String),
   }),
   /**
-   * A line for the group's chronicle — the fifth member, and the only one
-   * offered by **group** Hob. Accepting it writes a `group_history_entry`
-   * through the same `GroupHistory.create` a member's own hand goes through,
+   * A line for the Shared World's chronicle — the fifth member, and the only one
+   * offered by Shared World Hob. Accepting it writes a `group_history_entry`
+   * through the same repository path a member's own hand goes through,
    * with `origin = 'assistant'` and the turn on it; until then it is
    * transcript, exactly like the other four. A campaign Hob never offers one
-   * and a group Hob offers nothing else — which toolkit was bound is the
+   * and Shared World Hob offers nothing else — which toolkit was bound is the
    * whole of that rule.
    */
   Schema.Struct({
-    target: Schema.Literal("groupHistory"),
+    target: Schema.Literal("sharedWorldHistory"),
     title: Schema.NullOr(Schema.String),
     body: Schema.String,
   }),
@@ -273,13 +280,11 @@ export type HobProposal = typeof HobProposal.Type;
 export class HobThread extends Schema.Class<HobThread>("HobThread")({
   id: AssistantThreadId,
   /**
-   * The thread's scope: a campaign's conversation, or — since group Hob — a
-   * group's. Exactly one is set (`assistant_thread_one_scope`, `0031`); the
-   * pair of nullables is the persisted-column argument `HobProposal` makes,
-   * because a thread written before groups existed must keep decoding.
+   * The thread's scope: a campaign's conversation or a Shared World's.
+   * Exactly one is set (`assistant_thread_one_scope`, `0031`).
    */
   campaignId: Schema.NullOr(CampaignId),
-  groupId: Schema.NullOr(GroupId),
+  worldId: Schema.NullOr(SharedWorldId),
   title: Schema.String,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -489,8 +494,8 @@ export const HobAccepted = Schema.Union([
    * /me/characters/:id` against exactly this value.
    */
   Schema.Struct({ accepted: Schema.Literal("character"), character: Character }),
-  /** The chronicle line a group member kept — group Hob's one accept. */
-  Schema.Struct({ accepted: Schema.Literal("groupHistory"), entry: GroupHistoryEntry }),
+  /** The chronicle line a Shared World member kept — world Hob's one accept. */
+  Schema.Struct({ accepted: Schema.Literal("sharedWorldHistory"), entry: SharedWorldHistoryEntry }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 

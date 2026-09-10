@@ -4,7 +4,7 @@ import {
   type AssistantTurnId,
   type CampaignId,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type HobProposal,
   HobThread,
   HobTurn,
@@ -66,7 +66,7 @@ import {
 interface ThreadRow extends ProvenanceColumns {
   readonly id: AssistantThreadId;
   readonly campaign_id: CampaignId | null;
-  readonly group_id: GroupId | null;
+  readonly group_id: SharedWorldId | null;
   readonly title: string;
 }
 
@@ -85,7 +85,7 @@ const toThread = (row: ThreadRow): HobThread => {
   return new HobThread({
     id: row.id,
     campaignId: row.campaign_id,
-    groupId: row.group_id,
+    worldId: row.group_id,
     title: row.title,
     createdAt,
     updatedAt,
@@ -133,11 +133,11 @@ export class HobThreads extends Context.Service<
     /** Newest first — the panel resumes the one at the front. */
     readonly list: (
       reach: ConversationReach,
-      scopeId: CampaignId | GroupId,
+      scopeId: CampaignId | SharedWorldId,
     ) => Effect.Effect<ReadonlyArray<HobThread>, NotFound, CurrentActor>;
     readonly findById: (
       reach: ConversationReach,
-      scopeId: CampaignId | GroupId,
+      scopeId: CampaignId | SharedWorldId,
       id: AssistantThreadId,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /**
@@ -160,18 +160,18 @@ export class HobThreads extends Context.Service<
     /** Starts one, named after the question that started it. */
     readonly start: (
       reach: ConversationReach,
-      scopeId: CampaignId | GroupId,
+      scopeId: CampaignId | SharedWorldId,
       firstQuestion: string,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Oldest first: a conversation, read in the order it happened. */
     readonly turns: (
       reach: ConversationReach,
-      scopeId: CampaignId | GroupId,
+      scopeId: CampaignId | SharedWorldId,
       threadId: AssistantThreadId,
     ) => Effect.Effect<ReadonlyArray<HobTurn>, NotFound, CurrentActor>;
     readonly append: (
       reach: ConversationReach,
-      scopeId: CampaignId | GroupId,
+      scopeId: CampaignId | SharedWorldId,
       threadId: AssistantThreadId,
       draft: TurnDraft,
     ) => Effect.Effect<HobTurn, NotFound, CurrentActor>;
@@ -186,8 +186,8 @@ export class HobThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* reach === "group"
-                ? ensureGroupReadable(sql, scopeId as GroupId, actor)
+              yield* reach === "sharedWorld"
+                ? ensureGroupReadable(sql, scopeId as SharedWorldId, actor)
                 : ensureCampaignReadable(sql, scopeId as CampaignId, actor);
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
@@ -246,16 +246,16 @@ export class HobThreads extends Context.Service<
               // campaign writable, a player's needs it readable, and the
               // group's needs a live group membership — the chronicle's own
               // gate, because the group's conversation is the group's.
-              yield* reach === "group"
-                ? ensureGroupReadable(sql, scopeId as GroupId, actor)
+              yield* reach === "sharedWorld"
+                ? ensureGroupReadable(sql, scopeId as SharedWorldId, actor)
                 : reach === "own"
                   ? ensureCampaignReadable(sql, scopeId as CampaignId, actor)
                   : ensureCampaignWritable(sql, scopeId as CampaignId, actor);
               const rows = yield* sql<ThreadRow>`
                 insert into assistant_thread ${sql.insert(
                   defined({
-                    campaign_id: reach === "group" ? undefined : scopeId,
-                    group_id: reach === "group" ? scopeId : undefined,
+                    campaign_id: reach === "sharedWorld" ? undefined : scopeId,
+                    group_id: reach === "sharedWorld" ? scopeId : undefined,
                     account_id: reach === "own" ? actor.accountId : undefined,
                     title: titleFrom(firstQuestion),
                   }),
@@ -355,7 +355,7 @@ export class HobThreads extends Context.Service<
 export const reserveHobTurn = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,
-  scopeId: CampaignId | GroupId,
+  scopeId: CampaignId | SharedWorldId,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
   actor: Actor,
@@ -377,7 +377,7 @@ export const reserveHobTurn = (
 export const lockTurnForAccept = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,
-  scopeId: CampaignId | GroupId,
+  scopeId: CampaignId | SharedWorldId,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
 ) =>

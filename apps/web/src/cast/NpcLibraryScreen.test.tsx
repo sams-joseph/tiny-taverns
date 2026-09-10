@@ -7,8 +7,8 @@ import {
   campaignId,
   cazril,
   cazrilSource,
-  group,
-  groupId,
+  sharedWorldDetails,
+  worldId,
   installMemoryStorage,
   installStubServer,
 } from "../campaign/campaign.fixtures";
@@ -71,10 +71,10 @@ describe("NpcLibraryScreen", () => {
   });
 
   it("shares a source with a Shared World and copies it into a campaign as a snapshot", async () => {
-    server.routes.set(`POST /worlds/${groupId}/library`, {
+    server.routes.set(`POST /worlds/${worldId}/library`, {
       status: 200,
       body: {
-        groupId,
+        worldId,
         ownerAccountId: cazrilSource.accountId,
         kind: "npc",
         resourceId: cazrilSource.id,
@@ -96,7 +96,7 @@ describe("NpcLibraryScreen", () => {
     ).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "The Salt Company" }));
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/worlds/${groupId}/library`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${worldId}/library`)).toEqual({
         kind: "npc",
         resourceId: cazrilSource.id,
       }),
@@ -119,7 +119,7 @@ describe("NpcLibraryScreen", () => {
       status: 200,
       body: [
         {
-          campaign: { ...campaign, groupId: standaloneContextId },
+          campaign: { ...campaign, contextId: standaloneContextId },
           relation: "creator",
           sharedWorld: null,
           joinedAt: campaign.createdAt,
@@ -130,21 +130,21 @@ describe("NpcLibraryScreen", () => {
       status: 200,
       body: [
         {
-          group: { ...group, id: ownedWorldId, name: "The Roads Between" },
+          sharedWorld: { ...sharedWorldDetails, id: ownedWorldId, name: "The Roads Between" },
           isOwner: true,
-          joinedAt: group.createdAt,
+          joinedAt: sharedWorldDetails.createdAt,
         },
         {
-          group: { ...group, id: memberWorldId, name: "A Friend's World" },
+          sharedWorld: { ...sharedWorldDetails, id: memberWorldId, name: "A Friend's World" },
           isOwner: false,
-          joinedAt: group.createdAt,
+          joinedAt: sharedWorldDetails.createdAt,
         },
       ],
     });
     server.routes.set(`POST /worlds/${ownedWorldId}/library`, {
       status: 200,
       body: {
-        groupId: ownedWorldId,
+        worldId: ownedWorldId,
         ownerAccountId: cazrilSource.accountId,
         kind: "npc",
         resourceId: cazrilSource.id,
@@ -161,7 +161,9 @@ describe("NpcLibraryScreen", () => {
       await screen.findByRole("dialog", { name: "Share Cazril with a Shared World" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "The Roads Between" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "The Salt Road's group" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "The Salt Road's sharedWorldDetails" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "A Friend's World" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "The Roads Between" }));

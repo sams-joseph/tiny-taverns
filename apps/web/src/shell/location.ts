@@ -1,4 +1,9 @@
-import type { CampaignId, CampaignRelation, CampaignSharedWorld, GroupId } from "@taverns/api";
+import type {
+  CampaignId,
+  CampaignRelation,
+  CampaignSharedWorld,
+  SharedWorldId,
+} from "@taverns/api";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
@@ -31,7 +36,7 @@ import { membershipsAtom } from "../campaign/load";
  * remembered: being inside a campaign is the same fact as no global item being
  * lit.
  *
- * The global row is `Groups | Characters | Library | Components`. A group's
+ * The global row is `Shared Worlds | Characters | Library | Components`. A world's
  * own screen is *within* Groups; a character sheet is *within* the roster it
  * was opened from, so both light `characters` — the same containment a fight
  * has with its campaign's Overview.
@@ -78,8 +83,7 @@ export function useSection(): Section {
   // a fight, the character create form, and the splat a half-typed section
   // falls back through.
   if (matchRoute({ to: "/campaigns/$campaignId", fuzzy: true })) return "overview";
-  // Campaigns is home. Shared Worlds and their legacy redirects stay within
-  // this destination.
+  // Campaigns is home. Shared Worlds stay within this destination.
   return "campaigns";
 }
 
@@ -94,9 +98,9 @@ export function useCampaignId(): CampaignId | undefined {
   return useParams({ strict: false }).campaignId;
 }
 
-/** The group this route is about, if it names one. */
-export function useGroupId(): GroupId | undefined {
-  return useParams({ strict: false }).groupId;
+/** The Shared World this route is about, if it names one. */
+export function useSharedWorldId(): SharedWorldId | undefined {
+  return useParams({ strict: false }).worldId;
 }
 
 /**

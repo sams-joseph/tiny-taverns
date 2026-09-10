@@ -1,4 +1,4 @@
-import type { GroupCampaignCard, GroupId, GroupMember } from "@taverns/api";
+import type { SharedWorldCampaignCard, SharedWorldId, SharedWorldMember } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
 import { Result } from "effect";
@@ -11,7 +11,7 @@ import { ArchiveDialog } from "../campaign/ArchiveDialog";
 import { Hob, useHobPanel } from "../hob";
 import { AppShell, TopBar } from "../shell/AppShell";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
-import { GroupChronicle } from "./GroupChronicle";
+import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { sharedWorldViewAtom } from "./load";
 
 /**
@@ -30,7 +30,7 @@ import { sharedWorldViewAtom } from "./load";
  * which also establish the eligibility rows this screen reads.
  */
 
-const relationBadge = (relation: GroupCampaignCard["relation"]) => {
+const relationBadge = (relation: SharedWorldCampaignCard["relation"]) => {
   if (relation === "creator") return <Badge variant="secondary">Created by you</Badge>;
   if (relation === "player") return <Badge variant="info">Playing</Badge>;
   return null;
@@ -40,7 +40,7 @@ function CampaignCard({
   card,
   onArchive,
 }: {
-  readonly card: GroupCampaignCard;
+  readonly card: SharedWorldCampaignCard;
   /** The creator's shelf control, absent on every other card. */
   readonly onArchive: (() => void) | undefined;
 }) {
@@ -101,7 +101,7 @@ function CampaignCard({
 }
 
 /** Names a new campaign in this Shared World; the founder becomes its creator. */
-function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
+function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
@@ -115,7 +115,7 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
     const result = await runApiResult(
       (client) =>
         client.sharedWorlds.createCampaign({
-          params: { worldId: groupId },
+          params: { worldId: worldId },
           payload: { name: name.trim() },
         }),
       token,
@@ -134,8 +134,8 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
     // The directory gains a card, and the founder gains a membership row — the
     // creator's participation is written in the same transaction, which is
     // what the campaign chrome reads the relation from.
-    invalidate([reads.sharedWorld(groupId), reads.myCampaigns]);
-  }, [fetchCredential, groupId, invalidate, name]);
+    invalidate([reads.sharedWorld(worldId), reads.myCampaigns]);
+  }, [fetchCredential, worldId, invalidate, name]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -160,7 +160,7 @@ function NewCampaign({ groupId }: { readonly groupId: GroupId }) {
   );
 }
 
-function MemberRow({ member }: { readonly member: GroupMember }) {
+function MemberRow({ member }: { readonly member: SharedWorldMember }) {
   return (
     <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0">
       <span className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground">
@@ -171,9 +171,9 @@ function MemberRow({ member }: { readonly member: GroupMember }) {
   );
 }
 
-export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
-  const [resource, retry] = useApiAtom(sharedWorldViewAtom(groupId));
-  const [archiving, setArchiving] = useState<GroupCampaignCard | undefined>();
+export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId }) {
+  const [resource, retry] = useApiAtom(sharedWorldViewAtom(worldId));
+  const [archiving, setArchiving] = useState<SharedWorldCampaignCard | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -181,10 +181,10 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
   return (
     <AppShell
       onAskHob={hob.toggle}
-      panel={<Hob hob={hob} worldId={groupId} />}
+      panel={<Hob hob={hob} worldId={worldId} />}
       topBar={
         <TopBar
-          title={view?.group.name ?? "Shared World"}
+          title={view?.sharedWorld.name ?? "Shared World"}
           subtitle={
             view === undefined
               ? undefined
@@ -201,7 +201,7 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
         {view !== undefined && (
           <>
             <section className="flex flex-col gap-4" aria-label="Campaigns">
-              <NewCampaign groupId={groupId} />
+              <NewCampaign worldId={worldId} />
               {view.campaigns.length === 0 ? (
                 <EmptyState icon="book-open" title="Nothing being played yet">
                   Any member can start a campaign, and whoever starts one runs it.
@@ -221,7 +221,7 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
               )}
             </section>
 
-            <GroupChronicle groupId={groupId} />
+            <SharedWorldChronicle worldId={worldId} />
 
             <section className="flex max-w-2xl flex-col" aria-label="Members">
               <span className="pb-1 text-label leading-snug font-semibold text-heading">
@@ -238,7 +238,7 @@ export function SharedWorldScreen({ groupId }: { readonly groupId: GroupId }) {
       {archiving !== undefined && (
         <ArchiveDialog
           campaign={{ id: archiving.id, name: archiving.name }}
-          alsoInvalidates={[reads.sharedWorld(groupId)]}
+          alsoInvalidates={[reads.sharedWorld(worldId)]}
           onClose={() => setArchiving(undefined)}
           onArchived={() => setArchiving(undefined)}
         />

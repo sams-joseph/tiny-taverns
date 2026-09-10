@@ -365,8 +365,8 @@ function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: Campaign
 
   return (
     <Link
-      to="/worlds/$groupId"
-      params={{ groupId: world.id }}
+      to="/worlds/$worldId"
+      params={{ worldId: world.id }}
       activeProps={{}}
       title={`${world.name} — Shared World`}
       aria-label={`${world.name} — Shared World`}

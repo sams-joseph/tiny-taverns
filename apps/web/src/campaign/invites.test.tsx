@@ -5,7 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
-  groupId,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -31,7 +31,7 @@ const stamps = { createdAt: "2026-08-04T13:03:28.070Z" };
 
 const waiting = {
   id: inviteId,
-  groupId,
+  worldId,
   campaignId,
   label: "Ilse",
   status: "live",

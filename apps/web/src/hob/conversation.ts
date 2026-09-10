@@ -2,7 +2,7 @@ import type {
   AssistantThreadId,
   AssistantTurnId,
   CampaignId,
-  GroupId,
+  SharedWorldId,
   HobEvent,
   HobTurn as RecordedTurn,
 } from "@taverns/api";
@@ -61,7 +61,7 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  */
 export type HobScope =
   | { readonly type: "campaign"; readonly id: CampaignId }
-  | { readonly type: "sharedWorld"; readonly id: GroupId };
+  | { readonly type: "sharedWorld"; readonly id: SharedWorldId };
 
 interface ConversationStatus {
   readonly available: boolean;
@@ -124,12 +124,12 @@ const ACTIVITY: Record<string, string> = {
   proposeEncounter: "Building an encounter",
   proposeNote: "Writing a note",
   proposeBeat: "Writing down what happened",
-  searchGroupHistory: "Searching the Shared World Chronicle",
-  readGroupSummary: "Reading the Shared World summary",
-  listGroupCampaigns: "Looking across the campaigns",
+  searchSharedWorldHistory: "Searching the Shared World Chronicle",
+  readSharedWorldSummary: "Reading the Shared World summary",
+  listSharedWorldCampaigns: "Looking across the campaigns",
   listPlayedNights: "Looking through the played nights",
   nightStory: "Reading back a played night",
-  proposeGroupEntry: "Writing a Chronicle entry",
+  proposeSharedWorldEntry: "Writing a Chronicle entry",
 };
 
 const activityFor = (name: string, detail: string): string => {
@@ -297,7 +297,7 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
                     status: {
                       available: current.available,
                       model: current.model,
-                      label: current.group,
+                      label: current.sharedWorld,
                       type: "sharedWorld",
                     },
                     threads,

@@ -3,7 +3,7 @@ import {
   type Campaign,
   type Creature,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   NotFound,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -68,7 +68,7 @@ const makeFixture = Effect.gen(function* () {
 
   const jo = yield* anAccount("Jo");
   const saltRoad = yield* withActor(jo)(createCampaign({ name: "The Salt Road" }));
-  const groupId = saltRoad.groupId;
+  const groupId = saltRoad.contextId;
 
   const wren = yield* aGroupMemberAt(saltRoad.id, "Wren");
   const hagsBargain = yield* withActor(wren)(
@@ -92,7 +92,7 @@ interface Fixture {
   readonly jo: Actor;
   readonly wren: Actor;
   readonly fen: Actor;
-  readonly groupId: GroupId;
+  readonly groupId: SharedWorldId;
   readonly saltRoad: Campaign;
   readonly hagsBargain: Campaign;
   readonly elsewhere: Campaign;

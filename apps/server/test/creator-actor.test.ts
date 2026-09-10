@@ -331,7 +331,7 @@ describe("what the check refuses", () => {
     );
 
     expect(Object.keys(proof).sort()).toEqual(["actor", "campaign", "group"]);
-    expect(proof.group).toBe(fixture.campaign.groupId);
+    expect(proof.group).toBe(fixture.campaign.contextId);
     expect(proof.campaign).toBe(fixture.campaign.id);
     expect(proof.actor).toEqual(fixture.dm);
   }, 60_000);
@@ -644,7 +644,7 @@ describe("the scope, counted", () => {
     // the predicate answers first.
     // Stage 5 added four more: `GroupHistory.search`, `playedNights` and
     // `nightStory` — the canonical reads the group-Hob boundary decision
-    // grants to every live member — and `Proposals.acceptGroup`, whose
+    // grants to every live member — and `Proposals.acceptSharedWorld`, whose
     // audience is a hand-written chronicle entry's: any member, no proof.
     // And stage 6's three: `LibraryShares.list`/`share`/`unshare` — the
     // grant is the resource owner's act over their own original, checked in

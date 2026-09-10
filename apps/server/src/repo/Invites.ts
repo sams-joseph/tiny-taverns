@@ -8,14 +8,12 @@ import {
   type CampaignInviteId,
   CampaignSharedWorld,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type InvitePreview,
   type InviteRedeemed,
   type InviteStatus,
   IssuedInvite,
   NotFound,
-  SharedWorldInvitePreview,
-  SharedWorldInviteRedeemed,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -69,8 +67,8 @@ const TOKEN_BYTES = 32;
 
 interface InviteRow {
   readonly id: CampaignInviteId;
-  readonly group_id: GroupId;
-  readonly campaign_id: CampaignId | null;
+  readonly group_id: SharedWorldId;
+  readonly campaign_id: CampaignId;
   readonly label: string;
   readonly created_at: Date;
   readonly expires_at: Date;
@@ -82,16 +80,7 @@ interface InviteRow {
   readonly granted_campaign_membership: boolean;
 }
 
-/**
- * Rows reached through campaign management always have a campaign. The
- * nullable base row remains private to token preview/redemption so old
- * group-only links can expire without weakening the public contract.
- */
-interface CampaignInviteRow extends InviteRow {
-  readonly campaign_id: CampaignId;
-}
-
-interface ListedCampaignInviteRow extends CampaignInviteRow {
+interface ListedCampaignInviteRow extends InviteRow {
   readonly redeemed_by_name: string | null;
 }
 
@@ -112,7 +101,6 @@ const statusOf = (row: InviteRow): InviteStatus =>
 const toInvite = (row: ListedCampaignInviteRow): CampaignInvite =>
   new CampaignInvite({
     id: row.id,
-    groupId: row.group_id,
     campaignId: row.campaign_id,
     label: row.label,
     status: statusOf(row),
@@ -163,30 +151,27 @@ export class Invites extends Context.Service<
        * than by the actor — the ids come off the invite row, so this cannot
        * be pointed at a group or campaign the token does not belong to.
        */
-      const namedByInvite = (groupId: GroupId, campaignId: CampaignId | null) =>
+      const namedByInvite = (groupId: SharedWorldId, campaignId: CampaignId) =>
         Effect.map(
           sql<{
-            readonly shared_world_id: GroupId | null;
+            readonly shared_world_id: SharedWorldId | null;
             readonly shared_world_name: string | null;
-            readonly owner_name: string;
-            readonly campaign_id: CampaignId | null;
-            readonly campaign_name: string | null;
-            readonly creator_name: string | null;
-            readonly campaign_shared: boolean | null;
+            readonly campaign_id: CampaignId;
+            readonly campaign_name: string;
+            readonly creator_name: string;
+            readonly campaign_shared: boolean;
           }>`
             select case when play_group.is_shared_world then play_group.id end
                      as shared_world_id,
                    case when play_group.is_shared_world then play_group.name end
                      as shared_world_name,
-                   group_owner.name as owner_name,
                    campaign.id as campaign_id,
                    campaign.name as campaign_name,
                    campaign_creator.name as creator_name,
                    (campaign.visibility = 'shared') as campaign_shared
             from play_group
-            join account as group_owner on group_owner.id = play_group.owner_account_id
-            left join campaign on campaign.id = ${campaignId}
-            left join account as campaign_creator
+            join campaign on campaign.id = ${campaignId} and campaign.group_id = play_group.id
+            join account as campaign_creator
               on campaign_creator.id = campaign.creator_account_id
             where play_group.id = ${groupId}
           `,
@@ -245,7 +230,7 @@ export class Invites extends Context.Service<
 
               const token = randomBytes(TOKEN_BYTES).toString("base64url");
               const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
-              const rows = yield* sql<CampaignInviteRow>`
+              const rows = yield* sql<InviteRow>`
                 insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
                 values (${creator.group}, ${creator.campaign}, ${hashToken(token)},
                         ${payload.label ?? ""}, ${expiresAt})
@@ -262,7 +247,7 @@ export class Invites extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const rows = yield* sql<CampaignInviteRow>`
+                const rows = yield* sql<InviteRow>`
                   update group_invite
                   set revoked_at = coalesce(group_invite.revoked_at, now())
                   where group_invite.id = ${inviteId}
@@ -307,29 +292,13 @@ export class Invites extends Context.Service<
                 return yield* noSuchInvitation();
               }
 
-              const expiresAt = DateTime.fromDateUnsafe(invite.expires_at);
-              if (
-                named.campaign_id !== null &&
-                named.campaign_name !== null &&
-                named.creator_name !== null
-              ) {
-                return new CampaignInvitePreview({
-                  kind: "campaign",
-                  campaignName: named.campaign_name,
-                  creatorName: named.creator_name,
-                  sharedWorldName: named.shared_world_name,
-                  expiresAt,
-                });
-              }
-              if (named.shared_world_name !== null) {
-                return new SharedWorldInvitePreview({
-                  kind: "sharedWorld",
-                  sharedWorldName: named.shared_world_name,
-                  inviterName: named.owner_name,
-                  expiresAt,
-                });
-              }
-              return yield* noSuchInvitation();
+              return new CampaignInvitePreview({
+                kind: "campaign",
+                campaignName: named.campaign_name,
+                creatorName: named.creator_name,
+                sharedWorldName: named.shared_world_name,
+                expiresAt: DateTime.fromDateUnsafe(invite.expires_at),
+              });
             }),
           ),
 
@@ -357,10 +326,12 @@ export class Invites extends Context.Service<
                   // account id from a payload, no ids from a path, no role
                   // from anywhere.
                   yield* admitToGroup(sql, invite.group_id, actor.accountId);
-                  const grantedCampaignMembership =
-                    invite.campaign_id === null
-                      ? false
-                      : yield* admitTo(sql, invite.campaign_id, invite.group_id, actor.accountId);
+                  const grantedCampaignMembership = yield* admitTo(
+                    sql,
+                    invite.campaign_id,
+                    invite.group_id,
+                    actor.accountId,
+                  );
                   yield* sql`
                     update group_invite
                     set redeemed_by = ${actor.accountId},
@@ -380,29 +351,16 @@ export class Invites extends Context.Service<
                         id: named.shared_world_id,
                         name: named.shared_world_name,
                       });
-                if (
-                  named.campaign_id !== null &&
-                  named.campaign_name !== null &&
-                  named.creator_name !== null
-                ) {
-                  return new CampaignInviteRedeemed({
-                    kind: "campaign",
-                    campaignId: named.campaign_id,
-                    campaignName: named.campaign_name,
-                    sharedWorld,
-                    // The ordinary answer is `false`, and saying so here is what
-                    // keeps "the creator has not shared this table yet" from
-                    // reading as "this product is broken".
-                    shared: named.campaign_shared === true,
-                  });
-                }
-                if (sharedWorld !== null) {
-                  return new SharedWorldInviteRedeemed({
-                    kind: "sharedWorld",
-                    sharedWorld,
-                  });
-                }
-                return yield* noSuchInvitation();
+                return new CampaignInviteRedeemed({
+                  kind: "campaign",
+                  campaignId: named.campaign_id,
+                  campaignName: named.campaign_name,
+                  sharedWorld,
+                  // The ordinary answer is `false`, and saying so here is what
+                  // keeps "the creator has not shared this table yet" from
+                  // reading as "this product is broken".
+                  shared: named.campaign_shared,
+                });
               }),
             ),
           ),

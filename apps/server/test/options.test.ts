@@ -705,7 +705,7 @@ describe("the group share, which is the whole of how a class reaches a player", 
 
     await as(fixture.jo.token, (client) =>
       client.sharedWorldLibrary.share({
-        params: { worldId: fixture.saltRoad.groupId },
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
@@ -728,7 +728,7 @@ describe("the group share, which is the whole of how a class reaches a player", 
   it("stops reaching the picker when the grant is withdrawn", async () => {
     await as(fixture.jo.token, (client) =>
       client.sharedWorldLibrary.unshare({
-        params: { worldId: fixture.saltRoad.groupId },
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );
@@ -738,7 +738,7 @@ describe("the group share, which is the whole of how a class reaches a player", 
     // Put it back for the tests below.
     await as(fixture.jo.token, (client) =>
       client.sharedWorldLibrary.share({
-        params: { worldId: fixture.saltRoad.groupId },
+        params: { worldId: fixture.saltRoad.contextId },
         payload: { kind: "character_option", resourceId: fixture.bloodsworn.id },
       }),
     );

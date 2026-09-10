@@ -5,8 +5,8 @@ import {
   bodyOf,
   campaign,
   campaignId,
-  group,
-  groupId,
+  sharedWorld,
+  worldId,
   installMemoryStorage,
   installStubServer,
   mintingSession,
@@ -30,12 +30,12 @@ const frame = (event: string, data: unknown): string =>
   `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 const aimDirectory = (relation: "creator" | "player" | "none") =>
-  server.routes.set(`GET /worlds/${groupId}/campaigns`, {
+  server.routes.set(`GET /worlds/${worldId}/campaigns`, {
     status: 200,
     body: [
       {
         id: campaignId,
-        groupId,
+        worldId,
         creatorAccountId: campaign.creatorAccountId,
         creatorName: "Wren Alderby",
         name: campaign.name,
@@ -56,14 +56,14 @@ describe("the Shared Worlds list", () => {
     await renderCampaigns("/worlds", mintingSession());
 
     expect(await screen.findByText("The Salt Company")).toBeTruthy();
-    // The owner's own group says so; a group you were invited into would not.
+    // The owner's own sharedWorld says so; a sharedWorld you were invited into would not.
     expect(screen.getByText("Yours")).toBeTruthy();
     const open = screen.getByRole("button", { name: /Open/ });
-    expect(open.getAttribute("href")).toBe(`/#/worlds/${groupId}`);
+    expect(open.getAttribute("href")).toBe(`/#/worlds/${worldId}`);
   });
 
-  it("founds a group with one field, and re-reads the list", async () => {
-    server.routes.set("POST /worlds", { status: 200, body: group });
+  it("founds a sharedWorld with one field, and re-reads the list", async () => {
+    server.routes.set("POST /worlds", { status: 200, body: sharedWorld });
     await renderCampaigns("/worlds", mintingSession());
     await screen.findByText("The Salt Company");
 
@@ -114,8 +114,8 @@ describe("one Shared World's screen", () => {
     );
   });
 
-  it("starts a campaign in this group, and the founder runs it", async () => {
-    server.routes.set(`POST /worlds/${groupId}/campaigns`, { status: 200, body: campaign });
+  it("starts a campaign in this sharedWorld, and the founder runs it", async () => {
+    server.routes.set(`POST /worlds/${worldId}/campaigns`, { status: 200, body: campaign });
     await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
 
@@ -123,7 +123,7 @@ describe("one Shared World's screen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", `/worlds/${groupId}/campaigns`)).toEqual({
+      expect(bodyOf(server, "POST", `/worlds/${worldId}/campaigns`)).toEqual({
         name: "The Long Winter",
       }),
     );
@@ -140,7 +140,7 @@ describe("one Shared World's screen", () => {
     expect(screen.queryByRole("button", { name: /Invite/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
     // With no owner-only chrome left, the screen no longer asks who the
-    // current account is; group reach has already been proven by each read.
+    // current account is; sharedWorld reach has already been proven by each read.
     expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/me")).toBe(
       false,
     );
@@ -152,11 +152,11 @@ describe("one Shared World's screen", () => {
     const historyId = "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61";
     const entry = {
       id: historyId,
-      groupId,
+      worldId,
       campaignId: null,
       sessionId: null,
       sourceKind: "manual",
-      groupSeq: 1,
+      worldSeq: 1,
       occurredAt: null,
       acceptedAt: campaign.createdAt,
       title: "The roads remember",
@@ -167,34 +167,34 @@ describe("one Shared World's screen", () => {
       createdByAccountId: null,
       createdAt: campaign.createdAt,
     };
-    server.routes.set(`GET /worlds/${groupId}/hob`, {
+    server.routes.set(`GET /worlds/${worldId}/hob`, {
       status: 200,
-      body: { available: true, model: "local", group: group.name },
+      body: { available: true, model: "local", sharedWorld: sharedWorld.name },
     });
-    server.routes.set(`GET /worlds/${groupId}/hob/threads`, { status: 200, body: [] });
-    server.routes.set(`POST /worlds/${groupId}/hob/ask`, {
+    server.routes.set(`GET /worlds/${worldId}/hob/threads`, { status: 200, body: [] });
+    server.routes.set(`POST /worlds/${worldId}/hob/ask`, {
       status: 200,
       sse:
         frame("began", { threadId, turnId }) +
         frame("proposal", {
           turnId,
           proposal: {
-            target: "groupHistory",
+            target: "sharedWorldHistory",
             title: entry.title,
             body: entry.body,
           },
         }) +
         frame("done", { reason: "stop" }),
     });
-    server.routes.set(`POST /worlds/${groupId}/hob/threads/${threadId}/turns/${turnId}/accept`, {
+    server.routes.set(`POST /worlds/${worldId}/hob/threads/${threadId}/turns/${turnId}/accept`, {
       status: 200,
-      body: { accepted: "groupHistory", entry },
+      body: { accepted: "sharedWorldHistory", entry },
     });
-    server.routes.set(`GET /worlds/${groupId}/history`, {
+    server.routes.set(`GET /worlds/${worldId}/history`, {
       status: 200,
       body: () => {
         const reads = server.calls.filter(
-          (call) => call.method === "GET" && call.pathname === `/worlds/${groupId}/history`,
+          (call) => call.method === "GET" && call.pathname === `/worlds/${worldId}/history`,
         );
         return reads.length < 2 ? [] : [entry];
       },
@@ -212,7 +212,7 @@ describe("one Shared World's screen", () => {
     await waitFor(() =>
       expect(
         server.calls.filter(
-          (call) => call.method === "GET" && call.pathname === `/worlds/${groupId}/history`,
+          (call) => call.method === "GET" && call.pathname === `/worlds/${worldId}/history`,
         ),
       ).toHaveLength(2),
     );

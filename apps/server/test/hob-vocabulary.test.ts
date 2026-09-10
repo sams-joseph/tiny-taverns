@@ -4,7 +4,7 @@ import {
   type CampaignId,
   type CharacterOption,
   CurrentActor,
-  type GroupId,
+  type SharedWorldId,
   type HobEvent,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
@@ -120,7 +120,7 @@ const BUNDLED_CLASSES = 12;
  * `"kept"` here means authored and left unshared.
  */
 const homebrewClass = (
-  campaign: { readonly id: CampaignId; readonly groupId: GroupId },
+  campaign: { readonly id: CampaignId; readonly contextId: SharedWorldId },
   name: string,
   hitDie: number,
   reach: "kept" | "shared" = "shared",
@@ -134,7 +134,7 @@ const homebrewClass = (
       body: { hitDie, unarmouredAc: ["DEX"] },
     });
     if (reach === "shared") {
-      yield* shares.share(campaign.groupId, {
+      yield* shares.share(campaign.contextId, {
         kind: "character_option",
         resourceId: original.id,
       });
@@ -144,7 +144,7 @@ const homebrewClass = (
 
 /** A homebrew 2014 background. Its grants are display data, not ability-score seed data. */
 const homebrewBackground = (
-  campaign: { readonly id: CampaignId; readonly groupId: GroupId },
+  campaign: { readonly id: CampaignId; readonly contextId: SharedWorldId },
   name: string,
   body: BackgroundBody = {
     proficiencies: ["Athletics"],
@@ -163,7 +163,7 @@ const homebrewBackground = (
       name,
       body,
     });
-    yield* shares.share(campaign.groupId, {
+    yield* shares.share(campaign.contextId, {
       kind: "character_option",
       resourceId: original.id,
     });
@@ -487,9 +487,9 @@ describe("the boundary — one table's words are in no other table's schema", ()
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
-      "readGroupSummary",
+      "readSharedWorldSummary",
       "searchCampaign",
-      "searchGroupHistory",
+      "searchSharedWorldHistory",
       "sessionLog",
       "sessionRecap",
     ]);

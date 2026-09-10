@@ -1,4 +1,4 @@
-import type { GroupHistoryEntry, GroupId } from "@taverns/api";
+import type { SharedWorldHistoryEntry, SharedWorldId } from "@taverns/api";
 import { Badge, Button, Card, CardContent } from "@taverns/ui";
 import { useState } from "react";
 import { Atom } from "effect/unstable/reactivity";
@@ -10,24 +10,24 @@ import { SaveFailure, Textarea } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 
 /**
- * The group's chronicle — report §3.5 on screen, read-only plus one composer.
+ * The sharedWorld's chronicle — report §3.5 on screen, read-only plus one composer.
  *
  * **Every line here was admitted on purpose.** A recap entry is a copy a
  * campaign's creator shared (`POST …/history/from-recap` — server-first for
- * now, its campaign-side control comes with group Hob); a manual entry is a
+ * now, its campaign-side control comes with sharedWorld Hob); a manual entry is a
  * member writing the story down by hand, which is the composer at the top.
  * Nothing here reads through a campaign, so nothing here can leak one
  * creator's unplayed prep to another — the boundary is which rows exist.
  */
 
-const historyAtom = Atom.family((groupId: GroupId) =>
+const historyAtom = Atom.family((worldId: SharedWorldId) =>
   apiAtom(
-    (client) => client.sharedWorldHistory.list({ params: { worldId: groupId } }),
-    [reads.sharedWorldHistory(groupId)],
+    (client) => client.sharedWorldHistory.list({ params: { worldId: worldId } }),
+    [reads.sharedWorldHistory(worldId)],
   ),
 );
 
-function EntryRow({ entry }: { readonly entry: GroupHistoryEntry }) {
+function EntryRow({ entry }: { readonly entry: SharedWorldHistoryEntry }) {
   // Display order prefers when it happened; acceptance order is the list's.
   const day = dayOf(entry.occurredAt ?? entry.acceptedAt);
   return (
@@ -50,7 +50,7 @@ function EntryRow({ entry }: { readonly entry: GroupHistoryEntry }) {
   );
 }
 
-function Composer({ groupId }: { readonly groupId: GroupId }) {
+function Composer({ worldId }: { readonly worldId: SharedWorldId }) {
   const [body, setBody] = useState("");
   const { busy, failure, submit } = useMutation();
 
@@ -60,10 +60,10 @@ function Composer({ groupId }: { readonly groupId: GroupId }) {
     const done = await submit(
       (client) =>
         client.sharedWorldHistory.create({
-          params: { worldId: groupId },
+          params: { worldId: worldId },
           payload: { body: trimmed },
         }),
-      [reads.sharedWorldHistory(groupId)],
+      [reads.sharedWorldHistory(worldId)],
     );
     if (done._tag === "Success") setBody("");
   };
@@ -96,13 +96,13 @@ function Composer({ groupId }: { readonly groupId: GroupId }) {
   );
 }
 
-export function GroupChronicle({ groupId }: { readonly groupId: GroupId }) {
-  const [resource, retry] = useApiAtom(historyAtom(groupId));
+export function SharedWorldChronicle({ worldId }: { readonly worldId: SharedWorldId }) {
+  const [resource, retry] = useApiAtom(historyAtom(worldId));
 
   return (
     <section className="flex max-w-3xl flex-col gap-3" aria-label="Chronicle">
       <span className="text-label leading-snug font-semibold text-heading">Chronicle</span>
-      <Composer groupId={groupId} />
+      <Composer worldId={worldId} />
       {resource.state === "loading" && <Loading label="Reading the chronicle…" />}
       {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={retry} />}
       {resource.state === "ready" &&

@@ -71,21 +71,21 @@ import {
 } from "./EncounterRun.js";
 import { Conflict, NotFound, RateLimited } from "./Errors.js";
 import {
-  Group,
-  GroupCampaignCard,
-  GroupCreate,
-  GroupMember,
-  GroupMembership,
-  GroupUpdate,
-} from "./Group.js";
-import { GroupLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
-import { GroupHobStatus } from "./Hob.js";
+  SharedWorld,
+  SharedWorldCampaignCard,
+  SharedWorldCreate,
+  SharedWorldMember,
+  SharedWorldMembership,
+  SharedWorldUpdate,
+} from "./SharedWorld.js";
+import { SharedWorldLibraryShare, LibraryShareCreate } from "./LibraryShare.js";
+import { SharedWorldHobStatus } from "./Hob.js";
 import {
-  GroupHistoryEntry,
-  GroupHistoryEntryCreate,
-  GroupHistoryFromRecap,
-  GroupHistorySummary,
-} from "./GroupHistory.js";
+  SharedWorldHistoryEntry,
+  SharedWorldHistoryEntryCreate,
+  SharedWorldHistoryFromRecap,
+  SharedWorldHistorySummary,
+} from "./SharedWorldHistory.js";
 import {
   AccountId,
   AssistantThreadId,
@@ -102,7 +102,7 @@ import {
   EncounterRunId,
   EquipmentId,
   FeatId,
-  GroupId,
+  SharedWorldId,
   CampaignInviteId,
   HobDirectResourceUpdateId,
   MagicItemId,
@@ -190,44 +190,44 @@ class HealthGroup extends HttpApiGroup.make("health").add(
 ) {}
 
 /**
- * Shared Worlds: optional cross-campaign context. The wire says "world" even
- * though `Group` / `GroupId` remain the internal domain and persistence names.
+ * Shared Worlds: optional cross-campaign context. Persistence remains backed
+ * by `play_group`, but the public contract has no group-shaped vocabulary.
  */
 class SharedWorldsGroup extends HttpApiGroup.make("sharedWorlds")
   .add(
     /** Every explicit Shared World this account is a live member of. */
-    HttpApiEndpoint.get("list", "/", { success: Schema.Array(GroupMembership) }),
-    HttpApiEndpoint.post("create", "/", { payload: GroupCreate, success: Group }),
+    HttpApiEndpoint.get("list", "/", { success: Schema.Array(SharedWorldMembership) }),
+    HttpApiEndpoint.post("create", "/", { payload: SharedWorldCreate, success: SharedWorld }),
     HttpApiEndpoint.get("findById", "/:worldId", {
-      params: { worldId: GroupId },
-      success: Group,
+      params: { worldId: SharedWorldId },
+      success: SharedWorld,
       error: NotFound,
     }),
     HttpApiEndpoint.patch("update", "/:worldId", {
-      params: { worldId: GroupId },
-      payload: GroupUpdate,
-      success: Group,
+      params: { worldId: SharedWorldId },
+      payload: SharedWorldUpdate,
+      success: SharedWorld,
       error: NotFound,
     }),
     HttpApiEndpoint.delete("archive", "/:worldId", {
-      params: { worldId: GroupId },
-      success: Group,
+      params: { worldId: SharedWorldId },
+      success: SharedWorld,
       error: NotFound,
     }),
     HttpApiEndpoint.post("restore", "/:worldId/restore", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       payload: Schema.Struct({}),
-      success: Group,
+      success: SharedWorld,
       error: NotFound,
     }),
     /**
-     * The group's campaign directory — every campaign in the group, as a
+     * The Shared World's campaign directory — every campaign in the world, as a
      * narrow card, to every live member. Content still requires participation;
-     * see `GroupCampaignCard`.
+     * see `SharedWorldCampaignCard`.
      */
     HttpApiEndpoint.get("campaigns", "/:worldId/campaigns", {
-      params: { worldId: GroupId },
-      success: Schema.Array(GroupCampaignCard),
+      params: { worldId: SharedWorldId },
+      success: Schema.Array(SharedWorldCampaignCard),
       error: NotFound,
     }),
     /**
@@ -236,7 +236,7 @@ class SharedWorldsGroup extends HttpApiGroup.make("sharedWorlds")
      * creator participation row written in the same transaction.
      */
     HttpApiEndpoint.post("createCampaign", "/:worldId/campaigns", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       payload: CampaignCreate,
       success: Campaign,
       error: NotFound,
@@ -258,8 +258,8 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
     }),
     HttpApiEndpoint.post("promoteSharedWorld", "/:campaignId/shared-world", {
       params: { campaignId: CampaignId },
-      payload: GroupCreate,
-      success: Group,
+      payload: SharedWorldCreate,
+      success: SharedWorld,
       error: NotFound,
     }),
     HttpApiEndpoint.get("findById", "/:campaignId", {
@@ -330,7 +330,7 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * the campaign whose rules vocabulary and Hob thread shaped the sheet. It is a
  * context claim, refused by `ensureCampaignReadable` exactly as every other
  * create in the product refuses a false one, but it writes no seat. What the
- * endpoint still does not let a caller name is the *account* — so the group's
+ * endpoint still does not let a caller name is the *account* — so the API group's
  * real property is intact where it matters: nothing here answers about, or
  * writes for, anybody but the credential.
  *
@@ -345,7 +345,7 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * seats joined on.
  *
  * `identity` is the one read here that is about the account rather than about
- * what it has, and it is where the group's own property is at its plainest: it
+ * what it has, and it is where the Shared World's own property is at its plainest: it
  * takes nothing at all, so the account it answers about is the credential's by
  * construction.
  *
@@ -645,10 +645,10 @@ class MembersGroup extends HttpApiGroup.make("members")
  */
 
 /**
- * Group history: the group's shared chronicle — copies admitted on purpose,
- * canonical once admitted, ordered by acceptance. See `GroupHistory.ts` for
+ * Shared World history: the world's shared chronicle — copies admitted on purpose,
+ * canonical once admitted, ordered by acceptance. See `SharedWorldHistory.ts` for
  * the model; the boundary it implements is `decision-group-hob-boundary.md`'s:
- * what has *happened* is the group's, unplayed prep stays its creator's.
+ * what has *happened* is the Shared World's, unplayed prep stays its creator's.
  *
  * Reads are any live member's (`groupReadable`). `create` is any member
  * writing the chronicle by hand; `fromRecap` is the campaign **creator's**
@@ -659,26 +659,26 @@ class MembersGroup extends HttpApiGroup.make("members")
 class SharedWorldHistoryGroup extends HttpApiGroup.make("sharedWorldHistory")
   .add(
     HttpApiEndpoint.get("list", "/", {
-      params: { worldId: GroupId },
-      success: Schema.Array(GroupHistoryEntry),
+      params: { worldId: SharedWorldId },
+      success: Schema.Array(SharedWorldHistoryEntry),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
-      params: { worldId: GroupId },
-      payload: GroupHistoryEntryCreate,
-      success: GroupHistoryEntry,
+      params: { worldId: SharedWorldId },
+      payload: SharedWorldHistoryEntryCreate,
+      success: SharedWorldHistoryEntry,
       error: NotFound,
     }),
     HttpApiEndpoint.post("fromRecap", "/from-recap", {
-      params: { worldId: GroupId },
-      payload: GroupHistoryFromRecap,
-      success: GroupHistoryEntry,
+      params: { worldId: SharedWorldId },
+      payload: SharedWorldHistoryFromRecap,
+      success: SharedWorldHistoryEntry,
       error: [NotFound, Conflict],
     }),
     /** The current accepted summary, or `null` — the ordinary state of a young group. */
     HttpApiEndpoint.get("summary", "/summary", {
-      params: { worldId: GroupId },
-      success: Schema.NullOr(GroupHistorySummary),
+      params: { worldId: SharedWorldId },
+      success: Schema.NullOr(SharedWorldHistorySummary),
       error: NotFound,
     }),
   )
@@ -686,28 +686,28 @@ class SharedWorldHistoryGroup extends HttpApiGroup.make("sharedWorldHistory")
   .middleware(Authorization) {}
 
 /**
- * The group's shared Library shelf: the explicit share/copy layer of the
+ * The Shared World's shared Library shelf: the explicit share/copy layer of the
  * 2026-09-01 Library decision. `list` is any live member's; `share` and
  * `unshare` are the **owner's** — a grant over their own original, made and
  * withdrawn by them alone. What a share grants is being a `derive` source
- * for the group's campaigns; nothing here reads or writes the original.
+ * for the Shared World's campaigns; nothing here reads or writes the original.
  */
 class SharedWorldLibraryGroup extends HttpApiGroup.make("sharedWorldLibrary")
   .add(
     HttpApiEndpoint.get("list", "/", {
-      params: { worldId: GroupId },
-      success: Schema.Array(GroupLibraryShare),
+      params: { worldId: SharedWorldId },
+      success: Schema.Array(SharedWorldLibraryShare),
       error: NotFound,
     }),
     HttpApiEndpoint.post("share", "/", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       payload: LibraryShareCreate,
-      success: GroupLibraryShare,
+      success: SharedWorldLibraryShare,
       error: NotFound,
     }),
     /** Withdrawing the grant. Copies already made are snapshots and stand. */
     HttpApiEndpoint.post("unshare", "/unshare", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       payload: LibraryShareCreate,
       success: HttpApiSchema.NoContent,
       error: NotFound,
@@ -724,8 +724,8 @@ class SharedWorldLibraryGroup extends HttpApiGroup.make("sharedWorldLibrary")
 class SharedWorldMembersGroup extends HttpApiGroup.make("sharedWorldMembers")
   .add(
     HttpApiEndpoint.get("list", "/", {
-      params: { worldId: GroupId },
-      success: Schema.Array(GroupMember),
+      params: { worldId: SharedWorldId },
+      success: Schema.Array(SharedWorldMember),
       error: NotFound,
     }),
   )
@@ -2052,10 +2052,10 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
  * resumed".
  */
 /**
- * Group Hob: the assistant over the group's canonical record.
+ * Shared World Hob: the assistant over the world's canonical record.
  *
- * `HobGroup`'s shape, group-scoped: the group is a path segment closed over by
- * the handlers and never a tool parameter, the threads are the group's one
+ * Shared World Hob's shape: the world is a path segment closed over by the
+ * handlers and never a tool parameter, and the threads are the world's one
  * shared conversation (any live member resumes it — the chronicle's own
  * audience), and the accept keeps the one thing this surface can offer, a
  * chronicle line. What the assistant may know here is
@@ -2066,29 +2066,29 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
 class SharedWorldHobGroup extends HttpApiGroup.make("sharedWorldHob")
   .add(
     HttpApiEndpoint.get("status", "/", {
-      params: { worldId: GroupId },
-      success: GroupHobStatus,
+      params: { worldId: SharedWorldId },
+      success: SharedWorldHobStatus,
       error: NotFound,
     }),
     HttpApiEndpoint.post("ask", "/ask", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       payload: HobAsk,
       success: HttpApiSchema.StreamSse({ events: HobEvent }),
       error: [NotFound, HobUnavailable],
     }),
     HttpApiEndpoint.get("threads", "/threads", {
-      params: { worldId: GroupId },
+      params: { worldId: SharedWorldId },
       success: Schema.Array(HobThread),
       error: NotFound,
     }),
     HttpApiEndpoint.get("turns", "/threads/:threadId/turns", {
-      params: { worldId: GroupId, threadId: AssistantThreadId },
+      params: { worldId: SharedWorldId, threadId: AssistantThreadId },
       success: Schema.Array(HobTurn),
       error: NotFound,
     }),
     HttpApiEndpoint.post("accept", "/threads/:threadId/turns/:turnId/accept", {
       params: {
-        worldId: GroupId,
+        worldId: SharedWorldId,
         threadId: AssistantThreadId,
         turnId: AssistantTurnId,
       },

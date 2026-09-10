@@ -390,7 +390,7 @@ const makeFixture = Effect.gen(function* () {
   );
   yield* as(
     Effect.flatMap(LibraryShares, (shares) =>
-      shares.share(campaign.groupId, { kind: "creature", resourceId: original.id as string }),
+      shares.share(campaign.contextId, { kind: "creature", resourceId: original.id as string }),
     ),
   );
   // The group's chronicle: one entry through the shipped write, and one
@@ -398,14 +398,14 @@ const makeFixture = Effect.gen(function* () {
   // not shipped; the read under test is the same either way.
   yield* as(
     Effect.flatMap(GroupHistory, (h) =>
-      h.create(campaign.groupId, { body: "Both tables reached the crossing." }),
+      h.create(campaign.contextId, { body: "Both tables reached the crossing." }),
     ),
   );
   yield* Effect.flatMap(
     SqlClient.SqlClient,
     (sql) => sql`
       insert into group_history_summary (group_id, status, last_group_seq, text, origin)
-      values (${campaign.groupId}, 'accepted', 1, 'The story so far.', 'authored')
+      values (${campaign.contextId}, 'accepted', 1, 'The story so far.', 'authored')
     `,
   ).pipe(Effect.orDie);
   yield* as(
@@ -770,16 +770,16 @@ const READS: Record<
   // The group's chronicle: gated on live *group* membership rather than on a
   // campaign, so the stranger's refusal names the group. Reached through the
   // fixture campaign's own group, the way every group read in src is.
-  group_history_entry: (f) => Effect.flatMap(GroupHistory, (r) => r.list(f.campaign.groupId)),
+  group_history_entry: (f) => Effect.flatMap(GroupHistory, (r) => r.list(f.campaign.contextId)),
   // The share shelf: reach data any live member reads, a grant a stranger
   // must not see exists. Gated on group membership like the chronicle.
   group_library_share: (f) =>
-    Effect.flatMap(LibraryShares, (shares) => shares.list(f.campaign.groupId)),
+    Effect.flatMap(LibraryShares, (shares) => shares.list(f.campaign.contextId)),
   // `summary` answers one row or null; boxed so the harness's "something to
   // miss / nothing leaked" arithmetic reads it like every list.
   group_history_summary: (f) =>
     Effect.map(
-      Effect.flatMap(GroupHistory, (r) => r.summary(f.campaign.groupId)),
+      Effect.flatMap(GroupHistory, (r) => r.summary(f.campaign.contextId)),
       (summary) => (summary === null ? [] : [summary]),
     ),
 };
@@ -811,7 +811,7 @@ describe("a campaign cannot exist without a DM", () => {
       sqlOf(
         (sql) =>
           sql`insert into campaign ${sql.insert({
-            group_id: fixture.campaign.groupId,
+            group_id: fixture.campaign.contextId,
             creator_account_id: fixture.dm.accountId,
             name: "No DM",
           })}`,
@@ -831,7 +831,7 @@ describe("a campaign cannot exist without a DM", () => {
           Effect.gen(function* () {
             const rows = yield* sql<{ readonly id: string }>`
               insert into campaign ${sql.insert({
-                group_id: fixture.campaign.groupId,
+                group_id: fixture.campaign.contextId,
                 creator_account_id: fixture.dm.accountId,
                 name: "With a DM",
               })}
@@ -840,7 +840,7 @@ describe("a campaign cannot exist without a DM", () => {
             yield* sql`
               insert into campaign_member ${sql.insert({
                 campaign_id: rows[0]!.id,
-                group_id: fixture.campaign.groupId,
+                group_id: fixture.campaign.contextId,
                 account_id: fixture.dm.accountId,
               })}
             `;
@@ -893,14 +893,14 @@ describe("a campaign cannot exist without a DM", () => {
         const guest = yield* anAccount("Pim");
         yield* sql`
           insert into group_member ${sql.insert({
-            group_id: campaign.groupId,
+            group_id: campaign.contextId,
             account_id: guest.accountId,
           })}
         `;
         yield* sql`
           insert into campaign_member ${sql.insert({
             campaign_id: campaign.id,
-            group_id: campaign.groupId,
+            group_id: campaign.contextId,
             account_id: guest.accountId,
           })}
         `;

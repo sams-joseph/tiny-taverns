@@ -35,7 +35,7 @@ vi.stubGlobal("fetch", (url: string | URL, init: RequestInit | undefined) => {
 
 const campaignJson = (name: string) => ({
   id: "2b1f2a1e-0000-4000-8000-00000000c0de",
-  groupId: "5a1e2b3c-0000-4000-8000-00000000aaa1",
+  contextId: "5a1e2b3c-0000-4000-8000-00000000aaa1",
   creatorAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
   name,
   partyName: "The Ferrymen",

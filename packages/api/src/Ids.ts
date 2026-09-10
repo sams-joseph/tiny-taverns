@@ -12,13 +12,9 @@ const id = <const Name extends string>(name: Name) =>
 export const AccountId = id("AccountId");
 export type AccountId = typeof AccountId.Type;
 
-/**
- * The top-level social container for connected play — the table's group of
- * people, holding campaigns and the history they share. `play_group` in SQL,
- * because `group` is a keyword; a group everywhere else.
- */
-export const GroupId = id("GroupId");
-export type GroupId = typeof GroupId.Type;
+/** One explicit Shared World, or the private backing context of a standalone campaign. */
+export const SharedWorldId = id("SharedWorldId");
+export type SharedWorldId = typeof SharedWorldId.Type;
 
 export const CampaignId = id("CampaignId");
 export type CampaignId = typeof CampaignId.Type;
@@ -180,13 +176,13 @@ export type CampaignInviteId = typeof CampaignInviteId.Type;
 export const CampaignCharacterId = id("CampaignCharacterId");
 export type CampaignCharacterId = typeof CampaignCharacterId.Type;
 
-/** One canonical fact admitted to a group's shared history. */
-export const GroupHistoryEntryId = id("GroupHistoryEntryId");
-export type GroupHistoryEntryId = typeof GroupHistoryEntryId.Type;
+/** One canonical fact admitted to a Shared World's history. */
+export const SharedWorldHistoryEntryId = id("SharedWorldHistoryEntryId");
+export type SharedWorldHistoryEntryId = typeof SharedWorldHistoryEntryId.Type;
 
-/** One derived summary over a group's history entries. */
-export const GroupHistorySummaryId = id("GroupHistorySummaryId");
-export type GroupHistorySummaryId = typeof GroupHistorySummaryId.Type;
+/** One derived summary over a Shared World's history entries. */
+export const SharedWorldHistorySummaryId = id("SharedWorldHistorySummaryId");
+export type SharedWorldHistorySummaryId = typeof SharedWorldHistorySummaryId.Type;
 
 /** One conversation with Hob — a thread of turns, scoped to one campaign. */
 export const AssistantThreadId = id("AssistantThreadId");
