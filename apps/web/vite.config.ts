@@ -60,11 +60,12 @@ export default defineConfig({
      * fewer cores than the machine those numbers were taken on, so its per-test
      * wall clock is not comparable and the default cannot be tuned against a
      * local measurement at all — the honest move is a budget big enough that
-     * the machine stops being the variable. 20s is four times the measured
-     * local ceiling under load, and roughly thirty times the isolated cost of
-     * the slowest test. It is still short enough that a genuinely hung test
-     * fails the run rather than sitting on the runner's job timeout.
+     * the machine stops being the variable. The growing suite eventually
+     * crossed the old 20s budget there while the same test and the complete
+     * workflow passed locally. 60s matches the server suite's load-sensitive
+     * budget and remains short enough that a genuinely hung test fails the run
+     * rather than sitting on the runner's job timeout.
      */
-    testTimeout: 20_000,
+    testTimeout: 60_000,
   },
 });
