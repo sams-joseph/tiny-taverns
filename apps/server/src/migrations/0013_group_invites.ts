@@ -75,7 +75,7 @@ export default Effect.gen(function* () {
       redeemed_at  timestamptz,
       constraint group_invite_campaign_fkey
         foreign key (campaign_id, group_id)
-        references campaign (id, group_id) on delete cascade,
+        references campaign (id, group_id) on update cascade on delete cascade,
       constraint group_invite_redeemer_was_a_redemption
         check (redeemed_by is null or redeemed_at is not null)
     )

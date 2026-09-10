@@ -86,6 +86,16 @@ reset after pulling the rewritten baseline migrations.
   gallery—uses `campaigns.create` and mints only the hidden backing context.
   `sharedWorlds.createCampaign` is reserved for a world the user explicitly
   selected or the campaign composer mounted inside a Shared World.
+- A creator may later connect their standalone campaign to an existing Shared
+  World they own with `POST /campaigns/:campaignId/shared-world/connect`. The
+  transaction restores destination eligibility for every live participant,
+  updates the campaign's context, cascades the denormalized context id through
+  campaign memberships, seats, invitations and history provenance, then deletes
+  the empty automatic context. Campaign ids and content do not move. The UI
+  offers only owned worlds and explains that participants join the world while
+  campaign content remains participation-gated. Connecting an already-connected
+  campaign or targeting another owner's world answers `NotFound`; disconnecting
+  and moving between worlds remain intentionally absent.
 - `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen

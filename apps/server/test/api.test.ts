@@ -152,6 +152,33 @@ describe("campaign, session, character and note CRUD", () => {
     );
   });
 
+  it("connects a standalone campaign to an existing owned Shared World", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const client = yield* clientFor(token);
+        const world = yield* client.sharedWorlds.create({
+          payload: { name: "The Atlas of Roads" },
+        });
+        const campaign = yield* client.campaigns.create({
+          payload: { name: "The Unmapped Road" },
+        });
+        const connected = yield* client.campaigns.connectSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { worldId: world.id },
+        });
+        const campaigns = yield* client.me.campaigns();
+        const directory = yield* client.sharedWorlds.campaigns({ params: { worldId: world.id } });
+        return { world, campaign, connected, campaigns, directory };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.connected.id).toBe(seen.world.id);
+    expect(
+      seen.campaigns.find((membership) => membership.campaign.id === seen.campaign.id)?.sharedWorld,
+    ).toEqual({ id: seen.world.id, name: seen.world.name });
+    expect(seen.directory.map((campaign) => campaign.id)).toContain(seen.campaign.id);
+  }, 60_000);
+
   it("round-trips a campaign and everything hanging off it", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {

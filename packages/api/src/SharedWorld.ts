@@ -22,6 +22,12 @@ export const SharedWorldUpdate = Schema.Struct({
 });
 export type SharedWorldUpdate = typeof SharedWorldUpdate.Type;
 
+/** Connects one standalone campaign to an existing Shared World. */
+export const SharedWorldConnection = Schema.Struct({
+  worldId: SharedWorldId,
+});
+export type SharedWorldConnection = typeof SharedWorldConnection.Type;
+
 /**
  * A Shared World this account belongs to — the answer `GET /worlds` gives.
  *

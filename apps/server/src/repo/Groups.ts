@@ -16,6 +16,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { liveMemberAccountIds } from "./Memberships.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
 import {
   ensureGroupReadable,
@@ -28,7 +29,7 @@ import {
  * `play_group` and `group_member` — the group and who is in it.
  *
  * This module and `repo/visibility.ts` are the only two in `src` that may name
- * `group_member`, the same rule `campaign_member` lives under and for the same
+ * `group_member`, the same rule campaign participation lives under and for the same
  * reason: group membership is the thing that decides what an account is
  * eligible to reach, and a third writer is where the next leak lives.
  * `membership.test.ts` enforces it.
@@ -157,6 +158,11 @@ export class Groups extends Context.Service<
       creator: CampaignCreatorActor,
       payload: SharedWorldCreate,
     ) => Effect.Effect<SharedWorld, NotFound>;
+    /** Moves a standalone campaign into an existing Shared World owned by its creator. */
+    readonly connect: (
+      creator: CampaignCreatorActor,
+      worldId: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound>;
     readonly update: (
       id: SharedWorldId,
       patch: SharedWorldUpdate,
@@ -251,6 +257,70 @@ export class Groups extends Context.Service<
               `;
               return yield* one(rows, creator.group);
             }),
+          ),
+
+        connect: (creator, worldId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const destinations = yield* sql<GroupRow>`
+                  select destination.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  cross join play_group as destination
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.owner_account_id = ${creator.actor.accountId}
+                    and not source.is_shared_world
+                    and source.archived_at is null
+                    and destination.id = ${worldId}
+                    and destination.owner_account_id = ${creator.actor.accountId}
+                    and destination.is_shared_world
+                    and destination.archived_at is null
+                  for update of campaign, source, destination
+                `;
+                if (destinations.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: worldId });
+                }
+
+                // Participation is the set that follows the campaign. World
+                // eligibility remains plumbing, so every live participant is
+                // admitted (or restored) before the deferred keys inspect the
+                // moved rows at commit.
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, worldId, accountId),
+                  { discard: true },
+                );
+
+                const moved = yield* sql<{ readonly id: CampaignId }>`
+                  update campaign
+                  set group_id = ${worldId}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                  returning campaign.id
+                `;
+                if (moved.length === 0) {
+                  return yield* new NotFound({ resource: "campaign", id: creator.campaign });
+                }
+
+                // Automatic contexts contain one campaign by construction.
+                // Once it has moved, the context and its eligibility rows are
+                // no longer product state.
+                yield* sql`
+                  delete from play_group
+                  where play_group.id = ${creator.group}
+                    and not play_group.is_shared_world
+                    and not exists (
+                      select 1 from campaign where campaign.group_id = play_group.id
+                    )
+                `;
+
+                return toGroup(destinations[0]!);
+              }),
+            ),
           ),
 
         update: (id, patch) =>

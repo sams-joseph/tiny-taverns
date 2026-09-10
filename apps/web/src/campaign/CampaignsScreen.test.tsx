@@ -47,12 +47,56 @@ describe("the campaign-first home", () => {
     });
     await renderCampaigns("/campaigns", mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Create Shared World" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/shared-world")).toEqual({ name: "The Roads Between" }),
+    );
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
+  });
+
+  it("connects a standalone campaign to an existing owned Shared World", async () => {
+    const somebodyElsesWorld = {
+      ...sharedWorldDetails,
+      id: "5a1e2b3c-0000-4000-8000-00000000aaa2",
+      name: "Somebody Else's World",
+      ownerAccountId: "5a1e2b3c-0000-4000-8000-0000000000ff",
+    };
+    server.routes.set("GET /worlds", {
+      status: 200,
+      body: [
+        { sharedWorld: sharedWorldDetails, isOwner: true, joinedAt: campaign.createdAt },
+        { sharedWorld: somebodyElsesWorld, isOwner: false, joinedAt: campaign.createdAt },
+      ],
+    });
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/shared-world/connect`, {
+      status: 200,
+      body: sharedWorldDetails,
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
+    expect(screen.getByText(/current participants join the Shared World/)).toBeTruthy();
+    expect(screen.getByText(/other world members can see its name/)).toBeTruthy();
+    expect(
+      screen.getByText(/campaign content remains visible only to its participants/),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("combobox", { name: "Existing Shared World" }));
+    expect(await screen.findByRole("option", { name: "The Salt Company" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Somebody Else's World" })).toBeNull();
+    await userEvent.click(screen.getByRole("option", { name: "The Salt Company" }));
+    await userEvent.click(screen.getByRole("button", { name: "Connect campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/shared-world/connect")).toEqual({
+        worldId: sharedWorldDetails.id,
+      }),
     );
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
   });

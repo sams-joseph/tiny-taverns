@@ -73,6 +73,7 @@ import { Conflict, NotFound, RateLimited } from "./Errors.js";
 import {
   SharedWorld,
   SharedWorldCampaignCard,
+  SharedWorldConnection,
   SharedWorldCreate,
   SharedWorldMember,
   SharedWorldMembership,
@@ -259,6 +260,13 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
     HttpApiEndpoint.post("promoteSharedWorld", "/:campaignId/shared-world", {
       params: { campaignId: CampaignId },
       payload: SharedWorldCreate,
+      success: SharedWorld,
+      error: NotFound,
+    }),
+    /** Moves a standalone campaign into an existing Shared World owned by its creator. */
+    HttpApiEndpoint.post("connectSharedWorld", "/:campaignId/shared-world/connect", {
+      params: { campaignId: CampaignId },
+      payload: SharedWorldConnection,
       success: SharedWorld,
       error: NotFound,
     }),

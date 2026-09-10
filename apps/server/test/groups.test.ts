@@ -321,6 +321,122 @@ describe("cross-group isolation", () => {
 });
 
 describe("the group's own lifecycle", () => {
+  it("connects a standalone campaign to an owned Shared World without losing its table", async () => {
+    const journey = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const invites = yield* Invites;
+        const sql = yield* SqlClient.SqlClient;
+        const founder = yield* anAccount("Cartographer");
+        const campaign = yield* as(founder)(
+          campaigns.createStandalone({ name: "The Road Before Maps", visibility: "shared" }),
+        );
+        const oldContextId = campaign.contextId;
+        const player = yield* aPlayerAt(campaign.id, "Traveller");
+        yield* sql`
+          insert into campaign_character
+            (campaign_id, group_id, account_id, display_name, visibility)
+          values
+            (${campaign.id}, ${oldContextId}, ${player.accountId}, 'Traveller', 'shared')
+        `;
+        const creator = yield* asDm(founder, campaign.id);
+        const waiting = yield* invites.createForCampaign(creator, { label: "Late arrival" });
+        const destination = yield* as(founder)(groups.create({ name: "The Roads Between" }));
+
+        const connected = yield* groups.connect(creator, destination.id);
+        const movedCampaign = yield* as(founder)(campaigns.findById(campaign.id));
+        const playerCampaign = yield* as(player)(campaigns.findById(campaign.id));
+        const directory = yield* as(founder)(groups.campaigns(destination.id));
+        const rosterAfterMove = yield* as(founder)(groups.members(destination.id));
+        const campaignMembers = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign_member where campaign_id = ${campaign.id}
+        `;
+        const inviteRows = yield* sql<{ readonly group_id: string }>`
+          select group_id from group_invite where id = ${waiting.invite.id}
+        `;
+        const seatRows = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign_character where campaign_id = ${campaign.id}
+        `;
+        const oldContexts = yield* sql<{ readonly id: string }>`
+          select id from play_group where id = ${oldContextId}
+        `;
+        const lateArrival = yield* anAccount("Late arrival");
+        const redeemedAfterMove = yield* as(lateArrival)(invites.redeem(waiting.token));
+        const rosterAfterRedeem = yield* as(founder)(groups.members(destination.id));
+
+        return {
+          connected,
+          destination,
+          movedCampaign,
+          playerCampaign,
+          directory,
+          rosterAfterMove,
+          rosterAfterRedeem,
+          redeemedAfterMove,
+          campaignMembers,
+          inviteRows,
+          seatRows,
+          oldContexts,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(journey.connected.id).toBe(journey.destination.id);
+    expect(journey.movedCampaign.contextId).toBe(journey.destination.id);
+    expect(journey.playerCampaign.id).toBe(journey.movedCampaign.id);
+    expect(journey.directory.map((row) => row.id)).toContain(journey.movedCampaign.id);
+    expect(journey.rosterAfterMove.map((member) => member.name).sort()).toEqual([
+      "Cartographer",
+      "Traveller",
+    ]);
+    expect(journey.rosterAfterRedeem.map((member) => member.name).sort()).toEqual([
+      "Cartographer",
+      "Late arrival",
+      "Traveller",
+    ]);
+    expect(journey.redeemedAfterMove.sharedWorld).toEqual({
+      id: journey.destination.id,
+      name: journey.destination.name,
+    });
+    expect(journey.campaignMembers.every((row) => row.group_id === journey.destination.id)).toBe(
+      true,
+    );
+    expect(journey.inviteRows).toEqual([{ group_id: journey.destination.id }]);
+    expect(journey.seatRows).toEqual([{ group_id: journey.destination.id }]);
+    expect(journey.oldContexts).toEqual([]);
+  }, 60_000);
+
+  it("connects neither an existing Shared World campaign nor a campaign to another owner's world", async () => {
+    const refusals = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const founder = yield* anAccount("Boundary Keeper");
+        const standalone = yield* as(founder)(
+          campaigns.createStandalone({ name: "A Private Road" }),
+        );
+        const founderWorld = yield* as(founder)(groups.create({ name: "A Founder's World" }));
+        const standaloneCreator = yield* asDm(founder, standalone.id);
+        const anotherOwnersWorld = yield* groups
+          .connect(standaloneCreator, fixture.sharedWorld.id)
+          .pipe(Effect.result);
+
+        const connected = yield* groups.connect(standaloneCreator, founderWorld.id);
+        const connectedCreator = yield* asDm(founder, standalone.id);
+        const alreadyConnected = yield* groups
+          .connect(connectedCreator, connected.id)
+          .pipe(Effect.result);
+        return { anotherOwnersWorld, alreadyConnected };
+      }).pipe(Effect.orDie),
+    );
+
+    for (const refusal of [refusals.anotherOwnersWorld, refusals.alreadyConnected]) {
+      expect(refusal._tag).toBe("Failure");
+      if (refusal._tag === "Failure") expect(refusal.failure).toBeInstanceOf(NotFound);
+    }
+  }, 60_000);
+
   it("keeps a standalone campaign's context off every Shared World surface until promotion", async () => {
     const journey = await runtime.runPromise(
       Effect.gen(function* () {

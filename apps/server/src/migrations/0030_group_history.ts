@@ -64,7 +64,7 @@ export default Effect.gen(function* () {
         check ((origin = 'assistant') = (assistant_turn_id is not null)),
       constraint group_history_entry_campaign_fkey
         foreign key (campaign_id, group_id) references campaign (id, group_id)
-        on delete set null (campaign_id)
+        on update cascade on delete set null (campaign_id)
     )
   `;
   yield* sql`create index group_history_entry_group_idx on group_history_entry (group_id, group_seq)`;

@@ -114,6 +114,22 @@ export const admitTo = (
     (rows) => rows.length > 0,
   );
 
+/** The live participants whose eligibility follows a campaign to a new context. */
+export const liveMemberAccountIds = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+): Effect.Effect<ReadonlyArray<AccountId>, SqlError.SqlError> =>
+  Effect.map(
+    sql<{ readonly account_id: AccountId }>`
+      select campaign_member.account_id
+      from campaign_member
+      where campaign_member.campaign_id = ${campaignId}
+        and campaign_member.revoked_at is null
+      order by campaign_member.created_at, campaign_member.account_id
+    `,
+    (rows) => rows.map((row) => row.account_id),
+  );
+
 /**
  * Takes a participant's reach away again. Structurally unable to touch the
  * creator's row — see `notTheCreator`. Answers how many rows moved, so the
