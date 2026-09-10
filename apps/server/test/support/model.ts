@@ -1,4 +1,5 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
+import { outputTokenConfig } from "../../src/assistant/modelConfig.js";
 import { Effect, Layer } from "effect";
 import type { LanguageModel } from "effect/unstable/ai";
 import {
@@ -57,6 +58,7 @@ export const refused = (status: number, body?: string): Refusal => ({ status, bo
 export interface ChatRequest {
   readonly model?: string;
   readonly max_tokens?: number;
+  readonly max_completion_tokens?: number;
   readonly messages?: ReadonlyArray<Record<string, unknown>>;
   readonly tools?: ReadonlyArray<Record<string, unknown>>;
   readonly [key: string]: unknown;
@@ -170,6 +172,7 @@ export const scriptedModel = (options: {
   readonly model: string;
   readonly maxTokens: number;
   readonly rounds: ReadonlyArray<Round>;
+  readonly apiUrl?: string;
 }): ScriptedModel => {
   const requests: Array<ChatRequest> = [];
 
@@ -203,12 +206,12 @@ export const scriptedModel = (options: {
     requests: () => requests,
     layer: OpenAiLanguageModel.layer({
       model: options.model,
-      // The same shape `assistantFromConfig` uses, so the assertion that
-      // `max_tokens` reaches the wire is an assertion about the real wiring.
-      config: { max_output_tokens: options.maxTokens },
+      // The same endpoint-aware shape production uses, so both token-field
+      // assertions exercise the adapter's real request conversion.
+      config: outputTokenConfig(options.apiUrl ?? "http://model.invalid/v1", options.maxTokens),
     }).pipe(
       Layer.provide(
-        OpenAiClient.layer({ apiUrl: "http://model.invalid/v1" }).pipe(
+        OpenAiClient.layer({ apiUrl: options.apiUrl ?? "http://model.invalid/v1" }).pipe(
           Layer.provide(Layer.succeed(HttpClient.HttpClient, httpClient)),
         ),
       ),

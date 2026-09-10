@@ -8,6 +8,7 @@ import type { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";
+import { outputTokenConfig } from "./assistant/modelConfig.js";
 import { AuthorizationLive } from "./Authorization.js";
 import { ClerkIdentityProvider } from "./ClerkIdentityProvider.js";
 import {
@@ -109,9 +110,10 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
 /**
  * The provider layer both model-backed surfaces sit on — Hob and the NPC
  * rehearsal — spelled once so the two cannot disagree about the endpoint, the
- * credential or the output budget. `max_output_tokens` is named explicitly,
- * always: a provider package that does not recognise a model id caps it
- * silently, and the first symptom is an answer cut off mid-sentence.
+ * credential or the output budget. The portable adapter emits `max_tokens`,
+ * so direct OpenAI requests use its custom-property escape hatch to send the
+ * current `max_completion_tokens`; compatible local endpoints keep the legacy
+ * mapping they implement.
  */
 const languageModelLayer = (options: {
   readonly apiUrl: string;
@@ -121,7 +123,7 @@ const languageModelLayer = (options: {
 }) =>
   OpenAiLanguageModel.layer({
     model: options.model,
-    config: { max_output_tokens: options.maxTokens },
+    config: outputTokenConfig(options.apiUrl, options.maxTokens),
   }).pipe(
     Layer.provide(
       OpenAiClient.layer({ apiUrl: options.apiUrl, apiKey: options.apiKey }).pipe(
@@ -191,7 +193,7 @@ export const assistantFromConfig: Layer.Layer<
     const apiKey = yield* hobApiKey;
     const maxTokens = yield* hobMaxTokens;
     yield* Effect.logInfo(
-      `Hob is ON: model ${model.value} at ${apiUrl.value}, max_tokens ${maxTokens}.`,
+      `Hob is ON: model ${model.value} at ${apiUrl.value}, max output tokens ${maxTokens}.`,
     );
 
     return Hob.layer({ model: model.value }).pipe(

@@ -38,6 +38,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   reference. Start with `.repos/effect/MIGRATION.md` and `.repos/effect/migration/*.md`, then
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
+- **Hob's output-token field is endpoint-aware.** Effect beta.102's
+  `@effect/ai-openai-compat` always translates its portable `max_output_tokens` setting to the
+  deprecated Chat Completions `max_tokens`. Current models on `api.openai.com` reject that field,
+  so `assistant/modelConfig.ts` uses the adapter's custom-property escape hatch to emit
+  `max_completion_tokens` there. Non-OpenAI compatible endpoints retain `max_output_tokens` and
+  therefore the legacy `max_tokens` wire shape many local servers require. Do not collapse the two
+  paths until the pinned adapter handles both dialects itself.
 
 ## Shared World Story So Far, 2026-09-10: accepted memory with an exact boundary
 
