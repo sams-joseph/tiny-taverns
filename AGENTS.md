@@ -38,6 +38,29 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   reference. Start with `.repos/effect/MIGRATION.md` and `.repos/effect/migration/*.md`, then
   the module source and `packages/platform-node/test/NodeHttpServer.test.ts` for working
   end-to-end examples.
+- **Hob's Chat Completions config is endpoint- and model-aware.** Effect beta.102's
+  `@effect/ai-openai-compat` always translates its portable `max_output_tokens` setting to the
+  deprecated Chat Completions `max_tokens`. Current models on `api.openai.com` reject that field,
+  so `assistant/modelConfig.ts` uses the adapter's custom-property escape hatch to emit
+  `max_completion_tokens` there. Non-OpenAI compatible endpoints retain `max_output_tokens` and
+  therefore the legacy `max_tokens` wire shape many local servers require. Direct OpenAI requests
+  for `gpt-5.6-luna` also send `reasoning_effort: "none"`: Luna's default reasoning and function
+  tools cannot be combined on Chat Completions, while Hob requires tools. Do not collapse these
+  paths until the pinned adapter moves to Responses or handles both dialects itself.
+
+## Shared World Story So Far, 2026-09-10: accepted memory with an exact boundary
+
+- Shared World Hob refreshes Story So Far through two world-only tools:
+  `readStorySoFarSources` returns the current accepted summary plus accepted Chronicle entries
+  after its marker, then `proposeStorySoFar` records the reader's exact `lastWorldSeq` in the
+  transcript proposal. The model and accepting client never supply that boundary.
+- Accepting a `sharedWorldSummary` proposal atomically supersedes the prior accepted
+  `group_history_summary` and inserts its replacement. A Chronicle entry admitted after the
+  proposal therefore makes the accepted replacement visibly stale; it is never silently claimed
+  as covered. Unaccepted proposals remain transcript only and do not change world memory.
+- The Shared World screen reads the existing summary endpoint, renders Story So Far above the
+  Chronicle, compares it with the newest `worldSeq`, and invalidates the shared history read key
+  after acceptance so both text and staleness refresh together.
 
 ## Shared World transition, 2026-09-09: campaigns first, invitations follow them
 
@@ -1320,12 +1343,14 @@ entirely the machine rather than the code: **~0.6s idle and in isolation, 1963â€
 root runs on an unchanged tree, and 8599ms with the box deliberately oversubscribed.** Three other
 tests in that file and in `bestiary/LibraryScreen.test.tsx` drive the same control and track it.
 
-**So the budget is `testTimeout: 20_000` in `apps/web/vite.config.ts`, not the default**, and that
-is what a web-suite timeout now means. It was the default until CI's 2-core runner failed exactly
-those four at 5000ms while the server, package and build jobs were green â€” a runner with an order
-of magnitude fewer cores than this box, so no local number predicts it and the answer is a budget
-wide enough that the machine stops being the variable rather than a per-test annotation that leaves
-the next slowest test to fail the same way.
+**So the budget is `testTimeout: 60_000` in `apps/web/vite.config.ts`, not the default**, and that
+is what a web-suite timeout now means. It was first raised when CI's 2-core runner failed four
+Base UI-heavy tests at 5000ms, then raised from 20s when Character Create crossed that ceiling
+during the fully concurrent root pipeline while the same commit's complete workflow passed
+locally. A runner with an order of magnitude fewer cores than this box makes local wall time a poor
+ceiling; keep the budget global rather than adding a per-test annotation that leaves the next
+slowest test to fail the same way. Sixty seconds also matches the server suite's load-sensitive
+budget.
 
 None of that makes a slow test a fast one, so the diagnostic habit stands: **check the same commit
 twice under different load before believing a web-suite failure is yours**, and measure the suspect

@@ -118,6 +118,53 @@ describe("one Shared World's screen", () => {
     expect(screen.getByText("Run by Wren Alderby")).toBeTruthy();
   });
 
+  it("shows the accepted Story So Far above the Chronicle and marks newer entries", async () => {
+    const summaryText = "The company followed the lantern road into the marsh.";
+    const newerEntry = {
+      id: "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61",
+      worldId,
+      campaignId: null,
+      sessionId: null,
+      sourceKind: "manual",
+      worldSeq: 4,
+      occurredAt: null,
+      acceptedAt: campaign.createdAt,
+      title: "A newer turn",
+      body: "The bell rang after the company entered the marsh.",
+      facts: {},
+      origin: "authored",
+      assistantTurnId: null,
+      createdByAccountId: campaign.creatorAccountId,
+      createdAt: campaign.createdAt,
+    };
+    server.routes.set(`GET /worlds/${worldId}/history`, { status: 200, body: [newerEntry] });
+    server.routes.set(`GET /worlds/${worldId}/history/summary`, {
+      status: 200,
+      body: {
+        id: "0b9d3d1e-71ba-48e5-b2f1-f2cdd6ca893d",
+        worldId,
+        status: "accepted",
+        lastWorldSeq: 3,
+        text: summaryText,
+        origin: "assistant",
+        assistantTurnId: "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60",
+        acceptedAt: campaign.createdAt,
+        createdAt: campaign.createdAt,
+      },
+    });
+
+    await renderSharedWorld(mintingSession());
+
+    const story = await screen.findByRole("region", { name: "Story So Far" });
+    const chronicle = screen.getByRole("region", { name: "Chronicle" });
+    expect(within(story).getByText(summaryText)).toBeInTheDocument();
+    expect(within(story).getByText("Update needed")).toBeInTheDocument();
+    expect(within(story).getByRole("button", { name: "Refresh with Hob" })).toBeInTheDocument();
+    expect(
+      story.compareDocumentPosition(chronicle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("offers no way into a campaign this member does not participate in", async () => {
     // The participation decision on screen: the card names the campaign and
     // who runs it, and a link that lands on a 404 is worse than none.

@@ -75,7 +75,7 @@ function ReadAloudBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
 function ProseBody({
   artifact,
 }: {
-  readonly artifact: HobArtifact & { kind: "note" | "beat" | "chronicle" };
+  readonly artifact: HobArtifact & { kind: "note" | "beat" | "chronicle" | "story" };
 }) {
   return (
     <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">{artifact.text}</p>
@@ -147,6 +147,7 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
     case "note":
     case "beat":
     case "chronicle":
+    case "story":
       return <ProseBody artifact={artifact} />;
     case "npc":
       return <NpcBody artifact={artifact} />;
@@ -179,6 +180,7 @@ export function ArtifactCard({
 }) {
   const meta = ARTIFACT_KINDS[artifact.kind];
   const chronicle = artifact.kind === "chronicle";
+  const story = artifact.kind === "story";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -273,14 +275,22 @@ export function ArtifactCard({
               Open it
             </Button>
             <span className="ml-auto text-caption leading-none text-faint">
-              {chronicle ? "In the Shared World Chronicle" : "In tonight’s session"}
+              {story
+                ? "Current for this Shared World"
+                : chronicle
+                  ? "In the Shared World Chronicle"
+                  : "In tonight’s session"}
             </span>
           </>
         ) : (
           <>
             {isSaveable(artifact) && (
               <Button size="sm" disabled={onSave === undefined} onClick={() => onSave?.(artifact)}>
-                {chronicle ? "Add to Chronicle" : "Save to session"}
+                {story
+                  ? "Keep as Story So Far"
+                  : chronicle
+                    ? "Add to Chronicle"
+                    : "Save to session"}
               </Button>
             )}
             <Button

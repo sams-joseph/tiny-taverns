@@ -274,11 +274,14 @@ const ask = (
     readonly query?: string;
     /** What the DM typed. `ASKED` is a question about the record, deliberately. */
     readonly text?: string;
+    readonly apiUrl?: string;
+    readonly model?: string;
   },
 ): Promise<Asked> => {
   const model = scriptedModel({
-    model: "scripted-local",
+    model: options?.model ?? "scripted-local",
     maxTokens: MAX_TOKENS,
+    ...(options?.apiUrl === undefined ? {} : { apiUrl: options.apiUrl }),
     rounds: (options?.rounds as never) ?? [
       toolCallChunks("searchCampaign", { query: options?.query ?? "ferryman" }),
       textChunks("The ferryman ", "is called ", "Cazril."),
@@ -388,6 +391,32 @@ describe("answering", () => {
 
     expect(requests.length).toBeGreaterThan(0);
     for (const request of requests) expect(request.max_tokens).toBe(MAX_TOKENS);
+  }, 60_000);
+
+  it("uses max_completion_tokens for the official OpenAI endpoint", async () => {
+    const { requests } = await ask(fixture.dm, fixture.campaign.id, {
+      apiUrl: "https://api.openai.com/v1",
+    });
+
+    expect(requests.length).toBeGreaterThan(0);
+    for (const request of requests) {
+      expect(request.max_completion_tokens).toBe(MAX_TOKENS);
+      expect(request.max_tokens).toBeUndefined();
+      expect(request.reasoning_effort).toBeUndefined();
+    }
+  }, 60_000);
+
+  it("disables Luna reasoning so Chat Completions can use Hob's function tools", async () => {
+    const { requests } = await ask(fixture.dm, fixture.campaign.id, {
+      apiUrl: "https://api.openai.com/v1",
+      model: "gpt-5.6-luna",
+    });
+
+    expect(requests.length).toBeGreaterThan(0);
+    for (const request of requests) {
+      expect(request.reasoning_effort).toBe("none");
+      expect(request.tools?.length).toBeGreaterThan(0);
+    }
   }, 60_000);
 
   it("offers the model every tool, and a campaign id in none of them", async () => {

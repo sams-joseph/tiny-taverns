@@ -682,7 +682,7 @@ describe("the scope, counted", () => {
     // finding, reading turns, appending and building prompt context for the
     // shared live-session channel. They deliberately read through active table
     // presence, not a creator proof; only opening the channel is creator-gated.
-    expect(ungated).toBe(153);
+    expect(ungated).toBe(154);
   });
 });
 

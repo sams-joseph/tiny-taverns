@@ -627,6 +627,7 @@ export class Hob extends Context.Service<
               const broke = yield* Ref.make(false);
               const reachedForOne = yield* Ref.make(false);
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+              const summaryCoverage = yield* Ref.make<number | undefined>(undefined);
               const finished = yield* Ref.make("stop");
 
               const answering: Stream.Stream<
@@ -641,6 +642,7 @@ export class Hob extends Context.Service<
                       actor,
                       groupId,
                       proposal,
+                      summaryCoverage,
                     ),
                   ),
                   (bound) => Effect.provideContext(SharedWorldToolkit, bound),
@@ -1568,10 +1570,12 @@ const groupPrompt = (groupName: string): string =>
     "say that it does not. When two campaigns' records disagree, say they disagree",
     "rather than merging them.",
     "",
-    "When a member asks you to record something — a summary of events, a connection",
-    "between campaigns — write it and offer it with proposeSharedWorldEntry. Nothing you",
-    "offer enters the chronicle unless a member accepts it. Offer one thing at a time,",
-    "and say one short line about it.",
+    "When a member asks for or refreshes the Story So Far, call readStorySoFarSources,",
+    "write a concise synthesis using only that result, then offer it with",
+    "proposeStorySoFar. Its exact Chronicle coverage is recorded for you. For a new",
+    "event or connection the world should remember, use proposeSharedWorldEntry instead.",
+    "Nothing you offer becomes world memory unless a member accepts it. Offer one thing",
+    "at a time, and say one short line about it.",
     "",
     "Keep replies to a sentence or two unless asked for more.",
   ].join("\n");
@@ -1712,6 +1716,10 @@ const offered = (turn: HobTurn): string | undefined => {
       ].filter((part) => part !== undefined);
       return `[You offered the player a character called "${proposal.name}" — ${kept}: ${parts.join("; ")}]`;
     }
+    case "sharedWorldHistory":
+      return `[You offered the Shared World a Chronicle entry — ${kept}: ${proposal.body}]`;
+    case "sharedWorldSummary":
+      return `[You offered the Shared World a Story So Far through Chronicle sequence ${String(proposal.lastWorldSeq)} — ${kept}: ${proposal.text}]`;
   }
 };
 

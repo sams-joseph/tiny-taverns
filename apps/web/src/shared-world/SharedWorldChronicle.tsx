@@ -1,4 +1,8 @@
-import type { SharedWorldHistoryEntry, SharedWorldId } from "@taverns/api";
+import type {
+  SharedWorldHistoryEntry,
+  SharedWorldHistorySummary,
+  SharedWorldId,
+} from "@taverns/api";
 import { Badge, Button, Card, CardContent } from "@taverns/ui";
 import { useState } from "react";
 import { Atom } from "effect/unstable/reactivity";
@@ -26,6 +30,59 @@ const historyAtom = Atom.family((worldId: SharedWorldId) =>
     [reads.sharedWorldHistory(worldId)],
   ),
 );
+
+const summaryAtom = Atom.family((worldId: SharedWorldId) =>
+  apiAtom(
+    (client) => client.sharedWorldHistory.summary({ params: { worldId } }),
+    [reads.sharedWorldHistory(worldId)],
+  ),
+);
+
+function StorySoFar({
+  summary,
+  latestWorldSeq,
+  onAskHob,
+}: {
+  readonly summary: SharedWorldHistorySummary | null;
+  readonly latestWorldSeq: number;
+  readonly onAskHob: () => void;
+}) {
+  const stale = summary !== null && latestWorldSeq > summary.lastWorldSeq;
+  return (
+    <section className="flex flex-col gap-2" aria-label="Story So Far">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-label leading-snug font-semibold text-heading">Story So Far</span>
+        {stale && <Badge variant="outline">Update needed</Badge>}
+      </div>
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-card">
+          {summary === null ? (
+            <p className="text-body-s leading-body text-faint">
+              No Story So Far has been kept yet. Hob can draft one from the accepted Chronicle.
+            </p>
+          ) : (
+            <>
+              <p className="max-w-measure text-body-s leading-body whitespace-pre-line text-foreground">
+                {summary.text}
+              </p>
+              {stale && (
+                <p className="text-caption leading-body text-muted-foreground">
+                  The Chronicle has newer entries. This accepted summary remains current until a
+                  member keeps a replacement.
+                </p>
+              )}
+            </>
+          )}
+          {(summary === null || stale) && (
+            <Button size="sm" variant="outline" className="self-start" onClick={onAskHob}>
+              {summary === null ? "Draft Story So Far with Hob" : "Refresh with Hob"}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
 
 function EntryRow({ entry }: { readonly entry: SharedWorldHistoryEntry }) {
   // Display order prefers when it happened; acceptance order is the list's.
@@ -96,30 +153,52 @@ function Composer({ worldId }: { readonly worldId: SharedWorldId }) {
   );
 }
 
-export function SharedWorldChronicle({ worldId }: { readonly worldId: SharedWorldId }) {
+export function SharedWorldChronicle({
+  worldId,
+  onAskHob,
+}: {
+  readonly worldId: SharedWorldId;
+  readonly onAskHob: () => void;
+}) {
   const [resource, retry] = useApiAtom(historyAtom(worldId));
+  const [summary, retrySummary] = useApiAtom(summaryAtom(worldId));
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3" aria-label="Chronicle">
-      <span className="text-label leading-snug font-semibold text-heading">Chronicle</span>
-      <Composer worldId={worldId} />
-      {resource.state === "loading" && <Loading label="Reading the chronicle…" />}
-      {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={retry} />}
-      {resource.state === "ready" &&
-        (resource.value.length === 0 ? (
-          <p className="text-body-s leading-body text-faint">
-            Nothing admitted yet. A campaign's creator can share a played night here, and anyone can
-            write the story down by hand.
-          </p>
-        ) : (
-          <Card>
-            <CardContent className="pt-card">
-              {resource.value.map((entry) => (
-                <EntryRow key={entry.id} entry={entry} />
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-    </section>
+    <div className="flex max-w-3xl flex-col gap-6">
+      {summary.state === "loading" && <Loading label="Reading the Story So Far…" />}
+      {summary.state === "failed" && (
+        <FailureNotice failure={summary.failure} onRetry={retrySummary} />
+      )}
+      {summary.state === "ready" && resource.state === "ready" && (
+        <StorySoFar
+          summary={summary.value}
+          latestWorldSeq={resource.value[0]?.worldSeq ?? 0}
+          onAskHob={onAskHob}
+        />
+      )}
+      <section className="flex flex-col gap-3" aria-label="Chronicle">
+        <span className="text-label leading-snug font-semibold text-heading">Chronicle</span>
+        <Composer worldId={worldId} />
+        {resource.state === "loading" && <Loading label="Reading the chronicle…" />}
+        {resource.state === "failed" && (
+          <FailureNotice failure={resource.failure} onRetry={retry} />
+        )}
+        {resource.state === "ready" &&
+          (resource.value.length === 0 ? (
+            <p className="text-body-s leading-body text-faint">
+              Nothing admitted yet. A campaign's creator can share a played night here, and anyone
+              can write the story down by hand.
+            </p>
+          ) : (
+            <Card>
+              <CardContent className="pt-card">
+                {resource.value.map((entry) => (
+                  <EntryRow key={entry.id} entry={entry} />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+      </section>
+    </div>
   );
 }

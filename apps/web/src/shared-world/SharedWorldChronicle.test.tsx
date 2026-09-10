@@ -72,6 +72,8 @@ describe("the chronicle section", () => {
   it("says the empty state in words rather than looking broken", async () => {
     await renderSharedWorld(mintingSession());
     expect(await screen.findByText(/Nothing admitted yet/)).toBeTruthy();
+    expect(screen.getByText(/No Story So Far has been kept yet/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Draft Story So Far with Hob" })).toBeTruthy();
   });
 
   it("writes a manual entry and re-reads the one resource it changed", async () => {

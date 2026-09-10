@@ -243,6 +243,27 @@ export class GroupHistory extends Context.Service<
       groupId: SharedWorldId,
     ) => Effect.Effect<SharedWorldHistorySummary | null, NotFound, CurrentActor>;
     /**
+     * The exact accepted-memory batch used to refresh Story So Far. Entries
+     * begin immediately after the current accepted summary's coverage marker
+     * and are oldest first, so the model can extend rather than rewrite memory.
+     */
+    readonly summarySources: (groupId: SharedWorldId) => Effect.Effect<
+      {
+        readonly summary: SharedWorldHistorySummary | null;
+        readonly entries: ReadonlyArray<SharedWorldHistoryEntry>;
+        readonly lastWorldSeq: number;
+      },
+      NotFound,
+      CurrentActor
+    >;
+    /** Replace the one accepted summary while preserving its predecessors. */
+    readonly acceptSummary: (
+      groupId: SharedWorldId,
+      text: string,
+      lastWorldSeq: number,
+      from: AssistantOrigin,
+    ) => Effect.Effect<SharedWorldHistorySummary, NotFound, CurrentActor>;
+    /**
      * Lexical search over the chronicle — group Hob's grounding read. `ILIKE`
      * over title and body, newest admitted first; the corpus is bounded (a
      * chronicle is written by hand and by accepts), so no `tsvector` yet —
@@ -396,6 +417,72 @@ export class GroupHistory extends Context.Service<
                   and group_history_summary.status = 'accepted'
               `;
               return rows.length === 0 ? null : toSummary(rows[0]!);
+            }),
+          ),
+
+        summarySources: (groupId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureGroupReadable(sql, groupId, actor);
+              const summaries = yield* sql<SummaryRow>`
+                select * from group_history_summary
+                where group_history_summary.group_id = ${groupId}
+                  and group_history_summary.status = 'accepted'
+              `;
+              const current = summaries.length === 0 ? null : toSummary(summaries[0]!);
+              const after = current?.lastWorldSeq ?? 0;
+              const rows = yield* sql<EntryRow>`
+                select * from group_history_entry
+                where group_history_entry.group_id = ${groupId}
+                  and group_history_entry.group_seq > ${after}
+                order by group_history_entry.group_seq asc
+                limit ${ENTRY_LIMIT}
+              `;
+              const entries = rows.map(toEntry);
+              return {
+                summary: current,
+                entries,
+                lastWorldSeq: entries.at(-1)?.worldSeq ?? after,
+              };
+            }),
+          ),
+
+        acceptSummary: (groupId, text, lastWorldSeq, from) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureGroupReadable(sql, groupId, actor);
+              // Different proposal turns may be approved at the same instant.
+              // Serialize replacements on the world row so each transaction
+              // supersedes what is current when its turn arrives, rather than
+              // racing the partial unique index for an unexplained SQL defect.
+              yield* sql`select id from play_group where id = ${groupId} for update`;
+              // A proposal may cover only a real prefix of this world's
+              // Chronicle. Zero is the exact boundary for an empty world.
+              if (lastWorldSeq > 0) {
+                const boundary = yield* sql<{ readonly group_seq: string }>`
+                  select group_seq from group_history_entry
+                  where group_id = ${groupId} and group_seq = ${lastWorldSeq}
+                `;
+                if (boundary.length === 0) {
+                  return yield* new NotFound({ resource: "shared_world_history", id: groupId });
+                }
+              }
+              yield* sql`
+                update group_history_summary
+                set status = 'superseded', updated_at = now()
+                where group_id = ${groupId} and status = 'accepted'
+              `;
+              const rows = yield* sql<SummaryRow>`
+                insert into group_history_summary
+                  (group_id, status, last_group_seq, text, origin, assistant_turn_id,
+                   accepted_by_account_id, accepted_at)
+                values (${groupId}, 'accepted', ${lastWorldSeq}, ${text}, 'assistant',
+                        ${from.assistantTurnId}, ${actor.accountId}, now())
+                returning *
+              `;
+              return toSummary(rows[0]!);
             }),
           ),
 
