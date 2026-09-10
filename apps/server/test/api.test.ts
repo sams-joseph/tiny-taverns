@@ -166,18 +166,35 @@ describe("campaign, session, character and note CRUD", () => {
           params: { campaignId: campaign.id },
           payload: { worldId: world.id },
         });
+        const destination = yield* client.sharedWorlds.create({
+          payload: { name: "The New Atlas of Roads" },
+        });
+        const moved = yield* client.campaigns.moveSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: { worldId: destination.id },
+        });
         const disconnected = yield* client.campaigns.disconnectSharedWorld({
           params: { campaignId: campaign.id },
           payload: {},
         });
         const campaigns = yield* client.me.campaigns();
         const directory = yield* client.sharedWorlds.campaigns({ params: { worldId: world.id } });
-        return { world, campaign, connected, disconnected, campaigns, directory };
+        return {
+          world,
+          destination,
+          campaign,
+          connected,
+          moved,
+          disconnected,
+          campaigns,
+          directory,
+        };
       }).pipe(Effect.orDie),
     );
 
     expect(seen.connected.id).toBe(seen.world.id);
-    expect(seen.disconnected.contextId).not.toBe(seen.world.id);
+    expect(seen.moved.id).toBe(seen.destination.id);
+    expect(seen.disconnected.contextId).not.toBe(seen.destination.id);
     expect(
       seen.campaigns.find((membership) => membership.campaign.id === seen.campaign.id)?.sharedWorld,
     ).toBeNull();

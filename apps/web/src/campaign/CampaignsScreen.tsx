@@ -48,11 +48,13 @@ function CampaignRow({
   world,
   onConnect,
   onDisconnect,
+  onMove,
 }: {
   readonly membership: CampaignMembership;
   readonly world: CampaignSharedWorld | null;
   readonly onConnect: (() => void) | undefined;
   readonly onDisconnect: (() => void) | undefined;
+  readonly onMove: (() => void) | undefined;
 }) {
   const campaign = membership.campaign;
   return (
@@ -96,6 +98,11 @@ function CampaignRow({
                 Make standalone
               </Button>
             )}
+            {onMove !== undefined && (
+              <Button variant="ghost" size="sm" onClick={onMove}>
+                Move to another Shared World
+              </Button>
+            )}
           </>
         ) : (
           onConnect !== undefined && (
@@ -117,6 +124,102 @@ function CampaignRow({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function MoveSharedWorldDialog({
+  membership,
+  worlds,
+  onClose,
+}: {
+  readonly membership: CampaignMembership;
+  readonly worlds: ReadonlyArray<SharedWorldMembership>;
+  readonly onClose: () => void;
+}) {
+  const fetchCredential = useCredential();
+  const invalidate = useInvalidate();
+  const navigate = useNavigate();
+  const [target, setTarget] = useState(worlds[0]?.sharedWorld.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const source = membership.sharedWorld!;
+
+  const move = async () => {
+    const destination = worlds.find(
+      (candidate) => candidate.sharedWorld.id === target,
+    )?.sharedWorld;
+    if (destination === undefined) return;
+    setBusy(true);
+    setError(undefined);
+    const token = await fetchCredential();
+    const result = await runApiResult(
+      (client) =>
+        client.campaigns.moveSharedWorld({
+          params: { campaignId: membership.campaign.id },
+          payload: { worldId: destination.id },
+        }),
+      token,
+    );
+    setBusy(false);
+    if (Result.isFailure(result)) {
+      setError("That did not save. Try it again.");
+      return;
+    }
+    invalidate([
+      reads.myCampaigns,
+      reads.sharedWorld(source.id),
+      reads.sharedWorld(destination.id),
+    ]);
+    onClose();
+    await navigate({ to: "/worlds/$worldId", params: { worldId: destination.id } });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Move campaign to another Shared World">
+        <DialogHeader>
+          <DialogTitle>Move {membership.campaign.name}?</DialogTitle>
+          <DialogDescription>
+            Participants join the destination Shared World, while everyone remains a member of
+            {` ${source.name}`}. History already accepted there stays there. The campaign keeps its
+            content, invitations, and Hob conversations, but switches to the destination world's
+            Library shares; existing encounter instances remain.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 px-gutter py-3">
+          <Select value={target} onValueChange={(value) => setTarget(String(value))}>
+            <SelectTrigger aria-label="Destination Shared World" className="min-w-56">
+              <SelectValue>
+                {(value) =>
+                  worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
+                    .name ?? "Choose a Shared World"
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {worlds.map(({ sharedWorld }) => (
+                <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
+                  {sharedWorld.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {error !== undefined && (
+            <p role="alert" className="text-body-s leading-body text-danger">
+              {error}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={busy || target === ""} onClick={() => void move()}>
+            {busy ? "Moving…" : "Move campaign"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -451,6 +554,7 @@ export function CampaignsScreen() {
   const [shelfOpen, setShelfOpen] = useState(false);
   const [connecting, setConnecting] = useState<CampaignMembership | undefined>();
   const [disconnecting, setDisconnecting] = useState<CampaignMembership | undefined>();
+  const [moving, setMoving] = useState<CampaignMembership | undefined>();
   const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
@@ -494,6 +598,16 @@ export function CampaignsScreen() {
                         ? () => setDisconnecting(membership)
                         : undefined
                     }
+                    onMove={
+                      membership.relation === "creator" &&
+                      membership.sharedWorld !== null &&
+                      worlds.some(
+                        (world) =>
+                          world.isOwner && world.sharedWorld.id !== membership.sharedWorld?.id,
+                      )
+                        ? () => setMoving(membership)
+                        : undefined
+                    }
                   />
                 ))}
               </div>
@@ -524,6 +638,15 @@ export function CampaignsScreen() {
         <DisconnectSharedWorldDialog
           membership={disconnecting}
           onClose={() => setDisconnecting(undefined)}
+        />
+      )}
+      {moving !== undefined && moving.sharedWorld !== null && (
+        <MoveSharedWorldDialog
+          membership={moving}
+          worlds={worlds.filter(
+            (world) => world.isOwner && world.sharedWorld.id !== moving.sharedWorld?.id,
+          )}
+          onClose={() => setMoving(undefined)}
         />
       )}
     </AppShell>

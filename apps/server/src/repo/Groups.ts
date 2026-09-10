@@ -163,6 +163,11 @@ export class Groups extends Context.Service<
       creator: CampaignCreatorActor,
       worldId: SharedWorldId,
     ) => Effect.Effect<SharedWorld, NotFound>;
+    /** Moves a connected campaign directly into another owned Shared World. */
+    readonly move: (
+      creator: CampaignCreatorActor,
+      worldId: SharedWorldId,
+    ) => Effect.Effect<SharedWorld, NotFound>;
     readonly update: (
       id: SharedWorldId,
       patch: SharedWorldUpdate,
@@ -317,6 +322,53 @@ export class Groups extends Context.Service<
                       select 1 from campaign where campaign.group_id = play_group.id
                     )
                 `;
+
+                return toGroup(destinations[0]!);
+              }),
+            ),
+          ),
+
+        move: (creator, worldId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const destinations = yield* sql<GroupRow>`
+                  select destination.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  cross join play_group as destination
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.is_shared_world
+                    and destination.id = ${worldId}
+                    and destination.id <> source.id
+                    and destination.owner_account_id = ${creator.actor.accountId}
+                    and destination.is_shared_world
+                    and destination.archived_at is null
+                  for update of campaign, source, destination
+                `;
+                if (destinations.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id: worldId });
+                }
+
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, worldId, accountId),
+                  { discard: true },
+                );
+
+                const moved = yield* sql<{ readonly id: CampaignId }>`
+                  update campaign
+                  set group_id = ${worldId}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                  returning campaign.id
+                `;
+                if (moved.length === 0) {
+                  return yield* new NotFound({ resource: "campaign", id: creator.campaign });
+                }
 
                 return toGroup(destinations[0]!);
               }),

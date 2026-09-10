@@ -105,7 +105,17 @@ reset after pulling the rewritten baseline migrations.
   the former world with their campaign provenance, and campaign content and Hob
   threads keep their ids. World-shared Library sources stop being usable while
   already-minted instances stand. Disconnecting an already-standalone campaign
-  answers `NotFound`; a direct world-to-world move remains intentionally absent.
+  answers `NotFound`.
+- A connected campaign can move directly to another Shared World its creator
+  owns with `POST /campaigns/:campaignId/shared-world/move`. This is one atomic
+  move rather than a public disconnect/connect composition: live participants
+  are admitted to the destination before memberships, seats and invitations
+  cascade with the campaign. The source world retains its memberships and
+  Chronicle copies; destination Library shares become usable and source shares
+  stop being usable, while existing instances stand. The source need not be
+  owned by the campaign creator, so another owner's world cannot trap their
+  table. A standalone source, the current world, another owner's destination or
+  an archived destination answers `NotFound`.
 - `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen

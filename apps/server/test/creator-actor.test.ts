@@ -461,8 +461,9 @@ describe("the scope, counted", () => {
     // revoke. Their authority follows the campaign, not its hidden group.
     // Promoting a campaign's private context adds the eighty-third seam;
     // connecting one to an owned Shared World adds the eighty-fourth, and
-    // disconnecting it again is the eighty-fifth.
-    expect(gated).toBe(85);
+    // disconnecting it again is the eighty-fifth. Moving directly between two
+    // Shared Worlds adds the eighty-sixth.
+    expect(gated).toBe(86);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

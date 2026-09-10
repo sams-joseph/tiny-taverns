@@ -125,6 +125,52 @@ describe("the campaign-first home", () => {
     await waitFor(() => expect(bodyOf(server, "POST", "/shared-world/disconnect")).toEqual({}));
   });
 
+  it("moves a connected campaign directly to another owned Shared World", async () => {
+    const destination = {
+      ...sharedWorldDetails,
+      id: "5a1e2b3c-0000-4000-8000-00000000aaa3",
+      name: "The Second Atlas",
+    };
+    const somebodyElsesWorld = {
+      ...sharedWorldDetails,
+      id: "5a1e2b3c-0000-4000-8000-00000000aaa4",
+      name: "Somebody Else's Atlas",
+      ownerAccountId: "5a1e2b3c-0000-4000-8000-0000000000ff",
+    };
+    server.routes.set("GET /worlds", {
+      status: 200,
+      body: [
+        { sharedWorld: sharedWorldDetails, isOwner: true, joinedAt: campaign.createdAt },
+        { sharedWorld: destination, isOwner: true, joinedAt: campaign.createdAt },
+        { sharedWorld: somebodyElsesWorld, isOwner: false, joinedAt: campaign.createdAt },
+      ],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/shared-world/move`, {
+      status: 200,
+      body: destination,
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Move to another Shared World" }),
+    );
+    expect(screen.getByText(/Participants join the destination Shared World/)).toBeTruthy();
+    expect(screen.getByText(/everyone remains a member/)).toBeTruthy();
+    expect(screen.getByText(/History already accepted there stays there/)).toBeTruthy();
+    expect(screen.getByText(/switches to the destination world's Library shares/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("combobox", { name: "Destination Shared World" }));
+    expect(await screen.findByRole("option", { name: destination.name })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: sharedWorldDetails.name })).toBeNull();
+    expect(screen.queryByRole("option", { name: somebodyElsesWorld.name })).toBeNull();
+    await userEvent.click(screen.getByRole("option", { name: destination.name }));
+    await userEvent.click(screen.getByRole("button", { name: "Move campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/shared-world/move")).toEqual({ worldId: destination.id }),
+    );
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${destination.id}`));
+  });
+
   it("creates from one name and opens the campaign", async () => {
     server.routes.set("POST /campaigns", { status: 200, body: campaign });
     await renderCampaigns("/campaigns", mintingSession());

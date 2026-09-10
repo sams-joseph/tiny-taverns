@@ -277,6 +277,13 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       success: Campaign,
       error: NotFound,
     }),
+    /** Moves a connected campaign directly into another owned Shared World. */
+    HttpApiEndpoint.post("moveSharedWorld", "/:campaignId/shared-world/move", {
+      params: { campaignId: CampaignId },
+      payload: SharedWorldConnection,
+      success: SharedWorld,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("findById", "/:campaignId", {
       params: { campaignId: CampaignId },
       success: Campaign,

@@ -519,6 +519,139 @@ describe("the group's own lifecycle", () => {
     if (refused._tag === "Failure") expect(refused.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 
+  it("moves a campaign directly between Shared Worlds without moving old history", async () => {
+    const journey = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const invites = yield* Invites;
+        const sql = yield* SqlClient.SqlClient;
+        const sourceOwner = yield* anAccount("Old World Keeper");
+        const creator = yield* anAccount("World Mover");
+        const source = yield* as(sourceOwner)(groups.create({ name: "The First Atlas" }));
+        yield* admitToGroup(sql, source.id, creator.accountId);
+        const campaign = yield* as(creator)(
+          campaigns.create(source.id, { name: "The Walking Road", visibility: "shared" }),
+        );
+        const player = yield* aPlayerAt(campaign.id, "Atlas Bearer");
+        yield* sql`
+          insert into campaign_character
+            (campaign_id, group_id, account_id, display_name, visibility)
+          values
+            (${campaign.id}, ${source.id}, ${player.accountId}, 'Atlas Bearer', 'shared')
+        `;
+        const proof = yield* asDm(creator, campaign.id);
+        const waiting = yield* invites.createForCampaign(proof, { label: "New traveller" });
+        const history = yield* sql<{ readonly id: string }>`
+          insert into group_history_entry
+            (group_id, campaign_id, source_kind, body, origin, created_by_account_id)
+          values
+            (${source.id}, ${campaign.id}, 'manual', 'The first atlas remembers.', 'authored', ${creator.accountId})
+          returning id
+        `;
+        const destination = yield* as(creator)(groups.create({ name: "The Second Atlas" }));
+
+        const moved = yield* groups.move(proof, destination.id);
+        const playerCampaign = yield* as(player)(campaigns.findById(campaign.id));
+        const sourceDirectory = yield* as(sourceOwner)(groups.campaigns(source.id));
+        const destinationDirectory = yield* as(creator)(groups.campaigns(destination.id));
+        const sourceRoster = yield* as(sourceOwner)(groups.members(source.id));
+        const movedRows = yield* sql<{ readonly kind: string; readonly group_id: string }>`
+          select 'member' as kind, group_id from campaign_member where campaign_id = ${campaign.id}
+          union all
+          select 'invite' as kind, group_id from group_invite where id = ${waiting.invite.id}
+          union all
+          select 'seat' as kind, group_id from campaign_character where campaign_id = ${campaign.id}
+        `;
+        const historyAfter = yield* sql<{
+          readonly group_id: string;
+          readonly campaign_id: string | null;
+        }>`
+          select group_id, campaign_id from group_history_entry where id = ${history[0]!.id}
+        `;
+        const newcomer = yield* anAccount("New traveller");
+        const redeemed = yield* as(newcomer)(invites.redeem(waiting.token));
+        const destinationRoster = yield* as(creator)(groups.members(destination.id));
+
+        return {
+          campaign,
+          source,
+          destination,
+          moved,
+          playerCampaign,
+          sourceDirectory,
+          destinationDirectory,
+          sourceRoster,
+          destinationRoster,
+          movedRows,
+          historyAfter,
+          redeemed,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(journey.moved.id).toBe(journey.destination.id);
+    expect(journey.playerCampaign.contextId).toBe(journey.destination.id);
+    expect(journey.sourceDirectory.map((row) => row.id)).not.toContain(journey.campaign.id);
+    expect(journey.destinationDirectory.map((row) => row.id)).toContain(journey.campaign.id);
+    expect(journey.sourceRoster.map((member) => member.name).sort()).toEqual([
+      "Atlas Bearer",
+      "Old World Keeper",
+      "World Mover",
+    ]);
+    expect(journey.destinationRoster.map((member) => member.name).sort()).toEqual([
+      "Atlas Bearer",
+      "New traveller",
+      "World Mover",
+    ]);
+    expect(journey.movedRows.every((row) => row.group_id === journey.destination.id)).toBe(true);
+    expect(journey.movedRows.map((row) => row.kind).sort()).toEqual([
+      "invite",
+      "member",
+      "member",
+      "seat",
+    ]);
+    expect(journey.historyAfter).toEqual([
+      { group_id: journey.source.id, campaign_id: journey.campaign.id },
+    ]);
+    expect(journey.redeemed.sharedWorld).toEqual({
+      id: journey.destination.id,
+      name: journey.destination.name,
+    });
+  }, 60_000);
+
+  it("moves neither a standalone campaign, to its current world, nor to another owner's world", async () => {
+    const refusals = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const founder = yield* anAccount("Move Boundary Keeper");
+        const standalone = yield* as(founder)(
+          campaigns.createStandalone({ name: "The Unmoving Road" }),
+        );
+        const ownedWorld = yield* as(founder)(groups.create({ name: "A Movable World" }));
+        const standaloneProof = yield* asDm(founder, standalone.id);
+        const fromStandalone = yield* groups
+          .move(standaloneProof, ownedWorld.id)
+          .pipe(Effect.result);
+        const connected = yield* as(founder)(
+          campaigns.create(ownedWorld.id, { name: "A Worldly Road" }),
+        );
+        const connectedProof = yield* asDm(founder, connected.id);
+        const toCurrent = yield* groups.move(connectedProof, ownedWorld.id).pipe(Effect.result);
+        const toAnotherOwner = yield* groups
+          .move(connectedProof, fixture.sharedWorld.id)
+          .pipe(Effect.result);
+        return { fromStandalone, toCurrent, toAnotherOwner };
+      }).pipe(Effect.orDie),
+    );
+
+    for (const refusal of [refusals.fromStandalone, refusals.toCurrent, refusals.toAnotherOwner]) {
+      expect(refusal._tag).toBe("Failure");
+      if (refusal._tag === "Failure") expect(refusal.failure).toBeInstanceOf(NotFound);
+    }
+  }, 60_000);
+
   it("connects neither an existing Shared World campaign nor a campaign to another owner's world", async () => {
     const refusals = await runtime.runPromise(
       Effect.gen(function* () {
