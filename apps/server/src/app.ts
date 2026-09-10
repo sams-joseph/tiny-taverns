@@ -8,7 +8,7 @@ import type { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";
-import { outputTokenConfig } from "./assistant/modelConfig.js";
+import { chatCompletionConfig } from "./assistant/modelConfig.js";
 import { AuthorizationLive } from "./Authorization.js";
 import { ClerkIdentityProvider } from "./ClerkIdentityProvider.js";
 import {
@@ -113,7 +113,9 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
  * credential or the output budget. The portable adapter emits `max_tokens`,
  * so direct OpenAI requests use its custom-property escape hatch to send the
  * current `max_completion_tokens`; compatible local endpoints keep the legacy
- * mapping they implement.
+ * mapping they implement. The same config seam disables Luna reasoning on
+ * direct OpenAI requests because Chat Completions cannot combine it with Hob's
+ * required function tools.
  */
 const languageModelLayer = (options: {
   readonly apiUrl: string;
@@ -123,7 +125,7 @@ const languageModelLayer = (options: {
 }) =>
   OpenAiLanguageModel.layer({
     model: options.model,
-    config: outputTokenConfig(options.apiUrl, options.maxTokens),
+    config: chatCompletionConfig(options.apiUrl, options.model, options.maxTokens),
   }).pipe(
     Layer.provide(
       OpenAiClient.layer({ apiUrl: options.apiUrl, apiKey: options.apiKey }).pipe(

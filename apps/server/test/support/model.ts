@@ -1,5 +1,5 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
-import { outputTokenConfig } from "../../src/assistant/modelConfig.js";
+import { chatCompletionConfig } from "../../src/assistant/modelConfig.js";
 import { Effect, Layer } from "effect";
 import type { LanguageModel } from "effect/unstable/ai";
 import {
@@ -59,6 +59,7 @@ export interface ChatRequest {
   readonly model?: string;
   readonly max_tokens?: number;
   readonly max_completion_tokens?: number;
+  readonly reasoning_effort?: string;
   readonly messages?: ReadonlyArray<Record<string, unknown>>;
   readonly tools?: ReadonlyArray<Record<string, unknown>>;
   readonly [key: string]: unknown;
@@ -208,7 +209,11 @@ export const scriptedModel = (options: {
       model: options.model,
       // The same endpoint-aware shape production uses, so both token-field
       // assertions exercise the adapter's real request conversion.
-      config: outputTokenConfig(options.apiUrl ?? "http://model.invalid/v1", options.maxTokens),
+      config: chatCompletionConfig(
+        options.apiUrl ?? "http://model.invalid/v1",
+        options.model,
+        options.maxTokens,
+      ),
     }).pipe(
       Layer.provide(
         OpenAiClient.layer({ apiUrl: options.apiUrl ?? "http://model.invalid/v1" }).pipe(
