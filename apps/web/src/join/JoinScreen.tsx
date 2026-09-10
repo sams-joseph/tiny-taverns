@@ -48,20 +48,48 @@ import { SaveFailure } from "../ui/form";
 
 /** What a person is told once they are in. */
 function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
+  if (redeemed.kind === "sharedWorld") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="circle-check" size={18} className="text-accent" />
+            You joined {redeemed.sharedWorld.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-start gap-4">
+          <p className="max-w-measure text-body-s leading-body text-muted-foreground">
+            This older invitation welcomed you to the Shared World. Its Chronicle and campaigns are
+            ready whenever you are.
+          </p>
+          <Button
+            nativeButton={false}
+            render={<Link to="/worlds/$groupId" params={{ groupId: redeemed.sharedWorld.id }} />}
+          >
+            Open {redeemed.sharedWorld.name}
+            <Icon name="chevron-right" size={15} />
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="circle-check" size={18} className="text-accent" />
-          You are in {redeemed.groupName}
+          Your seat at {redeemed.campaignName} is ready
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-4">
-        {redeemed.campaignId !== null && redeemed.shared ? (
+        {redeemed.shared ? (
           <>
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-              The invitation also seats you at {redeemed.campaignName ?? "a table"}. Whatever its
-              creator has shared is yours to read; everything else stays theirs.
+              Whatever its creator has shared is yours to read; everything else stays theirs.
+              {redeemed.sharedWorld === null
+                ? ""
+                : ` This campaign is part of the ${redeemed.sharedWorld.name} Shared World.`}
             </p>
             <Button
               nativeButton={false}
@@ -72,29 +100,20 @@ function Joined({ redeemed }: { readonly redeemed: InviteRedeemed }) {
                 <Link to="/campaigns/$campaignId" params={{ campaignId: redeemed.campaignId }} />
               }
             >
-              Open {redeemed.campaignName ?? "the table"}
-              <Icon name="chevron-right" size={15} />
-            </Button>
-          </>
-        ) : redeemed.campaignId !== null ? (
-          <>
-            {/* Not a failure, and it must not read as one: the creator simply
-                has not opened the table yet. Saying so here is the difference
-                between "they have not shared it" and "this is broken". */}
-            <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-              Your seat at {redeemed.campaignName ?? "the table"} is kept, and it fills in the
-              moment its creator shares the campaign. The group is yours to see now.
-            </p>
-            <Button variant="secondary" nativeButton={false} render={<Link to="/campaigns" />}>
-              Your campaigns
+              Open {redeemed.campaignName}
               <Icon name="chevron-right" size={15} />
             </Button>
           </>
         ) : (
           <>
+            {/* Not a failure, and it must not read as one: the creator simply
+                has not opened the table yet. Saying so here is the difference
+                between "they have not shared it" and "this is broken". */}
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-              You are a member now: the group’s campaigns and shared history are yours to see, and a
-              campaign’s own content follows when its creator seats you at it.
+              Your seat is kept, and the campaign fills in the moment its creator shares it.
+              {redeemed.sharedWorld === null
+                ? ""
+                : ` It belongs to the ${redeemed.sharedWorld.name} Shared World, which you can explore now.`}
             </p>
             <Button variant="secondary" nativeButton={false} render={<Link to="/campaigns" />}>
               Your campaigns
@@ -182,14 +201,23 @@ export function JoinScreen() {
         {preview !== undefined && redeemed === undefined && (
           <Card>
             <CardHeader>
-              <CardTitle>{preview.campaignName ?? preview.groupName}</CardTitle>
+              <CardTitle>
+                {preview.kind === "campaign" ? preview.campaignName : preview.sharedWorldName}
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-start gap-4">
               <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-                <span className="text-heading">{preview.ownerName}</span> has invited you to join{" "}
-                {preview.campaignName === null
-                  ? `${preview.groupName} — the group their campaigns and shared history live in.`
-                  : `${preview.groupName}, with a seat at ${preview.campaignName}. Taking it gives you whatever its creator chooses to share — and nothing else.`}
+                <span className="text-heading">
+                  {preview.kind === "campaign" ? preview.creatorName : preview.inviterName}
+                </span>{" "}
+                has invited you to join{" "}
+                {preview.kind === "campaign"
+                  ? `${preview.campaignName}. Taking the seat gives you whatever its creator chooses to share — and nothing else.${
+                      preview.sharedWorldName === null
+                        ? ""
+                        : ` It is part of the ${preview.sharedWorldName} Shared World.`
+                    }`
+                  : `${preview.sharedWorldName}, a Shared World where campaigns and their Chronicle stay connected.`}
               </p>
               <p className="flex items-center gap-1.5 text-caption leading-body text-faint">
                 <Icon name="clock" size={14} />

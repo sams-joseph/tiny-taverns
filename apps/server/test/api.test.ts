@@ -980,13 +980,17 @@ describe("inviting a player, over the wire", () => {
     expect(seen.issued.token).not.toBe("");
 
     // Previewed with no `Authorization` header at all.
-    expect(seen.preview.campaignName).toBe("The Ferry at Dusk");
-    expect(seen.preview.ownerName).toBe("Jo");
+    expect(seen.preview.kind).toBe("campaign");
+    expect(seen.preview.kind === "campaign" && seen.preview.campaignName).toBe("The Ferry at Dusk");
+    expect(seen.preview.kind === "campaign" && seen.preview.creatorName).toBe("Jo");
 
     // Joined. The account went from no tables to exactly this one, as a player.
     expect(seen.before).toEqual([]);
-    expect(seen.redeemed.campaignName).toBe("The Ferry at Dusk");
-    expect(seen.redeemed.shared).toBe(true);
+    expect(seen.redeemed.kind).toBe("campaign");
+    expect(seen.redeemed.kind === "campaign" && seen.redeemed.campaignName).toBe(
+      "The Ferry at Dusk",
+    );
+    expect(seen.redeemed.kind === "campaign" && seen.redeemed.shared).toBe(true);
     expect(seen.after.map((row) => [row.campaign.name, row.relation])).toEqual([
       ["The Ferry at Dusk", "player"],
     ]);

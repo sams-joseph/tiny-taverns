@@ -3,14 +3,19 @@ import {
   type CampaignId,
   type CampaignInviteCreate,
   CampaignInvite,
+  CampaignInvitePreview,
+  CampaignInviteRedeemed,
   type CampaignInviteId,
+  CampaignSharedWorld,
   CurrentActor,
   type GroupId,
-  InvitePreview,
-  InviteRedeemed,
+  type InvitePreview,
+  type InviteRedeemed,
   type InviteStatus,
   IssuedInvite,
   NotFound,
+  SharedWorldInvitePreview,
+  SharedWorldInviteRedeemed,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -161,18 +166,28 @@ export class Invites extends Context.Service<
       const namedByInvite = (groupId: GroupId, campaignId: CampaignId | null) =>
         Effect.map(
           sql<{
-            readonly group_name: string;
+            readonly shared_world_id: GroupId | null;
+            readonly shared_world_name: string | null;
             readonly owner_name: string;
+            readonly campaign_id: CampaignId | null;
             readonly campaign_name: string | null;
+            readonly creator_name: string | null;
             readonly campaign_shared: boolean | null;
           }>`
-            select play_group.name as group_name,
-                   account.name as owner_name,
+            select case when play_group.is_shared_world then play_group.id end
+                     as shared_world_id,
+                   case when play_group.is_shared_world then play_group.name end
+                     as shared_world_name,
+                   group_owner.name as owner_name,
+                   campaign.id as campaign_id,
                    campaign.name as campaign_name,
+                   campaign_creator.name as creator_name,
                    (campaign.visibility = 'shared') as campaign_shared
             from play_group
-            join account on account.id = play_group.owner_account_id
+            join account as group_owner on group_owner.id = play_group.owner_account_id
             left join campaign on campaign.id = ${campaignId}
+            left join account as campaign_creator
+              on campaign_creator.id = campaign.creator_account_id
             where play_group.id = ${groupId}
           `,
           (rows) => rows[0],
@@ -292,12 +307,29 @@ export class Invites extends Context.Service<
                 return yield* noSuchInvitation();
               }
 
-              return new InvitePreview({
-                groupName: named.group_name,
-                ownerName: named.owner_name,
-                campaignName: named.campaign_name,
-                expiresAt: DateTime.fromDateUnsafe(invite.expires_at),
-              });
+              const expiresAt = DateTime.fromDateUnsafe(invite.expires_at);
+              if (
+                named.campaign_id !== null &&
+                named.campaign_name !== null &&
+                named.creator_name !== null
+              ) {
+                return new CampaignInvitePreview({
+                  kind: "campaign",
+                  campaignName: named.campaign_name,
+                  creatorName: named.creator_name,
+                  sharedWorldName: named.shared_world_name,
+                  expiresAt,
+                });
+              }
+              if (named.shared_world_name !== null) {
+                return new SharedWorldInvitePreview({
+                  kind: "sharedWorld",
+                  sharedWorldName: named.shared_world_name,
+                  inviterName: named.owner_name,
+                  expiresAt,
+                });
+              }
+              return yield* noSuchInvitation();
             }),
           ),
 
@@ -341,16 +373,36 @@ export class Invites extends Context.Service<
                 const named = yield* namedByInvite(invite.group_id, invite.campaign_id);
                 if (named === undefined) return yield* noSuchInvitation();
 
-                return new InviteRedeemed({
-                  groupId: invite.group_id,
-                  groupName: named.group_name,
-                  campaignId: invite.campaign_id,
-                  campaignName: named.campaign_name,
-                  // The ordinary answer is `false`, and saying so here is what
-                  // keeps "the creator has not shared this table yet" from
-                  // reading as "this product is broken".
-                  shared: named.campaign_shared === true,
-                });
+                const sharedWorld =
+                  named.shared_world_id === null || named.shared_world_name === null
+                    ? null
+                    : new CampaignSharedWorld({
+                        id: named.shared_world_id,
+                        name: named.shared_world_name,
+                      });
+                if (
+                  named.campaign_id !== null &&
+                  named.campaign_name !== null &&
+                  named.creator_name !== null
+                ) {
+                  return new CampaignInviteRedeemed({
+                    kind: "campaign",
+                    campaignId: named.campaign_id,
+                    campaignName: named.campaign_name,
+                    sharedWorld,
+                    // The ordinary answer is `false`, and saying so here is what
+                    // keeps "the creator has not shared this table yet" from
+                    // reading as "this product is broken".
+                    shared: named.campaign_shared === true,
+                  });
+                }
+                if (sharedWorld !== null) {
+                  return new SharedWorldInviteRedeemed({
+                    kind: "sharedWorld",
+                    sharedWorld,
+                  });
+                }
+                return yield* noSuchInvitation();
               }),
             ),
           ),

@@ -96,6 +96,11 @@ ordinary campaign work must not require navigating or owning that container.
   its `campaignId` is required. Nullable campaign ids exist only on the private
   repository row so legacy group-only tokens can expire or redeem; `group_invite`
   and `group_id` remain persistence names, not product governance concepts.
+- Token preview and redemption are tagged campaign-first results: the campaign
+  variant names its creator (not the Shared World owner), requires the campaign
+  id/name, and carries an optional `sharedWorld` reference only when its backing
+  context is explicit. The `sharedWorld` variant exists solely so old group-only
+  tokens remain usable without putting “group” back into the join experience.
 
 ## The group architecture of 2026-09-01: what supersedes what
 

@@ -9,7 +9,7 @@ import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Accounts } from "../src/Accounts.js";
+import { Accounts, hashToken } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";
@@ -176,7 +176,7 @@ const membershipRows = (campaignId: CampaignId) =>
   );
 
 describe("what an invitation grants", () => {
-  it("previews before there is an account, and names the group, its owner and the table", async () => {
+  it("previews before there is an account, and names the campaign and its creator", async () => {
     // The whole reason the preview exists: the person reading it has no
     // credential, so this is the one read in the product outside `health` with
     // no actor above it. What it discloses is bounded — a name, a name and a
@@ -186,9 +186,10 @@ describe("what an invitation grants", () => {
       Effect.flatMap(Invites, (invites) => invites.preview(issued.token)).pipe(Effect.orDie),
     );
 
-    expect(preview.groupName).toBe("The Salt Road group");
-    expect(preview.ownerName).toBe("Ada");
-    expect(preview.campaignName).toBe("The Salt Road");
+    expect(preview.kind).toBe("campaign");
+    expect(preview.kind === "campaign" && preview.creatorName).toBe("Ada");
+    expect(preview.kind === "campaign" && preview.campaignName).toBe("The Salt Road");
+    expect(preview.kind === "campaign" && preview.sharedWorldName).toBe("The Salt Road group");
     // Server-set and never asked for: an eternal invitation is not expressible.
     expect(DateTime.toEpochMillis(preview.expiresAt)).toBeGreaterThan(Date.now());
   }, 60_000);
@@ -197,9 +198,10 @@ describe("what an invitation grants", () => {
     const issued = await mint(fixture.campaign, "Pim");
     const { redeemed } = await joinAs("Pim", issued.token, fixture.campaign.id);
 
-    expect(redeemed.campaignName).toBe("The Salt Road");
-    expect(redeemed.campaignId).toBe(fixture.campaign.id);
-    expect(redeemed.shared).toBe(true);
+    expect(redeemed.kind).toBe("campaign");
+    expect(redeemed.kind === "campaign" && redeemed.campaignName).toBe("The Salt Road");
+    expect(redeemed.kind === "campaign" && redeemed.campaignId).toBe(fixture.campaign.id);
+    expect(redeemed.kind === "campaign" && redeemed.shared).toBe(true);
 
     const rows = await membershipRows(fixture.campaign.id);
     const pim = rows.find((row) => row.name === "Pim");
@@ -224,6 +226,79 @@ describe("what an invitation grants", () => {
     expect(here.map((row) => row.name)).not.toContain("Ori");
     expect(there.find((row) => row.name === "Ori")?.is_creator).toBe(false);
     expect(account.scope).toEqual({ _tag: "campaign", campaignId: fixture.otherTable.id });
+  }, 60_000);
+
+  it("names the campaign creator rather than the Shared World owner", async () => {
+    const preview = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const invites = yield* Invites;
+        const creator = yield* aGroupMemberAt(fixture.campaign.id, "Mara");
+        const campaign = yield* as(creator)(
+          campaigns.create(fixture.campaign.groupId, { name: "Mara's Crossing" }),
+        );
+        const proof = yield* asDm(creator, campaign.id);
+        const issued = yield* invites.createForCampaign(proof, { label: "friend" });
+        return yield* invites.preview(issued.token);
+      }).pipe(Effect.orDie),
+    );
+
+    expect(preview.kind).toBe("campaign");
+    expect(preview.kind === "campaign" && preview.creatorName).toBe("Mara");
+    expect(preview.kind === "campaign" && preview.sharedWorldName).toBe("The Salt Road group");
+  }, 60_000);
+
+  it("does not disclose a standalone campaign's backing context", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const invites = yield* Invites;
+        const creator = yield* anAccount("Standalone creator");
+        const campaign = yield* as(creator)(
+          campaigns.createStandalone({ name: "One Quiet Table" }),
+        );
+        const proof = yield* asDm(creator, campaign.id);
+        const issued = yield* invites.createForCampaign(proof, { label: "guest" });
+        const preview = yield* invites.preview(issued.token);
+        const guest = yield* anAccount("Standalone guest");
+        const redeemed = yield* as(guest)(invites.redeem(issued.token));
+        return { preview, redeemed };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(seen.preview.kind).toBe("campaign");
+    expect(seen.preview.kind === "campaign" && seen.preview.sharedWorldName).toBeNull();
+    expect(seen.redeemed.kind).toBe("campaign");
+    expect(seen.redeemed.kind === "campaign" && seen.redeemed.sharedWorld).toBeNull();
+  }, 60_000);
+
+  it("keeps old group-only tokens as explicit Shared World invitations", async () => {
+    const token = "legacy-shared-world-token";
+    const preview = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const invites = yield* Invites;
+        yield* sql`
+          insert into group_invite (group_id, token_hash, label, expires_at)
+          values (${fixture.campaign.groupId}, ${hashToken(token)}, 'old link', now() + interval '1 day')
+        `;
+        return yield* invites.preview(token);
+      }).pipe(Effect.orDie),
+    );
+    const redeemed = await runtime.runPromise(
+      Effect.gen(function* () {
+        const invites = yield* Invites;
+        const account = yield* anAccount("Legacy guest");
+        return yield* as(account)(invites.redeem(token));
+      }).pipe(Effect.orDie),
+    );
+
+    expect(preview.kind).toBe("sharedWorld");
+    expect(preview.kind === "sharedWorld" && preview.sharedWorldName).toBe("The Salt Road group");
+    expect(redeemed.kind).toBe("sharedWorld");
+    expect(redeemed.kind === "sharedWorld" && redeemed.sharedWorld.name).toBe(
+      "The Salt Road group",
+    );
   }, 60_000);
 
   it("is the campaign creator's act — a member cannot manage invitations", async () => {
@@ -406,7 +481,11 @@ describe("the lifetime rules", () => {
     );
 
     expect(again._tag).toBe("Success");
-    expect(again._tag === "Success" && again.success.campaignId).toBe(redeemed.campaignId);
+    expect(
+      again._tag === "Success" && again.success.kind === "campaign"
+        ? again.success.campaignId
+        : undefined,
+    ).toBe(redeemed.kind === "campaign" ? redeemed.campaignId : undefined);
     expect(second._tag).toBe("Failure");
     expect(second._tag === "Failure" && second.failure).toBeInstanceOf(NotFound);
 
@@ -573,7 +652,7 @@ describe("the tables I am at", () => {
       Effect.flatMap(Memberships, (repo) => as(player)(repo.mine("live"))).pipe(Effect.orDie),
     );
 
-    expect(redeemed.shared).toBe(false);
+    expect(redeemed.kind === "campaign" && redeemed.shared).toBe(false);
     expect(beforeSharing).toEqual([]);
     expect(afterSharing.map((row) => [row.campaign.name, row.relation])).toEqual([
       ["Salt and Sixpence", "player"],

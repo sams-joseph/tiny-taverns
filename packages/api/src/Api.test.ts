@@ -5,7 +5,7 @@ import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { Character, CharacterOwnCreate } from "./Character.js";
-import { CampaignInvite } from "./Invite.js";
+import { CampaignInvite, InvitePreview, InviteRedeemed } from "./Invite.js";
 import { CampaignCharacter, PartyJoin } from "./Party.js";
 import { Combatant, CombatantCreate } from "./Combatant.js";
 import { Creature, CreatureCreate } from "./Creature.js";
@@ -68,6 +68,47 @@ describe("the API declaration", () => {
 
     expect(decode(invitation).campaignId).toBe(invitation.campaignId);
     expect(() => decode({ ...invitation, campaignId: null })).toThrow();
+  });
+
+  it("keeps hidden groups out of campaign invitation responses", () => {
+    const decodePreview = Schema.decodeUnknownSync(InvitePreview);
+    const decodeRedeemed = Schema.decodeUnknownSync(InviteRedeemed);
+    const preview = {
+      kind: "campaign",
+      campaignName: "The Salt Road",
+      creatorName: "Ada",
+      sharedWorldName: null,
+      expiresAt: "2026-09-23T12:00:00.000Z",
+    };
+    const redeemed = {
+      kind: "campaign",
+      campaignId: "2b1f2a1e-0000-4000-8000-00000000a003",
+      campaignName: "The Salt Road",
+      sharedWorld: null,
+      shared: false,
+    };
+
+    expect(decodePreview(preview).kind).toBe("campaign");
+    expect(decodeRedeemed(redeemed).kind).toBe("campaign");
+    expect(() =>
+      decodePreview({
+        kind: "campaign",
+        groupName: "hidden",
+        ownerName: "Ada",
+        campaignName: "The Salt Road",
+        expiresAt: "2026-09-23T12:00:00.000Z",
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeRedeemed({
+        kind: "campaign",
+        groupId: "2b1f2a1e-0000-4000-8000-00000000a002",
+        groupName: "hidden",
+        campaignId: null,
+        campaignName: null,
+        shared: false,
+      }),
+    ).toThrow();
   });
 
   it("puts every campaign-scoped endpoint behind Authorization", () => {

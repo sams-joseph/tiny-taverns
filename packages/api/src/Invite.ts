@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { CampaignId, CampaignInviteId, GroupId } from "./Ids.js";
+import { CampaignSharedWorld } from "./Membership.js";
 
 /**
  * An invitation to join a campaign.
@@ -109,34 +110,62 @@ export type InviteToken = typeof InviteToken.Type;
  * A deliberate, minimal disclosure to whoever holds the capability — which is
  * the same trade the invitation itself is.
  */
-export class InvitePreview extends Schema.Class<InvitePreview>("InvitePreview")({
-  groupName: Schema.String,
-  /** The group owner's own name, so the page can say who is asking. */
-  ownerName: Schema.String,
-  /** The campaign this invitation also seats you at, when it names one. */
-  campaignName: Schema.NullOr(Schema.String),
+export class CampaignInvitePreview extends Schema.Class<CampaignInvitePreview>(
+  "CampaignInvitePreview",
+)({
+  kind: Schema.Literal("campaign"),
+  campaignName: Schema.String,
+  /** The campaign creator who minted the invitation. */
+  creatorName: Schema.String,
+  /** Null when the campaign has only its invisible standalone context. */
+  sharedWorldName: Schema.NullOr(Schema.String),
   expiresAt: Schema.DateTimeUtcFromString,
 }) {}
+
+/** Compatibility for a live group-only token minted before invitations followed campaigns. */
+export class SharedWorldInvitePreview extends Schema.Class<SharedWorldInvitePreview>(
+  "SharedWorldInvitePreview",
+)({
+  kind: Schema.Literal("sharedWorld"),
+  sharedWorldName: Schema.String,
+  inviterName: Schema.String,
+  expiresAt: Schema.DateTimeUtcFromString,
+}) {}
+
+export const InvitePreview = Schema.Union([CampaignInvitePreview, SharedWorldInvitePreview]);
+export type InvitePreview = typeof InvitePreview.Type;
 
 /**
  * What redeeming answers with.
  *
- * Deliberately not the `Group` or the `Campaign`: the id and the names are
- * what the join page needs to say "you are in The Salt Company" and to link
- * onwards.
+ * Campaign-first and deliberately narrow: enough to explain the new seat and
+ * link onwards. The backing group is absent; an explicit Shared World is an
+ * optional named destination instead.
  */
-export class InviteRedeemed extends Schema.Class<InviteRedeemed>("InviteRedeemed")({
-  groupId: GroupId,
-  groupName: Schema.String,
-  /** The campaign this invitation seated you at, when it named one. */
-  campaignId: Schema.NullOr(CampaignId),
-  campaignName: Schema.NullOr(Schema.String),
+export class CampaignInviteRedeemed extends Schema.Class<CampaignInviteRedeemed>(
+  "CampaignInviteRedeemed",
+)({
+  kind: Schema.Literal("campaign"),
+  campaignId: CampaignId,
+  campaignName: Schema.String,
+  /** Null when the campaign has only its invisible standalone context. */
+  sharedWorld: Schema.NullOr(CampaignSharedWorld),
   /**
-   * Whether that campaign is shared with its participants yet. `false` also
-   * when the invitation named no campaign. A campaign starts `dm`, so the
-   * ordinary outcome of joining is a screen with nothing on it; saying so at
-   * the moment of joining is the difference between "the creator has not
-   * shared this table yet" and "this product is broken".
+   * Whether that campaign is shared with its participants yet. A campaign
+   * starts `dm`, so the ordinary outcome of joining is a screen with nothing
+   * on it; saying so at the moment of joining is the difference between "the
+   * creator has not shared this table yet" and "this product is broken".
    */
   shared: Schema.Boolean,
 }) {}
+
+/** The successful answer for a still-live invitation from before campaign-scoped invites. */
+export class SharedWorldInviteRedeemed extends Schema.Class<SharedWorldInviteRedeemed>(
+  "SharedWorldInviteRedeemed",
+)({
+  kind: Schema.Literal("sharedWorld"),
+  sharedWorld: CampaignSharedWorld,
+}) {}
+
+export const InviteRedeemed = Schema.Union([CampaignInviteRedeemed, SharedWorldInviteRedeemed]);
+export type InviteRedeemed = typeof InviteRedeemed.Type;
