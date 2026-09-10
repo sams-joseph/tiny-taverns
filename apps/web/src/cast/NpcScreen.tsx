@@ -827,7 +827,7 @@ function KnowledgePanel({
                 <option value="note">Note</option>
                 <option value="beat">Beat</option>
                 <option value="recap">Recap</option>
-                <option value="group_history">Group history</option>
+                <option value="group_history">Shared World Chronicle</option>
               </select>
             </Field>
             <Field label="Source label" htmlFor="npc-knowledge-source-label">

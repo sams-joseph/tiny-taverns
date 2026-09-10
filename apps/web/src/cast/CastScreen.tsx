@@ -85,8 +85,8 @@ function AddNpcFromLibraryDialog({
           <DialogTitle>Add from Library</DialogTitle>
           <DialogDescription>
             Choose a reusable NPC source. Add from Library creates an independent Cast snapshot:
-            later source edits do not update it, and another creator's group-shared secrets are not
-            copied.
+            later source edits do not update it, and another creator's secrets shared through a
+            Shared World are not copied.
           </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-gutter py-3">

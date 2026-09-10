@@ -73,7 +73,7 @@ function Composer({ groupId }: { readonly groupId: GroupId }) {
       <Textarea
         value={body}
         onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setBody(event.target.value)}
-        placeholder="Write something the whole group should remember…"
+        placeholder="Write something the whole Shared World should remember…"
         rows={2}
         aria-label="Write the chronicle"
       />

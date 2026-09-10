@@ -110,7 +110,7 @@ export function FeatForm({
         <DialogHeader>
           <DialogTitle>{feat === undefined ? "Write a feat" : `Edit ${feat.name}`}</DialogTitle>
           <DialogDescription>
-            It lives in your library, ready to share with a group or use at your tables.
+            It lives in your library, ready to share with a Shared World or use at your tables.
           </DialogDescription>
         </DialogHeader>
 

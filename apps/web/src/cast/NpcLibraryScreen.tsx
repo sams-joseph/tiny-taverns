@@ -1,4 +1,4 @@
-import type { CampaignMembership, NpcCreate, NpcSource } from "@taverns/api";
+import type { CampaignMembership, GroupMembership, NpcCreate, NpcSource } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
   Badge,
@@ -25,6 +25,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Hob, useHobPanel } from "../hob";
 import { membershipsAtom } from "../campaign/load";
+import { sharedWorldsAtom } from "../group/load";
 import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
@@ -295,7 +296,7 @@ function SourceDialog({
 
               <SourceSection
                 title="Private material"
-                lede="Only the source owner can copy this into a campaign. When another creator copies a group-shared source, secrets and instructions are left out."
+                lede="Only the source owner can copy this into a campaign. When another creator copies a source shared through a Shared World, secrets and instructions are left out."
                 tone="private"
               >
                 <Field label="Secrets" htmlFor="npc-source-secrets">
@@ -394,7 +395,8 @@ function AddToCampaignDialog({
           <DialogTitle>Add {source.name}</DialogTitle>
           <DialogDescription>
             This makes an independent campaign Cast snapshot. Later source edits do not update it;
-            if another creator shared the source with your group, their secrets are not copied.
+            if another creator shared the source through your Shared World, their secrets are not
+            copied.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 px-gutter py-3">
@@ -428,26 +430,24 @@ function AddToCampaignDialog({
 
 function ShareDialog({
   source,
-  memberships,
+  worlds,
   onClose,
 }: {
   readonly source: NpcSource;
-  readonly memberships: ReadonlyArray<CampaignMembership>;
+  readonly worlds: ReadonlyArray<GroupMembership>;
   readonly onClose: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
-  const groups = Array.from(
-    new Map(
-      memberships
-        .filter((membership) => membership.relation === "creator")
-        .map((membership) => [membership.campaign.groupId, membership.campaign]),
-    ).values(),
-  );
-  const share = async (groupId: (typeof groups)[number]["groupId"]) => {
+  // The API list is already explicit-world-only; owner-ness narrows it to the
+  // same authority `sharedWorldLibrary.share` requires. Campaign membership
+  // has no place in this decision: a world owner with no campaign seat may
+  // share, while a campaign creator who does not own the world may not.
+  const ownedWorlds = worlds.filter((membership) => membership.isOwner);
+  const share = async (worldId: (typeof ownedWorlds)[number]["group"]["id"]) => {
     const saved = await submit(
       (client) =>
         client.sharedWorldLibrary.share({
-          params: { worldId: groupId },
+          params: { worldId },
           payload: { kind: "npc", resourceId: source.id },
         }),
       [],
@@ -457,28 +457,31 @@ function ShareDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label={`Share ${source.name} with a group`}>
+      <DialogContent aria-label={`Share ${source.name} with a Shared World`}>
         <DialogHeader>
-          <DialogTitle>Share {source.name}</DialogTitle>
+          <DialogTitle>Share {source.name} with a Shared World</DialogTitle>
           <DialogDescription>
-            Sharing grants a group permission to add snapshots to its campaigns. The original stays
-            in your Library, and another creator's copy does not receive your private material.
+            Sharing lets creators in a Shared World add snapshots to their campaigns. The original
+            stays in your Library, and another creator's copy does not receive your private
+            material.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 px-gutter py-3">
-          {groups.length === 0 ? (
-            <p className="text-body text-muted">Create a campaign in a group first.</p>
+          {ownedWorlds.length === 0 ? (
+            <p className="text-body text-muted">
+              Create or take ownership of a Shared World first.
+            </p>
           ) : (
-            groups.map((campaign) => (
+            ownedWorlds.map(({ group }) => (
               <Button
-                key={campaign.groupId}
+                key={group.id}
                 variant="outline"
                 className="justify-start"
-                onClick={() => void share(campaign.groupId)}
+                onClick={() => void share(group.id)}
                 disabled={busy}
               >
                 <Icon name="hand-helping" size={14} />
-                {campaign.name}'s group
+                {group.name}
               </Button>
             ))
           )}
@@ -553,12 +556,14 @@ export function NpcLibraryScreen() {
   const filter = useFilterQuery([]);
   const [resource, reload] = useApiAtom(libraryNpcsAtom(false));
   const [membershipsResource] = useApiAtom(membershipsAtom);
+  const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [editing, setEditing] = useState<NpcSource | "new" | undefined>();
   const [adding, setAdding] = useState<NpcSource | undefined>();
   const [sharing, setSharing] = useState<NpcSource | undefined>();
   const hob = useHobPanel({ initialOpen: false });
 
   const memberships = membershipsResource.state === "ready" ? membershipsResource.value : [];
+  const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
   const filtered = useMemo(
     () =>
       resource.state === "ready"
@@ -609,7 +614,7 @@ export function NpcLibraryScreen() {
               title={filter.narrowed ? "No NPCs match" : "No reusable NPCs yet"}
             >
               {!filter.narrowed
-                ? "Write an original here, share it with a group, then add snapshots to campaigns."
+                ? "Write an original here, share it with a Shared World, then add snapshots to campaigns."
                 : "Loosen the search to see more sources."}
             </EmptyState>
           ) : (
@@ -645,11 +650,7 @@ export function NpcLibraryScreen() {
         />
       )}
       {sharing !== undefined && (
-        <ShareDialog
-          source={sharing}
-          memberships={memberships}
-          onClose={() => setSharing(undefined)}
-        />
+        <ShareDialog source={sharing} worlds={worlds} onClose={() => setSharing(undefined)} />
       )}
       <Button
         variant="ghost"

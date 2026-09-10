@@ -84,6 +84,11 @@ ordinary campaign work must not require navigating or owning that container.
   generated client groups are `sharedWorlds`, `sharedWorldMembers`,
   `sharedWorldHistory`, `sharedWorldLibrary`, and `sharedWorldHob`. `/groups`
   remains only as a browser compatibility redirect; it is not an API alias.
+- The NPC Library share picker reads `sharedWorlds.list` directly and offers
+  only rows where `isOwner` is true, matching `sharedWorldLibrary.share`'s
+  authority. It never derives worlds from campaign memberships: that would
+  leak standalone backing contexts, omit world-only owners, and offer actions
+  to campaign creators who do not own the Shared World.
 - The Shared World screen binds its Hob panel to `sharedWorldHob`, not campaign
   Hob: it resumes the world's one thread, streams against `/worlds/:worldId/hob`,
   renders the world toolkit's `groupHistory` proposal as a Chronicle card, and

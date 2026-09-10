@@ -236,7 +236,7 @@ describe("CastScreen", () => {
     expect(await screen.findByText(/Choose a reusable NPC source/)).toBeInTheDocument();
     expect(screen.getByText(/independent Cast snapshot/)).toBeInTheDocument();
     expect(
-      screen.getByText(/another creator's group-shared secrets are not copied/),
+      screen.getByText(/another creator's secrets shared through a Shared World are not copied/),
     ).toBeInTheDocument();
   });
 
