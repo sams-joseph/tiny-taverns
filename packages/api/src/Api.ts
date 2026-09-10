@@ -270,6 +270,13 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       success: SharedWorld,
       error: NotFound,
     }),
+    /** Gives a connected campaign a fresh, hidden standalone context. */
+    HttpApiEndpoint.post("disconnectSharedWorld", "/:campaignId/shared-world/disconnect", {
+      params: { campaignId: CampaignId },
+      payload: Schema.Struct({}),
+      success: Campaign,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("findById", "/:campaignId", {
       params: { campaignId: CampaignId },
       success: Campaign,

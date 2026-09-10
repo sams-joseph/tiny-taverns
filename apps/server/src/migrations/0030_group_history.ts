@@ -33,6 +33,11 @@ import { SqlClient } from "effect/unstable/sql";
  * `last_group_seq` records how much of the record it has read — so "the
  * summary is stale" is arithmetic over the sequence, not a flag somebody
  * remembers to set.
+ *
+ * `campaign_id` is provenance, so it deliberately does not share a composite
+ * foreign key with `group_id`. A campaign may later leave this Shared World;
+ * the accepted copy stays here and keeps naming its source until that source
+ * is deleted, when the ordinary `on delete set null` snapshot rule applies.
  */
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -43,7 +48,7 @@ export default Effect.gen(function* () {
     create table group_history_entry (
       id                     uuid primary key default gen_random_uuid(),
       group_id               uuid not null references play_group (id) on delete cascade,
-      campaign_id            uuid,
+      campaign_id            uuid references campaign (id) on delete set null,
       session_id             uuid references session (id) on delete set null,
       source_kind            text not null check (source_kind in
                                ('recap', 'beat', 'note', 'fight', 'manual', 'character', 'summary_edit')),
@@ -61,10 +66,7 @@ export default Effect.gen(function* () {
       created_at             timestamptz not null default now(),
       updated_at             timestamptz not null default now(),
       constraint group_history_entry_assistant_provenance
-        check ((origin = 'assistant') = (assistant_turn_id is not null)),
-      constraint group_history_entry_campaign_fkey
-        foreign key (campaign_id, group_id) references campaign (id, group_id)
-        on update cascade on delete set null (campaign_id)
+        check ((origin = 'assistant') = (assistant_turn_id is not null))
     )
   `;
   yield* sql`create index group_history_entry_group_idx on group_history_entry (group_id, group_seq)`;

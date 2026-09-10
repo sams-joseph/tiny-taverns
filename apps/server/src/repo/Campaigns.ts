@@ -13,8 +13,9 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { addCreator } from "./Memberships.js";
-import { foundGroup } from "./Groups.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { admitToGroup, foundGroup } from "./Groups.js";
+import { addCreator, liveMemberAccountIds } from "./Memberships.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
   campaignReadable,
@@ -74,6 +75,10 @@ export class Campaigns extends Context.Service<
     readonly createStandalone: (
       payload: CampaignCreate,
     ) => Effect.Effect<Campaign, never, CurrentActor>;
+    /** Moves a connected campaign into a new automatic context of its own. */
+    readonly disconnectSharedWorld: (
+      creator: CampaignCreatorActor,
+    ) => Effect.Effect<Campaign, NotFound>;
     readonly update: (
       id: CampaignId,
       patch: CampaignUpdate,
@@ -210,6 +215,47 @@ export class Campaigns extends Context.Service<
                 const actor = yield* CurrentActor;
                 const group = yield* foundGroup(sql, payload.name, actor.accountId);
                 return yield* insert(group.id, payload, actor);
+              }),
+            ),
+          ),
+
+        disconnectSharedWorld: (creator) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const sources = yield* sql<CampaignRow>`
+                  select campaign.*
+                  from campaign
+                  join play_group as source on source.id = campaign.group_id
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                    and campaign.creator_account_id = ${creator.actor.accountId}
+                    and source.is_shared_world
+                  for update of campaign, source
+                `;
+                if (sources.length === 0) {
+                  return yield* new NotFound({
+                    resource: "campaign",
+                    id: creator.campaign,
+                  });
+                }
+
+                const context = yield* foundGroup(sql, sources[0]!.name, creator.actor.accountId);
+                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
+                yield* Effect.forEach(
+                  participants,
+                  (accountId) => admitToGroup(sql, context.id, accountId),
+                  { discard: true },
+                );
+
+                const rows = yield* sql<CampaignRow>`
+                  update campaign
+                  set group_id = ${context.id}, updated_at = now()
+                  where campaign.id = ${creator.campaign}
+                    and campaign.group_id = ${creator.group}
+                  returning *
+                `;
+                return yield* one(rows, creator.campaign);
               }),
             ),
           ),

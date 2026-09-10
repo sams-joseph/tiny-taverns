@@ -460,8 +460,9 @@ describe("the scope, counted", () => {
     // Campaign invitations add three creator-gated operations: list, mint and
     // revoke. Their authority follows the campaign, not its hidden group.
     // Promoting a campaign's private context adds the eighty-third seam;
-    // connecting one to an owned Shared World adds the eighty-fourth.
-    expect(gated).toBe(84);
+    // connecting one to an owned Shared World adds the eighty-fourth, and
+    // disconnecting it again is the eighty-fifth.
+    expect(gated).toBe(85);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

@@ -101,6 +101,30 @@ describe("the campaign-first home", () => {
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
   });
 
+  it("makes a connected campaign standalone with the consequences stated", async () => {
+    const standalone = {
+      ...campaign,
+      contextId: "5a1e2b3c-0000-4000-8000-00000000c0de",
+    };
+    server.routes.set(`POST /campaigns/${campaignId}/shared-world/disconnect`, {
+      status: 200,
+      body: standalone,
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Make standalone" }));
+    expect(screen.getByText(/campaign, its participants, invitations, and Hob/)).toBeTruthy();
+    expect(screen.getByText(/History already accepted.*stays in that Shared World/)).toBeTruthy();
+    expect(screen.getByText(/members remain members there/)).toBeTruthy();
+    expect(
+      screen.getByText(/can no longer use Library sources shared through that world/),
+    ).toBeTruthy();
+    expect(screen.getByText(/existing encounter instances remain/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Make standalone" }));
+
+    await waitFor(() => expect(bodyOf(server, "POST", "/shared-world/disconnect")).toEqual({}));
+  });
+
   it("creates from one name and opens the campaign", async () => {
     server.routes.set("POST /campaigns", { status: 200, body: campaign });
     await renderCampaigns("/campaigns", mintingSession());

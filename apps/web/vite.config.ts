@@ -38,6 +38,10 @@ export default defineConfig({
      */
     env: {
       VITE_CLERK_PUBLISHABLE_KEY: "",
+      // The fetch fixtures register canonical API paths. A developer's
+      // `.env.local` may point the browser at Vite's `/api` proxy, but that
+      // deployment concern must not prefix every request in the test suite.
+      VITE_API_URL: "",
     },
     /**
      * Vitest's default 5000ms is a local-machine number, and this suite has

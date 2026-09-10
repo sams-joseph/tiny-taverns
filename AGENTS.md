@@ -90,12 +90,22 @@ reset after pulling the rewritten baseline migrations.
   World they own with `POST /campaigns/:campaignId/shared-world/connect`. The
   transaction restores destination eligibility for every live participant,
   updates the campaign's context, cascades the denormalized context id through
-  campaign memberships, seats, invitations and history provenance, then deletes
-  the empty automatic context. Campaign ids and content do not move. The UI
+  campaign memberships, seats and invitations, then deletes the empty automatic
+  context. Chronicle campaign ids are provenance and never follow a context
+  move. Campaign ids and content do not move. The UI
   offers only owned worlds and explains that participants join the world while
   campaign content remains participation-gated. Connecting an already-connected
-  campaign or targeting another owner's world answers `NotFound`; disconnecting
-  and moving between worlds remain intentionally absent.
+  campaign or targeting another owner's world answers `NotFound`.
+- A campaign creator may make a connected campaign standalone with
+  `POST /campaigns/:campaignId/shared-world/disconnect`; Shared World ownership
+  is irrelevant because the campaign creator governs their table. The atomic
+  move creates a fresh hidden context, admits every live participant, and
+  cascades memberships, seats and invitations with the campaign. Existing
+  Shared World membership is not revoked, accepted Chronicle copies stay in
+  the former world with their campaign provenance, and campaign content and Hob
+  threads keep their ids. World-shared Library sources stop being usable while
+  already-minted instances stand. Disconnecting an already-standalone campaign
+  answers `NotFound`; a direct world-to-world move remains intentionally absent.
 - `GET /me/campaigns` rows carry `sharedWorld: { id, name } | null`; the null
   hides a standalone campaign's backing group. Campaign chrome reads that same
   membership atom it already needs for `relation`, so every campaign screen

@@ -407,6 +407,118 @@ describe("the group's own lifecycle", () => {
     expect(journey.oldContexts).toEqual([]);
   }, 60_000);
 
+  it("disconnects a campaign without taking its table or the Shared World's memory", async () => {
+    const journey = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const invites = yield* Invites;
+        const sql = yield* SqlClient.SqlClient;
+        const founder = yield* anAccount("World Walker");
+        const world = yield* as(founder)(groups.create({ name: "The Remembered World" }));
+        const campaign = yield* as(founder)(
+          campaigns.create(world.id, { name: "The Departing Road", visibility: "shared" }),
+        );
+        const player = yield* aPlayerAt(campaign.id, "Road Keeper");
+        yield* sql`
+          insert into campaign_character
+            (campaign_id, group_id, account_id, display_name, visibility)
+          values
+            (${campaign.id}, ${world.id}, ${player.accountId}, 'Road Keeper', 'shared')
+        `;
+        const creator = yield* asDm(founder, campaign.id);
+        const waiting = yield* invites.createForCampaign(creator, { label: "Late witness" });
+        const historyRows = yield* sql<{ readonly id: string }>`
+          insert into group_history_entry
+            (group_id, campaign_id, source_kind, body, origin, created_by_account_id)
+          values
+            (${world.id}, ${campaign.id}, 'manual', 'The road was remembered.', 'authored', ${founder.accountId})
+          returning id
+        `;
+
+        const disconnected = yield* campaigns.disconnectSharedWorld(creator);
+        const playerCampaign = yield* as(player)(campaigns.findById(campaign.id));
+        const directory = yield* as(founder)(groups.campaigns(world.id));
+        const oldWorldRoster = yield* as(founder)(groups.members(world.id));
+        const hiddenWorld = yield* as(founder)(groups.findById(disconnected.contextId)).pipe(
+          Effect.result,
+        );
+        const campaignMembers = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign_member where campaign_id = ${campaign.id}
+        `;
+        const inviteRows = yield* sql<{ readonly group_id: string }>`
+          select group_id from group_invite where id = ${waiting.invite.id}
+        `;
+        const seatRows = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign_character where campaign_id = ${campaign.id}
+        `;
+        const historyAfter = yield* sql<{
+          readonly group_id: string;
+          readonly campaign_id: string | null;
+          readonly body: string;
+        }>`
+          select group_id, campaign_id, body from group_history_entry
+          where id = ${historyRows[0]!.id}
+        `;
+        const lateWitness = yield* anAccount("Late witness");
+        const redeemed = yield* as(lateWitness)(invites.redeem(waiting.token));
+
+        return {
+          campaign,
+          world,
+          disconnected,
+          playerCampaign,
+          directory,
+          oldWorldRoster,
+          hiddenWorld,
+          campaignMembers,
+          inviteRows,
+          seatRows,
+          historyAfter,
+          redeemed,
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(journey.disconnected.contextId).not.toBe(journey.world.id);
+    expect(journey.playerCampaign.id).toBe(journey.campaign.id);
+    expect(journey.directory.map((row) => row.id)).not.toContain(journey.campaign.id);
+    expect(journey.oldWorldRoster.map((member) => member.name).sort()).toEqual([
+      "Road Keeper",
+      "World Walker",
+    ]);
+    expect(journey.hiddenWorld._tag).toBe("Failure");
+    expect(
+      journey.campaignMembers.every((row) => row.group_id === journey.disconnected.contextId),
+    ).toBe(true);
+    expect(journey.inviteRows).toEqual([{ group_id: journey.disconnected.contextId }]);
+    expect(journey.seatRows).toEqual([{ group_id: journey.disconnected.contextId }]);
+    expect(journey.historyAfter).toEqual([
+      {
+        group_id: journey.world.id,
+        campaign_id: journey.campaign.id,
+        body: "The road was remembered.",
+      },
+    ]);
+    expect(journey.redeemed.sharedWorld).toBeNull();
+    expect(journey.redeemed.campaignId).toBe(journey.campaign.id);
+  }, 60_000);
+
+  it("does not disconnect an already-standalone campaign", async () => {
+    const refused = await runtime.runPromise(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const founder = yield* anAccount("Solitary Cartographer");
+        const campaign = yield* as(founder)(campaigns.createStandalone({ name: "Already Alone" }));
+        const creator = yield* asDm(founder, campaign.id);
+        return yield* campaigns.disconnectSharedWorld(creator);
+      }).pipe(Effect.result),
+    );
+
+    expect(refused._tag).toBe("Failure");
+    if (refused._tag === "Failure") expect(refused.failure).toBeInstanceOf(NotFound);
+  }, 60_000);
+
   it("connects neither an existing Shared World campaign nor a campaign to another owner's world", async () => {
     const refusals = await runtime.runPromise(
       Effect.gen(function* () {

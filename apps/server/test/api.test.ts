@@ -166,17 +166,22 @@ describe("campaign, session, character and note CRUD", () => {
           params: { campaignId: campaign.id },
           payload: { worldId: world.id },
         });
+        const disconnected = yield* client.campaigns.disconnectSharedWorld({
+          params: { campaignId: campaign.id },
+          payload: {},
+        });
         const campaigns = yield* client.me.campaigns();
         const directory = yield* client.sharedWorlds.campaigns({ params: { worldId: world.id } });
-        return { world, campaign, connected, campaigns, directory };
+        return { world, campaign, connected, disconnected, campaigns, directory };
       }).pipe(Effect.orDie),
     );
 
     expect(seen.connected.id).toBe(seen.world.id);
+    expect(seen.disconnected.contextId).not.toBe(seen.world.id);
     expect(
       seen.campaigns.find((membership) => membership.campaign.id === seen.campaign.id)?.sharedWorld,
-    ).toEqual({ id: seen.world.id, name: seen.world.name });
-    expect(seen.directory.map((campaign) => campaign.id)).toContain(seen.campaign.id);
+    ).toBeNull();
+    expect(seen.directory.map((campaign) => campaign.id)).not.toContain(seen.campaign.id);
   }, 60_000);
 
   it("round-trips a campaign and everything hanging off it", async () => {

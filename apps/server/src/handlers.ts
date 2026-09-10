@@ -121,6 +121,9 @@ const CampaignsLive = HttpApiBuilder.group(
       .handle("connectSharedWorld", ({ params, payload }) =>
         asDm(params.campaignId, (creator) => groups.connect(creator, payload.worldId)),
       )
+      .handle("disconnectSharedWorld", ({ params }) =>
+        asDm(params.campaignId, (creator) => campaigns.disconnectSharedWorld(creator)),
+      )
       .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
       .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
       .handle("archive", ({ params }) => campaigns.archive(params.campaignId))

@@ -47,10 +47,12 @@ function CampaignRow({
   membership,
   world,
   onConnect,
+  onDisconnect,
 }: {
   readonly membership: CampaignMembership;
   readonly world: CampaignSharedWorld | null;
   readonly onConnect: (() => void) | undefined;
+  readonly onDisconnect: (() => void) | undefined;
 }) {
   const campaign = membership.campaign;
   return (
@@ -78,16 +80,23 @@ function CampaignRow({
           </span>
         )}
         {world !== null ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-link"
-            nativeButton={false}
-            render={<Link to="/worlds/$worldId" params={{ worldId: world.id }} />}
-          >
-            <Icon name="map" size={14} />
-            {world.name}
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-link"
+              nativeButton={false}
+              render={<Link to="/worlds/$worldId" params={{ worldId: world.id }} />}
+            >
+              <Icon name="map" size={14} />
+              {world.name}
+            </Button>
+            {onDisconnect !== undefined && (
+              <Button variant="ghost" size="sm" onClick={onDisconnect}>
+                Make standalone
+              </Button>
+            )}
+          </>
         ) : (
           onConnect !== undefined && (
             <Button variant="ghost" size="sm" onClick={onConnect}>
@@ -108,6 +117,70 @@ function CampaignRow({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function DisconnectSharedWorldDialog({
+  membership,
+  onClose,
+}: {
+  readonly membership: CampaignMembership;
+  readonly onClose: () => void;
+}) {
+  const fetchCredential = useCredential();
+  const invalidate = useInvalidate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const world = membership.sharedWorld!;
+
+  const disconnect = async () => {
+    setBusy(true);
+    setError(undefined);
+    const token = await fetchCredential();
+    const result = await runApiResult(
+      (client) =>
+        client.campaigns.disconnectSharedWorld({
+          params: { campaignId: membership.campaign.id },
+          payload: {},
+        }),
+      token,
+    );
+    setBusy(false);
+    if (Result.isFailure(result)) {
+      setError("That did not save. Try it again.");
+      return;
+    }
+    invalidate([reads.myCampaigns, reads.sharedWorld(world.id)]);
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Make campaign standalone">
+        <DialogHeader>
+          <DialogTitle>Make {membership.campaign.name} standalone?</DialogTitle>
+          <DialogDescription>
+            The campaign, its participants, invitations, and Hob conversations stay intact. History
+            already accepted into {world.name} stays in that Shared World, and its members remain
+            members there. This campaign will stop contributing future activity and can no longer
+            use Library sources shared through that world; existing encounter instances remain.
+          </DialogDescription>
+        </DialogHeader>
+        {error !== undefined && (
+          <p role="alert" className="px-gutter text-body-s leading-body text-danger">
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => void disconnect()}>
+            {busy ? "Working…" : "Make standalone"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -377,6 +450,7 @@ export function CampaignsScreen() {
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [connecting, setConnecting] = useState<CampaignMembership | undefined>();
+  const [disconnecting, setDisconnecting] = useState<CampaignMembership | undefined>();
   const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
@@ -415,6 +489,11 @@ export function CampaignsScreen() {
                         ? () => setConnecting(membership)
                         : undefined
                     }
+                    onDisconnect={
+                      membership.relation === "creator" && membership.sharedWorld !== null
+                        ? () => setDisconnecting(membership)
+                        : undefined
+                    }
                   />
                 ))}
               </div>
@@ -439,6 +518,12 @@ export function CampaignsScreen() {
           campaign={connecting.campaign}
           worlds={worlds.filter((world) => world.isOwner)}
           onClose={() => setConnecting(undefined)}
+        />
+      )}
+      {disconnecting !== undefined && (
+        <DisconnectSharedWorldDialog
+          membership={disconnecting}
+          onClose={() => setDisconnecting(undefined)}
         />
       )}
     </AppShell>
