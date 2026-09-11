@@ -213,7 +213,7 @@ The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `pre
 once in `packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
 campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
 the request's actor; every repository read carries that actor as a type-level requirement
-and filters in SQL. `AGENTS.md` records the contract each new endpoint has to follow.
+and filters in SQL. `docs/internals/visibility.md` records the contract each new endpoint has to follow.
 
 **The live session is the one place a read is a stream.** Writes are ordinary `POST`s;
 `GET /campaigns/:c/sessions/:s/runs/:r/events` is Server-Sent Events. Starting a run seeds
@@ -231,8 +231,8 @@ curl -N "http://localhost:3000/campaigns/$CAMPAIGN/sessions/$SESSION/runs/$RUN/e
 ```
 
 Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Event-ID`
-header, which a browser's `EventSource` sends by itself). `AGENTS.md` has the full contract
-— it is what the runner UI will be written against.
+header, which a browser's `EventSource` sends by itself). `docs/internals/live-session.md` has the
+full contract the runner UI is written against.
 
 The `Server` section of the web gallery calls the live API through the client derived from
 that same declaration — paste a token there to see it list your campaigns.
@@ -268,8 +268,8 @@ those subclass rows rather than free text. Character vocabulary is managed in th
 **Rules** screen; the reference articles live in **Compendium** so they are not confused with the
 character-building vocabulary. Spells, equipment, magic items and the compendium have their own API
 and Library shelves, with the same copy-as-snapshot rule. The copy is what a player reads from,
-because a player can never read somebody else's library — see `AGENTS.md`, which is also where the
-one thing these importers do differently is written down.
+because a player can never read somebody else's library — see `docs/internals/corpora.md`, which is
+also where the one thing these importers do differently is written down.
 
 The bundled 2014 monster, character-rules, feat, reference-rules, spell, mundane-equipment and magic-item data are transformed
 from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD
@@ -330,7 +330,7 @@ reachable only with their token.
 
 The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
 exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
-`effect` under `effect/unstable/http`. `AGENTS.md` records the full v3 → v4 mapping, and
+`effect` under `effect/unstable/http`. `docs/internals/server.md` records the full v3 → v4 mapping, and
 `.repos/effect` vendors the matching upstream source as the authoritative reference.
 
 ## Testing
