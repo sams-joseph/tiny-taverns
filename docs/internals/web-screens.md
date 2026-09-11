@@ -69,11 +69,11 @@ Consumers use `useFilterQuery` in `library/query.ts` for the value, the debounce
 
 A carried fight is two runs, and `RecapRunLink` carries the other run's round at each end. Two `Int`s that mean different things, so swapping them compiles and reads plausibly. `chronicle/fight.ts` is the only place the sentences are worded:
 
-| sentence | round |
-| --- | --- |
-| "Paused at round N when the night ended" | `run.round`, its own, frozen |
-| "Session M picked it up, and it has reached round K" | `continuedInto.round` |
-| "Resumed from round N of session M" | `continuedFrom.round` |
+| sentence                                             | round                        |
+| ---------------------------------------------------- | ---------------------------- |
+| "Paused at round N when the night ended"             | `run.round`, its own, frozen |
+| "Session M picked it up, and it has reached round K" | `continuedInto.round`        |
+| "Resumed from round N of session M"                  | `continuedFrom.round`        |
 
 `fight.test.ts` uses a fixture where the two numbers differ (paused at 4, since reached 7); with equal numbers the assertion holds whichever the screen picked. The state comes from `run.endedReason`, never from `endedAt`, and `fightStory` is shared by the DM's and the player's Chronicle so there is one chance to get it right.
 
