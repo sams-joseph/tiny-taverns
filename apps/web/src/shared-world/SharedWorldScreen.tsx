@@ -8,8 +8,8 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchiveDialog } from "../campaign/ArchiveDialog";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { useShowHob } from "../shell/slots";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
@@ -179,7 +179,6 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
   const [archiving, setArchiving] = useState<SharedWorldCampaignCard | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [worldArchiveOpen, setWorldArchiveOpen] = useState(false);
-  const hob = useHobPanel({ initialOpen: false });
   const navigate = useNavigate();
 
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -189,21 +188,19 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
       (membership) => membership.sharedWorld.id === worldId && membership.isOwner,
     );
 
+  // The panel is the layout's, and its Shared World scope is the route's.
+  const askHob = useShowHob();
+
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} worldId={worldId} />}
-      topBar={
-        <TopBar
-          title={view?.sharedWorld.name ?? "Shared World"}
-          subtitle={
-            view === undefined
-              ? undefined
-              : `${view.members.length} ${view.members.length === 1 ? "member" : "members"} · ${view.campaigns.length} ${view.campaigns.length === 1 ? "campaign" : "campaigns"}`
-          }
-        />
-      }
-    >
+    <>
+      <TopBar
+        title={view?.sharedWorld.name ?? "Shared World"}
+        subtitle={
+          view === undefined
+            ? undefined
+            : `${view.members.length} ${view.members.length === 1 ? "member" : "members"} · ${view.campaigns.length} ${view.campaigns.length === 1 ? "campaign" : "campaigns"}`
+        }
+      />
       <div className="flex flex-col gap-8">
         {resource.state === "loading" && <Loading label="Reading the Shared World…" />}
         {resource.state === "failed" && (
@@ -240,7 +237,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
               )}
             </section>
 
-            <SharedWorldChronicle worldId={worldId} onAskHob={hob.show} />
+            <SharedWorldChronicle worldId={worldId} onAskHob={askHob} />
 
             <section className="flex max-w-2xl flex-col" aria-label="Members">
               <span className="pb-1 text-label leading-snug font-semibold text-heading">
@@ -285,6 +282,6 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
           }}
         />
       )}
-    </AppShell>
+    </>
   );
 }

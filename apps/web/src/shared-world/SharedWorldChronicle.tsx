@@ -45,7 +45,8 @@ function StorySoFar({
 }: {
   readonly summary: SharedWorldHistorySummary | null;
   readonly latestWorldSeq: number;
-  readonly onAskHob: () => void;
+  /** Opens the Hob panel; absent where there is none, and so is the button. */
+  readonly onAskHob: (() => void) | undefined;
 }) {
   const stale = summary !== null && latestWorldSeq > summary.lastWorldSeq;
   return (
@@ -73,7 +74,7 @@ function StorySoFar({
               )}
             </>
           )}
-          {(summary === null || stale) && (
+          {onAskHob !== undefined && (summary === null || stale) && (
             <Button size="sm" variant="outline" className="self-start" onClick={onAskHob}>
               {summary === null ? "Draft Story So Far with Hob" : "Refresh with Hob"}
             </Button>
@@ -158,7 +159,8 @@ export function SharedWorldChronicle({
   onAskHob,
 }: {
   readonly worldId: SharedWorldId;
-  readonly onAskHob: () => void;
+  /** Opens the Hob panel; absent where there is none, and so is the button. */
+  readonly onAskHob: (() => void) | undefined;
 }) {
   const [resource, retry] = useApiAtom(historyAtom(worldId));
   const [summary, retrySummary] = useApiAtom(summaryAtom(worldId));

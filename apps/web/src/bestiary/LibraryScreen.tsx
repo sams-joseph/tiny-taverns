@@ -5,11 +5,10 @@ import { useCallback, useState } from "react";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
-import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
 import { listCount } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CreatureFilters, CreatureGrid } from "./CorpusParts";
 import { useCorpus } from "./corpus";
@@ -99,10 +98,6 @@ export function LibraryScreen() {
   const corpus = useCorpus(libraryAtom, more);
 
   const opening = corpus.creatures.find((creature) => creature.id === opened);
-  // No campaign in view, so no campaign for Hob's tools to hang off — the panel
-  // says so rather than offering a composer with nowhere to send. Same as the
-  // campaign list, and for the same reason.
-  const hob = useHobPanel({ initialOpen: false });
 
   /**
    * A write changes the shape of the list, and the list re-reads itself.
@@ -119,21 +114,16 @@ export function LibraryScreen() {
   };
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={
-            corpus.shown === undefined
-              ? undefined
-              : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
-          }
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={
+          corpus.shown === undefined
+            ? undefined
+            : countOf(corpus.creatures.length, corpus.narrowed, corpus.hasMore)
+        }
+        tabs={<LibraryNav />}
+      />
       {corpus.shown === undefined && corpus.resource.state === "loading" && (
         <Loading label="Opening your library…" />
       )}
@@ -217,6 +207,6 @@ export function LibraryScreen() {
           onSaved={saved}
         />
       )}
-    </AppShell>
+    </>
   );
 }

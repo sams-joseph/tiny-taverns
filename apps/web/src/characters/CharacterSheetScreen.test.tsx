@@ -267,6 +267,9 @@ describe("a character sheet", () => {
     const pressable = () =>
       screen
         .queryAllByRole("button")
+        // The shell's closed Hob panel keeps its controls in the document,
+        // off-canvas and `inert`; nothing there can be pressed.
+        .filter((node) => node.closest("[inert]") === null)
         .map((node) => node.getAttribute("aria-label") ?? node.textContent ?? "")
         .filter(
           (text) =>

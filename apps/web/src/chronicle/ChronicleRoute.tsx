@@ -1,7 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { FailureNotice, Loading } from "../ui/states";
 import { ChronicleScreen } from "./ChronicleScreen";
 import { PlayerChronicleScreen } from "./PlayerChronicleScreen";
@@ -14,21 +14,23 @@ import { PlayerChronicleScreen } from "./PlayerChronicleScreen";
  * what you are at the table, per pair, with no mode anywhere.
  */
 export function ChronicleRouteScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [resource, retry] = useApiAtom(membershipsAtom);
 
   if (resource.state === "loading") {
     return (
-      <AppShell topBar={<TopBar title="Chronicle" />}>
+      <>
+        <TopBar title="Chronicle" />
         <Loading label="Opening the record…" />
-      </AppShell>
+      </>
     );
   }
   if (resource.state === "failed") {
     return (
-      <AppShell topBar={<TopBar title="Chronicle" />}>
+      <>
+        <TopBar title="Chronicle" />
         <FailureNotice failure={resource.failure} onRetry={retry} />
-      </AppShell>
+      </>
     );
   }
 

@@ -3,11 +3,10 @@ import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
 import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMoreLibrarySpells,
@@ -37,28 +36,22 @@ export function SpellLibraryScreen() {
   const [resource, reload] = useApiAtom(librarySpellsAtom(query));
   const [opened, setOpened] = useState<string | undefined>();
   const [writing, setWriting] = useState(false);
-  const hob = useHobPanel({ initialOpen: false });
 
   const pages = useSpellPages(resource, query, loadMoreLibrarySpells);
   const shown = pages.shown;
   const opening = pages.spells.find((spell) => spell.id === opened);
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={
-            shown === undefined
-              ? undefined
-              : countOf(pages.spells.length, list.narrowed, pages.hasMore)
-          }
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={
+          shown === undefined
+            ? undefined
+            : countOf(pages.spells.length, list.narrowed, pages.hasMore)
+        }
+        tabs={<LibraryNav />}
+      />
       {shown === undefined && resource.state === "loading" && (
         <Loading label="Reading the spells…" />
       )}
@@ -111,6 +104,6 @@ export function SpellLibraryScreen() {
         <SpellDialog spell={opening} onClose={() => setOpened(undefined)} />
       )}
       {writing && <SpellCreateDialog onClose={() => setWriting(false)} />}
-    </AppShell>
+    </>
   );
 }

@@ -23,13 +23,12 @@ import { useMemo, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { Hob, useHobPanel } from "../hob";
 import { membershipsAtom } from "../campaign/load";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { NpcAvatar } from "./NpcCard";
@@ -560,7 +559,6 @@ export function NpcLibraryScreen() {
   const [editing, setEditing] = useState<NpcSource | "new" | undefined>();
   const [adding, setAdding] = useState<NpcSource | undefined>();
   const [sharing, setSharing] = useState<NpcSource | undefined>();
-  const hob = useHobPanel({ initialOpen: false });
 
   const memberships = membershipsResource.state === "ready" ? membershipsResource.value : [];
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
@@ -573,21 +571,16 @@ export function NpcLibraryScreen() {
   );
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={
-            resource.state === "ready"
-              ? `${filtered.length} NPC ${filtered.length === 1 ? "source" : "sources"}`
-              : undefined
-          }
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={
+          resource.state === "ready"
+            ? `${filtered.length} NPC ${filtered.length === 1 ? "source" : "sources"}`
+            : undefined
+        }
+        tabs={<LibraryNav />}
+      />
       {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -661,6 +654,6 @@ export function NpcLibraryScreen() {
       >
         Back to monsters
       </Button>
-    </AppShell>
+    </>
   );
 }

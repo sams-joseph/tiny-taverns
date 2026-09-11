@@ -681,10 +681,14 @@ describe("starting a session", () => {
     // for a session that is already running.
     await renderScreen(mintingSession());
 
-    const both = await screen.findAllByRole("button", { name: "Start an encounter" });
     // The row's and the card's, which is what makes the pair one answer rather
-    // than two controls that can differ.
-    expect(both).toHaveLength(2);
+    // than two controls that can differ. Waited for together: the row reads
+    // less than the Overview does, so it can draw a render sooner.
+    const both = await waitFor(() => {
+      const found = screen.getAllByRole("button", { name: "Start an encounter" });
+      expect(found).toHaveLength(2);
+      return found;
+    });
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
 
     await userEvent.click(both[0]!);
@@ -768,7 +772,10 @@ describe("starting a session", () => {
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
-    expect(await screen.findAllByRole("button", { name: "Back to the fight" })).toHaveLength(2);
+    // The row's and the card's, waited for together as above.
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Back to the fight" })).toHaveLength(2),
+    );
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Start an encounter" })).toBeNull();
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();

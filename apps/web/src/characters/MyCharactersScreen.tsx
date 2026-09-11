@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, Card, CardContent, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { AddToCampaignDialog } from "./AddToCampaignDialog";
 import { campaignsAvailableToJoin } from "./join";
@@ -199,20 +199,17 @@ export function MyCharactersScreen() {
   const view = resource.state === "ready" ? resource.value : undefined;
 
   return (
-    <AppShell
-      topBar={
-        <TopBar
-          title="Your characters"
-          subtitle={
-            view === undefined
-              ? undefined
-              : rosterSummary(view.characters, view.memberships.length, view.accountName)
-          }
-        >
-          {view !== undefined && <NewCharacterAction memberships={view.memberships} />}
-        </TopBar>
-      }
-    >
+    <>
+      <TopBar
+        title="Your characters"
+        subtitle={
+          view === undefined
+            ? undefined
+            : rosterSummary(view.characters, view.memberships.length, view.accountName)
+        }
+      >
+        {view !== undefined && <NewCharacterAction memberships={view.memberships} />}
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading your characters…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -238,6 +235,6 @@ export function MyCharactersScreen() {
             ))}
           </div>
         ))}
-    </AppShell>
+    </>
   );
 }

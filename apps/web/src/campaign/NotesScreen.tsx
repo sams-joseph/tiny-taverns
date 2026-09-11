@@ -21,7 +21,7 @@ import { NotesList } from "./NotesList";
  * what a note is for, which is the one thing an empty Notes screen most needs.
  */
 export function NotesScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const search = filter.text;
   const [editing, setEditing] = useState<{ readonly note: Note | undefined }>();
