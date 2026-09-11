@@ -4,7 +4,7 @@ import { Badge, Button, Card, Icon } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { DetailSection } from "../ui/detail";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { NpcAvatar } from "./NpcCard";
@@ -17,35 +17,32 @@ const playerNpcAtom = Atom.family(
 );
 
 export function PlayerNpcChatScreen() {
-  const { campaignId, npcId } = useParams({ from: "/campaigns/$campaignId/cast/$npcId/talk" });
+  const { campaignId, npcId } = useParams({
+    from: "/_shell/campaigns/$campaignId/cast/$npcId/talk",
+  });
   const [resource, reload] = useApiAtom(playerNpcAtom({ campaignId, npcId }));
   const npc = resource.state === "ready" ? resource.value : undefined;
 
   return (
-    <AppShell
-      campaignName={undefined}
-      topBar={
-        <TopBar
-          title={npc?.name ?? "An NPC"}
-          subtitle="Talk privately · only you can read this transcript"
+    <>
+      <TopBar
+        title={npc?.name ?? "An NPC"}
+        subtitle="Talk privately · only you can read this transcript"
+      >
+        <Button
+          size="sm"
+          variant="ghost"
+          nativeButton={false}
+          render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
         >
-          <Button
-            size="sm"
-            variant="ghost"
-            nativeButton={false}
-            render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
-          >
-            <Icon name="chevron-left" size={14} />
-            Back to table
-          </Button>
-        </TopBar>
-      }
-      fill
-    >
+          <Icon name="chevron-left" size={14} />
+          Back to table
+        </Button>
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading the NPC…" />}
       {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
       {npc !== undefined && <PlayerNpcChatBody npc={npc} />}
-    </AppShell>
+    </>
   );
 }
 

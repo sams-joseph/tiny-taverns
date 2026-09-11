@@ -152,6 +152,56 @@ const runsAtom = Atom.family((night: Night) =>
   apiAtom((client) => client.runs.list({ params: night }), [reads.runs(night.sessionId)]),
 );
 
+/**
+ * The fight on the table: the unended run. `encounter_run_one_live_per_session`
+ * is a partial unique index, so there is at most one.
+ */
+const liveRun = (runs: ReadonlyArray<EncounterRun>): EncounterRun | undefined =>
+  runs.find((row) => row.endedAt === null);
+
+/** Tonight, as the campaign row's badge and press need it. */
+export interface CampaignNight {
+  readonly campaign: Campaign;
+  readonly session: Session | undefined;
+  readonly run: EncounterRun | undefined;
+}
+
+/**
+ * The campaign, its open night and the fight on it, without the rest of the
+ * view.
+ *
+ * The campaign row reads this on every creator screen, including the runner and
+ * the create form, which read nothing else of the campaign's; the whole view
+ * there would be five reads to draw a badge. The parts are the view's own
+ * atoms, so on a campaign destination it is answered from the registry.
+ */
+export const campaignNightAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable((get: Atom.AtomContext) =>
+    combine(
+      get,
+      AsyncResult.flatMap(get(campaignAtom(campaignId)), (campaign, previous) => {
+        const sessionId = campaign.currentSessionId;
+        if (sessionId === null) {
+          return AsyncResult.success<CampaignNight, unknown>(
+            { campaign, session: undefined, run: undefined },
+            { waiting: previous.waiting },
+          );
+        }
+        const night: Night = { campaignId, sessionId };
+        const tonight = AsyncResult.all({
+          session: get(sessionAtom(night)),
+          runs: get(runsAtom(night)),
+        });
+        return AsyncResult.map(tonight, (parts) => ({
+          campaign,
+          session: parts.session,
+          run: liveRun(parts.runs),
+        })) as AsyncResult.AsyncResult<CampaignNight, unknown>;
+      }),
+    ),
+  ),
+);
+
 /** The creator-governed invitation list for one campaign. */
 export const campaignInvitesAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
@@ -233,7 +283,7 @@ const assemble = (
       ...settled,
       session: tonight.session,
       prep: tonight.prep,
-      run: tonight.runs.find((row) => row.endedAt === null),
+      run: liveRun(tonight.runs),
     })) as AsyncResult.AsyncResult<CampaignView, unknown>;
   });
 };

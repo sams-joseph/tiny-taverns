@@ -8,8 +8,7 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchivedDialog } from "../campaign/ArchivedDialog";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
 import { sharedWorldsAtom } from "./load";
@@ -118,21 +117,15 @@ export function SharedWorldsScreen() {
   const [resource, retry] = useApiAtom(sharedWorldsAtom);
   const [worldShelfOpen, setWorldShelfOpen] = useState(false);
   const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
-  const hob = useHobPanel({ initialOpen: false });
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Shared Worlds"
-          subtitle="Connected campaigns with one history and a shared memory for Hob."
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Shared Worlds"
+        subtitle="Connected campaigns with one history and a shared memory for Hob."
+      />
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
@@ -180,6 +173,6 @@ export function SharedWorldsScreen() {
 
       {worldShelfOpen && <ArchivedSharedWorldsDialog onClose={() => setWorldShelfOpen(false)} />}
       {campaignShelfOpen && <ArchivedDialog onClose={() => setCampaignShelfOpen(false)} />}
-    </AppShell>
+    </>
   );
 }

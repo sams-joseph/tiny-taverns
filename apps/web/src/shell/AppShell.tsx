@@ -1,9 +1,14 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
+import { useAtomValue } from "@effect/atom-react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { CampaignId, CampaignRelation } from "@taverns/api";
-import { Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
-import type { ReactNode } from "react";
+import { Badge, Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { useState, type ReactNode } from "react";
+import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
+import { useCampaignAct } from "../campaign/act";
+import { campaignAtom, campaignNightAtom } from "../campaign/load";
 import { HobRegion } from "../hob/HobDock";
 import {
   useCampaignId,
@@ -12,6 +17,7 @@ import {
   useSection,
   type Section,
 } from "./location";
+import { TopBarSlot } from "./slots";
 
 /**
  * The fixed shell: **two nav rows**, a per-screen bar under them, a scrolling
@@ -20,6 +26,14 @@ import {
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
  * state are the visual specification, not code to carry across.
+ *
+ * ### It is mounted once
+ *
+ * `shell/ShellLayout.tsx` is the only thing that renders it, as the component
+ * of a pathless layout route, so the header, both rows, the bar's slot and the
+ * Hob panel are the same nodes from one screen to the next. A screen reaches
+ * into it at exactly one point: `TopBar`, which portals into the slot. Nothing
+ * travels down from a screen as a prop, and nothing here is about a screen.
  *
  * ### Navigation has two tiers, and the rule is the shape rather than a habit
  *
@@ -36,12 +50,10 @@ import {
  * own mechanism — its `GlobalItem` is `active={screen === n.id}` and the
  * campaign screens appear in no global list.
  *
- * **The campaign's name is the way home**, so the second row's title is a link
- * to the campaign index with the delivery's back-chevron beside it. The shell
- * builds that link itself from the route — it knows the id — and takes only the
- * name, which is data no router can supply. That replaced a `NavContext` every
- * campaign screen passed a hand-built `link` to: seven call sites, seven
- * chances to point the way home at the wrong route.
+ * **The campaign row sources itself.** The way home is built from the route,
+ * the name from `campaignAtom`, and the creator's badge and press from
+ * `campaignNightAtom`. A screen used to hand the row its name, badge and action,
+ * and the screens that forgot drew a row missing them.
  *
  * **The 260px rail is gone, and the width it took is still the point.** The
  * second delivery replaced it with one 56px row and gave the content the 260px
@@ -51,9 +63,6 @@ import {
  * viewport: `main` is a `@container`, and so is each nav row — the question a
  * row asks is whether *it* fits its own contents, which the window does not
  * answer.
- *
- * Each screen composes this itself and supplies its own top bar, rather than
- * the shell reaching down for a title it would have to be told about anyway.
  */
 
 interface NavItem {
@@ -303,23 +312,6 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
 }
 
 /**
- * The app's own bar: where you are in the product, and who you are.
- *
- * Not sticky and not on the layering scale — it is a flex row *above* the
- * scrolling column rather than something floating over it, so it never
- * overlaps anything and never has to win.
- *
- * **There is no role switch.** The group architecture removed the premise: the
- * relation is per campaign (`useCampaignRelation`), so the campaign row and
- * the *Ask Hob* button derive themselves from what this account is at the
- * table the route names, and the same URL renders creator chrome to its
- * creator and participant chrome to a player. Nothing global is left for a
- * toggle to say.
- *
- * **Where you are is read from the router, not handed down.** There is no
- * `route` prop to pass and none to get wrong; see `shell/location.ts`.
- */
-/**
  * *Ask Hob* with the relation applied — a component of its own so the
  * membership read happens only when the route names a campaign. At a table
  * this account merely plays at the button is absent rather than present and
@@ -335,27 +327,6 @@ function AskHobSlot({
   const relation = useCampaignRelation(campaignId);
   if (relation === "player") return null;
   return <AskHobButton onClick={onAskHob} />;
-}
-
-/**
- * The campaign row's items, relation-derived — rendered only inside a
- * campaign, which is what keeps the membership read off every other screen.
- */
-function CampaignRowNav({
-  campaignId,
-  section,
-}: {
-  readonly campaignId: CampaignId;
-  readonly section: Section;
-}) {
-  const relation = useCampaignRelation(campaignId);
-  return (
-    <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
-      {campaignNavFor(relation, campaignId).map((item) => (
-        <CampaignNavLink key={item.label} item={item} active={item.section === section} />
-      ))}
-    </nav>
-  );
 }
 
 /** The route back out to this table's cross-campaign context, when explicit. */
@@ -382,17 +353,150 @@ function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: Campaign
   );
 }
 
-function TopNav({
-  campaignName,
-  campaignBadge,
-  campaignActions,
-  onAskHob,
+/**
+ * The campaign row's title, which is also the way home.
+ *
+ * The delivery draws a back-chevron and the campaign's name as one button
+ * pointing at the campaign's own home screen, and that is the whole of what the
+ * rail's footer used to do: from a fight, from the bestiary, from the Chronicle,
+ * the name is the way back to prep.
+ *
+ * Where it goes is a fact about the route and the name is `campaignAtom`'s, so
+ * there is nothing for a screen to get wrong. While the name is still loading
+ * the chevron is drawn on its own rather than under a placeholder, which keeps
+ * the row's height from moving and says nothing untrue in the meantime.
+ *
+ * **The name is the first thing to give way on a narrow bar, and it gives way
+ * whole.** Measured in Chromium: this row needs 986px with six items, a badge
+ * and *Start session*, so below about 1024 something has to go — and left as a
+ * plain shrinking flex item the name squeezed the *chevron* to zero width at
+ * 760, taking the way home with it. So the name is `hidden` under the row's own
+ * `@3xl`, where it truncates instead, and `min-w-4` is the chevron's own width
+ * held as a floor. What is left below that is a back-chevron, which is a control
+ * that says what it does without a label.
+ */
+function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
+  const [campaign] = useApiAtom(campaignAtom(campaignId));
+  const name = campaign.state === "ready" ? campaign.value.name : undefined;
+
+  return (
+    <Link
+      to="/campaigns/$campaignId"
+      params={{ campaignId }}
+      // No `data-active`: this is the title, not an item, and the row's own
+      // *Overview* is what lights when you are at it.
+      activeProps={{}}
+      title="Campaign home"
+      aria-label={name === undefined ? "Campaign home" : `${name} — campaign home`}
+      className="flex min-w-4 items-center gap-1.75 text-faint transition-control hover:text-muted-foreground"
+    >
+      <Icon name="chevron-left" size={15} className="shrink-0" />
+      {name !== undefined && (
+        // `truncate`, not `whitespace-nowrap`: this is the one part of the row
+        // that is arbitrary length, so it is the one that gives way — and
+        // `hidden` below `@3xl`, where there is no longer room to give.
+        <span className="hidden min-w-0 truncate font-display text-label leading-none font-semibold tracking-display text-heading @3xl:block">
+          {name}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+/**
+ * The night the campaign is preparing, beside its name — the creator's only.
+ *
+ * The badge is this row's decoration, so it is the second thing to give way:
+ * the campaign's own screens say which night it is in their subtitle, and a
+ * narrow bar has to keep its controls. A player's row has none because a
+ * player's session read is visibility-gated and a badge that appears for some
+ * nights and not others says something it does not mean to.
+ */
+function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
+  const night = useAtomValue(campaignNightAtom(campaignId));
+  const session = AsyncResult.isSuccess(night) ? night.value.session : undefined;
+  if (session === undefined) return null;
+
+  return (
+    <div className="hidden shrink-0 @2xl:block">
+      <Badge variant="secondary">Session {session.number}</Badge>
+    </div>
+  );
+}
+
+/**
+ * The one press that belongs to the whole campaign, pushed right — *Start
+ * session* in the delivery, and the creator's only, which is the delivery's
+ * `!player` guard held as a shape instead of a check.
+ *
+ * It says which of the three things it is (`useCampaignAct`), and the
+ * Overview's card renders the same value rather than branching again.
+ */
+function CampaignActButton({ campaignId }: { readonly campaignId: CampaignId }) {
+  const { act, dialogs } = useCampaignAct(campaignId);
+
+  return (
+    <>
+      {act !== undefined && (
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <Button size="sm" onClick={act.press}>
+            <Icon name={act.icon} size={13} />
+            {act.label}
+          </Button>
+        </div>
+      )}
+      {dialogs}
+    </>
+  );
+}
+
+/**
+ * The campaign row — present exactly when the route names a campaign, which is
+ * the delivery's `inCampaign` read off the router instead of off a screen-id
+ * list. A screen cannot render it by mistake and cannot forget it either.
+ */
+function CampaignRow({
+  campaignId,
+  section,
 }: {
-  readonly campaignName?: string;
-  readonly campaignBadge?: ReactNode;
-  readonly campaignActions?: ReactNode;
-  readonly onAskHob?: () => void;
+  readonly campaignId: CampaignId;
+  readonly section: Section;
 }) {
+  const relation = useCampaignRelation(campaignId);
+
+  return (
+    <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
+      <CampaignHome campaignId={campaignId} />
+      <CampaignSharedWorldLink campaignId={campaignId} />
+      {relation === "creator" && <SessionBadge campaignId={campaignId} />}
+      <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
+        {campaignNavFor(relation, campaignId).map((item) => (
+          <CampaignNavLink key={item.label} item={item} active={item.section === section} />
+        ))}
+      </nav>
+      {relation === "creator" && <CampaignActButton campaignId={campaignId} />}
+    </div>
+  );
+}
+
+/**
+ * The app's own bar: where you are in the product, and who you are.
+ *
+ * Not sticky and not on the layering scale — it is a flex row *above* the
+ * scrolling column rather than something floating over it, so it never
+ * overlaps anything and never has to win.
+ *
+ * **There is no role switch.** The group architecture removed the premise: the
+ * relation is per campaign (`useCampaignRelation`), so the campaign row and
+ * the *Ask Hob* button derive themselves from what this account is at the
+ * table the route names, and the same URL renders creator chrome to its
+ * creator and participant chrome to a player. Nothing global is left for a
+ * toggle to say.
+ *
+ * **Where you are is read from the router, not handed down.** There is no
+ * `route` prop to pass and none to get wrong; see `shell/location.ts`.
+ */
+function TopNav({ onAskHob }: { readonly onAskHob?: () => void }) {
   const section = useSection();
   const campaignId = useCampaignId();
 
@@ -450,184 +554,17 @@ function TopNav({
         </div>
       </div>
 
-      {/* The campaign row — present exactly when the route names a campaign,
-          which is the delivery's `inCampaign` read off the router instead of off
-          a screen-id list. A screen cannot render it by mistake and cannot
-          forget it either. */}
-      {campaignId !== undefined && (
-        <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
-          <CampaignHome campaignId={campaignId} name={campaignName} />
-          <CampaignSharedWorldLink campaignId={campaignId} />
-          {/* The badge is this row's decoration, so it is the second thing to
-              give way — the campaign's own screens say which night it is in
-              their subtitle, and a narrow bar has to keep its controls. */}
-          <div className="hidden shrink-0 @2xl:block">{campaignBadge}</div>
-          <CampaignRowNav campaignId={campaignId} section={section} />
-          {campaignActions !== undefined && (
-            <div className="ml-auto flex shrink-0 items-center gap-2">{campaignActions}</div>
-          )}
-        </div>
-      )}
-    </header>
-  );
-}
-
-/**
- * The campaign row's title, which is also the way home.
- *
- * The delivery draws a back-chevron and the campaign's name as one button
- * pointing at the campaign's own home screen, and that is the whole of what the
- * rail's footer used to do: from a fight, from the bestiary, from the Chronicle,
- * the name is the way back to prep.
- *
- * **The shell builds the link, and the screen supplies only the name.** Where it
- * goes is a fact about the route — the id is in the URL — so there is nothing
- * for a screen to get wrong. It replaced a `link` prop that seven screens each
- * passed by hand.
- *
- * The name is data no router can supply, so it is a prop; while it is still
- * loading the chevron is drawn on its own rather than under a placeholder, which
- * keeps the row's height from moving and says nothing untrue in the meantime.
- *
- * **The name is the first thing to give way on a narrow bar, and it gives way
- * whole.** Measured in Chromium: this row needs 986px with six items, a badge
- * and *Start session*, so below about 1024 something has to go — and left as a
- * plain shrinking flex item the name squeezed the *chevron* to zero width at
- * 760, taking the way home with it. So the name is `hidden` under the row's own
- * `@3xl`, where it truncates instead, and `min-w-4` is the chevron's own width
- * held as a floor. What is left below that is a back-chevron, which is a control
- * that says what it does without a label.
- */
-function CampaignHome({
-  campaignId,
-  name,
-}: {
-  readonly campaignId: CampaignId;
-  readonly name?: string;
-}) {
-  return (
-    <Link
-      to="/campaigns/$campaignId"
-      params={{ campaignId }}
-      // No `data-active`: this is the title, not an item, and the row's own
-      // *Overview* is what lights when you are at it.
-      activeProps={{}}
-      title="Campaign home"
-      aria-label={name === undefined ? "Campaign home" : `${name} — campaign home`}
-      className="flex min-w-4 items-center gap-1.75 text-faint transition-control hover:text-muted-foreground"
-    >
-      <Icon name="chevron-left" size={15} className="shrink-0" />
-      {name !== undefined && (
-        // `truncate`, not `whitespace-nowrap`: this is the one part of the row
-        // that is arbitrary length, so it is the one that gives way — and
-        // `hidden` below `@3xl`, where there is no longer room to give.
-        <span className="hidden min-w-0 truncate font-display text-label leading-none font-semibold tracking-display text-heading @3xl:block">
-          {name}
-        </span>
-      )}
-    </Link>
-  );
-}
-
-/**
- * The sticky per-screen header: what you are looking at, and what you can do to
- * it.
- *
- * `--fs-display-s` at `--ls-display`, which is where the delivery puts it now
- * that the wordmark sits in its own row above — one step down from the rail-era
- * `--fs-display-m`, because this is no longer the only display-sized thing on
- * the screen.
- *
- * `z-chrome` is the bottom rung of the layering scale in `@taverns/ui`'s
- * `styles.css`: sticky page furniture, deliberately far below the overlay band
- * so a dialog's scrim covers it. Reach for a rung, never a number.
- *
- * ### Tabs get their own row, below the header — the captain's rule
- *
- * > If we ever have tabs in the app like we do in the library I want those to
- * > be on their own row below the header. And any actions we have that belong
- * > to that tab should be inside of the content of that tab and not on the
- * > same hierarchical level as the tabs themselves.
- *
- * So `tabs` is a distinct full-width row under the title row, inside the same
- * sticky header so the strip's underline lands on the header's own bottom
- * hairline (the recipe's `-mb-px`, the campaign row's mechanism). `children`
- * stays for things that are genuinely header-level — a tab-scoped action does
- * not belong here or on the tab row; it goes inside that tab's content, which
- * for the Library screens is `FilterBar`'s `actions` slot.
- */
-export function TopBar({
-  title,
-  subtitle,
-  tabs,
-  children,
-}: {
-  readonly title: string;
-  readonly subtitle?: string;
-  /** A tab strip, on its own row below the title — never beside it. */
-  readonly tabs?: ReactNode;
-  readonly children?: ReactNode;
-}) {
-  return (
-    <header className="sticky top-0 z-chrome border-b border-hairline bg-surface-card">
-      {/* `flex-wrap` with a floor under the title: on a phone-width column the
-          action cluster drops under the title rather than squeezing the subtitle
-          into a one-word column beside three buttons. A `min-w-0` title would
-          never wrap anything — it fits any line at zero width — so the floor is
-          what makes the wrap reachable. Measured at 390 on the character sheet;
-          at 760 and above no screen's bar wraps. */}
-      <div className="flex flex-wrap items-center gap-gutter px-page-sm py-3.5 sm:px-page">
-        <div className="min-w-48 flex-1">
-          <h1 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-            {title}
-          </h1>
-          {subtitle !== undefined && (
-            <p className="mt-1 text-body-s leading-body text-muted-foreground">{subtitle}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2.5">{children}</div>
-      </div>
-      {tabs !== undefined && (
-        // `items-stretch` with no bottom padding: the strip's items reach the
-        // header's hairline, exactly as the campaign row's do.
-        <div className="flex h-10 items-stretch overflow-x-auto px-page-sm sm:px-page">{tabs}</div>
-      )}
+      {campaignId !== undefined && <CampaignRow campaignId={campaignId} section={section} />}
     </header>
   );
 }
 
 export function AppShell({
-  campaignName,
-  campaignBadge,
-  campaignActions,
-  topBar,
   onAskHob,
   panel,
-  fill = false,
+  fill,
   children,
 }: {
-  /**
-   * What this table is called — the campaign row's title, and the way home.
-   *
-   * The screen supplies it because the shell has no way to know it (the same
-   * reason the screen supplies its own `topBar`), and **only** it: where the
-   * title links to is a fact about the route, so the shell builds that itself.
-   * A screen that names no campaign in its URL has no campaign row at all and
-   * anything passed here is ignored, which is the shape rather than a rule.
-   */
-  readonly campaignName?: string;
-  /** The session badge beside the name, when the screen has read one. */
-  readonly campaignBadge?: ReactNode;
-  /**
-   * Pushed right on the campaign row — *Start session*, in the delivery.
-   *
-   * A screen's own top bar is still where the things you do *to what you are
-   * looking at* go; this is for the one action that belongs to the whole
-   * campaign and is drawn on the row that names it. Only DM screens supply one,
-   * which is the delivery's `!player` guard held as a shape instead of a check.
-   */
-  readonly campaignActions?: ReactNode;
-  readonly topBar: ReactNode;
   /**
    * The seam for the Hob chat panel, and the whole of it.
    *
@@ -650,8 +587,8 @@ export function AppShell({
    * positioning against it — and the shell carries no chat state, no shortcut
    * and no breakpoint of its own. `useHobPanel` owns all three.
    */
-  readonly onAskHob?: () => void;
-  readonly panel?: ReactNode;
+  readonly onAskHob: (() => void) | undefined;
+  readonly panel: ReactNode;
   /**
    * Give the body the viewport's height instead of letting the page scroll.
    *
@@ -661,24 +598,27 @@ export function AppShell({
    * a DM who has to scroll to see whose turn it is has the wrong tool. That
    * needs a bounded height all the way down, which is what this swaps in: the
    * column stops scrolling, and `main` becomes a `min-h-0` flex child so its
-   * own children can be told how tall they are.
+   * own children can be told how tall they are. Declared by the route, as
+   * `staticData.fill`.
    */
-  readonly fill?: boolean;
+  readonly fill: boolean;
   readonly children: ReactNode;
 }) {
+  /** The bar's slot, published to the screen below once it has mounted. */
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav
-        campaignName={campaignName}
-        campaignBadge={campaignBadge}
-        campaignActions={campaignActions}
-        onAskHob={onAskHob}
-      />
+      <TopNav onAskHob={onAskHob} />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
         >
-          {topBar}
+          {/* The screen's `TopBar` portals in here. Sticky at `z-chrome`, the
+              bottom rung of the layering scale in `@taverns/ui`'s `styles.css`:
+              page furniture, deliberately far below the overlay band so a
+              dialog's scrim covers it. Reach for a rung, never a number. */}
+          <div ref={setBar} className="sticky top-0 z-chrome" />
           {/* `@container`, so a screen's layout turns over on the width of the
               column it actually has. Every `fixed` overlay in the product is
               portalled to the body, so the containing block this establishes
@@ -690,7 +630,7 @@ export function AppShell({
                 : "@container flex-1 px-page-sm py-page sm:px-page"
             }
           >
-            {children}
+            <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
           </main>
         </div>
         {panel}

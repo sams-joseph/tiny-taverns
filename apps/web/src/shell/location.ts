@@ -5,6 +5,7 @@ import type {
   SharedWorldId,
 } from "@taverns/api";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
 
@@ -15,8 +16,8 @@ import { membershipsAtom } from "../campaign/load";
  *
  * **Nothing here is a prop.** The router owns the URL, so a second copy
  * threaded down through screens would be a second answer to "where am I" — and
- * the one that could disagree, because it is the one nobody updates. Every
- * screen renders `AppShell` with no location prop at all.
+ * the one that could disagree, because it is the one nobody updates. The shell
+ * is mounted once, by the layout route, and takes no location prop at all.
  *
  * ### There is no mode any more, and that is the group architecture's shape
  *
@@ -104,12 +105,26 @@ export function useSharedWorldId(): SharedWorldId | undefined {
 }
 
 /**
+ * Read in place of the membership list where the route names no campaign.
+ *
+ * The persistent layout's Hob panel asks for the relation on every screen, and
+ * a hook cannot be skipped; subscribing to `membershipsAtom` there would put
+ * `GET /me/campaigns` on the Library and the roster, which have no campaign to
+ * ask about. An atom that is never anything but `Initial` requests nothing.
+ */
+const noCampaign: typeof membershipsAtom = Atom.make(AsyncResult.initial());
+
+const useMembershipsFor = (campaignId: CampaignId | undefined) =>
+  useApiAtom(campaignId === undefined ? noCampaign : membershipsAtom)[0];
+
+/**
  * What this account is at the campaign the route names — the relation the
  * chrome derives from, in place of the global mode it replaced.
  *
- * `undefined` only while the membership read is still settling: the campaign
- * row draws no items for that moment, because a row of creator controls
- * flashed at a player is chrome for somebody it does not belong to.
+ * `undefined` while the membership read is still settling, and wherever the
+ * route names no campaign: the campaign row draws no items for that moment,
+ * because a row of creator controls flashed at a player is chrome for somebody
+ * it does not belong to.
  *
  * **A failed read and an absent membership both fall back to `creator`.** The
  * bar has to keep working when the server is unreachable — that is exactly
@@ -126,7 +141,7 @@ export function useSharedWorldId(): SharedWorldId | undefined {
 export function useCampaignRelation(
   campaignId: CampaignId | undefined,
 ): CampaignRelation | undefined {
-  const [resource] = useApiAtom(membershipsAtom);
+  const resource = useMembershipsFor(campaignId);
   if (campaignId === undefined || resource.state === "loading") return undefined;
   if (resource.state === "failed") return "creator";
   return resource.value.find((row) => row.campaign.id === campaignId)?.relation ?? "creator";
@@ -144,7 +159,7 @@ export function useCampaignRelation(
 export function useCampaignSharedWorld(
   campaignId: CampaignId | undefined,
 ): CampaignSharedWorld | null | undefined {
-  const [resource] = useApiAtom(membershipsAtom);
+  const resource = useMembershipsFor(campaignId);
   if (campaignId === undefined || resource.state === "loading") return undefined;
   if (resource.state === "failed") return undefined;
   return resource.value.find((row) => row.campaign.id === campaignId)?.sharedWorld;

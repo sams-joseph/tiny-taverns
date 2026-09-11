@@ -542,6 +542,23 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
     setActivity(undefined);
   }, []);
 
+  /**
+   * A different scope is a different conversation.
+   *
+   * The panel outlives navigation, so the scope changes under a mounted hook:
+   * the thread, the turns and anything still answering belong to the campaign
+   * or world they were asked in. The read effect above adopts the new scope's
+   * newest thread, and only onto an empty transcript, which this is what makes.
+   */
+  const scopeKey = campaignId ?? worldId;
+  const shownFor = useRef(scopeKey);
+  useEffect(() => {
+    if (shownFor.current === scopeKey) return;
+    shownFor.current = scopeKey;
+    reset();
+    setStatus(undefined);
+  }, [scopeKey, reset]);
+
   return {
     turns,
     thinking: asking && !writing,

@@ -1,48 +1,36 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
-import { useNavigate, type LinkProps } from "@tanstack/react-router";
-import { Badge, Button, Icon, type IconName } from "@taverns/ui";
+import { Button, Icon } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useInvalidate } from "../api/atoms";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { FailureNotice, Loading } from "../ui/states";
+import { useCampaignAct } from "./act";
 import { CampaignDialog } from "./CampaignDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
 import { campaignAtom, campaignViewAtom, campaignViewKeys, type CampaignView } from "./load";
-import { StartRunDialog } from "./StartRunDialog";
-import { StartSessionDialog } from "./StartSessionDialog";
 
 /**
- * Everything the campaign's five destinations have in common, once.
+ * Everything the campaign's destinations have in common, once.
  *
  * **The campaign view was one screen with three tabs; the sixth delivery makes
- * it three screens.** `CampaignScreens.jsx` splits `CampaignHome.jsx` into
+ * it several screens.** `CampaignScreens.jsx` splits `CampaignHome.jsx` into
  * `CampOverview`, `CampEncounters` and `CampNotes`, because the delivery's
  * second nav row is a row of URLs and a tab is not one — see `routes.tsx`.
  *
  * What the split must not do is give the campaign several answers to what it is.
- * The name in the bar, the way home, the session badge, whether the table is
- * shared, who is invited, and starting or finishing the night are facts about
- * the *campaign* rather than about whichever of its screens is open, so they
- * live here and every destination gets the same ones. A screen supplies its own
- * title, its own top-bar controls and its own body, which is the same seam the
- * shell already has with every other screen in the product.
+ * Whether the table is shared, who is invited, and finishing the night are facts
+ * about the *campaign* rather than about whichever of its screens is open, so
+ * they live here and every destination gets the same ones. A screen supplies its
+ * own title, its own top-bar controls and its own body.
  *
- * ### Party and the Chronicle are destinations too, and the rule cost something
- *
- * Both were built before the split and both composed `AppShell` themselves,
- * passing `campaignName` and nothing else. That is not a stylistic difference:
- * the badge and the campaign action are props of the shell, so a screen that
- * builds its own row simply has no way to draw them, **and the campaign row on
- * two of its five destinations silently lost the night it is preparing and the
- * one press it offers.** It reads as intermittent — same night, same width,
- * different tab — which is what took it so long to be reported as a bug rather
- * than as a layout quirk. `campaignRow.test.tsx` is what fails now instead: it
- * enumerates the DM row's own destinations, so a sixth screen that hand-builds a
- * shell cannot ship.
+ * The name, the way home, the session badge and the campaign's press are the
+ * campaign row's, which reads them itself (`shell/AppShell.tsx`). A destination
+ * used to hand them to the shell, and the two that composed a shell of their own
+ * drew a row without the night or the press; `campaignRow.test.tsx` still visits
+ * every destination the row offers.
  *
  * ### One value, three states — and eight atoms underneath it
  *
@@ -104,23 +92,6 @@ import { StartSessionDialog } from "./StartSessionDialog";
  */
 
 /**
- * The one press the campaign offers, whichever of its three things it is.
- *
- * **It is drawn twice** — on the campaign row, where it follows the DM across
- * all six of the campaign's screens, and in the Overview's *Next session* card,
- * which is the delivery's contextual, primary one. Both are the delivery's, and
- * both must say the same thing: two controls computing the same three-way branch
- * independently is two controls that can differ, and with three states rather
- * than two that stopped being a theoretical risk. So it is computed once, here,
- * and both call sites render it.
- */
-export interface CampaignAct {
-  readonly label: string;
-  readonly icon: IconName;
-  readonly press: () => void;
-}
-
-/**
  * What a screen reads on top of the campaign view.
  *
  * The error channel is `unknown` on purpose: `asResource` narrows whatever
@@ -151,21 +122,8 @@ export interface CampaignChromeSlots<Extra = undefined> {
    * was written for, which render `CampaignView` and nothing else.
    */
   readonly extra: Extra;
-  /**
-   * Put an encounter on the table, or walk back into the fight already on it.
-   *
-   * One function for both because it is one press to a DM, and which of the two
-   * it is depends on `view.run`, which lives here. **It opens a night if there
-   * is not one** — `StartRunDialog`'s cold branch — so an encounter card's *Run*
-   * still works in one step on a campaign that has never played.
-   */
+  /** Put an encounter on the table, or walk back into the fight — see `CampaignActs.run`. */
   readonly run: (encounterId?: EncounterId) => void;
-  /**
-   * The primary press for this campaign, in whichever of its three states —
-   * including opening the night, which is why no screen is handed a
-   * `startSession` of its own. One press computed once; see `CampaignAct`.
-   */
-  readonly act: CampaignAct;
   /** Open the confirmation that ends the night. */
   readonly finishSession: () => void;
   /**
@@ -179,26 +137,6 @@ export interface CampaignChromeSlots<Extra = undefined> {
 
 /** The campaign-wide dialogs, which any of the three screens may raise. */
 type CampaignEditing = { readonly what: "campaign" } | { readonly what: "invites" };
-
-/**
- * The three states, and the words for each.
- *
- * They used to be two — `live === undefined ? "Start session" : "Back to the
- * fight"` — and that was wrong the moment a night could be open with nothing on
- * the table: `live` is still undefined there, so the campaign would offer *Start
- * session* for a session already running and the press would try to open a
- * second one. **The session and the run are two questions and are asked
- * separately.**
- */
-const actFor = (view: CampaignView, onRun: () => void, onStartSession: () => void): CampaignAct =>
-  view.run !== undefined
-    ? { label: "Back to the fight", icon: "swords", press: onRun }
-    : view.session === undefined
-      ? { label: "Start session", icon: "play", press: onStartSession }
-      : // The night is open. What is left to do is the DM's discretion — an
-        // encounter goes on the table when the party reaches one — so the press
-        // is the fight rather than a second night.
-        { label: "Start an encounter", icon: "swords", press: onRun };
 
 export function CampaignChrome<Extra = undefined>({
   campaignId,
@@ -276,14 +214,8 @@ export function CampaignChrome<Extra = undefined>({
     invalidate(campaignViewKeys(campaignId, nightId));
     refreshExtra();
   }, [invalidate, campaignId, nightId, refreshExtra]);
-  // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
-  const hob = useHobPanel({ initialOpen: false });
-  const navigate = useNavigate();
+  const { run, dialogs } = useCampaignAct(campaignId);
   const [editing, setEditing] = useState<CampaignEditing | undefined>();
-  /** The encounter the DM pressed Run on, while the start dialog is open. */
-  const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
-  /** Whether the "open the night" confirmation is up. */
-  const [opening, setOpening] = useState(false);
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
 
@@ -296,36 +228,6 @@ export function CampaignChrome<Extra = undefined>({
   const view = loaded;
 
   const close = useCallback(() => setEditing(undefined), []);
-
-  /**
-   * Where the runner is, when there is a fight to go back to.
-   *
-   * Memoised because it is an object: a fresh literal every render would give
-   * `run` a fresh identity every render, and `run` reaches an encounter grid.
-   */
-  const live: LinkProps | undefined = useMemo(
-    () =>
-      view?.run !== undefined && view.session !== undefined
-        ? {
-            to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
-            params: { campaignId, sessionId: view.session.id, runId: view.run.id },
-          }
-        : undefined,
-    [campaignId, view?.run, view?.session],
-  );
-
-  const run = useCallback(
-    (encounterId?: EncounterId) => {
-      if (live !== undefined) {
-        void navigate(live);
-        return;
-      }
-      setStarting({ encounterId });
-    },
-    [live, navigate],
-  );
-
-  const startSession = useCallback(() => setOpening(true), []);
   const finishSession = useCallback(() => setFinishing(true), []);
   const openSettings = useCallback(
     (what: "campaign" | "invites") => setEditing({ what } as CampaignEditing),
@@ -341,44 +243,19 @@ export function CampaignChrome<Extra = undefined>({
           // never sees one half of one load.
           extra: extra as Extra,
           run,
-          act: actFor(view, () => run(), startSession),
           finishSession,
           openSettings,
         };
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} campaignId={campaignId} />}
-      campaignName={view?.campaign.name}
-      campaignBadge={
-        view?.session === undefined ? undefined : (
-          <Badge variant="secondary">Session {view.session.number}</Badge>
-        )
-      }
-      /* The delivery puts *Start session* on the campaign row, pushed right, and
-         it belongs to the campaign rather than to whichever screen is open —
-         which is exactly why it moved off the per-screen bar. It says which of
-         the three things it is (`actFor`), and the Overview's card renders the
-         same value rather than branching again. */
-      campaignActions={
-        slots === undefined ? undefined : (
-          <Button size="sm" onClick={slots.act.press}>
-            <Icon name={slots.act.icon} size={13} />
-            {slots.act.label}
-          </Button>
-        )
-      }
-      topBar={
-        <TopBar
-          title={title}
-          subtitle={slots === undefined ? undefined : subtitle?.(slots)}
-          tabs={slots === undefined ? undefined : tabs?.(slots)}
-        >
-          {slots !== undefined && actions?.(slots)}
-        </TopBar>
-      }
-    >
+    <>
+      <TopBar
+        title={title}
+        subtitle={slots === undefined ? undefined : subtitle?.(slots)}
+        tabs={slots === undefined ? undefined : tabs?.(slots)}
+      >
+        {slots !== undefined && actions?.(slots)}
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading the campaign…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -409,33 +286,9 @@ export function CampaignChrome<Extra = undefined>({
           onFinished={() => setFinishing(false)}
         />
       )}
-      {opening && view !== undefined && (
-        <StartSessionDialog
-          campaign={view.campaign}
-          onClose={() => setOpening(false)}
-          // There is no run to navigate to — that is the whole point of this
-          // door — so the DM stays where they are and the screen catches up on
-          // the two reads the dialog named.
-          onStarted={() => setOpening(false)}
-        />
-      )}
-      {starting !== undefined && view !== undefined && (
-        <StartRunDialog
-          campaign={view.campaign}
-          session={view.session}
-          encounters={view.encounters}
-          preselected={starting.encounterId}
-          onClose={() => setStarting(undefined)}
-          onStarted={(sessionId, runId) => {
-            setStarting(undefined);
-            void navigate({
-              to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
-              params: { campaignId, sessionId, runId },
-            });
-          }}
-        />
-      )}
-    </AppShell>
+      {/* An encounter card's *Run*, and its cold branch that opens a night. */}
+      {dialogs}
+    </>
   );
 }
 

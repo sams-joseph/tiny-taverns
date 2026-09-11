@@ -27,8 +27,7 @@ import { useApiAtom, useInvalidate } from "../api/atoms";
 import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { ArchivedDialog } from "./ArchivedDialog";
@@ -476,18 +475,12 @@ export function CampaignsScreen() {
   const [transition, setTransition] = useState<
     { readonly mode: SharedWorldTransition; readonly membership: CampaignMembership } | undefined
   >();
-  const hob = useHobPanel({ initialOpen: false });
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play." />
-      }
-    >
+    <>
+      <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play." />
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
@@ -551,6 +544,6 @@ export function CampaignsScreen() {
           onClose={() => setTransition(undefined)}
         />
       )}
-    </AppShell>
+    </>
   );
 }

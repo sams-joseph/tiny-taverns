@@ -63,7 +63,7 @@ const tabForHash = (hash: string): NpcTab =>
   NPC_TABS.some((item) => item.id === hash) ? (hash as NpcTab) : "profile";
 
 export function NpcScreen() {
-  const { campaignId, npcId } = useParams({ from: "/campaigns/$campaignId/cast/$npcId" });
+  const { campaignId, npcId } = useParams({ from: "/_shell/campaigns/$campaignId/cast/$npcId" });
   const locationHash = useLocation({ select: (location) => location.hash });
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<NpcTab>(() => tabForHash(locationHash));

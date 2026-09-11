@@ -3,11 +3,10 @@ import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
 import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   EQUIPMENT_FACETS,
@@ -42,7 +41,6 @@ export function EquipmentLibraryScreen() {
   const [resource, reload] = useApiAtom(libraryEquipmentAtom(query));
   const [opened, setOpened] = useState<string | undefined>();
   const [editing, setEditing] = useState<string | "new" | undefined>();
-  const hob = useHobPanel({ initialOpen: false });
 
   const pages = useEquipmentPages(resource, query, loadMoreLibraryEquipment);
   const shown = pages.shown;
@@ -50,21 +48,16 @@ export function EquipmentLibraryScreen() {
   const editingItem = pages.equipment.find((item) => item.id === editing);
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={
-            shown === undefined
-              ? undefined
-              : countOf(pages.equipment.length, list.narrowed, pages.hasMore)
-          }
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={
+          shown === undefined
+            ? undefined
+            : countOf(pages.equipment.length, list.narrowed, pages.hasMore)
+        }
+        tabs={<LibraryNav />}
+      />
       {shown === undefined && resource.state === "loading" && (
         <Loading label="Reading the equipment…" />
       )}
@@ -124,6 +117,6 @@ export function EquipmentLibraryScreen() {
       {editingItem !== undefined && (
         <EquipmentFormDialog equipment={editingItem} onClose={() => setEditing(undefined)} />
       )}
-    </AppShell>
+    </>
   );
 }

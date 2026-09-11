@@ -59,7 +59,7 @@ import { RosterCard } from "./RosterCard";
  */
 
 export function PartyScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [inviting, setInviting] = useState(false);
 
   return (
