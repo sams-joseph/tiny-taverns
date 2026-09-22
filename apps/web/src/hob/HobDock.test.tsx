@@ -34,13 +34,20 @@ const overlaidPanel = () => document.querySelector("[data-mobile=true]");
 const inlinePanel = () => document.querySelector("[data-slot=sidebar-container]");
 const gap = () => document.querySelector("[data-slot=sidebar-gap]");
 
-const dock = (props: { open: boolean; inline: boolean; onClose?: () => void }) =>
-  render(
-    <HobRegion>
+const dock = (props: {
+  open: boolean;
+  inline: boolean;
+  bounded?: boolean;
+  onClose?: () => void;
+}) => {
+  const { bounded, ...dockProps } = props;
+  return render(
+    <HobRegion bounded={bounded}>
       <div>the content</div>
-      <HobDock turns={[]} {...props} />
+      <HobDock turns={[]} {...dockProps} />
     </HobRegion>,
   );
+};
 
 describe("HobDock", () => {
   it("keeps the column but takes it off-canvas — and out of the tab order — when closed", () => {
@@ -56,6 +63,31 @@ describe("HobDock", () => {
     );
     expect(inlinePanel()).toHaveAttribute("inert");
     expect(scrim()).toBeNull();
+  });
+
+  it("clips the off-canvas column sideways without turning the row into a scroller", () => {
+    dock({ open: false, inline: true });
+
+    // The state the row spends most of its life in: the column is still laid
+    // out, 400px past the row's right edge, so an unclipped region hands the
+    // document 400px of sideways scroll and a scrollbar nobody asked for.
+    // Measured in Chromium at 1440: `scrollWidth` 1825 against a 1425 client
+    // width, and the collapsed panel's box at x 1425→1825.
+    expect(region()).toHaveClass("overflow-x-clip");
+    // `clip` and not `hidden`, which is the difference the class name hides:
+    // `hidden` on one axis computes the `visible` axis to `auto`, and a
+    // document screen gets back the second vertical scrollbar it just lost.
+    expect(region()).not.toHaveClass("overflow-x-hidden");
+    expect(region()).not.toHaveClass("overflow-hidden");
+    expect(region()).not.toHaveClass("overflow-auto");
+  });
+
+  it("clips both axes when the row is bounded to the viewport", () => {
+    dock({ open: false, inline: true, bounded: true });
+
+    // A fill screen already clips everything — the panel's own thread is what
+    // scrolls, inside the height the row was given.
+    expect(region()).toHaveClass("min-h-0", "overflow-hidden");
   });
 
   it("renders nothing at all while it is closed below the threshold", () => {

@@ -59,10 +59,19 @@ const HobRegionContext = createContext<React.RefObject<HTMLDivElement | null> | 
  * The row the dock lives in: the content column, then the panel.
  *
  * `relative` is load-bearing: it is what the overlay positions against. A
- * viewport-filling screen also needs `min-h-0` and clipping so the panel's own
- * thread can scroll inside the remaining height. A document screen must do the
- * opposite and grow with its content; clipping that region would turn the
- * content column back into a second page scroller.
+ * viewport-filling screen also needs `min-h-0` and clipping on both axes so the
+ * panel's own thread can scroll inside the remaining height. A document screen
+ * must do the opposite *vertically* and grow with its content; clipping it
+ * there would turn the content column back into a second page scroller.
+ *
+ * **Horizontally it must clip either way.** A collapsed off-canvas sidebar is
+ * still mounted and still laid out — at `right: calc(var(--sidebar-width) * -1)`,
+ * 400px past this row's right edge — so an unclipped region hands the document
+ * 400px of scrollable width and a horizontal scrollbar the reader never asked
+ * for. `overflow-x-clip` rather than `overflow-x-hidden` is the whole point:
+ * `hidden` on one axis computes the `visible` axis to `auto`, which makes this
+ * row a scroll container again and puts back the vertical scrollbar a document
+ * screen just got rid of. `clip` leaves the other axis genuinely `visible`.
  */
 export function HobRegion({
   bounded = false,
@@ -77,7 +86,7 @@ export function HobRegion({
     <HobRegionContext.Provider value={region}>
       <div
         ref={region}
-        className={`relative flex flex-1 ${bounded ? "min-h-0 overflow-hidden" : "min-h-full"}`}
+        className={`relative flex flex-1 ${bounded ? "min-h-0 overflow-hidden" : "min-h-full overflow-x-clip"}`}
       >
         {children}
       </div>
