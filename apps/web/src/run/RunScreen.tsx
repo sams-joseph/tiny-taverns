@@ -912,7 +912,11 @@ export function RunScreen() {
               onRoll={() => void rollInitiative()}
             />
 
-            <div className="flex min-h-0 flex-col gap-4">
+            {/* The column scrolls, not the page: the initiative list beside it
+                stays put while the DM reads further down. The sheet leads and
+                takes most of the column's height (`CombatantPanel`); the cards
+                under it are secondary and are reached by scrolling here. */}
+            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
               <CombatantPanel
                 combatant={selected}
                 hp={selected === undefined ? 0 : controller.hpOf(selected)}

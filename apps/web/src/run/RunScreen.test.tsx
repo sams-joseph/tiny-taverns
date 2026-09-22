@@ -489,6 +489,37 @@ describe("the runner", () => {
     expect(panel().getByText("1d6+2")).toBeInTheDocument();
   });
 
+  // Heights are the browser's (`pnpm -F web shell-audit` walks the runner);
+  // what jsdom can pin is who scrolls. The column does, so the sheet must not:
+  // a second scroller inside it is where the wheel gets stuck.
+  it("leads the right column with the sheet, and scrolls the column rather than the sheet", async () => {
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+
+    const sheet = screen.getByRole("region", { name: "Selected combatant" });
+    const column = sheet.parentElement as HTMLElement;
+    expect(column.firstElementChild).toBe(sheet);
+    expect(column).toHaveClass("min-h-0", "overflow-y-auto");
+    expect(sheet).toHaveClass("min-h-4/5", "shrink-0");
+    expect(sheet.className).not.toMatch(/overflow|flex-1/);
+    // The cards under it are in the same scroller, not squeezed beside it.
+    expect(column).toContainElement(screen.getByRole("log", { name: "What just happened" }));
+  });
+
+  it("keeps an empty sheet to its natural height, so the cards below show", async () => {
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, activeCombatantId: null } });
+      }
+    }
+    await renderRunner();
+
+    const sheet = await screen.findByRole("region", { name: "Selected combatant" });
+    expect(sheet).toHaveTextContent(/Pick a line in the initiative list/);
+    expect(sheet).toHaveClass("shrink-0");
+    expect(sheet.className).not.toMatch(/min-h|flex-1/);
+  });
+
   it("tells the DM a fight is over rather than pretending it is live", async () => {
     for (const [key, answer] of [...server.routes]) {
       if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
