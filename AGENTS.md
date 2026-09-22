@@ -67,7 +67,7 @@ The commonest defect here is a change that works on the path you tested and is m
 - Smallest proof that the change works: `vitest run <file>` in the package you touched, plus `typecheck` for that package. CI runs `turbo run lint typecheck test build` and `pnpm format:check` (root Prettier is not a turbo task).
 - The server suite needs Postgres, is capped at eight workers, and each file owns a database. Both suites carry a 60s test budget because they are load-sensitive; a timeout under load is not the same failure as a pool refusal.
 - Backend behaviour changes ship with a focused test. Boundary changes get a test that drives the refused path with a real actor minted the shipped way (`test/support/actors.ts`), not raw SQL.
-- Ask before driving a browser or computer use. When you do, assert on computed values (`getComputedStyle`, `elementFromPoint`, then click and check the value changed), not screenshots.
+- Ask before driving a browser or computer use. When you do, assert on computed values (`getComputedStyle`, `elementFromPoint`, then click and check the value changed), not screenshots. For the shell's geometry, `pnpm -F web shell-audit` already does this headlessly over the fixture maps, with no database or API server (`apps/web/audit/README.md`).
 
 ## Documentation
 

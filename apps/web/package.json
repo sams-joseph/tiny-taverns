@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "turbo run build --filter=web^... && tsc --noEmit",
     "lint": "eslint .",
-    "test": "turbo run build --filter=web^... && vitest run"
+    "test": "turbo run build --filter=web^... && vitest run",
+    "shell-audit": "turbo run build --filter=web^... && node audit/audit.mjs"
   },
   "dependencies": {
     "@clerk/react": "^6.12.11",

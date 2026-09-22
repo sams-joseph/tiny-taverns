@@ -61,7 +61,7 @@ git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect e
 ```
 
 Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui`
-(the component gallery in `App.tsx` renders every primitive, and its test drives them) and
+(the component gallery at `#/gallery` renders every primitive, and its test drives them) and
 `@taverns/design-system` (tokens, the Alegreya font files and the brand icons all resolve
 through normal Vite imports), plus the shared `@taverns/tsconfig` and
 `@taverns/eslint-config` packages — so the wiring is proven, not decorative.
@@ -90,12 +90,13 @@ same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI
 
 ### The gallery
 
-`apps/web` renders a **component gallery**: every component, in every variant and size, on
-the surfaces it is meant to sit on, with the colour ramps, type scale, radii and elevation
-alongside. It is how you check a change against `packages/design-system/guidelines/`.
+`apps/web` renders a **component gallery** at `#/gallery`: every component, in every variant
+and size, on the surfaces it is meant to sit on, with the colour ramps, type scale, radii and
+elevation alongside. It is how you check a change against `packages/design-system/guidelines/`.
+A dev build links it from the global row as _Components_; a production build does not.
 
 ```bash
-pnpm --filter web dev   # http://localhost:5173
+pnpm --filter web dev   # http://localhost:5173/#/gallery
 ```
 
 ## Prerequisites
