@@ -470,7 +470,6 @@ const runRoute = createRoute({
     },
   },
   component: RunScreen,
-  staticData: { fill: true },
   remountDeps: ({ params }) => params.runId,
 });
 
@@ -653,8 +652,8 @@ declare module "@tanstack/react-router" {
    * What a route tells the persistent layout above it, which cannot be a prop
    * because the layout renders the route rather than the other way round.
    *
-   * `fill`: the screen owns its scroller (the runner, the player table, the
-   * sheet, the NPC talk page) — see `AppShell`'s own `fill`.
+   * `fill`: the screen owns its scroller (the player table, the sheet, the NPC
+   * talk page) — see `AppShell`'s own `fill`. New screens do not use it.
    */
   interface StaticDataRouteOption {
     readonly fill?: boolean;

@@ -373,7 +373,7 @@ function hobState() {
     const spacer = document.createElement("div");
     spacer.style.height = "2000px";
     main.append(spacer);
-    // A fill screen (the runner) is bounded to the viewport, so the document
+    // A fill screen (the sheet) is bounded to the viewport, so the document
     // does not scroll at all and the spacer is clipped inside `main`.
     const bounded = document.scrollingElement.scrollHeight <= doc.clientHeight;
     window.scrollTo(0, 400);
@@ -502,28 +502,30 @@ try {
     }
 
     // The Hob panel across navigation: open it on the Overview, walk through
-    // two campaign screens, the runner (a fill screen) and out of the campaign,
-    // and ask whether it is the same node, still open, and where it sits: a
-    // full-height column beside the shell inline, under the bar as an overlay.
-    const overview = screens.find((screen) => screen.name === "overview");
+    // two campaign screens, the runner and out of the campaign, and ask whether
+    // it is the same node, still open, and where it sits: a full-height column
+    // beside the shell inline, under the bar as an overlay. Then again as a
+    // player, from their characters to the sheet, the one `fill` screen where a
+    // player has *Ask Hob* (inside a campaign they are seated in, they have
+    // none): bounded to the viewport, where the panel must simply not move.
+    const walks = [
+      { scenario: "creator", names: ["overview", "notes", "party", "run", "spells", "overview"] },
+      {
+        scenario: "player",
+        names: ["player-overview", "player-table", "sheet", "player-overview"],
+      },
+    ];
     if (only === undefined || only.includes("hob")) {
-      await load("creator", overview.path);
-      await cdp.run(pressAskHob);
-      await sleep(400);
-      await cdp.run(markShell);
-      const steps = [
-        overview.path,
-        ...["notes", "party", "run", "spells", "overview"].map(
-          (name) => screens.find((s) => s.name === name).path,
-        ),
-      ];
-      for (const [index, path] of steps.entries()) {
-        if (index > 0) await go(path);
-        hob.push({
-          width,
-          step: `${index}:${screens.find((s) => s.path === path).name}`,
-          ...(await cdp.run(hobState)),
-        });
+      for (const walk of walks) {
+        const steps = walk.names.map((name) => screens.find((s) => s.name === name));
+        await load(walk.scenario, steps[0].path);
+        await cdp.run(pressAskHob);
+        await sleep(400);
+        await cdp.run(markShell);
+        for (const [index, step] of steps.entries()) {
+          if (index > 0) await go(step.path);
+          hob.push({ width, step: `${index}:${step.name}`, ...(await cdp.run(hobState)) });
+        }
       }
     }
   }

@@ -679,14 +679,13 @@ export function AppShell({
    * Give the body the viewport's remaining height instead of letting the
    * document scroll.
    *
-   * The prep screens scroll: they are a document, and the top bar is sticky
-   * over it. The runner does not — it is one screenful with an initiative list
-   * that scrolls *inside* a panel while the stat block stays put beside it, and
-   * a DM who has to scroll to see whose turn it is has the wrong tool. That
-   * needs a bounded height all the way down, which is what this swaps in: the
-   * column stops scrolling, and `main` becomes a `min-h-0` flex child so its
-   * own children can be told how tall they are. Declared by the route, as
-   * `staticData.fill`.
+   * Screens are a document: the window scrolls and the chrome is sticky over
+   * it, and a page does not hand its scrolling to an inner container
+   * (`docs/internals/web-screens.md`). This is the exception three older
+   * screens still take — the player table, the sheet, the NPC talk page — each
+   * of which owns a scroller of its own: the column stops scrolling, and `main`
+   * becomes a `min-h-0` flex child so its own children can be told how tall
+   * they are. Declared by the route, as `staticData.fill`; new screens do not.
    */
   readonly fill: boolean;
   readonly children: ReactNode;

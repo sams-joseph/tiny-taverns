@@ -74,7 +74,7 @@ export function SessionLog({
   combatants,
   status,
 }: {
-  /** Newest first. Bounded by the screen — see `RunScreen`. */
+  /** Newest first, and already cut to the last few — `LOG_KEPT` in `RunScreen`. */
   readonly events: ReadonlyArray<SessionEvent>;
   readonly combatants: ReadonlyArray<Combatant>;
   readonly status: LiveStatus;
@@ -84,12 +84,7 @@ export function SessionLog({
   );
 
   return (
-    <Card
-      tone="panel"
-      role="log"
-      aria-label="What just happened"
-      className="max-h-64 shrink-0 overflow-hidden"
-    >
+    <Card tone="panel" role="log" aria-label="What just happened">
       <CardHeader className="pb-2">
         <div className="flex items-baseline justify-between gap-2.5">
           <CardTitle className="text-subtitle">What just happened</CardTitle>
@@ -103,7 +98,7 @@ export function SessionLog({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="overflow-y-auto pb-card">
+      <CardContent className="pb-card">
         {events.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
             Nothing yet. Every hit, turn and change lands here as it happens.

@@ -108,8 +108,8 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * which the Hob panel can take 400px out of without the window moving.
  *
  * The sheet scrolls in a scroller this screen owns rather than in the window —
- * `fill` on this route's `staticData`, the runner's mode — because both sticky
- * columns and the scroll-spy need a top edge that is *this screen's*. The
+ * `fill` on this route's `staticData` — because both sticky columns and the
+ * scroll-spy need a top edge that is *this screen's*. The
  * shell's chrome stack is outside that bounded region, so owning the scroller
  * is what makes `top-0` true without copying the chrome's variable height.
  *
