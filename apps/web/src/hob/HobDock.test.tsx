@@ -1,7 +1,7 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { HobDock, HobRegion } from "./HobDock";
+import { HobDock, HobFrame, HobRegion } from "./HobDock";
 import { HOB_INLINE_MIN, useHobPanel } from "./useHobPanel";
 
 /**
@@ -136,6 +136,46 @@ describe("HobDock", () => {
     expect(scrim()).not.toHaveClass("fixed");
     expect(overlaidPanel()).toHaveClass("absolute");
     expect(overlaidPanel()).not.toHaveClass("fixed");
+  });
+
+  it("finds the region from beside it, which is where the shell docks it", () => {
+    // The shell's shape: the dock is the frame's column, a *sibling* of the
+    // region under the bars rather than its child. The frame lifts the region's
+    // context above both, so the overlay still lands inside the region — below
+    // the bars — and not in the frame, which would scrim the bars as well.
+    render(
+      <HobFrame bounded={false} panel={<HobDock turns={[]} open inline={false} />}>
+        <div>the bars</div>
+        <HobRegion>
+          <div>the content</div>
+        </HobRegion>
+      </HobFrame>,
+    );
+
+    const shellRegion = screen.getByText("the content").parentElement;
+    expect(shellRegion?.contains(scrim() as Node)).toBe(true);
+    expect(shellRegion?.contains(overlaidPanel() as Node)).toBe(true);
+    expect(overlaidPanel()).toHaveClass("absolute");
+  });
+
+  it("pins the inline panel in a viewport-tall slot of the frame, clipped sideways", () => {
+    render(
+      <HobFrame bounded={false} panel={<HobDock turns={[]} open={false} inline />}>
+        <HobRegion>
+          <div>the content</div>
+        </HobRegion>
+      </HobFrame>,
+    );
+
+    // The sidebar's container is `absolute inset-y-0`, so the slot is what it
+    // is as tall as: the viewport, pinned while the document scrolls.
+    const slot = inlinePanel()?.closest(".sticky");
+    expect(slot).toHaveClass("top-0", "h-screen", "self-start");
+    // Closed, the column sits 400px past the frame's right edge; the frame
+    // clips it the way `HobRegion` does, and for the same reason.
+    const frame = slot?.parentElement;
+    expect(frame).toHaveClass("overflow-x-clip");
+    expect(frame).not.toHaveClass("overflow-x-hidden", "overflow-hidden", "overflow-auto");
   });
 
   it("dismisses on the scrim, which is the ordinary way out of an overlay", async () => {

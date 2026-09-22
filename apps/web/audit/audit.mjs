@@ -334,6 +334,21 @@ function hobState() {
   );
   const header = document.querySelector("header");
   const stack = document.querySelector(".sticky.top-0");
+  const doc = document.documentElement;
+  // The inline form is the sidebar's container; the overlaid one is the sheet,
+  // which only it marks `data-mobile`.
+  const inline = panel !== null && panel.closest("[data-mobile=true]") === null;
+  const dock = inline ? panel.closest("[data-slot=sidebar-container]") : null;
+  const box = (el) =>
+    el === null
+      ? null
+      : (({ x, y, width, height, right }) => ({
+          x: Math.round(x),
+          y: Math.round(y),
+          w: Math.round(width),
+          h: Math.round(height),
+          right: Math.round(right),
+        }))(el.getBoundingClientRect());
   let overlayCoversBar = null;
   let panelZ = null;
   if (panel !== null) {
@@ -341,20 +356,52 @@ function hobState() {
     let el = panel;
     while (el !== null && getComputedStyle(el).position === "static") el = el.parentElement;
     panelZ = el === null ? null : getComputedStyle(el).zIndex;
-    if (stack !== null) {
+    if (stack !== null && !inline) {
       const bar = stack.getBoundingClientRect();
       const probe = document.elementFromPoint(r.x + r.width / 2, bar.top + 10);
       overlayCoversBar = probe !== null && !stack.contains(probe);
     }
   }
+  // Inline, the panel must stay pinned full height while the document scrolls
+  // under the chrome beside it. Most screens on the walk are shorter than the
+  // viewport at 1440, so a spacer in `main` makes every step scroll; an inline
+  // style rather than a class, because a class no source file names is never
+  // emitted (CLAUDE.md, "Silent Tailwind").
+  let afterScroll = null;
+  const main = document.querySelector("main");
+  if (dock !== null && main !== null) {
+    const spacer = document.createElement("div");
+    spacer.style.height = "2000px";
+    main.append(spacer);
+    // A fill screen (the runner) is bounded to the viewport, so the document
+    // does not scroll at all and the spacer is clipped inside `main`.
+    const bounded = document.scrollingElement.scrollHeight <= doc.clientHeight;
+    window.scrollTo(0, 400);
+    afterScroll = {
+      bounded,
+      scrollY: Math.round(window.scrollY),
+      dockTop: Math.round(dock.getBoundingClientRect().top),
+      dockH: Math.round(dock.getBoundingClientRect().height),
+      stackTop: stack === null ? null : Math.round(stack.getBoundingClientRect().top),
+    };
+    window.scrollTo(0, 0);
+    spacer.remove();
+  }
   return {
     pressed: button?.getAttribute("aria-pressed") ?? null,
+    inline,
+    viewport: { w: doc.clientWidth, h: doc.clientHeight },
+    scrollWidth: doc.scrollWidth,
     panel:
       panel === null
         ? null
         : (({ x, width }) => ({ x: Math.round(x), w: Math.round(width) }))(
             panel.getBoundingClientRect(),
           ),
+    dock: box(dock),
+    stack: box(stack),
+    main: box(document.querySelector("main")),
+    afterScroll,
     panelZ,
     overlayCoversBar,
     samePanel: panel?.__auditMark === true,
@@ -455,8 +502,9 @@ try {
     }
 
     // The Hob panel across navigation: open it on the Overview, walk through
-    // two campaign screens and out of the campaign, and ask whether it is the
-    // same node, still open, and still under the bar.
+    // two campaign screens, the runner (a fill screen) and out of the campaign,
+    // and ask whether it is the same node, still open, and where it sits: a
+    // full-height column beside the shell inline, under the bar as an overlay.
     const overview = screens.find((screen) => screen.name === "overview");
     if (only === undefined || only.includes("hob")) {
       await load("creator", overview.path);
@@ -465,7 +513,7 @@ try {
       await cdp.run(markShell);
       const steps = [
         overview.path,
-        ...["notes", "party", "spells", "overview"].map(
+        ...["notes", "party", "run", "spells", "overview"].map(
           (name) => screens.find((s) => s.name === name).path,
         ),
       ];
@@ -618,13 +666,52 @@ for (const width of widths) {
     if (h.pressed !== "true" || h.panel === null || !h.samePanel || !h.sameHeader)
       findings.push(`${width}: hob at ${h.step}: ${JSON.stringify(h)}`);
     if (h.overlayCoversBar) findings.push(`${width}: hob at ${h.step}: the panel covers the bar`);
+    if (h.scrollWidth !== h.viewport.w)
+      findings.push(`${width}: hob at ${h.step}: scrollWidth ${h.scrollWidth} != ${h.viewport.w}`);
+    if (!h.inline) continue;
+    // Inline, the panel is a full-height column beside the whole shell: top 0,
+    // the viewport's height, flush with the right edge, and the chrome and
+    // `main` end where it begins.
+    const at = `${width}: hob at ${h.step}`;
+    if (h.dock === null) findings.push(`${at}: inline but no sidebar container`);
+    else {
+      if (h.dock.y !== 0 || h.dock.h !== h.viewport.h)
+        findings.push(`${at}: panel at y ${h.dock.y}, h ${h.dock.h} (want 0, ${h.viewport.h})`);
+      if (h.dock.right !== h.viewport.w)
+        findings.push(`${at}: panel's right edge ${h.dock.right} != ${h.viewport.w}`);
+      if (h.stack?.right !== h.dock.x)
+        findings.push(`${at}: chrome ends at ${h.stack?.right}, panel starts at ${h.dock.x}`);
+      if (h.main !== null && h.main.right > h.dock.x)
+        findings.push(`${at}: main ends at ${h.main.right}, past the panel at ${h.dock.x}`);
+    }
+    if (
+      h.afterScroll !== null &&
+      (h.afterScroll.scrollY !== (h.afterScroll.bounded ? 0 : 400) ||
+        h.afterScroll.dockTop !== 0 ||
+        h.afterScroll.dockH !== h.viewport.h ||
+        h.afterScroll.stackTop !== 0)
+    )
+      findings.push(`${at}: after scrolling ${JSON.stringify(h.afterScroll)}`);
   }
 }
 
 console.log(`\n## Hob across navigation`);
 for (const h of hob)
   console.log(
-    `${h.width}\t${h.step}\tpressed=${h.pressed}\tpanel=${h.panel === null ? "-" : `${h.panel.x}+${h.panel.w}`}\tz=${h.panelZ}\tsame panel=${h.samePanel}\tsame header=${h.sameHeader}`,
+    [
+      h.width,
+      h.step,
+      h.inline ? "inline" : "overlay",
+      `pressed=${h.pressed}`,
+      `panel=${h.panel === null ? "-" : `${h.panel.x}+${h.panel.w}`}`,
+      `dock=${h.dock === null ? "-" : `${h.dock.x},${h.dock.y} ${h.dock.w}x${h.dock.h}`}`,
+      `chrome.right=${h.stack?.right ?? "-"}`,
+      `at y ${h.afterScroll === null ? "-" : `${h.afterScroll.scrollY}: panel ${h.afterScroll.dockTop}+${h.afterScroll.dockH}, chrome ${h.afterScroll.stackTop}`}`,
+      `scrollW=${h.scrollWidth}`,
+      `z=${h.panelZ}`,
+      `same panel=${h.samePanel}`,
+      `same header=${h.sameHeader}`,
+    ].join("\t"),
   );
 
 // A request the scenario has no answer for is a gap in the fixtures, not in

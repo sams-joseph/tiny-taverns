@@ -32,7 +32,7 @@ Per screen, per width, after the DOM has been still for 300ms:
 - after scrolling the document 400px, whether the stack is still at `top: 0` and `elementFromPoint` still lands in it;
 - how many `Button`s paint the accent fill, and whether each is in the bar or the body.
 
-Then, at each width, it opens Hob on the Overview and walks Notes, Party, the Library and back. At each step it records whether the panel and header are the same DOM nodes (marked on the first step), whether _Ask Hob_ is still pressed, the panel's box and `z-index`, and whether the panel covers the bar.
+Then, at each width, it opens Hob on the Overview and walks Notes, Party, the runner (a `fill` screen), the Library and back. At each step it records whether the panel and header are the same DOM nodes (marked on the first step), whether _Ask Hob_ is still pressed, the panel's box and `z-index`, and `scrollWidth` with the panel open. Inline (from 1020 up) the panel must be a full-height column beside the whole shell: top 0, the viewport's height, flush with the right edge, with the sticky stack's right edge meeting its left and `main` ending before it; it then puts a 2000px spacer in `main`, scrolls the document 400px, and requires the panel still at `0` and viewport-tall and the stack still at `top: 0` (on the runner the document does not scroll, and the panel must simply not move). As an overlay, the panel must not cover the bar.
 
 The report prints one table per width, then the Hob walk, then **Findings**: any value that differs across screens where the rule says it should not, or breaks a rule. A clean run is `Findings (0)`.
 

@@ -41,10 +41,14 @@ function useHobScope(): HobScope | undefined {
  * ```tsx
  * const hob = useHobPanel();
  * // …in the top bar: <Button onClick={hob.toggle}>Ask Hob ⌘K</Button>
- * <HobRegion>
- *   <div className="relative flex min-w-0 flex-1 flex-col overflow-auto">…</div>
- *   <Hob hob={hob} />
- * </HobRegion>
+ * <HobFrame bounded={false} panel={<Hob hob={hob} />}>
+ *   <div className="flex min-w-0 flex-1 flex-col">
+ *     …the bars…
+ *     <HobRegion>
+ *       <div className="relative flex min-w-0 flex-1 flex-col">…</div>
+ *     </HobRegion>
+ *   </div>
+ * </HobFrame>
  * ```
  */
 export function Hob({ hob }: { readonly hob: HobPanelState }) {

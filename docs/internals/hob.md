@@ -106,7 +106,7 @@ Offline, stub `HttpClient`, not the model: `scriptedModel` in `test/support/mode
 
 ## The panel, briefly
 
-`apps/web/src/hob/conversation.ts` is the only web file that talks to the assistant. Nothing is requested until the panel is opened, and status is re-asked on each open. The "Knows" strip draws only what `HobStatus` vouched for; `hob.fixtures.ts`'s sample thread renders in the gallery and must never reach a screen. Omit an optional key rather than sending `undefined` (`threadId: undefined` arrives as null and `Schema.optional` refuses it). The panel is shadcn's `sidebar` over `sheet`, whose `container` prop portals the overlay into `HobRegion` so it covers the content, not the app.
+`apps/web/src/hob/conversation.ts` is the only web file that talks to the assistant. Nothing is requested until the panel is opened, and status is re-asked on each open. The "Knows" strip draws only what `HobStatus` vouched for; `hob.fixtures.ts`'s sample thread renders in the gallery and must never reach a screen. Omit an optional key rather than sending `undefined` (`threadId: undefined` arrives as null and `Schema.optional` refuses it). The panel is shadcn's `sidebar` over `sheet`. Docked, it is a full-height column of `HobFrame` beside the whole shell; overlaid, `sheet`'s `container` prop portals it into `HobRegion` so it covers the content under the bars, not the app.
 
 ## The NPC agent (Cast)
 

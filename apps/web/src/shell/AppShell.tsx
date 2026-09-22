@@ -17,7 +17,7 @@ import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
 import { campaignAtom, campaignNightAtom } from "../campaign/load";
-import { HobRegion } from "../hob/HobDock";
+import { HobFrame, HobRegion } from "../hob/HobDock";
 import {
   useCampaignId,
   useCampaignRelation,
@@ -28,7 +28,8 @@ import {
 import { TopBarSlot } from "./slots";
 
 /**
- * The shell: **two nav rows**, a per-screen bar under them, then the body.
+ * The shell: **two nav rows**, a per-screen bar under them, then the body —
+ * and, when it is docked, the Hob panel beside all four, full height.
  *
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
@@ -89,11 +90,11 @@ import { TopBarSlot } from "./slots";
  *
  * ### Nothing here asks the window how wide it is
  *
- * The page edge is `px-page-sm` under `@3xl` of `@container/app` on the outer
- * frame, which is the same question a `sm:` breakpoint used to ask and is not
+ * The page edge is `px-page-sm` under `@3xl` of `@container/app` on the shell's
+ * column, which is the same question a `sm:` breakpoint used to ask and is not
  * the same *kind* of question: everything else in the product turns over on the
  * width of the box it is in, and a shell with eight viewport breakpoints was the
- * one place that rule was written down and not followed. The frame is a
+ * one place that rule was written down and not followed. The column is a
  * container so a row can ask about the app rather than about the screen behind
  * it, and `characters/` reaches for the same `/app` container to cancel this
  * padding with a negative margin — two spellings of one edge is how they drift.
@@ -647,24 +648,30 @@ export function AppShell({
   /**
    * The seam for the Hob chat panel, and the whole of it.
    *
-   * `onAskHob` is the top nav's *Ask Hob* button; `panel` is rendered as the
-   * last child of the row under the top nav, and that row **is**
-   * `hob/HobDock.tsx`'s `HobRegion` — the component itself now, rather than a
-   * second copy of its class list kept in step by hand. It has to be: the region
-   * publishes its own element through a context, and the panel's overlaid form
-   * is portalled into that element and measured against it. A row restated here
-   * would be `relative` and look right and portal to `<body>`, where the scrim
-   * would cover the whole app including this bar.
+   * `onAskHob` is the top nav's *Ask Hob* button; `panel` is handed to
+   * `hob/HobDock.tsx`'s `HobFrame`, the app's full-height row, which renders it
+   * beside the whole shell. Inline, the panel is a column of the app from the
+   * viewport's top to its bottom, and every bar narrows with `main` to make
+   * room — the bars never run across above it.
+   *
+   * The overlaid form answers to a different box: the row under the chrome
+   * stack, which **is** `HobRegion` — the component itself, rather than a second
+   * copy of its class list kept in step by hand. It has to be: the region
+   * publishes its own element through a context the frame lifts above both, and
+   * the panel's overlaid form is portalled into that element and measured
+   * against it. A row restated here would be `relative` and look right and
+   * portal to `<body>`, where the scrim would cover the whole app including this
+   * bar.
    *
    * So `Hob` is passed here bare and never wrapped in a region of its own — a
-   * second region inside this one is a second positioned ancestor, and the
+   * second region inside the frame takes the ref from the first, and the
    * overlay would size to it instead of to the content. `HobRegion` used
-   * directly is still the right thing where there is no shell, which is what the
-   * gallery's specimens do.
+   * directly, with the dock inside it, is still the right thing where there is
+   * no shell, which is what the gallery's specimens do.
    *
-   * A panel is inline simply by taking part in the row, or an overlay by
-   * positioning against it — and the shell carries no chat state, no shortcut
-   * and no breakpoint of its own. `useHobPanel` owns all three.
+   * A panel is inline simply by taking part in the frame's row, or an overlay
+   * by positioning against the region — and the shell carries no chat state, no
+   * shortcut and no breakpoint of its own. `useHobPanel` owns all three.
    */
   readonly onAskHob: (() => void) | undefined;
   readonly panel: ReactNode;
@@ -688,42 +695,44 @@ export function AppShell({
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
 
   return (
-    // `@container/app`, named, and it is the only container anything asks about
-    // by name: it is the app's own frame, so it is what "how wide is the page
-    // edge" means. The rows and `main` below each keep an unnamed `@container`
-    // of their own for the questions that really are about their own width.
-    <div
-      className={`@container/app flex flex-col bg-surface-page ${
-        fill ? "h-screen overflow-hidden" : "min-h-screen"
-      }`}
-    >
-      {/* One sticky stack, so the global row, campaign row, screen bar and its
-          optional tabs pin as a unit. Keeping the slot here also means none of
-          those rows needs its own scroll container or a calculated top offset. */}
-      <div className="sticky top-0 z-chrome shrink-0">
-        <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
-        <div ref={setBar} />
-      </div>
-      <HobRegion bounded={fill}>
-        <div
-          className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-visible"}`}
-        >
-          {/* `@container`, so a screen's layout turns over on the width of the
-              column it actually has. Every `fixed` overlay in the product is
-              portalled to the body, so the containing block this establishes
-              catches nothing. */}
-          <main
-            className={
-              fill
-                ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter @3xl/app:px-page"
-                : "@container flex-1 px-page-sm py-page @3xl/app:px-page"
-            }
-          >
-            <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
-          </main>
+    // The frame is the app's full-height row, and the shell is its first
+    // column: the panel docks beside all of it, so opening Hob pushes the bars
+    // over with `main` rather than sliding in under them. See `HobFrame`.
+    <HobFrame bounded={fill} panel={panel} className="bg-surface-page">
+      {/* `@container/app`, named, and it is the only container anything asks
+          about by name: it is the app's own column, so it is what "how wide is
+          the page edge" means — beside an open panel that is the width the
+          shell actually has. The rows and `main` below each keep an unnamed
+          `@container` of their own for the questions that really are about
+          their own width. */}
+      <div className="@container/app flex min-w-0 flex-1 flex-col">
+        {/* One sticky stack, so the global row, campaign row, screen bar and its
+            optional tabs pin as a unit. Keeping the slot here also means none of
+            those rows needs its own scroll container or a calculated top offset. */}
+        <div className="sticky top-0 z-chrome shrink-0">
+          <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
+          <div ref={setBar} />
         </div>
-        {panel}
-      </HobRegion>
-    </div>
+        <HobRegion bounded={fill}>
+          <div
+            className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-visible"}`}
+          >
+            {/* `@container`, so a screen's layout turns over on the width of the
+                column it actually has. Every `fixed` overlay in the product is
+                portalled to the body, so the containing block this establishes
+                catches nothing. */}
+            <main
+              className={
+                fill
+                  ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter @3xl/app:px-page"
+                  : "@container flex-1 px-page-sm py-page @3xl/app:px-page"
+              }
+            >
+              <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
+            </main>
+          </div>
+        </HobRegion>
+      </div>
+    </HobFrame>
   );
 }
