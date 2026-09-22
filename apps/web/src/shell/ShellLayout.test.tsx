@@ -88,6 +88,25 @@ describe("one shell", () => {
     expect(importers).toEqual([join("shell", "ShellLayout.tsx")]);
   });
 
+  /**
+   * **The shell asks containers, not the window.** It had eight `sm:` uses while
+   * every screen under it turned over on the width of the box it was in, so the
+   * one file that states the rule was the one file breaking it. The page edge
+   * asks `@container/app` on the frame now, and each row asks its own container
+   * for everything else — see `AppShell.tsx`.
+   *
+   * A grep rather than a note, because the way this comes back is somebody
+   * reaching for `sm:` out of habit on a row that is already a container.
+   */
+  it("has no viewport breakpoint anywhere in the shell", () => {
+    const viewport = /(?<![@\w-])(max-)?(sm|md|lg|xl|2xl):/;
+    const offenders = sources()
+      .filter(({ file }) => file.startsWith(`shell${"/"}`))
+      .filter(({ source }) => viewport.test(code(source)))
+      .map(({ file }) => file);
+    expect(offenders).toEqual([]);
+  });
+
   it("has one Hob panel state, the layout's — the gallery's specimens aside", () => {
     // The gallery sits outside the persistent layout (`StandaloneLayout`), and
     // its specimens demonstrate the seam with a panel state of their own.

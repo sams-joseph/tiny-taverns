@@ -441,7 +441,7 @@ export function SectionSpine({
         // Second of the three flex items narrow (card, rail, document) and
         // third wide (card, document, spine) — the drawing's two orders, held
         // here so the document needs only its own pair.
-        "sticky top-0 z-chrome order-2 -mx-page-sm flex gap-1.5 overflow-x-auto border-b border-hairline bg-surface-page px-page-sm py-2 [scrollbar-width:none] sm:-mx-page sm:px-page",
+        "sticky top-0 z-chrome order-2 -mx-page-sm flex gap-1.5 overflow-x-auto border-b border-hairline bg-surface-page px-page-sm py-2 [scrollbar-width:none] @3xl/app:-mx-page @3xl/app:px-page",
         // The spine: a plain column with no band and no bleed, sized as the
         // delivery's third grid track.
         "@3xl:z-auto @3xl:order-3 @3xl:mx-0 @3xl:w-46.5 @3xl:shrink-0 @3xl:flex-col @3xl:gap-px @3xl:overflow-visible @3xl:border-b-0 @3xl:bg-transparent @3xl:px-0 @3xl:py-0",

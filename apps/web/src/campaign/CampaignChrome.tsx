@@ -26,11 +26,12 @@ import { campaignAtom, campaignViewAtom, campaignViewKeys, type CampaignView } f
  * they live here and every destination gets the same ones. A screen supplies its
  * own title, its own top-bar controls and its own body.
  *
- * The name, the way home, the session badge and the campaign's press are the
- * campaign row's, which reads them itself (`shell/AppShell.tsx`). A destination
- * used to hand them to the shell, and the two that composed a shell of their own
- * drew a row without the night or the press; `campaignRow.test.tsx` still visits
- * every destination the row offers.
+ * The name, the way home and the session badge are the campaign row's, which
+ * reads them itself (`shell/AppShell.tsx`); the campaign's own press is the
+ * per-screen bar's, which reads it the same way (`shell/TopBar.tsx`). A
+ * destination used to hand them to the shell, and the two that composed a shell
+ * of their own drew a row without the night or the press; `campaignRow.test.tsx`
+ * still visits every destination the row offers.
  *
  * ### One value, three states — and eight atoms underneath it
  *

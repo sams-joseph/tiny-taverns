@@ -1,4 +1,5 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import type { RouteIds } from "@tanstack/react-router";
@@ -188,6 +189,48 @@ describe("the shell's top bar", () => {
   it("keeps Ask Hob on the bar above any campaign", async () => {
     await renderAt("/campaigns");
     expect(screen.getByRole("button", { name: /Ask Hob/ })).toBeTruthy();
+  });
+
+  /**
+   * **Every control on the global row is the one 26px pill.** *Ask Hob* was a
+   * `Button size="sm"` — 32px measured, on a 44px row, beside four 26px nav
+   * pills — which is the delivery's `GlobalItem` and its *Ask Hob* drawn as two
+   * different things when the delivery draws them as one. jsdom computes no
+   * height, so what is asserted is the recipe they share: one class list, and
+   * `h-6.5` is the part of it that is the height.
+   */
+  it("wears one pill for every control on the global row", async () => {
+    await renderAt("/campaigns");
+    const row = nav().parentElement;
+    expect(row).not.toBeNull();
+    const controls = [...(row as HTMLElement).querySelectorAll<HTMLElement>("a[href], button")];
+    expect(controls.length).toBe(5);
+    for (const control of controls) {
+      expect(control.className).toContain("h-6.5");
+      expect(control.className).toContain("rounded-pill");
+    }
+  });
+
+  /**
+   * The one control on the bar that has a state, saying so. `AppShell.jsx` draws
+   * the open panel as an accent-soft fill under an accent border and the product
+   * did not, so a panel ⌘K had closed left the button looking exactly as it did
+   * with the panel up.
+   */
+  it("reflects the Hob panel's state on the button that opens it", async () => {
+    await renderAt("/campaigns");
+    const button = screen.getByRole("button", { name: /Ask Hob/ });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+    expect(button.className).toContain("bg-accent-soft");
+
+    // Closed from the keyboard, which is the case a button holding its own idea
+    // of open would get wrong: `useHobPanel` owns ⌘K and Esc.
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "false"));
+    expect(button.className).not.toContain("bg-accent-soft");
   });
 
   /**
