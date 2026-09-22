@@ -2,9 +2,10 @@ import { useParams } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
 import { PlayerCampaignScreen } from "../play/PlayerCampaignScreen";
 import { TopBar } from "../shell/TopBar";
-import { FailureNotice, Loading } from "../ui/states";
 import { CampaignScreen } from "./CampaignScreen";
 import { membershipsAtom } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { Loading } from "@taverns/ui";
 
 /**
  * One campaign URL, two projections — chosen by **what this account is at the
@@ -42,7 +43,7 @@ export function CampaignRouteScreen() {
     return (
       <>
         <TopBar title="Campaign" />
-        <FailureNotice failure={resource.failure} onRetry={retry} />
+        <ApiFailureNotice failure={resource.failure} onRetry={retry} />
       </>
     );
   }

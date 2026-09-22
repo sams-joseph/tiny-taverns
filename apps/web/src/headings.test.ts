@@ -33,11 +33,9 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   "characters/DraftCard.tsx": 1,
   // The wordmark, and the landing page's `h1`.
   "marketing/MarketingScreen.tsx": 2,
-  // The shell's page title, wordmark and campaign name, and the empty and
-  // failure states: each is moving to its own `@taverns/ui` component.
+  // The shell's wordmark, and the campaign name inside the row's `BackLink`:
+  // chrome labels, not headings. The page title is `PageHeader`'s.
   "shell/AppShell.tsx": 2,
-  "shell/TopBar.tsx": 1,
-  "ui/states.tsx": 2,
 };
 
 function sources(dir: string): { path: string; source: string }[] {

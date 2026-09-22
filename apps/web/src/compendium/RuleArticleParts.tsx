@@ -20,6 +20,7 @@ import {
   Input,
   cn,
   SectionHeading,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState, type ReactNode } from "react";
@@ -29,7 +30,6 @@ import { reads } from "../api/keys";
 import { FilterBar, FilterBox, SortMenu, type FilterOption } from "../library/filters";
 import type { FilterQuery } from "../library/query";
 import { Field, Textarea } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
 import { withoutLeadingHeading } from "./blocks";
 import { libraryRuleArticleDetailAtom, ruleArticleDetailKeys, type RuleArticleQuery } from "./load";
 import {
@@ -38,6 +38,7 @@ import {
   isLibraryArticle,
   ruleArticleOwnerLabel,
 } from "./ownership";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const SORTS: ReadonlyArray<FilterOption> = [
   { value: "name", label: "Name" },
@@ -265,7 +266,7 @@ export function RuleArticleReader({
       >
         {resource.state === "loading" && <Loading label="Opening the article…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         )}
         {resource.state === "ready" && (
           <RuleArticleDetailView detail={resource.value} onClose={onClose} onEdit={onEdit} />

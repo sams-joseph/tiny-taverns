@@ -1,13 +1,13 @@
 import type { Equipment } from "@taverns/api";
-import { Badge, Button, Icon } from "@taverns/ui";
+import { Badge, Button, Icon, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { EQUIPMENT_FACETS, equipmentQueryOf, type EquipmentQuery } from "../equipment/load";
 import { FilterBox } from "../library/filters";
 import { useFilterQuery } from "../library/query";
-import { FailureNotice, Loading } from "../ui/states";
 import { compactGearLine } from "./gearFacts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Choosing gear from the equipment catalogue, inside the Gear dialog —
@@ -79,7 +79,9 @@ export function EquipmentPicker({ onPick }: { readonly onPick: (row: Equipment) 
       </div>
 
       {resource.state === "loading" && <Loading label="Reading the catalogue…" />}
-      {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
+      {resource.state === "failed" && (
+        <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+      )}
 
       {resource.state === "ready" &&
         (resource.value.items.length === 0 ? (

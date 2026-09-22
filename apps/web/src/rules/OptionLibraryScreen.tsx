@@ -1,11 +1,10 @@
 import type { CharacterOption, Feat, OptionKind } from "@taverns/api";
-import { Button, EMPTY_FILTER_VALUE, Icon } from "@taverns/ui";
+import { Button, EMPTY_FILTER_VALUE, Icon, Loading, EmptyState } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
 import { TopBar } from "../shell/TopBar";
-import { FailureNotice, Loading } from "../ui/states";
 import { ClassProgressionDialog } from "./ClassProgressionDialog";
 import { isLibraryFeatOriginal } from "./feat";
 import { FeatForm } from "./FeatForm";
@@ -14,7 +13,7 @@ import { libraryRulesAtom } from "./load";
 import { isLibraryOriginal } from "./option";
 import { OptionForm } from "./OptionForm";
 import { OptionSection } from "./OptionSection";
-import { EmptyState } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * **Your library of classes, races and backgrounds** — where one is written,
@@ -135,7 +134,7 @@ export function OptionLibraryScreen() {
       {resource.state === "loading" && <Loading label="Opening your library…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 

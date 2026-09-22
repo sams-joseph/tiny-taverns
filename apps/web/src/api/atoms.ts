@@ -250,8 +250,8 @@ export const useInvalidate = (): ((keys: Invalidation) => void) => useAtomSet(in
  *
  * The returned pair is deliberately the shape `useApiResource` returns, so a
  * ported call site is a changed import and a changed first line rather than a
- * rewritten component — and so `ui/states.tsx` keeps saying the same things
- * about the same failures. What is new is `refreshing` on the `ready` arm: a
+ * rewritten component — and so `api/ApiFailureNotice.tsx` keeps saying the same
+ * things about the same failures. What is new is `refreshing` on the `ready` arm: a
  * re-read holds the value it has, so a screen stops blanking on every write.
  *
  * Three mappings that are decisions rather than plumbing:

@@ -4,7 +4,7 @@ How `apps/web` reads and writes: the atom read path, the invalidation vocabulary
 
 ## Reads are atoms
 
-`apps/web/src/api/atoms.ts` is the one way a screen reads. `apiAtom(use, answers)` wraps an endpoint call in an `AsyncResult` atom over `@effect/atom-react`; `useApiAtom` turns it into the three-state `Resource` that `ui/states.tsx` renders. There is no hook-and-`useState` idiom to copy, and none may be introduced.
+`apps/web/src/api/atoms.ts` is the one way a screen reads. `apiAtom(use, answers)` wraps an endpoint call in an `AsyncResult` atom over `@effect/atom-react`; `useApiAtom` turns it into the three-state `Resource` that `Loading`, `EmptyState` and `FailureNotice` from `@taverns/ui` render; a failure's words are `api/ApiFailureNotice.tsx`'s. There is no hook-and-`useState` idiom to copy, and none may be introduced.
 
 **Build the atom with `Atom.family` at module scope, keyed on what the read closes over.** An atom is identified by object identity, so one built inside a component is a new atom every render and the symptom is an infinite render loop. A family also shares the read: two components naming one key make one request. Record keys work because Effect's `Equal`/`Hash` are structural for plain objects and arrays; `api/atoms.test.tsx` pins it because a regression would hang a screen rather than fail a type. Keep keys to primitives: a function or class instance in a key is hashed every render and puts the loop back.
 

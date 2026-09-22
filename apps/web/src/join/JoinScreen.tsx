@@ -8,6 +8,7 @@ import {
   CardTitle,
   Icon,
   sectionHeadingVariants,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -21,8 +22,8 @@ import { publishableKey } from "../auth/config";
 import { SignInSurface } from "../auth/SignInSurface";
 import { dayOf } from "../chronicle/format";
 import { TopBar } from "../shell/TopBar";
-import { FailureNotice, Loading } from "../ui/states";
 import { SaveFailure } from "../ui/form";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Following an invitation — **the first screen a stranger sees of this
@@ -158,7 +159,7 @@ export function JoinScreen() {
         {resource.state === "loading" && <Loading label="Reading the invitation…" />}
 
         {/* One sentence for every dead token, because the server gives one
-            answer for all of them. `FailureNotice`'s `missing` copy is about a
+            answer for all of them. `ApiFailureNotice`'s `missing` copy is about a
             row; this is about a link, and the difference is worth the words. */}
         {resource.state === "failed" && resource.failure.kind === "missing" && (
           <Card tone="sunken" className="items-center gap-3 px-card py-11 text-center">
@@ -173,7 +174,7 @@ export function JoinScreen() {
           </Card>
         )}
         {resource.state === "failed" && resource.failure.kind !== "missing" && (
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         )}
 
         {preview !== undefined && redeemed === undefined && (

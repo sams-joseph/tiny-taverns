@@ -1,50 +1,17 @@
-import { Button, Card, Icon, type IconName } from "@taverns/ui";
+import { FailureNotice, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
-import type { ApiFailure } from "../api/failure";
 import { useHostedSession } from "../auth/hostedSession";
+import type { ApiFailure } from "./failure";
 
 /**
- * The three states every data-backed screen has, written once.
+ * What a failed read or write says, written once — the words for
+ * `@taverns/ui`'s `FailureNotice`, which owns the shape.
  *
- * The designers drew the empty state for the bestiary and the voice guide is
- * explicit about it: *"Empty states say what to do next, in two short
- * sentences."* Never "No data available", never an exclamation mark, never an
- * emoji. Same for failures — "Errors are matter-of-fact and bounded."
+ * The voice guide is explicit: *"Errors are matter-of-fact and bounded."* The
+ * copy is the app's rather than the package's because it depends on why the
+ * request failed and on whether hosted sign-in is configured, neither of which
+ * a component library can know.
  */
-
-/**
- * A load in flight.
- *
- * Deliberately a line of text and not a spinner or a shimmering skeleton: the
- * theme resets `--animate-*` to `initial`, so `animate-spin` and `animate-pulse`
- * are not classes that exist here, and the motion rules ("nothing overshoots and
- * nothing steps") are what put them out of reach in the first place.
- */
-export function Loading({ label = "Loading…" }: { readonly label?: string }) {
-  return (
-    <p role="status" className="text-body-s leading-body text-faint">
-      {label}
-    </p>
-  );
-}
-
-export function EmptyState({
-  icon,
-  title,
-  children,
-}: {
-  readonly icon: IconName;
-  readonly title: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <Card tone="sunken" className="items-center gap-3 px-card py-11 text-center">
-      <Icon name={icon} size={28} className="text-faint" />
-      <p className="font-display text-subtitle leading-snug font-semibold text-heading">{title}</p>
-      <p className="max-w-measure text-body-s leading-body text-muted-foreground">{children}</p>
-    </Card>
-  );
-}
 
 /** Where a machine token is pasted, named the same way in every failure notice. */
 function ServerPanelPointer() {
@@ -64,7 +31,7 @@ function ServerPanelPointer() {
  * Clerk dashboard sees first, so it must not read as breakage: no credential is
  * a normal way to run this app, and the notice says where to get one.
  */
-export function FailureNotice({
+export function ApiFailureNotice({
   failure,
   onRetry,
 }: {
@@ -135,20 +102,8 @@ export function FailureNotice({
   })();
 
   return (
-    <Card tone="sunken" className="items-center gap-3 px-card py-11 text-center">
-      <Icon name={icon} size={28} className="text-faint" />
-      <p
-        role="alert"
-        className="font-display text-subtitle leading-snug font-semibold text-heading"
-      >
-        {title}
-      </p>
-      <p className="max-w-measure text-body-s leading-body text-muted-foreground">{body}</p>
-      {onRetry !== undefined && (
-        <Button variant="secondary" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
-      )}
-    </Card>
+    <FailureNotice icon={icon} title={title} {...(onRetry !== undefined && { onRetry })}>
+      {body}
+    </FailureNotice>
   );
 }

@@ -9,9 +9,9 @@ import {
   Icon,
   SectionHeading,
   type IconName,
+  EmptyState,
 } from "@taverns/ui";
 import { useState } from "react";
-import { EmptyState } from "../ui/states";
 import { useCampaignAct } from "./act";
 import {
   CampaignChrome,

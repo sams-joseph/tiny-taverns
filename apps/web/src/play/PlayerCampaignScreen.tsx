@@ -9,13 +9,15 @@ import {
   CardTitle,
   Icon,
   SectionHeading,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * A table you sit at, in the player projection of one campaign.
@@ -180,7 +182,7 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
       <div className="flex flex-col gap-8">
         {resource.state === "loading" && <Loading label="Reading the table…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         )}
 
         {view !== undefined &&

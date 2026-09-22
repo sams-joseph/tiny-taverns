@@ -6,10 +6,18 @@ import type {
   NpcProposalContent,
 } from "@taverns/api";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, cn, Icon, tabsTriggerVariants, SectionHeading } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  cn,
+  Icon,
+  tabsTriggerVariants,
+  SectionHeading,
+  EmptyState,
+} from "@taverns/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { CampaignChrome } from "../campaign/CampaignChrome";
-import { EmptyState } from "../ui/states";
 import { npcFollowUpAtom } from "./load";
 import { NpcAvatar } from "./NpcCard";
 

@@ -8,7 +8,7 @@ import { Cause } from "effect";
  * than in whichever hook happens to fetch. **Reads go through `api/atoms.ts`
  * and writes through `api/mutation.ts`**, and the whole point of the taxonomy
  * is that a screen says the same thing about a 401 whichever of them fetched
- * it. `ui/states.tsx` is the one place its copy is written.
+ * it. `api/ApiFailureNotice.tsx` is the one place its copy is written.
  *
  * `runApi` in `client.ts` rejects its promise, which is right for the Server
  * panel's one-shot buttons and wrong for a screen — a rejected promise loses

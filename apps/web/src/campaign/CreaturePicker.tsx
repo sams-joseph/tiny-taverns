@@ -1,10 +1,10 @@
 import type { CampaignId, CreatureId } from "@taverns/api";
-import { Badge, Button, FilterInput, Icon } from "@taverns/ui";
+import { Badge, Button, FilterInput, Icon, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Choosing what is in an encounter, over the bestiary the campaign can reach.
@@ -94,7 +94,9 @@ export function CreaturePicker({
       />
 
       {resource.state === "loading" && <Loading label="Reading the bestiary…" />}
-      {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
+      {resource.state === "failed" && (
+        <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+      )}
 
       {resource.state === "ready" &&
         (resource.value.items.length === 0 ? (

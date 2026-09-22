@@ -1,8 +1,8 @@
 import { SectionHeading } from "@taverns/ui";
 import type { CharacterOption } from "@taverns/api";
 import type { ReactNode } from "react";
-import { EmptyState } from "../ui/states";
 import { OptionCard } from "./OptionCard";
+import { EmptyState } from "@taverns/ui";
 
 /**
  * One of the labelled lists a vocabulary is drawn as — classes, then races,

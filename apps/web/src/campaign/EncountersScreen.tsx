@@ -8,9 +8,9 @@ import {
   searchTextOf,
   type FilterCondition,
   type FilterInputFacet,
+  EmptyState,
 } from "@taverns/ui";
 import { useState } from "react";
-import { EmptyState } from "../ui/states";
 import { CampaignChrome } from "./CampaignChrome";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";

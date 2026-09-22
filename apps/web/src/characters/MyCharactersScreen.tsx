@@ -1,16 +1,24 @@
 import type { CampaignId, OwnedCharacter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Button, Card, CardContent, Icon, sectionHeadingVariants } from "@taverns/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  Icon,
+  sectionHeadingVariants,
+  EmptyState,
+  Loading,
+} from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { AddToCampaignDialog } from "./AddToCampaignDialog";
 import { campaignsAvailableToJoin } from "./join";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
 import { hitPoints, rosterSummary } from "./sheet";
 import { Portrait, StatPill } from "./SheetParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Your characters — `ui_kits/dm-screen/MyCharacters.jsx` against the real API,
@@ -212,7 +220,7 @@ export function MyCharactersScreen() {
       {resource.state === "loading" && <Loading label="Reading your characters…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 

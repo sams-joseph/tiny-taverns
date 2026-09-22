@@ -10,6 +10,7 @@ import {
   DialogTitle,
   Icon,
   Input,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
@@ -20,7 +21,7 @@ import { dayOf } from "../chronicle/format";
 import { campaignInvitesAtom } from "./load";
 import { useRouter, type RegisteredRouter } from "@tanstack/react-router";
 import { Field, SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Inviting somebody to the table, and taking it back.
@@ -266,7 +267,7 @@ export function InviteDialog({
             </span>
             {resource.state === "loading" && <Loading label="Reading your invitations…" />}
             {resource.state === "failed" && (
-              <FailureNotice failure={resource.failure} onRetry={retry} />
+              <ApiFailureNotice failure={resource.failure} onRetry={retry} />
             )}
             {invites !== undefined &&
               (invites.length === 0 ? (

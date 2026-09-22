@@ -7,6 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -15,7 +16,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { nextSessionNumber, startSession } from "../session/start";
 import { SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Opening the night, with no fight in sight — and the other half of a pair the
@@ -100,7 +101,9 @@ export function StartSessionDialog({
 
         <div className="px-gutter py-3">
           {number.state === "loading" && <Loading label="Counting the sessions…" />}
-          {number.state === "failed" && <FailureNotice failure={number.failure} onRetry={reload} />}
+          {number.state === "failed" && (
+            <ApiFailureNotice failure={number.failure} onRetry={reload} />
+          )}
           {number.state === "ready" && (
             <p className="text-body-s leading-body text-muted-foreground">
               Nothing goes on the table yet. Put an encounter on it when the party reaches one —{" "}

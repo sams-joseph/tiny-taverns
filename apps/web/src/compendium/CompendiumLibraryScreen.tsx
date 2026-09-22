@@ -1,11 +1,10 @@
 import type { RuleArticle, RuleArticleDetail } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, EmptyState, Loading } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { libraryRuleArticlesAtom, ruleArticleQueryOf, type RuleArticleQuery } from "./load";
 import { isLibraryArticle } from "./ownership";
 import {
@@ -15,6 +14,7 @@ import {
   RuleArticleGrid,
   RuleArticleReader,
 } from "./RuleArticleParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const summaryOf = (articles: ReadonlyArray<RuleArticle>): string => {
   const mine = articles.filter(isLibraryArticle).length;
@@ -45,7 +45,7 @@ export function CompendiumLibraryScreen() {
       )}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
       {value !== undefined && resource.state !== "failed" && (

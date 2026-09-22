@@ -3,7 +3,7 @@ import type {
   SharedWorldHistorySummary,
   SharedWorldId,
 } from "@taverns/api";
-import { Badge, Button, Card, CardContent } from "@taverns/ui";
+import { Badge, Button, Card, CardContent, Loading } from "@taverns/ui";
 import { useState } from "react";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -11,7 +11,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure, Textarea } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The sharedWorld's chronicle — report §3.5 on screen, read-only plus one composer.
@@ -169,7 +169,7 @@ export function SharedWorldChronicle({
     <div className="flex max-w-3xl flex-col gap-6">
       {summary.state === "loading" && <Loading label="Reading the Story So Far…" />}
       {summary.state === "failed" && (
-        <FailureNotice failure={summary.failure} onRetry={retrySummary} />
+        <ApiFailureNotice failure={summary.failure} onRetry={retrySummary} />
       )}
       {summary.state === "ready" && resource.state === "ready" && (
         <StorySoFar
@@ -183,7 +183,7 @@ export function SharedWorldChronicle({
         <Composer worldId={worldId} />
         {resource.state === "loading" && <Loading label="Reading the chronicle…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={retry} />
+          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {resource.state === "ready" &&
           (resource.value.length === 0 ? (

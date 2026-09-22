@@ -19,15 +19,16 @@ import {
   DialogTitle,
   Input,
   cn,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
 import { characterSpellsAtom } from "./load";
 import { ownCharacterWrites, saveOwnCharacter } from "./write";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const initialKnown = (
   book: CharacterSpellbook,
@@ -282,7 +283,7 @@ export function SpellPickerDialog({
           <Loading label="Reading your spell list…" />
         ) : resource.state === "failed" ? (
           <div className="p-gutter">
-            <FailureNotice failure={resource.failure} onRetry={reload} />
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           </div>
         ) : (
           <SpellPickerBody

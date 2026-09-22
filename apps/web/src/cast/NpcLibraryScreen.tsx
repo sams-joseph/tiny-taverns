@@ -17,6 +17,8 @@ import {
   Icon,
   Input,
   SectionHeading,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { Result } from "effect";
@@ -31,7 +33,6 @@ import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { NpcAvatar } from "./NpcCard";
 import {
   emptyDraft,
@@ -40,6 +41,7 @@ import {
   privateMaterialFrom,
   type NpcDraft,
 } from "./persona";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const libraryNpcsAtom = Atom.family((archived: boolean) =>
   apiAtom(
@@ -585,7 +587,7 @@ export function NpcLibraryScreen() {
       {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
       {resource.state === "ready" && (

@@ -1,4 +1,4 @@
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, EmptyState, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -7,7 +7,6 @@ import { ShowMore } from "../library/filters";
 import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMoreLibrarySpells,
   loadSpellLibrary,
@@ -17,6 +16,7 @@ import {
 } from "./load";
 import { useSpellPages } from "./pages";
 import { SpellCreateDialog, SpellDialog, SpellFilters, SpellGrid } from "./SpellParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const librarySpellsAtom = Atom.family((query: SpellQuery) =>
   apiAtom(loadSpellLibrary(query), [reads.librarySpells]),
@@ -57,7 +57,7 @@ export function SpellLibraryScreen() {
       )}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
       {shown !== undefined && resource.state !== "failed" && (

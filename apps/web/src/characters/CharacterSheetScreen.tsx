@@ -19,6 +19,8 @@ import {
   Icon,
   SectionHeading,
   sectionHeadingVariants,
+  BackLink,
+  Loading,
 } from "@taverns/ui";
 
 import { Result } from "effect";
@@ -30,7 +32,6 @@ import { useMutation } from "../api/mutation";
 import { TopBar } from "../shell/TopBar";
 import { DetailFacts } from "../ui/detail";
 import { SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
 import { AbilitiesDialog } from "./AbilitiesDialog";
 import { AddToCampaignDialog } from "./AddToCampaignDialog";
 import { campaignsAvailableToJoin } from "./join";
@@ -82,6 +83,7 @@ import {
   sheetWith,
   spendResource,
 } from "./write";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * One character, whole — `ui_kits/dm-screen/CharacterSheetB.jsx` (the seventh
@@ -1786,15 +1788,7 @@ export function CharacterSheetScreen() {
                 .join(" · ")
         }
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/characters" />}
-        >
-          <Icon name="chevron-left" size={14} />
-          Characters
-        </Button>
+        <BackLink render={<Link to="/characters" />}>Characters</BackLink>
         {/* **The way to the table, in the bar the delivery draws it in**
               (`CharacterSheet.jsx:90`) — and absent unless there is a table to
               go to. A control that led to a screen with nothing on it would be
@@ -1854,14 +1848,14 @@ export function CharacterSheetScreen() {
       {resource.state === "loading" && <Loading label="Reading the sheet…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 
       {view !== undefined &&
         (owned === undefined ? (
           <div className="max-w-3xl">
-            <FailureNotice failure={{ kind: "missing", resource: "character" }} />
+            <ApiFailureNotice failure={{ kind: "missing", resource: "character" }} />
           </div>
         ) : (
           <SheetScroller

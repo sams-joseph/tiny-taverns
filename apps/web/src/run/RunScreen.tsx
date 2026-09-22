@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
   toast,
   SectionHeading,
+  Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -30,7 +31,6 @@ import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
@@ -40,6 +40,7 @@ import { rollsAtom, runViewAtom, type RunPath } from "./load";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The encounter runner — `ui_kits/dm-screen/EncounterRunner.jsx`, against the
@@ -188,7 +189,7 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
     );
   }
   if (resource.state === "failed")
-    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
 
   const shareable = resource.value.filter((npc: Npc) => npc.visibility === "shared");
   if (shareable.length === 0) {
@@ -280,7 +281,7 @@ function SessionNpcMonitorPanel({
     );
   }
   if (resource.state === "failed")
-    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
 
   const rows = resource.value;
   const selected = rows.find((row) => row.npc.id === selectedId) ?? rows[0];
@@ -867,7 +868,7 @@ export function RunScreen() {
       {resource.state === "loading" && <Loading label="Reading the fight…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 

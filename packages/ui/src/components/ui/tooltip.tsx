@@ -1,6 +1,7 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import { cn } from "../../lib/utils";
+import { Kbd } from "./kbd";
 
 /**
  * Hard-bordered dark label on hover/focus. Always pass `shortcut` when the action
@@ -70,14 +71,7 @@ function TooltipContent({
           {...props}
         >
           {children}
-          {shortcut && (
-            <kbd
-              data-slot="kbd"
-              className="rounded-xs bg-slate-50/15 px-1.5 py-px font-mono text-micro leading-tight text-slate-50"
-            >
-              {shortcut}
-            </kbd>
-          )}
+          {shortcut && <Kbd tone="inverse">{shortcut}</Kbd>}
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

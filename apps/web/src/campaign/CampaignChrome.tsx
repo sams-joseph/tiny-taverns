@@ -1,16 +1,16 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, Loading } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useInvalidate } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
-import { FailureNotice, Loading } from "../ui/states";
 import { useCampaignAct } from "./act";
 import { CampaignDialog } from "./CampaignDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
 import { campaignAtom, campaignViewAtom, campaignViewKeys, type CampaignView } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Everything the campaign's destinations have in common, once.
@@ -260,7 +260,7 @@ export function CampaignChrome<Extra = undefined>({
       {resource.state === "loading" && <Loading label="Reading the campaign…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={retry} />
+          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
         </div>
       )}
       {slots !== undefined && children(slots)}

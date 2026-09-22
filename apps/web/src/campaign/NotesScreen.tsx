@@ -1,8 +1,7 @@
 import type { Note } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import { Button, EMPTY_FILTER_VALUE, FilterInput, Icon } from "@taverns/ui";
+import { Button, EMPTY_FILTER_VALUE, FilterInput, Icon, EmptyState } from "@taverns/ui";
 import { useState } from "react";
-import { EmptyState } from "../ui/states";
 import { CampaignChrome } from "./CampaignChrome";
 import { matches } from "./load";
 import { NoteDialog } from "./NoteDialog";

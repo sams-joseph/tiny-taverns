@@ -1,7 +1,6 @@
 import type { Feat } from "@taverns/api";
-import { Badge, Button, SectionHeading } from "@taverns/ui";
+import { Badge, Button, SectionHeading, EmptyState } from "@taverns/ui";
 import type { ReactNode } from "react";
-import { EmptyState } from "../ui/states";
 import { featPrerequisiteLine } from "./feat";
 
 export function FeatSection({

@@ -1,15 +1,15 @@
 import type { CampaignId, SessionId } from "@taverns/api";
 
-import { Icon, Toggle } from "@taverns/ui";
+import { Icon, Toggle, EmptyState, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
 import { PlayerRecapBody } from "./PlayerRecapBody";
 import { SessionEntry } from "./SessionEntry";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The record of a table you sit at.
@@ -92,7 +92,7 @@ export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: Cam
       {resource.state === "loading" && <Loading label="Opening the chronicle…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 

@@ -8,11 +8,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Loading,
 } from "@taverns/ui";
 import { useApiAtom } from "../api/atoms";
 import { DetailBody, DetailSection } from "../ui/detail";
-import { FailureNotice, Loading } from "../ui/states";
 import { libraryOptionProgressionAtom } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const levelLabel = (level: ClassLevel): string =>
   level.subclassId === null
@@ -46,7 +47,7 @@ export function ClassProgressionDialog({
         <DetailBody className="@container">
           {resource.state === "loading" && <Loading label="Reading the progression…" />}
           {resource.state === "failed" && (
-            <FailureNotice failure={resource.failure} onRetry={reload} />
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           )}
           {resource.state === "ready" && (
             <>

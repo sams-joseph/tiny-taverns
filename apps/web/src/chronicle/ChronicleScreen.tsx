@@ -11,6 +11,8 @@ import {
   Toggle,
   type FilterInputFacet,
   SectionHeading,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
@@ -18,12 +20,12 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { Resource } from "../api/failure";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadChronicleSpine, type ChronicleSpine } from "./load";
 import { RecapBody } from "./RecapBody";
 import { searchCampaign, type SearchAnswer, type SearchScope } from "./search";
 import { SearchResults } from "./SearchResults";
 import { SessionEntry } from "./SessionEntry";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The Chronicle — `ui_kits/dm-screen/Chronicle.jsx` against the real API.
@@ -276,7 +278,7 @@ function Chronicle({
     <>
       {searching && (
         <div className="flex max-w-4xl flex-col gap-3">
-          {hits.state === "failed" && <FailureNotice failure={hits.failure} />}
+          {hits.state === "failed" && <ApiFailureNotice failure={hits.failure} />}
           {/* The previous answer stays on screen while the next is fetched, so
               the list does not blank on every keystroke — with a quiet line
               saying a newer one is coming. */}

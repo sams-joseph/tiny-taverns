@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
+  Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -32,7 +33,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { nextSessionNumber, startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Putting an encounter on the table — the way into the runner.
@@ -193,7 +194,7 @@ export function StartRunDialog({
         )}
         {number.state === "failed" && (
           <div className="px-gutter py-gutter">
-            <FailureNotice failure={number.failure} onRetry={reload} />
+            <ApiFailureNotice failure={number.failure} onRetry={reload} />
           </div>
         )}
 
