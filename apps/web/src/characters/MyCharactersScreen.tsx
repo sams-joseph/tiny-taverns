@@ -145,6 +145,7 @@ function CharacterCard({
             </Button>
           )}
           <Button
+            variant="outline"
             className="w-full"
             size="sm"
             nativeButton={false}

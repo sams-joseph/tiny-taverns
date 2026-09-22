@@ -95,6 +95,9 @@ describe("your characters", () => {
       `/#/characters/${brannocId}`,
       `/#/characters/${sorrelId}`,
     ]);
+    // One peach primary per screen, and it is the bar's: a card's action is
+    // `outline`, never the accent fill.
+    for (const link of links) expect(link.className).not.toContain("bg-accent");
   });
 
   it("offers create and the explicit seat write, without dead invitation controls", async () => {

@@ -130,7 +130,7 @@ export function EncounterCard({
             visible word leads, verbatim, so the accessible name still contains
             what a voice-control user would say. */}
         <Button
-          variant={running ? "default" : "outline"}
+          variant={running ? "secondary" : "outline"}
           size="sm"
           className="ml-auto"
           aria-label={running ? `On the table now — ${encounter.name}` : `Run ${encounter.name}`}
