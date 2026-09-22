@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { campaignId, installStubServer } from "../campaign/campaign.fixtures";
+import { campaignId, installStubServer, npcId } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 
 /**
@@ -97,6 +97,46 @@ describe("the persistent shell", () => {
     const contentRegion = chrome?.nextElementSibling;
     expect(contentRegion).toHaveClass("min-h-0", "overflow-hidden");
     expect(contentRegion?.firstElementChild).toHaveClass("overflow-hidden");
+  });
+
+  /**
+   * jsdom computes no layout, so the pin is the class and the number is the
+   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 on all sixteen
+   * screens at every width, and the first campaign tab at x=424 (page edge 32,
+   * the `w-96` lead cell, `ml-2`) at 1024 and up. A `min-h-*` or a dropped
+   * `w-96` is what let sibling screens drift apart before.
+   */
+  it("sizes every chrome row to a fixed height", async () => {
+    await renderAt(`/campaigns/${campaignId}/cast/${npcId}`);
+    const bar = (await screen.findByRole("heading", { level: 1 })).closest(
+      "[data-slot=page-header]",
+    );
+
+    expect(sections().parentElement).toHaveClass("h-11");
+    expect(campaignNav().parentElement).toHaveClass("h-11.5");
+    expect(campaignNav().previousElementSibling).toHaveClass("@5xl:w-96", "@5xl:shrink-0");
+    expect(bar?.children[0]).toHaveClass("h-19");
+    expect(bar?.children[1]).toHaveClass("h-10");
+    for (const row of [
+      sections().parentElement,
+      campaignNav().parentElement,
+      ...(bar?.children ?? []),
+    ])
+      expect(row?.className).not.toMatch(/\bmin-h-/);
+  });
+
+  it("keeps an open panel open on the way out of a campaign", async () => {
+    await renderAt(`/campaigns/${campaignId}`);
+    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
+    await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
+    const before = panel();
+
+    await userEvent.click(within(sections()).getByRole("link", { name: "Campaigns" }));
+    await screen.findByRole("heading", { level: 1, name: "Campaigns" });
+    expect(panel()).toBe(before);
+    expect(panel()).toHaveAttribute("data-state", "expanded");
+    expect(screen.getByRole("button", { name: /Ask Hob/ })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

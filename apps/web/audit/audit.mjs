@@ -1,0 +1,642 @@
+#!/usr/bin/env node
+// The shell layout audit: the numbers jsdom cannot compute, measured in a real
+// Chromium against the Vitest fixture maps. See `README.md` beside this file.
+//
+//   pnpm -F web shell-audit                        every screen at every width
+//   pnpm -F web shell-audit --widths=1440,760      some widths
+//   pnpm -F web shell-audit --only=overview,notes --json=/tmp/audit.json
+
+// The measuring functions below are serialised and run inside the page.
+/* global document, window, location, localStorage, getComputedStyle, MutationObserver */
+
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
+
+const webDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+const args = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .filter((arg) => arg.startsWith("--"))
+    .map((arg) => {
+      const [key, value = "true"] = arg.slice(2).split("=");
+      return [key, value];
+    }),
+);
+const widths = (args.widths ?? "1440,1200,1024,900,760").split(",").map(Number);
+const height = Number(args.height ?? 900);
+const only = args.only?.split(",");
+
+/** A port nobody holds right now, so the audit never lands on somebody's 5173. */
+const freePort = () =>
+  new Promise((resolve, reject) => {
+    const probe = createNetServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// The stub API: the fixture maps over HTTP, on the Vite server's own origin.
+
+/**
+ * The fixture modules import `vitest`, the render harness and the auth
+ * provider for their `install*` and `render*` helpers, which the audit never
+ * calls and which would build a router at import. Shimmed for the SSR load
+ * only — nothing but `src/test/screens.ts` is loaded that way — so the browser
+ * bundle is the real app.
+ */
+const shims = {
+  "\0audit:vitest": "export const vi = new Proxy({}, { get: () => () => undefined });",
+  "\0audit:renderRoute": `export const TEST_MACHINE_TOKEN = "a-test-token";
+export const renderAt = () => { throw new Error("renderAt is not available to the audit"); };`,
+  "\0audit:auth": "export const HostedSessionScope = ({ children }) => children;",
+};
+
+function stubApi() {
+  let scenario;
+  let routes = new Map();
+  let unanswered = [];
+  return {
+    name: "audit-stub-api",
+    // Ahead of Vite's own resolver, which would otherwise answer first.
+    enforce: "pre",
+    resolveId(id, importer, options) {
+      if (!options?.ssr) return undefined;
+      if (id === "vitest") return "\0audit:vitest";
+      if (id.endsWith("/test/renderRoute")) return "\0audit:renderRoute";
+      if (id.endsWith("/auth/AuthProvider")) return "\0audit:auth";
+      return undefined;
+    },
+    load: (id) => shims[id],
+    configureServer(server) {
+      server.middlewares.use("/stub", async (req, res) => {
+        const url = new URL(req.url, "http://stub");
+        const send = (status, body, type = "application/json") => {
+          res.statusCode = status;
+          if (status === 204) return res.end();
+          res.setHeader("content-type", type);
+          // `null` is a body: `GET …/history/summary` answers it on purpose.
+          res.end(type === "application/json" ? JSON.stringify(body ?? null) : body);
+        };
+        if (url.pathname === "/__audit/scenario") {
+          const { scenarios } = await server.ssrLoadModule("/src/test/screens.ts");
+          scenario = url.searchParams.get("name");
+          routes = scenarios[scenario]();
+          unanswered = [];
+          return send(200, { scenario, routes: routes.size });
+        }
+        if (url.pathname === "/__audit/unanswered") {
+          const answer = [...new Set(unanswered)];
+          unanswered = [];
+          return send(200, answer);
+        }
+        const key = `${req.method} ${url.pathname}`;
+        const answer = routes.get(key);
+        if (answer === undefined) {
+          unanswered.push(key);
+          return send(404, { _tag: "NotFound", resource: "audit", id: url.pathname });
+        }
+        if (answer.sse !== undefined) return send(answer.status, answer.sse, "text/event-stream");
+        return send(answer.status, typeof answer.body === "function" ? answer.body() : answer.body);
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Chromium over the DevTools protocol, with Node's own WebSocket.
+
+const chromiumPath = () => {
+  const candidates = [
+    process.env.CHROMIUM,
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ];
+  const found = candidates.find((path) => path !== undefined && existsSync(path));
+  if (found === undefined) throw new Error("No Chromium found; set CHROMIUM=/path/to/chrome");
+  return found;
+};
+
+/** Launch with a port of Chromium's choosing and read it back off stderr. */
+const launchChromium = (profile) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(
+      chromiumPath(),
+      [
+        "--headless=new",
+        "--remote-debugging-port=0",
+        `--user-data-dir=${profile}`,
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-gpu",
+        "about:blank",
+      ],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+    let stderr = "";
+    child.once("error", reject);
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      const match = /DevTools listening on (ws:\/\/\S+)/.exec(stderr);
+      if (match !== null) resolve({ child, browserWs: match[1] });
+    });
+    child.once("exit", (code) => reject(new Error(`Chromium exited ${code}: ${stderr}`)));
+  });
+
+class Cdp {
+  #ws;
+  #next = 1;
+  #pending = new Map();
+  static async connect(url) {
+    const cdp = new Cdp();
+    cdp.#ws = new WebSocket(url);
+    await new Promise((resolve, reject) => {
+      cdp.#ws.addEventListener("open", resolve, { once: true });
+      cdp.#ws.addEventListener("error", reject, { once: true });
+    });
+    cdp.#ws.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      const pending = cdp.#pending.get(message.id);
+      if (pending === undefined) return;
+      cdp.#pending.delete(message.id);
+      if (message.error) pending.reject(new Error(message.error.message));
+      else pending.resolve(message.result);
+    });
+    return cdp;
+  }
+  send(method, params = {}) {
+    const id = this.#next++;
+    this.#ws.send(JSON.stringify({ id, method, params }));
+    return new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
+  }
+  /** Evaluate a function in the page and return its JSON value. */
+  async run(fn, ...fnArgs) {
+    const { result, exceptionDetails } = await this.send("Runtime.evaluate", {
+      expression: `(${fn})(...${JSON.stringify(fnArgs)})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? "eval failed");
+    return result.value;
+  }
+  close() {
+    this.#ws.close();
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---------------------------------------------------------------------------
+// What is measured. Each function runs inside the page.
+
+/** Wait until the screen's bar is up and the DOM has been still for 300ms. */
+function settled() {
+  return new Promise((resolve) => {
+    const started = performance.now();
+    let last = performance.now();
+    const observer = new MutationObserver(() => (last = performance.now()));
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+    const tick = () => {
+      const now = performance.now();
+      const ready =
+        document.querySelector('[data-slot="page-header"]') !== null &&
+        document.querySelector('[data-slot="loading"]') === null;
+      if ((ready && now - last > 300) || now - started > 8000) {
+        observer.disconnect();
+        resolve(ready);
+      } else setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
+function measure() {
+  const round = (n) => Math.round(n * 10) / 10;
+  const box = (el) => {
+    if (el === null || el === undefined) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: round(r.x),
+      y: round(r.y),
+      w: round(r.width),
+      h: round(r.height),
+      right: round(r.right),
+    };
+  };
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+  };
+  const doc = document.documentElement;
+  const viewport = doc.clientWidth;
+  const sections = document.querySelector('nav[aria-label="Sections"]');
+  const globalRow = sections?.parentElement ?? null;
+  const campaignNav = document.querySelector('nav[aria-label="This campaign"]');
+  const campaignRow = campaignNav?.parentElement ?? null;
+  const header = document.querySelector('[data-slot="page-header"]');
+  const bar = header?.firstElementChild ?? null;
+  const tabs = header?.children[1] ?? null;
+  const stack = document.querySelector(".sticky.top-0");
+  const main = document.querySelector("main");
+
+  // Anything in the chrome drawn past the viewport's right edge: clipped by an
+  // ancestor's overflow, so `scrollWidth` alone never sees it.
+  const pastEdge = stack
+    ? [...stack.querySelectorAll("a, button, h1, [data-slot=badge]")]
+        .filter(visible)
+        .filter((el) => el.getBoundingClientRect().right > viewport + 0.5)
+        .map(
+          (el) =>
+            `${(el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30)} @${round(el.getBoundingClientRect().right)}`,
+        )
+    : [];
+  const rowOverflow = (el) => (el === null ? null : el.scrollWidth > el.clientWidth);
+  const primaries = [...document.querySelectorAll('[data-slot="button"]')]
+    .filter(visible)
+    .filter((el) => el.classList.contains("bg-accent"))
+    .map(
+      (el) =>
+        `${el.textContent.trim()} (${el.closest('[data-slot="page-header"]') ? "bar" : "body"})`,
+    );
+  const campaignItems = campaignNav ? [...campaignNav.querySelectorAll("a")].filter(visible) : [];
+
+  return {
+    title: document.querySelector("h1")?.textContent?.trim() ?? null,
+    failure:
+      document.querySelector('[data-slot="failure-notice"]')?.textContent?.trim().slice(0, 80) ??
+      null,
+    viewport,
+    scrollWidth: doc.scrollWidth,
+    globalRow: box(globalRow),
+    globalControls: globalRow
+      ? [...globalRow.querySelectorAll("a, button")]
+          .filter(visible)
+          .map((el) => round(el.getBoundingClientRect().height))
+      : [],
+    campaignRow: box(campaignRow),
+    campaignLead: box(campaignNav?.previousElementSibling ?? null),
+    campaignLeadItems: campaignNav
+      ? [...(campaignNav.previousElementSibling?.children ?? [])]
+          .filter(visible)
+          .map((el) => el.getAttribute("aria-label") ?? el.textContent.trim())
+      : [],
+    campaignFirstTab: box(campaignItems[0] ?? null),
+    campaignLastItem: box(campaignItems.at(-1) ?? null),
+    bar: box(bar),
+    barActions: box(header?.querySelector('[data-slot="page-header-actions"]') ?? null),
+    tabs: box(tabs),
+    stackHeight: box(stack)?.h ?? null,
+    stackZ: stack ? getComputedStyle(stack).zIndex : null,
+    mainTop: box(main)?.y ?? null,
+    overflow: {
+      globalRow: rowOverflow(globalRow),
+      campaignRow: rowOverflow(campaignRow),
+      bar: rowOverflow(bar),
+    },
+    pastEdge,
+    primaries,
+  };
+}
+
+/** Scroll the document and ask what is under the bar: the chrome must win. */
+function stickyCheck() {
+  const stack = document.querySelector(".sticky.top-0");
+  if (stack === null) return null;
+  const scroller = document.scrollingElement;
+  if (scroller.scrollHeight <= scroller.clientHeight + 40) return { scrolls: false };
+  window.scrollTo(0, 400);
+  const top = stack.getBoundingClientRect().top;
+  const probe = document.elementFromPoint(
+    document.documentElement.clientWidth / 2,
+    stack.getBoundingClientRect().bottom - 5,
+  );
+  window.scrollTo(0, 0);
+  return {
+    scrolls: true,
+    stackTopAfterScroll: Math.round(top),
+    chromeOnTop: stack.contains(probe),
+  };
+}
+
+function hobState() {
+  const panel = document.querySelector('section[aria-label="Hob"]');
+  const button = [...document.querySelectorAll("button[aria-pressed]")].find((el) =>
+    el.textContent.includes("Ask Hob"),
+  );
+  const header = document.querySelector("header");
+  const stack = document.querySelector(".sticky.top-0");
+  let overlayCoversBar = null;
+  let panelZ = null;
+  if (panel !== null) {
+    const r = panel.getBoundingClientRect();
+    let el = panel;
+    while (el !== null && getComputedStyle(el).position === "static") el = el.parentElement;
+    panelZ = el === null ? null : getComputedStyle(el).zIndex;
+    if (stack !== null) {
+      const bar = stack.getBoundingClientRect();
+      const probe = document.elementFromPoint(r.x + r.width / 2, bar.top + 10);
+      overlayCoversBar = probe !== null && !stack.contains(probe);
+    }
+  }
+  return {
+    pressed: button?.getAttribute("aria-pressed") ?? null,
+    panel:
+      panel === null
+        ? null
+        : (({ x, width }) => ({ x: Math.round(x), w: Math.round(width) }))(
+            panel.getBoundingClientRect(),
+          ),
+    panelZ,
+    overlayCoversBar,
+    samePanel: panel?.__auditMark === true,
+    sameHeader: header?.__auditMark === true,
+  };
+}
+
+function markShell() {
+  for (const el of [
+    document.querySelector('section[aria-label="Hob"]'),
+    document.querySelector("header"),
+  ])
+    if (el !== null) el.__auditMark = true;
+}
+
+function pressAskHob() {
+  const button = [...document.querySelectorAll("button[aria-pressed]")].find((el) =>
+    el.textContent.includes("Ask Hob"),
+  );
+  button?.click();
+  return button !== undefined;
+}
+
+// ---------------------------------------------------------------------------
+
+const port = await freePort();
+const origin = `http://127.0.0.1:${port}`;
+// Process env beats `.env.local`, so a developer's own API URL or Clerk key
+// cannot redirect the audit.
+process.env.VITE_API_URL = `${origin}/stub`;
+process.env.VITE_CLERK_PUBLISHABLE_KEY = "";
+
+const vite = await createServer({
+  root: webDir,
+  configFile: join(webDir, "vite.config.ts"),
+  logLevel: "warn",
+  server: { port, strictPort: true, host: "127.0.0.1", hmr: false },
+  plugins: [stubApi()],
+  // Otherwise Node's own loader imports the real `vitest`, past the shim.
+  ssr: { noExternal: ["vitest"] },
+});
+await vite.listen();
+
+const profile = join(webDir, "node_modules/.cache/shell-audit-profile");
+rmSync(profile, { recursive: true, force: true });
+mkdirSync(profile, { recursive: true });
+const { child: chromium, browserWs } = await launchChromium(profile);
+console.error(`audit: vite on ${origin}; chromium pid ${chromium.pid}`);
+
+const results = [];
+const hob = [];
+let cdp;
+try {
+  const debugPort = new URL(browserWs).port;
+  const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json();
+  cdp = await Cdp.connect(targets.find((target) => target.type === "page").webSocketDebuggerUrl);
+  await cdp.send("Page.enable");
+  await cdp.send("Runtime.enable");
+
+  const { screens } = await vite.ssrLoadModule("/src/test/screens.ts");
+  const walk = screens.filter((screen) => only === undefined || only.includes(screen.name));
+
+  const load = async (scenario, path) => {
+    await fetch(`${origin}/stub/__audit/scenario?name=${scenario}`);
+    await cdp.send("Page.navigate", { url: `${origin}/#${path}` });
+    await sleep(300);
+    await cdp.run(() => localStorage.setItem("taverns.token", "audit-token"));
+    await cdp.send("Page.reload", { ignoreCache: false });
+    await sleep(300);
+    await cdp.run(settled);
+  };
+  const go = async (path) => {
+    await cdp.run((to) => (location.hash = `#${to}`), path);
+    await sleep(100);
+    return cdp.run(settled);
+  };
+
+  for (const width of widths) {
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    let scenario;
+    for (const screen of walk) {
+      if (screen.scenario !== scenario) {
+        scenario = screen.scenario;
+        await load(scenario, screen.path);
+      }
+      await cdp.run(() => window.scrollTo(0, 0));
+      await fetch(`${origin}/stub/__audit/unanswered`); // drop the previous screen's
+      const ready = await go(screen.path);
+      const metrics = await cdp.run(measure);
+      const sticky = await cdp.run(stickyCheck);
+      const unanswered = await (await fetch(`${origin}/stub/__audit/unanswered`)).json();
+      results.push({ width, screen: screen.name, scenario, ready, ...metrics, sticky, unanswered });
+    }
+
+    // The Hob panel across navigation: open it on the Overview, walk through
+    // two campaign screens and out of the campaign, and ask whether it is the
+    // same node, still open, and still under the bar.
+    const overview = screens.find((screen) => screen.name === "overview");
+    if (only === undefined || only.includes("hob")) {
+      await load("creator", overview.path);
+      await cdp.run(pressAskHob);
+      await sleep(400);
+      await cdp.run(markShell);
+      const steps = [
+        overview.path,
+        ...["notes", "party", "spells", "overview"].map(
+          (name) => screens.find((s) => s.name === name).path,
+        ),
+      ];
+      for (const [index, path] of steps.entries()) {
+        if (index > 0) await go(path);
+        hob.push({
+          width,
+          step: `${index}:${screens.find((s) => s.path === path).name}`,
+          ...(await cdp.run(hobState)),
+        });
+      }
+    }
+  }
+} finally {
+  cdp?.close();
+  chromium.kill();
+  await new Promise((resolve) =>
+    chromium.exitCode !== null ? resolve() : chromium.once("exit", resolve),
+  );
+  await vite.close();
+  rmSync(profile, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+// Report: one table per width, then everything that disagrees with the rules.
+
+const px = (b, key) => (b === null ? "-" : String(b[key]));
+for (const width of widths) {
+  console.log(`\n## ${width}px`);
+  console.log(
+    [
+      "screen",
+      "global",
+      "camp",
+      "bar",
+      "tabs",
+      "stack",
+      "mainTop",
+      "tab1.x",
+      "last.right",
+      "row.right",
+      "actions.right",
+      "ctrls",
+      "scrollW",
+      "z",
+      "primaries",
+    ].join("\t"),
+  );
+  for (const r of results.filter((result) => result.width === width)) {
+    console.log(
+      [
+        r.screen,
+        px(r.globalRow, "h"),
+        px(r.campaignRow, "h"),
+        px(r.bar, "h"),
+        px(r.tabs, "h"),
+        r.stackHeight,
+        r.mainTop,
+        px(r.campaignFirstTab, "x"),
+        px(r.campaignLastItem, "right"),
+        px(r.campaignRow, "right"),
+        px(r.barActions, "right"),
+        [...new Set(r.globalControls)].join("/"),
+        r.scrollWidth,
+        r.stackZ,
+        r.primaries.length,
+      ].join("\t"),
+    );
+  }
+}
+
+const findings = [];
+const distinct = (values) => [...new Set(values.filter((v) => v !== null && v !== undefined))];
+for (const width of widths) {
+  const rows = results.filter((r) => r.width === width);
+  const inCampaign = rows.filter((r) => r.campaignRow !== null);
+  const expect = (label, values, want) => {
+    const got = distinct(values);
+    if (got.length > 1 || (want !== undefined && got.length === 1 && got[0] !== want))
+      findings.push(
+        `${width}: ${label} is ${got.join(" / ")}${want === undefined ? "" : ` (want ${want})`}`,
+      );
+  };
+  expect(
+    "global row height",
+    rows.map((r) => r.globalRow?.h),
+    44,
+  );
+  expect(
+    "campaign row height",
+    inCampaign.map((r) => r.campaignRow.h),
+    46,
+  );
+  expect(
+    "bar height",
+    rows.map((r) => r.bar?.h),
+    76,
+  );
+  expect(
+    "tab strip height",
+    rows.map((r) => r.tabs?.h),
+    40,
+  );
+  expect(
+    "global control height",
+    rows.flatMap((r) => r.globalControls),
+    26,
+  );
+  // The lead cell is a fixed width only at `@5xl`; below it the cell is its
+  // contents, and a player's row carries no badge, so compare like with like.
+  for (const scenario of distinct(inCampaign.map((r) => r.scenario)))
+    expect(
+      `first campaign tab x (${scenario})`,
+      inCampaign.filter((r) => r.scenario === scenario).map((r) => r.campaignFirstTab?.x),
+    );
+  expect(
+    "sticky stack z-index",
+    rows.map((r) => r.stackZ),
+    "10",
+  );
+  // One content top edge for every campaign screen without a tab strip.
+  expect(
+    "campaign content top",
+    inCampaign.filter((r) => r.tabs === null).map((r) => r.mainTop),
+  );
+  for (const r of rows) {
+    const at = `${width}: ${r.screen}`;
+    if (!r.ready) findings.push(`${at}: never settled (no bar, or still loading)`);
+    if (r.failure !== null) findings.push(`${at}: failure notice "${r.failure}"`);
+    if (r.scrollWidth !== r.viewport)
+      findings.push(`${at}: scrollWidth ${r.scrollWidth} != viewport ${r.viewport}`);
+    if (r.pastEdge.length > 0)
+      findings.push(`${at}: chrome past the right edge: ${r.pastEdge.join(", ")}`);
+    for (const [row, over] of Object.entries(r.overflow))
+      if (over) findings.push(`${at}: ${row} overflows its box`);
+    if (
+      r.campaignLastItem !== null &&
+      r.campaignRow !== null &&
+      r.campaignLastItem.right > r.campaignRow.right
+    )
+      findings.push(
+        `${at}: campaign row's last item ends at ${r.campaignLastItem.right}, row at ${r.campaignRow.right}`,
+      );
+    if (r.primaries.length > 1)
+      findings.push(`${at}: ${r.primaries.length} primaries (${r.primaries.join(", ")})`);
+    if (r.sticky?.scrolls && (r.sticky.stackTopAfterScroll !== 0 || !r.sticky.chromeOnTop))
+      findings.push(`${at}: sticky chrome ${JSON.stringify(r.sticky)}`);
+  }
+  for (const h of hob.filter((step) => step.width === width)) {
+    if (h.pressed !== "true" || h.panel === null || !h.samePanel || !h.sameHeader)
+      findings.push(`${width}: hob at ${h.step}: ${JSON.stringify(h)}`);
+    if (h.overlayCoversBar) findings.push(`${width}: hob at ${h.step}: the panel covers the bar`);
+  }
+}
+
+console.log(`\n## Hob across navigation`);
+for (const h of hob)
+  console.log(
+    `${h.width}\t${h.step}\tpressed=${h.pressed}\tpanel=${h.panel === null ? "-" : `${h.panel.x}+${h.panel.w}`}\tz=${h.panelZ}\tsame panel=${h.samePanel}\tsame header=${h.sameHeader}`,
+  );
+
+// A request the scenario has no answer for is a gap in the fixtures, not in
+// the layout; it matters only when the screen then drew a failure notice.
+console.log(`\n## Unanswered requests`);
+for (const r of results.filter(
+  (result) => result.unanswered.length > 0 && result.width === widths[0],
+))
+  console.log(`${r.screen}\t${r.unanswered.join(", ")}`);
+
+console.log(`\n## Findings (${findings.length})`);
+for (const finding of findings) console.log(`- ${finding}`);
+
+if (args.json !== undefined)
+  writeFileSync(args.json, JSON.stringify({ results, hob, findings }, null, 2));
