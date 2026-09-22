@@ -26,6 +26,14 @@ import { subtitleOf } from "./load";
  *    is a `note` with an attachment, and a note cannot attach to a creature
  *    yet (`AGENTS.md`, the bestiary section). A paragraph invented here would
  *    be the third place read-aloud prose lives.
+ *
+ * It is the one card in the runner's right column that matters, so it is at
+ * least four fifths of that column tall, whatever sits below it, and grows with
+ * a long stat block rather than scrolling inside itself. The column is the
+ * scroller: one scroll surface, so the wheel never latches onto a sheet it
+ * cannot leave, and the fifth left over shows the top of the next card as the
+ * sign there is more. The empty state has nothing to read and keeps its
+ * natural height.
  */
 
 export function CombatantPanel({
@@ -53,12 +61,7 @@ export function CombatantPanel({
 }) {
   if (combatant === undefined) {
     return (
-      <Card
-        tone="panel"
-        role="region"
-        aria-label="Selected combatant"
-        className="min-h-0 flex-1 overflow-hidden"
-      >
+      <Card tone="panel" role="region" aria-label="Selected combatant" className="shrink-0">
         <CardContent className="pt-card">
           <p className="text-body-s leading-body text-muted-foreground">
             Pick a line in the initiative list and whoever is on it shows up here, stat block and
@@ -73,12 +76,7 @@ export function CombatantPanel({
   const subtitle = subtitleOf(combatant);
 
   return (
-    <Card
-      tone="panel"
-      role="region"
-      aria-label="Selected combatant"
-      className="min-h-0 flex-1 overflow-y-auto"
-    >
+    <Card tone="panel" role="region" aria-label="Selected combatant" className="min-h-4/5 shrink-0">
       <CardHeader>
         <div className="flex items-start gap-2">
           <CardTitle className="flex-1 text-heading">{combatant.displayName}</CardTitle>
