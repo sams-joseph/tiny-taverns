@@ -83,31 +83,20 @@ function ScreenBar({ title, subtitle, tabs, children }: TopBarProps) {
             </p>
           )}
         </div>
-        {/* Where the row runs out, the screen's own controls scroll — they do
-            not wrap (the height is fixed) and they are not cut off (the shell
-            clips, so anything past the edge is simply gone, which is how *Start
-            an encounter* lost its last three letters at 760). `min-w-32` on the
-            title is the floor that makes this the thing that gives: a `flex-1`
-            title with a zero basis would collapse to nothing first and leave a
-            bar that does not say what it is. Measured at 390 on the Cast, whose
-            bar carries four controls and a search box. */}
+        {/* The header is not a scrolling surface. `min-w-32` on the title is
+            the floor that makes its arbitrary text give way first; the
+            controls remain one ordinary flex row. If a screen cannot fit its
+            controls at a supported width, that screen must simplify its
+            composition rather than handing the header a second scrollbar. */}
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex min-w-0 items-center gap-2.5 overflow-x-auto [scrollbar-width:none]">
-            {children}
-          </div>
-          {/* Outside the scroller on purpose: the campaign's press is the
-              shell's, it was fully visible on its own row before it moved here,
-              and a crowded screen is not a reason to hide it. What scrolls is
-              what that screen put in the bar. */}
+          <div className="flex min-w-0 items-center gap-2.5">{children}</div>
           <CampaignAct />
         </div>
       </div>
       {tabs !== undefined && (
         // `items-stretch` with no bottom padding: the strip's items reach the
         // header's hairline, exactly as the campaign row's do.
-        <div className="flex h-10 items-stretch overflow-x-auto px-page-sm @3xl/app:px-page">
-          {tabs}
-        </div>
+        <div className="flex h-10 items-stretch px-page-sm @3xl/app:px-page">{tabs}</div>
       )}
     </header>
   );

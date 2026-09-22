@@ -58,18 +58,27 @@ const HobRegionContext = createContext<React.RefObject<HTMLDivElement | null> | 
 /**
  * The row the dock lives in: the content column, then the panel.
  *
- * `relative` is load-bearing (it is what the overlay positions against) and so
- * is `min-h-0` — the panel is a column with a list that scrolls inside it, and
- * a flex child that has not been told it may be shorter than its content will
- * simply grow instead. `overflow-hidden` is what clips the panel to the row,
- * both when it is overlaid and while it is sliding off-canvas.
+ * `relative` is load-bearing: it is what the overlay positions against. A
+ * viewport-filling screen also needs `min-h-0` and clipping so the panel's own
+ * thread can scroll inside the remaining height. A document screen must do the
+ * opposite and grow with its content; clipping that region would turn the
+ * content column back into a second page scroller.
  */
-export function HobRegion({ children }: { readonly children: ReactNode }) {
+export function HobRegion({
+  bounded = false,
+  children,
+}: {
+  readonly bounded?: boolean;
+  readonly children: ReactNode;
+}) {
   const region = useRef<HTMLDivElement>(null);
 
   return (
     <HobRegionContext.Provider value={region}>
-      <div ref={region} className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={region}
+        className={`relative flex flex-1 ${bounded ? "min-h-0 overflow-hidden" : "min-h-full"}`}
+      >
         {children}
       </div>
     </HobRegionContext.Provider>

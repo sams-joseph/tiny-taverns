@@ -62,6 +62,38 @@ describe("the persistent shell", () => {
     // One bar, not the old screen's left behind beside the new one.
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
+
+  it("pins one chrome stack while an ordinary screen uses the document scroll", async () => {
+    await renderAt("/campaigns");
+
+    const chrome = header()?.parentElement;
+    expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
+
+    const frame = chrome?.parentElement;
+    expect(frame).toHaveClass("min-h-screen");
+    expect(frame).not.toHaveClass("h-screen", "overflow-hidden");
+
+    const contentRegion = chrome?.nextElementSibling;
+    expect(contentRegion).toHaveClass("min-h-full");
+    expect(contentRegion).not.toHaveClass("overflow-hidden");
+    expect(contentRegion?.firstElementChild).toHaveClass("overflow-visible");
+    expect(contentRegion?.firstElementChild).not.toHaveClass("overflow-auto");
+  });
+
+  it("keeps an explicit fill screen bounded below the same chrome stack", async () => {
+    await renderAt(`/campaigns/${campaignId}/table`);
+
+    const chrome = header()?.parentElement;
+    expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
+
+    const frame = chrome?.parentElement;
+    expect(frame).toHaveClass("h-screen", "overflow-hidden");
+    expect(frame).not.toHaveClass("min-h-screen");
+
+    const contentRegion = chrome?.nextElementSibling;
+    expect(contentRegion).toHaveClass("min-h-0", "overflow-hidden");
+    expect(contentRegion?.firstElementChild).toHaveClass("overflow-hidden");
+  });
 });
 
 /**
@@ -103,6 +135,15 @@ describe("one shell", () => {
     const offenders = sources()
       .filter(({ file }) => file.startsWith(`shell${"/"}`))
       .filter(({ source }) => viewport.test(code(source)))
+      .map(({ file }) => file);
+    expect(offenders).toEqual([]);
+  });
+
+  it("has no independently scrolling row in the shell chrome", () => {
+    const overflow = /\boverflow-(?:x-|y-)?auto\b/;
+    const offenders = sources()
+      .filter(({ file }) => file.startsWith(`shell${"/"}`))
+      .filter(({ source }) => overflow.test(code(source)))
       .map(({ file }) => file);
     expect(offenders).toEqual([]);
   });
