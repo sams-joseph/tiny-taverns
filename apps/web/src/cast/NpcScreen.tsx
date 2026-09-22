@@ -18,6 +18,7 @@ import {
   Input,
   tabsTriggerVariants,
   SectionHeading,
+  BackLink,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useEffect, useState } from "react";
@@ -93,15 +94,9 @@ export function NpcScreen() {
       tabs={() => <NpcTabs active={tab} onChange={setTab} />}
       actions={({ extra }) => (
         <>
-          <Button
-            variant="ghost"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/campaigns/$campaignId/cast" params={{ campaignId }} />}
-          >
-            <Icon name="chevron-left" size={14} />
+          <BackLink render={<Link to="/campaigns/$campaignId/cast" params={{ campaignId }} />}>
             All NPCs
-          </Button>
+          </BackLink>
           <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
             <Icon name="pencil" size={14} />
             Edit

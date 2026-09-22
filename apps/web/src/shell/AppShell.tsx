@@ -2,7 +2,16 @@ import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { CampaignId, CampaignRelation } from "@taverns/api";
-import { Badge, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
+import {
+  BackLink,
+  Badge,
+  cn,
+  Icon,
+  Kbd,
+  navPillVariants,
+  tabsTriggerVariants,
+  type IconName,
+} from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
@@ -68,14 +77,14 @@ import { TopBarSlot } from "./slots";
  *
  *   44  the global row        `h-11`
  *   46  the campaign row      `h-11.5`
- *   76  the per-screen bar    `h-19`, in `shell/TopBar.tsx`
- *   40  a screen's tab strip  `h-10`, in `shell/TopBar.tsx`
+ *   76  the per-screen bar    `h-19`, in `@taverns/ui`'s `PageHeader`
+ *   40  a screen's tab strip  `h-10`, in `@taverns/ui`'s `PageHeader`
  *
  * They are *fixed*, not minimums, and that is the whole of "sibling screens
  * line up": measured in Chromium at 1440, the bar was 61px on a screen with no
  * subtitle, 89 with one and 141 on the Cast at 760 where the action cluster
  * wrapped, so the content's top edge moved by 80px between tabs of the same
- * campaign. `TopBar` reserves the subtitle line whether or not a screen has one
+ * campaign. `PageHeader` reserves the subtitle line whether or not a screen has one
  * and the row does not wrap, so the number above is the number on every screen.
  *
  * ### Nothing here asks the window how wide it is
@@ -262,44 +271,17 @@ const navLinkProps = (active: boolean) =>
   }) satisfies Partial<LinkProps> & Record<string, unknown>;
 
 /**
- * The global row's control: the delivery's 26px pill, and **every control on
- * that row is one**.
- *
- * The delivery gives the two rows deliberately different recipes, and the
- * difference is the information: an underline says *which part of this campaign
- * you are reading*, and the row above it is not about a campaign at all. Drawn
- * the same way, the bar would read as ten peers of one kind rather than two
- * tiers — which is the whole thing the split was for.
- *
- * It is written out here rather than pulled from `@taverns/ui`: it is this bar's
- * own recipe, unlike the underline, which is `Tabs`' and must not be copied. It
- * *is* shared between this file's two call sites, because the alternative was
- * what shipped — the four nav items wearing `GlobalItem` at 26px and *Ask Hob*
- * wearing `Button size="sm"` at 32, measured, on a 44px row.
- *
- * The three states are the delivery's, from `GlobalItem` and its *Ask Hob*
- * beside it: `here` is the sunken fill under a hairline, `on` is the accent-soft
- * fill under an accent border that says a panel is open, and `idle` is the
- * quiet one. Only *Ask Hob* is ever `on`, and only it carries a border while
- * idle — it is a button among links, and the hairline is what says so.
+ * The global row's control — `navPillVariants`, the row's one recipe, which
+ * `@taverns/ui` keeps beside the campaign row's underline. *Ask Hob* wears the
+ * same one, because the alternative was what shipped: the four nav items at
+ * 26px and *Ask Hob* wearing `Button size="sm"` at 32, measured, on a 44px row.
  */
-const pill = {
-  base: cn(
-    "flex h-6.5 shrink-0 items-center gap-1.75 rounded-pill border px-2.5",
-    "text-caption leading-none font-medium whitespace-nowrap transition-control",
-  ),
-  idle: "border-transparent text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
-  quiet: "border-hairline text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
-  here: "border-hairline bg-surface-sunken text-heading",
-  on: "border-accent bg-accent-soft text-accent-ink",
-} as const;
-
 function GlobalNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
     <Link
       {...item.link}
       {...navLinkProps(active)}
-      className={cn(pill.base, active ? pill.here : pill.idle)}
+      className={navPillVariants({ state: active ? "here" : "idle" })}
     >
       {item.icon !== undefined && (
         <Icon name={item.icon} size={13} className={active ? "text-accent-ink" : undefined} />
@@ -363,16 +345,14 @@ function AskHobButton({
       type="button"
       aria-pressed={open}
       onClick={onClick}
-      className={cn(pill.base, "cursor-pointer", open ? pill.on : pill.quiet)}
+      className={cn(navPillVariants({ state: open ? "on" : "quiet" }), "cursor-pointer")}
     >
       <img src={markUrl} alt="" aria-hidden="true" width={16} height={16} className="rounded-xs" />
       Ask Hob
       {/* The hint, not the shortcut — ⌘K is `useHobPanel`'s and works whether
           or not this chip is drawn. So on a bar with no room to spare it goes
           the way the wordmark does, and the button keeps its words. */}
-      <kbd className="hidden rounded-xs bg-surface-sunken px-1 font-mono text-micro leading-none font-medium text-faint @5xl:inline-block">
-        &#8984;K
-      </kbd>
+      <Kbd className="hidden @5xl:inline-block">&#8984;K</Kbd>
     </button>
   );
 }
@@ -450,17 +430,16 @@ function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
   const name = campaign.state === "ready" ? campaign.value.name : undefined;
 
   return (
-    <Link
-      to="/campaigns/$campaignId"
-      params={{ campaignId }}
+    <BackLink
       // No `data-active`: this is the title, not an item, and the row's own
       // *Overview* is what lights when you are at it.
-      activeProps={{}}
+      render={<Link to="/campaigns/$campaignId" params={{ campaignId }} activeProps={{}} />}
       title="Campaign home"
       aria-label={name === undefined ? "Campaign home" : `${name} — campaign home`}
-      className="flex min-w-4 items-center gap-1.75 text-faint transition-control hover:text-muted-foreground"
+      // `shrink` undoes the idiom's `shrink-0`: here the name inside is the
+      // row's one elastic thing, and `min-w-4` keeps the chevron as its floor.
+      className="shrink gap-1.75 text-faint hover:text-muted-foreground"
     >
-      <Icon name="chevron-left" size={15} className="shrink-0" />
       {name !== undefined && (
         // `truncate`, not `whitespace-nowrap`: this is the one part of the row
         // that is arbitrary length, so it is the one that gives way — and
@@ -469,7 +448,7 @@ function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
           {name}
         </span>
       )}
-    </Link>
+    </BackLink>
   );
 }
 

@@ -20,6 +20,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
@@ -28,10 +30,10 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { ArchivedDialog } from "./ArchivedDialog";
 import { membershipsAtom } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The campaign-first way into Taverns.
@@ -484,7 +486,7 @@ export function CampaignsScreen() {
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={retry} />
+          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {memberships !== undefined && (
           <>

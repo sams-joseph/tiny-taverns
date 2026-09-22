@@ -12,8 +12,8 @@ import {
   type FilterInputValue,
 } from "@taverns/ui";
 import type { ReactNode } from "react";
-import { FailureNotice } from "../ui/states";
 import type { ApiFailure } from "../api/failure";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The one Library filter pattern, written once.
@@ -222,7 +222,7 @@ export function ShowMore({
     <div className="flex flex-col items-center gap-3">
       {failure !== undefined && (
         <div className="w-full max-w-3xl">
-          <FailureNotice failure={failure} onRetry={onMore} />
+          <ApiFailureNotice failure={failure} onRetry={onMore} />
         </div>
       )}
       {hasMore && (

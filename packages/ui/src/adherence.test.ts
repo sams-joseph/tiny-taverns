@@ -39,6 +39,7 @@ describe("design-system adherence", () => {
   it("ports every delivered component", () => {
     const names = componentSources().map((file) => file.name.replace(".tsx", ""));
     expect(names.sort()).toEqual([
+      "back-link",
       "badge",
       "button",
       "card",
@@ -49,7 +50,9 @@ describe("design-system adherence", () => {
       "filter-input",
       "icon",
       "input",
+      "kbd",
       "label",
+      "page-header",
       "popover",
       "section-heading",
       "select",
@@ -57,6 +60,7 @@ describe("design-system adherence", () => {
       "sheet",
       "sidebar",
       "skeleton",
+      "states",
       "switch",
       "tabs",
       "toast",

@@ -12,6 +12,8 @@ import {
   EMPTY_FILTER_VALUE,
   FilterInput,
   Icon,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -21,11 +23,11 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { SaveFailure } from "../ui/form";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { npcFollowUpAtom, npcsAtom } from "./load";
 import { NpcCard } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { npcMatches } from "./persona";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const sourceDescription = (source: NpcSource): string => {
   const summary = source.persona.identity?.summary?.trim() ?? "";
@@ -92,7 +94,7 @@ function AddNpcFromLibraryDialog({
         <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
           {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
           {resource.state === "failed" && (
-            <FailureNotice failure={resource.failure} onRetry={reload} />
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           )}
           {resource.state === "ready" && resource.value.length === 0 && (
             <p className="text-body text-muted">No NPC sources are available yet.</p>

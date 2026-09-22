@@ -37,7 +37,7 @@ A ramp step (`peach-300`) names a colour; a semantic alias (`accent`, `accent-in
 
 **The settled contrast state.** Every contrast finding collapses into two pairs, both in the read-only `tokens/colors.css`: `--text-muted` on `--surface-raised` computes to 4.45:1 and is accepted; the `--text-faint` tier (2.6 to 3.8:1) predates the palette and is an open question for the designers, not a defect. Disabled controls render at `opacity: 0.5` and are exempt under WCAG 1.4.3. Fix none of these by editing the package, and treat a sweep that measures the same numbers as measuring the agreed answer.
 
-**The debt.** `slate-*` and `crimson-*` steps are still reached for directly in roughly thirty non-test files under `apps/web/src` and `packages/ui/src/components` (`button.tsx`, `tooltip.tsx`, `switch.tsx`, `InitiativeList.tsx`, `states.tsx` among them). Each renders correctly today, and swapping a step for a semantic token moves the rendered colour, so it is a restyle. It is the first place to look when the next palette delivery lands.
+**The debt.** `slate-*` and `crimson-*` steps are still reached for directly in roughly thirty non-test files under `apps/web/src` and `packages/ui/src/components` (`button.tsx`, `tooltip.tsx`, `switch.tsx`, `InitiativeList.tsx`, `ApiFailureNotice.tsx` among them). Each renders correctly today, and swapping a step for a semantic token moves the rendered colour, so it is a restyle. It is the first place to look when the next palette delivery lands.
 
 ## Headings: one recipe
 

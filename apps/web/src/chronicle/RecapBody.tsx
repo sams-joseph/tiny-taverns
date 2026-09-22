@@ -1,12 +1,12 @@
 import type { CampaignId, RecapFight, SessionId } from "@taverns/api";
-import { Badge, Card, Icon } from "@taverns/ui";
+import { Badge, Card, Icon, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { FailureNotice, Loading } from "../ui/states";
 import { fightStory, standing } from "./fight";
 import { loadRecap } from "./load";
 import { Drafted, Facet, RecapDocument } from "./recapParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * One night, read back from the five sources `SessionRecap` assembles — **the
@@ -102,7 +102,7 @@ export function RecapBody({
 
   if (resource.state === "loading") return <Loading label="Reading the night back…" />;
   if (resource.state === "failed") {
-    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
   }
 
   const recap = resource.value;

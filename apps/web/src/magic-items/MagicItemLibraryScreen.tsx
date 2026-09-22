@@ -1,4 +1,4 @@
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, EmptyState, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -7,7 +7,6 @@ import { ShowMore } from "../library/filters";
 import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMagicItemLibrary,
   loadMoreLibraryMagicItems,
@@ -22,6 +21,7 @@ import {
   MagicItemFormDialog,
   MagicItemGrid,
 } from "./MagicItemParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const libraryMagicItemsAtom = Atom.family((query: MagicItemQuery) =>
   apiAtom(loadMagicItemLibrary(query), [reads.libraryMagicItems]),
@@ -67,7 +67,7 @@ export function MagicItemLibraryScreen() {
       )}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
       {shown !== undefined && resource.state !== "failed" && (

@@ -8,13 +8,14 @@ import {
   DialogHeader,
   DialogTitle,
   Icon,
+  Loading,
 } from "@taverns/ui";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The shelf: campaigns this account has archived, and the one press that brings
@@ -119,7 +120,7 @@ export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
         <div className="flex max-h-[60vh] flex-col overflow-y-auto px-gutter py-3">
           {resource.state === "loading" && <Loading label="Reading the shelf…" />}
           {resource.state === "failed" && (
-            <FailureNotice failure={resource.failure} onRetry={retry} />
+            <ApiFailureNotice failure={resource.failure} onRetry={retry} />
           )}
           {mine !== undefined &&
             (mine.length === 0 ? (

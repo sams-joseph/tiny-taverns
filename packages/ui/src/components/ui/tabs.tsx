@@ -7,8 +7,8 @@ import { cn } from "../../lib/utils";
  * An underline bar: the active trigger is semibold with a 2px accent rule;
  * inactive triggers are muted. Triggers are 13px medium sentence case.
  *
- * This is the only navigation pattern in the app — never a pill group or a
- * segmented control.
+ * This is the only in-screen navigation pattern — never a pill group or a
+ * segmented control. The pill below is the global row's, and nowhere else's.
  */
 function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
   return (
@@ -61,6 +61,44 @@ const tabsTriggerVariants = cva([
   "[&_svg]:pointer-events-none [&_svg]:shrink-0",
 ]);
 
+/**
+ * The global row's pill: the delivery's 26px control, and **every control on
+ * that row is one** — the nav links and *Ask Hob* alike.
+ *
+ * It sits beside the underline because the two are the app's two navigation
+ * tiers, and the difference between them is the information: an underline says
+ * *which part of this campaign you are reading*, and the row above it is not
+ * about a campaign at all. Drawn the same way, the bar would read as ten peers
+ * of one kind rather than two tiers. So each tier has exactly one recipe, and
+ * both live here.
+ *
+ * The states are the delivery's, from `GlobalItem` and its *Ask Hob* beside it:
+ * `here` is the sunken fill under a hairline, `on` is the accent-soft fill under
+ * an accent border that says a panel is open, `idle` is the quiet one, and
+ * `quiet` is `idle` with a hairline — a button among links, and the hairline is
+ * what says so.
+ */
+const navPillVariants = cva(
+  [
+    "flex h-6.5 shrink-0 items-center gap-1.75 rounded-pill border px-2.5",
+    "text-caption leading-none font-medium whitespace-nowrap transition-control",
+  ],
+  {
+    variants: {
+      state: {
+        idle: "border-transparent text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
+        quiet:
+          "border-hairline text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
+        here: "border-hairline bg-surface-sunken text-heading",
+        on: "border-accent bg-accent-soft text-accent-ink",
+      },
+    },
+    defaultVariants: {
+      state: "idle",
+    },
+  },
+);
+
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
     <TabsPrimitive.Tab
@@ -81,4 +119,4 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsTriggerVariants };
+export { Tabs, TabsList, TabsTrigger, TabsContent, navPillVariants, tabsTriggerVariants };

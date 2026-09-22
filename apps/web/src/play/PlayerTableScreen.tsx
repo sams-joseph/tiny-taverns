@@ -10,7 +10,18 @@ import type {
   SheetAction,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import {
+  BackLink,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  EmptyState,
+  Loading,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useState } from "react";
@@ -28,9 +39,9 @@ import {
 } from "../characters/rolls";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerTableView } from "./load";
 import { usePlayerTableStream } from "./tableStream";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 interface PendingRoll extends LocalRoll {
   readonly localId: string;
@@ -190,7 +201,7 @@ function SessionNpcCard({
           <CardTitle>Open at the table</CardTitle>
         </CardHeader>
         <CardContent>
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </CardContent>
       </Card>
     );
@@ -407,18 +418,14 @@ export function PlayerTableScreen() {
               : `Session ${String(table.sessionNumber)}${fight === null ? " · nothing on the table" : ` · round ${String(fight.round)}`}`
         }
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
-        >
-          <Icon name="chevron-left" size={14} />
+        <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
           Overview
-        </Button>
+        </BackLink>
       </TopBar>
       {resource.state === "loading" && <Loading label="Reading the live table…" />}
-      {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
+      {resource.state === "failed" && (
+        <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+      )}
       {view !== undefined && table === null && (
         <EmptyState icon="swords" title="No shared live table">
           When the DM shares a live session and one of your characters has an active seat, the

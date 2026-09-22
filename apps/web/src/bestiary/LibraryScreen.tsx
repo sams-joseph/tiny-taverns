@@ -1,5 +1,5 @@
 import type { Creature, CreatureId, CreatureSort, PageCursor } from "@taverns/api";
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, EmptyState, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
 import { apiAtom } from "../api/atoms";
@@ -9,13 +9,13 @@ import { ShowMore } from "../library/filters";
 import { listCount } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { CreatureFilters, CreatureGrid } from "./CorpusParts";
 import { useCorpus } from "./corpus";
 import { CreatureDialog } from "./CreatureDialog";
 import { CreatureForm } from "./CreatureForm";
 import { loadLibrary, moreOfLibrary, type CorpusQuery } from "./load";
 import { isLibraryEntity } from "./provenance";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * The Library: **where a monster is authored**, and the bundled corpus beside
@@ -129,7 +129,7 @@ export function LibraryScreen() {
       )}
       {corpus.resource.state === "failed" && (
         <div className="max-w-3xl">
-          <FailureNotice failure={corpus.resource.failure} onRetry={corpus.reload} />
+          <ApiFailureNotice failure={corpus.resource.failure} onRetry={corpus.reload} />
         </div>
       )}
 

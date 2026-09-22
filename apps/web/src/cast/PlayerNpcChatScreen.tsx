@@ -1,15 +1,15 @@
 import type { CampaignId, NpcId, PlayerNpc } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, Icon, SectionHeading } from "@taverns/ui";
+import { Badge, Card, SectionHeading, BackLink, EmptyState, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { DetailSection } from "../ui/detail";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { NpcAvatar } from "./NpcCard";
 import { useNpcPlayerChat } from "./playerChat";
 import { RehearsalPanel } from "./RehearsalPanel";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const playerNpcAtom = Atom.family(
   (at: { readonly campaignId: CampaignId; readonly npcId: NpcId }) =>
@@ -29,18 +29,14 @@ export function PlayerNpcChatScreen() {
         title={npc?.name ?? "An NPC"}
         subtitle="Talk privately · only you can read this transcript"
       >
-        <Button
-          size="sm"
-          variant="ghost"
-          nativeButton={false}
-          render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
-        >
-          <Icon name="chevron-left" size={14} />
-          Back to table
-        </Button>
+        <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
+          Overview
+        </BackLink>
       </TopBar>
       {resource.state === "loading" && <Loading label="Reading the NPC…" />}
-      {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
+      {resource.state === "failed" && (
+        <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+      )}
       {npc !== undefined && <PlayerNpcChatBody npc={npc} />}
     </>
   );

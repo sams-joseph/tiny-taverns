@@ -12,6 +12,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  EmptyState,
+  Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
@@ -19,7 +21,6 @@ import { useApiAtom, useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { abilitySummary, type AbilityDraft } from "./abilities";
 import { AbilityScoresDialog } from "./AbilitiesDialog";
 import {
@@ -52,6 +53,7 @@ import { ABILITY_KEYS, type AbilityKey } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterCreateWrites, createOwnCharacter } from "./write";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * A player writing down a character of their own —
@@ -354,7 +356,7 @@ export function CharacterCreateScreen() {
       {resource.state === "loading" && <Loading label="Reading your tables…" />}
       {resource.state === "failed" && (
         <div className="mx-auto w-full max-w-3xl">
-          <FailureNotice failure={resource.failure} onRetry={reload} />
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
 

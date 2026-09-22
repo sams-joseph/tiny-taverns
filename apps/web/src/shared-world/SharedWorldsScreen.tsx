@@ -1,6 +1,17 @@
 import type { SharedWorldMembership } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  Input,
+  EmptyState,
+  Loading,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -9,9 +20,9 @@ import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
 import { sharedWorldsAtom } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Every explicit Shared World this account belongs to. Campaigns remain home;
@@ -129,7 +140,7 @@ export function SharedWorldsScreen() {
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={retry} />
+          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {memberships !== undefined && (
           <>

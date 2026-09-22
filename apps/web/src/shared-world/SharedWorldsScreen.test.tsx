@@ -218,6 +218,16 @@ describe("one Shared World's screen", () => {
     );
   });
 
+  it("puts the owner's settings in the bar, not the body", async () => {
+    await renderSharedWorld(mintingSession());
+
+    const settings = await screen.findByRole("button", { name: "Shared World settings" });
+    const header = screen.getByRole("heading", { level: 1 }).closest("header");
+    expect(header).not.toBeNull();
+    expect(header?.contains(settings)).toBe(true);
+    expect(screen.getByRole("main").contains(settings)).toBe(false);
+  });
+
   it("lets the owner rename the Shared World", async () => {
     server.routes.set(`PATCH /worlds/${worldId}`, {
       status: 200,

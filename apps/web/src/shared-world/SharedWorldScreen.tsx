@@ -1,6 +1,17 @@
 import type { SharedWorldCampaignCard, SharedWorldId, SharedWorldMember } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon, Input } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  Input,
+  EmptyState,
+  Loading,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -10,11 +21,11 @@ import { useCredential } from "../auth/credential";
 import { ArchiveDialog } from "../campaign/ArchiveDialog";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
-import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
 import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * One Shared World: its campaign directory, and its people.
@@ -200,22 +211,23 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
             ? undefined
             : `${view.members.length} ${view.members.length === 1 ? "member" : "members"} · ${view.campaigns.length} ${view.campaigns.length === 1 ? "campaign" : "campaigns"}`
         }
-      />
+      >
+        {/* The owner's screen action, so it is the bar's — never a button
+            right-aligned above the body. */}
+        {ownsWorld && view !== undefined && (
+          <Button size="sm" onClick={() => setSettingsOpen(true)}>
+            <Icon name="pencil" size={14} />
+            Shared World settings
+          </Button>
+        )}
+      </TopBar>
       <div className="flex flex-col gap-8">
         {resource.state === "loading" && <Loading label="Reading the Shared World…" />}
         {resource.state === "failed" && (
-          <FailureNotice failure={resource.failure} onRetry={retry} />
+          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
         )}
         {view !== undefined && (
           <>
-            {ownsWorld && (
-              <div className="flex justify-end">
-                <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-                  <Icon name="pencil" size={14} />
-                  Shared World settings
-                </Button>
-              </div>
-            )}
             <section className="flex flex-col gap-4" aria-label="Campaigns">
               <NewCampaign worldId={worldId} />
               {view.campaigns.length === 0 ? (

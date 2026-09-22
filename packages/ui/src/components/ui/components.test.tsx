@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { BackLink } from "./back-link";
 import { Badge } from "./badge";
 import { Button } from "./button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./card";
@@ -17,10 +18,13 @@ import {
 } from "./dropdown-menu";
 import { Icon } from "./icon";
 import { Input } from "./input";
+import { Kbd } from "./kbd";
 import { Label } from "./label";
 import { SectionHeading } from "./section-heading";
+import { PageHeader } from "./page-header";
+import { EmptyState, FailureNotice, Loading } from "./states";
 import { Switch } from "./switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
+import { navPillVariants, Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { Toggle } from "./toggle";
 
 describe("Button", () => {
@@ -260,5 +264,122 @@ describe("Tabs", () => {
     expect(screen.getByText("Six goblins in the reeds")).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "Notes" }));
     expect(screen.getByText("The wagon driver knows the shortcut")).toBeVisible();
+  });
+});
+
+describe("navPillVariants", () => {
+  it("draws each of the global row's states from one recipe", () => {
+    expect(navPillVariants({ state: "here" })).toContain("bg-surface-sunken");
+    expect(navPillVariants({ state: "on" })).toContain("bg-accent-soft");
+    expect(navPillVariants({ state: "quiet" })).toContain("border-hairline");
+    expect(navPillVariants()).toContain("border-transparent");
+    for (const state of ["idle", "quiet", "here", "on"] as const) {
+      expect(navPillVariants({ state })).toContain("rounded-pill");
+    }
+  });
+});
+
+describe("BackLink", () => {
+  it("is a link named for where it goes, with the chevron drawn for it", () => {
+    render(<BackLink href="/characters">Characters</BackLink>);
+    const link = screen.getByRole("link", { name: "Characters" });
+    expect(link.getAttribute("href")).toBe("/characters");
+    expect(link.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders into the caller's own link element", () => {
+    render(
+      <BackLink render={<a data-router="" href="/campaigns/1" />} title="Campaign home">
+        Overview
+      </BackLink>,
+    );
+    const link = screen.getByRole("link", { name: "Overview" });
+    expect(link).toHaveAttribute("data-router");
+    expect(link).toHaveAttribute("title", "Campaign home");
+    expect(link).toHaveClass("text-muted-foreground");
+  });
+});
+
+describe("Kbd", () => {
+  it("is a kbd element in either tone", () => {
+    render(
+      <>
+        <Kbd>K</Kbd>
+        <Kbd tone="inverse">SPACE</Kbd>
+      </>,
+    );
+    expect(screen.getByText("K").tagName).toBe("KBD");
+    expect(screen.getByText("K")).toHaveClass("bg-surface-sunken");
+    expect(screen.getByText("SPACE")).toHaveClass("text-slate-50");
+  });
+});
+
+describe("PageHeader", () => {
+  it("draws the title, subtitle and actions in one row, and tabs on their own", () => {
+    render(
+      <PageHeader
+        title="The Salt Road"
+        subtitle="Session 4"
+        actions={<button type="button">Edit</button>}
+        tabs={<a href="#notes">Notes</a>}
+      />,
+    );
+    const heading = screen.getByRole("heading", { level: 1, name: "The Salt Road" });
+    expect(screen.getByText("Session 4")).toBeInTheDocument();
+
+    const titleRow = heading.parentElement?.parentElement;
+    const tabsRow = screen.getByRole("link", { name: "Notes" }).parentElement;
+    expect(titleRow?.contains(screen.getByRole("button", { name: "Edit" }))).toBe(true);
+    expect(titleRow?.contains(tabsRow ?? null)).toBe(false);
+    expect(tabsRow?.parentElement).toBe(titleRow?.parentElement);
+  });
+
+  it("reserves the subtitle's line when there is none", () => {
+    render(<PageHeader title="Characters" />);
+    const cell = screen.getByRole("heading", { level: 1 }).parentElement;
+    expect(cell).toHaveClass("h-12");
+    expect(document.querySelector("[data-slot=page-header-actions]")).toBeNull();
+  });
+});
+
+describe("states", () => {
+  it("announces a load as a status line", () => {
+    render(<Loading label="Reading the bestiary…" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Reading the bestiary…");
+  });
+
+  it("says what is empty and what to do next", () => {
+    render(
+      <EmptyState icon="footprints" title="No monsters yet">
+        Add one.
+      </EmptyState>,
+    );
+    expect(screen.getByText("No monsters yet")).toBeInTheDocument();
+    expect(screen.getByText("Add one.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("alerts a failure by its title and offers a retry only when given one", async () => {
+    const user = userEvent.setup();
+    let retries = 0;
+    const { rerender } = render(
+      <FailureNotice icon="octagon-x" title="The server did not answer">
+        Start it.
+      </FailureNotice>,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("The server did not answer");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+    rerender(
+      <FailureNotice
+        icon="octagon-x"
+        title="The server did not answer"
+        onRetry={() => (retries += 1)}
+      >
+        Start it.
+      </FailureNotice>,
+    );
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retries).toBe(1);
   });
 });

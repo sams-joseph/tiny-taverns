@@ -2,9 +2,10 @@ import { useParams } from "@tanstack/react-router";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
 import { TopBar } from "../shell/TopBar";
-import { FailureNotice, Loading } from "../ui/states";
 import { ChronicleScreen } from "./ChronicleScreen";
 import { PlayerChronicleScreen } from "./PlayerChronicleScreen";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { Loading } from "@taverns/ui";
 
 /**
  * One Chronicle URL, two projections — the same chooser `CampaignRoute.tsx`
@@ -29,7 +30,7 @@ export function ChronicleRouteScreen() {
     return (
       <>
         <TopBar title="Chronicle" />
-        <FailureNotice failure={resource.failure} onRetry={retry} />
+        <ApiFailureNotice failure={resource.failure} onRetry={retry} />
       </>
     );
   }

@@ -489,9 +489,14 @@ describe("a character sheet", () => {
     await renderSheet();
     await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
 
-    expect(screen.getByRole("button", { name: /Characters/ }).getAttribute("href")).toBe(
-      "/#/characters",
-    );
+    // The page header's, not the global row's — both are links to the roster.
+    const header = screen.getByRole("heading", { level: 1 }).closest("header");
+    expect(header).not.toBeNull();
+    expect(
+      within(header as HTMLElement)
+        .getByRole("link", { name: "Characters" })
+        .getAttribute("href"),
+    ).toBe("/#/characters");
   });
 
   /**

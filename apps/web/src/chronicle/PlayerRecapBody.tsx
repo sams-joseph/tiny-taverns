@@ -1,12 +1,12 @@
 import type { CampaignId, PlayerCombatant, PlayerRecapFight, SessionId } from "@taverns/api";
-import { Badge, Card, Icon, type IconName } from "@taverns/ui";
+import { Badge, Card, Icon, type IconName, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { FailureNotice, Loading } from "../ui/states";
 import { fightStory, playerStanding } from "./fight";
 import { loadPlayerRecap } from "./load";
 import { Facet, RecapDocument } from "./recapParts";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * One night, as somebody who played in it is told it.
@@ -189,7 +189,7 @@ export function PlayerRecapBody({
 
   if (resource.state === "loading") return <Loading label="Reading the night back…" />;
   if (resource.state === "failed") {
-    return <FailureNotice failure={resource.failure} onRetry={reload} />;
+    return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
   }
 
   const recap = resource.value;

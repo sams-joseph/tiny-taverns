@@ -22,6 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -30,8 +31,8 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
-import { FailureNotice, Loading } from "../ui/states";
 import { CreaturePicker } from "./CreaturePicker";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * Writing an encounter: the card's own fields, and what is in it.
@@ -518,7 +519,7 @@ export function EncounterDialog({
         )}
         {roster.state === "failed" && (
           <div className="px-gutter py-gutter">
-            <FailureNotice failure={roster.failure} onRetry={reload} />
+            <ApiFailureNotice failure={roster.failure} onRetry={reload} />
           </div>
         )}
         {roster.state === "ready" && (

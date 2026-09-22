@@ -67,8 +67,8 @@ describe("an atom as a screen's three states", () => {
    * reads. A refresh landing while one is in flight interrupts it, and
    * `Cause.squash` of an interrupt-only cause is the string *"All fibers
    * interrupted without error"* — which `classifyFailure` would name `unknown`
-   * and `ui/states.tsx` would render as *"That did not work"*, under the heading
-   * of a screen that is perfectly fine.
+   * and `api/ApiFailureNotice.tsx` would render as *"That did not work"*, under
+   * the heading of a screen that is perfectly fine.
    */
   it("reads an interrupted refresh as still loading, not as a failure", () => {
     const interrupted = AsyncResult.failure<string, never>(Cause.interrupt(1));
