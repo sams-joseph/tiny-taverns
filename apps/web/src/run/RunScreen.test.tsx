@@ -298,6 +298,11 @@ describe("the runner", () => {
     expect(screen.getByText("Names cost extra.")).toBeInTheDocument();
     expect(screen.getByText(/scripted-local/)).toBeInTheDocument();
 
+    // The transcript takes its natural height and scrolls with the window;
+    // fixtures never overflow, so assert the classes rather than the geometry.
+    const transcript = screen.getByText("Names cost extra.").closest(".space-y-2")!;
+    expect(transcript.className).not.toMatch(/overflow-|max-h-/);
+
     state = "paused";
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();

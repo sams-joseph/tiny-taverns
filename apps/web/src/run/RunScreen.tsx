@@ -429,7 +429,7 @@ function SessionNpcMonitorDetail({
           )}
         </div>
       </div>
-      <div className="mt-3 max-h-80 space-y-2 overflow-auto rounded-control border border-hairline bg-surface-card p-2">
+      <div className="mt-3 space-y-2 rounded-control border border-hairline bg-surface-card p-2">
         {row.turns.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
             No one has spoken in this shared conversation yet.
