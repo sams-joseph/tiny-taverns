@@ -3,11 +3,10 @@ import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { Hob, useHobPanel } from "../hob";
 import { ShowMore } from "../library/filters";
 import { listCount, useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import {
   loadMagicItemLibrary,
@@ -42,7 +41,6 @@ export function MagicItemLibraryScreen() {
   const [resource, reload] = useApiAtom(libraryMagicItemsAtom(query));
   const [opened, setOpened] = useState<string | undefined>();
   const [editing, setEditing] = useState<string | "new" | undefined>();
-  const hob = useHobPanel({ initialOpen: false });
 
   const pages = useMagicItemPages(resource, query, loadMoreLibraryMagicItems);
   const shown = pages.shown;
@@ -54,21 +52,16 @@ export function MagicItemLibraryScreen() {
   };
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={
-            shown === undefined
-              ? undefined
-              : countOf(pages.magicItems.length, list.narrowed, pages.hasMore)
-          }
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={
+          shown === undefined
+            ? undefined
+            : countOf(pages.magicItems.length, list.narrowed, pages.hasMore)
+        }
+        tabs={<LibraryNav />}
+      />
       {shown === undefined && resource.state === "loading" && (
         <Loading label="Reading the hoard…" />
       )}
@@ -132,6 +125,6 @@ export function MagicItemLibraryScreen() {
       {editingItem !== undefined && (
         <MagicItemFormDialog magicItem={editingItem} onClose={() => setEditing(undefined)} />
       )}
-    </AppShell>
+    </>
   );
 }

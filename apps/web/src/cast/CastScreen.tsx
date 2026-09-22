@@ -143,7 +143,7 @@ function AddNpcFromLibraryDialog({
  * same place.
  */
 export function CastScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const navigate = useNavigate();
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly npc: Npc | undefined }>();

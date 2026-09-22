@@ -18,7 +18,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { DetailFacts } from "../ui/detail";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
@@ -97,8 +97,8 @@ import {
  * which the Hob panel can take 400px out of without the window moving.
  *
  * The sheet scrolls in a scroller this screen owns rather than in the shell's
- * column — `fill`, the runner's mode — because both sticky columns and the
- * scroll-spy need a top edge that is *this screen's*: under the shell's
+ * column — `fill` on this route's `staticData`, the runner's mode — because
+ * both sticky columns and the scroll-spy need a top edge that is *this screen's*: under the shell's
  * scroller the sticky `TopBar` would park them, and its height is neither a
  * token nor constant between screens (the Chronicle's aside is not sticky for
  * exactly this reason). Owning the scroller is what makes `top-0` true.
@@ -1674,7 +1674,7 @@ const sheetAtom = Atom.family((characterId: CharacterId) =>
 );
 
 export function CharacterSheetScreen() {
-  const { characterId } = useParams({ from: "/characters/$characterId" });
+  const { characterId } = useParams({ from: "/_shell/characters/$characterId" });
   /**
    * The roster's own load, reused whole — **and that is the point rather than a
    * shortcut.** `GET /me/characters` composes `ownRowReadable`, which is the
@@ -1761,12 +1761,10 @@ export function CharacterSheetScreen() {
     : (drawn[0]?.id ?? "abilities");
 
   return (
-    <AppShell
-      fill
-      topBar={
-        <TopBar
-          title={character?.name ?? "A character"}
-          /* **The campaign's name is on this line now, and that is where it has
+    <>
+      <TopBar
+        title={character?.name ?? "A character"}
+        /* **The campaign's name is on this line now, and that is where it has
              to be.** It used to hang in the top nav beside the campaign the
              route named — but this route names none: `GET /me/characters` is the
              one read on `character` with no campaign in its path, so the sixth
@@ -1774,83 +1772,81 @@ export function CharacterSheetScreen() {
              second bar to put it in. It is still the thing that tells two
              characters at two tables apart, so it joins the line that already
              says which character this is. */
-          subtitle={
-            character === undefined
-              ? undefined
-              : [campaignName, character.descriptor, character.sheet.identity?.subclass]
-                  .filter(
-                    (part): part is string => part !== null && part !== undefined && part !== "",
-                  )
-                  .join(" · ")
-          }
+        subtitle={
+          character === undefined
+            ? undefined
+            : [campaignName, character.descriptor, character.sheet.identity?.subclass]
+                .filter(
+                  (part): part is string => part !== null && part !== undefined && part !== "",
+                )
+                .join(" · ")
+        }
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/characters" />}
         >
-          <Button
-            variant="secondary"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/characters" />}
-          >
-            <Icon name="chevron-left" size={14} />
-            Characters
-          </Button>
-          {/* **The way to the table, in the bar the delivery draws it in**
+          <Icon name="chevron-left" size={14} />
+          Characters
+        </Button>
+        {/* **The way to the table, in the bar the delivery draws it in**
               (`CharacterSheet.jsx:90`) — and absent unless there is a table to
               go to. A control that led to a screen with nothing on it would be
               the stubbed field this product refuses everywhere else, and the
               banner below is the sentence saying why this one is here. */}
-          {firstSeat !== undefined && banner !== undefined && (
-            <Button
-              variant="secondary"
-              size="sm"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/campaigns/$campaignId/table"
-                  params={{ campaignId: firstSeat.campaignId }}
-                />
-              }
-            >
-              <Icon name="swords" size={14} />
-              Go to the table
-            </Button>
-          )}
-          {owned !== undefined && joinOptions.length > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setEditing("join")}>
-              <Icon name="user-plus" size={14} />
-              Add to campaign
-            </Button>
-          )}
-          {/* **The product's first character delete on screen**, and it is here
+        {firstSeat !== undefined && banner !== undefined && (
+          <Button
+            variant="secondary"
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link
+                to="/campaigns/$campaignId/table"
+                params={{ campaignId: firstSeat.campaignId }}
+              />
+            }
+          >
+            <Icon name="swords" size={14} />
+            Go to the table
+          </Button>
+        )}
+        {owned !== undefined && joinOptions.length > 0 && (
+          <Button variant="secondary" size="sm" onClick={() => setEditing("join")}>
+            <Icon name="user-plus" size={14} />
+            Add to campaign
+          </Button>
+        )}
+        {/* **The product's first character delete on screen**, and it is here
               because Hob drafting one is what made an unwanted character cheap:
               a player who describes somebody, keeps the draft and changes their
               mind owns a real row. It is a confirm rather than a press,
               because a character really goes — there is no
               archive for one the way there is for a campaign. See
               `DeleteCharacterDialog`. */}
-          {character !== undefined && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Delete ${character.name}`}
-              onClick={() => setEditing("delete")}
-            >
-              <Icon name="trash-2" size={14} />
-              Delete
-            </Button>
-          )}
-          {/* The durable columns, and the one write with no drawn home of its
+        {character !== undefined && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Delete ${character.name}`}
+            onClick={() => setEditing("delete")}
+          >
+            <Icon name="trash-2" size={14} />
+            Delete
+          </Button>
+        )}
+        {/* The durable columns, and the one write with no drawn home of its
               own — the delivery gives the identity card no edit affordance, so
               it goes where a screen's own action goes. It is absent until the
               row is loaded, because there is nothing to edit until then. */}
-          {character !== undefined && (
-            <Button size="sm" onClick={() => setEditing("identity")}>
-              <Icon name="pencil" size={14} />
-              Edit
-            </Button>
-          )}
-        </TopBar>
-      }
-    >
+        {character !== undefined && (
+          <Button size="sm" onClick={() => setEditing("identity")}>
+            <Icon name="pencil" size={14} />
+            Edit
+          </Button>
+        )}
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading the sheet…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -1926,6 +1922,6 @@ export function CharacterSheetScreen() {
           onDeleted={() => void navigate({ to: "/characters", replace: true })}
         />
       )}
-    </AppShell>
+    </>
   );
 }

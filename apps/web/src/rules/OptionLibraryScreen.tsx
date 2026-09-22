@@ -2,10 +2,9 @@ import type { CharacterOption, Feat, OptionKind } from "@taverns/api";
 import { Button, EMPTY_FILTER_VALUE, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
-import { Hob, useHobPanel } from "../hob";
 import { FilterBar, FilterBox } from "../library/filters";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { FailureNotice, Loading } from "../ui/states";
 import { ClassProgressionDialog } from "./ClassProgressionDialog";
 import { isLibraryFeatOriginal } from "./feat";
@@ -109,11 +108,6 @@ export function OptionLibraryScreen() {
 
   const [resource, reload] = useApiAtom(libraryRulesAtom);
 
-  // No campaign in view, so no campaign for Hob's tools to hang off — the panel
-  // says so rather than offering a composer with nowhere to send. Same as the
-  // campaign list and the monster Library, and for the same reason.
-  const hob = useHobPanel({ initialOpen: false });
-
   const options = resource.state === "ready" ? resource.value.options : undefined;
   const vocabulary = resource.state === "ready" ? resource.value.vocabulary : undefined;
   const feats = resource.state === "ready" ? resource.value.feats : undefined;
@@ -132,17 +126,12 @@ export function OptionLibraryScreen() {
     shownFeats.length === 0;
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={options === undefined ? undefined : summaryOf(options)}
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={options === undefined ? undefined : summaryOf(options)}
+        tabs={<LibraryNav />}
+      />
       {resource.state === "loading" && <Loading label="Opening your library…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -281,7 +270,7 @@ export function OptionLibraryScreen() {
       {progression !== undefined && (
         <ClassProgressionDialog option={progression} onClose={() => setProgression(undefined)} />
       )}
-    </AppShell>
+    </>
   );
 }
 

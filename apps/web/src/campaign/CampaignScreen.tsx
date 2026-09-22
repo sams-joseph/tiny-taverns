@@ -3,10 +3,10 @@ import { Link, useParams } from "@tanstack/react-router";
 import { Button, Card, CardContent, CardHeader, CardTitle, Icon, type IconName } from "@taverns/ui";
 import { useState, type ReactNode } from "react";
 import { EmptyState } from "../ui/states";
+import { useCampaignAct } from "./act";
 import {
   CampaignChrome,
   CampaignSettingsButtons,
-  type CampaignAct,
   type CampaignChromeSlots,
 } from "./CampaignChrome";
 import { EncounterCard } from "./EncounterCard";
@@ -81,11 +81,13 @@ const sectionLink = "text-caption leading-none font-medium text-accent-ink hover
  * (`StartSessionDialog`); with one open and nothing on the table it offers the
  * fight instead.
  *
- * **The button is `slots.act` rather than a branch of its own.** The campaign
- * row draws the same press, and two controls computing the same three-way
- * question independently is two controls that can differ — see `CampaignAct`.
+ * **The button is `useCampaignAct` rather than a branch of its own.** The
+ * campaign row draws the same press, and two controls computing the same
+ * three-way question independently is two controls that can differ — see
+ * `CampaignAct`.
  */
-function NextSession({ view, act }: { readonly view: CampaignView; readonly act: CampaignAct }) {
+function NextSession({ view }: { readonly view: CampaignView }) {
+  const { act, dialogs } = useCampaignAct(view.campaign.id);
   const live = view.run;
   const encounters = view.encounters.length;
   // The unticked half of tonight's checklist — the same substitution the
@@ -129,10 +131,13 @@ function NextSession({ view, act }: { readonly view: CampaignView; readonly act:
                 : (view.session.title ?? `Session ${String(view.session.number)}`)}
             </CardTitle>
           </div>
-          <Button className="shrink-0" onClick={act.press}>
-            <Icon name={act.icon} size={14} />
-            {act.label}
-          </Button>
+          {act !== undefined && (
+            <Button className="shrink-0" onClick={act.press}>
+              <Icon name={act.icon} size={14} />
+              {act.label}
+            </Button>
+          )}
+          {dialogs}
         </div>
       </CardHeader>
       <CardContent>
@@ -241,7 +246,7 @@ const subtitleFor = (view: CampaignView): string | undefined => {
 type Editing = { readonly what: "encounter"; readonly encounter: Encounter | undefined };
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
-  const { view, run, act, finishSession } = slots;
+  const { view, run, finishSession } = slots;
   const [editing, setEditing] = useState<Editing | undefined>();
 
   // Counted over every note, as the encounter list does: a card's count is a
@@ -264,7 +269,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           place: 340 for it, 32 for the gap, and 524 left for the body. */}
       <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
         <div className="@container flex min-w-0 flex-1 flex-col gap-6">
-          <NextSession view={view} act={act} />
+          <NextSession view={view} />
 
           <div>
             <SectionHead title="Encounters on deck">
@@ -335,7 +340,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
 }
 
 export function CampaignScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
 
   return (
     <CampaignChrome

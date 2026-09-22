@@ -1,6 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -60,8 +60,10 @@ describe("a table you sit at", () => {
   it("reads only what a player may read", async () => {
     await renderScreen();
 
-    // Twice: the top nav's context, and the screen's own bar.
-    expect(await screen.findAllByText(campaign.name)).toHaveLength(2);
+    // Twice: the top nav's context, and the screen's own bar. Waited for
+    // together — the row reads the name for itself and may draw it a render
+    // apart from the screen.
+    await waitFor(() => expect(screen.getAllByText(campaign.name)).toHaveLength(2));
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}`);
     // The party read — `party.list`, the seats over shared characters — is the
     // one a player may make; the old campaign-scoped character list is gone

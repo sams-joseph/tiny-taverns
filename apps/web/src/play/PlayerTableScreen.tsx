@@ -26,7 +26,7 @@ import {
   rollDetail,
   rollDiceExpression,
 } from "../characters/rolls";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerTableView } from "./load";
@@ -324,7 +324,7 @@ function RollControls({
 }
 
 export function PlayerTableScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId/table" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId/table" });
   const [resource, reload] = useApiAtom(playerTableAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
   const table = view?.table;
@@ -396,32 +396,27 @@ export function PlayerTableScreen() {
   };
 
   return (
-    <AppShell
-      fill
-      campaignName={view?.campaign.name}
-      topBar={
-        <TopBar
-          title={view?.campaign.name ?? "The table"}
-          subtitle={
-            table === undefined
-              ? undefined
-              : table === null
-                ? "No shared live table for one of your seats."
-                : `Session ${String(table.sessionNumber)}${fight === null ? " · nothing on the table" : ` · round ${String(fight.round)}`}`
-          }
+    <>
+      <TopBar
+        title={view?.campaign.name ?? "The table"}
+        subtitle={
+          table === undefined
+            ? undefined
+            : table === null
+              ? "No shared live table for one of your seats."
+              : `Session ${String(table.sessionNumber)}${fight === null ? " · nothing on the table" : ` · round ${String(fight.round)}`}`
+        }
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
         >
-          <Button
-            variant="secondary"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}
-          >
-            <Icon name="chevron-left" size={14} />
-            Overview
-          </Button>
-        </TopBar>
-      }
-    >
+          <Icon name="chevron-left" size={14} />
+          Overview
+        </Button>
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading the live table…" />}
       {resource.state === "failed" && <FailureNotice failure={resource.failure} onRetry={reload} />}
       {view !== undefined && table === null && (
@@ -559,6 +554,6 @@ export function PlayerTableScreen() {
           )}
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

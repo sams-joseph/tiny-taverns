@@ -12,19 +12,17 @@ import { campaign, campaignId, installStubServer } from "./campaign.fixtures";
  * sometimes it doesn't — it shows on some tabs but not the other, even on the
  * same night, same screen size."*
  *
- * It was not intermittent and it was not the width. Overview, Encounters and
- * Notes render `CampaignChrome`, which is what passes `campaignBadge` and
- * `campaignActions` into the shell; the Party and the Chronicle predated the
- * sixth delivery's split and each composed `AppShell` **itself**, passing
- * `campaignName` and nothing else. So two of the five destinations had no way to
- * draw either, whatever the night — and the same gap cost the campaign action,
- * which is the press a DM reaches for most.
+ * It was not intermittent and it was not the width. The badge and the campaign
+ * action were props a screen passed to the shell, and the Party and the
+ * Chronicle each composed a shell of their own that passed neither. The row now
+ * reads both itself, from `campaignNightAtom`, and the shell is mounted once by
+ * the layout route, so no screen can draw it short.
  *
  * ### Why it is written as an enumeration, and not as five assertions
  *
- * The failure mode is a *new screen*, not a regression in these five: a sixth
- * destination that hand-builds a shell would ship exactly as these two did, and
- * a test naming today's five by hand would pass over it. So the destinations are
+ * The failure mode is a *new screen*, not a regression in these: a destination
+ * that somehow draws the row differently would ship the way those two did, and a
+ * test naming today's destinations by hand would pass over it. So the destinations are
  * read out of the rendered campaign row — the row is the definition of what a
  * campaign's destinations are — and every one of them is then visited. Add an
  * item to `campaignNavFor` and this test starts visiting it with no edit here.

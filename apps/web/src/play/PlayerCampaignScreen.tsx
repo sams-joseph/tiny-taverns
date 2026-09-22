@@ -4,7 +4,7 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerCampaignView } from "./load";
 
@@ -150,30 +150,26 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
     view.npcs.length === 0;
 
   return (
-    <AppShell
-      campaignName={view?.campaign.name}
-      topBar={
-        <TopBar
-          title={view?.campaign.name ?? "A table"}
-          subtitle={
-            view === undefined
-              ? undefined
-              : view.campaign.partyName !== null && view.campaign.partyName !== ""
-                ? view.campaign.partyName
-                : "You are at this table."
-          }
+    <>
+      <TopBar
+        title={view?.campaign.name ?? "A table"}
+        subtitle={
+          view === undefined
+            ? undefined
+            : view.campaign.partyName !== null && view.campaign.partyName !== ""
+              ? view.campaign.partyName
+              : "You are at this table."
+        }
+      >
+        <Button
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/campaigns/$campaignId/characters/new" params={{ campaignId }} />}
         >
-          <Button
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/campaigns/$campaignId/characters/new" params={{ campaignId }} />}
-          >
-            <Icon name="user-plus" size={14} />
-            New character
-          </Button>
-        </TopBar>
-      }
-    >
+          <Icon name="user-plus" size={14} />
+          New character
+        </Button>
+      </TopBar>
       <div className="flex flex-col gap-8">
         {resource.state === "loading" && <Loading label="Reading the table…" />}
         {resource.state === "failed" && (
@@ -257,6 +253,6 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
             </>
           ))}
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -130,7 +130,7 @@ const spineAtom = Atom.family((campaignId: CampaignId) =>
 );
 
 export function ChronicleScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [q, setQ] = useState("");
   const scope: SearchScope =

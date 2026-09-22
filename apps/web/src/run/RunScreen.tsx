@@ -27,8 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { reads } from "../api/keys";
-import { Hob, useHobPanel } from "../hob";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { FailureNotice, Loading } from "../ui/states";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
@@ -571,7 +570,7 @@ function HobDirectUpdates({
 
 export function RunScreen() {
   const { campaignId, sessionId, runId } = useParams({
-    from: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+    from: "/_shell/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
   });
   const path = useMemo<RunPath>(
     () => ({ campaignId, sessionId, runId }),
@@ -785,218 +784,191 @@ export function RunScreen() {
   }, [refresh]);
 
   const back: LinkProps = { to: "/campaigns/$campaignId", params: { campaignId } };
-  // Closed by default — see `CampaignsScreen`, and `useHobPanel`'s own note.
-  // Doubly so here: mid-fight is the last moment to hand 400px to a panel that
-  // cannot answer, and Esc already means "close the panel" only while it is open.
-  const hob = useHobPanel({ initialOpen: false });
 
   return (
     <TooltipProvider>
-      <AppShell
-        fill
-        onAskHob={hob.toggle}
-        panel={<Hob hob={hob} campaignId={campaignId} />}
-        // The campaign's name is the link back to prep, and the shell builds
-        // that link itself now — a fight is inside a campaign, so the campaign
-        // row is drawn with the way home already in it. The badge is the one
-        // thing here the route cannot answer.
-        campaignName={view?.campaign.name}
-        campaignBadge={
-          view === undefined ? undefined : (
-            <Badge variant="secondary">Session {view.session.number}</Badge>
-          )
-        }
-        topBar={
-          <TopBar
-            title={state?.run.encounterName ?? "The fight"}
-            subtitle={
-              state === undefined
-                ? undefined
-                : `Round ${String(state.run.round)} · ${
-                    over
-                      ? "this fight is over"
-                      : active === undefined
-                        ? "nobody is up"
-                        : `${active.displayName} is up`
-                  }`
-            }
-          >
-            {state !== undefined && !over && (
-              <>
-                {connection.status !== "live" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-on-dark-muted"
-                    onClick={connection.reconnect}
-                  >
-                    <Icon name="octagon-x" size={13} />
-                    {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
-                  </Button>
-                )}
-                <span className="flex items-center gap-2">
-                  <Switch
-                    id="run-share"
-                    checked={state.run.visibility === "shared"}
-                    disabled={share.busy}
-                    onCheckedChange={(next) => void setShared(next)}
-                  />
-                  <Label htmlFor="run-share">Share</Label>
-                </span>
-                <span className="flex items-center gap-2">
-                  <Switch
-                    id="run-hob-direct-writes"
-                    checked={state.run.allowHobDirectWrites}
-                    disabled={direct.busy}
-                    onCheckedChange={(next) => void setHobDirectWrites(next)}
-                  />
-                  <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
-                </span>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
-                        {turn.busy ? "Advancing…" : "Next turn"}
-                      </Button>
-                    }
-                  />
-                  <TooltipContent shortcut="SPACE">Advance initiative</TooltipContent>
-                </Tooltip>
-                <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
-                  End
-                </Button>
-              </>
-            )}
-            {over && (
-              <Button
-                variant="secondary"
-                size="sm"
-                nativeButton={false}
-                render={<Link {...back} />}
-              >
-                Back to the campaign
-              </Button>
-            )}
-          </TopBar>
+      <TopBar
+        title={state?.run.encounterName ?? "The fight"}
+        subtitle={
+          state === undefined
+            ? undefined
+            : `Round ${String(state.run.round)} · ${
+                over
+                  ? "this fight is over"
+                  : active === undefined
+                    ? "nobody is up"
+                    : `${active.displayName} is up`
+              }`
         }
       >
-        {resource.state === "loading" && <Loading label="Reading the fight…" />}
-        {resource.state === "failed" && (
-          <div className="max-w-3xl">
-            <FailureNotice failure={resource.failure} onRetry={reload} />
-          </div>
-        )}
-
-        {state !== undefined && view !== undefined && (
-          <div className="flex min-h-0 flex-1 flex-col gap-4">
-            {over && (
-              <p
-                role="status"
-                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+        {state !== undefined && !over && (
+          <>
+            {connection.status !== "live" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-on-dark-muted"
+                onClick={connection.reconnect}
               >
-                This fight came off the table. The order and the hit points below are how it
-                finished — they are saved to Session {view.session.number}.
-              </p>
+                <Icon name="octagon-x" size={13} />
+                {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
+              </Button>
             )}
-            {controller.staleness !== undefined && (
-              <p
-                role="status"
-                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
-              >
-                The last re-read did not answer, so this may be a moment behind. Everything below is
-                the last thing the server said.
-              </p>
-            )}
-
-            {/* The column's width, not the viewport's — `main` is the container.
-                `@3xl` (48rem = 768px) leaves the initiative list 412px beside a
-                340px stat panel, and with the rail gone the column reaches that
-                256px sooner than the `lg:` breakpoint it replaces did. */}
-            <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
-              <InitiativeList
-                run={state.run}
-                combatants={state.combatants}
-                hpOf={controller.hpOf}
-                selectedId={selected?.id}
-                disabled={frozen}
-                onSelect={(combatant) =>
-                  setSelectedId((current) => (current === combatant.id ? undefined : combatant.id))
-                }
-                onDamage={(combatant, amount) => void damage(combatant, amount)}
-                onAdd={() => setAdding(true)}
-                onRoll={() => void rollInitiative()}
+            <span className="flex items-center gap-2">
+              <Switch
+                id="run-share"
+                checked={state.run.visibility === "shared"}
+                disabled={share.busy}
+                onCheckedChange={(next) => void setShared(next)}
               />
+              <Label htmlFor="run-share">Share</Label>
+            </span>
+            <span className="flex items-center gap-2">
+              <Switch
+                id="run-hob-direct-writes"
+                checked={state.run.allowHobDirectWrites}
+                disabled={direct.busy}
+                onCheckedChange={(next) => void setHobDirectWrites(next)}
+              />
+              <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
+            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
+                    {turn.busy ? "Advancing…" : "Next turn"}
+                  </Button>
+                }
+              />
+              <TooltipContent shortcut="SPACE">Advance initiative</TooltipContent>
+            </Tooltip>
+            <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
+              End
+            </Button>
+          </>
+        )}
+        {over && (
+          <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
+            Back to the campaign
+          </Button>
+        )}
+      </TopBar>
+      {resource.state === "loading" && <Loading label="Reading the fight…" />}
+      {resource.state === "failed" && (
+        <div className="max-w-3xl">
+          <FailureNotice failure={resource.failure} onRetry={reload} />
+        </div>
+      )}
 
-              <div className="flex min-h-0 flex-col gap-4">
-                <CombatantPanel
-                  combatant={selected}
-                  hp={selected === undefined ? 0 : controller.hpOf(selected)}
-                  creatures={view.creatures}
-                  active={selected !== undefined && selected.id === state.run.activeCombatantId}
-                  following={selectedId === undefined}
-                  disabled={frozen || share.busy}
-                  onTheirTurn={() => selected !== undefined && void setActive(selected)}
-                  onEdit={() => setEditing(selected)}
-                  onFollow={() => setSelectedId(undefined)}
-                />
-                <HobDirectUpdates
-                  updates={state.directUpdates}
-                  busy={direct.busy}
-                  onUndo={(update) => void undoDirectUpdate(update)}
-                />
-                {!over && <ShareNpcCard path={path} />}
-                {!over && (
-                  <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />
-                )}
-                {!over && (
-                  <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
-                )}
-                <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
-                <SessionLog
-                  events={log}
-                  combatants={state.combatants}
-                  status={over ? "stopped" : connection.status}
-                />
-              </div>
+      {state !== undefined && view !== undefined && (
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {over && (
+            <p
+              role="status"
+              className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+            >
+              This fight came off the table. The order and the hit points below are how it finished
+              — they are saved to Session {view.session.number}.
+            </p>
+          )}
+          {controller.staleness !== undefined && (
+            <p
+              role="status"
+              className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
+            >
+              The last re-read did not answer, so this may be a moment behind. Everything below is
+              the last thing the server said.
+            </p>
+          )}
+
+          {/* The column's width, not the viewport's — `main` is the container.
+              `@3xl` (48rem = 768px) leaves the initiative list 412px beside a
+              340px stat panel, and with the rail gone the column reaches that
+              256px sooner than the `lg:` breakpoint it replaces did. */}
+          <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
+            <InitiativeList
+              run={state.run}
+              combatants={state.combatants}
+              hpOf={controller.hpOf}
+              selectedId={selected?.id}
+              disabled={frozen}
+              onSelect={(combatant) =>
+                setSelectedId((current) => (current === combatant.id ? undefined : combatant.id))
+              }
+              onDamage={(combatant, amount) => void damage(combatant, amount)}
+              onAdd={() => setAdding(true)}
+              onRoll={() => void rollInitiative()}
+            />
+
+            <div className="flex min-h-0 flex-col gap-4">
+              <CombatantPanel
+                combatant={selected}
+                hp={selected === undefined ? 0 : controller.hpOf(selected)}
+                creatures={view.creatures}
+                active={selected !== undefined && selected.id === state.run.activeCombatantId}
+                following={selectedId === undefined}
+                disabled={frozen || share.busy}
+                onTheirTurn={() => selected !== undefined && void setActive(selected)}
+                onEdit={() => setEditing(selected)}
+                onFollow={() => setSelectedId(undefined)}
+              />
+              <HobDirectUpdates
+                updates={state.directUpdates}
+                busy={direct.busy}
+                onUndo={(update) => void undoDirectUpdate(update)}
+              />
+              {!over && <ShareNpcCard path={path} />}
+              {!over && (
+                <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />
+              )}
+              {!over && (
+                <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
+              )}
+              <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
+              <SessionLog
+                events={log}
+                combatants={state.combatants}
+                status={over ? "stopped" : connection.status}
+              />
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {adding && (
-          <CombatantDialog
-            path={path}
-            combatant={undefined}
-            onClose={() => setAdding(false)}
-            onSaved={saved}
-          />
-        )}
-        {editing !== undefined && (
-          <CombatantDialog
-            key={editing.id}
-            path={path}
-            combatant={editing}
-            onClose={() => setEditing(undefined)}
-            onSaved={saved}
-          />
-        )}
-        {ending && view !== undefined && (
-          <EndRunDialog
-            path={path}
-            session={view.session}
-            encounterName={state?.run.encounterName ?? "this fight"}
-            onClose={() => setEnding(false)}
-            onEnded={() => {
-              setEnding(false);
-              reload();
-            }}
-          />
-        )}
+      {adding && (
+        <CombatantDialog
+          path={path}
+          combatant={undefined}
+          onClose={() => setAdding(false)}
+          onSaved={saved}
+        />
+      )}
+      {editing !== undefined && (
+        <CombatantDialog
+          key={editing.id}
+          path={path}
+          combatant={editing}
+          onClose={() => setEditing(undefined)}
+          onSaved={saved}
+        />
+      )}
+      {ending && view !== undefined && (
+        <EndRunDialog
+          path={path}
+          session={view.session}
+          encounterName={state?.run.encounterName ?? "this fight"}
+          onClose={() => setEnding(false)}
+          onEnded={() => {
+            setEnding(false);
+            reload();
+          }}
+        />
+      )}
 
-        {/* The runner's own manager, mounted with the screen. A toast raised
-            here has to beat a dialog's backdrop, which is what `z-toast` above
-            `z-dialog` is for. */}
-        <Toaster />
-      </AppShell>
+      {/* The runner's own manager, mounted with the screen. A toast raised
+          here has to beat a dialog's backdrop, which is what `z-toast` above
+          `z-dialog` is for. */}
+      <Toaster />
     </TooltipProvider>
   );
 }

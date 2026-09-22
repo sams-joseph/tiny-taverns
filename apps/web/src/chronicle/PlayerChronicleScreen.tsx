@@ -5,7 +5,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { loadPlayerChronicle } from "./load";
 import { PlayerRecapBody } from "./PlayerRecapBody";
@@ -75,24 +75,20 @@ export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: Cam
   const earliest = sessions[sessions.length - 1];
 
   return (
-    <AppShell
-      campaignName={view?.campaign.name}
-      topBar={
-        <TopBar
-          title="Chronicle"
-          subtitle={
-            view === undefined
-              ? undefined
-              : `${String(sessions.length)} ${sessions.length === 1 ? "night" : "nights"} your DM has shared`
-          }
-        >
-          <Toggle size="sm" pressed={readAloud} onPressedChange={setReadAloud}>
-            <Icon name="megaphone" size={13} />
-            Read aloud
-          </Toggle>
-        </TopBar>
-      }
-    >
+    <>
+      <TopBar
+        title="Chronicle"
+        subtitle={
+          view === undefined
+            ? undefined
+            : `${String(sessions.length)} ${sessions.length === 1 ? "night" : "nights"} your DM has shared`
+        }
+      >
+        <Toggle size="sm" pressed={readAloud} onPressedChange={setReadAloud}>
+          <Icon name="megaphone" size={13} />
+          Read aloud
+        </Toggle>
+      </TopBar>
       {resource.state === "loading" && <Loading label="Opening the chronicle…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -154,6 +150,6 @@ export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: Cam
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

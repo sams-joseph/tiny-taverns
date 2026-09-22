@@ -12,7 +12,7 @@ import { useHostedSession } from "../auth/hostedSession";
 import { publishableKey } from "../auth/config";
 import { SignInSurface } from "../auth/SignInSurface";
 import { dayOf } from "../chronicle/format";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { FailureNotice, Loading } from "../ui/states";
 import { SaveFailure } from "../ui/form";
 
@@ -117,7 +117,7 @@ const previewAtom = Atom.family((token: string) =>
 );
 
 export function JoinScreen() {
-  const { token } = useParams({ from: "/join/$token" });
+  const { token } = useParams({ from: "/_standalone/join/$token" });
   const [resource, reload] = useApiAtom(previewAtom(token));
   const { signedIn } = useHostedSession();
   const { busy, failure, submit } = useMutation();
@@ -144,9 +144,8 @@ export function JoinScreen() {
   const preview = resource.state === "ready" ? resource.value : undefined;
 
   return (
-    <AppShell
-      topBar={<TopBar title="An invitation" subtitle="Somebody has asked you to their table." />}
-    >
+    <>
+      <TopBar title="An invitation" subtitle="Somebody has asked you to their table." />
       <div className="flex max-w-3xl flex-col gap-6">
         {resource.state === "loading" && <Loading label="Reading the invitation…" />}
 
@@ -218,6 +217,6 @@ export function JoinScreen() {
 
         {redeemed !== undefined && <Joined redeemed={redeemed} />}
       </div>
-    </AppShell>
+    </>
   );
 }

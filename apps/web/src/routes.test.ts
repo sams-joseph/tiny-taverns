@@ -47,7 +47,10 @@ const landsOn = (path: string): { readonly at: string; readonly params: unknown 
   // `_splat` and `*` are the router's own bookkeeping on a splat match, not
   // something a screen reads; dropping them keeps these assertions about ids.
   const { _splat, "*": _star, ...params } = leaf?.params as Record<string, unknown>;
-  return { at: leaf?.routeId ?? "", params };
+  // The full path rather than the id: the id carries the pathless layout the
+  // route sits in (`/_shell/…`), and these assertions are about where a link
+  // lands, not which layout draws it.
+  return { at: leaf?.fullPath ?? "", params };
 };
 
 /** The link this app would render for a route, which is what a nav item is. */

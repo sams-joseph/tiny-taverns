@@ -17,7 +17,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { abilitySummary, type AbilityDraft } from "./abilities";
@@ -140,7 +140,7 @@ import { characterCreateWrites, createOwnCharacter } from "./write";
  * rather than to a form for a character they have already made.
  */
 export function CharacterCreateScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId/characters/new" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId/characters/new" });
   const navigate = useNavigate();
   const [resource, reload] = useApiAtom(newCharacterAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -337,24 +337,20 @@ export function CharacterCreateScreen() {
   };
 
   return (
-    <AppShell
-      campaignName={membership?.campaign.name}
-      topBar={
-        <TopBar
-          title="New character"
-          subtitle={writable ? `Using ${membership.campaign.name} as rules context.` : undefined}
+    <>
+      <TopBar
+        title="New character"
+        subtitle={writable ? `Using ${membership.campaign.name} as rules context.` : undefined}
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/characters" />}
         >
-          <Button
-            variant="secondary"
-            size="sm"
-            nativeButton={false}
-            render={<Link to="/characters" />}
-          >
-            Cancel
-          </Button>
-        </TopBar>
-      }
-    >
+          Cancel
+        </Button>
+      </TopBar>
       {resource.state === "loading" && <Loading label="Reading your tables…" />}
       {resource.state === "failed" && (
         <div className="mx-auto w-full max-w-3xl">
@@ -981,6 +977,6 @@ export function CharacterCreateScreen() {
             )}
           </div>
         ))}
-    </AppShell>
+    </>
   );
 }

@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
 import { campaignId, worldId } from "../campaign/campaign.fixtures";
-import { Hob } from "./Hob";
+import type { HobScope } from "./conversation";
+import { ScopedHob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
 
 /**
@@ -252,16 +253,22 @@ const renderHob = (options?: {
   const hob = panelState(options?.open ?? true);
   render(
     <HostedSessionScope session={noSession}>
-      {options?.world === true ? (
-        <Hob hob={hob} worldId={worldId as SharedWorldId} />
-      ) : options?.campaign === false ? (
-        <Hob hob={hob} />
-      ) : (
-        <Hob hob={hob} campaignId={campaignId as CampaignId} />
-      )}
+      <ScopedHob
+        hob={hob}
+        scope={
+          options?.world === true
+            ? worldScope
+            : options?.campaign === false
+              ? undefined
+              : campaignScope
+        }
+      />
     </HostedSessionScope>,
   );
 };
+
+const campaignScope: HobScope = { type: "campaign", id: campaignId as CampaignId };
+const worldScope: HobScope = { type: "sharedWorld", id: worldId as SharedWorldId };
 
 const delta = (text: string): Frame => ({ event: "delta", data: { text } });
 const tool = (name: string, phase: string, detail: string): Frame => ({
@@ -727,6 +734,46 @@ describe("what Hob offers, and the one thing that writes", () => {
     );
     // And the card does not claim to be saved.
     expect(screen.queryByText("Saved")).toBeNull();
+  });
+});
+
+describe("a change of scope under an open panel", () => {
+  /**
+   * The persistent layout keeps one panel mounted while the reader moves, so
+   * the scope changes under a live hook. What was said belongs to where it was
+   * asked: the transcript is cleared and the new scope's newest thread adopted.
+   */
+  it("swaps the thread and keeps nothing of the last one", async () => {
+    const said = (text: string) => ({
+      id: turnId,
+      threadId,
+      who: "hob",
+      text,
+      proposal: null,
+      acceptedAt: null,
+      createdAt: stamp,
+    });
+    server.threads = [aThread("Who is the ferryman?")];
+    server.turns = [said("Cazril.")];
+
+    const hob = panelState(true);
+    const at = (scope: HobScope) => (
+      <HostedSessionScope session={noSession}>
+        <ScopedHob hob={hob} scope={scope} />
+      </HostedSessionScope>
+    );
+    const { rerender } = render(at(campaignScope));
+    expect(await screen.findByText("Cazril.")).toBeInTheDocument();
+
+    server.threads = [aWorldThread("What connects the roads?")];
+    server.turns = [said("Every road passed through the lantern district.")];
+    rerender(at(worldScope));
+
+    expect(
+      await screen.findByText("Every road passed through the lantern district."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Cazril.")).toBeNull();
+    expect(server.paths).toContain(`/worlds/${worldId}/hob/threads/${threadId}/turns`);
   });
 });
 

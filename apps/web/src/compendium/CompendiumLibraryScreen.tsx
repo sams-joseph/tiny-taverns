@@ -2,10 +2,9 @@ import type { RuleArticle, RuleArticleDetail } from "@taverns/api";
 import { Button, Icon } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
-import { Hob, useHobPanel } from "../hob";
 import { useFilterQuery } from "../library/query";
 import { LibraryNav } from "../library/LibraryNav";
-import { AppShell, TopBar } from "../shell/AppShell";
+import { TopBar } from "../shell/TopBar";
 import { EmptyState, FailureNotice, Loading } from "../ui/states";
 import { libraryRuleArticlesAtom, ruleArticleQueryOf, type RuleArticleQuery } from "./load";
 import { isLibraryArticle } from "./ownership";
@@ -31,22 +30,16 @@ export function CompendiumLibraryScreen() {
   const [editing, setEditing] = useState<RuleArticleDetail | undefined>();
   const [removing, setRemoving] = useState<RuleArticle>();
   const [writing, setWriting] = useState(false);
-  const hob = useHobPanel({ initialOpen: false });
 
   const value = resource.state === "ready" ? resource.value : undefined;
 
   return (
-    <AppShell
-      onAskHob={hob.toggle}
-      panel={<Hob hob={hob} />}
-      topBar={
-        <TopBar
-          title="Library"
-          subtitle={value === undefined ? undefined : summaryOf(value.articles)}
-          tabs={<LibraryNav />}
-        />
-      }
-    >
+    <>
+      <TopBar
+        title="Library"
+        subtitle={value === undefined ? undefined : summaryOf(value.articles)}
+        tabs={<LibraryNav />}
+      />
       {resource.state === "loading" && value === undefined && (
         <Loading label="Reading the compendium…" />
       )}
@@ -122,6 +115,6 @@ export function CompendiumLibraryScreen() {
           onSaved={() => setEditing(undefined)}
         />
       )}
-    </AppShell>
+    </>
   );
 }

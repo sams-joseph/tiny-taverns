@@ -39,6 +39,7 @@ import { PartyScreen } from "./party/PartyScreen";
 import { PlayerTableScreen } from "./play/PlayerTableScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RunScreen } from "./run/RunScreen";
+import { ShellLayout, StandaloneLayout } from "./shell/ShellLayout";
 import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
 
 /**
@@ -134,16 +135,43 @@ const asToken = (raw: string | undefined): string | undefined =>
  */
 const rootRoute = createRootRoute({ component: SignedOutGate });
 
+/**
+ * The persistent layout: `AppShell` mounted once, with the Hob panel, around
+ * every screen but two.
+ *
+ * Pathless, so it adds nothing to a URL — but it **does** add to every route
+ * id below it, which is what `useParams({ from })` and `RouteIds` name: the
+ * campaign route's id is `/_shell/campaigns/$campaignId`. Leaf `remountDeps`
+ * remount the leaf, never this, which is the whole point: see
+ * `shell/ShellLayout.tsx`.
+ */
+const shellRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "_shell",
+  component: ShellLayout,
+});
+
+/**
+ * The two routes outside it, in the same shell without the Hob panel. See
+ * `StandaloneLayout` for why each is outside; the signed-out gate's exemption of
+ * both is path-based and does not care which layout they are in.
+ */
+const standaloneRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "_standalone",
+  component: StandaloneLayout,
+});
+
 /** Every explicit Shared World this account belongs to. */
 const worldsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/worlds",
   component: SharedWorldsScreen,
 });
 
 /** The campaign-first home. */
 const campaignsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/campaigns",
   component: CampaignsScreen,
 });
@@ -154,7 +182,7 @@ const campaignsRoute = createRoute({
  * bad link that falls back to the campaign home.
  */
 const worldRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/worlds/$worldId",
   params: {
     parse: ({ worldId }) => {
@@ -169,14 +197,14 @@ const worldRoute = createRoute({
 /**
  * Everything inside one table.
  *
- * A parent with no component of its own — it renders `<Outlet />` — because
- * there is no chrome shared between a campaign, its bestiary and a fight: each
- * composes its own `AppShell`. What the parent is for is the id: one
- * `params.parse`, so every screen below inherits a decoded `CampaignId` and a
- * bad one is refused once rather than at each of six routes.
+ * A parent with no component of its own — it renders `<Outlet />` — because the
+ * chrome is the persistent layout's, and the campaign row inside it reads the
+ * id off the route. What the parent is for is the id: one `params.parse`, so
+ * every screen below inherits a decoded `CampaignId` and a bad one is refused
+ * once rather than at each of six routes.
  */
 const campaignRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/campaigns/$campaignId",
   params: {
     parse: ({ campaignId }) => {
@@ -259,6 +287,7 @@ const playerNpcTalkRoute = createRoute({
     },
   },
   component: PlayerNpcChatScreen,
+  staticData: { fill: true },
   remountDeps: ({ params }) => params.npcId,
 });
 
@@ -317,7 +346,7 @@ const campaignSplatRoute = createRoute({
  * — is about this account, which does not change under it.
  */
 const libraryRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library",
   component: LibraryScreen,
 });
@@ -341,42 +370,42 @@ const libraryRoute = createRoute({
  * one of to exist.
  */
 const libraryRulesRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/rules",
   component: OptionLibraryScreen,
 });
 
 /** The 2014 reference rules and authored rule-section articles. */
 const libraryCompendiumRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/compendium",
   component: CompendiumLibraryScreen,
 });
 
 /** The spell shelf under the global Library destination. */
 const librarySpellsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/spells",
   component: SpellLibraryScreen,
 });
 
 /** The mundane equipment shelf under the global Library destination. */
 const libraryEquipmentRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/equipment",
   component: EquipmentLibraryScreen,
 });
 
 /** The magic item shelf under the global Library destination. */
 const libraryMagicItemsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/magic-items",
   component: MagicItemLibraryScreen,
 });
 
 /** Reusable account-owned NPC sources, copied into campaigns as snapshots. */
 const libraryNpcsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/library/npcs",
   component: NpcLibraryScreen,
 });
@@ -418,6 +447,7 @@ const playerTableRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "table",
   component: PlayerTableScreen,
+  staticData: { fill: true },
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -440,6 +470,7 @@ const runRoute = createRoute({
     },
   },
   component: RunScreen,
+  staticData: { fill: true },
   remountDeps: ({ params }) => params.runId,
 });
 
@@ -472,7 +503,7 @@ const characterCreateRoute = createRoute({
  * the name is looked up.
  */
 const charactersRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/characters",
 });
 
@@ -502,6 +533,7 @@ const characterRoute = createRoute({
     },
   },
   component: CharacterSheetScreen,
+  staticData: { fill: true },
   // A different character is a different sheet: which tab is open belongs to
   // the one being read.
   remountDeps: ({ params }) => params.characterId,
@@ -520,7 +552,7 @@ const characterRoute = createRoute({
  * the "you are in" panel from the first should survive into it.
  */
 const joinRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => standaloneRoute,
   path: "/join/$token",
   params: {
     parse: ({ token }) => {
@@ -533,7 +565,7 @@ const joinRoute = createRoute({
 });
 
 const galleryRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => standaloneRoute,
   path: "/gallery",
   component: Gallery,
 });
@@ -547,49 +579,50 @@ const galleryRoute = createRoute({
  * what you meant.
  */
 const catchAllRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "$",
   component: CampaignsScreen,
 });
 
 const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: "/",
   component: CampaignsScreen,
 });
 
 export const routeTree = rootRoute.addChildren([
-  indexRoute,
-  campaignsRoute,
-  worldsRoute,
-  worldRoute,
-  libraryRoute,
-  libraryRulesRoute,
-  libraryCompendiumRoute,
-  librarySpellsRoute,
-  libraryEquipmentRoute,
-  libraryMagicItemsRoute,
-  libraryNpcsRoute,
-  campaignRoute.addChildren([
-    campaignIndexRoute,
-    encountersRoute,
-    notesRoute,
-    castRoute,
-    npcFollowUpRoute,
-    playerNpcTalkRoute,
-    npcRoute,
-    castSplatRoute,
-    chronicleRoute,
-    partyRoute,
-    playerTableRoute,
-    characterCreateRoute,
-    runRoute,
-    campaignSplatRoute,
+  shellRoute.addChildren([
+    indexRoute,
+    campaignsRoute,
+    worldsRoute,
+    worldRoute,
+    libraryRoute,
+    libraryRulesRoute,
+    libraryCompendiumRoute,
+    librarySpellsRoute,
+    libraryEquipmentRoute,
+    libraryMagicItemsRoute,
+    libraryNpcsRoute,
+    campaignRoute.addChildren([
+      campaignIndexRoute,
+      encountersRoute,
+      notesRoute,
+      castRoute,
+      npcFollowUpRoute,
+      playerNpcTalkRoute,
+      npcRoute,
+      castSplatRoute,
+      chronicleRoute,
+      partyRoute,
+      playerTableRoute,
+      characterCreateRoute,
+      runRoute,
+      campaignSplatRoute,
+    ]),
+    charactersRoute.addChildren([charactersIndexRoute, characterRoute, charactersSplatRoute]),
+    catchAllRoute,
   ]),
-  charactersRoute.addChildren([charactersIndexRoute, characterRoute, charactersSplatRoute]),
-  joinRoute,
-  galleryRoute,
-  catchAllRoute,
+  standaloneRoute.addChildren([joinRoute, galleryRoute]),
 ]);
 
 /**
@@ -615,6 +648,16 @@ export const router = createRouter({
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
+  }
+  /**
+   * What a route tells the persistent layout above it, which cannot be a prop
+   * because the layout renders the route rather than the other way round.
+   *
+   * `fill`: the screen owns its scroller (the runner, the player table, the
+   * sheet, the NPC talk page) — see `AppShell`'s own `fill`.
+   */
+  interface StaticDataRouteOption {
+    readonly fill?: boolean;
   }
 }
 

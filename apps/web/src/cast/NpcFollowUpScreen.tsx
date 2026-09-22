@@ -50,7 +50,7 @@ const tabbed = (
 };
 
 export function NpcFollowUpScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const locationHash = useLocation({ select: (location) => location.hash });
   const [tab, setTab] = useState<FollowUpTab>(() => tabForHash(locationHash));
 

@@ -80,7 +80,7 @@ const satisfies = (encounter: Encounter, condition: FilterCondition): boolean =>
 };
 
 export function EncountersScreen() {
-  const { campaignId } = useParams({ from: "/campaigns/$campaignId" });
+  const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly encounter: Encounter | undefined }>();
 
