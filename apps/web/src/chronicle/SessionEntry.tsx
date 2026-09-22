@@ -1,5 +1,5 @@
 import type { Session } from "@taverns/api";
-import { Card, CardContent, cn, Icon } from "@taverns/ui";
+import { Card, CardContent, cn, Icon, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { dayOf, spanOf } from "./format";
 
@@ -94,9 +94,9 @@ export function SessionEntry({
                   {played ?? "Not played yet"}
                 </span>
               </div>
-              <h3 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
+              <SectionHeading as="h3" size="display">
                 {title}
-              </h3>
+              </SectionHeading>
               {!open && (
                 <p className="mt-2 max-w-measure text-body-s leading-body text-muted-foreground">
                   {spanOf(session.startedAt, session.endedAt)}

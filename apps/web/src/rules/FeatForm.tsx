@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  SectionHeading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useMemo, useState } from "react";
@@ -138,9 +139,9 @@ export function FeatForm({
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-display text-title leading-snug font-semibold text-heading">
+              <SectionHeading as="h3" size="title">
                 Ability prerequisites
-              </h3>
+              </SectionHeading>
               <Button
                 type="button"
                 variant="secondary"

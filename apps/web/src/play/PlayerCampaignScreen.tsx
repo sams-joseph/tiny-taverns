@@ -1,6 +1,15 @@
 import type { CampaignId, Note, PartySeat } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  SectionHeading,
+} from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -115,9 +124,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-display text-subtitle leading-snug font-semibold tracking-display text-heading">
-        {title}
-      </h2>
+      <SectionHeading size="subtitle">{title}</SectionHeading>
       {children}
     </section>
   );

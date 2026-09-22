@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@taverns/ui";
+import { cn, SectionHeading } from "@taverns/ui";
 
 /**
  * The one shape a Library detail dialog has, written once.
@@ -51,9 +51,7 @@ export function DetailSection({
 }) {
   return (
     <section className={cn("flex flex-col gap-2 border-t border-hairline pt-4", className)}>
-      {title !== undefined && (
-        <h3 className="font-display text-body leading-title font-semibold text-heading">{title}</h3>
-      )}
+      {title !== undefined && <SectionHeading as="h3">{title}</SectionHeading>}
       {children}
     </section>
   );

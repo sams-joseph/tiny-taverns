@@ -1,6 +1,14 @@
 import type { InviteRedeemed } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
-import { Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  sectionHeadingVariants,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
@@ -155,10 +163,7 @@ export function JoinScreen() {
         {resource.state === "failed" && resource.failure.kind === "missing" && (
           <Card tone="sunken" className="items-center gap-3 px-card py-11 text-center">
             <Icon name="eye-off" size={28} className="text-faint" />
-            <p
-              role="alert"
-              className="font-display text-subtitle leading-snug font-semibold text-heading"
-            >
+            <p role="alert" className={sectionHeadingVariants({ size: "subtitle" })}>
               This invitation is no longer good
             </p>
             <p className="max-w-measure text-body-s leading-body text-muted-foreground">

@@ -10,6 +10,7 @@ import {
   searchTextOf,
   Toggle,
   type FilterInputFacet,
+  SectionHeading,
 } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
@@ -364,14 +365,16 @@ function Chronicle({
             <aside className="@4xl:w-aside @4xl:shrink-0">
               <Card tone="sunken">
                 <CardContent className="flex flex-col gap-4 pt-card">
-                  <div className="flex items-baseline justify-between gap-2.5">
-                    <span className="font-display text-title leading-snug font-semibold text-heading">
-                      Threads still open
-                    </span>
-                    <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
-                      {openThreads.length}
-                    </span>
-                  </div>
+                  <SectionHeading
+                    size="title"
+                    action={
+                      <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
+                        {openThreads.length}
+                      </span>
+                    }
+                  >
+                    Threads still open
+                  </SectionHeading>
                   {current === undefined ? (
                     <p className="text-body-s leading-body text-faint">
                       No night is being prepared, so there is no checklist to read this from.

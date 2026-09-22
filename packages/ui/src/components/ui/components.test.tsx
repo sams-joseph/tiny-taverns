@@ -18,6 +18,7 @@ import {
 import { Icon } from "./icon";
 import { Input } from "./input";
 import { Label } from "./label";
+import { SectionHeading } from "./section-heading";
 import { Switch } from "./switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { Toggle } from "./toggle";
@@ -107,6 +108,38 @@ describe("Label and Input", () => {
     const input = screen.getByLabelText("Damage");
     expect(input).toHaveValue("2d6+3");
     expect(input).toHaveClass("font-mono");
+  });
+});
+
+describe("SectionHeading", () => {
+  it("is an h2 at the section size unless told otherwise", () => {
+    render(<SectionHeading>Encounters on deck</SectionHeading>);
+    const heading = screen.getByRole("heading", { level: 2, name: "Encounters on deck" });
+    expect(heading).toHaveClass("font-display", "text-body", "text-heading");
+  });
+
+  it("takes its level and its size separately", () => {
+    render(
+      <SectionHeading as="h3" size="display">
+        Session 4
+      </SectionHeading>,
+    );
+    expect(screen.getByRole("heading", { level: 3, name: "Session 4" })).toHaveClass(
+      "text-display-s",
+    );
+  });
+
+  it("sets an action on the heading's baseline, with the row taking className", () => {
+    render(
+      <SectionHeading className="mb-3" action={<a href="#all">All encounters</a>}>
+        Encounters on deck
+      </SectionHeading>,
+    );
+    const heading = screen.getByRole("heading", { name: "Encounters on deck" });
+    const row = heading.parentElement;
+    expect(row).toHaveClass("mb-3", "items-baseline");
+    expect(heading).not.toHaveClass("mb-3");
+    expect(row).toContainElement(screen.getByRole("link", { name: "All encounters" }));
   });
 });
 

@@ -1,6 +1,6 @@
 import type { CampaignId, OwnedCharacter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Button, Card, CardContent, Icon } from "@taverns/ui";
+import { Button, Card, CardContent, Icon, sectionHeadingVariants } from "@taverns/ui";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
@@ -99,9 +99,7 @@ function CharacterCard({
         <div className="flex items-start gap-3">
           <Portrait name={character.name} />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-body leading-tight font-semibold text-heading">
-              {character.name}
-            </p>
+            <p className={sectionHeadingVariants()}>{character.name}</p>
             {character.descriptor !== null && character.descriptor !== "" && (
               <p className="mt-1 text-caption leading-body text-muted-foreground">
                 {character.descriptor}

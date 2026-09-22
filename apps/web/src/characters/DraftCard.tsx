@@ -1,4 +1,4 @@
-import { Badge, Button, Icon } from "@taverns/ui";
+import { Badge, Button, Icon, sectionHeadingVariants } from "@taverns/ui";
 import type { CharacterProposal } from "./draft";
 import { Portrait, SheetSection } from "./SheetParts";
 import { AbilityCell } from "./SheetParts";
@@ -61,9 +61,7 @@ export function DraftCard({
         <div className="flex items-start gap-3.5 pb-5">
           <Portrait name={draft.name} size="lg" />
           <div className="min-w-0 flex-1">
-            <div className="font-display text-display-s leading-tight font-semibold text-heading">
-              {draft.name}
-            </div>
+            <div className={sectionHeadingVariants({ size: "display" })}>{draft.name}</div>
             {/* The half-line, as the sheet's own `descriptor` will read it.
                 `level` is on the proposal now — a drafted character starts at
                 1, and the accept writes that number rather than leaving the

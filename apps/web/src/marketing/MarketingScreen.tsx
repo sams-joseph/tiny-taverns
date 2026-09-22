@@ -1,6 +1,14 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, Card, Icon, type IconName } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Icon,
+  type IconName,
+  SectionHeading,
+  sectionHeadingVariants,
+} from "@taverns/ui";
 import type { ReactNode } from "react";
 import { StartCta, StartCtaNote } from "./StartCta";
 
@@ -188,9 +196,7 @@ function HeroInitiative(): ReactNode {
   return (
     <Card tone="panel" className="overflow-hidden">
       <div className="flex items-center gap-2 border-b border-strong px-3.5 py-2.5">
-        <span className="font-display text-body leading-snug font-semibold text-heading">
-          Initiative
-        </span>
+        <span className={sectionHeadingVariants()}>Initiative</span>
         <Badge>Round 3</Badge>
       </div>
 
@@ -336,18 +342,18 @@ function Features(): ReactNode {
       className="scroll-mt-20 bg-surface-page px-page-sm py-14 @3xl:px-page @3xl:py-18"
     >
       <div className="mx-auto max-w-275">
-        <h2 className="max-w-[24ch] font-display text-display-m leading-snug font-semibold tracking-display text-heading @2xl:text-display-l">
+        <SectionHeading size="hero" className="max-w-[24ch]">
           Six things you stop doing by hand
-        </h2>
+        </SectionHeading>
         <div className="mt-8 grid gap-4 @3xl:grid-cols-2 @5xl:grid-cols-3">
           {FEATURES.map((feature) => (
             <Card key={feature.title} className="gap-2.5 p-card">
               <span className="flex size-9 items-center justify-center rounded-sm border border-accent/25 bg-accent-soft text-accent-ink">
                 <Icon name={feature.icon} size={19} />
               </span>
-              <span className="font-display text-title leading-snug font-semibold tracking-tight text-heading">
+              <SectionHeading as="h3" size="title">
                 {feature.title}
-              </span>
+              </SectionHeading>
               <p className="text-body-s leading-body text-muted-foreground">{feature.body}</p>
             </Card>
           ))}
@@ -381,9 +387,7 @@ function Start(): ReactNode {
       className="scroll-mt-20 border-y border-hairline bg-surface-sunken px-page-sm py-14 @3xl:px-page @3xl:py-18"
     >
       <div className="mx-auto max-w-155 text-center">
-        <h2 className="font-display text-display-m leading-tight font-bold tracking-display text-heading @2xl:text-display-l">
-          Next session is Thursday
-        </h2>
+        <SectionHeading size="hero">Next session is Thursday</SectionHeading>
         <p className="mt-3 text-body-l leading-body text-slate-300">
           Bring your notes; we&rsquo;ll do the arithmetic.
         </p>

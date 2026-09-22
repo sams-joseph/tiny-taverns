@@ -8,6 +8,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  SectionHeading,
 } from "@taverns/ui";
 import { useState } from "react";
 import { subtitleOf } from "./load";
@@ -301,9 +302,7 @@ export function InitiativeList({
   return (
     <Card tone="panel" className="min-h-0 flex-1 overflow-hidden">
       <div className="flex items-center gap-2.5 border-b border-strong px-panel py-2.5">
-        <span className="font-display text-subtitle leading-snug font-semibold text-heading">
-          Initiative
-        </span>
+        <SectionHeading size="subtitle">Initiative</SectionHeading>
         <Badge>Round {run.round}</Badge>
         <span className="min-w-0 truncate text-caption leading-body text-muted-foreground">
           {visibilitySentence(shared, held, combatants.length)}

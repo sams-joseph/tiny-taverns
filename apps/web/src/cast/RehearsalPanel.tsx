@@ -1,6 +1,6 @@
 import type { CampaignId, NpcId } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, Icon } from "@taverns/ui";
+import { Badge, Button, Icon, SectionHeading } from "@taverns/ui";
 import { useEffect, useRef } from "react";
 import { Composer, NothingListens, UserTurn } from "../hob/ChatParts";
 import { NpcAvatar } from "./NpcCard";
@@ -72,9 +72,9 @@ export function RehearsalPanel({
         {rehearsal.turns.length === 0 && !rehearsal.thinking ? (
           <div className="flex shrink-0 flex-col items-center px-2 pt-6 pb-1 text-center">
             <NpcAvatar name={name} size="lg" />
-            <h3 className="mt-3 font-display text-display-s leading-tight font-semibold tracking-display text-heading">
+            <SectionHeading as="h3" size="display" className="mt-3">
               {emptyTitle}
-            </h3>
+            </SectionHeading>
             <p className="mt-1.5 max-w-measure text-body-s leading-body text-muted-foreground">
               {emptyBody}
             </p>

@@ -1,5 +1,5 @@
 import type { Ability } from "@taverns/api";
-import { Badge, Button, Card, cn, Icon } from "@taverns/ui";
+import { Badge, Button, Card, cn, Icon, SectionHeading } from "@taverns/ui";
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
 import { hpFraction, initialsOf, type SheetSectionId, type SheetSectionSpec } from "./sheet";
 
@@ -57,9 +57,9 @@ export function SheetSection({
       {/* `flex-wrap`, so a header carrying two actions drops them under the
           title in a narrow column rather than squeezing the title against them. */}
       <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-card py-2.5">
-        <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
+        <SectionHeading size="label" className="flex-1">
           {title}
-        </h2>
+        </SectionHeading>
         {aside}
         {action}
       </div>

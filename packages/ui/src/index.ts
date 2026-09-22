@@ -23,6 +23,7 @@ export {
 export { Icon, icons } from "./components/ui/icon";
 export type { IconName, IconProps } from "./components/ui/icon";
 export { Label } from "./components/ui/label";
+export { SectionHeading, sectionHeadingVariants } from "./components/ui/section-heading";
 export { Toggle, toggleVariants } from "./components/ui/toggle";
 
 export { Checkbox } from "./components/ui/checkbox";

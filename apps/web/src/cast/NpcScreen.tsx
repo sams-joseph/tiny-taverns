@@ -9,7 +9,16 @@ import type {
   SessionId,
 } from "@taverns/api";
 import { Link, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, cn, Icon, Input, tabsTriggerVariants } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  cn,
+  Icon,
+  Input,
+  tabsTriggerVariants,
+  SectionHeading,
+} from "@taverns/ui";
 import { Result } from "effect";
 import { useEffect, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -197,9 +206,7 @@ function NpcBody({
           <div className="flex items-start gap-3">
             <NpcAvatar name={npc.name} size="lg" />
             <div className="min-w-0 flex-1">
-              <h2 className="font-display text-title leading-title font-semibold text-heading">
-                {npc.name}
-              </h2>
+              <SectionHeading size="title">{npc.name}</SectionHeading>
               {npc.role !== "" && (
                 <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
               )}
@@ -300,9 +307,7 @@ function AwarenessPanel({
       <Card className="gap-4 p-card">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-title leading-title font-semibold text-heading">
-              Hob research candidates
-            </h2>
+            <SectionHeading size="title">Hob research candidates</SectionHeading>
             <p className="text-body-s leading-body text-muted-foreground">
               Campaign Hob can research notes, beats, recaps and Cast context for you. These rows
               are only candidates until you approve them here.
@@ -314,9 +319,9 @@ function AwarenessPanel({
       </Card>
 
       <Card tone="sunken" className="gap-4 p-card">
-        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+        <SectionHeading as="h3" size="label">
           Reviewed
-        </h3>
+        </SectionHeading>
         <AwarenessList
           npc={npc}
           candidates={decided}
@@ -585,9 +590,7 @@ function ProposalPanel({
       <Card className="gap-4 p-card">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-title leading-title font-semibold text-heading">
-              Pending proposals
-            </h2>
+            <SectionHeading size="title">Pending proposals</SectionHeading>
             <p className="text-body-s leading-body text-muted-foreground">
               NPC proposals are review records. Accepting one uses this stored content only; the
               accept button never sends replacement prose.
@@ -599,9 +602,9 @@ function ProposalPanel({
       </Card>
 
       <Card tone="sunken" className="gap-4 p-card">
-        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+        <SectionHeading as="h3" size="label">
           Already reviewed
-        </h3>
+        </SectionHeading>
         <ProposalList npc={npc} proposals={decided} empty="Nothing accepted or rejected yet." />
       </Card>
     </div>
@@ -769,9 +772,7 @@ function KnowledgePanel({
       <Card className="gap-4 p-card">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-title leading-title font-semibold text-heading">
-              Knowledge facts
-            </h2>
+            <SectionHeading size="title">Knowledge facts</SectionHeading>
             <p className="text-body-s leading-body text-muted-foreground">
               Facts copied into this NPC. Source links are provenance only; rehearsal never reads
               through them.
@@ -791,9 +792,9 @@ function KnowledgePanel({
       </Card>
 
       <Card tone="sunken" className="gap-4 p-card">
-        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+        <SectionHeading as="h3" size="label">
           Add a fact
-        </h3>
+        </SectionHeading>
         <form
           className="flex flex-col gap-3"
           onSubmit={(event) => {
@@ -939,9 +940,7 @@ function MemoryPanel({
       <Card className="gap-4 p-card">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-title leading-title font-semibold text-heading">
-              Approved memory
-            </h2>
+            <SectionHeading size="title">Approved memory</SectionHeading>
             <p className="text-body-s leading-body text-muted-foreground">
               Rehearsal sees only approved memories. Drafts are visible here until you approve or
               retire them.
@@ -962,9 +961,9 @@ function MemoryPanel({
       </Card>
 
       <Card tone="sunken" className="gap-4 p-card">
-        <h3 className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+        <SectionHeading as="h3" size="label">
           Draft a memory
-        </h3>
+        </SectionHeading>
         <form
           className="flex flex-col gap-3"
           onSubmit={(event) => {
@@ -1225,10 +1224,10 @@ function Inspector({
   const status = rehearsal.status;
   return (
     <Card tone="sunken" className="gap-3 p-card" aria-label="Prompt inspector">
-      <h3 className="flex items-center gap-2 text-micro leading-snug font-medium tracking-caps text-faint uppercase">
+      <SectionHeading as="h3" size="label" className="flex items-center gap-2">
         <Icon name="info" size={12} />
         Prompt inspector
-      </h3>
+      </SectionHeading>
       <DetailFacts
         facts={[
           {

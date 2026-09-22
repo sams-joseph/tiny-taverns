@@ -9,6 +9,7 @@ import {
   CardTitle,
   Input,
   Label,
+  SectionHeading,
 } from "@taverns/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMachineToken, writeMachineToken } from "../auth/credential";
@@ -267,9 +268,7 @@ export function ServerPanel() {
   return (
     <section id="server" className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <h2 className="font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-          Server
-        </h2>
+        <SectionHeading size="display">Server</SectionHeading>
         <p className="max-w-measure text-body leading-body text-muted-foreground">
           Live calls through the client derived from <code>TavernsApi</code>. Start the API with{" "}
           <code>pnpm db:up &amp;&amp; pnpm -F server dev</code>, then either sign in above or paste

@@ -1,3 +1,4 @@
+import { SectionHeading } from "@taverns/ui";
 import type { Ability, Creature, CreatureFeature, CreatureProficiency, Trait } from "@taverns/api";
 
 /**
@@ -119,7 +120,9 @@ function FeatureSection({
   if (features === undefined || features.length === 0) return null;
   return (
     <div className="flex flex-col gap-4 border-t border-hairline pt-4">
-      <h3 className="text-label leading-body font-semibold tracking-caps text-heading">{title}</h3>
+      <SectionHeading as="h3" size="label">
+        {title}
+      </SectionHeading>
       {features.map((feature) => (
         <FeatureBlock key={feature.name} feature={feature} />
       ))}
