@@ -1,6 +1,6 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import type { RouteIds } from "@tanstack/react-router";
 import { Schema } from "effect";
@@ -118,7 +118,8 @@ describe("the shell's top bar", () => {
 
     const links = within(nav()).getAllByRole("link");
     // One row for every account — there is no mode left to branch on, so the
-    // four items are the four items everywhere, join page and gallery included.
+    // items are the same items everywhere, join page and gallery included. This
+    // suite runs as a dev build, so the dev-only gallery entry is on the row.
     expect(links.map((link) => link.textContent)).toEqual([
       "Campaigns",
       "Characters",
@@ -134,6 +135,17 @@ describe("the shell's top bar", () => {
     // …and no role switch beside them, ever again: the relation is a fact
     // about a pair, read per campaign, and there is nothing global to toggle.
     expect(screen.queryByLabelText("Role")).toBeNull();
+  });
+
+  it("leaves Components off the row in a production build", async () => {
+    vi.stubEnv("DEV", false);
+    try {
+      await renderAt("/campaigns");
+      const links = within(nav()).getAllByRole("link");
+      expect(links.map((link) => link.textContent)).toEqual(["Campaigns", "Characters", "Library"]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("lights Characters from a sheet, because a sheet is within the roster", async () => {
