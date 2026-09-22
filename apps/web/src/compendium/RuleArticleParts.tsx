@@ -19,6 +19,7 @@ import {
   Icon,
   Input,
   cn,
+  SectionHeading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState, type ReactNode } from "react";
@@ -92,9 +93,9 @@ export function RuleArticleGrid({
           >
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-title leading-title font-semibold text-heading">
+                <SectionHeading as="h3" size="title" className="truncate">
                   {article.name}
-                </h3>
+                </SectionHeading>
                 <p className="mt-1 text-caption leading-body text-muted-foreground">
                   {article.sectionCount} {article.sectionCount === 1 ? "section" : "sections"}
                 </p>
@@ -305,9 +306,9 @@ function RuleArticleDetailView({
               // nothing at the top of the body.
               className="flex flex-col gap-3 border-t border-subtle pt-5 first:border-t-0 first:pt-0"
             >
-              <h3 className="text-title leading-title font-semibold text-heading">
+              <SectionHeading as="h3" size="title">
                 {section.title}
-              </h3>
+              </SectionHeading>
               <RuleBlocks blocks={withoutLeadingHeading(section.blocks, section.title)} />
             </section>
           ))}
@@ -415,7 +416,9 @@ export function RuleArticleForm({
             />
           </Field>
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-title leading-title font-semibold text-heading">Sections</h3>
+            <SectionHeading as="h3" size="title">
+              Sections
+            </SectionHeading>
             <Button
               variant="secondary"
               size="sm"

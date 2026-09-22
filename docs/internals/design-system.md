@@ -39,6 +39,10 @@ A ramp step (`peach-300`) names a colour; a semantic alias (`accent`, `accent-in
 
 **The debt.** `slate-*` and `crimson-*` steps are still reached for directly in roughly thirty non-test files under `apps/web/src` and `packages/ui/src/components` (`button.tsx`, `tooltip.tsx`, `switch.tsx`, `InitiativeList.tsx`, `states.tsx` among them). Each renders correctly today, and swapping a step for a semantic token moves the rendered colour, so it is a restyle. It is the first place to look when the next palette delivery lands.
 
+## Headings: one recipe
+
+Below the page title, every heading is `SectionHeading`, and heading type on an element that is not a heading (a card's name, an editable title) is `sectionHeadingVariants`. Level (`as`) and size are separate props, so the outline can stay honest while a card's title sits at `title` size under an `h2`. `apps/web/src/headings.test.ts` fails on a raw `h2`–`h6` and counts every other `font-display` outside the gallery against a list that says why it is not a heading (figures, monograms, the wordmark).
+
 ## Overlay layering: one scale
 
 Every z-index comes from §3 of `packages/ui/src/styles.css`. Reach for a rung, never a number:

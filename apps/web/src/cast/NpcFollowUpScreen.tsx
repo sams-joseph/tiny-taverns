@@ -6,7 +6,7 @@ import type {
   NpcProposalContent,
 } from "@taverns/api";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, cn, Icon, tabsTriggerVariants } from "@taverns/ui";
+import { Badge, Button, Card, cn, Icon, tabsTriggerVariants, SectionHeading } from "@taverns/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { EmptyState } from "../ui/states";
@@ -127,9 +127,7 @@ export function NpcFollowUpScreen() {
                 </div>
                 <Card tone="sunken" className="h-fit gap-4 p-card">
                   <div>
-                    <h2 className="font-display text-title leading-title font-semibold text-heading">
-                      After the session
-                    </h2>
+                    <SectionHeading size="title">After the session</SectionHeading>
                     <p className="mt-1 text-body-s leading-body text-muted-foreground">
                       This queue gathers existing review rows across the Cast. It does not summarize
                       transcripts, call a model, or accept anything here.
@@ -181,9 +179,7 @@ function FollowUpShell({
         <NpcAvatar name={npc.name} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-title leading-title font-semibold text-heading">
-              {npc.name}
-            </h2>
+            <SectionHeading size="title">{npc.name}</SectionHeading>
             {npc.role !== "" && <Badge variant="outline">{npc.role}</Badge>}
             {npc.archivedAt !== null && <Badge variant="outline">Archived NPC</Badge>}
           </div>

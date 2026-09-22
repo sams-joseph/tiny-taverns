@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Icon, Input } from "@taverns/ui";
+import { Badge, Button, Card, Icon, cn, Input, sectionHeadingVariants } from "@taverns/ui";
 import { useState } from "react";
 import { ARTIFACT_KINDS, type HobArtifact } from "./transcript";
 
@@ -226,7 +226,10 @@ export function ArtifactCard({
                 disabled={onRename === undefined}
                 onClick={() => setEditing(true)}
                 title="Click to edit"
-                className="font-display text-title leading-snug font-semibold text-heading not-disabled:cursor-text disabled:cursor-default"
+                className={cn(
+                  sectionHeadingVariants({ size: "title" }),
+                  "not-disabled:cursor-text disabled:cursor-default",
+                )}
               >
                 {artifact.title}
               </button>

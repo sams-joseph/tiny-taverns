@@ -1,5 +1,5 @@
 import { useParams } from "@tanstack/react-router";
-import { Button, Card, CardContent, Icon } from "@taverns/ui";
+import { Button, Card, CardContent, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
 import { useMemo, useState } from "react";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
@@ -162,9 +162,7 @@ function Party({
               second "nobody yet" under it would say it twice. */}
           {view.party.length > 0 && (
             <section aria-label="Characters" className="mt-8">
-              <h2 className="mb-3 font-display text-body leading-tight font-semibold tracking-display text-heading">
-                Characters
-              </h2>
+              <SectionHeading className="mb-3">Characters</SectionHeading>
               {/* The creator's seat verbs are on the rows: this route is the
                   creator's side of the relation split, so the writes they
                   offer are exactly the ones the server accepts. */}
@@ -176,14 +174,16 @@ function Party({
         <aside className="@4xl:w-aside @4xl:shrink-0">
           <Card tone="sunken">
             <CardContent className="flex flex-col gap-4 pt-card">
-              <div className="flex items-baseline justify-between gap-2.5">
-                <span className="font-display text-title leading-snug font-semibold text-heading">
-                  Needs you
-                </span>
-                <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
-                  {needs.length}
-                </span>
-              </div>
+              <SectionHeading
+                size="title"
+                action={
+                  <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
+                    {needs.length}
+                  </span>
+                }
+              >
+                Needs you
+              </SectionHeading>
               {needs.length === 0 ? (
                 <p className="text-body-s leading-body text-faint">
                   {nobody ? (

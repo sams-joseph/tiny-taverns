@@ -1,5 +1,5 @@
 import type { Feat } from "@taverns/api";
-import { Badge, Button } from "@taverns/ui";
+import { Badge, Button, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { EmptyState } from "../ui/states";
 import { featPrerequisiteLine } from "./feat";
@@ -15,7 +15,7 @@ export function FeatSection({
 }) {
   return (
     <section aria-label="Feats" className="flex flex-col gap-3">
-      <h2 className="font-display text-subtitle leading-snug font-semibold text-heading">Feats</h2>
+      <SectionHeading size="subtitle">Feats</SectionHeading>
       {feats.length === 0 ? (
         <EmptyState icon="sparkles" title="No feats at all">
           {emptyBody}
@@ -44,9 +44,9 @@ function FeatCard({
     <article className="flex min-w-0 flex-col gap-3 rounded-card border border-subtle bg-surface-card p-4 shadow-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate font-display text-title leading-snug font-semibold text-heading">
+          <SectionHeading as="h3" size="title" className="truncate">
             {feat.name}
-          </h3>
+          </SectionHeading>
           <p className="text-caption leading-body text-muted-foreground">
             {featPrerequisiteLine(feat)}
           </p>

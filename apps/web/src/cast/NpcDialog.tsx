@@ -9,6 +9,7 @@ import {
   DialogTitle,
   Icon,
   Input,
+  SectionHeading,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState, type ReactNode } from "react";
@@ -364,10 +365,10 @@ function Section({
       }
     >
       <div className="flex flex-col gap-1">
-        <h3 className="flex items-center gap-2 font-display text-body leading-title font-semibold text-heading">
+        <SectionHeading as="h3" className="flex items-center gap-2">
           {tone === "private" && <Icon name="lock" size={14} className="text-faint" />}
           {title}
-        </h3>
+        </SectionHeading>
         {lede !== undefined && (
           <p className="text-caption leading-body text-muted-foreground">{lede}</p>
         )}

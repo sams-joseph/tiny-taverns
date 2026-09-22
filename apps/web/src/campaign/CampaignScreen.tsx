@@ -1,7 +1,16 @@
 import type { CampaignId, Encounter, PartySeat } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
-import { Button, Card, CardContent, CardHeader, CardTitle, Icon, type IconName } from "@taverns/ui";
-import { useState, type ReactNode } from "react";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Icon,
+  SectionHeading,
+  type IconName,
+} from "@taverns/ui";
+import { useState } from "react";
 import { EmptyState } from "../ui/states";
 import { useCampaignAct } from "./act";
 import {
@@ -50,24 +59,6 @@ import { SessionCard } from "./SessionCard";
  * Everything else is `CampaignView`, which the frame already loads — so the
  * Overview costs no read the campaign screen did not already make.
  */
-
-/** The delivery's `SectionHead`: a heading, and the way to the whole of it. */
-function SectionHead({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children?: ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex items-baseline justify-between gap-2.5">
-      <h2 className="font-display text-body leading-tight font-semibold tracking-display text-heading">
-        {title}
-      </h2>
-      {children}
-    </div>
-  );
-}
 
 /** The delivery's section link — accent-coloured, quiet, and a real `<a>`. */
 const sectionLink = "text-caption leading-none font-medium text-accent-ink hover:text-link-hover";
@@ -125,11 +116,11 @@ function NextSession({ view }: { readonly view: CampaignView }) {
             <div className="mb-2 text-micro leading-none font-semibold tracking-wide-caps uppercase text-accent-ink">
               {view.session === undefined ? "No session open" : "Tonight"}
             </div>
-            <CardTitle className="font-display text-display-s leading-tight font-semibold">
+            <SectionHeading size="display">
               {view.session === undefined
                 ? "Nothing is running yet"
                 : (view.session.title ?? `Session ${String(view.session.number)}`)}
-            </CardTitle>
+            </SectionHeading>
           </div>
           {act !== undefined && (
             <Button className="shrink-0" onClick={act.press}>
@@ -272,15 +263,20 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
           <NextSession view={view} />
 
           <div>
-            <SectionHead title="Encounters on deck">
-              <Link
-                to="/campaigns/$campaignId/encounters"
-                params={{ campaignId: view.campaign.id }}
-                className={sectionLink}
-              >
-                All encounters
-              </Link>
-            </SectionHead>
+            <SectionHeading
+              className="mb-3"
+              action={
+                <Link
+                  to="/campaigns/$campaignId/encounters"
+                  params={{ campaignId: view.campaign.id }}
+                  className={sectionLink}
+                >
+                  All encounters
+                </Link>
+              }
+            >
+              Encounters on deck
+            </SectionHeading>
             {view.encounters.length === 0 ? (
               <EmptyState icon="swords" title="No encounters yet">
                 Nothing is waiting for the party. Write one with{" "}

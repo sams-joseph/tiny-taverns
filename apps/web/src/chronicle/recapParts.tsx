@@ -1,5 +1,5 @@
 import type { Beat, Note, PrepItem } from "@taverns/api";
-import { Badge, Icon, type IconName } from "@taverns/ui";
+import { Badge, Icon, type IconName, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 
 /**
@@ -30,10 +30,10 @@ export function Facet({
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-label-s leading-none font-semibold tracking-caps text-faint uppercase">
+      <SectionHeading as="h4" size="label" className="flex items-center gap-1.5">
         <Icon name={icon} size={12} />
         {label}
-      </h4>
+      </SectionHeading>
       {children}
     </section>
   );

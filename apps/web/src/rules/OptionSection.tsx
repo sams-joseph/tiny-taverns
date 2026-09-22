@@ -1,3 +1,4 @@
+import { SectionHeading } from "@taverns/ui";
 import type { CharacterOption } from "@taverns/api";
 import type { ReactNode } from "react";
 import { EmptyState } from "../ui/states";
@@ -42,9 +43,7 @@ export function OptionSection({
 }) {
   return (
     <section aria-label={title} className="flex flex-col gap-3">
-      <h2 className="font-display text-subtitle leading-snug font-semibold text-heading">
-        {title}
-      </h2>
+      <SectionHeading size="subtitle">{title}</SectionHeading>
       {options.length === 0 ? (
         <EmptyState icon="book-open" title={empty}>
           {emptyBody}

@@ -1,5 +1,5 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
-import { Button, Icon } from "@taverns/ui";
+import { Button, Icon, SectionHeading } from "@taverns/ui";
 import { useState, type ReactNode } from "react";
 import { HOB_COMMANDS, HOB_CONTEXT, HOB_STARTERS } from "./hob.fixtures";
 import type { HobContextChip, HobStarter } from "./transcript";
@@ -321,9 +321,9 @@ export function EmptyThread({
     <div className="flex shrink-0 flex-col gap-3.5">
       <div className="flex flex-col items-center px-2 pt-6 pb-1 text-center">
         <HobAvatar size={44} />
-        <h3 className="mt-3 font-display text-display-s leading-tight font-semibold tracking-display text-heading">
+        <SectionHeading as="h3" size="display" className="mt-3">
           {title}
-        </h3>
+        </SectionHeading>
         <p className="mt-1.5 text-body-s leading-body text-muted-foreground">{description}</p>
       </div>
       <StarterGrid starters={starters} onPick={onPick} />

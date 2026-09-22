@@ -51,6 +51,7 @@ describe("design-system adherence", () => {
       "input",
       "label",
       "popover",
+      "section-heading",
       "select",
       "separator",
       "sheet",

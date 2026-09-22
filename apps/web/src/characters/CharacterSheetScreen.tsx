@@ -10,7 +10,16 @@ import type {
   Trait,
 } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, cn, Icon } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  cn,
+  Icon,
+  SectionHeading,
+  sectionHeadingVariants,
+} from "@taverns/ui";
 
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -469,9 +478,9 @@ function RollLog({
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-card py-2.5">
-        <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
+        <SectionHeading size="label" className="flex-1">
           Your rolls
-        </h2>
+        </SectionHeading>
         <RollModeControl mode={mode} onMode={onMode} />
       </div>
       <CardContent className="space-y-3 pt-card">
@@ -1269,9 +1278,7 @@ function IdentityCard({
         >
           <Portrait name={character.name} size="xs" />
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-body-s leading-tight font-semibold text-heading">
-              {character.name}
-            </p>
+            <p className={cn(sectionHeadingVariants(), "truncate")}>{character.name}</p>
             {summary.length > 0 && (
               <p className="mt-1 font-mono text-mono leading-none text-muted-foreground">
                 {summary.join(" · ")}
@@ -1295,9 +1302,7 @@ function IdentityCard({
           {/* Wide: the portrait plate and the name over the card. */}
           <div className="hidden items-start gap-3 @3xl:flex">
             <Portrait name={character.name} size="lg" />
-            <p className="min-w-0 font-display text-body leading-tight font-semibold text-heading">
-              {character.name}
-            </p>
+            <p className={cn(sectionHeadingVariants(), "min-w-0")}>{character.name}</p>
           </div>
           {(meta.length > 0 || (character.playerName !== null && character.playerName !== "")) && (
             <div>

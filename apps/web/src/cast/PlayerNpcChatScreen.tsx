@@ -1,6 +1,6 @@
 import type { CampaignId, NpcId, PlayerNpc } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
-import { Badge, Button, Card, Icon } from "@taverns/ui";
+import { Badge, Button, Card, Icon, SectionHeading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -66,9 +66,7 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
           <div className="flex items-start gap-3">
             <NpcAvatar name={npc.name} size="lg" />
             <div className="min-w-0">
-              <h2 className="font-display text-title leading-title font-semibold text-heading">
-                {npc.name}
-              </h2>
+              <SectionHeading size="title">{npc.name}</SectionHeading>
               {npc.role !== "" && (
                 <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
               )}

@@ -20,6 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   toast,
+  SectionHeading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -140,7 +141,9 @@ function SessionNpcProposalWatch({
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <Icon name="sparkles" size={15} />
-          <h3 className="text-title-s font-semibold">NPC proposals waiting</h3>
+          <SectionHeading as="h3" size="title">
+            NPC proposals waiting
+          </SectionHeading>
         </div>
         <p className="text-body-s leading-body">
           {pending} {pending === 1 ? "proposal needs" : "proposals need"} creator review. Nothing
@@ -191,7 +194,9 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
   if (shareable.length === 0) {
     return (
       <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <h3 className="text-title-s font-semibold text-foreground">Open at the table</h3>
+        <SectionHeading as="h3" size="title">
+          Open at the table
+        </SectionHeading>
         <p className="mt-2 text-body-s text-muted-foreground">
           Make an NPC player-facing in Cast before opening them at the table.
         </p>
@@ -204,7 +209,9 @@ function ShareNpcCard({ path }: { readonly path: RunPath }) {
     <section className="rounded-card border border-hairline bg-surface-card p-card">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-title-s font-semibold text-foreground">Open at the table</h3>
+          <SectionHeading as="h3" size="title">
+            Open at the table
+          </SectionHeading>
           <p className="text-caption text-muted-foreground">
             Start the shared live-session conversation players see at the table.
           </p>
@@ -265,7 +272,9 @@ function SessionNpcMonitorPanel({
   if (resource.state === "loading") {
     return (
       <section className="rounded-card border border-hairline bg-surface-card p-card">
-        <h3 className="text-title-s font-semibold text-foreground">Scene cast</h3>
+        <SectionHeading as="h3" size="title">
+          Scene cast
+        </SectionHeading>
         <p className="mt-2 text-body-s text-muted-foreground">Reading open NPC conversations…</p>
       </section>
     );
@@ -300,7 +309,9 @@ function SessionNpcMonitorPanel({
     <section className="rounded-card border border-hairline bg-surface-card p-card">
       <div className="flex flex-col gap-3">
         <div>
-          <h3 className="text-title-s font-semibold text-foreground">Scene cast</h3>
+          <SectionHeading as="h3" size="title">
+            Scene cast
+          </SectionHeading>
           <p className="text-caption leading-snug text-muted-foreground">
             Open NPCs, monitor shared table transcripts, and pause or close an NPC conversation
             without editing its history.
@@ -373,7 +384,7 @@ function SessionNpcMonitorDetail({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-body-s font-semibold text-foreground">{row.npc.name}</h4>
+            <SectionHeading as="h4">{row.npc.name}</SectionHeading>
             <Badge variant={badgeForSessionState(state)}>{state}</Badge>
             <Badge variant={row.available ? "success" : "outline"}>
               {row.available ? "available" : "unavailable"}
@@ -452,9 +463,9 @@ function DiceTray({
       aria-label="Dice tray"
     >
       <div className="flex items-center gap-2 border-b border-hairline px-card py-2.5">
-        <h2 className="flex-1 text-label-s leading-none font-semibold tracking-caps uppercase text-muted-foreground">
+        <SectionHeading size="label" className="flex-1">
           Dice tray
-        </h2>
+        </SectionHeading>
         <Badge variant={status === "live" ? "success" : "outline"}>{status}</Badge>
       </div>
       <div className="space-y-2 p-card">
