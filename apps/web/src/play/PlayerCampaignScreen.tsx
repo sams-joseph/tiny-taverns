@@ -222,6 +222,7 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
                             </p>
                           )}
                           <Button
+                            variant="outline"
                             size="sm"
                             nativeButton={false}
                             render={
