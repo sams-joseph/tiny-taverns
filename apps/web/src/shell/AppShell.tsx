@@ -135,8 +135,18 @@ const globalNav: ReadonlyArray<NavItem> = [
   // `footprints`, as the delivery names it — the same glyph the bestiary's own
   // empty state wears, which is what makes the two read as one corpus.
   { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
-  { label: "Components", icon: "panel-left", link: { to: "/gallery" }, section: "gallery" },
 ];
+
+// The gallery is a tool for building the product, not a peer of Campaigns, so
+// it is on the row only in a dev build. Read at render so a test can stub it.
+const galleryNav: NavItem = {
+  label: "Components",
+  icon: "panel-left",
+  link: { to: "/gallery" },
+  section: "gallery",
+};
+const globalNavItems = (): ReadonlyArray<NavItem> =>
+  import.meta.env.DEV ? [...globalNav, galleryNav] : globalNav;
 
 /**
  * The campaign row: the screens inside one table, derived from **what this
@@ -610,7 +620,7 @@ function TopNav({
           </div>
 
           <nav aria-label="Sections" className="flex items-center gap-1">
-            {globalNav.map((item) => (
+            {globalNavItems().map((item) => (
               <GlobalNavLink key={item.label} item={item} active={item.section === section} />
             ))}
           </nav>
