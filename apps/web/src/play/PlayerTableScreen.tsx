@@ -433,7 +433,7 @@ export function PlayerTableScreen() {
         </EmptyState>
       )}
       {view !== undefined && table !== null && table !== undefined && (
-        <div className="@container flex min-h-0 flex-col gap-5">
+        <div className="@container flex flex-col gap-5">
           <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
             <span>
               {connection.status === "live"
@@ -458,7 +458,7 @@ export function PlayerTableScreen() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid min-h-0 gap-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
+            <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
               <div className="flex min-w-0 flex-col gap-5">
                 <Card>
                   <CardHeader>

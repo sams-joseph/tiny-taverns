@@ -7,3 +7,5 @@ pnpm-lock.yaml
 .repos
 # The designers' delivery, kept byte-for-byte (see packages/design-system/PORT-NOTES.md).
 packages/design-system
+# The @AGENTS.md pointer, kept in its exact two-line form by firstmate's fm-ensure-agents-md.sh.
+CLAUDE.md

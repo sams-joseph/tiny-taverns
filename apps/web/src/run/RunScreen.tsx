@@ -873,7 +873,7 @@ export function RunScreen() {
       )}
 
       {state !== undefined && view !== undefined && (
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="flex flex-col gap-4">
           {over && (
             <p
               role="status"
@@ -897,7 +897,7 @@ export function RunScreen() {
               `@3xl` (48rem = 768px) leaves the initiative list 412px beside a
               340px stat panel, and with the rail gone the column reaches that
               256px sooner than the `lg:` breakpoint it replaces did. */}
-          <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
+          <div className="grid items-start gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
             <InitiativeList
               run={state.run}
               combatants={state.combatants}
@@ -912,11 +912,10 @@ export function RunScreen() {
               onRoll={() => void rollInitiative()}
             />
 
-            {/* The column scrolls, not the page: the initiative list beside it
-                stays put while the DM reads further down. The sheet leads and
-                takes most of the column's height (`CombatantPanel`); the cards
-                under it are secondary and are reached by scrolling here. */}
-            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+            {/* The sheet leads at its full height; the cards under it are
+                secondary and are reached by scrolling the window, like any
+                other page. Nothing here is a scroller of its own. */}
+            <div className="flex flex-col gap-4">
               <CombatantPanel
                 combatant={selected}
                 hp={selected === undefined ? 0 : controller.hpOf(selected)}

@@ -319,12 +319,37 @@ function stickyCheck() {
     document.documentElement.clientWidth / 2,
     stack.getBoundingClientRect().bottom - 5,
   );
+  // A screen's own `sticky` must pin below the chrome, not under it.
+  const chromeBottom = Math.round(stack.getBoundingClientRect().bottom);
+  const underChrome = [...document.querySelectorAll("main *")]
+    .filter((el) => getComputedStyle(el).position === "sticky")
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.height > 0 && r.top < chromeBottom - 1 && r.bottom > 0)
+    .map((r) => Math.round(r.top));
   window.scrollTo(0, 0);
   return {
     scrolls: true,
     stackTopAfterScroll: Math.round(top),
     chromeOnTop: stack.contains(probe),
+    underChrome,
   };
+}
+
+/**
+ * Every element in `main` that scrolls on its own, outside a dialog: the page
+ * is the window's to scroll (`docs/internals/web-screens.md`). A sideways strip
+ * (the sheet's pill rail) is not a page scroller and is left out.
+ */
+function innerScrollers() {
+  return [...document.querySelectorAll("main *")]
+    .filter((el) => el.closest("[role=dialog]") === null)
+    .filter((el) => {
+      const overflow = getComputedStyle(el).overflowY;
+      return (
+        (overflow === "auto" || overflow === "scroll") && el.scrollHeight > el.clientHeight + 1
+      );
+    })
+    .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 4).join(".")}`);
 }
 
 function hobState() {
@@ -373,12 +398,8 @@ function hobState() {
     const spacer = document.createElement("div");
     spacer.style.height = "2000px";
     main.append(spacer);
-    // A fill screen (the runner) is bounded to the viewport, so the document
-    // does not scroll at all and the spacer is clipped inside `main`.
-    const bounded = document.scrollingElement.scrollHeight <= doc.clientHeight;
     window.scrollTo(0, 400);
     afterScroll = {
-      bounded,
       scrollY: Math.round(window.scrollY),
       dockTop: Math.round(dock.getBoundingClientRect().top),
       dockH: Math.round(dock.getBoundingClientRect().height),
@@ -497,33 +518,35 @@ try {
       const ready = await go(screen.path);
       const metrics = await cdp.run(measure);
       const sticky = await cdp.run(stickyCheck);
+      const scrollers = await cdp.run(innerScrollers);
       const unanswered = await (await fetch(`${origin}/stub/__audit/unanswered`)).json();
-      results.push({ width, screen: screen.name, scenario, ready, ...metrics, sticky, unanswered });
+      results.push({
+        width,
+        screen: screen.name,
+        scenario,
+        ready,
+        ...metrics,
+        sticky,
+        scrollers,
+        unanswered,
+      });
     }
 
     // The Hob panel across navigation: open it on the Overview, walk through
-    // two campaign screens, the runner (a fill screen) and out of the campaign,
-    // and ask whether it is the same node, still open, and where it sits: a
-    // full-height column beside the shell inline, under the bar as an overlay.
-    const overview = screens.find((screen) => screen.name === "overview");
+    // two campaign screens, the runner and out of the campaign, and ask whether
+    // it is the same node, still open, and where it sits: a full-height column
+    // beside the shell inline, under the bar as an overlay.
     if (only === undefined || only.includes("hob")) {
-      await load("creator", overview.path);
+      const steps = ["overview", "notes", "party", "run", "spells", "overview"].map((name) =>
+        screens.find((s) => s.name === name),
+      );
+      await load("creator", steps[0].path);
       await cdp.run(pressAskHob);
       await sleep(400);
       await cdp.run(markShell);
-      const steps = [
-        overview.path,
-        ...["notes", "party", "run", "spells", "overview"].map(
-          (name) => screens.find((s) => s.name === name).path,
-        ),
-      ];
-      for (const [index, path] of steps.entries()) {
-        if (index > 0) await go(path);
-        hob.push({
-          width,
-          step: `${index}:${screens.find((s) => s.path === path).name}`,
-          ...(await cdp.run(hobState)),
-        });
+      for (const [index, step] of steps.entries()) {
+        if (index > 0) await go(step.path);
+        hob.push({ width, step: `${index}:${step.name}`, ...(await cdp.run(hobState)) });
       }
     }
   }
@@ -661,6 +684,10 @@ for (const width of widths) {
       findings.push(`${at}: ${r.primaries.length} primaries (${r.primaries.join(", ")})`);
     if (r.sticky?.scrolls && (r.sticky.stackTopAfterScroll !== 0 || !r.sticky.chromeOnTop))
       findings.push(`${at}: sticky chrome ${JSON.stringify(r.sticky)}`);
+    if (r.sticky?.underChrome?.length > 0)
+      findings.push(`${at}: sticky under the chrome at y ${r.sticky.underChrome.join(", ")}`);
+    if (r.scrollers.length > 0)
+      findings.push(`${at}: inner page scroller ${r.scrollers.join(", ")}`);
   }
   for (const h of hob.filter((step) => step.width === width)) {
     if (h.pressed !== "true" || h.panel === null || !h.samePanel || !h.sameHeader)
@@ -686,7 +713,7 @@ for (const width of widths) {
     }
     if (
       h.afterScroll !== null &&
-      (h.afterScroll.scrollY !== (h.afterScroll.bounded ? 0 : 400) ||
+      (h.afterScroll.scrollY !== 400 ||
         h.afterScroll.dockTop !== 0 ||
         h.afterScroll.dockH !== h.viewport.h ||
         h.afterScroll.stackTop !== 0)

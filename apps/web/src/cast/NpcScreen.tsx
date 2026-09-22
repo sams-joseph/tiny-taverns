@@ -179,6 +179,7 @@ function NpcBody({
     return (
       <div className="flex min-h-[34rem] flex-col">
         <RehearsalPanel
+          jumpOnOpen
           name={npc.name}
           rehearsal={usableRehearsal}
           reviewTarget={{ campaignId: npc.campaignId, npcId: npc.id }}

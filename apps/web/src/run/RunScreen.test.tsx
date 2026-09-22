@@ -490,34 +490,35 @@ describe("the runner", () => {
   });
 
   // Heights are the browser's (`pnpm -F web shell-audit` walks the runner);
-  // what jsdom can pin is who scrolls. The column does, so the sheet must not:
-  // a second scroller inside it is where the wheel gets stuck.
-  it("leads the right column with the sheet, and scrolls the column rather than the sheet", async () => {
+  // what jsdom can pin is who scrolls. The window does, and only the window:
+  // the runner is a document screen (no `fill`), so nothing between these
+  // cards and the page may bound a height or scroll on its own.
+  it("leads the right column with the sheet, and leaves the scrolling to the window", async () => {
     await renderRunner();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
 
     const sheet = screen.getByRole("region", { name: "Selected combatant" });
+    const log = screen.getByRole("log", { name: "What just happened" });
     const column = sheet.parentElement as HTMLElement;
     expect(column.firstElementChild).toBe(sheet);
-    expect(column).toHaveClass("min-h-0", "overflow-y-auto");
-    expect(sheet).toHaveClass("min-h-4/5", "shrink-0");
-    expect(sheet.className).not.toMatch(/overflow|flex-1/);
-    // The cards under it are in the same scroller, not squeezed beside it.
-    expect(column).toContainElement(screen.getByRole("log", { name: "What just happened" }));
-  });
+    // The cards under it follow it down the page, in the same column.
+    expect(column).toContainElement(log);
 
-  it("keeps an empty sheet to its natural height, so the cards below show", async () => {
-    for (const [key, answer] of [...server.routes]) {
-      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
-        server.routes.set(key, { ...answer, body: { ...liveRun, activeCombatantId: null } });
+    const classOf = (element: Element): string => element.getAttribute("class") ?? "";
+    // Nothing inside the cards scrolls on its own…
+    const scroller = /(^|\s)(overflow(-y)?-(auto|scroll)|max-h-\S+)(\s|$)/;
+    // …and nothing from them up to the page bounds a height to hand one. The
+    // frame's `min-h-screen` is it growing with the document, and `clip` is not
+    // a scroll container.
+    const bound =
+      /(^|\s)(overflow(-y)?-(auto|scroll|hidden)|max-h-\S+|h-screen|min-h-(?!screen)\S+)(\s|$)/;
+    for (const card of [sheet, log, screen.getByRole("table", { name: "Initiative order" })]) {
+      for (const inside of card.querySelectorAll("*"))
+        expect(classOf(inside)).not.toMatch(scroller);
+      for (let at: Element | null = card; at !== null; at = at.parentElement) {
+        expect(classOf(at)).not.toMatch(bound);
       }
     }
-    await renderRunner();
-
-    const sheet = await screen.findByRole("region", { name: "Selected combatant" });
-    expect(sheet).toHaveTextContent(/Pick a line in the initiative list/);
-    expect(sheet).toHaveClass("shrink-0");
-    expect(sheet.className).not.toMatch(/min-h|flex-1/);
   });
 
   it("tells the DM a fight is over rather than pretending it is live", async () => {

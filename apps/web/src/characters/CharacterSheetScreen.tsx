@@ -25,7 +25,7 @@ import {
 
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
@@ -107,11 +107,10 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * container, so a grid there turns over on the width the column actually has,
  * which the Hob panel can take 400px out of without the window moving.
  *
- * The sheet scrolls in a scroller this screen owns rather than in the window —
- * `fill` on this route's `staticData`, the runner's mode — because both sticky
- * columns and the scroll-spy need a top edge that is *this screen's*. The
- * shell's chrome stack is outside that bounded region, so owning the scroller
- * is what makes `top-0` true without copying the chrome's variable height.
+ * The sheet scrolls with the window, like every screen. Both sticky columns
+ * and the scroll-spy's reading line sit under the shell's sticky chrome, whose
+ * height depends on the route, so they read it from `--chrome-height`, which
+ * `AppShell` measures and publishes, rather than copying it.
  *
  * ### Where each thing on it comes from
  *
@@ -162,13 +161,11 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * 1. **The previous document stays rendered while the re-read is in flight.**
  *    `useApiAtom` holds the last value through a refresh (`ready` with
- *    `refreshing: true`, `api/atoms.ts`), so the scroller, its sections and its
- *    scroll position are never unmounted by a save; `Loading` is drawn only
- *    when there is no document at all. Measured in Chromium: across a gear save
- *    the scroller kept its `scrollTop` and its node identity, and the new line
- *    drew in place.
+ *    `refreshing: true`, `api/atoms.ts`), so the document, its sections and the
+ *    window's scroll position are never unmounted or reset by a save;
+ *    `Loading` is drawn only when there is no document at all.
  * 2. **The lit section and the scroll position are held above the resource
- *    anyway.** `active` is screen state, and the scroller's last `scrollTop` is
+ *    anyway.** `active` is screen state, and the window's last `scrollY` is
  *    kept in a ref and restored by a layout effect whenever the document
  *    (re)mounts — so the one case the atom cannot cover, a character id
  *    changing under the same screen or a failure that really does replace the
@@ -201,7 +198,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *   values they are.
  */
 
-/** How far below the scroller's top edge the reading line sits, in CSS pixels. */
+/** How far below the sticky chrome the reading line sits, in CSS pixels. */
 const SPY_SLACK = 60;
 
 type LoggedRollState = "local" | "sending" | "sent" | "failed";
@@ -1264,7 +1261,7 @@ function IdentityCard({
   const detailsId = `vitals-${character.id}`;
 
   return (
-    <div className="order-1 @3xl:sticky @3xl:top-0 @3xl:w-63 @3xl:shrink-0">
+    <div className="order-1 @3xl:sticky @3xl:top-(--chrome-height) @3xl:w-63 @3xl:shrink-0">
       <Card>
         {/* Narrow: the two-line summary, and the press that opens the rest. */}
         <button
@@ -1506,18 +1503,20 @@ function LiveTableBanner({ banner }: { readonly banner: LiveBanner }) {
 }
 
 /**
- * The scroller, the three columns and the scroll-spy — everything that has to
- * know where the reader is.
+ * The three columns and the scroll-spy — everything that has to know where the
+ * reader is.
  *
- * It owns the scroll container so `offsetTop`s are measured against it
- * (`relative`), restores the position it was last at when it mounts, and asks
- * `sectionInView` which section is lit on every scroll. A press on the spine
- * **pins** its section until the reader scrolls by hand (wheel, touch or key):
- * a smooth scroll fires the same events as a thumb does, and a short last
- * section that cannot reach the reading line would otherwise be lit for a
- * frame and then lose the marker to the section above it.
+ * The window is the scroller, as on every screen. This restores the position
+ * it was last at when it mounts, and asks `sectionInView` which section is lit
+ * on every scroll, measuring each section against the reading line under the
+ * shell's sticky chrome (`--chrome-height`, which `AppShell` publishes) and,
+ * narrow, the rail. A press on the spine **pins** its section until the reader
+ * scrolls by hand (wheel, touch or key): a smooth scroll fires the same events
+ * as a thumb does, and a short last section that cannot reach the reading line
+ * would otherwise be lit for a frame and then lose the marker to the section
+ * above it.
  */
-function SheetScroller({
+function SheetLayout({
   owned,
   gearRows,
   banner,
@@ -1542,7 +1541,6 @@ function SheetScroller({
   readonly onEdit: (what: "abilities" | "skills" | "spells" | "backstory" | "gear") => void;
   readonly onReload: () => void;
 }) {
-  const scroller = useRef<HTMLDivElement>(null);
   const spine = useRef<HTMLElement>(null);
   const sectionElements = useRef(new Map<SheetSectionId, HTMLElement>());
   const pinned = useRef<SheetSectionId | undefined>(undefined);
@@ -1559,16 +1557,15 @@ function SheetScroller({
   // Where the reader was, restored when the document (re)mounts — see the
   // screen's doc comment for why this is the second layer and not the first.
   useLayoutEffect(() => {
-    const element = scroller.current;
-    if (element !== null && scrollTopRef.current > 0) element.scrollTop = scrollTopRef.current;
+    if (scrollTopRef.current > 0) window.scrollTo(0, scrollTopRef.current);
   }, [scrollTopRef]);
 
   /**
-   * The rail's height, when the nav is the rail — the amount a section has to
-   * be scrolled clear of so its heading is not under the band. On the wide
-   * layout the spine is a column beside the document and takes no headroom at
-   * all. The two shapes are told apart by the nav's own flex direction, which
-   * the same `@3xl` that lays the sheet out decides — a second copy of the
+   * How far below the viewport's top the reading line sits: the shell's sticky
+   * chrome, and the rail's height when the nav is the rail. On the wide layout
+   * the spine is a column beside the document and takes no headroom at all.
+   * The two shapes are told apart by the nav's own flex direction, which the
+   * same `@3xl` that lays the sheet out decides — a second copy of the
    * breakpoint would drift, and **position cannot be used instead**: Chromium
    * reports a stuck element's `offsetTop` at its stuck position, so a rail the
    * reader has scrolled under looks as though it sits below the sections
@@ -1578,57 +1575,64 @@ function SheetScroller({
   const headroom = () => {
     const nav = spine.current;
     if (nav === null) return 0;
-    return getComputedStyle(nav).flexDirection === "row" ? nav.offsetHeight : 0;
+    const style = getComputedStyle(nav);
+    const chrome = Number.parseFloat(style.getPropertyValue("--chrome-height")) || 0;
+    return chrome + (style.flexDirection === "row" ? nav.offsetHeight : 0);
   };
 
-  const onScroll = () => {
-    const element = scroller.current;
-    if (element === null) return;
-    scrollTopRef.current = element.scrollTop;
-    const room = headroom();
-    const tops = sections.flatMap((section) => {
-      const node = sectionElements.current.get(section.id);
-      return node === undefined ? [] : [{ id: section.id, top: node.offsetTop - room }];
-    });
-    const atEnd = element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
-    const spied = sectionInView(tops, element.scrollTop, SPY_SLACK, atEnd);
-    if (spied === undefined) return;
-    if (pinned.current !== undefined) {
-      // The smooth scroll has arrived when the spy agrees with the press.
-      if (spied === pinned.current) pinned.current = undefined;
-      return;
-    }
-    onActive(spied);
-  };
+  /** A section's top in the document, less the headroom above the line. */
+  const topOf = (node: HTMLElement, room: number) =>
+    node.getBoundingClientRect().top + window.scrollY - room;
+
+  // The latest render's closures, for listeners attached once.
+  const latest = useRef({ sections, onActive });
+  latest.current = { sections, onActive };
+
+  useEffect(() => {
+    const onScroll = () => {
+      scrollTopRef.current = window.scrollY;
+      const room = headroom();
+      const tops = latest.current.sections.flatMap((section) => {
+        const node = sectionElements.current.get(section.id);
+        return node === undefined ? [] : [{ id: section.id, top: topOf(node, room) }];
+      });
+      const page = document.documentElement;
+      const atEnd = window.scrollY + window.innerHeight >= page.scrollHeight - 1;
+      const spied = sectionInView(tops, window.scrollY, SPY_SLACK, atEnd);
+      if (spied === undefined) return;
+      if (pinned.current !== undefined) {
+        // The smooth scroll has arrived when the spy agrees with the press.
+        if (spied === pinned.current) pinned.current = undefined;
+        return;
+      }
+      latest.current.onActive(spied);
+    };
+    const unpin = () => {
+      pinned.current = undefined;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("wheel", unpin, { passive: true });
+    window.addEventListener("touchmove", unpin, { passive: true });
+    window.addEventListener("keydown", unpin);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("wheel", unpin);
+      window.removeEventListener("touchmove", unpin);
+      window.removeEventListener("keydown", unpin);
+    };
+  }, [scrollTopRef]);
 
   const go = (id: SheetSectionId) => {
-    const element = scroller.current;
     const target = sectionElements.current.get(id);
     onActive(id);
-    if (element === null || target === undefined) return;
+    if (target === undefined) return;
     pinned.current = id;
-    const top = Math.max(0, target.offsetTop - headroom());
-    if (typeof element.scrollTo === "function") element.scrollTo({ top, behavior: "smooth" });
-    else element.scrollTop = top;
-  };
-
-  const unpin = () => {
-    pinned.current = undefined;
+    const top = Math.max(0, topOf(target, headroom()));
+    window.scrollTo({ top, behavior: "smooth" });
   };
 
   return (
-    <div
-      ref={scroller}
-      onScroll={onScroll}
-      onWheel={unpin}
-      onTouchMove={unpin}
-      onKeyDown={unpin}
-      /* The scroller takes the page gutter back from `main` so the sticky
-         columns and the rail meet its top edge — `top-0` is measured against
-         this box — and so the scrollbar sits at the page edge rather than a
-         gutter in from it. */
-      className="relative -mx-page-sm -my-gutter min-h-0 flex-1 overflow-auto px-page-sm py-gutter @3xl/app:-mx-page @3xl/app:px-page"
-    >
+    <div>
       {banner !== undefined && <LiveTableBanner banner={banner} />}
       {/* The drawing's `252px / minmax(0,1fr) / 186px` grid as a flex row: the
           card and the spine are fixed tracks that stick, the document is the
@@ -1740,7 +1744,7 @@ export function CharacterSheetScreen() {
   >();
   /**
    * Which section is lit, whether the narrow summary is open, and where the
-   * scroller was — all three above the resource, for the reason the screen's
+   * window was scrolled to — all three above the resource, for the reason the screen's
    * doc comment gives under *Keeping your place across a write*.
    */
   const [active, setActive] = useState<SheetSectionId>("abilities");
@@ -1858,7 +1862,7 @@ export function CharacterSheetScreen() {
             <ApiFailureNotice failure={{ kind: "missing", resource: "character" }} />
           </div>
         ) : (
-          <SheetScroller
+          <SheetLayout
             owned={owned}
             gearRows={view.gear}
             banner={banner}

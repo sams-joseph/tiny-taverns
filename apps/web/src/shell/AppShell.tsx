@@ -13,7 +13,7 @@ import {
   type IconName,
 } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
 import { campaignAtom, campaignNightAtom } from "../campaign/load";
@@ -634,7 +634,6 @@ export function AppShell({
   hobOpen,
   onAskHob,
   panel,
-  fill,
   children,
 }: {
   /**
@@ -675,59 +674,56 @@ export function AppShell({
    */
   readonly onAskHob: (() => void) | undefined;
   readonly panel: ReactNode;
-  /**
-   * Give the body the viewport's remaining height instead of letting the
-   * document scroll.
-   *
-   * The prep screens scroll: they are a document, and the top bar is sticky
-   * over it. The runner does not — it is one screenful with an initiative list
-   * that scrolls *inside* a panel while the stat block stays put beside it, and
-   * a DM who has to scroll to see whose turn it is has the wrong tool. That
-   * needs a bounded height all the way down, which is what this swaps in: the
-   * column stops scrolling, and `main` becomes a `min-h-0` flex child so its
-   * own children can be told how tall they are. Declared by the route, as
-   * `staticData.fill`.
-   */
-  readonly fill: boolean;
   readonly children: ReactNode;
 }) {
   /** The bar's slot, published to the screen below once it has mounted. */
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
+  const column = useRef<HTMLDivElement>(null);
+  const stack = useRef<HTMLDivElement>(null);
+
+  // The sticky stack's height, measured and published as `--chrome-height` on
+  // the column, so a screen's own `sticky` can pin just under it — the window
+  // is every screen's scroller, and the stack is what covers its top. Measured
+  // rather than summed from the rows, because which rows there are is the
+  // route's (a campaign row, a tab strip) and a sum kept by hand drifts.
+  useLayoutEffect(() => {
+    const from = stack.current;
+    const to = column.current;
+    if (from === null || to === null) return;
+    const publish = () => to.style.setProperty("--chrome-height", `${from.offsetHeight}px`);
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(from);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     // The frame is the app's full-height row, and the shell is its first
     // column: the panel docks beside all of it, so opening Hob pushes the bars
     // over with `main` rather than sliding in under them. See `HobFrame`.
-    <HobFrame bounded={fill} panel={panel} className="bg-surface-page">
+    <HobFrame panel={panel} className="bg-surface-page">
       {/* `@container/app`, named, and it is the only container anything asks
           about by name: it is the app's own column, so it is what "how wide is
           the page edge" means — beside an open panel that is the width the
           shell actually has. The rows and `main` below each keep an unnamed
           `@container` of their own for the questions that really are about
           their own width. */}
-      <div className="@container/app flex min-w-0 flex-1 flex-col">
+      <div ref={column} className="@container/app flex min-w-0 flex-1 flex-col">
         {/* One sticky stack, so the global row, campaign row, screen bar and its
             optional tabs pin as a unit. Keeping the slot here also means none of
             those rows needs its own scroll container or a calculated top offset. */}
-        <div className="sticky top-0 z-chrome shrink-0">
+        <div ref={stack} className="sticky top-0 z-chrome shrink-0">
           <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
           <div ref={setBar} />
         </div>
-        <HobRegion bounded={fill}>
-          <div
-            className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-visible"}`}
-          >
+        <HobRegion>
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-visible">
             {/* `@container`, so a screen's layout turns over on the width of the
                 column it actually has. Every `fixed` overlay in the product is
                 portalled to the body, so the containing block this establishes
                 catches nothing. */}
-            <main
-              className={
-                fill
-                  ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter @3xl/app:px-page"
-                  : "@container flex-1 px-page-sm py-page @3xl/app:px-page"
-              }
-            >
+            <main className="@container flex-1 px-page-sm py-page @3xl/app:px-page">
               <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>
             </main>
           </div>

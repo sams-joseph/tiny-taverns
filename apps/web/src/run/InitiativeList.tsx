@@ -300,7 +300,10 @@ export function InitiativeList({
   const monsters = combatants.filter((combatant) => combatant.kind === "npc").length;
 
   return (
-    <Card tone="panel" className="min-h-0 flex-1 overflow-hidden">
+    // `clip` keeps the rows inside the card's corners without making the card
+    // a scroll container: the list takes its whole height and the window
+    // scrolls it.
+    <Card tone="panel" className="overflow-clip">
       <div className="flex items-center gap-2.5 border-b border-strong px-panel py-2.5">
         <SectionHeading size="subtitle">Initiative</SectionHeading>
         <Badge>Round {run.round}</Badge>
@@ -343,7 +346,7 @@ export function InitiativeList({
         </span>
       </div>
 
-      <div role="table" aria-label="Initiative order" className="min-h-0 flex-1 overflow-y-auto">
+      <div role="table" aria-label="Initiative order">
         {combatants.length === 0 ? (
           <p className="px-panel py-8 text-center text-body-s leading-body text-muted-foreground">
             Nobody is in the order. Add whoever is at the table, or end the fight and start one with

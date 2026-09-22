@@ -1,7 +1,7 @@
 import type { CampaignId, NpcId } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Icon, SectionHeading } from "@taverns/ui";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Composer, NothingListens, UserTurn } from "../hob/ChatParts";
 import { NpcAvatar } from "./NpcCard";
 import type { Rehearsal } from "./rehearsal";
@@ -16,6 +16,14 @@ import type { Rehearsal } from "./rehearsal";
  * NPC, the composer's label names the NPC, and there is no "Knows" strip, no
  * starter grid and no slash commands — a rehearsal is a scene, not a palette.
  * The report's rule, kept as a shape: nothing on this panel can say "Hob".
+ *
+ * The transcript is not a scroll box: it takes its whole height in the page and
+ * the window scrolls it, with the composer `sticky` at the viewport's bottom
+ * while any of the panel is on screen. So "keep the newest line in view" is a
+ * window scroll to the panel's end — on open when the panel is the page
+ * (`jumpOnOpen`), when the reader sends, and when a line arrives while they
+ * were already at the end. A reader who has scrolled elsewhere on the page is
+ * left where they are.
  */
 export function RehearsalPanel({
   name,
@@ -26,6 +34,7 @@ export function RehearsalPanel({
   label = `Say something to ${name}`,
   ariaLabel = `Rehearse with ${name}`,
   reviewTarget,
+  jumpOnOpen = false,
 }: {
   readonly name: string;
   readonly rehearsal: Rehearsal;
@@ -35,21 +44,41 @@ export function RehearsalPanel({
   readonly label?: string;
   readonly ariaLabel?: string;
   readonly reviewTarget?: { readonly campaignId: CampaignId; readonly npcId: NpcId };
+  /** Scroll the window to the newest line when the transcript first has one. */
+  readonly jumpOnOpen?: boolean;
 }) {
-  const thread = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  const atEnd = useRef(false);
+  const opened = useRef(false);
 
-  // Jump to the newest line while there is one; the empty state reads top-down.
+  // Whether the panel's end is on screen, read before a new line moves it.
   useEffect(() => {
-    const element = thread.current;
-    if (element !== null && rehearsal.turns.length > 0) {
-      element.scrollTop = element.scrollHeight;
+    const element = end.current;
+    if (element === null || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      atEnd.current = entry?.isIntersecting ?? false;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // A layout effect, so it runs before the observer hears that the new line
+  // pushed the end off screen. The empty state reads top-down.
+  useLayoutEffect(() => {
+    const element = end.current;
+    if (element === null || (rehearsal.turns.length === 0 && !rehearsal.thinking)) return;
+    const first = !opened.current;
+    opened.current = true;
+    if ((first && jumpOnOpen) || rehearsal.thinking || atEnd.current) {
+      if (typeof element.scrollIntoView === "function")
+        element.scrollIntoView({ block: "nearest" });
     }
-  }, [rehearsal.turns, rehearsal.thinking]);
+  }, [rehearsal.turns, rehearsal.thinking, jumpOnOpen]);
 
   return (
     <section
       aria-label={ariaLabel}
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-card border border-hairline bg-surface-card"
+      className="flex flex-1 flex-col overflow-clip rounded-card border border-hairline bg-surface-card"
     >
       <header className="flex shrink-0 items-center gap-2.5 border-b border-hairline p-3.5">
         <NpcAvatar name={name} />
@@ -68,7 +97,7 @@ export function RehearsalPanel({
         </Button>
       </header>
 
-      <div ref={thread} className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-3.5">
+      <div className="flex flex-1 flex-col gap-3.5 p-3.5">
         {rehearsal.turns.length === 0 && !rehearsal.thinking ? (
           <div className="flex shrink-0 flex-col items-center px-2 pt-6 pb-1 text-center">
             <NpcAvatar name={name} size="lg" />
@@ -109,7 +138,7 @@ export function RehearsalPanel({
         )}
       </div>
 
-      <div className="shrink-0">
+      <div className="sticky bottom-0 bg-surface-card">
         {rehearsal.notice !== undefined && (
           <p
             role="alert"
@@ -129,6 +158,7 @@ export function RehearsalPanel({
           />
         )}
       </div>
+      <div ref={end} aria-hidden="true" />
     </section>
   );
 }
