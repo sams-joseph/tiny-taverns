@@ -92,19 +92,30 @@ describe("the persistent shell", () => {
     expect(contentRegion?.firstElementChild).not.toHaveClass("overflow-auto");
   });
 
-  it("keeps an explicit fill screen bounded below the same chrome stack", async () => {
-    await renderAt(`/campaigns/${campaignId}/table`);
+  // There is no bounded mode any more: the screens that used to own a scroller
+  // (the player table, the NPC talk page, the sheet and the runner) get the
+  // same frame as every other, and pin their own `sticky` under the chrome by
+  // the height it publishes.
+  it.each([
+    ["the player table", `/campaigns/${campaignId}/table`],
+    ["the NPC talk page", `/campaigns/${campaignId}/cast/${npcId}/talk`],
+  ])("gives %s the document scroll, not a bounded frame", async (_, path) => {
+    await renderAt(path);
 
     const chrome = header()?.parentElement;
     expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
 
-    const frame = chrome?.parentElement?.parentElement;
-    expect(frame).toHaveClass("h-screen", "overflow-hidden");
-    expect(frame).not.toHaveClass("min-h-screen");
+    const column = chrome?.parentElement;
+    expect(column?.style.getPropertyValue("--chrome-height")).toMatch(/^\d+(\.\d+)?px$/);
+
+    const frame = column?.parentElement;
+    expect(frame).toHaveClass("min-h-screen");
+    expect(frame).not.toHaveClass("h-screen", "overflow-hidden");
 
     const contentRegion = chrome?.nextElementSibling;
-    expect(contentRegion).toHaveClass("min-h-0", "overflow-hidden");
-    expect(contentRegion?.firstElementChild).toHaveClass("overflow-hidden");
+    expect(contentRegion).not.toHaveClass("min-h-0", "overflow-hidden");
+    expect(contentRegion?.firstElementChild).toHaveClass("overflow-visible");
+    expect(screen.getByRole("main")).not.toHaveClass("min-h-0");
   });
 
   /**

@@ -34,20 +34,13 @@ const overlaidPanel = () => document.querySelector("[data-mobile=true]");
 const inlinePanel = () => document.querySelector("[data-slot=sidebar-container]");
 const gap = () => document.querySelector("[data-slot=sidebar-gap]");
 
-const dock = (props: {
-  open: boolean;
-  inline: boolean;
-  bounded?: boolean;
-  onClose?: () => void;
-}) => {
-  const { bounded, ...dockProps } = props;
-  return render(
-    <HobRegion bounded={bounded}>
+const dock = (props: { open: boolean; inline: boolean; onClose?: () => void }) =>
+  render(
+    <HobRegion>
       <div>the content</div>
-      <HobDock turns={[]} {...dockProps} />
+      <HobDock turns={[]} {...props} />
     </HobRegion>,
   );
-};
 
 describe("HobDock", () => {
   it("keeps the column but takes it off-canvas — and out of the tab order — when closed", () => {
@@ -80,14 +73,6 @@ describe("HobDock", () => {
     expect(region()).not.toHaveClass("overflow-x-hidden");
     expect(region()).not.toHaveClass("overflow-hidden");
     expect(region()).not.toHaveClass("overflow-auto");
-  });
-
-  it("clips both axes when the row is bounded to the viewport", () => {
-    dock({ open: false, inline: true, bounded: true });
-
-    // A fill screen already clips everything — the panel's own thread is what
-    // scrolls, inside the height the row was given.
-    expect(region()).toHaveClass("min-h-0", "overflow-hidden");
   });
 
   it("renders nothing at all while it is closed below the threshold", () => {
@@ -144,7 +129,7 @@ describe("HobDock", () => {
     // context above both, so the overlay still lands inside the region — below
     // the bars — and not in the frame, which would scrim the bars as well.
     render(
-      <HobFrame bounded={false} panel={<HobDock turns={[]} open inline={false} />}>
+      <HobFrame panel={<HobDock turns={[]} open inline={false} />}>
         <div>the bars</div>
         <HobRegion>
           <div>the content</div>
@@ -160,7 +145,7 @@ describe("HobDock", () => {
 
   it("pins the inline panel in a viewport-tall slot of the frame, clipped sideways", () => {
     render(
-      <HobFrame bounded={false} panel={<HobDock turns={[]} open={false} inline />}>
+      <HobFrame panel={<HobDock turns={[]} open={false} inline />}>
         <HobRegion>
           <div>the content</div>
         </HobRegion>

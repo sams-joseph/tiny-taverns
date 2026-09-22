@@ -45,10 +45,11 @@ export function PlayerNpcChatScreen() {
 function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
   const chat = useNpcPlayerChat(npc.campaignId, npc.id, npc.name);
   return (
-    <div className="@container flex min-h-0 flex-1 flex-col gap-4">
-      <div className="grid min-h-0 flex-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-h-[34rem] min-w-0">
+    <div className="@container">
+      <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="flex min-h-[34rem] min-w-0 flex-col">
           <RehearsalPanel
+            jumpOnOpen
             name={npc.name}
             rehearsal={chat}
             subtitle="Talk privately · only you can read this transcript"

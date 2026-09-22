@@ -75,12 +75,10 @@ const HobRegionContext = createContext<React.RefObject<HTMLDivElement | null> | 
  * The row the overlay covers: the content column, and — where there is no
  * `HobFrame`, as in the gallery — the dock after it.
  *
- * `relative` is load-bearing: it is what the overlay positions against. A
- * viewport-filling screen also needs `min-h-0` and clipping on both axes so the
- * panel's own thread can scroll inside the remaining height. A document screen
- * must do the opposite *vertically* and grow with its content; clipping it
- * there would turn the content column back into a second page scroller. It
- * carries no `min-h-full` either: `flex-1` already fills, and in the shell's
+ * `relative` is load-bearing: it is what the overlay positions against. It
+ * grows with its content *vertically*, because every screen is a document the
+ * window scrolls; clipping it there would turn the content column into a
+ * second page scroller. It carries no `min-h-full` either: `flex-1` already fills, and in the shell's
  * column — a stretched flex item, so a definite height — 100% is the whole
  * viewport *below* the chrome, which put the chrome's 168px of overflow under
  * the frame and let the document scroll past the pinned panel (measured).
@@ -96,23 +94,14 @@ const HobRegionContext = createContext<React.RefObject<HTMLDivElement | null> | 
  * `clip` leaves the other axis genuinely `visible`. `HobFrame` clips the same
  * way for the same reason.
  */
-export function HobRegion({
-  bounded = false,
-  children,
-}: {
-  readonly bounded?: boolean;
-  readonly children: ReactNode;
-}) {
+export function HobRegion({ children }: { readonly children: ReactNode }) {
   const frame = useContext(HobRegionContext);
   const own = useRef<HTMLDivElement>(null);
   const region = frame ?? own;
 
   return (
     <HobRegionContext.Provider value={region}>
-      <div
-        ref={region}
-        className={`relative flex flex-1 ${bounded ? "min-h-0 overflow-hidden" : "overflow-x-clip"}`}
-      >
+      <div ref={region} className="relative flex flex-1 overflow-x-clip">
         {children}
       </div>
     </HobRegionContext.Provider>
@@ -130,19 +119,16 @@ export function HobRegion({
  * Below the threshold the sheet portals the panel into the region and the slot
  * is an empty 0px box.
  *
- * A fill screen bounds the row to the viewport and clips both axes, as
- * `HobRegion` does; a document screen grows with its content and clips only
- * sideways, where the off-canvas column sits 400px past the right edge.
+ * The row grows with the document and clips only sideways, where the
+ * off-canvas column sits 400px past the right edge, as `HobRegion` does.
  * `overflow-x-clip` makes no scroll container, so the chrome's `sticky` and the
  * slot's still pin against the viewport.
  */
 export function HobFrame({
-  bounded,
   panel,
   className,
   children,
 }: {
-  readonly bounded: boolean;
   readonly panel: ReactNode;
   readonly className?: string;
   readonly children: ReactNode;
@@ -151,13 +137,7 @@ export function HobFrame({
 
   return (
     <HobRegionContext.Provider value={region}>
-      <div
-        className={cn(
-          "flex",
-          bounded ? "h-screen overflow-hidden" : "min-h-screen overflow-x-clip",
-          className,
-        )}
-      >
+      <div className={cn("flex min-h-screen overflow-x-clip", className)}>
         {children}
         {panel !== undefined && panel !== null && (
           <div className="sticky top-0 flex h-screen shrink-0 self-start">{panel}</div>

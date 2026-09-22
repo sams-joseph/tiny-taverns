@@ -287,7 +287,6 @@ const playerNpcTalkRoute = createRoute({
     },
   },
   component: PlayerNpcChatScreen,
-  staticData: { fill: true },
   remountDeps: ({ params }) => params.npcId,
 });
 
@@ -447,7 +446,6 @@ const playerTableRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "table",
   component: PlayerTableScreen,
-  staticData: { fill: true },
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -532,7 +530,6 @@ const characterRoute = createRoute({
     },
   },
   component: CharacterSheetScreen,
-  staticData: { fill: true },
   // A different character is a different sheet: which tab is open belongs to
   // the one being read.
   remountDeps: ({ params }) => params.characterId,
@@ -647,16 +644,6 @@ export const router = createRouter({
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
-  }
-  /**
-   * What a route tells the persistent layout above it, which cannot be a prop
-   * because the layout renders the route rather than the other way round.
-   *
-   * `fill`: the screen owns its scroller (the player table, the sheet, the NPC
-   * talk page) — see `AppShell`'s own `fill`. New screens do not use it.
-   */
-  interface StaticDataRouteOption {
-    readonly fill?: boolean;
   }
 }
 

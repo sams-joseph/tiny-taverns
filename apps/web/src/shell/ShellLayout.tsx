@@ -1,4 +1,4 @@
-import { Outlet, useMatches } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 import { Hob, useHobPanel, type HobPanelState } from "../hob";
 import { AppShell } from "./AppShell";
 import { ShowHob } from "./slots";
@@ -14,10 +14,6 @@ import { ShowHob } from "./slots";
  * The Hob panel's open state lives here, once, so it stays open across
  * navigation and across campaigns; `Hob` reads the scope from the route, so
  * only the thread swaps.
- *
- * `fill` is route data rather than a prop, because the screen that wants it is
- * below the layout and a prop cannot travel up: see `StaticDataRouteOption` in
- * `routes.tsx`.
  */
 export function ShellLayout() {
   return <Frame hob={useHobPanel({ initialOpen: false })} />;
@@ -34,14 +30,9 @@ export function StandaloneLayout() {
 }
 
 function Frame({ hob }: { readonly hob: HobPanelState | undefined }) {
-  const fill = useMatches({
-    select: (matches) => matches.some((match) => match.staticData.fill === true),
-  });
-
   return (
     <ShowHob.Provider value={hob?.show}>
       <AppShell
-        fill={fill}
         hobOpen={hob?.open ?? false}
         onAskHob={hob?.toggle}
         panel={hob === undefined ? undefined : <Hob hob={hob} />}

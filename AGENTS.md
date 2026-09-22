@@ -106,4 +106,12 @@ The web client sends requests through a client derived from `TavernsApi`. `Autho
 - Structural over remembered: a constraint the schema refuses, a grep a test performs, a type that does not compile. A rule that has to be remembered gets a test that remembers it.
 - Provenance is a pointer, never an access path. Nothing is read through `derived_from`, `continued_from` or `equipmentId` to grant reach.
 - Optional keys are omitted, not sent as `undefined`; a required argument beats a default nobody names.
+- Pages scroll with the window. Never bound a page to the viewport and hand its scrolling to an inner container; `sticky` is fine (pin under the chrome with `--chrome-height`), and a modal dialog scrolling its own body is a separate case.
 - If a rule here fights the task, say so and get a decision before breaking it.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
