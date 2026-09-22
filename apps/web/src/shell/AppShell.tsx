@@ -2,12 +2,11 @@ import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import type { CampaignId, CampaignRelation } from "@taverns/api";
-import { Badge, Button, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
+import { Badge, cn, Icon, tabsTriggerVariants, type IconName } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
-import { useCampaignAct } from "../campaign/act";
 import { campaignAtom, campaignNightAtom } from "../campaign/load";
 import { HobRegion } from "../hob/HobDock";
 import {
@@ -51,9 +50,11 @@ import { TopBarSlot } from "./slots";
  * campaign screens appear in no global list.
  *
  * **The campaign row sources itself.** The way home is built from the route,
- * the name from `campaignAtom`, and the creator's badge and press from
- * `campaignNightAtom`. A screen used to hand the row its name, badge and action,
- * and the screens that forgot drew a row missing them.
+ * the name from `campaignAtom` and the creator's badge from `campaignNightAtom`.
+ * A screen used to hand the row its name, badge and action, and the screens that
+ * forgot drew a row missing them. The action has since moved off this row into
+ * the per-screen bar (`shell/TopBar.tsx`) — where it sources itself the same
+ * way, for the same reason.
  *
  * **The 260px rail is gone, and the width it took is still the point.** The
  * second delivery replaced it with one 56px row and gave the content the 260px
@@ -63,6 +64,31 @@ import { TopBarSlot } from "./slots";
  * viewport: `main` is a `@container`, and so is each nav row — the question a
  * row asks is whether *it* fits its own contents, which the window does not
  * answer.
+ *
+ * ### Every row has a height, and the heights are written down here
+ *
+ *   44  the global row        `h-11`
+ *   46  the campaign row      `h-11.5`
+ *   76  the per-screen bar    `h-19`, in `shell/TopBar.tsx`
+ *   40  a screen's tab strip  `h-10`, in `shell/TopBar.tsx`
+ *
+ * They are *fixed*, not minimums, and that is the whole of "sibling screens
+ * line up": measured in Chromium at 1440, the bar was 61px on a screen with no
+ * subtitle, 89 with one and 141 on the Cast at 760 where the action cluster
+ * wrapped, so the content's top edge moved by 80px between tabs of the same
+ * campaign. `TopBar` reserves the subtitle line whether or not a screen has one
+ * and the row does not wrap, so the number above is the number on every screen.
+ *
+ * ### Nothing here asks the window how wide it is
+ *
+ * The page edge is `px-page-sm` under `@3xl` of `@container/app` on the outer
+ * frame, which is the same question a `sm:` breakpoint used to ask and is not
+ * the same *kind* of question: everything else in the product turns over on the
+ * width of the box it is in, and a shell with eight viewport breakpoints was the
+ * one place that rule was written down and not followed. The frame is a
+ * container so a row can ask about the app rather than about the screen behind
+ * it, and `characters/` reaches for the same `/app` container to cancel this
+ * padding with a negative margin — two spellings of one edge is how they drift.
  */
 
 interface NavItem {
@@ -72,9 +98,9 @@ interface NavItem {
    *
    * The campaign row draws labels and nothing else — `CampItem` in the delivery
    * renders `{item.label}` and no icon, and `CAMP_DM`/`CAMP_PLAYER` carry no
-   * `icon` key to render. That is not only the drawing: six labelled items plus
-   * a name, a badge and *Start session* is the widest thing in this bar, and the
-   * icons were the part of it carrying no information the label did not.
+   * `icon` key to render. That is not only the drawing: six labelled items
+   * beside a name and a badge is the widest thing in this bar, and the icons
+   * were the part of it carrying no information the label did not.
    */
   readonly icon?: IconName;
   /**
@@ -227,7 +253,8 @@ const navLinkProps = (active: boolean) =>
   }) satisfies Partial<LinkProps> & Record<string, unknown>;
 
 /**
- * A global-row item: a pill, not an underline.
+ * The global row's control: the delivery's 26px pill, and **every control on
+ * that row is one**.
  *
  * The delivery gives the two rows deliberately different recipes, and the
  * difference is the information: an underline says *which part of this campaign
@@ -235,23 +262,35 @@ const navLinkProps = (active: boolean) =>
  * the same way, the bar would read as ten peers of one kind rather than two
  * tiers — which is the whole thing the split was for.
  *
- * So this one is `GlobalItem`'s 26px pill, and it is written out rather than
- * pulled from a variant in `@taverns/ui`: it is this bar's own recipe and has no
- * second call site, unlike the underline, which is `Tabs`' and must not be
- * copied.
+ * It is written out here rather than pulled from `@taverns/ui`: it is this bar's
+ * own recipe, unlike the underline, which is `Tabs`' and must not be copied. It
+ * *is* shared between this file's two call sites, because the alternative was
+ * what shipped — the four nav items wearing `GlobalItem` at 26px and *Ask Hob*
+ * wearing `Button size="sm"` at 32, measured, on a 44px row.
+ *
+ * The three states are the delivery's, from `GlobalItem` and its *Ask Hob*
+ * beside it: `here` is the sunken fill under a hairline, `on` is the accent-soft
+ * fill under an accent border that says a panel is open, and `idle` is the
+ * quiet one. Only *Ask Hob* is ever `on`, and only it carries a border while
+ * idle — it is a button among links, and the hairline is what says so.
  */
+const pill = {
+  base: cn(
+    "flex h-6.5 shrink-0 items-center gap-1.75 rounded-pill border px-2.5",
+    "text-caption leading-none font-medium whitespace-nowrap transition-control",
+  ),
+  idle: "border-transparent text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
+  quiet: "border-hairline text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
+  here: "border-hairline bg-surface-sunken text-heading",
+  on: "border-accent bg-accent-soft text-accent-ink",
+} as const;
+
 function GlobalNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
     <Link
       {...item.link}
       {...navLinkProps(active)}
-      className={cn(
-        "flex h-6.5 shrink-0 items-center gap-1.75 rounded-pill border px-2.5",
-        "text-caption leading-none font-medium whitespace-nowrap transition-control",
-        active
-          ? "border-hairline bg-surface-sunken text-heading"
-          : "border-transparent text-muted-foreground hover:bg-surface-sunken hover:text-foreground",
-      )}
+      className={cn(pill.base, active ? pill.here : pill.idle)}
     >
       {item.icon !== undefined && (
         <Icon name={item.icon} size={13} className={active ? "text-accent-ink" : undefined} />
@@ -290,24 +329,42 @@ function CampaignNavLink({ item, active }: { readonly item: NavItem; readonly ac
 }
 
 /**
- * *Ask Hob*, part of the specified layout.
+ * *Ask Hob*, part of the specified layout — and a pill, like everything else on
+ * this row.
  *
  * The panel it opens is built elsewhere; this is the shell's half of the seam.
  * With no `onAskHob` handed down it still renders — it is the bar the designers
  * drew — and does nothing.
+ *
+ * **The open state is on the button.** `AppShell.jsx` draws it and the product
+ * did not: a panel that ⌘K had toggled shut left the control looking exactly as
+ * it did with the panel up, so the one control that has a state said nothing
+ * about it. `aria-pressed` alongside the fill, because the colour is not the
+ * announcement.
  */
-function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
+function AskHobButton({
+  open,
+  onClick,
+}: {
+  readonly open: boolean;
+  readonly onClick?: () => void;
+}) {
   return (
-    <Button variant="secondary" size="sm" className="gap-2" onClick={onClick}>
-      <img src={markUrl} alt="" aria-hidden="true" width={18} height={18} className="rounded-xs" />
+    <button
+      type="button"
+      aria-pressed={open}
+      onClick={onClick}
+      className={cn(pill.base, "cursor-pointer", open ? pill.on : pill.quiet)}
+    >
+      <img src={markUrl} alt="" aria-hidden="true" width={16} height={16} className="rounded-xs" />
       Ask Hob
       {/* The hint, not the shortcut — ⌘K is `useHobPanel`'s and works whether
           or not this chip is drawn. So on a bar with no room to spare it goes
           the way the wordmark does, and the button keeps its words. */}
-      <kbd className="hidden rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-micro leading-snug font-medium text-faint @5xl:inline-block">
+      <kbd className="hidden rounded-xs bg-surface-sunken px-1 font-mono text-micro leading-none font-medium text-faint @5xl:inline-block">
         &#8984;K
       </kbd>
-    </Button>
+    </button>
   );
 }
 
@@ -319,14 +376,16 @@ function AskHobButton({ onClick }: { readonly onClick?: () => void }) {
  */
 function AskHobSlot({
   campaignId,
+  open,
   onAskHob,
 }: {
   readonly campaignId: CampaignId;
+  readonly open: boolean;
   readonly onAskHob?: () => void;
 }) {
   const relation = useCampaignRelation(campaignId);
   if (relation === "player") return null;
-  return <AskHobButton onClick={onAskHob} />;
+  return <AskHobButton open={open} onClick={onAskHob} />;
 }
 
 /** The route back out to this table's cross-campaign context, when explicit. */
@@ -348,6 +407,10 @@ function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: Campaign
       )}
     >
       <Icon name="map" size={14} className="shrink-0 text-accent-ink" />
+      {/* Below `@5xl` the chip is its glyph and nothing else — the first of the
+          campaign row's three deliberate collapses, and the one that costs the
+          least: the icon is still the way to the world and still says there is
+          one. See `CampaignRow`. */}
       <span className="hidden max-w-32 truncate @5xl:block">{world.name}</span>
     </Link>
   );
@@ -366,14 +429,12 @@ function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: Campaign
  * the chevron is drawn on its own rather than under a placeholder, which keeps
  * the row's height from moving and says nothing untrue in the meantime.
  *
- * **The name is the first thing to give way on a narrow bar, and it gives way
- * whole.** Measured in Chromium: this row needs 986px with six items, a badge
- * and *Start session*, so below about 1024 something has to go — and left as a
- * plain shrinking flex item the name squeezed the *chevron* to zero width at
- * 760, taking the way home with it. So the name is `hidden` under the row's own
- * `@3xl`, where it truncates instead, and `min-w-4` is the chevron's own width
- * held as a floor. What is left below that is a back-chevron, which is a control
- * that says what it does without a label.
+ * **The name is the one elastic thing in the row, so it is the one that gives
+ * way.** Inside the fixed title cell it truncates; below the row's own `@3xl` it
+ * is `hidden` outright, because left as a plain shrinking flex item it squeezed
+ * the *chevron* to zero width at 760 and took the way home with it. `min-w-4` is
+ * the chevron's own width held as a floor. What is left below that is a
+ * back-chevron, which is a control that says what it does without a label.
  */
 function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
   const [campaign] = useApiAtom(campaignAtom(campaignId));
@@ -406,11 +467,12 @@ function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
 /**
  * The night the campaign is preparing, beside its name — the creator's only.
  *
- * The badge is this row's decoration, so it is the second thing to give way:
- * the campaign's own screens say which night it is in their subtitle, and a
- * narrow bar has to keep its controls. A player's row has none because a
- * player's session read is visibility-gated and a badge that appears for some
- * nights and not others says something it does not mean to.
+ * The badge is this row's decoration, so it is the row's second collapse and it
+ * goes at the same width the chip's label does: the campaign's own screens say
+ * which night it is in their subtitle, and a narrow bar has to keep its
+ * controls. A player's row has none because a player's session read is
+ * visibility-gated and a badge that appears for some nights and not others says
+ * something it does not mean to.
  */
 function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
   const night = useAtomValue(campaignNightAtom(campaignId));
@@ -418,35 +480,9 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
   if (session === undefined) return null;
 
   return (
-    <div className="hidden shrink-0 @2xl:block">
+    <div className="hidden shrink-0 @5xl:block">
       <Badge variant="secondary">Session {session.number}</Badge>
     </div>
-  );
-}
-
-/**
- * The one press that belongs to the whole campaign, pushed right — *Start
- * session* in the delivery, and the creator's only, which is the delivery's
- * `!player` guard held as a shape instead of a check.
- *
- * It says which of the three things it is (`useCampaignAct`), and the
- * Overview's card renders the same value rather than branching again.
- */
-function CampaignActButton({ campaignId }: { readonly campaignId: CampaignId }) {
-  const { act, dialogs } = useCampaignAct(campaignId);
-
-  return (
-    <>
-      {act !== undefined && (
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Button size="sm" onClick={act.press}>
-            <Icon name={act.icon} size={13} />
-            {act.label}
-          </Button>
-        </div>
-      )}
-      {dialogs}
-    </>
   );
 }
 
@@ -454,6 +490,30 @@ function CampaignActButton({ campaignId }: { readonly campaignId: CampaignId }) 
  * The campaign row — present exactly when the route names a campaign, which is
  * the delivery's `inCampaign` read off the router instead of off a screen-id
  * list. A screen cannot render it by mistake and cannot forget it either.
+ *
+ * ### The tabs are anchored to a column, not to wherever the name ended
+ *
+ * The name, the world chip and the night badge share **one cell of fixed
+ * width**, so the first tab starts at the same x whatever the campaign is
+ * called. Measured at 1440 it did not: the first tab sat at 428 for a campaign
+ * named *The Hollow Crown* and would sit anywhere else for a campaign named
+ * anything else, which is what made the row read as five things floating rather
+ * than two columns. `w-96` is the widest the cell's own contents get — 375px
+ * measured, with the chip's label at its `max-w-32` ceiling and a three-digit
+ * session — rounded up onto the scale; past that the name truncates, which is
+ * the one thing in here that is arbitrary length.
+ *
+ * ### Below `@5xl` it collapses, in a stated order
+ *
+ * The cell is fixed only while there is room for it. Under 1024 the chip drops
+ * to its icon, the badge goes, and the cell becomes as wide as what is left —
+ * the row's width is needed by the tabs, which are the controls. The tab strip
+ * scrolls rather than pushing past the row's right edge: measured at 760 the
+ * row's last item reached x=788 against a row ending at 760 and the shell's
+ * `overflow-hidden` cut *Start an encounter* mid-word, invisible to
+ * `scrollWidth` because nothing here scrolled. That press has since left this
+ * row for the per-screen bar (`shell/TopBar.tsx`), which is most of why the
+ * row now fits; the strip is what keeps it fitting when a future row does not.
  */
 function CampaignRow({
   campaignId,
@@ -465,16 +525,27 @@ function CampaignRow({
   const relation = useCampaignRelation(campaignId);
 
   return (
-    <div className="@container flex h-11.5 items-center gap-3 px-page-sm sm:px-page">
-      <CampaignHome campaignId={campaignId} />
-      <CampaignSharedWorldLink campaignId={campaignId} />
-      {relation === "creator" && <SessionBadge campaignId={campaignId} />}
-      <nav aria-label="This campaign" className="ml-2 flex items-stretch self-stretch">
-        {campaignNavFor(relation, campaignId).map((item) => (
-          <CampaignNavLink key={item.label} item={item} active={item.section === section} />
-        ))}
-      </nav>
-      {relation === "creator" && <CampaignActButton campaignId={campaignId} />}
+    // The `@container` is the bare row and the padding is on the box inside it,
+    // because a container query resolves against the container's **content
+    // box**: with `px-page` on the container itself, `@5xl` meant 1024 *plus the
+    // 64px of page edge*, so the row collapsed at 1024 — measured — where the
+    // decision says it should not have. Same shape as the global row above.
+    <div className="@container">
+      <div className="flex h-11.5 items-center px-page-sm @3xl/app:px-page">
+        <div className="flex min-w-0 items-center gap-3 @5xl:w-96 @5xl:shrink-0">
+          <CampaignHome campaignId={campaignId} />
+          <CampaignSharedWorldLink campaignId={campaignId} />
+          {relation === "creator" && <SessionBadge campaignId={campaignId} />}
+        </div>
+        <nav
+          aria-label="This campaign"
+          className="ml-2 flex min-w-0 items-stretch self-stretch overflow-x-auto [scrollbar-width:none]"
+        >
+          {campaignNavFor(relation, campaignId).map((item) => (
+            <CampaignNavLink key={item.label} item={item} active={item.section === section} />
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }
@@ -496,7 +567,13 @@ function CampaignRow({
  * **Where you are is read from the router, not handed down.** There is no
  * `route` prop to pass and none to get wrong; see `shell/location.ts`.
  */
-function TopNav({ onAskHob }: { readonly onAskHob?: () => void }) {
+function TopNav({
+  hobOpen,
+  onAskHob,
+}: {
+  readonly hobOpen: boolean;
+  readonly onAskHob?: () => void;
+}) {
   const section = useSection();
   const campaignId = useCampaignId();
 
@@ -506,16 +583,26 @@ function TopNav({ onAskHob }: { readonly onAskHob?: () => void }) {
           because each row runs out of space at its own width and the question
           is always whether *this* row fits — which the window does not answer
           (a narrow window with a short nav has room to spare). Same rule as
-          `main`'s `@container`. */}
-      <div
-        className={cn(
-          "@container flex h-11 items-center gap-4 px-page-sm sm:px-page",
-          campaignId !== undefined && "border-b border-hairline",
-        )}
-      >
-        <div className="flex shrink-0 items-center gap-2">
-          <img src={markUrl} alt="" aria-hidden="true" width={22} height={22} className="block" />
-          {/* The one thing on this row that is decoration rather than a control,
+          `main`'s `@container`. The page edge is the one question that is not
+          the row's, so it asks `@container/app` — see this file's header.
+
+          The container is the bare row and the padding is a box inside it: a
+          container query resolves against the container's *content* box, so
+          with the page edge on the container itself every threshold in here
+          silently meant "that, plus 64px". */}
+      <div className="@container">
+        <div
+          className={cn(
+            // The hairline is on the sized box, not the container: `h-11` is a
+            // border-box 44, so a border on a wrapper outside it would make the
+            // row 45 and put every row below it a pixel out.
+            "flex h-11 items-center gap-4 px-page-sm @3xl/app:px-page",
+            campaignId !== undefined && "border-b border-hairline",
+          )}
+        >
+          <div className="flex shrink-0 items-center gap-2">
+            <img src={markUrl} alt="" aria-hidden="true" width={22} height={22} className="block" />
+            {/* The one thing on this row that is decoration rather than a control,
               so it is the one that gives way when it runs out of room. The mark
               stays, so the corner still says where you are.
 
@@ -524,33 +611,34 @@ function TopNav({ onAskHob }: { readonly onAskHob?: () => void }) {
               is left fits a long way further down. Re-derived in a browser
               rather than inherited — see this file's own note is not enough,
               the numbers are in the commit. */}
-          <span className="hidden font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading @2xl:inline">
-            Tiny Taverns
-          </span>
-        </div>
+            <span className="hidden font-display text-subtitle leading-tight font-semibold tracking-display whitespace-nowrap text-heading @2xl:inline">
+              Tiny Taverns
+            </span>
+          </div>
 
-        <nav aria-label="Sections" className="flex items-center gap-1">
-          {globalNav.map((item) => (
-            <GlobalNavLink key={item.label} item={item} active={item.section === section} />
-          ))}
-        </nav>
+          <nav aria-label="Sections" className="flex items-center gap-1">
+            {globalNav.map((item) => (
+              <GlobalNavLink key={item.label} item={item} active={item.section === section} />
+            ))}
+          </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* There is no role switch beside this any more: the relation is a
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {/* There is no role switch beside this any more: the relation is a
               fact about the pair (this account, this campaign), read off the
               membership row per campaign inside `AskHobSlot`, and a global
               toggle was a second answer to a per-campaign question. Above any
               campaign the button is simply the bar the designers drew. */}
-          {campaignId === undefined ? (
-            <AskHobButton onClick={onAskHob} />
-          ) : (
-            <AskHobSlot campaignId={campaignId} onAskHob={onAskHob} />
-          )}
-          {/* Clerk's own components, unthemed on purpose — see SignInSurface.
+            {campaignId === undefined ? (
+              <AskHobButton open={hobOpen} onClick={onAskHob} />
+            ) : (
+              <AskHobSlot campaignId={campaignId} open={hobOpen} onAskHob={onAskHob} />
+            )}
+            {/* Clerk's own components, unthemed on purpose — see SignInSurface.
               Renders nothing at all when no publishable key is configured, which
               is why the bar can carry it unconditionally. It moved here from the
               per-screen bar with the rail: it belongs to the app, not the page. */}
-          <SignInSurface />
+            <SignInSurface />
+          </div>
         </div>
       </div>
 
@@ -560,11 +648,20 @@ function TopNav({ onAskHob }: { readonly onAskHob?: () => void }) {
 }
 
 export function AppShell({
+  hobOpen,
   onAskHob,
   panel,
   fill,
   children,
 }: {
+  /**
+   * Whether the panel is up, for the one control on the bar that has a state.
+   *
+   * It is `useHobPanel`'s `open` rather than anything this file holds: ⌘K and
+   * Esc reach the same value, so a button drawing its own idea of open would be
+   * wrong the first time somebody used the keyboard.
+   */
+  readonly hobOpen: boolean;
   /**
    * The seam for the Hob chat panel, and the whole of it.
    *
@@ -608,8 +705,12 @@ export function AppShell({
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav onAskHob={onAskHob} />
+    // `@container/app`, named, and it is the only container anything asks about
+    // by name: it is the app's own frame, so it is what "how wide is the page
+    // edge" means. The rows and `main` below each keep an unnamed `@container`
+    // of their own for the questions that really are about their own width.
+    <div className="@container/app flex h-screen flex-col overflow-hidden bg-surface-page">
+      <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
       <HobRegion>
         <div
           className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
@@ -626,8 +727,8 @@ export function AppShell({
           <main
             className={
               fill
-                ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter sm:px-page"
-                : "@container flex-1 px-page-sm py-page sm:px-page"
+                ? "@container flex min-h-0 flex-1 flex-col px-page-sm py-gutter @3xl/app:px-page"
+                : "@container flex-1 px-page-sm py-page @3xl/app:px-page"
             }
           >
             <TopBarSlot.Provider value={bar}>{children}</TopBarSlot.Provider>

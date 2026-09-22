@@ -42,6 +42,7 @@ function Frame({ hob }: { readonly hob: HobPanelState | undefined }) {
     <ShowHob.Provider value={hob?.show}>
       <AppShell
         fill={fill}
+        hobOpen={hob?.open ?? false}
         onAskHob={hob?.toggle}
         panel={hob === undefined ? undefined : <Hob hob={hob} />}
       >

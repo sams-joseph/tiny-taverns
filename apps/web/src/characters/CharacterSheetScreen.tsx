@@ -1621,7 +1621,7 @@ function SheetScroller({
          columns and the rail meet its top edge — `top-0` is measured against
          this box — and so the scrollbar sits at the page edge rather than a
          gutter in from it. */
-      className="relative -mx-page-sm -my-gutter min-h-0 flex-1 overflow-auto px-page-sm py-gutter sm:-mx-page sm:px-page"
+      className="relative -mx-page-sm -my-gutter min-h-0 flex-1 overflow-auto px-page-sm py-gutter @3xl/app:-mx-page @3xl/app:px-page"
     >
       {banner !== undefined && <LiveTableBanner banner={banner} />}
       {/* The drawing's `252px / minmax(0,1fr) / 186px` grid as a flex row: the

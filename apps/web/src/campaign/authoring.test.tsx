@@ -681,17 +681,20 @@ describe("starting a session", () => {
     // for a session that is already running.
     await renderScreen(mintingSession());
 
-    // The row's and the card's, which is what makes the pair one answer rather
-    // than two controls that can differ. Waited for together: the row reads
-    // less than the Overview does, so it can draw a render sooner.
-    const both = await waitFor(() => {
+    // **Exactly one**, and it is the *Tonight* card's. The chrome used to draw a
+    // second — the campaign row's, and since 2026-09-22 the per-screen bar's —
+    // but the bar leaves the press to the card on the Overview, which is the
+    // one screen whose body already carries it. Two peach buttons on one screen
+    // is the budget this keeps (`shell/TopBar.tsx`).
+    const press = await waitFor(() => {
       const found = screen.getAllByRole("button", { name: "Start an encounter" });
-      expect(found).toHaveLength(2);
+      expect(found).toHaveLength(1);
       return found;
     });
+    expect(press[0]!.closest("header")).toBeNull();
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
 
-    await userEvent.click(both[0]!);
+    await userEvent.click(press[0]!);
     // The run dialog, not a second night.
     expect(await screen.findByText("Put an encounter on the table")).toBeInTheDocument();
     expect(screen.getByText(/This runs in session 12/)).toBeInTheDocument();
@@ -772,9 +775,9 @@ describe("starting a session", () => {
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
-    // The row's and the card's, waited for together as above.
+    // One press on the Overview, the card's — see above.
     await waitFor(() =>
-      expect(screen.getAllByRole("button", { name: "Back to the fight" })).toHaveLength(2),
+      expect(screen.getAllByRole("button", { name: "Back to the fight" })).toHaveLength(1),
     );
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Start an encounter" })).toBeNull();
