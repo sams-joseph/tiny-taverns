@@ -34,6 +34,6 @@ Per screen, per width, after the DOM has been still for 300ms:
 
 Then, at each width, it opens Hob on the Overview and walks Notes, Party, the Library and back. At each step it records whether the panel and header are the same DOM nodes (marked on the first step), whether _Ask Hob_ is still pressed, the panel's box and `z-index`, and whether the panel covers the bar.
 
-The report prints one table per width, then the Hob walk, then **Findings**: any value that differs across screens where the rule says it should not, or breaks a rule. A clean run is `Findings (0)` apart from the known primary-budget defects listed in `src/shell/primaries.test.tsx`.
+The report prints one table per width, then the Hob walk, then **Findings**: any value that differs across screens where the rule says it should not, or breaks a rule. A clean run is `Findings (0)`.
 
 The measured numbers are recorded once, in `docs/internals/web-screens.md`.

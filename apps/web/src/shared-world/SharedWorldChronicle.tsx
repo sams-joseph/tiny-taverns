@@ -143,6 +143,7 @@ function Composer({ worldId }: { readonly worldId: SharedWorldId }) {
         )}
         <Button
           size="sm"
+          variant="outline"
           className="ml-auto"
           disabled={busy || body.trim() === ""}
           onClick={() => void save()}

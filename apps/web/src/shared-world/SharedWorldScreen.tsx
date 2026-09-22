@@ -160,7 +160,11 @@ function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
           onChange={(event) => setName(event.target.value)}
           className="max-w-xs"
         />
-        <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
+        <Button
+          variant="outline"
+          onClick={() => void create()}
+          disabled={busy || name.trim() === ""}
+        >
           {busy ? "Working…" : "Start a campaign"}
         </Button>
       </div>

@@ -73,7 +73,7 @@ export function PartyScreen() {
         // included, writes their own through the create flow and it arrives
         // here as a seat. What the creator does from this screen is manage
         // seats (share, retire — on the character list) and people (below).
-        <Button size="sm" onClick={() => setInviting(true)}>
+        <Button size="sm" variant="outline" onClick={() => setInviting(true)}>
           <Icon name="user-plus" size={14} />
           Invite a player
         </Button>
