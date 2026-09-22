@@ -25,10 +25,7 @@ afterEach(cleanup);
  * not exemptions. Each is asserted to still be over, so fixing one fails this
  * file until its line is deleted.
  */
-const overBudget: Partial<Record<(typeof screens)[number]["name"], string>> = {
-  party: "Invite a player and Start an encounter, both in the bar",
-  world: "Shared World settings in the bar, Start a campaign and Write it down in the body",
-};
+const overBudget: Partial<Record<(typeof screens)[number]["name"], string>> = {};
 
 const primaries = () =>
   [...document.querySelectorAll('[data-slot="button"]')].filter((button) =>
