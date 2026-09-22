@@ -96,12 +96,11 @@ import {
  * container, so a grid there turns over on the width the column actually has,
  * which the Hob panel can take 400px out of without the window moving.
  *
- * The sheet scrolls in a scroller this screen owns rather than in the shell's
- * column — `fill` on this route's `staticData`, the runner's mode — because
- * both sticky columns and the scroll-spy need a top edge that is *this screen's*: under the shell's
- * scroller the sticky `TopBar` would park them, and its height is neither a
- * token nor constant between screens (the Chronicle's aside is not sticky for
- * exactly this reason). Owning the scroller is what makes `top-0` true.
+ * The sheet scrolls in a scroller this screen owns rather than in the window —
+ * `fill` on this route's `staticData`, the runner's mode — because both sticky
+ * columns and the scroll-spy need a top edge that is *this screen's*. The
+ * shell's chrome stack is outside that bounded region, so owning the scroller
+ * is what makes `top-0` true without copying the chrome's variable height.
  *
  * ### Where each thing on it comes from
  *

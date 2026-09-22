@@ -19,8 +19,7 @@ import {
 import { TopBarSlot } from "./slots";
 
 /**
- * The fixed shell: **two nav rows**, a per-screen bar under them, a scrolling
- * body.
+ * The shell: **two nav rows**, a per-screen bar under them, then the body.
  *
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
@@ -507,13 +506,10 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
  *
  * The cell is fixed only while there is room for it. Under 1024 the chip drops
  * to its icon, the badge goes, and the cell becomes as wide as what is left —
- * the row's width is needed by the tabs, which are the controls. The tab strip
- * scrolls rather than pushing past the row's right edge: measured at 760 the
- * row's last item reached x=788 against a row ending at 760 and the shell's
- * `overflow-hidden` cut *Start an encounter* mid-word, invisible to
- * `scrollWidth` because nothing here scrolled. That press has since left this
- * row for the per-screen bar (`shell/TopBar.tsx`), which is most of why the
- * row now fits; the strip is what keeps it fitting when a future row does not.
+ * the row's width is needed by the tabs, which are the controls. The row is not
+ * a scroller: the action that once pushed those links past the edge now belongs
+ * to the per-screen bar (`shell/TopBar.tsx`). Future overflow here is a layout
+ * defect to solve, not another scrolling surface inside the page.
  */
 function CampaignRow({
   campaignId,
@@ -537,10 +533,7 @@ function CampaignRow({
           <CampaignSharedWorldLink campaignId={campaignId} />
           {relation === "creator" && <SessionBadge campaignId={campaignId} />}
         </div>
-        <nav
-          aria-label="This campaign"
-          className="ml-2 flex min-w-0 items-stretch self-stretch overflow-x-auto [scrollbar-width:none]"
-        >
+        <nav aria-label="This campaign" className="ml-2 flex min-w-0 items-stretch self-stretch">
           {campaignNavFor(relation, campaignId).map((item) => (
             <CampaignNavLink key={item.label} item={item} active={item.section === section} />
           ))}
@@ -553,9 +546,9 @@ function CampaignRow({
 /**
  * The app's own bar: where you are in the product, and who you are.
  *
- * Not sticky and not on the layering scale — it is a flex row *above* the
- * scrolling column rather than something floating over it, so it never
- * overlaps anything and never has to win.
+ * This component does not position itself. `AppShell` places it in the one
+ * sticky chrome stack with the per-screen bar, so the rows stay pinned without
+ * separately maintained `top` offsets.
  *
  * **There is no role switch.** The group architecture removed the premise: the
  * relation is per campaign (`useCampaignRelation`), so the campaign row and
@@ -687,7 +680,8 @@ export function AppShell({
   readonly onAskHob: (() => void) | undefined;
   readonly panel: ReactNode;
   /**
-   * Give the body the viewport's height instead of letting the page scroll.
+   * Give the body the viewport's remaining height instead of letting the
+   * document scroll.
    *
    * The prep screens scroll: they are a document, and the top bar is sticky
    * over it. The runner does not — it is one screenful with an initiative list
@@ -709,17 +703,22 @@ export function AppShell({
     // by name: it is the app's own frame, so it is what "how wide is the page
     // edge" means. The rows and `main` below each keep an unnamed `@container`
     // of their own for the questions that really are about their own width.
-    <div className="@container/app flex h-screen flex-col overflow-hidden bg-surface-page">
-      <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
-      <HobRegion>
+    <div
+      className={`@container/app flex flex-col bg-surface-page ${
+        fill ? "h-screen overflow-hidden" : "min-h-screen"
+      }`}
+    >
+      {/* One sticky stack, so the global row, campaign row, screen bar and its
+          optional tabs pin as a unit. Keeping the slot here also means none of
+          those rows needs its own scroll container or a calculated top offset. */}
+      <div className="sticky top-0 z-chrome shrink-0">
+        <TopNav hobOpen={hobOpen} onAskHob={onAskHob} />
+        <div ref={setBar} />
+      </div>
+      <HobRegion bounded={fill}>
         <div
-          className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-auto"}`}
+          className={`relative flex min-w-0 flex-1 flex-col ${fill ? "overflow-hidden" : "overflow-visible"}`}
         >
-          {/* The screen's `TopBar` portals in here. Sticky at `z-chrome`, the
-              bottom rung of the layering scale in `@taverns/ui`'s `styles.css`:
-              page furniture, deliberately far below the overlay band so a
-              dialog's scrim covers it. Reach for a rung, never a number. */}
-          <div ref={setBar} className="sticky top-0 z-chrome" />
           {/* `@container`, so a screen's layout turns over on the width of the
               column it actually has. Every `fixed` overlay in the product is
               portalled to the body, so the containing block this establishes
