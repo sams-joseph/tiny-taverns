@@ -76,6 +76,10 @@ describe("the persistent shell", () => {
     const contentRegion = chrome?.nextElementSibling;
     expect(contentRegion).toHaveClass("min-h-full");
     expect(contentRegion).not.toHaveClass("overflow-hidden");
+    // Vertically it grows with the document; sideways it still clips, or the
+    // collapsed Hob column off its right edge is 400px of horizontal scroll.
+    // `HobDock.test.tsx` owns the reason.
+    expect(contentRegion).toHaveClass("overflow-x-clip");
     expect(contentRegion?.firstElementChild).toHaveClass("overflow-visible");
     expect(contentRegion?.firstElementChild).not.toHaveClass("overflow-auto");
   });
