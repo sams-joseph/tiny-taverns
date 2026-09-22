@@ -69,17 +69,25 @@ describe("the persistent shell", () => {
     const chrome = header()?.parentElement;
     expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
 
-    const frame = chrome?.parentElement;
+    // The chrome is inside the shell's column, and the column is the frame's
+    // first child: the bars narrow with `main` rather than spanning the panel.
+    const column = chrome?.parentElement;
+    expect(column).toHaveClass("@container/app", "flex-1", "min-w-0");
+
+    const frame = column?.parentElement;
     expect(frame).toHaveClass("min-h-screen");
     expect(frame).not.toHaveClass("h-screen", "overflow-hidden");
-
-    const contentRegion = chrome?.nextElementSibling;
-    expect(contentRegion).toHaveClass("min-h-full");
-    expect(contentRegion).not.toHaveClass("overflow-hidden");
-    // Vertically it grows with the document; sideways it still clips, or the
+    // Vertically it grows with the document; sideways it clips, or the
     // collapsed Hob column off its right edge is 400px of horizontal scroll.
     // `HobDock.test.tsx` owns the reason.
-    expect(contentRegion).toHaveClass("overflow-x-clip");
+    expect(frame).toHaveClass("overflow-x-clip");
+
+    const contentRegion = chrome?.nextElementSibling;
+    // Not `min-h-full`: inside the column that is the viewport under the
+    // chrome, and the document then scrolls past the frame and the pinned panel.
+    expect(contentRegion).toHaveClass("flex-1");
+    expect(contentRegion).not.toHaveClass("min-h-full");
+    expect(contentRegion).not.toHaveClass("overflow-hidden");
     expect(contentRegion?.firstElementChild).toHaveClass("overflow-visible");
     expect(contentRegion?.firstElementChild).not.toHaveClass("overflow-auto");
   });
@@ -90,13 +98,37 @@ describe("the persistent shell", () => {
     const chrome = header()?.parentElement;
     expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
 
-    const frame = chrome?.parentElement;
+    const frame = chrome?.parentElement?.parentElement;
     expect(frame).toHaveClass("h-screen", "overflow-hidden");
     expect(frame).not.toHaveClass("min-h-screen");
 
     const contentRegion = chrome?.nextElementSibling;
     expect(contentRegion).toHaveClass("min-h-0", "overflow-hidden");
     expect(contentRegion?.firstElementChild).toHaveClass("overflow-hidden");
+  });
+
+  /**
+   * The geometry is the audit's (`apps/web/audit/`): inline, the panel's top is
+   * 0, its height is the viewport's, and the chrome's right edge meets its left.
+   * What jsdom can see is the shape that produces it — the panel is the frame's
+   * own column beside the shell, in a slot pinned at the viewport's height, and
+   * nothing in the chrome stack or the content region contains it.
+   */
+  it("docks the panel beside the whole shell, full height, not under the bars", async () => {
+    await renderAt(`/campaigns/${campaignId}`);
+    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
+    await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
+
+    const chrome = header()?.parentElement;
+    const column = chrome?.parentElement;
+    const frame = column?.parentElement;
+    const slot = frame?.lastElementChild;
+
+    expect(slot).not.toBe(column);
+    expect(slot?.contains(panel())).toBe(true);
+    expect(column?.contains(panel())).toBe(false);
+    expect(slot).toHaveClass("sticky", "top-0", "h-screen", "self-start", "shrink-0");
   });
 
   /**

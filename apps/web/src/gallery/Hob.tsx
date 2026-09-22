@@ -89,9 +89,11 @@ function DockSpecimen({ inline }: { readonly inline: boolean }) {
 }
 
 /**
- * The whole mount, exactly as a shell does it: `HobRegion` around the content,
- * `Hob` as its last child, and `useHobPanel` owning open/inline and the ⌘K
- * binding. This specimen is the seam — if it renders, the shell's version will.
+ * The whole mount, as a shell with no bars to push does it: `HobRegion` around
+ * the content, `Hob` as its last child, and `useHobPanel` owning open/inline and
+ * the ⌘K binding. The app's own shell puts `Hob` beside the region in a
+ * `HobFrame` instead, so the inline panel runs the viewport's full height; the
+ * overlay lands in the region either way.
  * `inline` here is measured from the real viewport, so resizing the window
  * flips this box between the two modes at 1020.
  */
