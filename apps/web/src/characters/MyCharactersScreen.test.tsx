@@ -124,20 +124,22 @@ describe("your characters", () => {
     expect(card.queryByText("Passive")).toBeNull();
   });
 
-  it("opens a sheet through a real link, keyed on the character", async () => {
+  it("opens a sheet through the card's one link, keyed on the character", async () => {
     await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
 
-    // The accessible role stays `button` on a `nativeButton={false}` anchor, so
-    // this looks for a button and reads its href.
-    const links = screen.getAllByRole("button", { name: "Open sheet" });
+    // The whole card opens the sheet through the name's link; there is no
+    // separate *Open sheet* control.
+    expect(screen.queryByRole("button", { name: "Open sheet" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open sheet" })).toBeNull();
+    const links = ["Brannoc Duskharrow", "Sorrel"].map((name) => {
+      const card = screen.getByText(new RegExp(name)).closest("div[data-slot=card]");
+      return within(card as HTMLElement).getByRole("link");
+    });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       `/#/characters/${brannocId}`,
       `/#/characters/${sorrelId}`,
     ]);
-    // One peach primary per screen, and it is the bar's: a card's action is
-    // `outline`, never the accent fill.
-    for (const link of links) expect(link.className).not.toContain("bg-accent");
   });
 
   it("offers create and the explicit seat write, without dead invitation controls", async () => {
@@ -176,6 +178,8 @@ describe("your characters", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "Add to campaign" });
+    // The button sits over the card's stretched link and must not also follow it.
+    expect(window.location.hash).not.toContain(`/characters/${brannocId}`);
     expect(within(dialog).getByText(/The character stays yours/)).toBeTruthy();
     expect(within(dialog).queryByRole("button", { name: /Add to The Salt Road/i })).toBeNull();
     await userEvent.click(

@@ -103,11 +103,15 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * them and must not draw a zero in their place. The drawing's **colour swatch**
  * is left out: nothing on the row or the account carries a colour.
  *
- * Below the drawing's footer, the two things the roster did before and the
- * drawing does not show: where the character is seated, and the actions —
- * *Add to campaign* and *Open sheet* — on a hairline-divided row of their own,
- * so the card's top half stays a picture of the character and its bottom row
- * is the only place to press.
+ * Below the drawing's footer, the thing the roster did before and the drawing
+ * does not show: where the character is seated, with *Add to campaign* on a
+ * hairline-divided row of its own.
+ *
+ * The whole card opens the sheet. The link is the character's name, its
+ * `::after` stretched over the card, so there is one link and no interactive
+ * element nested inside another. *Add to campaign* is `relative` and comes
+ * after the name in the tree, so it paints above that overlay with no z-index
+ * of its own and presses without navigating.
  */
 function CharacterCard({
   owned,
@@ -145,7 +149,7 @@ function CharacterCard({
   ].flatMap((stat) => (stat.value === undefined ? [] : [{ ...stat, value: stat.value }]));
 
   return (
-    <Card className="h-full overflow-hidden">
+    <Card className="relative h-full overflow-hidden transition-control hover:border-strong has-[a:focus-visible]:ring-focus">
       <div className="relative flex aspect-4/3 items-center justify-center border-b border-hairline bg-surface-sunken">
         {/* A monogram, not art: there is no asset store, so no upload either. */}
         <span
@@ -163,7 +167,15 @@ function CharacterCard({
 
       <CardContent className="flex flex-1 flex-col gap-5 pt-card">
         <div className="min-w-0">
-          <p className={sectionHeadingVariants({ size: "display" })}>{character.name}</p>
+          <p className={sectionHeadingVariants({ size: "display" })}>
+            <Link
+              to="/characters/$characterId"
+              params={{ characterId: character.id }}
+              className="text-inherit after:absolute after:inset-0 hover:text-inherit focus-visible:shadow-none"
+            >
+              {character.name}
+            </Link>
+          </p>
           {lineage !== undefined && (
             <p className="mt-1 text-body leading-body text-muted-foreground">{lineage}</p>
           )}
@@ -215,23 +227,14 @@ function CharacterCard({
             {tables.length === 0 ? "Not seated at a table" : tables.join(" · ")}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {joinOptions.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setJoining(true)}>
+        {joinOptions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" className="relative" onClick={() => setJoining(true)}>
               <Icon name="user-plus" size={14} />
               Add to campaign
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            nativeButton={false}
-            render={<Link to="/characters/$characterId" params={{ characterId: character.id }} />}
-          >
-            Open sheet
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
       {joining && (
         <AddToCampaignDialog
@@ -303,7 +306,7 @@ export function MyCharactersScreen() {
           // The encounter grid's rule: `auto-fill minmax(…)` inside a container
           // query, because the question is how wide *this column* is and the
           // Hob panel can take 400px of it without the window moving.
-          <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3">
+          <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4">
             {view.characters.map((owned) => (
               <CharacterCard
                 key={owned.character.id}
