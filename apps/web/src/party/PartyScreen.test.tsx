@@ -1,13 +1,17 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
+import { apiUrl } from "../api/client";
+import { drawnPortrait } from "../campaign/campaign.fixtures";
 import {
   brannocSeat,
   campaignId,
   emptyParty,
   installPartyServer,
   liveInvite,
+  pellSeat,
   renderParty,
+  sorrelSeat,
   sorrelSeatId,
 } from "./party.fixtures";
 
@@ -311,5 +315,38 @@ describe("the states a real screen has", () => {
     await renderParty();
     await screen.findByText("Ilse Vantar");
     expect(called("GET", "/hob")).toBe(false);
+  });
+});
+
+describe("the party list's plates", () => {
+  /** Portrait images on the page: the plates, which are the only `<img>`s here. */
+  const portraits = () =>
+    Array.from(document.querySelectorAll("img")).filter((img) =>
+      img.getAttribute("src")?.includes("/portraits/"),
+    );
+
+  it("draws no image for a character with no portrait", async () => {
+    await renderParty();
+    await screen.findByText("Sorrel Ash");
+    expect(portraits()).toHaveLength(0);
+  });
+
+  it("lays a seated character's portrait over its initials, and only on that row", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: [
+        { ...brannocSeat, character: { ...brannocSeat.character, portrait: drawnPortrait } },
+        sorrelSeat,
+        pellSeat,
+      ],
+    });
+    await renderParty();
+    await screen.findByText("Sorrel Ash");
+
+    const [plate, ...others] = portraits();
+    expect(others).toHaveLength(0);
+    expect(plate?.getAttribute("src")).toBe(apiUrl(drawnPortrait.thumbUrl));
+    // The initials stay under the picture, for its loading and failed states.
+    expect(plate?.parentElement?.textContent).toBe("B");
   });
 });

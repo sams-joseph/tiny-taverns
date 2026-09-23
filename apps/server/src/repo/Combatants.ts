@@ -14,8 +14,14 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import {
+  type PortraitSigner,
+  portraitImages,
+  portraitSigner,
+  seatedPortraitColumn,
+} from "./Characters.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
@@ -45,10 +51,29 @@ export interface CombatantRow extends ProvenanceColumns {
   readonly kind: CombatantKind;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly conditions: ReadonlyArray<string>;
+  /** From {@link combatantColumns}; `null` unless the character is seated where the reader sees it. */
+  readonly portrait_id: string | null;
 }
 
-export const toCombatant = (row: CombatantRow): Combatant =>
-  new Combatant({
+/**
+ * The combatant's own columns and its character's portrait id, gated by the
+ * seat (`seatedPortraitColumn`). **Every read that becomes a `Combatant` names
+ * this** — `toCombatant` dies on a row without `portrait_id`, as `toCharacter`
+ * does, so a path that forgot fails a test rather than dropping the picture.
+ */
+export const combatantColumns = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`
+  combatant.*, ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
+`;
+
+export const toCombatant = (row: CombatantRow, sign: PortraitSigner | undefined): Combatant => {
+  if (row.portrait_id === undefined) {
+    throw new Error("a combatant read did not select combatantColumns");
+  }
+  return new Combatant({
     id: row.id,
     encounterRunId: row.encounter_run_id,
     characterId: row.character_id,
@@ -62,8 +87,10 @@ export const toCombatant = (row: CombatantRow): Combatant =>
     ac: row.ac,
     kind: row.kind,
     conditions: row.conditions,
+    portrait: portraitImages(row.portrait_id, sign),
     ...provenanceOf(row),
   });
+};
 
 /**
  * The initiative list.
@@ -121,6 +148,9 @@ export class Combatants extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
+      // A combatant row is not a character read, but its portrait is one: the
+      // seat gate in `combatantColumns` is what lets the id reach the signer.
+      const sign = yield* portraitSigner;
 
       /**
        * Both claims in the path, checked together rather than one at a time.
@@ -179,7 +209,7 @@ export class Combatants extends Context.Service<
         actor: Actor,
       ): Effect.Effect<Combatant, NotFound, never> =>
         sql<CombatantRow>`
-          select combatant.* from combatant
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
           where combatant.id = ${id}
             and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
         `.pipe(
@@ -187,7 +217,7 @@ export class Combatants extends Context.Service<
           Effect.flatMap((rows) =>
             rows.length === 0
               ? new NotFound({ resource: "combatant", id })
-              : Effect.succeed(toCombatant(rows[0]!)),
+              : Effect.succeed(toCombatant(rows[0]!, sign)),
           ),
         );
 
@@ -198,11 +228,11 @@ export class Combatants extends Context.Service<
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
               yield* ensureNestedRowReadable(sql, RUNS, runId, sessionId, campaignId, actor);
               const rows = yield* sql<CombatantRow>`
-                select combatant.* from combatant
+                select ${combatantColumns(sql, campaignId, actor)} from combatant
                 where ${containedChildReadable(sql, COMBATANT, runId, campaignId, actor)}
                 ${initiativeOrder(sql)}
               `;
-              return rows.map(toCombatant);
+              return rows.map((row) => toCombatant(row, sign));
             }),
           ),
 
@@ -237,9 +267,9 @@ export class Combatants extends Context.Service<
                         visibility: payload.visibility,
                       }),
                     )}
-                    returning *
+                    returning ${combatantColumns(sql, campaignId, actor)}
                   `;
-                  const combatant = toCombatant(rows[0]!);
+                  const combatant = toCombatant(rows[0]!, sign);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-added",
@@ -276,10 +306,10 @@ export class Combatants extends Context.Service<
                     update combatant set ${setClause(sql, columns)}
                     where combatant.id = ${id}
                       and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning *
+                    returning ${combatantColumns(sql, campaignId, actor)}
                   `;
                   if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
-                  const combatant = toCombatant(rows[0]!);
+                  const combatant = toCombatant(rows[0]!, sign);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-updated",
@@ -339,10 +369,10 @@ export class Combatants extends Context.Service<
                         updated_at = now()
                     where combatant.id = ${id}
                       and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning *
+                    returning ${combatantColumns(sql, campaignId, actor)}
                   `;
                   if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
-                  const combatant = toCombatant(rows[0]!);
+                  const combatant = toCombatant(rows[0]!, sign);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-damaged",

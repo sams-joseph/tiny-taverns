@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CharacterPortraitImages } from "./Character.js";
 import {
   CampaignCharacterId,
   CampaignId,
@@ -45,6 +46,8 @@ export const PlayerLiveCombatantYou = Schema.Struct({
   hpMax: Schema.Int,
   tempHp: Schema.Int,
   conditions: Schema.Array(Schema.String),
+  /** Your character's portrait, as `Character.portrait` carries it. */
+  portrait: Schema.NullOr(CharacterPortraitImages),
 });
 export type PlayerLiveCombatantYou = typeof PlayerLiveCombatantYou.Type;
 
@@ -57,6 +60,11 @@ export const PlayerLiveCombatantAlly = Schema.Struct({
   playerName: Schema.NullOr(Schema.String),
   initiative: Schema.Int,
   conditions: Schema.Array(Schema.String),
+  /**
+   * The ally's portrait, computed in SQL through the seat that makes the row
+   * visible at all, so a character the asker may not see has no URL here.
+   */
+  portrait: Schema.NullOr(CharacterPortraitImages),
 });
 export type PlayerLiveCombatantAlly = typeof PlayerLiveCombatantAlly.Type;
 

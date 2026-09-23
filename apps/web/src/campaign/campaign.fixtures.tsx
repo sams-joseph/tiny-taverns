@@ -290,6 +290,17 @@ export const character = {
   ...stamps,
 };
 
+/**
+ * A drawn portrait as the wire carries it — three signed paths on the API. Only
+ * the shape matters here: jsdom loads no image, so a plate test asserts the
+ * `<img>` it lays over the initials, not the picture.
+ */
+export const drawnPortrait = {
+  thumbUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/thumb?e=1&s=t",
+  cardUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/card?e=1&s=c",
+  fullUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/full?e=1&s=f",
+};
+
 /** Brannoc's seat at this table — `campaign_character`, the campaign's half. */
 export const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
 
@@ -1088,6 +1099,7 @@ export const brannoc = {
   kind: "pc",
   conditions: [],
   visibility: "dm",
+  portrait: null,
   ...provenance,
   ...stamps,
 };

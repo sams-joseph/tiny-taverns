@@ -8,8 +8,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * An `<img>` cannot send the bearer header every other request carries, so the
  * image route (`GET /portraits/:portraitId/:variant`) has no `Authorization`
  * and takes an HMAC in the query string instead. **The signature is minted only
- * by `toCharacter`**, for rows a visibility predicate already returned, so a
- * URL is that SQL decision carried forward, never a second way in.
+ * by `portraitImages`** (`repo/Characters.ts`), for ids a visibility predicate
+ * already returned, so a URL is that SQL decision carried forward, never a
+ * second way in.
  *
  * ### Bucketed expiry
  *

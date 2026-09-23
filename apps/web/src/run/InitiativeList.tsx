@@ -11,6 +11,7 @@ import {
   SectionHeading,
 } from "@taverns/ui";
 import { useState } from "react";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { subtitleOf } from "./load";
 
 /**
@@ -207,10 +208,19 @@ function CombatantRow({
         {combatant.initiative}
       </span>
 
-      <Icon
-        name={combatant.kind === "pc" ? "shield" : "skull"}
-        size={15}
-        className={combatant.kind === "pc" ? "shrink-0 text-info" : "shrink-0 text-danger"}
+      {/* A PC's portrait when its seat lets this reader see one; otherwise the
+          prototype's icon, in the same slot so the names stay in a column. */}
+      <CharacterPortrait
+        name={combatant.displayName}
+        portrait={combatant.kind === "pc" ? combatant.portrait : null}
+        size="row"
+        fallback={
+          <Icon
+            name={combatant.kind === "pc" ? "shield" : "skull"}
+            size={15}
+            className={combatant.kind === "pc" ? "text-info" : "text-danger"}
+          />
+        }
       />
 
       <div className="min-w-0 flex-1">

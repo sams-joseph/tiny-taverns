@@ -16,6 +16,8 @@ import {
   sessionId,
   yourCombatantId,
 } from "../characters/characters.fixtures";
+import { apiUrl } from "../api/client";
+import { drawnPortrait } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { noSession } from "../characters/characters.fixtures";
@@ -135,6 +137,7 @@ describe("PlayerTableScreen", () => {
             hpMax: 52,
             tempHp: 3,
             conditions: ["Blessed"],
+            portrait: null,
           },
           {
             kind: "ally",
@@ -145,6 +148,7 @@ describe("PlayerTableScreen", () => {
             playerName: "Wren",
             initiative: 14,
             conditions: [],
+            portrait: null,
           },
           {
             kind: "npc",
@@ -169,6 +173,49 @@ describe("PlayerTableScreen", () => {
     expect(screen.getByText("Medium Fey · Bloodied")).toBeTruthy();
     expect(screen.queryByText(/82/)).toBeNull();
     expect(screen.queryByText(/AC 17|17 AC/i)).toBeNull();
+  });
+
+  it("lays an ally's portrait on its row, and draws none where there is none", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: [
+          {
+            kind: "you",
+            combatantId: yourCombatantId,
+            characterId: brannocId,
+            campaignCharacterId: brannocSeatRef.campaignCharacterId,
+            displayName: "Brannoc Duskharrow",
+            subtitle: null,
+            initiative: 16,
+            hpCurrent: 44,
+            hpMax: 52,
+            tempHp: 0,
+            conditions: [],
+            portrait: null,
+          },
+          {
+            kind: "ally",
+            combatantId: "2b1f2a1e-0000-4000-8000-000000000d0b",
+            characterId: "2b1f2a1e-0000-4000-8000-000000000902",
+            displayName: "Nessa",
+            subtitle: null,
+            playerName: "Wren",
+            initiative: 14,
+            conditions: [],
+            portrait: drawnPortrait,
+          },
+        ],
+      }),
+    );
+
+    await renderTable();
+    await screen.findByText("Nessa");
+
+    const rowOf = (name: string) => screen.getByText(name).closest(".min-h-row")!;
+    expect(rowOf("Nessa").querySelector("img")?.getAttribute("src")).toBe(
+      apiUrl(drawnPortrait.thumbUrl),
+    );
+    expect(rowOf("Brannoc Duskharrow").querySelector("img")).toBeNull();
   });
 
   it("persists a browser-submitted roll and shows only this character's log", async () => {

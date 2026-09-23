@@ -409,6 +409,67 @@ describe("the form's create draws one portrait", () => {
   });
 });
 
+describe("the plates beyond the character's own read", () => {
+  it("carry the portrait on the runner, the recap and the player table, over the real wiring", async () => {
+    const character = await createAs(ilse, {
+      name: "Oda Flint",
+      race: "Gnome",
+      className: "Wizard",
+      sheet: { notes: "", abilities: [], traits: [], story: { appearance: "Ink to the elbows." } },
+    });
+    await settled();
+    await as(ilse.token, (client) =>
+      client.party.join({ params: { campaignId }, payload: { characterId: character.id } }),
+    );
+    const expected = (await mine(ilse.token, character.id))?.portrait;
+    expect(expected).not.toBeNull();
+
+    const session = await as(dm.token, (client) =>
+      client.sessions.create({
+        params: { campaignId },
+        payload: { number: 1, title: "The ford", visibility: "shared" },
+      }),
+    );
+    await as(dm.token, (client) =>
+      client.campaigns.update({
+        params: { campaignId },
+        payload: { currentSessionId: session.id },
+      }),
+    );
+    const encounter = await as(dm.token, (client) =>
+      client.encounters.create({ params: { campaignId }, payload: { name: "Reeds" } }),
+    );
+    const fight = await as(dm.token, (client) =>
+      client.runs.start({
+        params: { campaignId, sessionId: session.id },
+        payload: { encounterId: encounter.id, visibility: "shared" },
+      }),
+    );
+    const params = { campaignId, sessionId: session.id, runId: fight.id };
+    const rows = await as(dm.token, (client) => client.combatants.list({ params }));
+    const row = rows.find((entry) => entry.characterId === character.id)!;
+    expect(row.portrait).toEqual(expected);
+
+    const recap = await as(dm.token, (client) =>
+      client.recap.read({ params: { campaignId, sessionId: session.id } }),
+    );
+    const recapped = recap.fights.flatMap((entry) => entry.combatants);
+    expect(recapped.find((entry) => entry.characterId === character.id)?.portrait).toEqual(
+      expected,
+    );
+
+    await as(dm.token, (client) =>
+      client.combatants.update({
+        params: { ...params, combatantId: row.id },
+        payload: { visibility: "shared" },
+      }),
+    );
+    const table = await as(ilse.token, (client) => client.table.read({ params: { campaignId } }));
+    const you = table?.fight?.order.find((entry) => entry.kind === "you");
+    expect(you?.kind === "you" && you.portrait).toEqual(expected);
+  });
+});
+
 const events = (actor: Actor) =>
   run(
     Effect.gen(function* () {
