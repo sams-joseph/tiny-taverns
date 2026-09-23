@@ -4,18 +4,18 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
 import { StorageKey } from "../storage/ObjectStorage.js";
 import { dieOnSqlError } from "./rows.js";
-import { campaignWritable, groupWritable, ownCharacter } from "./visibility.js";
+import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./visibility.js";
 
 /**
  * Every statement about Hob-drawn images' records — one table per kind
- * (`character_portrait`, `campaign_image`, `shared_world_image`;
+ * (`character_portrait`, `campaign_image`, `shared_world_image`, `npc_image`;
  * `images/kinds.ts`) — and the `storage_deletion` outbox they share. The
  * worker that draws and stores is `images/HobImages.ts`; this file is only rows.
  *
  * **Who may read an image is not decided here.** The wire carries an image only
  * as a field of its subject — a `Character` (and the rows that point at one), a
- * `Campaign` or a `SharedWorld` — minted by that subject's own reads for an id
- * a visibility predicate already returned. The one read below that takes no actor,
+ * `Campaign`, a `SharedWorld` or an `Npc` — minted by that subject's own reads
+ * for an id a visibility predicate already returned. The one read below that takes no actor,
  * {@link ImageRecords} `readyPrefix`, runs only after the image route has
  * checked a signature that such a read minted.
  *
@@ -24,7 +24,8 @@ import { campaignWritable, groupWritable, ownCharacter } from "./visibility.js";
  * the draw is billed to. A character is its owner's; a campaign is its
  * creator's, through `campaignWritable`, so a player's request draws nothing;
  * a Shared World is its owner's, through `groupWritable`, so a member's draws
- * nothing either.
+ * nothing either; a campaign NPC is its campaign's creator's, the same way a
+ * campaign is.
  */
 
 export type ImageFailure =
@@ -81,13 +82,20 @@ export const imageObjectKey = (prefix: StorageKey, file: string): StorageKey =>
  * The subject this actor may start a draw of, locked, with the account it is
  * billed to — or no row. **A kind with no entry here does not compile**, which
  * is the point: whose picture it is must be decided before it can be drawn.
+ *
+ * A kind whose row is also keyed by its subject's campaign (`npc_image`)
+ * answers `campaign_id` as well, and the insert writes it.
  */
 const OWNED_SUBJECT: {
   readonly [K in ImageKind]: (
     sql: SqlClient.SqlClient,
     subjectId: string,
     actor: Actor,
-  ) => Statement.Statement<{ readonly subject_id: string; readonly account_id: string }>;
+  ) => Statement.Statement<{
+    readonly subject_id: string;
+    readonly account_id: string;
+    readonly campaign_id?: string;
+  }>;
 } = {
   character: (sql, subjectId, actor) => sql`
     select character.id as subject_id, character.account_id from character
@@ -109,6 +117,17 @@ const OWNED_SUBJECT: {
     select play_group.id as subject_id, ${actor.accountId}::uuid as account_id from play_group
     where play_group.id = ${subjectId} and ${groupWritable(sql, actor)}
     for update of play_group
+  `,
+  // A campaign NPC, through its campaign's `campaignWritable`: only the
+  // creator starts its portrait, and it is billed to them. A Library original
+  // has no campaign, so it never matches — and `npc_image_subject_fkey` could
+  // not name it anyway.
+  npc: (sql, subjectId, actor) => sql`
+    select npc.id as subject_id, npc.campaign_id, ${actor.accountId}::uuid as account_id from npc
+    where npc.id = ${subjectId}
+      and npc.campaign_id is not null
+      and ${campaignWritable(sql, actor, rowCampaign(sql, "npc"))}
+    for update of npc
   `,
 };
 
@@ -237,6 +256,9 @@ export class ImageRecords extends Context.Service<
                   insert into ${table(kind)} ${sql.insert({
                     id,
                     [IMAGE_KINDS[kind].subjectColumn]: subject.subject_id,
+                    ...(subject.campaign_id === undefined
+                      ? {}
+                      : { campaign_id: subject.campaign_id }),
                     account_id: subject.account_id,
                     state: failure === undefined ? "generating" : "failed",
                     failure: failure ?? null,

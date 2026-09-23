@@ -85,6 +85,9 @@ const NOT_CONTENT = [
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",
+  // An NPC's portrait: who may see it is exactly who may read the NPC, through
+  // the NPC's own reads. See 0050_npc_images.ts.
+  "npc_image",
   "play_group",
   "proficiency",
   "racial_trait_damage_type",

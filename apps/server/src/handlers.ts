@@ -344,6 +344,9 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("sharedWorld", ({ params, query }) =>
         images.image("sharedWorld", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("npc", ({ params, query }) =>
+        images.image("npc", { ...params, e: query.e, s: query.s }),
       );
   }),
 );
@@ -924,168 +927,187 @@ const NpcsLive = HttpApiBuilder.group(
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
+    const images = yield* HobImages;
 
     const asCreator = <A, E, R>(
       campaignId: CampaignId,
       use: (creator: CampaignCreatorActor) => Effect.Effect<A, E, R>,
     ) => Effect.flatMap(creators.of(campaignId), use);
 
-    return handlers
-      .handle("list", ({ params, query }) =>
-        asCreator(params.campaignId, (creator) => npcs.list(creator, query)),
-      )
-      .handle("create", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) => npcs.create(creator, payload)),
-      )
-      .handle("sources", ({ params }) =>
-        asCreator(params.campaignId, (creator) => npcs.sourcesForCampaign(creator)),
-      )
-      .handle("copyFromSource", ({ params }) =>
-        asCreator(params.campaignId, (creator) => npcs.copyFromSource(creator, params.sourceNpcId)),
-      )
-      .handle("followUp", ({ params }) =>
-        asCreator(params.campaignId, (creator) => followUps.pending(creator)),
-      )
-      .handle("findById", ({ params }) =>
-        asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
-      )
-      .handle("update", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) => npcs.update(creator, params.npcId, payload)),
-      )
-      .handle("archive", ({ params }) =>
-        asCreator(params.campaignId, (creator) => npcs.archive(creator, params.npcId)),
-      )
-      .handle("restore", ({ params }) =>
-        asCreator(params.campaignId, (creator) => npcs.restore(creator, params.npcId)),
-      )
-      .handle("rehearsal", ({ params }) => agent.status(params.campaignId, params.npcId))
-      .handle("rehearse", ({ params, payload }) =>
-        agent.rehearse(params.campaignId, params.npcId, payload),
-      )
-      .handle("threads", ({ params }) =>
-        asCreator(params.campaignId, (creator) => threads.list(creator, params.npcId)),
-      )
-      .handle("turns", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          threads.turns(creator, params.npcId, params.threadId),
-        ),
-      )
-      .handle("knowledge", ({ params }) =>
-        asCreator(params.campaignId, (creator) => knowledge.list(creator, params.npcId)),
-      )
-      .handle("createKnowledge", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) => knowledge.create(creator, params.npcId, payload)),
-      )
-      .handle("updateKnowledge", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          knowledge.update(creator, params.npcId, params.factId, payload),
-        ),
-      )
-      .handle("retireKnowledge", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          knowledge.retire(creator, params.npcId, params.factId),
-        ),
-      )
-      .handle("memories", ({ params }) =>
-        asCreator(params.campaignId, (creator) => memories.list(creator, params.npcId)),
-      )
-      .handle("draftMemory", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) => memories.draft(creator, params.npcId, payload)),
-      )
-      .handle("updateMemory", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          memories.update(creator, params.npcId, params.memoryId, payload),
-        ),
-      )
-      .handle("approveMemory", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          memories.approve(creator, params.npcId, params.memoryId),
-        ),
-      )
-      .handle("retireMemory", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          memories.retire(creator, params.npcId, params.memoryId),
-        ),
-      )
-      .handle("resetMemories", ({ params }) =>
-        asCreator(params.campaignId, (creator) => memories.reset(creator, params.npcId)),
-      )
-      .handle("proposals", ({ params }) =>
-        asCreator(params.campaignId, (creator) => proposals.list(creator, params.npcId)),
-      )
-      .handle("acceptProposal", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          proposals.accept(creator, params.npcId, params.proposalId),
-        ),
-      )
-      .handle("rejectProposal", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          proposals.reject(creator, params.npcId, params.proposalId, payload),
-        ),
-      )
-      .handle("awarenessCandidates", ({ params }) =>
-        asCreator(params.campaignId, (creator) => awareness.list(creator, params.npcId)),
-      )
-      .handle("updateAwarenessCandidate", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          awareness.update(creator, params.npcId, params.candidateId, payload),
-        ),
-      )
-      .handle("approveAwarenessCandidate", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          awareness.approve(creator, params.npcId, params.candidateId, payload),
-        ),
-      )
-      .handle("rejectAwarenessCandidate", ({ params, payload }) =>
-        asCreator(params.campaignId, (creator) =>
-          awareness.reject(creator, params.npcId, params.candidateId, payload),
-        ),
-      )
-      .handle("playerList", ({ params }) => npcs.playerList(params.campaignId))
-      .handle("playerFindById", ({ params }) =>
-        npcs.playerFindById(params.campaignId, params.npcId),
-      )
-      .handle("playerStatus", ({ params }) => agent.playerStatus(params.campaignId, params.npcId))
-      .handle("playerThreads", ({ params }) => threads.playerList(params.campaignId, params.npcId))
-      .handle("playerTurns", ({ params }) =>
-        threads.playerTurns(params.campaignId, params.npcId, params.threadId),
-      )
-      .handle("talk", ({ params, payload }) => agent.talk(params.campaignId, params.npcId, payload))
-      .handle("sessionList", ({ params }) =>
-        threads.sessionList(params.campaignId, params.sessionId),
-      )
-      .handle("sessionMonitor", ({ params }) =>
-        asCreator(params.campaignId, (creator) => agent.sessionMonitor(creator, params.sessionId)),
-      )
-      .handle("openSession", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          threads.openSession(creator, params.npcId, params.sessionId),
-        ),
-      )
-      .handle("pauseSession", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          threads.pauseSession(creator, params.npcId, params.sessionId),
-        ),
-      )
-      .handle("resumeSession", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          threads.resumeSession(creator, params.npcId, params.sessionId),
-        ),
-      )
-      .handle("closeSession", ({ params }) =>
-        asCreator(params.campaignId, (creator) =>
-          threads.closeSession(creator, params.npcId, params.sessionId),
-        ),
-      )
-      .handle("sessionStatus", ({ params }) =>
-        agent.sessionStatus(params.campaignId, params.sessionId, params.npcId),
-      )
-      .handle("sessionTurns", ({ params }) =>
-        threads.sessionTurns(params.campaignId, params.sessionId, params.npcId),
-      )
-      .handle("sessionTalk", ({ params, payload }) =>
-        agent.sessionTalk(params.campaignId, params.sessionId, params.npcId, payload),
-      );
+    return (
+      handlers
+        .handle("list", ({ params, query }) =>
+          asCreator(params.campaignId, (creator) => npcs.list(creator, query)),
+        )
+        // Both ways an NPC joins a cast start its portrait after the insert
+        // commits, as a character's and a campaign's do: `drawNpc` returns at
+        // once, with the NPC marked `imagePending` when a draw started. No Hob
+        // path drafts an NPC, and a Library original is never drawn.
+        .handle("create", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => npcs.create(creator, payload)).pipe(
+            Effect.flatMap(images.drawNpc),
+          ),
+        )
+        .handle("sources", ({ params }) =>
+          asCreator(params.campaignId, (creator) => npcs.sourcesForCampaign(creator)),
+        )
+        .handle("copyFromSource", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            npcs.copyFromSource(creator, params.sourceNpcId),
+          ).pipe(Effect.flatMap(images.drawNpc)),
+        )
+        .handle("followUp", ({ params }) =>
+          asCreator(params.campaignId, (creator) => followUps.pending(creator)),
+        )
+        .handle("findById", ({ params }) =>
+          asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
+        )
+        .handle("update", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => npcs.update(creator, params.npcId, payload)),
+        )
+        .handle("archive", ({ params }) =>
+          asCreator(params.campaignId, (creator) => npcs.archive(creator, params.npcId)),
+        )
+        .handle("restore", ({ params }) =>
+          asCreator(params.campaignId, (creator) => npcs.restore(creator, params.npcId)),
+        )
+        .handle("rehearsal", ({ params }) => agent.status(params.campaignId, params.npcId))
+        .handle("rehearse", ({ params, payload }) =>
+          agent.rehearse(params.campaignId, params.npcId, payload),
+        )
+        .handle("threads", ({ params }) =>
+          asCreator(params.campaignId, (creator) => threads.list(creator, params.npcId)),
+        )
+        .handle("turns", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            threads.turns(creator, params.npcId, params.threadId),
+          ),
+        )
+        .handle("knowledge", ({ params }) =>
+          asCreator(params.campaignId, (creator) => knowledge.list(creator, params.npcId)),
+        )
+        .handle("createKnowledge", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            knowledge.create(creator, params.npcId, payload),
+          ),
+        )
+        .handle("updateKnowledge", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            knowledge.update(creator, params.npcId, params.factId, payload),
+          ),
+        )
+        .handle("retireKnowledge", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            knowledge.retire(creator, params.npcId, params.factId),
+          ),
+        )
+        .handle("memories", ({ params }) =>
+          asCreator(params.campaignId, (creator) => memories.list(creator, params.npcId)),
+        )
+        .handle("draftMemory", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => memories.draft(creator, params.npcId, payload)),
+        )
+        .handle("updateMemory", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            memories.update(creator, params.npcId, params.memoryId, payload),
+          ),
+        )
+        .handle("approveMemory", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            memories.approve(creator, params.npcId, params.memoryId),
+          ),
+        )
+        .handle("retireMemory", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            memories.retire(creator, params.npcId, params.memoryId),
+          ),
+        )
+        .handle("resetMemories", ({ params }) =>
+          asCreator(params.campaignId, (creator) => memories.reset(creator, params.npcId)),
+        )
+        .handle("proposals", ({ params }) =>
+          asCreator(params.campaignId, (creator) => proposals.list(creator, params.npcId)),
+        )
+        .handle("acceptProposal", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            proposals.accept(creator, params.npcId, params.proposalId),
+          ),
+        )
+        .handle("rejectProposal", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            proposals.reject(creator, params.npcId, params.proposalId, payload),
+          ),
+        )
+        .handle("awarenessCandidates", ({ params }) =>
+          asCreator(params.campaignId, (creator) => awareness.list(creator, params.npcId)),
+        )
+        .handle("updateAwarenessCandidate", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            awareness.update(creator, params.npcId, params.candidateId, payload),
+          ),
+        )
+        .handle("approveAwarenessCandidate", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            awareness.approve(creator, params.npcId, params.candidateId, payload),
+          ),
+        )
+        .handle("rejectAwarenessCandidate", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) =>
+            awareness.reject(creator, params.npcId, params.candidateId, payload),
+          ),
+        )
+        .handle("playerList", ({ params }) => npcs.playerList(params.campaignId))
+        .handle("playerFindById", ({ params }) =>
+          npcs.playerFindById(params.campaignId, params.npcId),
+        )
+        .handle("playerStatus", ({ params }) => agent.playerStatus(params.campaignId, params.npcId))
+        .handle("playerThreads", ({ params }) =>
+          threads.playerList(params.campaignId, params.npcId),
+        )
+        .handle("playerTurns", ({ params }) =>
+          threads.playerTurns(params.campaignId, params.npcId, params.threadId),
+        )
+        .handle("talk", ({ params, payload }) =>
+          agent.talk(params.campaignId, params.npcId, payload),
+        )
+        .handle("sessionList", ({ params }) =>
+          threads.sessionList(params.campaignId, params.sessionId),
+        )
+        .handle("sessionMonitor", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            agent.sessionMonitor(creator, params.sessionId),
+          ),
+        )
+        .handle("openSession", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            threads.openSession(creator, params.npcId, params.sessionId),
+          ),
+        )
+        .handle("pauseSession", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            threads.pauseSession(creator, params.npcId, params.sessionId),
+          ),
+        )
+        .handle("resumeSession", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            threads.resumeSession(creator, params.npcId, params.sessionId),
+          ),
+        )
+        .handle("closeSession", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            threads.closeSession(creator, params.npcId, params.sessionId),
+          ),
+        )
+        .handle("sessionStatus", ({ params }) =>
+          agent.sessionStatus(params.campaignId, params.sessionId, params.npcId),
+        )
+        .handle("sessionTurns", ({ params }) =>
+          threads.sessionTurns(params.campaignId, params.sessionId, params.npcId),
+        )
+        .handle("sessionTalk", ({ params, payload }) =>
+          agent.sessionTalk(params.campaignId, params.sessionId, params.npcId, payload),
+        )
+    );
   }),
 );
 

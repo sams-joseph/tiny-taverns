@@ -4,8 +4,8 @@
  *
  * **One style, two framings.** The palette and the rules are the same words for
  * every kind of image; what differs is only the framing the place it shows
- * needs — a bust on a plate for a character, a wide scene under a card for a
- * campaign or a Shared World. Each framing is a whole style string, so a prompt builder appends
+ * needs — a bust on a plate for a character or an NPC, a wide scene under a
+ * card for a campaign or a Shared World. Each framing is a whole style string, so a prompt builder appends
  * one constant and never assembles the style itself.
  */
 
@@ -17,7 +17,7 @@ const HOUSE_PALETTE =
 /** What no image may carry, whatever it shows. */
 const HOUSE_RULES = "No text, no lettering, no frame, no watermark. Tasteful and non-graphic.";
 
-/** A character's portrait: one figure on a plate that crops to the head. */
+/** A character's or an NPC's portrait: one figure on a plate that crops to the head. */
 export const HOUSE_PORTRAIT_STYLE = `${HOUSE_PALETTE} Single subject, centred bust, plain dark background. ${HOUSE_RULES}`;
 
 /**

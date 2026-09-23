@@ -188,6 +188,7 @@ describe("migrations", () => {
       "note",
       "npc",
       "npc_awareness_candidate",
+      "npc_image",
       "npc_knowledge_fact",
       "npc_memory",
       "npc_proposal",
@@ -273,6 +274,7 @@ describe("migrations", () => {
       { migration_id: 48, name: "character_portraits" },
       { migration_id: 49, name: "campaign_images" },
       { migration_id: 50, name: "shared_world_images" },
+      { migration_id: 51, name: "npc_images" },
     ]);
   }, 60_000);
 
@@ -332,6 +334,7 @@ describe("migrations", () => {
       { migration_id: 48, name: "character_portraits" },
       { migration_id: 49, name: "campaign_images" },
       { migration_id: 50, name: "shared_world_images" },
+      { migration_id: 51, name: "npc_images" },
     ]);
   }, 60_000);
 });

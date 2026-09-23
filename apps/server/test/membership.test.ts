@@ -952,6 +952,9 @@ describe("a stranger reads nothing", () => {
               'group_invite',
               'group_member',
               'hob_direct_resource_update',
+              -- A portrait is read only as a field of the NPC, through the
+              -- NPC's own shipped reads; it has no read of its own.
+              'npc_image',
               'play_group',
               'character_option_ability_bonus',
               'character_option_equipment_reference',

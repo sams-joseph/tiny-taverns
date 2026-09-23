@@ -808,10 +808,10 @@ class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
  * per kind of image, each at the path its kind's signed URLs name.
  *
  * The capability is the signature instead. `Character.portrait`,
- * `Campaign.image` and `SharedWorld.image` carry these paths already signed,
- * and the server mints them only inside a read a SQL visibility predicate has
- * allowed, so holding a URL means some read let you see that character, that
- * campaign or that Shared World within the last day or so. The signature covers the kind, the image, the size and the expiry;
+ * `Campaign.image`, `SharedWorld.image` and `Npc.image` carry these paths
+ * already signed, and the server mints them only inside a read a SQL
+ * visibility predicate has allowed, so holding a URL means some read let you
+ * see that character, campaign, Shared World or NPC within the last day or so. The signature covers the kind, the image, the size and the expiry;
  * a forged, altered or expired one is the same `NotFound` as an image that does
  * not exist, and so is one that is not `ready` or a signature minted for
  * another kind's route.
@@ -845,6 +845,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** A Shared World's cover. */
     HttpApiEndpoint.get("sharedWorld", "/shared-world-images/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** A campaign NPC's portrait. */
+    HttpApiEndpoint.get("npc", "/npc-images/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),

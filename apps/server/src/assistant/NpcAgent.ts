@@ -685,6 +685,9 @@ const promptNpc = (npc: PlayerNpc): Npc =>
     visibility: "shared",
     origin: "authored",
     assistantTurnId: null,
+    // The prompt never reads the portrait, and this copy holds no URL.
+    image: null,
+    imagePending: false,
     createdAt: DateTime.fromDateUnsafe(new Date(0)),
     updatedAt: DateTime.fromDateUnsafe(new Date(0)),
   });
