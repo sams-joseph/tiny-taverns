@@ -17,12 +17,12 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
-import { imageRequestBody } from "../src/portraits/ImageModel.js";
-import { Portraits } from "../src/portraits/Portraits.js";
-import { PortraitUrls, expiryFor } from "../src/portraits/PortraitUrls.js";
+import { imageRequestBody } from "../src/images/ImageModel.js";
+import { HobImages } from "../src/images/HobImages.js";
+import { ImageUrls, expiryFor } from "../src/images/ImageUrls.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Party } from "../src/repo/Party.js";
-import { PortraitRecords } from "../src/repo/Portraits.js";
+import { ImageRecords } from "../src/repo/Images.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { ObjectStorage, StorageKey } from "../src/storage/ObjectStorage.js";
 import { admittedTo, campaignVia } from "./support/actors.js";
@@ -76,7 +76,7 @@ let now = Date.now();
 
 const database = migratedDatabase("taverns_test_portraits");
 const storage = ObjectStorage.memory;
-const urls = PortraitUrls.layer(SECRET, () => now);
+const urls = ImageUrls.layer(SECRET, () => now);
 const services = servicesOver(
   database,
   undefined,
@@ -84,7 +84,7 @@ const services = servicesOver(
   undefined,
   storage,
   urls,
-  Portraits.layer({
+  HobImages.layer({
     generation: Option.some({
       limits: { perAccountPerDay: PER_ACCOUNT, perDay: 100 },
       // The production timeout (150 s). A short one here would race every
@@ -98,7 +98,7 @@ const services = servicesOver(
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
-    Layer.provideMerge(PortraitRecords.layer),
+    Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),
@@ -122,7 +122,7 @@ const sql = <A>(query: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>) 
   runtime.runPromise(Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie));
 
 /** Wait for every drawing job to finish. */
-const settled = () => runtime.runPromise(Effect.flatMap(Portraits, (portraits) => portraits.idle));
+const settled = () => runtime.runPromise(Effect.flatMap(HobImages, (portraits) => portraits.idle));
 
 interface Person {
   readonly token: string;
@@ -193,6 +193,9 @@ beforeAll(async () => {
       campaignVia(client, { name: "The Salt Road", visibility: "shared" }),
     )
   ).id;
+  // The campaign's own cover draws too; let it finish before any test counts
+  // requests to the image endpoint.
+  await settled();
   await run(admittedTo(campaignId, ilse.actor, "Ilse"));
   await run(admittedTo(campaignId, wren.actor, "Wren"));
 }, 120_000);
@@ -266,6 +269,7 @@ describe("the form's create draws one portrait", () => {
       imageRequestBody(
         { apiUrl: "http://127.0.0.1:1234/v1", model: "flux-klein", quality: "medium" },
         "a prompt",
+        "1024x1024",
       ),
     ).toEqual({
       model: "flux-klein",
@@ -329,8 +333,8 @@ describe("the form's create draws one portrait", () => {
       client.me.updateCharacter({ params: { characterId: character.id }, payload: { level: 2 } }),
     );
     const record = await run(
-      Effect.flatMap(PortraitRecords, (records) =>
-        records.start(character.id, {
+      Effect.flatMap(ImageRecords, (records) =>
+        records.start("character", character.id, {
           prompt: "again",
           model: MODEL,
           limits: { perAccountPerDay: 100, perDay: 100 },
@@ -395,7 +399,7 @@ describe("the form's create draws one portrait", () => {
     await as(ilse.token, (client) =>
       client.me.deleteCharacter({ params: { characterId: character.id } }),
     );
-    await run(Effect.flatMap(Portraits, (portraits) => portraits.drainDeletions));
+    await run(Effect.flatMap(HobImages, (portraits) => portraits.drainDeletions));
     expect(await recordOf(character.id)).toBeUndefined();
     for (const file of ["original.png", "full.webp", "card.webp", "thumb.webp"]) {
       expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);
@@ -572,19 +576,17 @@ describe("when there is no portrait", () => {
       Effect.scoped(
         Effect.gen(function* () {
           const built = yield* Layer.build(
-            Portraits.layer({
+            HobImages.layer({
               generation: Option.some({
                 limits: { perAccountPerDay: 100, perDay: 100 },
                 concurrency: 1,
                 timeout: "200 millis",
               }),
               storageOn: false,
-            }).pipe(
-              Layer.provide([PortraitRecords.layer, ObjectStorage.memory, urls, hanging.layer]),
-            ),
+            }).pipe(Layer.provide([ImageRecords.layer, ObjectStorage.memory, urls, hanging.layer])),
           );
-          const worker = Context.get(built, Portraits);
-          const answered = yield* worker.drawAfterCreate(character);
+          const worker = Context.get(built, HobImages);
+          const answered = yield* worker.drawCharacter(character);
           expect(answered.portraitPending).toBe(true);
           yield* worker.idle;
         }),
@@ -634,8 +636,8 @@ describe("when there is no portrait", () => {
           insert into character ${sql.insert({ account_id: stranger.actor.accountId, name: "Raw" })}
           returning id
         `;
-        const records = yield* PortraitRecords;
-        const job = yield* records.start(rows[0]!.id, {
+        const records = yield* ImageRecords;
+        const job = yield* records.start("character", rows[0]!.id, {
           prompt: "a tiefling",
           model: MODEL,
           limits: { perAccountPerDay: 100, perDay: 0 },
@@ -668,7 +670,7 @@ describe("crashes and deletes in the middle of a draw", () => {
     );
     await run(Deferred.succeed(release, undefined));
     await settled();
-    await run(Effect.flatMap(Portraits, (portraits) => portraits.drainDeletions));
+    await run(Effect.flatMap(HobImages, (portraits) => portraits.drainDeletions));
 
     for (const file of ["original.png", "full.webp", "card.webp", "thumb.webp"]) {
       expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);
@@ -693,7 +695,7 @@ describe("crashes and deletes in the middle of a draw", () => {
     images.next({ kind: "held", release });
     const fresh = await createAs(pip, { name: "Fresh", race: "Elf" });
 
-    const swept = await run(Effect.flatMap(Portraits, (portraits) => portraits.sweep));
+    const swept = await run(Effect.flatMap(HobImages, (portraits) => portraits.sweep));
     expect(swept).toBe(1);
     const record = await recordOf(character.id);
     expect(record?.state).toBe("failed");

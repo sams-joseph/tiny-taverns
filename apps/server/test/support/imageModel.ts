@@ -5,7 +5,7 @@ import {
   type HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http";
-import { ImageModel } from "../../src/portraits/ImageModel.js";
+import { ImageModel } from "../../src/images/ImageModel.js";
 
 /**
  * An image endpoint that answers exactly what a test tells it to — the

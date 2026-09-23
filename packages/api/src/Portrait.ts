@@ -18,7 +18,7 @@ import { APPEARANCE_MAX } from "./Character.js";
  * 3. **Kit** — up to two lines the character is visibly carrying (see
  *    {@link kitFor}). A visual hint only; it links nothing.
  * 4. **Background** — only when there is no appearance line, as a light hint.
- * 5. **Style** — the fixed house text.
+ * 5. **Style** — the fixed house text, `HOUSE_PORTRAIT_STYLE` (`HouseStyle.ts`).
  *
  * ### What never goes in
  *
@@ -27,16 +27,6 @@ import { APPEARANCE_MAX } from "./Character.js";
  * provider's moderation. Ability scores, which would push toward stereotyped
  * bodies.
  */
-
-/**
- * The house style, from the design delivery's imagery direction
- * (`packages/design-system/readme.md`, *Imagery*) and the constraints a
- * portrait on a sheet needs.
- */
-export const HOUSE_PORTRAIT_STYLE =
-  "Painterly fantasy illustration, cool and low-key, slight grain, blue-hour light rather " +
-  "than firelight. Single subject, centred bust, plain dark background. No text, no " +
-  "lettering, no frame, no watermark. Tasteful and non-graphic.";
 
 /** The most any one label contributes; a row's labels are open text with no bound of their own. */
 const LABEL_MAX = 80;
@@ -56,7 +46,7 @@ export type PortraitSubject = Pick<Character, "race" | "subrace" | "className"> 
 };
 
 export interface PortraitOptions {
-  /** The style sentence(s) appended last; {@link HOUSE_PORTRAIT_STYLE} is the one there is. */
+  /** The style sentence(s) appended last; `HOUSE_PORTRAIT_STYLE` is the one there is. */
   readonly style: string;
 }
 

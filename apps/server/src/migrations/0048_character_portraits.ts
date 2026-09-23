@@ -18,7 +18,7 @@ import { SqlClient } from "effect/unstable/sql";
  * **It records what happened, including what did not.** `state` is
  * `generating` → `ready` | `failed`, and a failed row says which kind:
  * `refused` (provider moderation), `provider`, `timeout`, `interrupted` (the
- * process died mid-draw; the sweep in `repo/Portraits.ts` sets it), `storage`,
+ * process died mid-draw; the sweep in `repo/Images.ts` sets it), `storage`,
  * `skipped` (nothing to draw from: no race, class, appearance or background)
  * and `capped` (the daily limit was reached). `prompt` is exactly the text
  * sent, `model` the model it was sent to, and the token counts are the
@@ -40,7 +40,7 @@ import { SqlClient } from "effect/unstable/sql";
  * one for every deleted row**, whatever deleted it — the character's delete
  * cascading, or anything later — in the same transaction, so a committed
  * delete cannot leave files nobody will ever remove. The portrait worker
- * drains it (`Portraits.drainDeletions`), and `ObjectStorage.deletePrefix` is
+ * drains it (`HobImages.drainDeletions`), and `ObjectStorage.deletePrefix` is
  * idempotent, so a drain that dies halfway is simply run again.
  */
 export default Effect.gen(function* () {

@@ -6,10 +6,10 @@ import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
-import { applicationOver, portraitsFromConfig, servicesOver } from "../src/app.js";
-import { Portraits } from "../src/portraits/Portraits.js";
-import { PortraitUrls } from "../src/portraits/PortraitUrls.js";
-import { PortraitRecords } from "../src/repo/Portraits.js";
+import { applicationOver, hobImagesFromConfig, servicesOver } from "../src/app.js";
+import { HobImages } from "../src/images/HobImages.js";
+import { ImageUrls } from "../src/images/ImageUrls.js";
+import { ImageRecords } from "../src/repo/Images.js";
 import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
@@ -28,7 +28,7 @@ const services = servicesOver(database);
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
-    Layer.provideMerge(PortraitRecords.layer),
+    Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),
@@ -101,11 +101,11 @@ const generatingUnder = (env: Record<string, string>) =>
     Effect.scoped(
       Effect.gen(function* () {
         const built = yield* Layer.build(
-          Layer.fresh(portraitsFromConfig).pipe(
-            Layer.provide([PortraitRecords.layer, ObjectStorage.memory, PortraitUrls.off]),
+          Layer.fresh(hobImagesFromConfig).pipe(
+            Layer.provide([ImageRecords.layer, ObjectStorage.memory, ImageUrls.off]),
           ),
         );
-        return Context.get(built, Portraits).generating;
+        return Context.get(built, HobImages).generating;
       }),
     ).pipe(
       Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env })),
@@ -156,8 +156,8 @@ describe("a server that restarts mid-draw", () => {
       Effect.scoped(
         Effect.gen(function* () {
           yield* Layer.build(
-            Portraits.layer({ generation: Option.none(), storageOn: true }).pipe(
-              Layer.provide([PortraitRecords.layer, ObjectStorage.memory, PortraitUrls.off]),
+            HobImages.layer({ generation: Option.none(), storageOn: true }).pipe(
+              Layer.provide([ImageRecords.layer, ObjectStorage.memory, ImageUrls.off]),
             ),
           );
           const sql = yield* SqlClient.SqlClient;

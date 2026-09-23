@@ -34,6 +34,10 @@ afterAll(() => runtime.dispose());
 const NOT_CONTENT = [
   "ability_score",
   "account",
+  // A campaign's cover: who may see it is exactly who may read the campaign,
+  // through the campaign's own reads — `character_portrait`'s reason, one
+  // subject over. See 0049_campaign_images.ts.
+  "campaign_image",
   "campaign_member",
   "character_option_ability_bonus",
   "character_option_equipment_reference",

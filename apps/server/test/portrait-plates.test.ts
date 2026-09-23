@@ -10,7 +10,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
-import { PortraitUrls } from "../src/portraits/PortraitUrls.js";
+import { ImageUrls } from "../src/images/ImageUrls.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
@@ -38,7 +38,7 @@ import { migratedDatabase } from "./support/database.js";
  * `portraits.test.ts`'s question, and this file's is only who is handed a URL.
  */
 
-const urls = PortraitUrls.layer(Redacted.make("plate-test-secret"));
+const urls = ImageUrls.layer(Redacted.make("plate-test-secret"));
 const live = LiveEvents.layer;
 
 const services = Layer.mergeAll(

@@ -1,6 +1,10 @@
 import {
+  Campaign,
+  campaignImageHasSubject,
+  campaignImagePromptFor,
   Character,
   type CurrentActor,
+  HOUSE_COVER_STYLE,
   HOUSE_PORTRAIT_STYLE,
   NotFound,
   portraitHasSubject,
@@ -19,48 +23,53 @@ import {
 } from "effect";
 import { HttpServerResponse } from "effect/unstable/http";
 import {
-  type PortraitFailure,
-  type PortraitJob,
-  type PortraitLimits,
-  PortraitRecords,
-  portraitObjectKey,
-} from "../repo/Portraits.js";
+  type ImageFailure,
+  type ImageJob,
+  type ImageLimits,
+  ImageRecords,
+  imageObjectKey,
+} from "../repo/Images.js";
 import { ObjectStorage, StorageKey } from "../storage/ObjectStorage.js";
 import { ImageModel } from "./ImageModel.js";
-import { PortraitUrls } from "./PortraitUrls.js";
-import { renderPortrait } from "./render.js";
+import { type ImageRequest, ImageUrls } from "./ImageUrls.js";
+import { IMAGE_KINDS, type ImageKind } from "./kinds.js";
+import { renderImage } from "./render.js";
 
 /**
- * Hob draws a character's portrait, once, after the character is made — the
- * server's **first background worker**.
+ * Hob draws a picture of a thing a person made, once, after it is made — a
+ * character's portrait, a campaign's cover — and this is the server's **one
+ * background worker**, the same for every kind (`kinds.ts`).
  *
  * ### The trigger
  *
- * {@link Portraits} `drawAfterCreate` is called by the two handlers that make a
- * character — the form's `POST …/characters` and Hob's accept — **after** their
- * transaction commits, with the character they return. It records the one
- * portrait row the character will ever have (`repo/Portraits.ts` `start`, which
- * also applies the daily caps and the nothing-to-draw-from skip) and hands a
- * drawing row to a fiber. The request does not wait: a closed tab still gets
- * the picture, and a slow provider never holds a connection open.
+ * Each kind has one entry point here, called by every handler that makes that
+ * kind of thing **after** its transaction commits, with the row it returns:
+ * {@link HobImages} `drawCharacter` from the form's `POST …/characters` and
+ * Hob's accept, `drawCampaign` from `POST /campaigns` and
+ * `POST /worlds/:worldId/campaigns`. It records the one image row the subject
+ * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
+ * caps, the nothing-to-draw-from skip and the kind's rule about who may start
+ * one) and hands a drawing row to a fiber. The request does not wait: a closed
+ * tab still gets the picture, and a slow provider never holds a connection open.
  *
  * ### The job
  *
  * A service-owned `FiberSet`, so shutdown interrupts every job cleanly, and a
- * `Semaphore` of `PORTRAIT_CONCURRENCY`. Each job — waiting for a permit
- * included — runs under {@link JOB_TIMEOUT}: call the image model, decode and
- * resize with `sharp`, then store every file and mark the row `ready` inside
- * one transaction that holds the row's lock (see `PortraitRecords.store` for
- * why that makes a delete mid-draw safe). Any failure marks the row `failed`
- * with its kind and enqueues the prefix; provider text goes to the log only.
+ * `Semaphore` of `PORTRAIT_CONCURRENCY` shared by every kind. Each job —
+ * waiting for a permit included — runs under {@link JOB_TIMEOUT}: call the
+ * image model at the kind's size, decode and resize with `sharp`, then store
+ * every file and mark the row `ready` inside one transaction that holds the
+ * row's lock (see `ImageRecords.store` for why that makes a delete mid-draw
+ * safe). Any failure marks the row `failed` with its kind and enqueues the
+ * prefix; provider text goes to the log only.
  *
  * ### The loop
  *
- * At boot and every minute: rows still `generating` past {@link STALE_AFTER_SECONDS}
- * belong to a process that died and become `interrupted`, and due
- * `storage_deletion` rows are drained through `ObjectStorage.deletePrefix`.
- * The loop runs whenever storage is on, whether or not generation is, because
- * a deleted character's files must go either way.
+ * At boot and every minute: rows of any kind still `generating` past
+ * {@link STALE_AFTER_SECONDS} belong to a process that died and become
+ * `interrupted`, and due `storage_deletion` rows are drained through
+ * `ObjectStorage.deletePrefix`. The loop runs whenever storage is on, whether
+ * or not generation is, because a deleted subject's files must go either way.
  *
  * ### One instance
  *
@@ -79,61 +88,59 @@ export const STALE_AFTER_SECONDS = 170;
 const LOOP_EVERY = Duration.minutes(1);
 const DRAIN_BATCH = 50;
 
-export interface PortraitGeneration {
-  readonly limits: PortraitLimits;
+export interface ImageGeneration {
+  readonly limits: ImageLimits;
   readonly concurrency: number;
   /** {@link JOB_TIMEOUT} unless a test needs a timeout it can wait for. */
   readonly timeout?: Duration.Input;
 }
 
-export class Portraits extends Context.Service<
-  Portraits,
+export class HobImages extends Context.Service<
+  HobImages,
   {
-    /** Whether a new character will be drawn. */
+    /** Whether a new character or campaign will be drawn. */
     readonly generating: boolean;
     /**
      * See the header. Answers the character again, `portraitPending` when a
      * draw started. Never fails: a portrait is not worth failing a create for.
      */
-    readonly drawAfterCreate: (
-      character: Character,
-    ) => Effect.Effect<Character, never, CurrentActor>;
-    /** The image route: a checked signature, a ready row, the stored bytes. */
-    readonly image: (request: {
-      readonly portraitId: string;
-      readonly variant: string;
-      readonly e: string | undefined;
-      readonly s: string | undefined;
-    }) => Effect.Effect<HttpServerResponse.HttpServerResponse, NotFound>;
+    readonly drawCharacter: (character: Character) => Effect.Effect<Character, never, CurrentActor>;
+    /** The same for a campaign's cover: `imagePending` when a draw started. */
+    readonly drawCampaign: (campaign: Campaign) => Effect.Effect<Campaign, never, CurrentActor>;
+    /** An image route: a checked signature, a ready row, the stored bytes. */
+    readonly image: (
+      kind: ImageKind,
+      request: ImageRequest,
+    ) => Effect.Effect<HttpServerResponse.HttpServerResponse, NotFound>;
     /** Delete every due prefix in `storage_deletion`, now. */
     readonly drainDeletions: Effect.Effect<void>;
-    /** Start a drain in the background; what the delete handler does after it commits. */
+    /** Start a drain in the background; what a delete handler does after it commits. */
     readonly drainSoon: Effect.Effect<void>;
     /** Mark stale `generating` rows `interrupted`. Answers how many. */
     readonly sweep: Effect.Effect<number>;
     /** Resolves when no job is running. For tests. */
     readonly idle: Effect.Effect<void>;
   }
->()("Portraits") {
+>()("HobImages") {
   /**
-   * @param generation `None` when portraits are OFF; images already drawn are
+   * @param generation `None` when images are OFF; images already drawn are
    *   still served and deletions still drained while storage is on.
    * @param storageOn whether `STORAGE_DRIVER` names a provider. With storage
    *   off there are no files to serve or delete, so the loop does not run.
    */
   static readonly layer = (options: {
-    readonly generation: Option.Option<PortraitGeneration>;
+    readonly generation: Option.Option<ImageGeneration>;
     readonly storageOn: boolean;
-  }): Layer.Layer<Portraits, never, PortraitRecords | ObjectStorage | PortraitUrls> =>
+  }): Layer.Layer<HobImages, never, ImageRecords | ObjectStorage | ImageUrls> =>
     Layer.effect(this)(
       Effect.gen(function* () {
-        const records = yield* PortraitRecords;
+        const records = yield* ImageRecords;
         const storage = yield* ObjectStorage;
-        const urls = yield* PortraitUrls;
+        const urls = yield* ImageUrls;
         const model = yield* Effect.serviceOption(ImageModel);
         const jobs = yield* FiberSet.make<void, never>();
         // The loop and kicked drains, apart from the jobs so `idle` means
-        // "no portrait is being drawn".
+        // "no image is being drawn".
         const housekeeping = yield* FiberSet.make<void, never>();
         const permits = yield* Semaphore.make(
           Option.match(options.generation, {
@@ -147,7 +154,7 @@ export class Portraits extends Context.Service<
           onSome: (generation) => generation.timeout ?? JOB_TIMEOUT,
         });
 
-        const failureOf = (cause: Cause.Cause<unknown>): PortraitFailure => {
+        const failureOf = (cause: Cause.Cause<unknown>): ImageFailure => {
           const error = Cause.squash(cause);
           if (Cause.isTimeoutError(error)) return "timeout";
           const tag =
@@ -163,18 +170,18 @@ export class Portraits extends Context.Service<
           }
         };
 
-        const draw = (image: ImageModel["Service"], job: PortraitJob) =>
+        const draw = (image: ImageModel["Service"], job: ImageJob) =>
           Effect.gen(function* () {
-            const drawn = yield* image.generate(job.prompt);
-            const rendered = yield* renderPortrait(drawn.bytes);
+            const drawn = yield* image.generate(job.prompt, IMAGE_KINDS[job.kind].size);
+            const rendered = yield* renderImage(job.kind, drawn.bytes);
             const files = [
               {
-                key: portraitObjectKey(job.prefix, `original.${rendered.original.ext}`),
+                key: imageObjectKey(job.prefix, `original.${rendered.original.ext}`),
                 bytes: rendered.original.bytes,
                 contentType: rendered.original.contentType,
               },
               ...rendered.variants.map(({ variant, bytes }) => ({
-                key: portraitObjectKey(job.prefix, `${variant}.webp`),
+                key: imageObjectKey(job.prefix, `${variant}.webp`),
                 bytes,
                 contentType: "image/webp",
               })),
@@ -213,7 +220,7 @@ export class Portraits extends Context.Service<
                         ? ` ${String(error.detail)}`
                         : "";
                     yield* Effect.logWarning(
-                      `Portrait ${job.id} failed (${failure}):${detail} ${Cause.pretty(cause)}`,
+                      `Image ${job.kind}/${job.id} failed (${failure}):${detail} ${Cause.pretty(cause)}`,
                     );
                     yield* records.fail(job, failure);
                   }),
@@ -242,7 +249,7 @@ export class Portraits extends Context.Service<
         if (options.storageOn) {
           yield* Effect.all([sweep, drainDeletions]).pipe(
             Effect.catchCause((cause) =>
-              Effect.logWarning(`Portrait housekeeping failed: ${Cause.pretty(cause)}`),
+              Effect.logWarning(`Image housekeeping failed: ${Cause.pretty(cause)}`),
             ),
             Effect.repeat(Schedule.spaced(LOOP_EVERY)),
             Effect.asVoid,
@@ -254,45 +261,76 @@ export class Portraits extends Context.Service<
           Option.map(model, (image) => ({ settings, image })),
         );
 
+        /**
+         * Start the one draw of a subject: `true` when a job was handed to a
+         * fiber. `prompt` is `undefined` when there is nothing to draw from.
+         * Never fails; a picture is not worth failing a create for.
+         */
+        const start = (
+          kind: ImageKind,
+          subjectId: string,
+          prompt: () => string | undefined,
+        ): Effect.Effect<boolean, never, CurrentActor> =>
+          Option.match(generation, {
+            onNone: () => Effect.succeed(false),
+            onSome: ({ settings, image }) =>
+              Effect.gen(function* () {
+                const job = yield* records.start(kind, subjectId, {
+                  prompt: prompt(),
+                  model: image.model,
+                  limits: settings.limits,
+                });
+                if (job === undefined) return false;
+                yield* FiberSet.run(jobs, draw(image, job));
+                return true;
+              }).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.as(
+                    Effect.logWarning(
+                      `Could not start an image for ${kind} ${subjectId}: ${Cause.pretty(cause)}`,
+                    ),
+                    false,
+                  ),
+                ),
+              ),
+          });
+
         return {
           generating: Option.isSome(generation),
 
-          drawAfterCreate: (character) =>
-            Option.match(generation, {
-              onNone: () => Effect.succeed(character),
-              onSome: ({ settings, image }) =>
-                Effect.gen(function* () {
-                  const job = yield* records.start(character.id, {
-                    prompt: portraitHasSubject(character)
-                      ? portraitPromptFor(character, { style: HOUSE_PORTRAIT_STYLE })
-                      : undefined,
-                    model: image.model,
-                    limits: settings.limits,
-                  });
-                  if (job === undefined) return character;
-                  yield* FiberSet.run(jobs, draw(image, job));
-                  return new Character({ ...character, portraitPending: true });
-                }).pipe(
-                  Effect.catchCause((cause) =>
-                    Effect.as(
-                      Effect.logWarning(
-                        `Could not start a portrait for ${character.id}: ${Cause.pretty(cause)}`,
-                      ),
-                      character,
-                    ),
-                  ),
-                ),
-            }),
+          drawCharacter: (character) =>
+            Effect.map(
+              start("character", character.id, () =>
+                portraitHasSubject(character)
+                  ? portraitPromptFor(character, { style: HOUSE_PORTRAIT_STYLE })
+                  : undefined,
+              ),
+              (pending) =>
+                pending ? new Character({ ...character, portraitPending: true }) : character,
+            ),
 
-          image: (request) =>
+          drawCampaign: (campaign) =>
+            Effect.map(
+              start("campaign", campaign.id, () =>
+                campaignImageHasSubject(campaign)
+                  ? campaignImagePromptFor(campaign, { style: HOUSE_COVER_STYLE })
+                  : undefined,
+              ),
+              (pending) => (pending ? new Campaign({ ...campaign, imagePending: true }) : campaign),
+            ),
+
+          image: (kind, request) =>
             Effect.gen(function* () {
-              const missing = new NotFound({ resource: "portrait", id: request.portraitId });
-              const checked = urls.verify(request);
+              const missing = new NotFound({
+                resource: IMAGE_KINDS[kind].tag,
+                id: request.imageId,
+              });
+              const checked = urls.verify(kind, request);
               if (checked === undefined) return yield* missing;
-              const prefix = yield* records.readyPrefix(request.portraitId);
+              const prefix = yield* records.readyPrefix(kind, request.imageId);
               if (prefix === undefined) return yield* missing;
               const object = yield* storage
-                .get(portraitObjectKey(prefix, `${checked.variant}.webp`))
+                .get(imageObjectKey(prefix, `${checked.variant}.webp`))
                 .pipe(
                   Effect.catchTag("StorageNotFound", () => Effect.fail(missing)),
                   Effect.catchTags({

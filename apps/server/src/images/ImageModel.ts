@@ -2,7 +2,7 @@ import { Context, Data, Duration, Effect, Layer, Option, Redacted, Schema } from
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 
 /**
- * The image model portraits are drawn by: one OpenAI-shaped call,
+ * The image model every Hob-drawn image is drawn by: one OpenAI-shaped call,
  * `POST {apiUrl}/images/generations`, answered with `data[0].b64_json`.
  *
  * OpenAI's Images API and stable-diffusion.cpp's `sd-server` both speak this
@@ -23,31 +23,34 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
  * A moderation block (`error.code = "moderation_blocked"`) is
  * {@link ImageRefused}; anything else the provider says is
  * {@link ImageProviderFailed}. Both keep the provider's words in `detail`, for
- * the log line, and the portrait record keeps only the kind.
+ * the log line, and the image record keeps only the kind.
  */
 
-export const PORTRAIT_SIZE = "1024x1024";
-
-export type PortraitQuality = "low" | "medium" | "high" | "auto";
+export type ImageQuality = "low" | "medium" | "high" | "auto";
 
 export interface ImageModelOptions {
   readonly apiUrl: string;
   readonly model: string;
   readonly apiKey: Redacted.Redacted | undefined;
-  readonly quality: PortraitQuality;
+  readonly quality: ImageQuality;
 }
 
 const isOpenAi = (apiUrl: string): boolean => new URL(apiUrl).hostname === "api.openai.com";
 
-/** The request body for one portrait, in the dialect `apiUrl` speaks. */
+/**
+ * The request body for one image, in the dialect `apiUrl` speaks. `size` is the
+ * kind's (`kinds.ts`): a square for a portrait, 3:2 for a cover — both sizes
+ * OpenAI's image models accept, and any size `sd-server` does.
+ */
 export const imageRequestBody = (
   options: Pick<ImageModelOptions, "apiUrl" | "model" | "quality">,
   prompt: string,
+  size: string,
 ): Record<string, unknown> => ({
   model: options.model,
   prompt,
   n: 1,
-  size: PORTRAIT_SIZE,
+  size,
   // PNG, so the original is kept lossless; the WebP variants are ours.
   output_format: "png",
   ...(isOpenAi(options.apiUrl) ? { quality: options.quality, moderation: "auto" } : {}),
@@ -92,10 +95,11 @@ const REQUEST_TIMEOUT = Duration.seconds(140);
 export class ImageModel extends Context.Service<
   ImageModel,
   {
-    /** The model name, as recorded on the portrait row. */
+    /** The model name, as recorded on the image row. */
     readonly model: string;
     readonly generate: (
       prompt: string,
+      size: string,
     ) => Effect.Effect<GeneratedImage, ImageRefused | ImageProviderFailed>;
   }
 >()("ImageModel") {
@@ -110,10 +114,10 @@ export class ImageModel extends Context.Service<
 
         return {
           model: options.model,
-          generate: (prompt) =>
+          generate: (prompt, size) =>
             Effect.gen(function* () {
               const request = HttpClientRequest.post(url).pipe(
-                HttpClientRequest.bodyJsonUnsafe(imageRequestBody(options, prompt)),
+                HttpClientRequest.bodyJsonUnsafe(imageRequestBody(options, prompt, size)),
                 options.apiKey === undefined
                   ? (request) => request
                   : HttpClientRequest.bearerToken(Redacted.value(options.apiKey)),

@@ -3,6 +3,7 @@ import {
   type Actor,
   Campaign,
   type CampaignCreate,
+  CampaignImages,
   type CampaignId,
   type CampaignUpdate,
   Conflict,
@@ -13,6 +14,7 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { admitToGroup, foundGroup } from "./Groups.js";
 import { addCreator, liveMemberAccountIds } from "./Memberships.js";
@@ -40,10 +42,62 @@ export interface CampaignRow extends ProvenanceColumns {
   readonly player_count: number;
   readonly current_session_id: SessionId | null;
   readonly archived_at: Date | null;
+  /** From {@link campaignImageColumns}; `null` when the campaign has no cover record. */
+  readonly image_id: string | null;
+  readonly image_state: "generating" | "ready" | "failed" | null;
 }
 
-export const toCampaign = (row: CampaignRow): Campaign =>
-  new Campaign({
+/**
+ * The cover's two facts beside a campaign row: `image_id` and `image_state`,
+ * as scalar subqueries so they fit a `select`, a `returning` and a column list
+ * alike. **Every read that becomes a `Campaign` names this fragment** —
+ * `toCampaign` dies on a row without it, so a path that forgot is a failed test
+ * rather than a campaign whose cover silently vanished.
+ */
+export const campaignImageColumns = (sql: SqlClient.SqlClient) => sql`
+  (select campaign_image.id from campaign_image
+   where campaign_image.campaign_id = campaign.id) as image_id,
+  (select campaign_image.state from campaign_image
+   where campaign_image.campaign_id = campaign.id) as image_state
+`;
+
+/**
+ * Signs a ready cover's paths; the campaign kind of `ImageUrls.pathsFor`.
+ * `undefined` when a repository was built without the service, which mints
+ * nothing — the same answer a server with no URL secret gives.
+ */
+export type CampaignImageSigner = (imageId: string) => Campaign["image"];
+
+/** The signer a repository layer was built with, or `undefined`. */
+export const campaignImageSigner: Effect.Effect<CampaignImageSigner | undefined> = Effect.map(
+  imageSigner,
+  (sign: ImageSigner | undefined) =>
+    sign === undefined
+      ? undefined
+      : (imageId) => {
+          const paths = sign("campaign", imageId);
+          return paths === null
+            ? null
+            : new CampaignImages({ cardUrl: paths.card, fullUrl: paths.full });
+        },
+);
+
+/**
+ * **The only place a cover URL is minted.** `imageId` must come from a read
+ * whose SQL already returned the campaign to this reader — `campaignReadable`
+ * or `campaignWritable` beside {@link campaignImageColumns} — and that is what
+ * makes cover visibility exactly campaign visibility.
+ */
+export const campaignImages = (
+  imageId: string | null,
+  sign: CampaignImageSigner | undefined,
+): Campaign["image"] => (imageId !== null && sign !== undefined ? sign(imageId) : null);
+
+export const toCampaign = (row: CampaignRow, sign: CampaignImageSigner | undefined): Campaign => {
+  if (row.image_state === undefined) {
+    throw new Error("a campaign read did not select campaignImageColumns");
+  }
+  return new Campaign({
     id: row.id,
     contextId: row.group_id,
     creatorAccountId: row.creator_account_id,
@@ -51,9 +105,12 @@ export const toCampaign = (row: CampaignRow): Campaign =>
     partyName: row.party_name,
     playerCount: row.player_count,
     currentSessionId: row.current_session_id,
+    image: campaignImages(row.image_state === "ready" ? row.image_id : null, sign),
+    imagePending: row.image_state === "generating",
     archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
     ...provenanceOf(row),
   });
+};
 
 /**
  * Reads and writes over `campaign`.
@@ -90,6 +147,8 @@ export class Campaigns extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const sign = yield* campaignImageSigner;
+      const asCampaign = (row: CampaignRow): Campaign => toCampaign(row, sign);
 
       /**
        * Whether a session may become this campaign's current one.
@@ -134,7 +193,7 @@ export class Campaigns extends Context.Service<
       const one = (rows: ReadonlyArray<CampaignRow>, id: CampaignId) =>
         rows.length === 0
           ? Effect.fail(new NotFound({ resource: "campaign", id }))
-          : Effect.succeed(toCampaign(rows[0]!));
+          : Effect.succeed(asCampaign(rows[0]!));
 
       const insert = (groupId: SharedWorldId, payload: CampaignCreate, actor: Actor) =>
         Effect.gen(function* () {
@@ -149,10 +208,10 @@ export class Campaigns extends Context.Service<
                 visibility: payload.visibility,
               }),
             )}
-            returning *
+            returning campaign.*, ${campaignImageColumns(sql)}
           `;
           yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
-          return toCampaign(rows[0]!);
+          return asCampaign(rows[0]!);
         });
 
       return {
@@ -160,11 +219,11 @@ export class Campaigns extends Context.Service<
           Effect.gen(function* () {
             const actor = yield* CurrentActor;
             const rows = yield* sql<CampaignRow>`
-              select * from campaign
+              select campaign.*, ${campaignImageColumns(sql)} from campaign
               where ${campaignReadable(sql, actor)} and campaign.archived_at is null
               order by campaign.created_at desc
             `;
-            return rows.map(toCampaign);
+            return rows.map(asCampaign);
           }),
         ),
 
@@ -173,7 +232,7 @@ export class Campaigns extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<CampaignRow>`
-                select * from campaign
+                select campaign.*, ${campaignImageColumns(sql)} from campaign
                 where campaign.id = ${id} and ${campaignReadable(sql, actor, id)}
               `;
               return yield* one(rows, id);
@@ -237,7 +296,7 @@ export class Campaigns extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const sources = yield* sql<CampaignRow>`
-                  select campaign.*
+                  select campaign.*, ${campaignImageColumns(sql)}
                   from campaign
                   join play_group as source on source.id = campaign.group_id
                   where campaign.id = ${creator.campaign}
@@ -266,7 +325,7 @@ export class Campaigns extends Context.Service<
                   set group_id = ${context.id}, updated_at = now()
                   where campaign.id = ${creator.campaign}
                     and campaign.group_id = ${creator.group}
-                  returning *
+                  returning campaign.*, ${campaignImageColumns(sql)}
                 `;
                 return yield* one(rows, creator.campaign);
               }),
@@ -288,7 +347,7 @@ export class Campaigns extends Context.Service<
               const rows = yield* sql<CampaignRow>`
                 update campaign set ${setClause(sql, columns)}
                 where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning *
+                returning campaign.*, ${campaignImageColumns(sql)}
               `;
               return yield* one(rows, id);
             }),
@@ -326,7 +385,7 @@ export class Campaigns extends Context.Service<
               const rows = yield* sql<CampaignRow>`
                 update campaign set archived_at = now(), updated_at = now()
                 where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning *
+                returning campaign.*, ${campaignImageColumns(sql)}
               `;
               return yield* one(rows, id);
             }),
@@ -355,7 +414,7 @@ export class Campaigns extends Context.Service<
               const rows = yield* sql<CampaignRow>`
                 update campaign set archived_at = null, updated_at = now()
                 where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning *
+                returning campaign.*, ${campaignImageColumns(sql)}
               `;
               return yield* one(rows, id);
             }),

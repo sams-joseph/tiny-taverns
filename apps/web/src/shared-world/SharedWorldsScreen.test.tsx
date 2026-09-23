@@ -353,14 +353,15 @@ describe("one Shared World's screen", () => {
       status: 200,
       body: { accepted: "sharedWorldHistory", entry },
     });
-    server.routes.set(`GET /worlds/${worldId}/history`, {
+    const acceptPath = `/worlds/${worldId}/hob/threads/${threadId}/turns/${turnId}/accept`;
+    const historyPath = `/worlds/${worldId}/history`;
+    // Answer from state, as the server does: the entry exists once the accept
+    // has been received, whichever read asks and however many do.
+    const accepted = () =>
+      server.calls.some((call) => call.method === "POST" && call.pathname === acceptPath);
+    server.routes.set(`GET ${historyPath}`, {
       status: 200,
-      body: () => {
-        const reads = server.calls.filter(
-          (call) => call.method === "GET" && call.pathname === `/worlds/${worldId}/history`,
-        );
-        return reads.length < 2 ? [] : [entry];
-      },
+      body: () => (accepted() ? [entry] : []),
     });
 
     await renderSharedWorld(mintingSession());
@@ -372,13 +373,26 @@ describe("one Shared World's screen", () => {
     await userEvent.type(ask, "Remember the night the lanterns failed.{Enter}");
     await userEvent.click(await screen.findByRole("button", { name: "Add to Chronicle" }));
 
+    // The keep is what refreshes the Chronicle: the screen read it once on the
+    // way in, nothing re-read it before the accept, and a read follows the
+    // accept and draws the entry only that read can return.
+    //
+    // Reads *after* the accept are counted as "at least one", not "exactly one",
+    // on purpose. One invalidation can refresh an atom twice when the runner is
+    // starved: measured under single-core contention, a single invalidation of
+    // this key refreshed both the history and the summary atoms twice while the
+    // Chronicle mounted once. That is the atom library's reactivity wiring, not
+    // this screen, and a count that includes it fails on load rather than on a
+    // regression.
+    const historyReads = (calls: typeof server.calls) =>
+      calls.filter((call) => call.method === "GET" && call.pathname === historyPath);
+    const acceptAt = () =>
+      server.calls.findIndex((call) => call.method === "POST" && call.pathname === acceptPath);
+    await waitFor(() => expect(acceptAt()).toBeGreaterThanOrEqual(0));
     await waitFor(() =>
-      expect(
-        server.calls.filter(
-          (call) => call.method === "GET" && call.pathname === `/worlds/${worldId}/history`,
-        ),
-      ).toHaveLength(2),
+      expect(historyReads(server.calls.slice(acceptAt() + 1)).length).toBeGreaterThanOrEqual(1),
     );
+    expect(historyReads(server.calls.slice(0, acceptAt()))).toHaveLength(1);
     expect(
       await within(screen.getByRole("region", { name: "Chronicle" })).findByText(
         "Every lantern went dark on the same night.",

@@ -13,7 +13,12 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError, Statement } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
-import { type CampaignRow, toCampaign } from "./Campaigns.js";
+import {
+  type CampaignRow,
+  campaignImageColumns,
+  campaignImageSigner,
+  toCampaign,
+} from "./Campaigns.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { dieOnSqlError } from "./rows.js";
 import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibility.js";
@@ -247,6 +252,9 @@ export class Memberships extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      // `mine` is a campaign read, so it signs covers exactly as `Campaigns`
+      // does, for the campaigns its own predicate returned.
+      const sign = yield* campaignImageSigner;
 
       const onShelf = (shelf: CampaignShelf): Statement.Fragment =>
         shelf === "archived"
@@ -285,6 +293,7 @@ export class Memberships extends Context.Service<
               const actor = yield* CurrentActor;
               const rows = yield* sql<MembershipRow>`
                 select campaign.*,
+                       ${campaignImageColumns(sql)},
                        (campaign.creator_account_id = ${actor.accountId}) as is_creator,
                        campaign_member.created_at as joined_at,
                        play_group.is_shared_world,
@@ -301,7 +310,7 @@ export class Memberships extends Context.Service<
               return rows.map(
                 (row) =>
                   new CampaignMembership({
-                    campaign: toCampaign(row),
+                    campaign: toCampaign(row, sign),
                     relation: relationOf(row.is_creator),
                     sharedWorld: row.is_shared_world
                       ? new CampaignSharedWorld({
