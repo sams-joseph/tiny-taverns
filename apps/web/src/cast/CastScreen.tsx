@@ -183,9 +183,18 @@ export function CastScreen() {
             facets={[]}
             className="min-h-control-sm max-w-52 py-0.5"
           />
-          <Button variant="outline" size="sm" onClick={() => setCopying(true)}>
+          {/* Five controls do not fit one unwrapping header row between the
+              header's wrap breakpoint and a wide desktop, so the secondary
+              press keeps its name for screen readers and its tooltip-sized
+              `title` there and draws only its icon. */}
+          <Button
+            variant="outline"
+            size="sm"
+            title="Add from Library"
+            onClick={() => setCopying(true)}
+          >
             <Icon name="copy" size={14} />
-            Add from Library
+            <span className="@4xl/app:@max-7xl/app:sr-only">Add from Library</span>
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setEditing({ npc: undefined })}>
             <Icon name="plus" size={14} />

@@ -149,7 +149,7 @@ describe("the persistent shell", () => {
    * lead group, which is capped at `max-w-96` so a long name truncates. A
    * `min-h-*` is what let sibling screens drift apart before.
    */
-  it("sizes every chrome row to a fixed height", async () => {
+  it("sizes every chrome row to a fixed height, the bar's from its wrap breakpoint up", async () => {
     await renderAt(`/campaigns/${campaignId}/cast/${npcId}`);
     const bar = (await screen.findByRole("heading", { level: 1 })).closest(
       "[data-slot=page-header]",
@@ -158,7 +158,10 @@ describe("the persistent shell", () => {
     expect(sections().parentElement).toHaveClass("h-11");
     expect(campaignNav().parentElement).toHaveClass("h-11.5");
     expect(campaignNav().previousElementSibling).toHaveClass("max-w-96", "min-w-0");
-    expect(bar?.children[0]).toHaveClass("h-19");
+    // Narrow, the bar's actions wrap on their own row rather than overlap;
+    // `apps/web/audit` measures that they do not.
+    expect(bar?.children[0]).toHaveClass("flex-wrap", "@4xl/app:h-19", "@4xl/app:flex-nowrap");
+    expect(bar?.querySelector("[data-slot=page-header-actions]")).toHaveClass("flex-wrap");
     expect(bar?.children[1]).toHaveClass("h-10");
     for (const row of [
       sections().parentElement,

@@ -39,7 +39,9 @@ function ScreenBar({ title, subtitle, tabs, children }: TopBarProps) {
       {...(tabs !== undefined && { tabs })}
       actions={
         <>
-          <div className="flex min-w-0 items-center gap-2.5">{children}</div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5 empty:hidden @4xl/app:shrink-0 @4xl/app:flex-nowrap">
+            {children}
+          </div>
           <CampaignAct />
         </>
       }

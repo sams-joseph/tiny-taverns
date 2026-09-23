@@ -29,6 +29,7 @@ Per screen, per width, after the DOM has been still for 300ms:
 - the height of every control on the global row;
 - `document.documentElement.scrollWidth` against `clientWidth`, and any chrome control drawn past the right edge (an ancestor's overflow clips it, and `scrollWidth` cannot see that);
 - `scrollWidth > clientWidth` on each chrome row;
+- any two controls in the per-screen bar whose boxes intersect (a flex row that cannot shrink further draws its items over one another, which neither check above sees);
 - after scrolling the document 400px, whether the stack is still at `top: 0` and `elementFromPoint` still lands in it;
 - after that same scroll, any `sticky` element in `main` stuck above the chrome's bottom edge (under it rather than below it);
 - any element in `main`, outside a dialog, that scrolls vertically on its own — pages scroll with the window;

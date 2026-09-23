@@ -24,9 +24,17 @@ import type { ReactNode } from "react";
  * `p` a `0 0 var(--s-5)` margin, and that 12px below the subtitle was two thirds
  * of the difference between this bar and the sum of its parts.
  *
- * **Nothing wraps.** A fixed height and a wrapping row are the same bug written
- * twice; the title truncates instead — the title is the one part of the bar
- * that is arbitrary length, so it is the one that gives way.
+ * **From the `@4xl/app` container up, nothing wraps.** A fixed height and a
+ * wrapping row are the same bug written twice; the title truncates instead —
+ * the title is the one part of the bar that is arbitrary length, so it is the
+ * one that gives way.
+ *
+ * **Below it, the actions take their own row and wrap.** A phone has no width
+ * to give: at 390 the Cast's five controls in one unwrapping row were drawn on
+ * top of one another (the shell audit's overlap check), and shrinking them
+ * would shrink tap targets. So the narrow bar is the title's reserved `h-12`
+ * and then as many rows of actions as the screen has, and its height follows
+ * the screen there; the fixed-height guarantee is a desktop one.
  *
  * ### Screen actions live here, never in the body
  *
@@ -52,11 +60,11 @@ import type { ReactNode } from "react";
 function PageHeader({ title, subtitle, actions, tabs }: PageHeaderProps) {
   return (
     <header data-slot="page-header" className="border-b border-hairline bg-surface-card">
-      <div className="flex h-19 items-center gap-gutter px-page-sm @3xl/app:px-page">
+      <div className="flex flex-wrap items-center gap-x-gutter gap-y-2.5 px-page-sm py-3.5 @3xl/app:px-page @4xl/app:h-19 @4xl/app:flex-nowrap @4xl/app:py-0">
         {/* `h-12` is the reserved pair of lines; see above. The title block is
             top-aligned inside it so the `h1` sits at the same y whether a
             subtitle follows it or not. */}
-        <div className="h-12 min-w-32 flex-1">
+        <div className="h-12 min-w-32 flex-1 basis-full @4xl/app:basis-0">
           <h1 className="truncate font-display text-display-s leading-tight font-semibold tracking-display text-heading">
             {title}
           </h1>
@@ -67,12 +75,16 @@ function PageHeader({ title, subtitle, actions, tabs }: PageHeaderProps) {
           )}
         </div>
         {/* The header is not a scrolling surface. `min-w-32` on the title is
-            the floor that makes its arbitrary text give way first; the
-            controls remain one ordinary flex row. If a screen cannot fit its
-            controls at a supported width, that screen must simplify its
-            composition rather than handing the header a second scrollbar. */}
+            the floor that makes its arbitrary text give way first; wide, the
+            controls are one ordinary flex row, and narrow they wrap on their
+            own row. If a screen cannot fit its controls at a wide width, that
+            screen must simplify its composition rather than handing the
+            header a second scrollbar. */}
         {actions !== undefined && (
-          <div data-slot="page-header-actions" className="flex min-w-0 items-center gap-2.5">
+          <div
+            data-slot="page-header-actions"
+            className="flex min-w-0 flex-wrap items-center gap-2.5 not-has-[>:not(:empty)]:hidden @4xl/app:flex-nowrap"
+          >
             {actions}
           </div>
         )}

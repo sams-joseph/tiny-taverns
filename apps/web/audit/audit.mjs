@@ -259,6 +259,28 @@ function measure() {
             `${(el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30)} @${round(el.getBoundingClientRect().right)}`,
         )
     : [];
+  // Header controls drawn on top of one another: a flex row whose children
+  // cannot shrink any further overflows into its neighbour, and neither the
+  // viewport edge nor `scrollWidth` sees that.
+  const barControls = header
+    ? [...header.querySelectorAll("a, button, input, h1")]
+        .filter(visible)
+        .filter((el) => !el.parentElement.closest("a, button"))
+        // A switch's native input is a clipped 1px box behind its thumb.
+        .filter((el) => el.getBoundingClientRect().width > 2)
+    : [];
+  const label = (el) =>
+    (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30);
+  const barOverlaps = [];
+  for (const [i, a] of barControls.entries())
+    for (const b of barControls.slice(i + 1)) {
+      if (a.contains(b) || b.contains(a)) continue;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      const x = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+      const y = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+      if (x > 0.5 && y > 0.5) barOverlaps.push(`${label(a)} × ${label(b)}`);
+    }
   const rowOverflow = (el) => (el === null ? null : el.scrollWidth > el.clientWidth);
   const primaries = [...document.querySelectorAll('[data-slot="button"]')]
     .filter(visible)
@@ -303,6 +325,7 @@ function measure() {
       bar: rowOverflow(bar),
     },
     pastEdge,
+    barOverlaps,
     primaries,
   };
 }
@@ -630,9 +653,13 @@ for (const width of widths) {
     inCampaign.map((r) => r.campaignRow.h),
     46,
   );
+  // The bar's height is fixed only from `PageHeader`'s wrap breakpoint (the
+  // `@4xl/app` container, 896px) up; below it the actions take their own
+  // wrapping row and the height follows the screen.
+  const fixedBar = (r) => r.bar === null || r.bar.w >= 896;
   expect(
     "bar height",
-    rows.map((r) => r.bar?.h),
+    rows.filter(fixedBar).map((r) => r.bar?.h),
     76,
   );
   expect(
@@ -663,7 +690,7 @@ for (const width of widths) {
   // One content top edge for every campaign screen without a tab strip.
   expect(
     "campaign content top",
-    inCampaign.filter((r) => r.tabs === null).map((r) => r.mainTop),
+    inCampaign.filter((r) => r.tabs === null && fixedBar(r)).map((r) => r.mainTop),
   );
   for (const r of rows) {
     const at = `${width}: ${r.screen}`;
@@ -683,6 +710,8 @@ for (const width of widths) {
       findings.push(
         `${at}: campaign row's last item ends at ${r.campaignLastItem.right}, row at ${r.campaignRow.right}`,
       );
+    if (r.barOverlaps.length > 0)
+      findings.push(`${at}: header controls overlap: ${r.barOverlaps.join(", ")}`);
     if (r.primaries.length > 1)
       findings.push(`${at}: ${r.primaries.length} primaries (${r.primaries.join(", ")})`);
     if (r.sticky?.scrolls && (r.sticky.stackTopAfterScroll !== 0 || !r.sticky.chromeOnTop))
