@@ -93,6 +93,16 @@ export class SharedWorldHobStatus extends Schema.Class<SharedWorldHobStatus>(
 }) {}
 
 /**
+ * `HobStatus` for drafting a character with no campaign (`/me/hob`). It names
+ * nothing Hob knows, because on that surface it knows only the core rules,
+ * which is the same for everybody.
+ */
+export class HobDraftStatus extends Schema.Class<HobDraftStatus>("HobDraftStatus")({
+  available: Schema.Boolean,
+  model: Schema.NullOr(Schema.String),
+}) {}
+
+/**
  * Who said a line — the panel's own vocabulary, not the model provider's.
  *
  * `hob` rather than `assistant` because that is what `HobTurn` in `apps/web`
@@ -290,8 +300,9 @@ export type HobProposal = typeof HobProposal.Type;
 export class HobThread extends Schema.Class<HobThread>("HobThread")({
   id: AssistantThreadId,
   /**
-   * The thread's scope: a campaign's conversation or a Shared World's.
-   * Exactly one is set (`assistant_thread_one_scope`, `0031`).
+   * The thread's scope: a campaign's conversation or a Shared World's, or
+   * neither for a character drafted with no campaign, which belongs to its
+   * author alone (`assistant_thread_one_scope`, `0054`).
    */
   campaignId: Schema.NullOr(CampaignId),
   worldId: Schema.NullOr(SharedWorldId),
@@ -362,6 +373,18 @@ export const HobAsk = Schema.Struct({
   intent: Schema.optional(Schema.Literal("character")),
 });
 export type HobAsk = typeof HobAsk.Type;
+
+/**
+ * A question to the drafting surface with no campaign (`/me/hob/ask`).
+ *
+ * `HobAsk` without `intent`: this surface drafts a character and nothing else,
+ * so there is no second surface for the field to name.
+ */
+export const HobDraftAsk = Schema.Struct({
+  threadId: Schema.optional(AssistantThreadId),
+  text: turnText,
+});
+export type HobDraftAsk = typeof HobDraftAsk.Type;
 
 /**
  * The thread and the turn this answer is being written into, said first.

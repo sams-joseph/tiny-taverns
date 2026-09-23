@@ -170,8 +170,9 @@ export const draftFailureFor = (failure: ApiFailure): string => {
  *   bound to it server-side from the request path, so this is the whole of what
  *   the client says about scope — there is no campaign in a payload and none in
  *   a tool parameter, which is the grounding property the DM's Hob has and this
- *   one keeps unchanged. `null` is a character with no campaign: Hob's drafting
- *   thread is campaign-scoped, so nothing is asked and nothing can be.
+ *   one keeps unchanged. `null` is a character with no campaign: the same
+ *   surface over `/me/hob`, a thread of the reader's own account drafted
+ *   against the core rules.
  * @param enabled Whether to ask at all. The screen passes `false` until it knows
  *   the reader is a player at this table, so a status request is not made on a
  *   screen that is about to draw a refusal.
@@ -212,12 +213,15 @@ export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolea
    * refusal without a request, and everybody else pays one small `GET`.
    */
   useEffect(() => {
-    if (!enabled || campaignId === null) return;
+    if (!enabled) return;
     let live = true;
     void (async () => {
       const token = await credentialRef.current();
       const result = await runApiResult(
-        (client) => client.hob.status({ params: { campaignId } }),
+        (client) =>
+          campaignId === null
+            ? client.meHob.status()
+            : client.hob.status({ params: { campaignId } }),
         token,
       );
       if (!live) return;
@@ -245,7 +249,7 @@ export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolea
 
   const ask = useCallback(
     (text: string) => {
-      if (asking || text.trim() === "" || campaignId === null) return;
+      if (asking || text.trim() === "") return;
       setAsked(true);
       setAsking(true);
       setWriting(false);
@@ -299,23 +303,30 @@ export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolea
         const token = yield* Effect.promise(() => credentialRef.current());
         const client = yield* makeClient(token);
         const continuing = thread.current;
-        const stream = yield* client.hob.ask({
-          params: { campaignId },
-          // The key is *omitted* rather than sent as `undefined`: the derived
-          // client encodes an absent optional as `null` and `Schema.optional`
-          // refuses a null on the way back in, which is a 400 on the first
-          // question of every conversation.
-          //
-          // `intent` is what makes this surface work for the campaign's
-          // creator too: without it the server reads the CampaignCreatorActor
-          // proof as "the panel is asking" and answers with the nine-tool DM
-          // toolkit, which has no `proposeCharacter` — a draft that can never
-          // arrive, and a description filed into the campaign's shared thread.
-          payload:
-            continuing === undefined
-              ? { text, intent: "character" }
-              : { threadId: continuing, text, intent: "character" },
-        });
+        // The key is *omitted* rather than sent as `undefined`: the derived
+        // client encodes an absent optional as `null` and `Schema.optional`
+        // refuses a null on the way back in, which is a 400 on the first
+        // question of every conversation.
+        const stream =
+          campaignId === null
+            ? // No campaign: the account's own drafting surface, which drafts
+              // and does nothing else, so there is no `intent` to name.
+              yield* client.meHob.ask({
+                payload: continuing === undefined ? { text } : { threadId: continuing, text },
+              })
+            : yield* client.hob.ask({
+                params: { campaignId },
+                // `intent` is what makes this surface work for the campaign's
+                // creator too: without it the server reads the
+                // CampaignCreatorActor proof as "the panel is asking" and
+                // answers with the nine-tool DM toolkit, which has no
+                // `proposeCharacter` — a draft that can never arrive, and a
+                // description filed into the campaign's shared thread.
+                payload:
+                  continuing === undefined
+                    ? { text, intent: "character" }
+                    : { threadId: continuing, text, intent: "character" },
+              });
         yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
       }).pipe(
         Effect.provide(FetchHttpClient.layer),
@@ -349,13 +360,16 @@ export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolea
    */
   const keep = useCallback(async (): Promise<Result.Result<Character, string>> => {
     const threadId = thread.current;
-    if (campaignId === null || threadId === undefined || turnId === undefined) {
+    if (threadId === undefined || turnId === undefined) {
       return Result.fail("There is nothing to keep yet.");
     }
     setKeeping(true);
     const token = await credentialRef.current();
     const result = await runApiResult(
-      (client) => client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
+      (client) =>
+        campaignId === null
+          ? client.meHob.accept({ params: { threadId, turnId }, payload: {} })
+          : client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
       token,
     );
     setKeeping(false);

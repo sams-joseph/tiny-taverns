@@ -1,4 +1,5 @@
 import {
+  type AccountId,
   type Actor,
   type AssistantThreadId,
   type AssistantTurnId,
@@ -28,8 +29,9 @@ import {
 /**
  * The conversation with Hob, as rows.
  *
- * A thread is campaign-scoped like a note and a turn hangs off a thread like a
- * prep item hangs off a session, so **this repository writes no predicate of its
+ * A thread is scoped like a note (to a campaign, a Shared World, or for drafting
+ * with no campaign an account alone) and a turn hangs off a thread like a prep
+ * item hangs off a session, so **this repository writes no predicate of its
  * own** — it is `repo/visibility.ts`'s `conversationReachable` and the existing
  * `NestedTable` machinery, applied to two more tables. A campaign-scoped
  * credential cannot reach another table's conversations for exactly the reason
@@ -53,7 +55,8 @@ import {
  * `ensureCampaignReadable` — the campaign half of `withinReadableCampaign`, so
  * a thread started through it is reachable by its author afterwards by the same
  * clauses rather than by two rules kept in step. That is `Characters.createOwn`
- * verbatim, one table across.
+ * verbatim, one table across. An `"account"` thread (drafting with no campaign)
+ * has no gate, like `Characters.createCore`: it names nothing but its author.
  *
  * The one thing here that is not ordinary CRUD is that turn ids are **generated
  * in TypeScript** rather than by the column default. `Hob.ask` has to tell the
@@ -119,6 +122,12 @@ const titleFrom = (text: string): string => {
   return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 };
 
+/**
+ * What a thread is scoped to: the campaign for `"dm"`/`"own"`, the Shared
+ * World for `"sharedWorld"`, and the actor's own account for `"account"`.
+ */
+export type ConversationScope = CampaignId | SharedWorldId | AccountId;
+
 /** What `Hob.ask` appends. `id` is supplied so the client can be told it early. */
 export interface TurnDraft {
   readonly id: AssistantTurnId;
@@ -133,11 +142,11 @@ export class HobThreads extends Context.Service<
     /** Newest first — the panel resumes the one at the front. */
     readonly list: (
       reach: ConversationReach,
-      scopeId: CampaignId | SharedWorldId,
+      scopeId: ConversationScope,
     ) => Effect.Effect<ReadonlyArray<HobThread>, NotFound, CurrentActor>;
     readonly findById: (
       reach: ConversationReach,
-      scopeId: CampaignId | SharedWorldId,
+      scopeId: ConversationScope,
       id: AssistantThreadId,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /**
@@ -160,18 +169,18 @@ export class HobThreads extends Context.Service<
     /** Starts one, named after the question that started it. */
     readonly start: (
       reach: ConversationReach,
-      scopeId: CampaignId | SharedWorldId,
+      scopeId: ConversationScope,
       firstQuestion: string,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
     /** Oldest first: a conversation, read in the order it happened. */
     readonly turns: (
       reach: ConversationReach,
-      scopeId: CampaignId | SharedWorldId,
+      scopeId: ConversationScope,
       threadId: AssistantThreadId,
     ) => Effect.Effect<ReadonlyArray<HobTurn>, NotFound, CurrentActor>;
     readonly append: (
       reach: ConversationReach,
-      scopeId: CampaignId | SharedWorldId,
+      scopeId: ConversationScope,
       threadId: AssistantThreadId,
       draft: TurnDraft,
     ) => Effect.Effect<HobTurn, NotFound, CurrentActor>;
@@ -186,9 +195,13 @@ export class HobThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              yield* reach === "sharedWorld"
-                ? ensureGroupReadable(sql, scopeId as SharedWorldId, actor)
-                : ensureCampaignReadable(sql, scopeId as CampaignId, actor);
+              // An account's threads have no container to gate on: the
+              // predicate below answers them, and another account's are none.
+              if (reach === "sharedWorld") {
+                yield* ensureGroupReadable(sql, scopeId as SharedWorldId, actor);
+              } else if (reach !== "account") {
+                yield* ensureCampaignReadable(sql, scopeId as CampaignId, actor);
+              }
               const rows = yield* sql<ThreadRow>`
                 select assistant_thread.* from assistant_thread
                 where ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
@@ -242,21 +255,29 @@ export class HobThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              // Three gates for three scopes: the DM's thread needs the
-              // campaign writable, a player's needs it readable, and the
-              // group's needs a live group membership — the chronicle's own
-              // gate, because the group's conversation is the group's.
-              yield* reach === "sharedWorld"
-                ? ensureGroupReadable(sql, scopeId as SharedWorldId, actor)
-                : reach === "own"
-                  ? ensureCampaignReadable(sql, scopeId as CampaignId, actor)
-                  : ensureCampaignWritable(sql, scopeId as CampaignId, actor);
+              // Four gates for four scopes: the DM's thread needs the
+              // campaign writable, a player's needs it readable, the group's
+              // needs a live group membership — the chronicle's own gate,
+              // because the group's conversation is the group's — and an
+              // account's needs only to be the actor's own account.
+              if (reach === "account") {
+                if (scopeId !== actor.accountId) {
+                  return yield* new NotFound({ resource: "account", id: scopeId });
+                }
+              } else {
+                yield* reach === "sharedWorld"
+                  ? ensureGroupReadable(sql, scopeId as SharedWorldId, actor)
+                  : reach === "own"
+                    ? ensureCampaignReadable(sql, scopeId as CampaignId, actor)
+                    : ensureCampaignWritable(sql, scopeId as CampaignId, actor);
+              }
               const rows = yield* sql<ThreadRow>`
                 insert into assistant_thread ${sql.insert(
                   defined({
-                    campaign_id: reach === "sharedWorld" ? undefined : scopeId,
+                    campaign_id: reach === "dm" || reach === "own" ? scopeId : undefined,
                     group_id: reach === "sharedWorld" ? scopeId : undefined,
-                    account_id: reach === "own" ? actor.accountId : undefined,
+                    account_id:
+                      reach === "own" || reach === "account" ? actor.accountId : undefined,
                     title: titleFrom(firstQuestion),
                   }),
                 )}
@@ -355,7 +376,7 @@ export class HobThreads extends Context.Service<
 export const reserveHobTurn = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,
-  scopeId: CampaignId | SharedWorldId,
+  scopeId: ConversationScope,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
   actor: Actor,
@@ -377,7 +398,7 @@ export const reserveHobTurn = (
 export const lockTurnForAccept = (
   sql: SqlClient.SqlClient,
   reach: ConversationReach,
-  scopeId: CampaignId | SharedWorldId,
+  scopeId: ConversationScope,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
 ) =>

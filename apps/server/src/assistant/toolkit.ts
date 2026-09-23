@@ -346,15 +346,32 @@ const nameSchema = (names: ReadonlyArray<string>): Schema.Codec<string, string> 
  * used to appear twice — once as `Schema.Literals` and once as prose — and two
  * statements of one vocabulary is two things to forget to update.
  */
-const nameSentence = (noun: string, plural: string, names: ReadonlyArray<string>): string =>
+const nameSentence = (
+  rules: DraftRules,
+  noun: string,
+  plural: string,
+  names: ReadonlyArray<string>,
+): string =>
   names.length === 0
-    ? `This campaign has no ${plural} written down, so put whatever fits the ` +
-      `character in ${noun} and say so.`
+    ? `${rules === "campaign" ? "This campaign has" : "The core rules have"} no ${plural} ` +
+      `written down, so put whatever fits the character in ${noun} and say so.`
     : names.length > OPTION_ENUM_CAP
-      ? `Pick one ${noun} from this campaign's own list: call listOptions first ` +
-        `and copy a name back exactly as it came, spelling and all.`
+      ? `Pick one ${noun} from ${rules === "campaign" ? "this campaign's own list" : "the core rules"}: ` +
+        "call listOptions first and copy a name back exactly as it came, spelling and all."
       : `Pick one ${noun} from ${names.map(quoted).join(", ")} — spelled exactly ` +
         "like that, quotes aside.";
+
+/**
+ * Which rules a character is drafted against: a campaign's vocabulary
+ * (`usableInCampaign`, the player toolkit) or the core rules alone
+ * (`coreRulesUsable`, drafting with no campaign). It changes the words the
+ * model is shown and the reads behind them, never the shape of a tool.
+ */
+export type DraftRules = "campaign" | "core";
+
+/** Where the vocabulary came from, as the refusals say it. */
+const rulesPlace = (rules: DraftRules): string =>
+  rules === "campaign" ? "in this campaign" : "in the core rules";
 
 /**
  * The words a model writes when it means *nothing here*, for an endpoint that
@@ -989,14 +1006,14 @@ const skillsFrom = (names: ReadonlyArray<string>): ReadonlyArray<Skill> => {
  * background genuinely called "None", so the free-text optionals take the
  * permissive arm and the handler collapses a blank one.
  */
-export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
+export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: DraftRules) =>
   Tool.make("proposeCharacter", {
     description:
       "Offer the player a character sheet built from what they described. Give " +
       "them a name, then a race, a class and a background. " +
-      `${nameSentence("race", "race", vocabulary.race)} ` +
-      `${nameSentence("class", "classes", vocabulary.classes)} ` +
-      `${nameSentence("background", "backgrounds", vocabulary.backgrounds)} ` +
+      `${nameSentence(rules, "race", "race", vocabulary.race)} ` +
+      `${nameSentence(rules, "class", "classes", vocabulary.classes)} ` +
+      `${nameSentence(rules, "background", "backgrounds", vocabulary.backgrounds)} ` +
       "If the race has a subrace, put that subrace in subrace; put a class specialty " +
       "like circle of the moon in subclass. Rank the " +
       "six abilities most important first, name up to four skills, write a " +
@@ -1143,6 +1160,19 @@ export const ListOptions = Tool.make("listOptions", {
   failureMode: "return",
 });
 
+/**
+ * {@link ListOptions} for drafting with no campaign: the same line, said about
+ * the core rules, which is all there is to read out on that surface.
+ */
+export const CoreListOptions = Tool.make("listOptions", {
+  description:
+    "Every class, race and background in the core rules a character can be built from. " +
+    "Use it before proposeCharacter, and copy a `name` back exactly as it came.",
+  success: Schema.Array(OptionLine),
+  failure: NotFound,
+  failureMode: "return",
+});
+
 const StartingSpellLine = Schema.Struct({
   spellId: SpellId,
   name: Schema.String,
@@ -1154,25 +1184,41 @@ const StartingSpellLine = Schema.Struct({
   note: Schema.String,
 });
 
+const startingSpellsParameters = Schema.Struct({
+  className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
+  subclass: optionalText(80),
+});
+
+const startingSpellsSuccess = Schema.Struct({
+  mode: Schema.Literals(["none", "known", "prepared", "spellbook"]),
+  limits: Schema.Struct({
+    cantripsKnown: Schema.optional(Schema.Int),
+    spellsKnown: Schema.optional(Schema.Int),
+    prepared: Schema.optional(Schema.Int),
+  }),
+  spells: Schema.Array(StartingSpellLine),
+});
+
 export const ListStartingSpells = Tool.make("listStartingSpells", {
   description:
     "List the cantrips and 1st-level spells this proposed level-1 class can start with, " +
     "using the same campaign-visible spell list as the sheet picker. Call this before " +
     "proposeCharacter for a caster, then copy spellId values into cantrips, spells and " +
     "preparedSpells. The campaign is already chosen by the request; do not invent spell ids.",
-  parameters: Schema.Struct({
-    className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
-    subclass: optionalText(80),
-  }),
-  success: Schema.Struct({
-    mode: Schema.Literals(["none", "known", "prepared", "spellbook"]),
-    limits: Schema.Struct({
-      cantripsKnown: Schema.optional(Schema.Int),
-      spellsKnown: Schema.optional(Schema.Int),
-      prepared: Schema.optional(Schema.Int),
-    }),
-    spells: Schema.Array(StartingSpellLine),
-  }),
+  parameters: startingSpellsParameters,
+  success: startingSpellsSuccess,
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/** {@link ListStartingSpells} over the core rules' spells, for drafting with no campaign. */
+export const CoreListStartingSpells = Tool.make("listStartingSpells", {
+  description:
+    "List the cantrips and 1st-level spells this proposed level-1 class can start with " +
+    "in the core rules. Call this before proposeCharacter for a caster, then copy spellId " +
+    "values into cantrips, spells and preparedSpells. Do not invent spell ids.",
+  parameters: startingSpellsParameters,
+  success: startingSpellsSuccess,
   failure: NotFound,
   failureMode: "return",
 });
@@ -1335,11 +1381,33 @@ export const SharedWorldToolkit = Toolkit.make(
  * other reason would fragment prompt caching for no gain.
  */
 export const playerToolkitOver = (vocabulary: CharacterVocabulary) =>
-  Toolkit.make(SearchCampaign, ListStartingSpells, proposeCharacterOver(vocabulary));
+  Toolkit.make(SearchCampaign, ListStartingSpells, proposeCharacterOver(vocabulary, "campaign"));
 
 /** {@link playerToolkitOver} above the cap: the same three, plus the listing. */
 export const playerToolkitListing = (vocabulary: CharacterVocabulary) =>
-  Toolkit.make(SearchCampaign, ListOptions, ListStartingSpells, proposeCharacterOver(vocabulary));
+  Toolkit.make(
+    SearchCampaign,
+    ListOptions,
+    ListStartingSpells,
+    proposeCharacterOver(vocabulary, "campaign"),
+  );
+
+/**
+ * **The drafting toolkit with no campaign** — the player's, over the core
+ * rules, minus `searchCampaign`.
+ *
+ * There is no campaign record to search and no Shared World to read, so the
+ * toolkit holds nothing that reads one: `listStartingSpells` over
+ * `Spells.forDraft(null, …)` and `proposeCharacter` over `Options.core`, both
+ * `coreRulesUsable`, the same predicate the create form's core pickers read.
+ * A tool that could reach a campaign is absent, not refused.
+ */
+export const coreToolkitOver = (vocabulary: CharacterVocabulary) =>
+  Toolkit.make(CoreListStartingSpells, proposeCharacterOver(vocabulary, "core"));
+
+/** {@link coreToolkitOver} above the cap: the same two, plus the listing. */
+export const coreToolkitListing = (vocabulary: CharacterVocabulary) =>
+  Toolkit.make(CoreListOptions, CoreListStartingSpells, proposeCharacterOver(vocabulary, "core"));
 
 /** The repositories a DM Hob tool call may reach — read-only, except the conditional direct counter writer. */
 export interface HobRepositories {
@@ -1848,6 +1916,14 @@ export const groupHandlersFor = (
  */
 type CharacterDraft = Tool.Parameters<ReturnType<typeof proposeCharacterOver>>;
 
+/** What a drafted character's spells are read against, closed over by its caller. */
+type SpellsForDraft = (draft: {
+  readonly className?: string | undefined;
+  readonly subclassName?: string | undefined;
+  readonly level: number;
+  readonly sheet: CharacterSheet;
+}) => Effect.Effect<CharacterSpellRules, NotFound, CurrentActor>;
+
 /**
  * The numbers `seedFor` reads, out of a row `optionNamed` returned.
  *
@@ -1905,16 +1981,16 @@ const raceChoiceBonuses = (
  * empty-query refusal: a `Conflict` naming the tool that answers what the model
  * was reaching for, charged to the round budget like any other.
  */
-const notInVocabulary = (kind: OptionKind, label: string) =>
+const notInVocabulary = (rules: DraftRules, kind: OptionKind, label: string) =>
   new Conflict({
     message:
-      `"${label}" is not a ${kind} in this campaign. Call listOptions and copy a ` +
+      `"${label}" is not a ${kind} ${rulesPlace(rules)}. Call listOptions and copy a ` +
       "name back exactly as it comes, spelling and all.",
   });
 
-const notASubrace = (race: string, subrace: string) =>
+const notASubrace = (rules: DraftRules, race: string, subrace: string) =>
   new Conflict({
-    message: `"${subrace}" is not a subrace of "${race}" in this campaign. Pick one contained by that race or leave subrace blank.`,
+    message: `"${subrace}" is not a subrace of "${race}" ${rulesPlace(rules)}. Pick one contained by that race or leave subrace blank.`,
   });
 
 const unavailableSpell = (spellId: SpellId) =>
@@ -2027,12 +2103,50 @@ export const playerHandlersFor = (
   campaignId: CampaignId,
   proposal: ProposalSlot,
   vocabulary: CharacterVocabulary,
+) => ({
+  searchCampaign: searchWith(repositories, campaignId, bind(actor, proposal).as),
+  ...draftingHandlersFor(repositories, actor, proposal, vocabulary, "campaign", (draft) =>
+    repositories.spells.forDraft(campaignId, draft),
+  ),
+});
+
+/**
+ * {@link playerHandlersFor} with no campaign: the drafting half alone, over
+ * the core rules. `Hob.askDraft` reads the vocabulary through `Options.core`,
+ * and the spells come from `Spells.forDraft(null, …)` (`vocabularyAt` with no table), so nothing here can name a
+ * campaign or a Shared World.
+ */
+export const coreHandlersFor = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+) =>
+  draftingHandlersFor(repositories, actor, proposal, vocabulary, "core", (draft) =>
+    repositories.spells.forDraft(null, draft),
+  );
+
+/** What the drafting half reads: the spells and the bundled kit names. */
+export type DraftingRepositories = Pick<HobRepositories, "spells" | "equipment">;
+
+/**
+ * The three drafting handlers both character surfaces share: `listOptions`,
+ * `listStartingSpells` and `proposeCharacter`. One implementation, so a
+ * character drafted at a table and one drafted with no campaign are composed
+ * by the same code over a different vocabulary and spell list (`rules`,
+ * `spellsFor`).
+ */
+const draftingHandlersFor = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+  rules: DraftRules,
+  spellsFor: SpellsForDraft,
 ) => {
   const { as, offer } = bind(actor, proposal);
 
   return {
-    searchCampaign: searchWith(repositories, campaignId, as),
-
     listOptions: () =>
       Effect.succeed(
         vocabulary.options.map((option) => ({
@@ -2047,7 +2161,7 @@ export const playerHandlersFor = (
     listStartingSpells: ({ className, subclass }: Tool.Parameters<typeof ListStartingSpells>) =>
       Effect.map(
         as(
-          repositories.spells.forDraft(campaignId, {
+          spellsFor({
             className,
             subclassName: blank(subclass),
             level: 1,
@@ -2107,10 +2221,10 @@ export const playerHandlersFor = (
       const subraceOption = subraceEntryOf(raceOption, namedSubrace);
 
       if (vocabulary.listed && classOption === undefined) {
-        return Effect.fail(notInVocabulary("class", className));
+        return Effect.fail(notInVocabulary(rules, "class", className));
       }
       if (vocabulary.listed && raceOption === undefined) {
-        return Effect.fail(notInVocabulary("race", race));
+        return Effect.fail(notInVocabulary(rules, "race", race));
       }
       // Only when the campaign has some. A table with no backgrounds written
       // down gets free text from `nameSchema` and there is no list to be
@@ -2120,10 +2234,10 @@ export const playerHandlersFor = (
         vocabulary.backgrounds.length > 0 &&
         backgroundOption === undefined
       ) {
-        return Effect.fail(notInVocabulary("background", background));
+        return Effect.fail(notInVocabulary(rules, "background", background));
       }
       if (namedSubrace !== undefined && raceOption !== undefined && subraceOption === undefined) {
-        return Effect.fail(notASubrace(raceOption.name, namedSubrace));
+        return Effect.fail(notASubrace(rules, raceOption.name, namedSubrace));
       }
 
       /**
@@ -2231,7 +2345,7 @@ export const playerHandlersFor = (
         };
 
         const spellBook = yield* as(
-          repositories.spells.forDraft(campaignId, {
+          spellsFor({
             className: classOption?.name ?? className,
             subclassName: blank(subclass),
             level: seed.level,
@@ -2307,6 +2421,38 @@ export const playerBindOver = (
     toolkit.toHandlers(
       toolkit.of(playerHandlersFor(repositories, actor, campaignId, proposal, vocabulary)),
     ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/**
+ * {@link playerBindOver} with no campaign: the core toolkit, bound to
+ * {@link coreHandlersFor}. `listOptions` is in the handlers either way and has
+ * a tool to answer only above the cap, exactly as on the player side.
+ */
+export const coreBindOver = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+) => {
+  const toolkit = coreToolkitOver(vocabulary);
+  return Effect.flatMap(
+    toolkit.toHandlers(toolkit.of(coreHandlersFor(repositories, actor, proposal, vocabulary))),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/** {@link coreBindOver} above {@link OPTION_ENUM_CAP}. */
+export const coreBindListing = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+) => {
+  const toolkit = coreToolkitListing(vocabulary);
+  return Effect.flatMap(
+    toolkit.toHandlers(toolkit.of(coreHandlersFor(repositories, actor, proposal, vocabulary))),
     (bound) => Effect.provideContext(toolkit, bound),
   );
 };

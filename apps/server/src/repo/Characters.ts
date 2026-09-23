@@ -478,11 +478,16 @@ export class Characters extends Context.Service<
     ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
      * The same insert with no campaign: the core rules (`coreRulesUsable`) are
-     * the vocabulary and there is no gate, because nothing is named. No `from`:
-     * Hob's drafting thread is campaign-scoped, so only the form reaches this.
+     * the vocabulary and there is no gate, because nothing is named.
      */
     readonly createCore: (
       payload: CharacterOwnCreate,
+      /**
+       * The turn that drafted them, when the owner accepted a proposal from
+       * their own account-scoped thread. `repo/Proposals.ts` is the only
+       * caller that passes it.
+       */
+      from?: AssistantOrigin,
     ) => Effect.Effect<Character, Conflict, CurrentActor>;
     /**
      * The owner's PATCH over the shared sheet. `expectedVersion`, when sent,
@@ -839,12 +844,12 @@ export class Characters extends Context.Service<
           ),
 
         // No gate: the caller named nothing but themselves.
-        createCore: (payload) =>
+        createCore: (payload, from) =>
           insertOwn(
             () => Effect.void,
             () => coreRulesUsable(sql, "character_option"),
             payload,
-            undefined,
+            from,
           ),
 
         updateOwn: (id, patch) =>

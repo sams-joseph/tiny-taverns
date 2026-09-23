@@ -1,6 +1,6 @@
 # Hob, the assistant
 
-This page covers the server side of Hob (`apps/server/src/assistant/`), the conversation and accept repositories behind it, the three toolkits, configuration, how to diagnose a model that "never calls a tool", and the NPC agent that shares Hob's loop and model. The panel's layout is in [Web screens](web-screens.md); the predicates Hob composes are in [Visibility](visibility.md).
+This page covers the server side of Hob (`apps/server/src/assistant/`), the conversation and accept repositories behind it, the four toolkits, configuration, how to diagnose a model that "never calls a tool", and the NPC agent that shares Hob's loop and model. The panel's layout is in [Web screens](web-screens.md); the predicates Hob composes are in [Visibility](visibility.md).
 
 ## Tools, not a context blob
 
@@ -16,7 +16,7 @@ A `sql` template or an `"effect/unstable/sql"` import anywhere under `src/assist
 
 `LanguageModel.streamText` at the pinned Effect beta is one round trip: it resolves the tool calls a step asked for, emits their results, and stops without sending them back. `round()` in `Hob.ts` supplies the loop through `Chat.fromPrompt`, capped at `MAX_ROUNDS` (4). `hob.test.ts` pins the second request.
 
-The wire is `POST /campaigns/:c/hob/ask` as an SSE stream of `HobEvent` (`began`, `delta`, `tool`, `proposal`, `done`, `failed`; `packages/api/src/Hob.ts`). Three ordering rules matter:
+The wire is `POST /campaigns/:c/hob/ask` (and `/worlds/:w/hob/ask`, `/me/hob/ask`) as an SSE stream of `HobEvent` (`began`, `delta`, `tool`, `proposal`, `done`, `failed`; `packages/api/src/Hob.ts`). Three ordering rules matter:
 
 - `began` goes first, before the model is called, carrying the thread id and the turn id the answer will be saved as. Turn ids are minted in TypeScript (`HobThreads`), so a dropped connection cannot lose the thread the question was filed to.
 - `done` is emitted exactly once, at the end, by `ask`; a round never emits it. An answer that said `failed` gets no `done`.
@@ -30,25 +30,28 @@ A `propose*` tool writes nothing. It stashes the draft in a `Ref` that becomes `
 
 `repo/Proposals.ts` (with its NPC counterpart, `repo/NpcProposals.ts`) is the only path that turns a proposal into a content row, and no create payload carries `origin`. Accept takes no content payload: the row is materialised from the `proposal` column the server wrote. If accept took prose, any client could post its own and have it recorded as the assistant's. It writes through the ordinary `create` methods with one extra `AssistantOrigin` argument (`repo/rows.ts`).
 
-One transaction, turn locked `for update` first: a double-tapped save is one row and one `Conflict`; a turn that proposed nothing is `NotFound` about the proposal. `materialise` has six targets: `note`, `beat` (session resolved at accept time; none is a `Conflict`), `encounter` with its roster, `character` (through `Characters.createOwn`, owned by the accepting credential), and the two Shared World kinds behind `acceptSharedWorld`. Which target a caller can reach is decided by the thread's reach, not a check here: a `character` proposal exists only in a player-reach thread, so a campaign thread can never accept one. Accepted rows take the column default for `visibility`. Discard is not built and not faked; `hob-proposals.test.ts` counts the content tables either side of a proposal.
+One transaction, turn locked `for update` first: a double-tapped save is one row and one `Conflict`; a turn that proposed nothing is `NotFound` about the proposal. `materialise` has six targets: `note`, `beat` (session resolved at accept time; none is a `Conflict`), `encounter` with its roster, `character` (through `Characters.createOwn`, owned by the accepting credential), and the two Shared World kinds behind `acceptSharedWorld`. `acceptDraft` is the account-scoped accept: a `character` through `Characters.createCore`, and nothing else. Which target a caller can reach is decided by the thread's reach, not a check here: a `character` proposal exists only in a player-reach or account thread, so a campaign's own thread can never accept one. Accepted rows take the column default for `visibility`. Discard is not built and not faked; `hob-proposals.test.ts` counts the content tables either side of a proposal.
 
 ## Threads and reach
 
-`assistant_thread` has two scopes (campaign XOR group) and a nullable `account_id`: null is the campaign's own conversation, a uuid is one account's. `conversationReachable` in `repo/visibility.ts` is a three-way partition: `"dm"` (`rowWritable` plus `account_id is null`), `"own"` (`ownRowWritable`, which never matches a null), `"sharedWorld"` (`group_id` pinned, `account_id is null`, `groupReadable`). Disjointness is what keeps a player out of prep and a creator's panel from resuming a player's thread, without a check anywhere.
+`assistant_thread` has three scopes (`assistant_thread_one_scope`, `0054`): a campaign's, a Shared World's (never owned), or an account's alone (no campaign, no world, `account_id` set). On a campaign thread `account_id` null is the campaign's own conversation and a uuid is one account's. `conversationReachable` in `repo/visibility.ts` is a four-way partition: `"dm"` (`rowWritable` plus `account_id is null`), `"own"` (`ownRowWritable`, which never matches a null), `"sharedWorld"` (`group_id` pinned, `account_id is null`, `groupReadable`), `"account"` (both scopes null and `account_id` the actor's, with no credential scope, on `ownCharacter`'s argument). Disjointness is what keeps a player out of prep, a creator's panel from resuming a player's thread, and a drafting thread with no campaign out of every campaign and world path, without a check anywhere.
 
 Two decisions there are easy to undo. It is one fragment for reading and writing, spelled with the writable halves, because a conversation has no middle state the way a `shared` note does. And `conversationTurnReachable` does not apply the turn's own `visibility`: the column defaults to `dm` and nothing writes it, so applying it would hide a player's conversation from its author.
 
 `HobThreads` takes a `reach` argument rather than twin methods. A creator holds threads in both campaign sets, so operations naming a thread read the reach off the row (`HobThreads.reachOf`) rather than deriving it from the creator proof; `threads.list` stays proof-derived because listing genuinely is "which set does the panel show".
 
-## Three toolkits, because a toolkit is what the model is shown
+## Four toolkits, because a toolkit is what the model is shown
 
-A tool bound to a handler that always refuses is still a tool the model spends a round reaching for. So `toolkit.ts` has three toolkits, not one narrowed at the handler:
+A tool bound to a handler that always refuses is still a tool the model spends a round reaching for. So `toolkit.ts` has four toolkits, not one narrowed at the handler:
 
 - `HobToolkit` (campaign creator): the campaign reads plus `getNpc`, the two read-only Shared World tools, `proposeNpcAwareness`, and `proposeNote` / `proposeBeat` / `proposeEncounter`.
 - `SharedWorldToolkit`: history search, summary, Story So Far sources, the world's campaigns, played nights, `nightStory`, and `proposeSharedWorldEntry` / `proposeStorySoFar`. It knows every canonical played event across the world and nothing unplayed. `hob-group.test.ts` plants sentinels in notes, planned encounters, prep lines and draft threads and asserts zero occurrences in any captured request.
 - The player's, built per request: `searchCampaign` (bound to the asking actor, so `rowReadable` narrows it), `listStartingSpells`, and `proposeCharacter`.
+- The core drafting toolkit (`coreToolkitOver`, `/me/hob`): the player's without `searchCampaign`, over the core rules (`Options.core`, `Spells.forDraft(null, …)`, both `coreRulesUsable`). It has no campaign or Shared World tool to reach with, and `Hob.askDraft` holds no campaign repository. `hob-draft.test.ts` checks the tool list, the vocabulary and that a creator's campaign reaches no request byte.
 
-`HobAsk.intent` selects the surface. `intent: "character"` picks the drafting toolkit and a thread of the asker's own for creator and player alike; absent, a creator gets the campaign toolkit. The proof alone cannot tell the two apart (`hob-character.test.ts`, "the creator drafts too").
+`playerHandlersFor` and `coreHandlersFor` share one `draftingHandlersFor`, so the two drafting surfaces compose a character with the same code over a different vocabulary and spell list.
+
+At a campaign, `HobAsk.intent` selects the surface. `intent: "character"` picks the drafting toolkit and a thread of the asker's own for creator and player alike; absent, a creator gets the campaign toolkit. The proof alone cannot tell the two apart (`hob-character.test.ts`, "the creator drafts too").
 
 ### The player's toolkit is built per request
 
@@ -66,7 +69,7 @@ The redraft loop is `promptFor`'s `offered()`: a saved `turn.proposal` is render
 
 ### Pictures are not a tool
 
-Hob "draws" a character's portrait, a campaign's or a Shared World's cover and an NPC's portrait, but no toolkit carries a drawing tool, in any of the four. A tool is called at the model's discretion, and an image costs money and up to two minutes inside a four-round stream; a local text model cannot make images at all. The draw is the server's own job after a create commits ([Images](images.md)). Hob's part is the `appearance` line `proposeCharacter` writes, which the portrait prompt reads.
+Hob "draws" a character's portrait, a campaign's or a Shared World's cover and an NPC's portrait, but no toolkit carries a drawing tool, Hob's or the NPC agent's. A tool is called at the model's discretion, and an image costs money and up to two minutes inside a four-round stream; a local text model cannot make images at all. The draw is the server's own job after a create commits ([Images](images.md)). Hob's part is the `appearance` line `proposeCharacter` writes, which the portrait prompt reads.
 
 ### Direct resource spends
 

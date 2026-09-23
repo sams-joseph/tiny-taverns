@@ -43,11 +43,14 @@ export function DraftCard({
   onKeep,
   onRewrite,
   keeping,
+  spellsFrom,
 }: {
   readonly draft: CharacterProposal;
   readonly onKeep: () => void;
   readonly onRewrite: () => void;
   readonly keeping: boolean;
+  /** Whose spell list the starting spells came from: a table's, or the core rules'. */
+  readonly spellsFrom: "table" | "core";
 }) {
   const sheet = draft.sheet;
   const line = lineageLine(draft);
@@ -136,7 +139,14 @@ export function DraftCard({
       )}
 
       {spells.length > 0 && (
-        <SheetSection title="Starting spells" aside="Picked from this table's spell list">
+        <SheetSection
+          title="Starting spells"
+          aside={
+            spellsFrom === "core"
+              ? "Picked from the core rules' spell list"
+              : "Picked from this table's spell list"
+          }
+        >
           <div className="flex flex-wrap gap-1.5">
             {spells.map((spell) => (
               <Badge

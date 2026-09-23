@@ -93,10 +93,11 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * By the captain's decision of 2026-09-23 an account needs no table to make a
  * character: `#/characters/new` is the same screen with the core rules
  * (`coreOptionsAtom`) as the vocabulary and `POST /me/characters` as the
- * write. It has no membership to check and **no Hob**: the drafting thread is
- * campaign-scoped (`assistant_thread` belongs to a campaign or a Shared
- * World), so the describe stage would be a control that cannot answer, and the
- * screen opens on the form instead.
+ * write. It has no membership to check. Hob drafts here too, over `/me/hob`: a
+ * thread of the reader's own account and a toolkit built over the core rules.
+ * With no model behind Hob the describe stage would be a control that cannot
+ * answer, so the screen asks first and opens on the form, with no way back to
+ * a composer that is not there.
  *
  * ### What is deliberately not on it
  *
@@ -157,7 +158,7 @@ export function CharacterCreateScreen() {
   return <CharacterCreate campaignId={campaignId} />;
 }
 
-/** The same screen with no campaign: the core rules, and no Hob. */
+/** The same screen with no campaign: the core rules, and Hob when it is on. */
 export function CoreCharacterCreateScreen() {
   return <CharacterCreate campaignId={null} />;
 }
@@ -318,12 +319,21 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
    * time in five. One press, no state lost, and the form is the thing that was
    * always going to work.
    */
-  const [stage, setStage] = useState<"describe" | "form">(
-    campaignId === null ? "form" : "describe",
+  const [chosen, setStage] = useState<"describe" | "form" | undefined>(
+    campaignId === null ? undefined : "describe",
   );
   const [prose, setProse] = useState("");
   const [kept, setKept] = useState<string | undefined>(undefined);
   const hob = useCharacterDraft(campaignId, writable);
+  /**
+   * With no campaign the first stage waits on Hob's status: the describe stage
+   * when a model is behind it, the form when not. At a table it is always the
+   * describe stage, which says itself when Hob cannot answer.
+   */
+  const stage = chosen ?? (hob.available === true ? "describe" : "form");
+  const deciding = chosen === undefined && hob.available === undefined;
+  /** Whether *Have Hob draft it instead* leads anywhere. */
+  const hobOffered = campaignId !== null || hob.available === true;
   const invalidate = useInvalidate();
 
   const keep = async () => {
@@ -387,7 +397,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
           Cancel
         </Button>
       </TopBar>
-      {resource.state === "loading" && (
+      {(resource.state === "loading" || (resource.state === "ready" && deciding)) && (
         <Loading label={campaignId === null ? "Reading the rules…" : "Reading your tables…"} />
       )}
       {resource.state === "failed" && (
@@ -397,6 +407,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
       )}
 
       {view !== undefined &&
+        !deciding &&
         (!writable ? (
           // The read this screen already makes is what answers it, so the form
           // is never drawn over a table the save would refuse. `GET
@@ -426,6 +437,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
               <div className="min-w-0 flex-1">
                 <DraftCard
                   draft={hob.draft}
+                  spellsFrom={campaignId === null ? "core" : "table"}
                   keeping={hob.keeping}
                   onKeep={() => void keep()}
                   onRewrite={() => setStage("describe")}
@@ -570,8 +582,9 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
                 the only thing to say is that the other fork is still there. It
                 keeps whatever was typed on both sides — `prose` and `draft` are
                 separate pieces of state, so neither press loses the other.
-                With no campaign there is no other fork, so nothing is said. */}
-            {campaignId !== null && (
+                With no model behind Hob there is no other fork, so nothing is
+                said. */}
+            {hobOffered && (
               <p className="flex flex-wrap items-center gap-2 text-caption leading-body text-muted-foreground">
                 Filling it in yourself.
                 <Button variant="ghost" size="sm" onClick={() => setStage("describe")}>

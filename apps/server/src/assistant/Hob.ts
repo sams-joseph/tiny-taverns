@@ -1,4 +1,5 @@
 import {
+  type AssistantThreadId,
   type AssistantTurnId,
   type Campaign,
   type CampaignId,
@@ -9,6 +10,8 @@ import {
   HobBegun,
   HobDelta,
   HobDone,
+  type HobDraftAsk,
+  HobDraftStatus,
   type HobEvent,
   HobFailure,
   type HobProposal,
@@ -36,7 +39,7 @@ import { Creatures } from "../repo/Creatures.js";
 import { CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { EquipmentRepo } from "../repo/Equipment.js";
 import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
-import { HobThreads } from "../repo/HobThreads.js";
+import { HobThreads, type TurnDraft } from "../repo/HobThreads.js";
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
@@ -50,6 +53,8 @@ import { Spells } from "../repo/Spells.js";
 import {
   type AwarenessSlot,
   type CharacterVocabulary,
+  coreBindListing,
+  coreBindOver,
   dmBindWithDirect,
   dmHandlersFor,
   groupHandlersFor,
@@ -143,6 +148,17 @@ export class Hob extends Context.Service<
       groupId: SharedWorldId,
       ask: HobAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
+    /** `status`, for drafting a character with no campaign. Names nothing. */
+    readonly draftStatus: Effect.Effect<HobDraftStatus, never, CurrentActor>;
+    /**
+     * Drafting a character with no campaign — `ask`'s protocol over the core
+     * drafting toolkit (`coreBindOver`) and a thread of the asker's own
+     * account (`"account"` reach). A thread id that is not theirs is a
+     * `NotFound` before a byte of stream.
+     */
+    readonly askDraft: (
+      ask: HobDraftAsk,
+    ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
   }
 >()("Hob") {
   /**
@@ -183,6 +199,10 @@ export class Hob extends Context.Service<
               }),
           ),
         askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
+        // Nothing to resolve first: the path names no campaign and no world,
+        // so there is nothing a denial here could disclose.
+        draftStatus: Effect.succeed(new HobDraftStatus({ available: false, model: null })),
+        askDraft: () => Effect.fail(off),
       };
     }),
   );
@@ -598,9 +618,9 @@ export class Hob extends Context.Service<
            * repository at all**. Its toolkit reaches the chronicle, the
            * summary, the directory and the canonical timeline, and nothing
            * else exists to leak. The streaming machinery (`conversation`,
-           * `note`, the tail's ordering rules) is the shared code; what is
-           * duplicated is the assembly, and `hob-group.test.ts` measures the
-           * result at the wire.
+           * `note`, and `deliver`'s ordering rules) is the shared code; what
+           * is duplicated is the assembly, and `hob-group.test.ts` measures
+           * the result at the wire.
            */
           askSharedWorld: (groupId, ask) =>
             Effect.gen(function* () {
@@ -623,9 +643,6 @@ export class Hob extends Context.Service<
               });
 
               const answerId = yield* freshTurnId;
-              const written = yield* Ref.make("");
-              const broke = yield* Ref.make(false);
-              const reachedForOne = yield* Ref.make(false);
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
               const summaryCoverage = yield* Ref.make<number | undefined>(undefined);
               const finished = yield* Ref.make("stop");
@@ -654,79 +671,211 @@ export class Hob extends Context.Service<
                 { proposal },
               );
 
-              const save = Effect.gen(function* () {
-                const text = yield* Ref.get(written);
-                const offered = yield* Ref.get(proposal);
-                if (text === "" && offered === undefined) return;
-                yield* threads.append("sharedWorld", groupId, thread.id, {
-                  id: answerId,
-                  who: "hob",
-                  text,
-                  proposal: offered,
-                });
-              }).pipe(Effect.provideService(CurrentActor, actor), Effect.ignore);
+              // General chat, so the DM's build-report gates: silence is the
+              // default and only an explicit build ask earns the "built
+              // nothing" sentence.
+              return yield* deliver({
+                threadId: thread.id,
+                answerId,
+                answering,
+                proposal,
+                finished,
+                asked: ask.text,
+                surface: "dm",
+                save: (turn) =>
+                  threads
+                    .append("sharedWorld", groupId, thread.id, turn)
+                    .pipe(Effect.provideService(CurrentActor, actor)),
+                languageModel,
+                failing: "Hob's Shared World answer failed",
+              });
+            }),
 
-              // `ask`'s tail, with the DM's build-report gates: group chat is
-              // general chat, so silence is the default and only an explicit
-              // build ask earns the "built nothing" sentence.
-              const tail = Stream.unwrap(
-                Effect.map(
-                  Effect.all([
-                    Ref.get(proposal),
-                    Ref.get(finished),
-                    Ref.get(broke),
-                    Ref.get(written),
-                    Ref.get(reachedForOne),
-                  ]),
-                  ([offered, reason, failed, text, reached]) =>
-                    Stream.fromIterable<HobEvent>([
-                      ...(offered === undefined
-                        ? []
-                        : [
-                            {
-                              event: "proposal" as const,
-                              data: new HobProposed({ turnId: answerId, proposal: offered }),
-                            },
-                          ]),
-                      ...(failed
-                        ? []
-                        : text === "" && offered === undefined
-                          ? [silence]
-                          : offered === undefined && !reached && wouldNotBuild("dm", ask.text, text)
-                            ? [unbuilt("dm")]
-                            : [{ event: "done" as const, data: new HobDone({ reason }) }]),
-                    ]),
-                ),
-              );
+          draftStatus: Effect.succeed(
+            new HobDraftStatus({ available: true, model: options.model }),
+          ),
 
-              return Stream.fromIterable<HobEvent>([
-                {
-                  event: "began",
-                  data: new HobBegun({ threadId: thread.id, turnId: answerId }),
-                },
-              ]).pipe(
-                Stream.concat(
-                  answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
-                ),
-                Stream.concat(tail),
-                Stream.provideService(LanguageModel.LanguageModel, languageModel),
-                Stream.catchCause((cause) =>
-                  Stream.unwrap(
-                    Effect.as(
-                      Effect.logWarning(
-                        `Hob's Shared World answer failed: ${describe(Cause.squash(cause))}`,
-                      ),
-                      Stream.succeed(failure(apology(Cause.squash(cause)))),
-                    ),
-                  ),
-                ),
-                Stream.ensuring(save),
-              );
+          /**
+           * Drafting with no campaign — the player's drafting surface over the
+           * core rules, in a thread that belongs to the asker's account alone.
+           *
+           * A parallel assembly for `askSharedWorld`'s reason: this surface
+           * holds **no campaign and no Shared World repository**. The
+           * vocabulary is `Options.core` and the spells `Spells.forDraft(null, …)`,
+           * both `coreRulesUsable`, and the toolkit (`coreBindOver`) has no
+           * search to reach anything else with.
+           */
+          askDraft: (ask) =>
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const account = actor.accountId;
+
+              // Resolved before a byte of stream, so a thread id that is not
+              // this account's is a 404 and the model is never called.
+              const thread =
+                ask.threadId === undefined
+                  ? yield* threads.start("account", account, ask.text)
+                  : yield* threads.findById("account", account, ask.threadId);
+              const history = yield* threads.turns("account", account, thread.id);
+
+              yield* threads.append("account", account, thread.id, {
+                id: yield* freshTurnId,
+                who: "user",
+                text: ask.text,
+              });
+
+              const answerId = yield* freshTurnId;
+              const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
+              const finished = yield* Ref.make("stop");
+
+              // Read here, while `CurrentActor` is ambient, for the reason the
+              // campaign vocabulary is: it decides the shape of a tool.
+              const vocabulary = vocabularyOf(yield* repositories.options.core({}));
+              const drafting = {
+                spells: repositories.spells,
+                equipment: repositories.equipment,
+              };
+              const system = corePrompt();
+              const answering: Stream.Stream<
+                HobEvent,
+                AiError.AiError | Schema.SchemaError,
+                LanguageModel.LanguageModel
+              > = vocabulary.listed
+                ? conversation(
+                    coreBindListing(drafting, actor, proposal, vocabulary),
+                    system,
+                    history,
+                    ask,
+                    finished,
+                    { proposal },
+                  )
+                : conversation(
+                    coreBindOver(drafting, actor, proposal, vocabulary),
+                    system,
+                    history,
+                    ask,
+                    finished,
+                    { proposal },
+                  );
+
+              // The player's drafting gates: a draft is wanted unless this
+              // was a question about the one on screen.
+              return yield* deliver({
+                threadId: thread.id,
+                answerId,
+                answering,
+                proposal,
+                finished,
+                asked: ask.text,
+                surface: "own",
+                save: (turn) =>
+                  threads
+                    .append("account", account, thread.id, turn)
+                    .pipe(Effect.provideService(CurrentActor, actor)),
+                languageModel,
+                failing: "Hob's draft with no campaign failed",
+              });
             }),
         };
       }),
     );
 }
+
+/**
+ * The answer as it reaches the wire, for the two surfaces that bind one
+ * toolkit and save one kind of turn: the Shared World's and drafting with no
+ * campaign. `ask` keeps its own because it also carries NPC awareness and
+ * direct writes.
+ *
+ * The same ordering rules as `ask`: `began` first; the proposal, then exactly
+ * one of `done` or a failure; the turn saved in a finalizer however the
+ * stream ends, and nothing saved when Hob produced neither words nor a
+ * proposal. `surface` is whose build-report gates apply — see
+ * {@link wouldNotBuild}.
+ */
+const deliver = (options: {
+  readonly threadId: AssistantThreadId;
+  readonly answerId: AssistantTurnId;
+  readonly answering: Stream.Stream<
+    HobEvent,
+    AiError.AiError | Schema.SchemaError,
+    LanguageModel.LanguageModel
+  >;
+  readonly proposal: ProposalSlot;
+  readonly finished: Ref.Ref<string>;
+  readonly asked: string;
+  readonly surface: "dm" | "own";
+  readonly save: (turn: TurnDraft) => Effect.Effect<unknown, unknown>;
+  readonly languageModel: LanguageModel.Service;
+  /** The log line's opening words when the answer fails. */
+  readonly failing: string;
+}): Effect.Effect<Stream.Stream<HobEvent>> =>
+  Effect.gen(function* () {
+    const written = yield* Ref.make("");
+    const broke = yield* Ref.make(false);
+    const reachedForOne = yield* Ref.make(false);
+
+    const save = Effect.gen(function* () {
+      const text = yield* Ref.get(written);
+      const offered = yield* Ref.get(options.proposal);
+      if (text === "" && offered === undefined) return;
+      yield* options.save({ id: options.answerId, who: "hob", text, proposal: offered });
+    }).pipe(Effect.ignore);
+
+    const tail = Stream.unwrap(
+      Effect.map(
+        Effect.all([
+          Ref.get(options.proposal),
+          Ref.get(options.finished),
+          Ref.get(broke),
+          Ref.get(written),
+          Ref.get(reachedForOne),
+        ]),
+        ([offered, reason, failed, text, reached]) =>
+          Stream.fromIterable<HobEvent>([
+            ...(offered === undefined
+              ? []
+              : [
+                  {
+                    event: "proposal" as const,
+                    data: new HobProposed({ turnId: options.answerId, proposal: offered }),
+                  },
+                ]),
+            ...(failed
+              ? []
+              : text === "" && offered === undefined
+                ? [silence]
+                : offered === undefined &&
+                    !reached &&
+                    wouldNotBuild(options.surface, options.asked, text)
+                  ? [unbuilt(options.surface)]
+                  : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+          ]),
+      ),
+    );
+
+    return Stream.fromIterable<HobEvent>([
+      {
+        event: "began",
+        data: new HobBegun({ threadId: options.threadId, turnId: options.answerId }),
+      },
+    ]).pipe(
+      Stream.concat(
+        options.answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
+      ),
+      Stream.concat(tail),
+      Stream.provideService(LanguageModel.LanguageModel, options.languageModel),
+      Stream.catchCause((cause) =>
+        Stream.unwrap(
+          Effect.as(
+            Effect.logWarning(`${options.failing}: ${describe(Cause.squash(cause))}`),
+            Stream.succeed(failure(apology(Cause.squash(cause)))),
+          ),
+        ),
+      ),
+      Stream.ensuring(save),
+    );
+  });
 
 /**
  * One question, over whichever toolkit is answering.
@@ -1610,26 +1759,55 @@ const playerPrompt = (campaign: Campaign): string =>
     "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping a player",
     `make a character for "${campaign.name}", a tabletop roleplaying game somebody else runs.`,
     "",
-    "They will describe a person in their own words. Read it, and offer them a whole",
-    "character with proposeCharacter — a name, a race, a class, a background, the six abilities",
-    "ranked most important first, up to four skills, starting spells for a caster, a starting kit,",
-    "a line on how they look and a short backstory in their register rather than yours. Do not",
-    "ask clarifying questions first: draft something, and let them correct it. Nothing you",
-    "offer is saved until they keep it.",
-    "",
-    "Do not write ability scores or modifiers. Rank the six and the standard array is",
-    "applied for you. For a caster, call listStartingSpells first and choose spellId",
-    "values from that list; never invent a spell id. Give a short reason for each real choice in `rationale` — the",
-    "player is shown those beside the sheet and they are what they will argue with.",
-    "",
-    "If they ask for a change — a different class, a harder background — offer a whole",
-    "character again, keeping everything they did not ask you to change.",
+    ...DRAFTING,
     "",
     "You may search this campaign's record with searchCampaign, and what you find there",
     "is worth using: a character who fits the place reads better than one who does not.",
     "You can only see what the DM has shared, which is often nothing at all. Never state",
     "as fact a place, a person or an event you have not read — if the record does not",
     "say, write the character without it.",
+  ].join("\n");
+
+/**
+ * How a character is drafted, said once for both drafting prompts: draft, do
+ * not interview; rank the abilities, never write numbers; redraft whole.
+ */
+const DRAFTING: ReadonlyArray<string> = [
+  "They will describe a person in their own words. Read it, and offer them a whole",
+  "character with proposeCharacter — a name, a race, a class, a background, the six abilities",
+  "ranked most important first, up to four skills, starting spells for a caster, a starting kit,",
+  "a line on how they look and a short backstory in their register rather than yours. Do not",
+  "ask clarifying questions first: draft something, and let them correct it. Nothing you",
+  "offer is saved until they keep it.",
+  "",
+  "Do not write ability scores or modifiers. Rank the six and the standard array is",
+  "applied for you. For a caster, call listStartingSpells first and choose spellId",
+  "values from that list; never invent a spell id. Give a short reason for each real choice in `rationale` — the",
+  "player is shown those beside the sheet and they are what they will argue with.",
+  "",
+  "If they ask for a change — a different class, a harder background — offer a whole",
+  "character again, keeping everything they did not ask you to change.",
+];
+
+/**
+ * What Hob is told when somebody drafts a character **with no campaign**.
+ *
+ * The player's prompt without the table: there is no record to search and no
+ * setting to borrow, so it says the core rules are all there is and that a
+ * place or a person in the backstory is theirs to invent or leave out, never
+ * a fact about somebody's campaign.
+ */
+const corePrompt = (): string =>
+  [
+    "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping somebody",
+    "make a character for a tabletop roleplaying game, with the core rules and no campaign",
+    "behind it yet.",
+    "",
+    ...DRAFTING,
+    "",
+    "There is no campaign record to read and no setting to fit. Do not claim to know",
+    "anybody's campaign; a place or a person in the backstory is one you made up for them,",
+    "and they can change it.",
   ].join("\n");
 
 /**

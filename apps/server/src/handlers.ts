@@ -909,6 +909,51 @@ const HobLive = HttpApiBuilder.group(
 );
 
 /**
+ * Hob drafting a character with no campaign — `HobLive`'s five with one
+ * reach, the caller's own account (`"account"`), so there is no proof to
+ * resolve and no two sets to tell apart. A kept draft starts the portrait
+ * after the accept commits, as `createCoreCharacter` does.
+ */
+const MeHobLive = HttpApiBuilder.group(
+  TavernsApi,
+  "meHob",
+  Effect.fnUntraced(function* (handlers) {
+    const hob = yield* Hob;
+    const threads = yield* HobThreads;
+    const proposals = yield* Proposals;
+    const images = yield* HobImages;
+
+    return handlers
+      .handle("status", () => hob.draftStatus)
+      .handle("ask", ({ payload }) => hob.askDraft(payload))
+      .handle("threads", () =>
+        Effect.flatMap(CurrentActor, (actor) =>
+          // The account's own list is never a `NotFound`: there is no
+          // container to be refused, and another account's threads are none.
+          threads.list("account", actor.accountId).pipe(Effect.orDie),
+        ),
+      )
+      .handle("turns", ({ params }) =>
+        Effect.flatMap(CurrentActor, (actor) =>
+          threads.turns("account", actor.accountId, params.threadId),
+        ),
+      )
+      .handle("accept", ({ params }) =>
+        proposals.acceptDraft(params.threadId, params.turnId).pipe(
+          Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> =>
+            accepted.accepted === "character"
+              ? Effect.map(images.drawCharacter(accepted.character), (character) => ({
+                  ...accepted,
+                  character,
+                }))
+              : Effect.succeed(accepted),
+          ),
+        ),
+      );
+  }),
+);
+
+/**
  * The campaign's cast.
  *
  * Creator Cast/profile/knowledge/memory/proposal handlers mint the
@@ -1398,6 +1443,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     RollsLive,
     SearchLive,
     HobLive,
+    MeHobLive,
     SharedWorldHobLive,
     NpcsLive,
     RunsLive,

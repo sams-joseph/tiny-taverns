@@ -282,6 +282,7 @@ describe("migrations", () => {
       { migration_id: 51, name: "npc_images" },
       { migration_id: 52, name: "descriptions" },
       { migration_id: 53, name: "campaign_move_keys" },
+      { migration_id: 54, name: "account_threads" },
     ]);
   }, 60_000);
 
@@ -344,6 +345,7 @@ describe("migrations", () => {
       { migration_id: 51, name: "npc_images" },
       { migration_id: 52, name: "descriptions" },
       { migration_id: 53, name: "campaign_move_keys" },
+      { migration_id: 54, name: "account_threads" },
     ]);
   }, 60_000);
 });

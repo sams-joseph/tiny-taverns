@@ -46,7 +46,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 ## The assistant
 
 - **Hob**: the assistant. Every fact it states arrives through a tool that is a shipped repository method. See [hob.md](hob.md).
-- **thread / turn**: a saved conversation (`assistant_thread`, campaign or world scoped, optionally one account's own) and its lines (`assistant_turn`).
+- **thread / turn**: a saved conversation (`assistant_thread`, campaign or world scoped, optionally one account's own at a campaign, or one account's alone when drafting a character with no campaign) and its lines (`assistant_turn`).
 - **proposal**: something Hob offered, stored on its turn. Not a row until a person accepts it. No create payload carries `origin`; accepted rows and the assistant's own turns are the only things that carry `'assistant'`.
 - **toolkit**: the set of tools a model is shown for one request. There is a creator toolkit, a player drafting toolkit, a Shared World toolkit and an NPC toolkit; they are different sets, not one set narrowed.
 - **NPC / Cast**: a campaign's structured non-player character (`npc`) and the screen that manages it. An NPC answers from its persona, explicit knowledge and approved memory, never from campaign-wide reads.
