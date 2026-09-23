@@ -135,23 +135,12 @@ const OWNED_SUBJECT: {
 const utcDayStart = (sql: SqlClient.SqlClient) =>
   sql`(date_trunc('day', now() at time zone 'utc') at time zone 'utc')`;
 
-/** Every kind's rows as one relation, for the statements that span them all. */
-const everyImage = (sql: SqlClient.SqlClient) =>
-  sql.join(
-    " union all ",
-    false,
-  )(
-    ALL_IMAGE_KINDS.map(
-      (kind) => sql`select account_id, created_at, failure from ${sql(IMAGE_KINDS[kind].table)}`,
-    ),
-  );
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * One advisory lock serialises every image start, of every kind, so two
  * creates cannot both read a count of nine and both draw the tenth. Starts are
- * rare and the critical section is two counts and an insert.
+ * rare and the critical section is two counts and two inserts.
  */
 const START_LOCK = 0x70_6f_72_74; // "port"
 
@@ -230,18 +219,18 @@ export class ImageRecords extends Context.Service<
                 const subject = owned[0];
                 if (subject === undefined) return undefined;
 
-                // Skipped and capped rows sent nothing, so they spend nothing.
+                // The caps count `image_spend`, not the image rows: those
+                // cascade from their subjects, and deleting a subject must not
+                // give its draw back to the day (0055_image_spend.ts).
                 const [mine, everyone] = yield* Effect.all([
                   sql<{ readonly count: number }>`
-                    select count(*)::int as count from (${everyImage(sql)}) as drawn
-                    where drawn.account_id = ${subject.account_id}
-                      and drawn.created_at >= ${utcDayStart(sql)}
-                      and (drawn.failure is null or drawn.failure not in ('skipped', 'capped'))
+                    select count(*)::int as count from image_spend
+                    where account_id = ${subject.account_id}
+                      and spent_at >= ${utcDayStart(sql)}
                   `,
                   sql<{ readonly count: number }>`
-                    select count(*)::int as count from (${everyImage(sql)}) as drawn
-                    where drawn.created_at >= ${utcDayStart(sql)}
-                      and (drawn.failure is null or drawn.failure not in ('skipped', 'capped'))
+                    select count(*)::int as count from image_spend
+                    where spent_at >= ${utcDayStart(sql)}
                   `,
                 ]);
                 const capped =
@@ -275,6 +264,10 @@ export class ImageRecords extends Context.Service<
                 if (rows.length === 0 || failure !== undefined || plan.prompt === undefined) {
                   return undefined;
                 }
+                // Skipped and capped rows sent nothing, so only a draw spends.
+                yield* sql`
+                  insert into image_spend ${sql.insert({ account_id: subject.account_id, kind })}
+                `;
                 return { kind, id, prefix, prompt: plan.prompt };
               }),
             )

@@ -626,6 +626,71 @@ describe("when there is no portrait", () => {
     expect(drawn.every((character) => character.portraitPending)).toBe(true);
   });
 
+  it("does not give a deleted character's draw back to the account's day", async () => {
+    // Deleting the subject cascades its portrait row; the spend must outlive it.
+    const tam = await person("Tam");
+    await run(admittedTo(campaignId, tam.actor, "Tam"));
+    const drawn: Array<Character> = [];
+    for (let index = 0; index < PER_ACCOUNT; index += 1) {
+      drawn.push(await createAs(tam, { name: `Tam ${String(index)}`, race: "Dwarf" }));
+    }
+    await settled();
+    expect(drawn.every((character) => character.portraitPending)).toBe(true);
+    for (const character of drawn) {
+      await as(tam.token, (client) =>
+        client.me.deleteCharacter({ params: { characterId: character.id } }),
+      );
+    }
+    expect(await Promise.all(drawn.map((character) => recordOf(character.id)))).toEqual(
+      drawn.map(() => undefined),
+    );
+
+    const before = images.requests().length;
+    const again = await createAs(tam, { name: "Tam again", race: "Dwarf" });
+    await settled();
+    expect(again.portraitPending).toBe(false);
+    expect(images.requests().length).toBe(before);
+    expect((await recordOf(again.id))?.failure).toBe("capped");
+  });
+
+  it("does not give a deleted character's draw back to everybody's day", async () => {
+    const start = (name: string, perDay: number) =>
+      run(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const rows = yield* sql<{ readonly id: CharacterId }>`
+            insert into character ${sql.insert({ account_id: stranger.actor.accountId, name })}
+            returning id
+          `;
+          const records = yield* ImageRecords;
+          const job = yield* records.start("character", rows[0]!.id, {
+            prompt: "a goliath",
+            model: MODEL,
+            limits: { perAccountPerDay: 100, perDay },
+          });
+          // Nothing draws a job started here; close it so no row is left drawing.
+          if (job !== undefined) yield* records.fail(job, "provider");
+          return { id: rows[0]!.id, job };
+        }).pipe(Effect.provideService(CurrentActor, stranger.actor)),
+      );
+    const spent = await sql(
+      (sql) => sql<{ readonly count: number }>`
+        select count(*)::int as count from image_spend
+        where spent_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'
+      `,
+    );
+    // One below the overall cap: this start is the last draw of the day.
+    const perDay = spent[0]!.count + 1;
+    const last = await start("Last", perDay);
+    expect(last.job).toBeDefined();
+    await sql((sql) => sql`delete from character where id = ${last.id}`);
+    expect(await recordOf(last.id)).toBeUndefined();
+
+    const next = await start("Next", perDay);
+    expect(next.job).toBeUndefined();
+    expect((await recordOf(next.id))?.failure).toBe("capped");
+  });
+
   it("stops drawing for everybody at the overall cap", async () => {
     // A character with no record yet, which only a raw row can be while
     // generation is on: every create through the product starts one.
