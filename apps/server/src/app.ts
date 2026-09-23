@@ -374,8 +374,8 @@ export const hobImagesFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      `Hob-drawn images are ON (character portraits, campaign covers): model ${model.value} ` +
-        `at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
+      "Hob-drawn images are ON (character portraits, campaign and Shared World covers): " +
+        `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
     return HobImages.layer({ generation: Option.some({ limits, concurrency }), storageOn }).pipe(
