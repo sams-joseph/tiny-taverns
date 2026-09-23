@@ -6,7 +6,7 @@
  * What a kind decides:
  *
  * - **`table` / `subjectColumn`** — its record (`character_portrait`,
- *   `campaign_image`, `shared_world_image`), one row per subject, bound to the subject and its owner
+ *   `campaign_image`, `shared_world_image`, `npc_image`), one row per subject, bound to the subject and its owner
  *   by a composite key (see `0049_campaign_images.ts` for why a table per kind).
  * - **`root`** — the first segment of its storage keys:
  *   `{root}/{accountId}/{subjectId}/{imageId}/`.
@@ -101,6 +101,25 @@ export const IMAGE_KINDS = {
     },
     position: "centre",
   } satisfies ImageKindSpec<"card" | "full">,
+  /**
+   * A campaign NPC's portrait: a square bust, drawn and cut exactly as a
+   * character's is, so a cast and a party sit on the same plates. The cast's
+   * plates are 28 and 44 px, so every screen loads `thumb` today.
+   */
+  npc: {
+    table: "npc_image",
+    subjectColumn: "npc_id",
+    root: "npc-images",
+    tag: "npc-image",
+    route: "/npc-images",
+    size: "1024x1024",
+    variants: {
+      thumb: { width: 160, height: 160 },
+      card: { width: 640, height: 640 },
+      full: { width: 1024, height: 1024 },
+    },
+    position: "top",
+  } satisfies ImageKindSpec<"thumb" | "card" | "full">,
 } as const;
 
 export type ImageKind = keyof typeof IMAGE_KINDS;

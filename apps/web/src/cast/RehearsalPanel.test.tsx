@@ -43,7 +43,9 @@ afterEach(() => {
 
 describe("the rehearsal chat", () => {
   it("lets the transcript take its height, with the composer sticky at the bottom", () => {
-    render(<RehearsalPanel name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />);
+    render(
+      <RehearsalPanel image={null} name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />,
+    );
 
     const panel = screen.getByRole("region", { name: "Rehearse with Mara" });
     for (const element of [panel, ...panel.querySelectorAll("*")]) {
@@ -58,28 +60,40 @@ describe("the rehearsal chat", () => {
 
   it("brings the newest line into view on open only when the panel is the page", () => {
     const { unmount } = render(
-      <RehearsalPanel name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />,
+      <RehearsalPanel image={null} name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />,
     );
     expect(scrolled).not.toHaveBeenCalled();
     unmount();
 
-    render(<RehearsalPanel jumpOnOpen name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />);
+    render(
+      <RehearsalPanel
+        image={null}
+        jumpOnOpen
+        name="Mara"
+        rehearsal={rehearsal({ turns: [line("1")] })}
+      />,
+    );
     expect(scrolled).toHaveBeenCalledWith({ block: "nearest" });
   });
 
   it("follows the reader's own line, and leaves a reader who scrolled away", () => {
     const { rerender } = render(
-      <RehearsalPanel name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />,
+      <RehearsalPanel image={null} name="Mara" rehearsal={rehearsal({ turns: [line("1")] })} />,
     );
     // Someone else spoke; nothing says this reader is at the end.
     rerender(
-      <RehearsalPanel name="Mara" rehearsal={rehearsal({ turns: [line("1"), line("2")] })} />,
+      <RehearsalPanel
+        image={null}
+        name="Mara"
+        rehearsal={rehearsal({ turns: [line("1"), line("2")] })}
+      />,
     );
     expect(scrolled).not.toHaveBeenCalled();
 
     // This reader sent: the reply is coming, so the end comes into view.
     rerender(
       <RehearsalPanel
+        image={null}
         name="Mara"
         rehearsal={rehearsal({ turns: [line("1"), line("2"), line("3", "user")], thinking: true })}
       />,

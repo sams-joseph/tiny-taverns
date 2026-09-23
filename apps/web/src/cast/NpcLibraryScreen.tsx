@@ -33,7 +33,7 @@ import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
-import { NpcAvatar } from "./NpcCard";
+import { NpcAvatar } from "./NpcAvatar";
 import {
   emptyDraft,
   hasAdvanced,
@@ -514,7 +514,8 @@ function SourceCard({
     <Card className="h-full">
       <CardHeader>
         <div className="flex items-start gap-2.5">
-          <NpcAvatar name={source.name} />
+          {/* A Library original is never drawn; a copy into a cast is. */}
+          <NpcAvatar name={source.name} image={null} />
           <div className="min-w-0 flex-1">
             <CardTitle>{source.name}</CardTitle>
             {source.role !== "" && (

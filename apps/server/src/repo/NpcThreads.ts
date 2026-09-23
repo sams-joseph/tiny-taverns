@@ -22,7 +22,13 @@ import { Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { playerNpcReadable, toPlayerNpc } from "./Npcs.js";
+import {
+  npcImageColumns,
+  npcImageSigner,
+  type PlayerNpcRow,
+  playerNpcReadable,
+  toPlayerNpc,
+} from "./Npcs.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import {
   type Containment,
@@ -287,6 +293,9 @@ export class NpcThreads extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      // A session read hands the NPC back as a `PlayerNpc`, portrait included,
+      // signed only on the handlers' copy of this repository (`app.ts`).
+      const sign = yield* npcImageSigner;
       const live = yield* Effect.serviceOption(LiveEvents);
 
       const threadReachable = (creator: CampaignCreatorActor, npcId: NpcId) =>
@@ -757,8 +766,8 @@ export class NpcThreads extends Context.Service<
               return yield* Effect.all(
                 threadRows.map((threadRow) =>
                   Effect.gen(function* () {
-                    const npcRows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
-                      select npc.*, npc_thread.session_state
+                    const npcRows = yield* sql<PlayerNpcRow>`
+                      select npc.*, npc_thread.session_state, ${npcImageColumns(sql)}
                       from npc
                       join npc_thread on npc_thread.npc_id = npc.id
                       where npc_thread.id = ${threadRow.id}
@@ -791,7 +800,7 @@ export class NpcThreads extends Context.Service<
                         ? null
                         : `Last reply ended with ${finish}.`;
                     return new NpcSessionMonitor({
-                      npc: toPlayerNpc(npcRows[0]!),
+                      npc: toPlayerNpc(npcRows[0]!, sign),
                       thread,
                       turns,
                       pendingProposals: proposalRows[0]?.count ?? 0,
@@ -812,8 +821,8 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* ensureSessionParticipant(campaignId, sessionId);
-              const rows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
-                select npc.*, npc_thread.session_state from npc
+              const rows = yield* sql<PlayerNpcRow>`
+                select npc.*, npc_thread.session_state, ${npcImageColumns(sql)} from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc_thread.channel = 'session_shared'
                   and npc_thread.session_id = ${sessionId}
@@ -823,7 +832,7 @@ export class NpcThreads extends Context.Service<
                   and (${campaignWritableById(sql, campaignId, actor)} or (npc.visibility = 'shared' and npc_thread.visibility = 'shared' and npc_thread.session_state <> 'closed'))
                 order by npc.name asc, npc.id asc
               `;
-              return rows.map(toPlayerNpc);
+              return rows.map((row) => toPlayerNpc(row, sign));
             }),
           ),
 
@@ -831,14 +840,14 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<Parameters<typeof toPlayerNpc>[0]>`
-                select npc.*, npc_thread.session_state from npc
+              const rows = yield* sql<PlayerNpcRow>`
+                select npc.*, npc_thread.session_state, ${npcImageColumns(sql)} from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc.id = ${npcId}
                   and ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
-              return toPlayerNpc(rows[0]!);
+              return toPlayerNpc(rows[0]!, sign);
             }),
           ),
 

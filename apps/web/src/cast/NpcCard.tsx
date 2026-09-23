@@ -12,36 +12,9 @@ import {
 } from "@taverns/ui";
 import { useApiAtom } from "../api/atoms";
 import { npcPendingProposalCountAtom, sessionNpcsAtom } from "./load";
-import { describeNpc, hasPrivateMaterial, initialsOf } from "./persona";
+import { NpcAvatar } from "./NpcAvatar";
+import { describeNpc, hasPrivateMaterial } from "./persona";
 import { npcIsOpenInSession } from "./status";
-
-/**
- * Two letters in a square — the NPC's face until a portrait control is drawn.
- *
- * Not a Hob mark and not an `<img>`: the report is explicit that the rehearsal
- * is branded as the NPC and never as Hob, and a stubbed portrait upload is the
- * kind of control this product refuses. Initials are honest and need no asset.
- */
-export function NpcAvatar({
-  name,
-  size = "sm",
-}: {
-  readonly name: string;
-  readonly size?: "sm" | "lg";
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={
-        size === "lg"
-          ? "flex size-11 shrink-0 items-center justify-center rounded-control border border-strong bg-surface-raised font-display text-body font-semibold text-heading"
-          : "flex size-7 shrink-0 items-center justify-center rounded-sm border border-strong bg-surface-raised font-display text-micro font-semibold text-heading"
-      }
-    >
-      {initialsOf(name)}
-    </span>
-  );
-}
 
 function NpcStatusBadges({
   npc,
@@ -137,7 +110,7 @@ export function NpcCard({
     <Card className="h-full">
       <CardHeader>
         <div className="flex items-start gap-2.5">
-          <NpcAvatar name={npc.name} />
+          <NpcAvatar name={npc.name} image={npc.image} />
           <div className="min-w-0 flex-1">
             <CardTitle>
               <Link
@@ -165,6 +138,11 @@ export function NpcCard({
         <CardDescription className="line-clamp-3">{describeNpc(npc)}</CardDescription>
       </CardHeader>
       <CardContent className="mt-auto flex flex-wrap items-center gap-1.5">
+        {npc.imagePending && (
+          <Badge variant="outline" role="status">
+            Hob is drawing…
+          </Badge>
+        )}
         <NpcStatusBadges npc={npc} currentSessionId={currentSessionId} />
         {hasPrivateMaterial(npc) && (
           <Badge variant="outline">

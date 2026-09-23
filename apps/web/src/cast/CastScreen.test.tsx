@@ -67,7 +67,7 @@ const followUpWithProposal = {
   items: [
     {
       itemKind: "proposal",
-      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null },
+      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null, image: null },
       proposal: pendingProposal,
       source: {
         channel: "rehearsal",
@@ -121,7 +121,15 @@ describe("CastScreen", () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
       status: 200,
       body: [
-        { id: npcId, campaignId, name: "Cazril", role: "the ferryman", persona: cazril.persona },
+        {
+          id: npcId,
+          campaignId,
+          name: "Cazril",
+          role: "the ferryman",
+          persona: cazril.persona,
+          image: null,
+          imagePending: false,
+        },
       ],
     });
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {

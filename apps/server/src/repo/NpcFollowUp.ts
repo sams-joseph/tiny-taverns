@@ -27,11 +27,19 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { toNpcAwarenessCandidate } from "./NpcAwareness.js";
+import {
+  type NpcImageRow,
+  type NpcImageSigner,
+  npcImageColumns,
+  npcImageOf,
+  npcImageSigner,
+} from "./Npcs.js";
 import { toNpcProposal } from "./NpcProposals.js";
 import { dieOnSqlError, type ProvenanceColumns } from "./rows.js";
 import { rowWritable } from "./visibility.js";
 
-interface NpcSummaryRow {
+/** The portrait columns sit beside the NPC the creator's `rowWritable` returned. */
+interface NpcSummaryRow extends NpcImageRow {
   readonly npc_id: NpcId;
   readonly npc_name: string;
   readonly npc_role: string;
@@ -79,12 +87,13 @@ interface FollowUpCandidateRow extends ProvenanceColumns, NpcSummaryRow {
   readonly accepted_memory_id: NpcMemoryId | null;
 }
 
-const npcSummary = (row: NpcSummaryRow): NpcFollowUpNpc =>
+const npcSummary = (row: NpcSummaryRow, sign: NpcImageSigner | undefined): NpcFollowUpNpc =>
   new NpcFollowUpNpc({
     id: row.npc_id,
     name: row.npc_name,
     role: row.npc_role,
     archivedAt: row.npc_archived_at === null ? null : DateTime.fromDateUnsafe(row.npc_archived_at),
+    image: npcImageOf(row, sign).image,
   });
 
 const sourceLabel = (row: FollowUpProposalRow): string => {
@@ -97,10 +106,13 @@ const sourceLabel = (row: FollowUpProposalRow): string => {
   return "Private player chat";
 };
 
-const proposalItem = (row: FollowUpProposalRow): NpcFollowUpProposal =>
+const proposalItem = (
+  row: FollowUpProposalRow,
+  sign: NpcImageSigner | undefined,
+): NpcFollowUpProposal =>
   new NpcFollowUpProposal({
     itemKind: "proposal",
-    npc: npcSummary(row),
+    npc: npcSummary(row, sign),
     proposal: toNpcProposal(row),
     source: {
       channel: row.channel,
@@ -110,10 +122,13 @@ const proposalItem = (row: FollowUpProposalRow): NpcFollowUpProposal =>
     },
   });
 
-const candidateItem = (row: FollowUpCandidateRow): NpcFollowUpAwarenessCandidate =>
+const candidateItem = (
+  row: FollowUpCandidateRow,
+  sign: NpcImageSigner | undefined,
+): NpcFollowUpAwarenessCandidate =>
   new NpcFollowUpAwarenessCandidate({
     itemKind: "awareness",
-    npc: npcSummary(row),
+    npc: npcSummary(row, sign),
     candidate: toNpcAwarenessCandidate(row),
   });
 
@@ -135,6 +150,7 @@ export class NpcFollowUps extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const sign = yield* npcImageSigner;
 
       return {
         pending: (creator) =>
@@ -145,6 +161,7 @@ export class NpcFollowUps extends Context.Service<
                        npc.name as npc_name,
                        npc.role as npc_role,
                        npc.archived_at as npc_archived_at,
+                       ${npcImageColumns(sql)},
                        npc_thread.channel,
                        npc_thread.session_id,
                        session.number as session_number
@@ -162,7 +179,8 @@ export class NpcFollowUps extends Context.Service<
                        npc.campaign_id,
                        npc.name as npc_name,
                        npc.role as npc_role,
-                       npc.archived_at as npc_archived_at
+                       npc.archived_at as npc_archived_at,
+                       ${npcImageColumns(sql)}
                 from npc_awareness_candidate
                 join npc on npc.id = npc_awareness_candidate.npc_id
                 where npc.campaign_id = ${creator.campaign}
@@ -171,8 +189,8 @@ export class NpcFollowUps extends Context.Service<
                 order by npc_awareness_candidate.created_at desc, npc_awareness_candidate.id desc
               `;
               const items = [
-                ...proposalRows.map(proposalItem),
-                ...candidateRows.map(candidateItem),
+                ...proposalRows.map((row) => proposalItem(row, sign)),
+                ...candidateRows.map((row) => candidateItem(row, sign)),
               ].sort((a, b) => {
                 const aTime =
                   a.itemKind === "proposal" ? a.proposal.createdAt : a.candidate.createdAt;

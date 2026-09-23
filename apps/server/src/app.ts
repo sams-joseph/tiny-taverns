@@ -360,7 +360,8 @@ export const hobImagesFromConfig: Layer.Layer<
     if (Option.isNone(apiUrl) || Option.isNone(model) || missing.length > 0) {
       yield* Effect.logInfo(
         `Hob-drawn images are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
-          "so new characters keep their lettered plates and new campaigns their plain cards. " +
+          "so new characters keep their lettered plates, new campaigns and Shared Worlds their " +
+          "plain cards and new NPCs their initials. " +
           "To turn them on, set them in apps/server/.env.local (see .env.example).",
       );
       return HobImages.layer({ generation: Option.none(), storageOn });
@@ -374,7 +375,7 @@ export const hobImagesFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      "Hob-drawn images are ON (character portraits, campaign and Shared World covers): " +
+      "Hob-drawn images are ON (character portraits, campaign and Shared World covers, NPC portraits): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
@@ -554,12 +555,17 @@ export const servicesOver = <E>(
     Memberships.layer.pipe(Layer.provide(imageUrls)),
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
-    // every method behind the `CampaignCreatorActor` proof.
-    Npcs.layer,
+    // every method behind the `CampaignCreatorActor` proof. An NPC read signs
+    // its portrait's URLs, so the handlers' copy is `fresh` with the signer,
+    // for `Campaigns`' reason: the bare `Npcs.layer` Hob and the NPC agent
+    // hold hands what it reads to a model, and must never hold a bearer URL.
+    Layer.fresh(Npcs.layer).pipe(Layer.provide(imageUrls)),
     NpcKnowledge.layer,
     NpcMemories.layer,
     NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
-    NpcFollowUps.layer,
+    // The follow-up queue names each NPC with its portrait. Only the handlers
+    // hold it.
+    NpcFollowUps.layer.pipe(Layer.provide(imageUrls)),
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -569,7 +575,9 @@ export const servicesOver = <E>(
         NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
       ]),
     ),
-    NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // The session reads answer `PlayerNpc`s with their portraits, signed on
+    // this copy only; the NPC agent's stays bare, as `Npcs` does above.
+    Layer.fresh(NpcThreads.layer).pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // Files, behind whichever provider `STORAGE_DRIVER` names.
     storage,
     // Hob's pictures of every kind: the worker, the image routes and the

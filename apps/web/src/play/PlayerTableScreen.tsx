@@ -160,6 +160,7 @@ function SessionNpcConversation({
   return (
     <RehearsalPanel
       name={npc.name}
+      image={npc.image}
       rehearsal={chat}
       subtitle="Open at the table · shared with active participants"
       emptyTitle={`Talk to ${npc.name}`}

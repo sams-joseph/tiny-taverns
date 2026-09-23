@@ -29,6 +29,7 @@ export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Note.js";
 export * from "./Npc.js";
+export * from "./NpcImage.js";
 export * from "./Page.js";
 export * from "./Party.js";
 export * from "./PlayerLive.js";

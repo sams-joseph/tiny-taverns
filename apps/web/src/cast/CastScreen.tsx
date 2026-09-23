@@ -17,11 +17,12 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { useState } from "react";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useCallback, useState } from "react";
+import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { SaveFailure } from "../ui/form";
 import { npcFollowUpAtom, npcsAtom } from "./load";
 import { NpcCard } from "./NpcCard";
@@ -150,6 +151,17 @@ export function CastScreen() {
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly npc: Npc | undefined }>();
   const [copying, setCopying] = useState(false);
+  // While Hob draws a new NPC's portrait, re-read the cast until it lands.
+  const [cast] = useApiAtom(npcsAtom(campaignId));
+  const invalidate = useInvalidate();
+  const rereadCast = useCallback(
+    () => invalidate([reads.npcs(campaignId)]),
+    [invalidate, campaignId],
+  );
+  useHobDrawingPolling(
+    cast.state === "ready" && cast.value.some((npc) => npc.imagePending),
+    rereadCast,
+  );
 
   return (
     <CampaignChrome

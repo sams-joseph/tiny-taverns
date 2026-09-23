@@ -4,9 +4,10 @@ import { Badge, Card, SectionHeading, BackLink, EmptyState, Loading } from "@tav
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
 import { DetailSection } from "../ui/detail";
-import { NpcAvatar } from "./NpcCard";
+import { NpcAvatar } from "./NpcAvatar";
 import { useNpcPlayerChat } from "./playerChat";
 import { RehearsalPanel } from "./RehearsalPanel";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -22,6 +23,8 @@ export function PlayerNpcChatScreen() {
   });
   const [resource, reload] = useApiAtom(playerNpcAtom({ campaignId, npcId }));
   const npc = resource.state === "ready" ? resource.value : undefined;
+  // A DM can share an NPC the moment it is made, while Hob is still drawing it.
+  useHobDrawingPolling(npc?.imagePending === true, reload);
 
   return (
     <>
@@ -51,6 +54,7 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
           <RehearsalPanel
             jumpOnOpen
             name={npc.name}
+            image={npc.image}
             rehearsal={chat}
             subtitle="Talk privately · only you can read this transcript"
             emptyTitle={`Talk to ${npc.name}`}
@@ -61,7 +65,7 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
         </div>
         <Card tone="sunken" className="gap-4 p-card">
           <div className="flex items-start gap-3">
-            <NpcAvatar name={npc.name} size="lg" />
+            <NpcAvatar name={npc.name} image={npc.image} size="lg" />
             <div className="min-w-0">
               <SectionHeading size="title">{npc.name}</SectionHeading>
               {npc.role !== "" && (

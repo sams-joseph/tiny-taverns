@@ -75,6 +75,8 @@ const cazril = new Npc({
   visibility: "dm",
   origin: "authored",
   assistantTurnId: null,
+  image: null,
+  imagePending: false,
   createdAt: stamp,
   updatedAt: stamp,
 });

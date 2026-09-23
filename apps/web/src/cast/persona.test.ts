@@ -41,6 +41,8 @@ const row = (overrides: Partial<ConstructorParameters<typeof Npc>[0]> = {}): Npc
     visibility: "dm",
     origin: "authored",
     assistantTurnId: null,
+    image: null,
+    imagePending: false,
     createdAt: stamp,
     updatedAt: stamp,
     ...overrides,

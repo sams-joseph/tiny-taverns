@@ -7,6 +7,9 @@ import {
   HOUSE_COVER_STYLE,
   HOUSE_PORTRAIT_STYLE,
   NotFound,
+  Npc,
+  npcImageHasSubject,
+  npcImagePromptFor,
   portraitHasSubject,
   portraitPromptFor,
   SharedWorld,
@@ -40,8 +43,9 @@ import { renderImage } from "./render.js";
 
 /**
  * Hob draws a picture of a thing a person made, once, after it is made — a
- * character's portrait, a campaign's or a Shared World's cover — and this is
- * the server's **one background worker**, the same for every kind (`kinds.ts`).
+ * character's portrait, a campaign's or a Shared World's cover, an NPC's
+ * portrait — and this is the server's **one background worker**, the same for
+ * every kind (`kinds.ts`).
  *
  * ### The trigger
  *
@@ -50,7 +54,8 @@ import { renderImage } from "./render.js";
  * {@link HobImages} `drawCharacter` from the form's `POST …/characters` and
  * Hob's accept, `drawCampaign` from `POST /campaigns` and
  * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
- * `POST /campaigns/:campaignId/shared-world` (promotion). It records the one image row the subject
+ * `POST /campaigns/:campaignId/shared-world` (promotion), `drawNpc` from the
+ * cast's create and its copy from the Library. It records the one image row the subject
  * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
  * caps, the nothing-to-draw-from skip and the kind's rule about who may start
  * one) and hands a drawing row to a fiber. The request does not wait: a closed
@@ -102,7 +107,7 @@ export interface ImageGeneration {
 export class HobImages extends Context.Service<
   HobImages,
   {
-    /** Whether a new character, campaign or Shared World will be drawn. */
+    /** Whether a new character, campaign, Shared World or NPC will be drawn. */
     readonly generating: boolean;
     /**
      * See the header. Answers the character again, `portraitPending` when a
@@ -115,6 +120,11 @@ export class HobImages extends Context.Service<
     readonly drawSharedWorld: (
       world: SharedWorld,
     ) => Effect.Effect<SharedWorld, never, CurrentActor>;
+    /**
+     * The same for a campaign NPC's portrait, drawn only from its public
+     * persona (`npcImagePromptFor`): `imagePending` when a draw started.
+     */
+    readonly drawNpc: (npc: Npc) => Effect.Effect<Npc, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
       kind: ImageKind,
@@ -335,6 +345,16 @@ export class HobImages extends Context.Service<
                   : undefined,
               ),
               (pending) => (pending ? new SharedWorld({ ...world, imagePending: true }) : world),
+            ),
+
+          drawNpc: (npc) =>
+            Effect.map(
+              start("npc", npc.id, () =>
+                npcImageHasSubject(npc)
+                  ? npcImagePromptFor(npc, { style: HOUSE_PORTRAIT_STYLE })
+                  : undefined,
+              ),
+              (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
             ),
 
           image: (kind, request) =>

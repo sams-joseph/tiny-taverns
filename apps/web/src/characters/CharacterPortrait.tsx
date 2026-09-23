@@ -1,7 +1,8 @@
 import type { CharacterPortraitImages } from "@taverns/api";
 import { cn } from "@taverns/ui";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { apiUrl } from "../api/client";
+import { DrawnImage } from "../hob/DrawnImage";
 import { initialsOf } from "./sheet";
 
 /**
@@ -11,17 +12,9 @@ import { initialsOf } from "./sheet";
  * **The initials are every state that is not a loaded picture** — no portrait
  * (portraits are off, there was nothing to draw from, the provider refused),
  * one still being drawn, one still loading, and one whose URL failed (an
- * expired signature, a server that has since lost the file). So there is no
- * error chrome anywhere: `onError` drops the `<img>` and the plate underneath
- * is what was always there.
- *
- * The picture fades in on load, timed by the motion tokens, so a slow load
- * never flashes a half-drawn image over the letters. It is decorative
- * (`alt=""`): the name is always beside it.
- *
- * **Its size is stated in CSS, never by attribute** — preflight's
- * `img { height: auto }` beats a `height` attribute (`web-screens.md`, the
- * `HobAvatar` note) — by filling a plate whose size the class names.
+ * expired signature, a server that has since lost the file). The picture is
+ * `DrawnImage` (`hob/DrawnImage.tsx`), the same fade and the same collapse an
+ * NPC's plate uses, filling a plate whose size the class names.
  */
 export function CharacterPortrait({
   name,
@@ -48,29 +41,7 @@ export function CharacterPortrait({
 }) {
   const src =
     portrait === null ? undefined : apiUrl(size === "card" ? portrait.cardUrl : portrait.thumbUrl);
-  // Which URL loaded, and which failed — by URL rather than a flag, so a new
-  // one (the portrait arrived, or a later read signed a fresh URL) gets a
-  // fresh chance with nothing to reset.
-  const [loadedSrc, setLoadedSrc] = useState<string>();
-  const [brokenSrc, setBrokenSrc] = useState<string>();
-  const loaded = src !== undefined && loadedSrc === src;
-
-  const image = src !== undefined && brokenSrc !== src && (
-    <img
-      key={src}
-      src={src}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      data-loaded={loaded ? "" : undefined}
-      onLoad={() => setLoadedSrc(src)}
-      onError={() => setBrokenSrc(src)}
-      className={cn(
-        "absolute inset-0 size-full object-cover object-top opacity-0 transition-opacity duration-(--dur-slow) ease-out",
-        loaded && "opacity-100",
-      )}
-    />
-  );
+  const image = <DrawnImage src={src} className="object-top" />;
 
   if (portrait === null && fallback !== undefined) {
     return (

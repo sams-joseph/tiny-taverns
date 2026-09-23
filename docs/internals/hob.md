@@ -66,7 +66,7 @@ The redraft loop is `promptFor`'s `offered()`: a saved `turn.proposal` is render
 
 ### Pictures are not a tool
 
-Hob "draws" a character's portrait and a campaign's or a Shared World's cover, but no toolkit carries a drawing tool, in any of the four. A tool is called at the model's discretion, and an image costs money and up to two minutes inside a four-round stream; a local text model cannot make images at all. The draw is the server's own job after a create commits ([Images](images.md)). Hob's part is the `appearance` line `proposeCharacter` writes, which the portrait prompt reads.
+Hob "draws" a character's portrait, a campaign's or a Shared World's cover and an NPC's portrait, but no toolkit carries a drawing tool, in any of the four. A tool is called at the model's discretion, and an image costs money and up to two minutes inside a four-round stream; a local text model cannot make images at all. The draw is the server's own job after a create commits ([Images](images.md)). Hob's part is the `appearance` line `proposeCharacter` writes, which the portrait prompt reads.
 
 ### Direct resource spends
 

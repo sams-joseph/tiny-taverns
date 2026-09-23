@@ -126,6 +126,42 @@ const npcName = Schema.NonEmptyString.check(Schema.isMaxLength(80));
 const npcRole = Schema.String.check(Schema.isMaxLength(120));
 
 /**
+ * Where an NPC's portrait loads from: three sizes of one square WebP, each a
+ * short-lived signed path on this API (`/npc-images/:imageId/:variant?e=…&s=…`).
+ *
+ * The same capability `CharacterPortraitImages` is: a path rather than an
+ * absolute URL, minted only inside a read whose SQL already returned the NPC to
+ * this reader — the creator's cast reads, or a player's read of a shared NPC —
+ * so whoever can see the NPC sees its portrait and nobody else gets a URL. A
+ * bad or expired one is `NotFound`.
+ */
+export class NpcImages extends Schema.Class<NpcImages>("NpcImages")({
+  /** 160 px square, for the 28 and 44 px plates at 2x. */
+  thumbUrl: Schema.String,
+  /** 640 px square. */
+  cardUrl: Schema.String,
+  /** 1024 px square, the drawn size. */
+  fullUrl: Schema.String,
+}) {}
+
+/** The portrait fields every read of a campaign NPC carries, the creator's and a player's alike. */
+const npcImageFields = {
+  /**
+   * The portrait Hob drew once, after the NPC was added to the cast — or
+   * `null`: none was drawn (images are off, there was nothing public to draw
+   * from, the provider refused), it is still being drawn, or this server cannot
+   * sign URLs.
+   */
+  image: Schema.NullOr(NpcImages),
+  /**
+   * The portrait is being drawn right now. A screen shows a quiet drawing state
+   * and re-reads until it clears; it never becomes true again, because a
+   * portrait is drawn once.
+   */
+  imagePending: Schema.Boolean,
+};
+
+/**
  * The row, as the creator reads it.
  *
  * `derivedFrom` is the nullable pointer a Library source leaves on a campaign
@@ -154,10 +190,15 @@ export class Npc extends Schema.Class<Npc>("Npc")({
   archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   visibility: Visibility,
   ...provenanceFields,
+  ...npcImageFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/**
+ * A Library original. **It has no portrait**: a portrait belongs to a campaign
+ * NPC and its campaign's creator, and a copy into a cast is drawn as it lands.
+ */
 export class NpcSource extends Schema.Class<NpcSource>("NpcSource")({
   id: NpcId,
   accountId: AccountId,
@@ -246,6 +287,7 @@ export class PlayerNpc extends Schema.Class<PlayerNpc>("PlayerNpc")({
   name: Schema.String,
   role: Schema.String,
   persona: NpcPersona,
+  ...npcImageFields,
   /** Present only when read as a live-session conversation. */
   sessionState: Schema.optional(NpcSessionState),
 }) {}
@@ -498,6 +540,7 @@ export class NpcFollowUpNpc extends Schema.Class<NpcFollowUpNpc>("NpcFollowUpNpc
   name: npcName,
   role: npcRole,
   archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  image: Schema.NullOr(NpcImages),
 }) {}
 
 export const NpcFollowUpProposalSource = Schema.Struct({

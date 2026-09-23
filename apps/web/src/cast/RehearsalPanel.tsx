@@ -1,9 +1,9 @@
-import type { CampaignId, NpcId } from "@taverns/api";
+import type { CampaignId, NpcId, NpcImages } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Icon, SectionHeading } from "@taverns/ui";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Composer, NothingListens, UserTurn } from "../hob/ChatParts";
-import { NpcAvatar } from "./NpcCard";
+import { NpcAvatar } from "./NpcAvatar";
 import type { Rehearsal } from "./rehearsal";
 
 /**
@@ -12,7 +12,7 @@ import type { Rehearsal } from "./rehearsal";
  * `UserTurn`, `Composer` and `NothingListens` are Hob's parts, reused because
  * a line the creator typed and a composer are the same thing in either
  * conversation. What is *not* reused is anything that says Hob: the reply row
- * wears the NPC's initials rather than the mark, the thinking line names the
+ * wears the NPC's own plate (its portrait, or its initials) rather than the mark, the thinking line names the
  * NPC, the composer's label names the NPC, and there is no "Knows" strip, no
  * starter grid and no slash commands — a rehearsal is a scene, not a palette.
  * The report's rule, kept as a shape: nothing on this panel can say "Hob".
@@ -27,6 +27,7 @@ import type { Rehearsal } from "./rehearsal";
  */
 export function RehearsalPanel({
   name,
+  image,
   rehearsal,
   subtitle = "Rehearse · only the creator can read this",
   emptyTitle = `Rehearse with ${name}`,
@@ -37,6 +38,8 @@ export function RehearsalPanel({
   jumpOnOpen = false,
 }: {
   readonly name: string;
+  /** The NPC's portrait, from the read that returned it; `null` draws the initials. */
+  readonly image: NpcImages | null;
   readonly rehearsal: Rehearsal;
   readonly subtitle?: string;
   readonly emptyTitle?: string;
@@ -81,7 +84,7 @@ export function RehearsalPanel({
       className="flex flex-1 flex-col overflow-clip rounded-card border border-hairline bg-surface-card"
     >
       <header className="flex shrink-0 items-center gap-2.5 border-b border-hairline p-3.5">
-        <NpcAvatar name={name} />
+        <NpcAvatar name={name} image={image} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-body-s leading-tight font-medium text-heading">{name}</span>
           <span className="truncate text-micro leading-snug text-faint">{subtitle}</span>
@@ -100,7 +103,7 @@ export function RehearsalPanel({
       <div className="flex flex-1 flex-col gap-3.5 p-3.5">
         {rehearsal.turns.length === 0 && !rehearsal.thinking ? (
           <div className="flex shrink-0 flex-col items-center px-2 pt-6 pb-1 text-center">
-            <NpcAvatar name={name} size="lg" />
+            <NpcAvatar name={name} image={image} size="lg" />
             <SectionHeading as="h3" size="display" className="mt-3">
               {emptyTitle}
             </SectionHeading>
@@ -115,7 +118,7 @@ export function RehearsalPanel({
                 {turn.text}
               </AttributedUserTurn>
             ) : (
-              <NpcReply key={turn.id} name={name}>
+              <NpcReply key={turn.id} name={name} image={image}>
                 {turn.text}
               </NpcReply>
             ),
@@ -123,7 +126,7 @@ export function RehearsalPanel({
         )}
         {rehearsal.thinking && (
           <div role="status" className="flex shrink-0 items-center gap-2.5">
-            <NpcAvatar name={name} />
+            <NpcAvatar name={name} image={image} />
             <span className="font-serif text-caption leading-body italic text-faint">
               {name} is thinking…
             </span>
@@ -220,11 +223,19 @@ function AttributedUserTurn({
   );
 }
 
-/** What the NPC said — the reply row, wearing the NPC's initials. */
-function NpcReply({ name, children }: { readonly name: string; readonly children: string }) {
+/** What the NPC said — the reply row, wearing the NPC's plate. */
+function NpcReply({
+  name,
+  image,
+  children,
+}: {
+  readonly name: string;
+  readonly image: NpcImages | null;
+  readonly children: string;
+}) {
   return (
     <div className="flex shrink-0 items-start gap-2.5">
-      <NpcAvatar name={name} />
+      <NpcAvatar name={name} image={image} />
       <div className="min-w-0 flex-1 pt-0.5 text-body-s leading-body whitespace-pre-wrap text-foreground">
         {children}
       </div>

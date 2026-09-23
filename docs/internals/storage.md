@@ -1,6 +1,6 @@
 # Storage: the cloud storage adapter
 
-The server keeps files (Hob-drawn images: character portraits, and campaign and Shared World covers) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
+The server keeps files (Hob-drawn images: character portraits, campaign and Shared World covers, and NPC portraits) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
 
 ## The interface is provider-neutral
 

@@ -216,6 +216,8 @@ export const cazril = {
   visibility: "dm",
   origin: "authored",
   assistantTurnId: null,
+  image: null,
+  imagePending: false,
   createdAt: stamps.createdAt,
   updatedAt: stamps.updatedAt,
 };
@@ -242,6 +244,8 @@ export const playerCazril = {
   name: "Cazril",
   role: "the ferryman at the crossing",
   persona: cazril.persona,
+  image: null,
+  imagePending: false,
 };
 
 export const npcRehearsalStatus = {
@@ -309,6 +313,13 @@ export const drawnCover = {
 export const drawnWorldCover = {
   cardUrl: "/shared-world-images/2b1f2a1e-0000-4000-8000-00000000c002/card?e=1&s=c",
   fullUrl: "/shared-world-images/2b1f2a1e-0000-4000-8000-00000000c002/full?e=1&s=f",
+};
+
+/** A cast NPC's portrait as the server signs it: `Npc.image` and `PlayerNpc.image`. */
+export const drawnNpcPortrait = {
+  thumbUrl: "/npc-images/2b1f2a1e-0000-4000-8000-00000000d001/thumb?e=1&s=t",
+  cardUrl: "/npc-images/2b1f2a1e-0000-4000-8000-00000000d001/card?e=1&s=c",
+  fullUrl: "/npc-images/2b1f2a1e-0000-4000-8000-00000000d001/full?e=1&s=f",
 };
 
 export const drawnPortrait = {
