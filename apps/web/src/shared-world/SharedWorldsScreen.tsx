@@ -8,23 +8,17 @@ import {
   CardHeader,
   CardTitle,
   Icon,
-  Input,
   EmptyState,
   Loading,
 } from "@taverns/ui";
-import { Result } from "effect";
-import { useCallback, useState } from "react";
-import { useApiAtom, useInvalidate } from "../api/atoms";
-import { runApiResult } from "../api/client";
-import { reads } from "../api/keys";
-import { useCredential } from "../auth/credential";
+import { useState } from "react";
+import { useApiAtom } from "../api/atoms";
 import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { TopBar } from "../shell/TopBar";
-import { describedBy } from "../ui/describedBy";
-import { NewSharedWorldDescription } from "../ui/description";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
+import { NewSharedWorldDialog } from "./NewSharedWorldDialog";
 import { sharedWorldsAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -32,8 +26,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * Every explicit Shared World this account belongs to. Campaigns remain home;
  * this is the optional cross-campaign context directory.
  *
- * Founding one makes you its owner and first member in one transaction
- * (`sharedWorlds.create`), and campaigns can then be started inside it.
+ * Founding one (*New Shared World*, the bar's one primary) makes you its owner
+ * and first member in one transaction (`sharedWorlds.create`) and lands on it;
+ * campaigns can then be started inside it.
  *
  * There is no mode and no filter: an account's Shared Worlds are the explicit
  * contexts it belongs to, independently of its relation to any campaign.
@@ -76,70 +71,11 @@ function SharedWorldRow({ membership }: { readonly membership: SharedWorldMember
   );
 }
 
-/**
- * Names a new Shared World, and describes it if its founder wants to — before
- * the one cover draw reads it. Everything else about it has a column default.
- */
-function NewSharedWorld() {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  const create = useCallback(async () => {
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.sharedWorlds.create({ payload: describedBy({ name: name.trim() }, description) }),
-      token,
-    );
-
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError(
-        result.failure.kind === "unauthorized"
-          ? "That credential is not good for this."
-          : "That did not save. Try it again.",
-      );
-      return;
-    }
-    setName("");
-    setDescription("");
-    invalidate([reads.mySharedWorlds]);
-  }, [description, fetchCredential, invalidate, name]);
-
-  return (
-    <div className="flex max-w-xl flex-col gap-3">
-      <Input
-        aria-label="Shared World name"
-        placeholder="The Salt Company"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        className="max-w-xs"
-      />
-      <NewSharedWorldDescription value={description} onChange={setDescription} />
-      <div>
-        <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
-          {busy ? "Working…" : "Create Shared World"}
-        </Button>
-      </div>
-      {error !== undefined && (
-        <p role="alert" className="text-body-s leading-body text-danger">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function SharedWorldsScreen() {
   const [resource, retry] = useApiAtom(sharedWorldsAtom);
   const [worldShelfOpen, setWorldShelfOpen] = useState(false);
   const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
   // A world founded here, or promoted from a campaign, lands on this list while
@@ -154,7 +90,12 @@ export function SharedWorldsScreen() {
       <TopBar
         title="Shared Worlds"
         subtitle="Connected campaigns with one history and a shared memory for Hob."
-      />
+      >
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Icon name="plus" size={14} />
+          New Shared World
+        </Button>
+      </TopBar>
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
@@ -162,10 +103,10 @@ export function SharedWorldsScreen() {
         )}
         {memberships !== undefined && (
           <>
-            <NewSharedWorld />
             {memberships.length === 0 ? (
               <EmptyState icon="map" title="No Shared World yet">
-                Create one when two campaigns should share history and Hob's memory.
+                Create one with <em>New Shared World</em> when two campaigns should share history
+                and Hob's memory.
               </EmptyState>
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
@@ -202,6 +143,7 @@ export function SharedWorldsScreen() {
 
       {worldShelfOpen && <ArchivedSharedWorldsDialog onClose={() => setWorldShelfOpen(false)} />}
       {campaignShelfOpen && <ArchivedDialog onClose={() => setCampaignShelfOpen(false)} />}
+      {creating && <NewSharedWorldDialog onClose={() => setCreating(false)} />}
     </>
   );
 }

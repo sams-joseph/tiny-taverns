@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   Icon,
-  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -24,17 +23,18 @@ import {
   Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
 import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { TopBar } from "../shell/TopBar";
 import { describedBy } from "../ui/describedBy";
-import { NewCampaignDescription, NewSharedWorldDescription } from "../ui/description";
+import { NewSharedWorldDialog, SharedWorldFields } from "../shared-world/NewSharedWorldDialog";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { ArchivedDialog } from "./ArchivedDialog";
+import { NewCampaignDialog } from "./NewCampaignDialog";
 import { HobCover } from "../hob/HobCover";
 import { membershipsAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -315,13 +315,12 @@ function SharedWorldTransitionDialog({
               <span className="text-label leading-snug font-semibold text-heading">
                 {worlds.length > 0 ? "Or create a new Shared World" : "Create a Shared World"}
               </span>
-              <Input
-                aria-label="Shared World name"
-                placeholder="The Salt Marches"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+              <SharedWorldFields
+                name={name}
+                onName={setName}
+                description={description}
+                onDescription={setDescription}
               />
-              <NewSharedWorldDescription value={description} onChange={setDescription} />
             </div>
           )}
           {error !== undefined && (
@@ -350,107 +349,25 @@ function SharedWorldTransitionDialog({
   );
 }
 
-function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMembership> }) {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [target, setTarget] = useState(STANDALONE);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  const create = useCallback(async () => {
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const world = worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
-    const payload = describedBy({ name: name.trim() }, description);
-    const result = await runApiResult(
-      (client) =>
-        world === undefined
-          ? client.campaigns.create({ payload })
-          : client.sharedWorlds.createCampaign({ params: { worldId: world.id }, payload }),
-      token,
-    );
-
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError(
-        result.failure.kind === "unauthorized"
-          ? "That credential is not good for this."
-          : "That did not save. Try it again.",
-      );
-      return;
-    }
-
-    invalidate([reads.myCampaigns]);
-    if (world !== undefined) invalidate([reads.sharedWorld(world.id)]);
-    await navigate({
-      to: "/campaigns/$campaignId",
-      params: { campaignId: result.success.id },
-    });
-  }, [description, fetchCredential, invalidate, name, navigate, target, worlds]);
-
-  return (
-    <div className="flex max-w-xl flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          aria-label="New campaign name"
-          placeholder="The Salt Road"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="max-w-xs"
-        />
-        {worlds.length > 0 && (
-          <Select value={target} onValueChange={(value) => setTarget(String(value))}>
-            <SelectTrigger aria-label="Campaign context" className="w-56">
-              <SelectValue>
-                {(value) =>
-                  value === STANDALONE
-                    ? "Standalone campaign"
-                    : (worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
-                        .name ?? "Shared World")
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={STANDALONE}>Standalone campaign</SelectItem>
-              {worlds.map(({ sharedWorld }) => (
-                <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
-                  {sharedWorld.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-      <NewCampaignDescription value={description} onChange={setDescription} />
-      <div>
-        <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
-          {busy ? "Working…" : "Start a campaign"}
-        </Button>
-      </div>
-      {error !== undefined && (
-        <p role="alert" className="text-body-s leading-body text-danger">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
+/**
+ * Every Shared World this account belongs to, and the way to found one. That
+ * press is this section's, so it lives in the section rather than the bar,
+ * whose one primary is *New campaign*.
+ */
 function SharedWorldDirectory({
   worlds,
+  onNew,
 }: {
   readonly worlds: ReadonlyArray<SharedWorldMembership>;
+  readonly onNew: () => void;
 }) {
   return (
     <section className="flex flex-col gap-2" aria-label="Shared Worlds">
       <span className="text-label leading-snug font-semibold text-heading">Shared Worlds</span>
       {worlds.length === 0 ? (
         <p className="text-body-s leading-body text-muted-foreground">
-          Shared Worlds you create or join will appear here.
+          Shared Worlds you create or join will appear here. Found one when several campaigns should
+          share a history and Hob's memory.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -475,6 +392,10 @@ function SharedWorldDirectory({
           ))}
         </div>
       )}
+      <Button variant="outline" size="sm" className="self-start" onClick={onNew}>
+        <Icon name="plus" size={14} />
+        New Shared World
+      </Button>
     </section>
   );
 }
@@ -483,6 +404,8 @@ export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
+  const [creating, setCreating] = useState<"campaign" | "world" | undefined>();
+  const navigate = useNavigate();
   const [transition, setTransition] = useState<
     { readonly mode: SharedWorldTransition; readonly membership: CampaignMembership } | undefined
   >();
@@ -496,7 +419,12 @@ export function CampaignsScreen() {
 
   return (
     <>
-      <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play." />
+      <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play.">
+        <Button size="sm" onClick={() => setCreating("campaign")}>
+          <Icon name="plus" size={14} />
+          New campaign
+        </Button>
+      </TopBar>
       <div className="flex flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
@@ -504,10 +432,10 @@ export function CampaignsScreen() {
         )}
         {memberships !== undefined && (
           <>
-            <NewCampaign worlds={worlds} />
             {memberships.length === 0 ? (
               <EmptyState icon="book-open" title="No campaign yet">
-                Start one above, or follow an invitation from somebody running a game.
+                Start one with <em>New campaign</em>, or follow an invitation from somebody running
+                a game.
               </EmptyState>
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
@@ -541,12 +469,22 @@ export function CampaignsScreen() {
               <Icon name="history" size={14} />
               Archived campaigns
             </Button>
-            <SharedWorldDirectory worlds={worlds} />
+            <SharedWorldDirectory worlds={worlds} onNew={() => setCreating("world")} />
           </>
         )}
       </div>
 
       {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
+      {creating === "campaign" && (
+        <NewCampaignDialog
+          context={{ kind: "choose", worlds }}
+          onClose={() => setCreating(undefined)}
+          onCreated={(campaign) =>
+            navigate({ to: "/campaigns/$campaignId", params: { campaignId: campaign.id } })
+          }
+        />
+      )}
+      {creating === "world" && <NewSharedWorldDialog onClose={() => setCreating(undefined)} />}
       {transition !== undefined && (
         <SharedWorldTransitionDialog
           mode={transition.mode}

@@ -65,24 +65,37 @@ describe("the Shared Worlds list", () => {
     expect(open.getAttribute("href")).toBe(`/#/worlds/${worldId}`);
   });
 
-  it("founds a sharedWorld with one field, and re-reads the list", async () => {
-    server.routes.set("POST /worlds", { status: 200, body: sharedWorld });
+  it("puts New Shared World in the bar and no create form in the body", async () => {
     await renderCampaigns("/worlds", mintingSession());
     await screen.findByText("The Salt Company");
 
+    expect(screen.getByRole("button", { name: "New Shared World" }).classList).toContain(
+      "bg-accent",
+    );
+    expect(screen.queryByLabelText("Shared World name")).toBeNull();
+  });
+
+  it("founds a sharedWorld with one field, and lands on it", async () => {
+    server.routes.set("POST /worlds", { status: 200, body: sharedWorldDetails });
+    await renderCampaigns("/worlds", mintingSession());
+    await screen.findByText("The Salt Company");
+
+    await userEvent.click(screen.getByRole("button", { name: "New Shared World" }));
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Hag's Bargain Co");
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/worlds")).toEqual({ name: "The Hag's Bargain Co" }),
     );
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${worldId}`));
   });
 
   it("founds a Shared World with its description, trimmed, for the one cover draw", async () => {
-    server.routes.set("POST /worlds", { status: 200, body: sharedWorld });
+    server.routes.set("POST /worlds", { status: 200, body: sharedWorldDetails });
     await renderCampaigns("/worlds", mintingSession());
     await screen.findByText("The Salt Company");
 
+    await userEvent.click(screen.getByRole("button", { name: "New Shared World" }));
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Reach");
     await userEvent.type(
       screen.getByLabelText("Shared World description"),
@@ -213,6 +226,7 @@ describe("one Shared World's screen", () => {
     await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
 
+    await userEvent.click(screen.getByRole("button", { name: "New campaign" }));
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
@@ -223,11 +237,26 @@ describe("one Shared World's screen", () => {
     );
   });
 
+  it("asks for a new campaign in a dialog without offering another context", async () => {
+    await renderSharedWorld(mintingSession());
+    await screen.findByText("The Salt Road");
+
+    expect(screen.queryByLabelText("New campaign name")).toBeNull();
+    const section = screen.getByRole("region", { name: "Campaigns" });
+    await userEvent.click(within(section).getByRole("button", { name: "New campaign" }));
+    const dialog = await screen.findByRole("dialog", { name: "New campaign" });
+    expect(within(dialog).getByText(/A new table in The Salt Company/)).toBeTruthy();
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("starts a campaign in this Shared World with its description", async () => {
     server.routes.set(`POST /worlds/${worldId}/campaigns`, { status: 200, body: campaign });
     await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
 
+    await userEvent.click(screen.getByRole("button", { name: "New campaign" }));
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
     await userEvent.type(
       screen.getByLabelText("New campaign description"),

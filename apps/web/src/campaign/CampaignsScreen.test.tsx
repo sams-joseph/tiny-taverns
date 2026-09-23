@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -14,6 +14,11 @@ import {
 
 const server = installStubServer();
 installMemoryStorage();
+
+const openNewCampaign = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "New campaign" }));
+  return screen.findByRole("dialog", { name: "New campaign" });
+};
 
 beforeEach(() => {
   server.reset();
@@ -200,11 +205,54 @@ describe("the campaign-first home", () => {
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${destination.id}`));
   });
 
+  it("puts New campaign in the bar and no create form in the body", async () => {
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    // The bar's one primary, and the inline form it replaced is gone.
+    expect(screen.getByRole("button", { name: "New campaign" }).classList).toContain("bg-accent");
+    expect(screen.queryByLabelText("New campaign name")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start a campaign" })).toBeNull();
+  });
+
+  it("closes the new campaign dialog on Cancel without writing", async () => {
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    await openNewCampaign();
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+  });
+
+  it("keeps the new campaign dialog open and says so when the create fails", async () => {
+    server.routes.set("POST /campaigns", { status: 500, body: {} });
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    const dialog = await openNewCampaign();
+    expect(
+      (within(dialog).getByRole("button", { name: "Start a campaign" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "That did not save. Try it again.",
+    );
+    expect(screen.getByLabelText("New campaign name")).toHaveValue("The Long Winter");
+    expect(globalThis.location.hash).toBe("#/campaigns");
+  });
+
   it("creates from one name and opens the campaign", async () => {
     server.routes.set("POST /campaigns", { status: 200, body: campaign });
     await renderCampaigns("/campaigns", mintingSession());
     await screen.findByText("The Salt Road");
 
+    await openNewCampaign();
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
     await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
 
@@ -219,6 +267,7 @@ describe("the campaign-first home", () => {
     await renderCampaigns("/campaigns", mintingSession());
     await screen.findByText("The Salt Road");
 
+    await openNewCampaign();
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
     await userEvent.type(
       screen.getByLabelText("New campaign description"),
@@ -242,6 +291,7 @@ describe("the campaign-first home", () => {
     await renderCampaigns("/campaigns", mintingSession());
     await screen.findByText("The Salt Road");
 
+    await openNewCampaign();
     await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
     await userEvent.click(screen.getByRole("combobox", { name: "Campaign context" }));
     await userEvent.click(await screen.findByRole("option", { name: "The Salt Company" }));
@@ -264,7 +314,70 @@ describe("the campaign-first home", () => {
 
     expect(await screen.findByText("No campaign yet")).toBeTruthy();
     expect(screen.getByText(/follow an invitation/)).toBeTruthy();
+    expect(screen.getByText("New campaign", { selector: "em" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Shared World The Salt Company" })).toBeTruthy();
     expect(screen.queryByText(/group/i)).toBeNull();
+  });
+});
+
+describe("founding a Shared World from the campaign list", () => {
+  const openNewSharedWorld = async () => {
+    const section = await screen.findByRole("region", { name: "Shared Worlds" });
+    await userEvent.click(within(section).getByRole("button", { name: "New Shared World" }));
+    return screen.findByRole("dialog", { name: "New Shared World" });
+  };
+
+  it("offers it inside the directory, beside the empty state, as a secondary", async () => {
+    server.routes.set("GET /worlds", { status: 200, body: [] });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    const section = await screen.findByRole("region", { name: "Shared Worlds" });
+    expect(
+      within(section).getByText(/Shared Worlds you create or join will appear here/),
+    ).toBeTruthy();
+    const press = within(section).getByRole("button", { name: "New Shared World" });
+    expect(press.classList).not.toContain("bg-accent");
+  });
+
+  it("founds one on its own with its description, and lands on it", async () => {
+    server.routes.set("POST /worlds", { status: 200, body: sharedWorldDetails });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await openNewSharedWorld();
+    await userEvent.type(screen.getByLabelText("Shared World name"), "  The Reach ");
+    await userEvent.type(screen.getByLabelText("Shared World description"), "Chained islands.");
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/worlds")).toEqual({
+        name: "The Reach",
+        description: "Chained islands.",
+      }),
+    );
+    // Standalone: no campaign is promoted or connected on the way.
+    expect(server.calls.some((call) => call.pathname.includes("/shared-world"))).toBe(false);
+    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
+  });
+
+  it("says when founding fails and keeps the dialog", async () => {
+    server.routes.set("POST /worlds", { status: 500, body: {} });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    const dialog = await openNewSharedWorld();
+    await userEvent.type(screen.getByLabelText("Shared World name"), "The Reach");
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("That did not save.");
+    expect(globalThis.location.hash).toBe("#/campaigns");
+  });
+
+  it("closes on Cancel without writing", async () => {
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await openNewSharedWorld();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
   });
 });
