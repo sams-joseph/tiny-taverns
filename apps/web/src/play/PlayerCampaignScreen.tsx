@@ -15,7 +15,9 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import { CampaignCover } from "../campaign/CampaignCover";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
 import { loadPlayerCampaignView } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -158,6 +160,8 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
   const [resource, reload] = useApiAtom(playerCampaignAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
+  // A player can arrive while the cover is still being drawn; re-read until it lands.
+  useHobDrawingPolling(view?.campaign.imagePending === true, reload);
   const empty =
     view !== undefined &&
     view.party.length === 0 &&
@@ -189,6 +193,14 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
         {resource.state === "loading" && <Loading label="Reading the table…" />}
         {resource.state === "failed" && (
           <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+        )}
+
+        {view !== undefined && (
+          <CampaignCover
+            image={view.campaign.image}
+            pending={view.campaign.imagePending}
+            shape="band"
+          />
         )}
 
         {view !== undefined &&

@@ -48,6 +48,8 @@ export const campaign = {
   playerCount: 4,
   currentSessionId: session12Id,
   visibility: "dm",
+  image: null,
+  imagePending: false,
   archivedAt: null,
   ...provenance,
   ...stamps,

@@ -51,7 +51,7 @@ import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
-import { Portraits } from "./portraits/Portraits.js";
+import { HobImages } from "./images/HobImages.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
@@ -114,25 +114,34 @@ const CampaignsLive = HttpApiBuilder.group(
     const campaigns = yield* Campaigns;
     const groups = yield* Groups;
     const asDm = yield* asDmOf;
-    return handlers
-      .handle("list", () => campaigns.list)
-      .handle("create", ({ payload }) => campaigns.createStandalone(payload))
-      .handle("promoteSharedWorld", ({ params, payload }) =>
-        asDm(params.campaignId, (creator) => groups.promote(creator, payload)),
-      )
-      .handle("connectSharedWorld", ({ params, payload }) =>
-        asDm(params.campaignId, (creator) => groups.connect(creator, payload.worldId)),
-      )
-      .handle("disconnectSharedWorld", ({ params }) =>
-        asDm(params.campaignId, (creator) => campaigns.disconnectSharedWorld(creator)),
-      )
-      .handle("moveSharedWorld", ({ params, payload }) =>
-        asDm(params.campaignId, (creator) => groups.move(creator, payload.worldId)),
-      )
-      .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
-      .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
-      .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
-      .handle("restore", ({ params }) => campaigns.restore(params.campaignId));
+    const images = yield* HobImages;
+    return (
+      handlers
+        .handle("list", () => campaigns.list)
+        // The cover is started after the create commits, as a character's
+        // portrait is: `drawCampaign` returns at once, with the campaign marked
+        // `imagePending` when a draw started. The Shared World group's
+        // `createCampaign` is the other way a campaign is made, and does the same.
+        .handle("create", ({ payload }) =>
+          campaigns.createStandalone(payload).pipe(Effect.flatMap(images.drawCampaign)),
+        )
+        .handle("promoteSharedWorld", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) => groups.promote(creator, payload)),
+        )
+        .handle("connectSharedWorld", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) => groups.connect(creator, payload.worldId)),
+        )
+        .handle("disconnectSharedWorld", ({ params }) =>
+          asDm(params.campaignId, (creator) => campaigns.disconnectSharedWorld(creator)),
+        )
+        .handle("moveSharedWorld", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) => groups.move(creator, payload.worldId)),
+        )
+        .handle("findById", ({ params }) => campaigns.findById(params.campaignId))
+        .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
+        .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
+        .handle("restore", ({ params }) => campaigns.restore(params.campaignId))
+    );
   }),
 );
 
@@ -164,7 +173,7 @@ const MeLive = HttpApiBuilder.group(
     const memberships = yield* Memberships;
     const characters = yield* Characters;
     const spells = yield* Spells;
-    const portraits = yield* Portraits;
+    const images = yield* HobImages;
     return (
       handlers
         // The whole handler, and there is nothing for it to pass: `identity`
@@ -194,17 +203,17 @@ const MeLive = HttpApiBuilder.group(
         //
         // The portrait is started after `createOwn` commits, never inside it:
         // the job must find a committed row, and Hob's accept below calls the
-        // same `drawAfterCreate` after *its* transaction. It returns at once,
+        // same `drawCharacter` after *its* transaction. It returns at once,
         // with the character marked `portraitPending` when a draw started.
         .handle("createCharacter", ({ params, payload }) =>
           characters
             .createOwn(params.campaignId, payload)
-            .pipe(Effect.flatMap(portraits.drawAfterCreate)),
+            .pipe(Effect.flatMap(images.drawCharacter)),
         )
         // The delete's own trigger enqueued the portrait's files; this only
         // drains them now rather than at the next minute's sweep.
         .handle("deleteCharacter", ({ params }) =>
-          characters.removeOwn(params.characterId).pipe(Effect.tap(() => portraits.drainSoon)),
+          characters.removeOwn(params.characterId).pipe(Effect.tap(() => images.drainSoon)),
         )
     );
   }),
@@ -250,16 +259,23 @@ const SharedWorldsLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const groups = yield* Groups;
     const campaigns = yield* Campaigns;
-    return handlers
-      .handle("list", () => groups.mine)
-      .handle("archived", () => groups.archived)
-      .handle("create", ({ payload }) => groups.create(payload))
-      .handle("findById", ({ params }) => groups.findById(params.worldId))
-      .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))
-      .handle("archive", ({ params }) => groups.archive(params.worldId))
-      .handle("restore", ({ params }) => groups.restore(params.worldId))
-      .handle("campaigns", ({ params }) => groups.campaigns(params.worldId))
-      .handle("createCampaign", ({ params, payload }) => campaigns.create(params.worldId, payload));
+    const images = yield* HobImages;
+    return (
+      handlers
+        .handle("list", () => groups.mine)
+        .handle("archived", () => groups.archived)
+        .handle("create", ({ payload }) => groups.create(payload))
+        .handle("findById", ({ params }) => groups.findById(params.worldId))
+        .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))
+        .handle("archive", ({ params }) => groups.archive(params.worldId))
+        .handle("restore", ({ params }) => groups.restore(params.worldId))
+        .handle("campaigns", ({ params }) => groups.campaigns(params.worldId))
+        // The second way a campaign is made, so it starts the cover exactly as
+        // `campaigns.create` does, after its transaction commits.
+        .handle("createCampaign", ({ params, payload }) =>
+          campaigns.create(params.worldId, payload).pipe(Effect.flatMap(images.drawCampaign)),
+        )
+    );
   }),
 );
 
@@ -301,17 +317,22 @@ const CampaignInvitesLive = HttpApiBuilder.group(
  * this handler has, and what it discloses is decided in `repo/Invites.ts`.
  */
 /**
- * Portrait bytes, behind a signature instead of a credential; see the group's
- * declaration and `portraits/Portraits.ts`.
+ * Hob-drawn image bytes, behind a signature instead of a credential; see the
+ * group's declaration and `images/HobImages.ts`. One handler per kind, each
+ * checking signatures minted for its own kind only.
  */
-const PortraitsLive = HttpApiBuilder.group(
+const ImagesLive = HttpApiBuilder.group(
   TavernsApi,
-  "portraits",
+  "images",
   Effect.fnUntraced(function* (handlers) {
-    const portraits = yield* Portraits;
-    return handlers.handle("image", ({ params, query }) =>
-      portraits.image({ ...params, e: query.e, s: query.s }),
-    );
+    const images = yield* HobImages;
+    return handlers
+      .handle("portrait", ({ params, query }) =>
+        images.image("character", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("campaign", ({ params, query }) =>
+        images.image("campaign", { ...params, e: query.e, s: query.s }),
+      );
   }),
 );
 
@@ -800,7 +821,7 @@ const HobLive = HttpApiBuilder.group(
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
     const dmActors = yield* CampaignCreatorActors;
-    const portraits = yield* Portraits;
+    const images = yield* HobImages;
 
     /**
      * Whose conversations a *listing* reaches — **one read, and the same
@@ -854,7 +875,7 @@ const HobLive = HttpApiBuilder.group(
           ).pipe(
             Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> =>
               accepted.accepted === "character"
-                ? Effect.map(portraits.drawAfterCreate(accepted.character), (character) => ({
+                ? Effect.map(images.drawCharacter(accepted.character), (character) => ({
                     ...accepted,
                     character,
                   }))
@@ -1319,7 +1340,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldLibraryLive,
     SharedWorldMembersLive,
     InvitePreviewLive,
-    PortraitsLive,
+    ImagesLive,
     JoinLive,
     CampaignsLive,
     MembersLive,

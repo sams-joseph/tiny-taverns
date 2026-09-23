@@ -108,6 +108,8 @@ export const campaign = {
   playerCount: 4,
   currentSessionId: sessionId,
   visibility: "dm",
+  image: null,
+  imagePending: false,
   archivedAt: null,
   ...provenance,
   ...stamps,
@@ -295,6 +297,12 @@ export const character = {
  * the shape matters here: jsdom loads no image, so a plate test asserts the
  * `<img>` it lays over the initials, not the picture.
  */
+/** A campaign's cover as the server signs it: `Campaign.image`. */
+export const drawnCover = {
+  cardUrl: "/campaign-images/2b1f2a1e-0000-4000-8000-00000000c001/card?e=1&s=c",
+  fullUrl: "/campaign-images/2b1f2a1e-0000-4000-8000-00000000c001/full?e=1&s=f",
+};
+
 export const drawnPortrait = {
   thumbUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/thumb?e=1&s=t",
   cardUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/card?e=1&s=c",

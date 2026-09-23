@@ -137,6 +137,7 @@ describe("migrations", () => {
       "beat",
       "campaign",
       "campaign_character",
+      "campaign_image",
       "campaign_member",
       "character",
       "character_option",
@@ -269,6 +270,7 @@ describe("migrations", () => {
       { migration_id: 46, name: "campaign_invites" },
       { migration_id: 47, name: "shared_worlds" },
       { migration_id: 48, name: "character_portraits" },
+      { migration_id: 49, name: "campaign_images" },
     ]);
   }, 60_000);
 
@@ -326,6 +328,7 @@ describe("migrations", () => {
       { migration_id: 46, name: "campaign_invites" },
       { migration_id: 47, name: "shared_worlds" },
       { migration_id: 48, name: "character_portraits" },
+      { migration_id: 49, name: "campaign_images" },
     ]);
   }, 60_000);
 });

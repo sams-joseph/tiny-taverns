@@ -31,7 +31,9 @@ import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { TopBar } from "../shell/TopBar";
 import { sharedWorldsAtom } from "../shared-world/load";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { ArchivedDialog } from "./ArchivedDialog";
+import { CampaignCover } from "./CampaignCover";
 import { membershipsAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -57,7 +59,8 @@ function CampaignRow({
 }) {
   const campaign = membership.campaign;
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      <CampaignCover image={campaign.image} pending={campaign.imagePending} shape="card" />
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
@@ -479,6 +482,11 @@ export function CampaignsScreen() {
   >();
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
+  // While Hob draws a new campaign's cover, re-read until it lands.
+  useHobDrawingPolling(
+    memberships?.some((membership) => membership.campaign.imagePending) === true,
+    retry,
+  );
 
   return (
     <>

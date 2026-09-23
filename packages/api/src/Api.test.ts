@@ -132,12 +132,18 @@ describe("the API declaration", () => {
     // and a deadline. See `Invite.ts` for the trade and `repo/Invites.ts` for
     // the read. Adding a third name here should be at least as hard.
     //
-    // **The third is `portraits.image`**, because an `<img>` cannot send the
-    // bearer header. Its capability is an HMAC over the portrait, the size and
-    // an expiry, minted only inside a character read a visibility predicate
+    // **The third is `images`**, one endpoint per kind of Hob-drawn image,
+    // because an `<img>` cannot send the bearer header. Its capability is an
+    // HMAC over the kind, the image, the size and an expiry, minted only inside
+    // a read of the character or the campaign that a visibility predicate
     // already allowed; every failure is the same `NotFound`. See the group's
-    // declaration and `apps/server/src/portraits/PortraitUrls.ts`.
-    expect(unauthenticated).toEqual(["health.check", "invitePreview.read", "portraits.image"]);
+    // declaration and `apps/server/src/images/ImageUrls.ts`.
+    expect(unauthenticated).toEqual([
+      "health.check",
+      "invitePreview.read",
+      "images.portrait",
+      "images.campaign",
+    ]);
   });
 
   /**
@@ -266,6 +272,8 @@ describe("the API declaration", () => {
       "encounters",
       "health",
       "hob",
+      // Hob-drawn image bytes behind a signed URL, not a credential: see above.
+      "images",
       "invitePreview",
       "join",
       // The Library: where every corpus original is authored and managed, read
@@ -290,8 +298,6 @@ describe("the API declaration", () => {
       // account-owned character. It replaced the campaign-scoped `characters`
       // group when the continuity decision made the character top-level.
       "party",
-      // Portrait bytes behind a signed URL, not a credential: see above.
-      "portraits",
       "prep",
       "recap",
       "rolls",

@@ -2,7 +2,11 @@ import { cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiUrl } from "../api/client";
 import { CharacterPortrait } from "./CharacterPortrait";
-import { PORTRAIT_POLL_LIMIT_MS, PORTRAIT_POLL_MS, usePortraitPolling } from "./portraitPolling";
+import {
+  DRAWING_POLL_LIMIT_MS,
+  DRAWING_POLL_MS,
+  useHobDrawingPolling,
+} from "../hob/drawingPolling";
 
 /**
  * The plate: initials always, the portrait over them when there is one, and the
@@ -108,38 +112,38 @@ describe("CharacterPortrait on a list row", () => {
   });
 });
 
-describe("usePortraitPolling", () => {
+describe("useHobDrawingPolling", () => {
   afterEach(() => vi.useRealTimers());
 
   it("re-reads every two seconds while pending, and stops when it is not", () => {
     vi.useFakeTimers();
     const reload = vi.fn();
-    const { rerender } = renderHook(({ pending }) => usePortraitPolling(pending, reload), {
+    const { rerender } = renderHook(({ pending }) => useHobDrawingPolling(pending, reload), {
       initialProps: { pending: true },
     });
-    vi.advanceTimersByTime(PORTRAIT_POLL_MS * 3);
+    vi.advanceTimersByTime(DRAWING_POLL_MS * 3);
     expect(reload).toHaveBeenCalledTimes(3);
     rerender({ pending: false });
-    vi.advanceTimersByTime(PORTRAIT_POLL_MS * 3);
+    vi.advanceTimersByTime(DRAWING_POLL_MS * 3);
     expect(reload).toHaveBeenCalledTimes(3);
   });
 
   it("gives up after three minutes", () => {
     vi.useFakeTimers();
     const reload = vi.fn();
-    renderHook(() => usePortraitPolling(true, reload));
-    vi.advanceTimersByTime(PORTRAIT_POLL_LIMIT_MS + PORTRAIT_POLL_MS * 5);
+    renderHook(() => useHobDrawingPolling(true, reload));
+    vi.advanceTimersByTime(DRAWING_POLL_LIMIT_MS + DRAWING_POLL_MS * 5);
     const calls = reload.mock.calls.length;
-    expect(calls).toBeLessThanOrEqual(PORTRAIT_POLL_LIMIT_MS / PORTRAIT_POLL_MS);
-    vi.advanceTimersByTime(PORTRAIT_POLL_MS * 10);
+    expect(calls).toBeLessThanOrEqual(DRAWING_POLL_LIMIT_MS / DRAWING_POLL_MS);
+    vi.advanceTimersByTime(DRAWING_POLL_MS * 10);
     expect(reload).toHaveBeenCalledTimes(calls);
   });
 
   it("does nothing when nothing is being drawn", () => {
     vi.useFakeTimers();
     const reload = vi.fn();
-    renderHook(() => usePortraitPolling(false, reload));
-    vi.advanceTimersByTime(PORTRAIT_POLL_MS * 5);
+    renderHook(() => useHobDrawingPolling(false, reload));
+    vi.advanceTimersByTime(DRAWING_POLL_MS * 5);
     expect(reload).not.toHaveBeenCalled();
   });
 });

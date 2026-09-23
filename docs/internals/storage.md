@@ -1,6 +1,6 @@
 # Storage: the cloud storage adapter
 
-The server keeps files (character portraits first) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
+The server keeps files (Hob-drawn images: character portraits and campaign covers) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
 
 ## The interface is provider-neutral
 
@@ -8,7 +8,7 @@ The server keeps files (character portraits first) behind one Effect service, `O
 - **Operations**: `put` (bytes and a content type, replacing), `get` (metadata plus a byte stream, or `StorageNotFound`), `head` (metadata or `None`), `delete` (idempotent), `deletePrefix` (idempotent).
 - **`deletePrefix(p)` removes keys under `p/`**, at any depth. It does not remove an object stored at `p` itself, or `p2/…`. S3-style providers must list with the trailing slash to match.
 - **No bucket, region, endpoint or URL appears in the interface.** A provider's configuration is its adapter's business, read in its branch of `storageFromConfig`.
-- **Errors are ours**: `StorageNotFound`, `StorageError` and `StorageUnavailable`. `StorageError.message` names only the operation and the key; provider text goes in `cause`, which is for logs. No storage error reaches the wire: the portrait image route maps `StorageNotFound` to the contract's `NotFound` and lets the other two be a 500.
+- **Errors are ours**: `StorageNotFound`, `StorageError` and `StorageUnavailable`. `StorageError.message` names only the operation and the key; provider text goes in `cause`, which is for logs. No storage error reaches the wire: the image routes map `StorageNotFound` to the contract's `NotFound` and let the other two be a 500.
 
 ## Configuration and the boot line
 
@@ -41,5 +41,5 @@ Every branch logs one line, as hosted sign-in and Hob do (`server.md`, _Env file
 
 Keys are derived from ids, never from anything a person typed, and never overwritten.
 
-- **Portraits**: `portraits/{accountId}/{characterId}/{portraitId}/` holds `original.png` (the provider's bytes, untouched, so provenance credentials survive), `full.webp` (1024), `card.webp` (640) and `thumb.webp` (160). The prefix is built by `portraitPrefix` in `repo/Portraits.ts` and written to `character_portrait.storage_prefix` at insert; one `deletePrefix` removes every size, and the account segment makes an account-wide purge one more.
-- **Deletion is an outbox**, `storage_deletion`, filled by a trigger when a portrait row is deleted and by a failed or interrupted draw, and drained through `deletePrefix`. A failed drain backs off a minute per attempt. See [Characters](characters.md), _The portrait_.
+- **Hob-drawn images**: `{root}/{accountId}/{subjectId}/{imageId}/`, where the root is the kind's (`images/kinds.ts`): `portraits/…` for a character and `campaign-images/…` for a campaign, whose account is the campaign's creator. Each prefix holds `original.png` (the provider's bytes, untouched, so provenance credentials survive) and the kind's WebP variants: a portrait's `full.webp` (1024), `card.webp` (640) and `thumb.webp` (160), and a cover's `full.webp` (1536 × 1024) and `card.webp` (768 × 512). The prefix is built by `imagePrefix` in `repo/Images.ts` and written to the row's `storage_prefix` at insert. One `deletePrefix` removes every size, and the account segment means an account-wide purge takes one more call per root.
+- **Deletion is an outbox**, `storage_deletion`. A trigger on every image table fills it when a row is deleted, and a failed or interrupted draw fills it too. It is drained through `deletePrefix`, and a failed drain backs off a minute per attempt. See [Images](images.md), _Deleting and archiving_.

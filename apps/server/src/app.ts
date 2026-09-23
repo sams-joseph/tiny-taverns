@@ -65,10 +65,10 @@ import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
-import { ImageModel } from "./portraits/ImageModel.js";
-import { Portraits } from "./portraits/Portraits.js";
-import { PortraitUrls } from "./portraits/PortraitUrls.js";
-import { PortraitRecords } from "./repo/Portraits.js";
+import { HobImages } from "./images/HobImages.js";
+import { ImageModel } from "./images/ImageModel.js";
+import { ImageUrls } from "./images/ImageUrls.js";
+import { ImageRecords } from "./repo/Images.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -313,35 +313,37 @@ export const storageFromConfig: Layer.Layer<ObjectStorage, Config.ConfigError | 
   );
 
 /**
- * Whether this server can sign portrait image URLs: `PORTRAIT_URL_SECRET`, or
- * nothing is minted. Its line is part of the portraits line below.
+ * Whether this server can sign image URLs: `PORTRAIT_URL_SECRET`, or nothing
+ * is minted. Its line is part of the images line below.
  */
-export const portraitUrlsFromConfig: Layer.Layer<PortraitUrls, Config.ConfigError> = Layer.unwrap(
+export const imageUrlsFromConfig: Layer.Layer<ImageUrls, Config.ConfigError> = Layer.unwrap(
   Effect.map(portraitUrlSecret, (secret) =>
     Option.match(secret, {
-      onNone: () => PortraitUrls.off,
-      onSome: (value) => PortraitUrls.layer(value),
+      onNone: () => ImageUrls.off,
+      onSome: (value) => ImageUrls.layer(value),
     }),
   ),
 );
 
 /**
- * Whether Hob draws a portrait of each new character: the portraits half of
- * the question `assistantFromConfig` answers, arranged the same way.
+ * Whether Hob draws a picture of each new character and campaign: the images
+ * half of the question `assistantFromConfig` answers, arranged the same way.
  *
  * **Unset is the default and what CI runs.** Generation needs four things —
  * `PORTRAIT_API_URL` and `PORTRAIT_MODEL`, `PORTRAIT_URL_SECRET` so the result
  * can be shown, and storage so it can be kept — and the OFF line names every
- * one that is missing. Portraits already drawn are still served, and a deleted
- * character's files still deleted, whenever storage is on.
+ * one that is missing. The variables keep the `PORTRAIT_` names they had when
+ * portraits were the only kind, and govern every kind. Images already drawn
+ * are still served, and a deleted subject's files still deleted, whenever
+ * storage is on.
  *
  * The ON line names the model, the endpoint, the quality and both daily caps,
  * and **never the key**.
  */
-export const portraitsFromConfig: Layer.Layer<
-  Portraits,
+export const hobImagesFromConfig: Layer.Layer<
+  HobImages,
   Config.ConfigError,
-  PortraitRecords | ObjectStorage | PortraitUrls
+  ImageRecords | ObjectStorage | ImageUrls
 > = Layer.unwrap(
   Effect.gen(function* () {
     const apiUrl = yield* portraitApiUrl;
@@ -357,11 +359,11 @@ export const portraitsFromConfig: Layer.Layer<
     ];
     if (Option.isNone(apiUrl) || Option.isNone(model) || missing.length > 0) {
       yield* Effect.logInfo(
-        `Portraits are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
-          "so new characters keep their lettered plates. To turn them on, set them in " +
-          "apps/server/.env.local (see .env.example).",
+        `Hob-drawn images are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
+          "so new characters keep their lettered plates and new campaigns their plain cards. " +
+          "To turn them on, set them in apps/server/.env.local (see .env.example).",
       );
-      return Portraits.layer({ generation: Option.none(), storageOn });
+      return HobImages.layer({ generation: Option.none(), storageOn });
     }
 
     const quality = yield* portraitQuality;
@@ -372,10 +374,11 @@ export const portraitsFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      `Portraits are ON: model ${model.value} at ${apiUrl.value}, quality ${quality}, ` +
-        `${String(limits.perAccountPerDay)} per account and ${String(limits.perDay)} in all per day.`,
+      `Hob-drawn images are ON (character portraits, campaign covers): model ${model.value} ` +
+        `at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
+        `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
-    return Portraits.layer({ generation: Option.some({ limits, concurrency }), storageOn }).pipe(
+    return HobImages.layer({ generation: Option.some({ limits, concurrency }), storageOn }).pipe(
       Layer.provide(
         ImageModel.layer({
           apiUrl: apiUrl.value,
@@ -427,12 +430,12 @@ export const servicesOver = <E>(
     Npcs | NpcKnowledge | NpcMemories | NpcThreads | NpcProposals | CampaignCreatorActors
   > = npcAgentFromConfig,
   storage: Layer.Layer<ObjectStorage, E | Config.ConfigError | StorageError> = storageFromConfig,
-  portraitUrls: Layer.Layer<PortraitUrls, E | Config.ConfigError> = portraitUrlsFromConfig,
-  portraits: Layer.Layer<
-    Portraits,
+  imageUrls: Layer.Layer<ImageUrls, E | Config.ConfigError> = imageUrlsFromConfig,
+  images: Layer.Layer<
+    HobImages,
     E | Config.ConfigError,
-    PortraitRecords | ObjectStorage | PortraitUrls
-  > = portraitsFromConfig,
+    ImageRecords | ObjectStorage | ImageUrls
+  > = hobImagesFromConfig,
 ): Layer.Layer<
   | Accounts
   | Authorization
@@ -469,7 +472,7 @@ export const servicesOver = <E>(
   | Npcs
   | NpcThreads
   | ObjectStorage
-  | Portraits
+  | HobImages
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -493,7 +496,11 @@ export const servicesOver = <E>(
     // Jotting a beat appends `beat-added` to the log, so it rings the doorbell
     // like every other live write.
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
-    Campaigns.layer,
+    // A campaign read signs its cover's URLs. `fresh`, for `Recap`'s reason
+    // below: the bare `Campaigns.layer` Hob and the accept paths hold must stay
+    // unsigned, because Hob hands what it reads to the model and a signed URL
+    // is a bearer capability that must not leave us.
+    Layer.fresh(Campaigns.layer).pipe(Layer.provide(imageUrls)),
     Groups.layer,
     // The chronicle renders recaps at share time, so it composes `Recap`.
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
@@ -502,12 +509,12 @@ export const servicesOver = <E>(
     // The owner's half of the shared character. Most durable sheet writes do
     // not ring, but resource spends and rests are live table facts when a night
     // is open, so the repository takes the same doorbell the party uses.
-    // Both character reads sign portrait URLs, so both take `PortraitUrls`.
-    Characters.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
+    // Both character reads sign portrait URLs, so both take `ImageUrls`.
+    Characters.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // The campaign's half: the seats. The condition write-through and the
     // delta are live writes, so this is a live repository the way the old
     // campaign-scoped `Characters` was.
-    Party.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
+    Party.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -517,7 +524,7 @@ export const servicesOver = <E>(
     // all three share one `PubSub` rather than one each, which is the whole
     // point of a doorbell. A combatant carries its character's portrait, so it
     // signs URLs too (`seatedPortraitColumn`).
-    Combatants.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
+    Combatants.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     Creatures.layer,
     // The DM gate the three live groups spend. It is a repository like any
     // other — one read of `campaign_member` through the shipped predicate —
@@ -541,7 +548,8 @@ export const servicesOver = <E>(
     // endpoint now: `GET /me/campaigns`.
     Invites.layer,
     LiveEvents.layer,
-    Memberships.layer,
+    // `GET /me/campaigns` is a campaign read, so it signs covers too.
+    Memberships.layer.pipe(Layer.provide(imageUrls)),
     Notes.layer,
     // The campaign's cast and its rehearsal transcripts: creator-only rows,
     // every method behind the `CampaignCreatorActor` proof.
@@ -562,9 +570,10 @@ export const servicesOver = <E>(
     NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
     // Files, behind whichever provider `STORAGE_DRIVER` names.
     storage,
-    // Hob's portraits: the worker, the image route and the deletion drain.
-    // The same memoised storage and URL layers the rest of the graph holds.
-    portraits.pipe(Layer.provide([PortraitRecords.layer, storage, portraitUrls])),
+    // Hob's pictures of every kind: the worker, the image routes and the
+    // deletion drain. The same memoised storage and URL layers the rest of the
+    // graph holds.
+    images.pipe(Layer.provide([ImageRecords.layer, storage, imageUrls])),
     // The NPC rehearsal loop: proposal tools write only review rows, never
     // destination campaign state. It reads the NPC, its transcript, and this
     // NPC's explicit facts/approved memories — no campaign-wide repositories.
@@ -613,7 +622,7 @@ export const servicesOver = <E>(
     // What is live at one table, to a player. Its read writes nothing, but its
     // stream subscribes to the same contentless doorbell as the DM runner.
     // Its `you` and `ally` rows carry portraits, so it signs URLs as well.
-    PlayerTable.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
+    PlayerTable.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     PrepItems.layer,
     // The accept path: the only writer of `origin = 'assistant'`. It composes
     // the ordinary create methods, so an accepted row is made by the same
@@ -625,7 +634,7 @@ export const servicesOver = <E>(
         // A player accepting a character draft goes through `createOwn`, so the
         // accept path holds `Characters` as well now — the same statement a
         // typed one takes, with `assistant_turn_id` on it.
-        Characters.layer.pipe(Layer.provide(portraitUrls)),
+        Characters.layer.pipe(Layer.provide(imageUrls)),
         EncounterCreatures.layer,
         Encounters.layer,
         // Group Hob's accepted chronicle line goes through the same
@@ -640,7 +649,7 @@ export const servicesOver = <E>(
     // memoises by identity and the bare `Recap.layer` the chronicle and Hob
     // hold must stay unsigned: Hob's `sessionRecap` tool hands a recap to the
     // model, and a signed URL is a bearer capability that must not leave us.
-    Layer.fresh(Recap.layer).pipe(Layer.provide(portraitUrls)),
+    Layer.fresh(Recap.layer).pipe(Layer.provide(imageUrls)),
     // Read-only, and the only place a `tsvector` is queried. No `LiveEvents`:
     // searching writes nothing and rings no doorbell.
     Search.layer,
@@ -742,7 +751,7 @@ export const applicationOver = <E>(
     | Npcs
     | NpcThreads
     | Options
-    | Portraits
+    | HobImages
     | RuleArticles
     | Rolls
     | Party

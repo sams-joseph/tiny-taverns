@@ -1,25 +1,19 @@
 import { Data, Effect } from "effect";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
-import type { PortraitVariant } from "./PortraitUrls.js";
+import { IMAGE_KINDS, type ImageKind, variantSize, variantsOf } from "./kinds.js";
 
 /**
  * What a generated image becomes before it is stored: the provider's bytes,
- * untouched, plus three square WebP sizes made with `sharp`.
+ * untouched, plus the kind's WebP sizes made with `sharp` (`kinds.ts`).
  *
  * The original is kept byte for byte so provider provenance (OpenAI's C2PA
  * credentials) survives and sizes can be re-derived later; a resize would
- * strip it. The variants are what browsers load: `full` 1024, `card` 640 (the
- * 4:3 card at 2x), `thumb` 160 (the 40 and 64 px plates at 2x).
+ * strip it. The variants are what browsers load, each cropped to its exact
+ * size with a cover fit anchored where the kind keeps its subject.
  */
 
-export const VARIANT_SIZES: Readonly<Record<PortraitVariant, number>> = {
-  full: 1024,
-  card: 640,
-  thumb: 160,
-};
-
-/** Refuse a decompression bomb: a 1024 square is about a million pixels. */
+/** Refuse a decompression bomb: a 1536 × 1024 image is about a million and a half pixels. */
 const MAX_INPUT_PIXELS = 4096 * 4096;
 
 const ORIGINAL_TYPES: Readonly<Record<string, { readonly type: string; readonly ext: string }>> = {
@@ -33,7 +27,7 @@ export class ImageUnreadable extends Data.TaggedError("ImageUnreadable")<{
   readonly detail: string;
 }> {}
 
-export interface RenderedPortrait {
+export interface RenderedImage {
   readonly original: {
     readonly bytes: Uint8Array;
     readonly contentType: string;
@@ -43,14 +37,15 @@ export interface RenderedPortrait {
   readonly height: number;
   readonly sha256: Uint8Array;
   readonly variants: ReadonlyArray<{
-    readonly variant: PortraitVariant;
+    readonly variant: string;
     readonly bytes: Uint8Array;
   }>;
 }
 
-export const renderPortrait = (
+export const renderImage = (
+  kind: ImageKind,
   bytes: Uint8Array,
-): Effect.Effect<RenderedPortrait, ImageUnreadable> =>
+): Effect.Effect<RenderedImage, ImageUnreadable> =>
   Effect.tryPromise({
     try: async () => {
       const input = sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS });
@@ -60,13 +55,13 @@ export const renderPortrait = (
         throw new Error(`unsupported image format ${String(metadata.format)}`);
       }
       const variants = await Promise.all(
-        (Object.keys(VARIANT_SIZES) as ReadonlyArray<PortraitVariant>).map(async (variant) => ({
+        variantsOf(kind).map(async (variant) => ({
           variant,
           bytes: new Uint8Array(
             await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS })
-              .resize(VARIANT_SIZES[variant], VARIANT_SIZES[variant], {
+              .resize(variantSize(kind, variant).width, variantSize(kind, variant).height, {
                 fit: "cover",
-                position: "top",
+                position: IMAGE_KINDS[kind].position,
               })
               .webp({ quality: 82 })
               .toBuffer(),

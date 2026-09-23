@@ -66,7 +66,7 @@ import {
   usesNote,
 } from "./sheet";
 import { CharacterPortrait } from "./CharacterPortrait";
-import { usePortraitPolling } from "./portraitPolling";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import {
   AbilityCell,
   DeathSaveRow,
@@ -1711,7 +1711,7 @@ export function CharacterSheetScreen() {
   const owned = view?.characters.find((row) => row.character.id === characterId);
   const character = owned?.character;
   // While Hob draws, re-read until the portrait lands (or does not).
-  usePortraitPolling(character?.portraitPending === true, reload);
+  useHobDrawingPolling(character?.portraitPending === true, reload);
   /**
    * The banner's table is the character's **first** seat — `load.ts` picked the
    * same one to read the live table from, so the name and the numbers cannot

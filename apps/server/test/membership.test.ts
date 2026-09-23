@@ -226,6 +226,12 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Feats.ts",
       "repo/Groups.ts",
       "repo/HobThreads.ts",
+      // An image row copies its owner from the subject row the same
+      // transaction read through `ownCharacter` or `campaignWritable`, and the
+      // composite key to `character (id, account_id)` or
+      // `campaign (id, creator_account_id)` refuses any other; the daily cap
+      // counts by it. Never a caller-supplied account.
+      "repo/Images.ts",
       "repo/LibraryShares.ts",
       "repo/MagicItems.ts",
       "repo/Memberships.ts",
@@ -236,11 +242,6 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Options.ts",
       "repo/Party.ts",
       "repo/PlayerTable.ts",
-      // A portrait row copies its owner from the character row the same
-      // transaction read through `ownCharacter`, and the composite key to
-      // `character (id, account_id)` refuses any other; the daily cap counts
-      // by it. Never a caller-supplied account.
-      "repo/Portraits.ts",
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
@@ -940,6 +941,9 @@ describe("a stranger reads nothing", () => {
             and table_name not in (
               'ability_score',
               'account',
+              -- A cover is read only as a field of the campaign, through the
+              -- campaign's own shipped reads; it has no read of its own.
+              'campaign_image',
               'campaign_member',
               -- A portrait is read only as a field of the character, through
               -- the character's own shipped reads; it has no read of its own.

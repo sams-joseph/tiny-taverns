@@ -44,6 +44,8 @@ const campaignJson = (name: string) => ({
   visibility: "shared",
   origin: "authored",
   assistantTurnId: null,
+  image: null,
+  imagePending: false,
   archivedAt: null,
   createdAt: "2026-08-04T13:03:28.035Z",
   updatedAt: "2026-08-04T13:03:28.035Z",

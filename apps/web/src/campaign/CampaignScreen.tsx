@@ -11,8 +11,12 @@ import {
   type IconName,
   EmptyState,
 } from "@taverns/ui";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useInvalidate } from "../api/atoms";
+import { reads } from "../api/keys";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { useCampaignAct } from "./act";
+import { CampaignCover } from "./CampaignCover";
 import {
   CampaignChrome,
   CampaignSettingsButtons,
@@ -239,6 +243,15 @@ type Editing = { readonly what: "encounter"; readonly encounter: Encounter | und
 function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
   const { view, run, finishSession } = slots;
   const [editing, setEditing] = useState<Editing | undefined>();
+  const invalidate = useInvalidate();
+  const campaignId = view.campaign.id;
+  // A campaign opens here the moment it is made, while Hob is still drawing its
+  // cover. Re-read the campaign, and the list it came from, until it lands.
+  const rereadCover = useCallback(
+    () => invalidate([reads.campaign(campaignId), reads.myCampaigns]),
+    [invalidate, campaignId],
+  );
+  useHobDrawingPolling(view.campaign.imagePending, rereadCover);
 
   // Counted over every note, as the encounter list does: a card's count is a
   // fact about the encounter, not about what is on screen beside it.
@@ -255,69 +268,78 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
 
   return (
     <>
-      {/* `@4xl` (56rem = 896px) is the *content column's* width, not the
+      {/* The cover, when there is one, above everything the page is about. */}
+      <div className="flex flex-col gap-6">
+        <CampaignCover
+          image={view.campaign.image}
+          pending={view.campaign.imagePending}
+          shape="band"
+        />
+        {/* `@4xl` (56rem = 896px) is the *content column's* width, not the
           viewport's — `main` is the container. 896 is where the aside earns its
           place: 340 for it, 32 for the gap, and 524 left for the body. */}
-      <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
-        <div className="@container flex min-w-0 flex-1 flex-col gap-6">
-          <NextSession view={view} />
+        <div className="flex flex-col gap-8 @4xl:flex-row @4xl:items-start">
+          <div className="@container flex min-w-0 flex-1 flex-col gap-6">
+            <NextSession view={view} />
 
-          <div>
-            <SectionHeading
-              className="mb-3"
-              action={
-                <Link
-                  to="/campaigns/$campaignId/encounters"
-                  params={{ campaignId: view.campaign.id }}
-                  className={sectionLink}
-                >
-                  All encounters
-                </Link>
-              }
-            >
-              Encounters on deck
-            </SectionHeading>
-            {view.encounters.length === 0 ? (
-              <EmptyState icon="swords" title="No encounters yet">
-                Nothing is waiting for the party. Write one with{" "}
-                <span className="text-heading">New encounter</span> and it lands here, ready to run.
-              </EmptyState>
-            ) : (
-              // `@lg` (32rem) and `@3xl` (48rem) are the *column's* widths, and
-              // they are where the prototype's `auto-fill minmax(250px, 1fr)`
-              // turns over: two cards need 516px, three need 782px.
-              <div className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3">
-                {onDeck.map((encounter) => (
-                  <EncounterCard
-                    key={encounter.id}
-                    encounter={encounter}
-                    noteCount={noteCounts.get(encounter.id) ?? 0}
-                    running={view.run?.encounterId === encounter.id}
-                    onEdit={() => setEditing({ what: "encounter", encounter })}
-                    onRun={() => run(encounter.id)}
-                  />
-                ))}
-              </div>
-            )}
+            <div>
+              <SectionHeading
+                className="mb-3"
+                action={
+                  <Link
+                    to="/campaigns/$campaignId/encounters"
+                    params={{ campaignId: view.campaign.id }}
+                    className={sectionLink}
+                  >
+                    All encounters
+                  </Link>
+                }
+              >
+                Encounters on deck
+              </SectionHeading>
+              {view.encounters.length === 0 ? (
+                <EmptyState icon="swords" title="No encounters yet">
+                  Nothing is waiting for the party. Write one with{" "}
+                  <span className="text-heading">New encounter</span> and it lands here, ready to
+                  run.
+                </EmptyState>
+              ) : (
+                // `@lg` (32rem) and `@3xl` (48rem) are the *column's* widths, and
+                // they are where the prototype's `auto-fill minmax(250px, 1fr)`
+                // turns over: two cards need 516px, three need 782px.
+                <div className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3">
+                  {onDeck.map((encounter) => (
+                    <EncounterCard
+                      key={encounter.id}
+                      encounter={encounter}
+                      noteCount={noteCounts.get(encounter.id) ?? 0}
+                      running={view.run?.encounterId === encounter.id}
+                      onEdit={() => setEditing({ what: "encounter", encounter })}
+                      onRun={() => run(encounter.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        <aside className="flex flex-col gap-4 @4xl:w-aside @4xl:shrink-0">
-          <PrepChecklist
-            key={view.session?.id ?? view.campaign.id}
-            campaignId={view.campaign.id}
-            sessionId={view.session?.id}
-            items={view.prep}
-          />
-          {view.session !== undefined && (
-            <SessionCard session={view.session} liveRun={view.run} onFinish={finishSession} />
-          )}
-          <PartyStrip
-            party={view.party}
-            playerCount={view.campaign.playerCount}
-            campaignId={view.campaign.id}
-          />
-        </aside>
+          <aside className="flex flex-col gap-4 @4xl:w-aside @4xl:shrink-0">
+            <PrepChecklist
+              key={view.session?.id ?? view.campaign.id}
+              campaignId={view.campaign.id}
+              sessionId={view.session?.id}
+              items={view.prep}
+            />
+            {view.session !== undefined && (
+              <SessionCard session={view.session} liveRun={view.run} onFinish={finishSession} />
+            )}
+            <PartyStrip
+              party={view.party}
+              playerCount={view.campaign.playerCount}
+              campaignId={view.campaign.id}
+            />
+          </aside>
+        </div>
       </div>
 
       {/* Keyed on what is being edited, so opening the dialog on a second row

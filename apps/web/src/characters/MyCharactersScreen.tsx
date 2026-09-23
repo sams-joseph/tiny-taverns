@@ -15,7 +15,7 @@ import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
 import { AddToCampaignDialog } from "./AddToCampaignDialog";
 import { CharacterPortrait } from "./CharacterPortrait";
-import { usePortraitPolling } from "./portraitPolling";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { campaignsAvailableToJoin } from "./join";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
@@ -281,7 +281,7 @@ export function MyCharactersScreen() {
   const [resource, reload] = useApiAtom(myCharactersAtom);
   const view = resource.state === "ready" ? resource.value : undefined;
   // While Hob draws any of them, re-read until the portraits land.
-  usePortraitPolling(
+  useHobDrawingPolling(
     view?.characters.some((owned) => owned.character.portraitPending) === true,
     reload,
   );

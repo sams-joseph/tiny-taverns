@@ -160,11 +160,13 @@ export const storageFsRoot = Config.string("STORAGE_FS_ROOT").pipe(
 );
 
 /**
- * Where portraits are drawn: an OpenAI-shaped `/v1` base URL that serves
+ * Where every Hob-drawn image is drawn — character portraits and campaign
+ * covers alike: an OpenAI-shaped `/v1` base URL that serves
  * `POST /images/generations` and answers `b64_json` — OpenAI itself
- * (`https://api.openai.com/v1`), or a local `sd-server`.
+ * (`https://api.openai.com/v1`), or a local `sd-server`. The `PORTRAIT_`
+ * names predate the second kind and govern every kind.
  *
- * `Option` for the reason `hobApiUrl` is: unset is a supported mode, portraits
+ * `Option` for the reason `hobApiUrl` is: unset is a supported mode, images
  * are OFF, and every character keeps its lettered plate. Generation needs this,
  * `PORTRAIT_MODEL`, `PORTRAIT_URL_SECRET` and storage (`STORAGE_DRIVER`); the
  * boot line names whichever is missing.
@@ -178,7 +180,7 @@ export const portraitModel = Config.option(Config.string("PORTRAIT_MODEL"));
 export const portraitApiKey = Config.option(Config.redacted("PORTRAIT_API_KEY"));
 
 /**
- * OpenAI's `quality`, sent only to api.openai.com (see `portraits/ImageModel.ts`).
+ * OpenAI's `quality`, sent only to api.openai.com (see `images/ImageModel.ts`).
  * `medium` is the cost the plan was priced at.
  */
 export const portraitQuality = Config.literals(
@@ -188,18 +190,18 @@ export const portraitQuality = Config.literals(
 
 /**
  * The HMAC key image URLs are signed with. Without it no URL can be minted, so
- * portraits are OFF — a per-process random key would break every URL at each
+ * images are OFF — a per-process random key would break every URL at each
  * restart and between two instances, which looks like a storage bug.
  */
 export const portraitUrlSecret = Config.option(Config.redacted("PORTRAIT_URL_SECRET"));
 
-/** How many portraits draw at once in this process. */
+/** How many images, of every kind together, draw at once in this process. */
 export const portraitConcurrency = Config.int("PORTRAIT_CONCURRENCY").pipe(Config.withDefault(2));
 
-/** Portraits one account may have drawn per UTC day. */
+/** Images of every kind together one account may have drawn per UTC day. */
 export const portraitAccountDailyLimit = Config.int("PORTRAIT_ACCOUNT_DAILY_LIMIT").pipe(
   Config.withDefault(10),
 );
 
-/** Portraits this server may have drawn per UTC day, across every account. */
+/** Images of every kind this server may have drawn per UTC day, across every account. */
 export const portraitDailyLimit = Config.int("PORTRAIT_DAILY_LIMIT").pipe(Config.withDefault(200));

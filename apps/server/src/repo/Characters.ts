@@ -4,6 +4,7 @@ import {
   type CampaignId,
   Character,
   type CharacterId,
+  CharacterPortraitImages,
   type CharacterOwnCreate,
   type CharacterOwnUpdate,
   type CharacterResourceSpend,
@@ -24,8 +25,8 @@ import {
   spellActionFor,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Option } from "effect";
+import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { PortraitUrls } from "../portraits/PortraitUrls.js";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
@@ -144,16 +145,30 @@ export const seatedPortraitColumn = (
 `;
 
 /**
- * Signs a ready portrait's image paths; `PortraitUrls.imagesFor`. Absent when a
- * repository was built without the service (most repository tests), which
- * mints nothing — the same answer a server with no URL secret gives.
+ * Signs a ready portrait's image paths; the character kind of
+ * `ImageUrls.pathsFor`. Absent when a repository was built without the service
+ * (most repository tests), which mints nothing — the same answer a server with
+ * no URL secret gives.
  */
 export type PortraitSigner = (portraitId: string) => Character["portrait"];
 
+const portraitSignerOf =
+  (sign: ImageSigner): PortraitSigner =>
+  (portraitId) => {
+    const paths = sign("character", portraitId);
+    return paths === null
+      ? null
+      : new CharacterPortraitImages({
+          thumbUrl: paths.thumb,
+          cardUrl: paths.card,
+          fullUrl: paths.full,
+        });
+  };
+
 /** The signer a repository layer was built with, or `undefined`; see {@link PortraitSigner}. */
 export const portraitSigner: Effect.Effect<PortraitSigner | undefined> = Effect.map(
-  Effect.serviceOption(PortraitUrls),
-  (urls) => Option.getOrUndefined(Option.map(urls, (service) => service.imagesFor)),
+  imageSigner,
+  (sign) => (sign === undefined ? undefined : portraitSignerOf(sign)),
 );
 
 /**

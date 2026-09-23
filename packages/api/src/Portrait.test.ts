@@ -2,12 +2,12 @@ import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { APPEARANCE_MAX, CharacterSheet, emptyCharacterSheet } from "./Character.js";
 import {
-  HOUSE_PORTRAIT_STYLE,
   PORTRAIT_PROMPT_MAX,
   type PortraitSubject,
   portraitHasSubject,
   portraitPromptFor,
 } from "./Portrait.js";
+import { HOUSE_PORTRAIT_STYLE } from "./HouseStyle.js";
 
 const style = { style: HOUSE_PORTRAIT_STYLE };
 
