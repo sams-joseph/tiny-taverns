@@ -130,16 +130,13 @@ describe("an NPC's page", () => {
     await waitFor(() => expect(drawnPlates().length).toBeGreaterThanOrEqual(1));
   });
 
-  it("says Hob is drawing their portrait, and re-reads the NPC until it lands", async () => {
+  it("says Hob is drawing, and re-reads the NPC until the portrait lands", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}`, {
       status: 200,
       body: { ...cazril, imagePending: true },
     });
     await renderCreator(`/campaigns/${campaignId}/cast/${npcId}`);
-    expect(await screen.findByText("Hob is drawing their portrait…")).toHaveAttribute(
-      "role",
-      "status",
-    );
+    expect(await screen.findByText("Hob is drawing…")).toHaveAttribute("role", "status");
 
     server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}`, {
       status: 200,
@@ -148,7 +145,7 @@ describe("an NPC's page", () => {
     await waitFor(() => expect(drawnPlates().length).toBeGreaterThanOrEqual(1), {
       timeout: 15_000,
     });
-    expect(screen.queryByText("Hob is drawing their portrait…")).toBeNull();
+    expect(screen.queryByText("Hob is drawing…")).toBeNull();
   }, 30_000);
 
   it("draws the initials with no portrait exactly as before", async () => {

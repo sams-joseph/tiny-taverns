@@ -215,12 +215,6 @@ function NpcBody({
               {npc.role !== "" && (
                 <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
               )}
-              {npc.imagePending && (
-                // Quiet, and nothing blocks: the drawing happens on the server.
-                <p role="status" className="text-micro leading-body text-muted-foreground">
-                  Hob is drawing their portrait…
-                </p>
-              )}
             </div>
             <NpcDetailStatus npc={npc} proposals={proposals} currentSessionId={currentSessionId} />
           </div>
@@ -246,6 +240,12 @@ function NpcDetailStatus({
   const pending = proposals.filter((proposal) => proposal.state === "pending").length;
   return (
     <div className="flex flex-wrap justify-end gap-1.5">
+      {npc.imagePending && (
+        // Quiet, and nothing blocks: the drawing happens on the server.
+        <Badge variant="outline" role="status">
+          Hob is drawing…
+        </Badge>
+      )}
       {npc.archivedAt !== null ? (
         <Badge variant="outline">Archived</Badge>
       ) : npc.visibility === "shared" ? (
