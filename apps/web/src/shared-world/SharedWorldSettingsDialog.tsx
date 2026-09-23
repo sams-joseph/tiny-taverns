@@ -1,4 +1,4 @@
-import type { SharedWorld } from "@taverns/api";
+import { type SharedWorld, SHARED_WORLD_DESCRIPTION_MAX } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -13,9 +13,13 @@ import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure } from "../ui/form";
+import { Field, SaveFailure, Textarea } from "../ui/form";
 
-/** Owner-only edits. Archiving stays behind its own named confirmation. */
+/**
+ * Owner-only edits: the name and the description every member reads. Changing
+ * the description does not redraw the cover, which is drawn once. Archiving
+ * stays behind its own named confirmation.
+ */
 export function SharedWorldSettingsDialog({
   sharedWorld,
   onClose,
@@ -28,6 +32,7 @@ export function SharedWorldSettingsDialog({
   readonly onArchive: () => void;
 }) {
   const [name, setName] = useState(sharedWorld.name);
+  const [description, setDescription] = useState(sharedWorld.description ?? "");
   const [showProblem, setShowProblem] = useState(false);
   const { busy, failure, submit } = useMutation();
   const empty = name.trim() === "";
@@ -40,7 +45,11 @@ export function SharedWorldSettingsDialog({
       (client) =>
         client.sharedWorlds.update({
           params: { worldId: sharedWorld.id },
-          payload: { name: name.trim() },
+          payload: {
+            name: name.trim(),
+            // An emptied description is no description: `null` clears it.
+            description: description.trim() === "" ? null : description.trim(),
+          },
         }),
       [reads.mySharedWorlds, reads.sharedWorld(sharedWorld.id)],
     );
@@ -53,7 +62,8 @@ export function SharedWorldSettingsDialog({
         <DialogHeader>
           <DialogTitle>Shared World settings</DialogTitle>
           <DialogDescription>
-            Rename {sharedWorld.name}, or move it to the archive when its campaigns have left.
+            Rename or describe {sharedWorld.name}, or move it to the archive when its campaigns have
+            left.
           </DialogDescription>
         </DialogHeader>
 
@@ -69,6 +79,21 @@ export function SharedWorldSettingsDialog({
               disabled={busy}
               aria-invalid={showProblem && empty}
               onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Description"
+            htmlFor="shared-world-description"
+            hint="The land, as every member will read it."
+          >
+            <Textarea
+              id="shared-world-description"
+              className="min-h-20"
+              maxLength={SHARED_WORLD_DESCRIPTION_MAX}
+              value={description}
+              disabled={busy}
+              onChange={(event) => setDescription(event.target.value)}
             />
           </Field>
 
@@ -100,7 +125,7 @@ export function SharedWorldSettingsDialog({
             Cancel
           </Button>
           <Button size="sm" disabled={busy || (showProblem && empty)} onClick={() => void save()}>
-            {busy ? "Saving…" : "Save name"}
+            {busy ? "Saving…" : "Save changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

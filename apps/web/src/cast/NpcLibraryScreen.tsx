@@ -1,4 +1,10 @@
-import type { CampaignMembership, SharedWorldMembership, NpcCreate, NpcSource } from "@taverns/api";
+import {
+  APPEARANCE_MAX,
+  type CampaignMembership,
+  type SharedWorldMembership,
+  type NpcCreate,
+  type NpcSource,
+} from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
   Badge,
@@ -35,6 +41,7 @@ import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { NpcAvatar } from "./NpcAvatar";
 import {
+  draftOf,
   emptyDraft,
   hasAdvanced,
   personaFrom,
@@ -49,26 +56,6 @@ const libraryNpcsAtom = Atom.family((archived: boolean) =>
     [reads.libraryNpcs],
   ),
 );
-
-const draftOfSource = (npc: NpcSource): NpcDraft => ({
-  name: npc.name,
-  role: npc.role,
-  summary: npc.persona.identity?.summary ?? "",
-  manner: npc.persona.voice?.manner ?? "",
-  pronouns: npc.persona.identity?.pronouns ?? "",
-  pronunciation: npc.persona.identity?.pronunciation ?? "",
-  phrases: (npc.persona.voice?.phrases ?? []).join("\n"),
-  exampleLines: (npc.persona.voice?.exampleLines ?? []).join("\n"),
-  wants: npc.persona.intent?.wants ?? "",
-  fears: npc.persona.intent?.fears ?? "",
-  loyalties: npc.persona.intent?.loyalties ?? "",
-  attitude: npc.persona.intent?.attitude ?? "",
-  dodges: (npc.persona.boundaries?.dodges ?? []).join("\n"),
-  refuses: (npc.persona.boundaries?.refuses ?? []).join("\n"),
-  asksTheDm: (npc.persona.boundaries?.asksTheDm ?? []).join("\n"),
-  secrets: npc.privateMaterial.secrets ?? "",
-  instructions: npc.privateMaterial.instructions ?? "",
-});
 
 const sourceDescription = (source: NpcSource): string => {
   const summary = source.persona.identity?.summary?.trim() ?? "";
@@ -103,9 +90,7 @@ function SourceDialog({
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<NpcDraft>(
-    source === undefined ? emptyDraft : draftOfSource(source),
-  );
+  const [draft, setDraft] = useState<NpcDraft>(source === undefined ? emptyDraft : draftOf(source));
   const [advanced, setAdvanced] = useState(source !== undefined && hasAdvanced(draft));
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
@@ -165,6 +150,19 @@ function SourceDialog({
               id="npc-source-summary"
               value={draft.summary}
               onChange={(event) => set("summary")(event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Appearance"
+            htmlFor="npc-source-appearance"
+            hint="How they look, as a player would see them. A copy's portrait is drawn from it."
+          >
+            <Textarea
+              id="npc-source-appearance"
+              className="min-h-16"
+              maxLength={APPEARANCE_MAX}
+              value={draft.appearance}
+              onChange={(event) => set("appearance")(event.target.value)}
             />
           </Field>
           <Field label="How they talk" htmlFor="npc-source-manner">

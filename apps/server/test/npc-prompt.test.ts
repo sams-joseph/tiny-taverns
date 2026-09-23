@@ -48,6 +48,7 @@ const cazril = new Npc({
       pronouns: "he/him",
       pronunciation: "KAZ-ril",
       summary: "An old ferryman who takes names instead of coin, and remembers every one.",
+      appearance: "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
     },
     voice: {
       manner: "Slow, dry, never raises his voice. Answers a question with a smaller question.",

@@ -39,6 +39,7 @@ const campaignJson = (name: string) => ({
   creatorAccountId: "2b1f2a1e-0000-4000-8000-00000000d000",
   name,
   partyName: "The Ferrymen",
+  description: null,
   playerCount: 4,
   currentSessionId: null,
   visibility: "shared",

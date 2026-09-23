@@ -28,6 +28,7 @@ import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { DetailFacts, DetailSection } from "../ui/detail";
+import { NpcAppearance } from "./NpcAppearance";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { npcAtom, sessionNpcsAtom, type NpcDetail } from "./load";
 import { NpcAvatar } from "./NpcAvatar";
@@ -1113,6 +1114,7 @@ function Persona({ npc }: { readonly npc: Npc }) {
       {identity?.summary !== undefined && (
         <p className="text-body-s leading-body text-foreground">{identity.summary}</p>
       )}
+      <NpcAppearance appearance={identity?.appearance} />
       {(identity?.pronouns !== undefined || identity?.pronunciation !== undefined) && (
         <DetailFacts
           facts={[

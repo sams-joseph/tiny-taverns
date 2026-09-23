@@ -7,6 +7,7 @@ import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
 import { DetailSection } from "../ui/detail";
+import { NpcAppearance } from "./NpcAppearance";
 import { NpcAvatar } from "./NpcAvatar";
 import { useNpcPlayerChat } from "./playerChat";
 import { RehearsalPanel } from "./RehearsalPanel";
@@ -73,10 +74,16 @@ function PlayerNpcChatBody({ npc }: { readonly npc: PlayerNpc }) {
               )}
             </div>
           </div>
-          {npc.persona.identity?.summary !== undefined ? (
-            <p className="text-body-s leading-body text-foreground">
-              {npc.persona.identity.summary}
-            </p>
+          {npc.persona.identity?.summary !== undefined ||
+          npc.persona.identity?.appearance !== undefined ? (
+            <>
+              {npc.persona.identity.summary !== undefined && (
+                <p className="text-body-s leading-body text-foreground">
+                  {npc.persona.identity.summary}
+                </p>
+              )}
+              <NpcAppearance appearance={npc.persona.identity.appearance} />
+            </>
           ) : (
             <EmptyState icon="user-round" title="No public profile yet">
               Your DM shared this NPC, but did not write a public summary.

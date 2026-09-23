@@ -75,6 +75,13 @@ describe("the two documents", () => {
     for (const key of privateKeys) expect(publicText).not.toContain(draft[key]);
   });
 
+  it("writes the appearance into the public identity, trimmed, and leaves a blank one absent", () => {
+    expect(personaFrom({ ...emptyDraft, appearance: "  Stooped, grey-eyed.  " })).toEqual({
+      identity: { appearance: "Stooped, grey-eyed." },
+    });
+    expect(personaFrom({ ...emptyDraft, appearance: "   " })).toEqual({});
+  });
+
   it("splits list boxes on lines, trims, drops blanks, and leaves an empty section absent", () => {
     const draft = {
       ...emptyDraft,
@@ -89,7 +96,12 @@ describe("the two documents", () => {
   it("round-trips a full row through the form and back", () => {
     const full = row({
       persona: {
-        identity: { pronouns: "he/him", pronunciation: "KAZ-ril", summary: "Old." },
+        identity: {
+          pronouns: "he/him",
+          pronunciation: "KAZ-ril",
+          summary: "Old.",
+          appearance: "Stooped.",
+        },
         voice: { manner: "Dry.", phrases: ["a", "b"], exampleLines: ["c"] },
         intent: { wants: "w", fears: "f", loyalties: "l", attitude: "a" },
         boundaries: { dodges: ["d"], refuses: ["r"], asksTheDm: ["q"] },
@@ -102,7 +114,10 @@ describe("the two documents", () => {
     expect(personaFrom(draft)).toEqual(full.persona);
     expect(privateMaterialFrom(draft)).toEqual(full.privateMaterial);
     expect(hasAdvanced(draft)).toBe(true);
-    expect(hasAdvanced({ ...emptyDraft, name: "x", summary: "y", manner: "z" })).toBe(false);
+    // The appearance is on the first screen, so it never opens the advanced half.
+    expect(
+      hasAdvanced({ ...emptyDraft, name: "x", summary: "y", appearance: "a", manner: "z" }),
+    ).toBe(false);
   });
 });
 

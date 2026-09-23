@@ -18,6 +18,14 @@ export class CampaignImages extends Schema.Class<CampaignImages>("CampaignImages
   fullUrl: Schema.String,
 }) {}
 
+/**
+ * The bound on `Campaign.description`, shared by the forms, the schema and the
+ * column's own check (`0052_descriptions.ts`).
+ */
+export const CAMPAIGN_DESCRIPTION_MAX = 600;
+
+const campaignDescription = Schema.String.check(Schema.isMaxLength(CAMPAIGN_DESCRIPTION_MAX));
+
 export class Campaign extends Schema.Class<Campaign>("Campaign")({
   id: CampaignId,
   /** Private-context identity used by server integrity; never presented as a Shared World. */
@@ -32,6 +40,14 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
   creatorAccountId: AccountId,
   name: Schema.String,
   partyName: Schema.NullOr(Schema.String),
+  /**
+   * The pitch, in a few sentences — the premise and the place, as the table
+   * would hear it. **Player-facing**: every reader of the campaign reads it,
+   * and it is what the cover is drawn from (`CampaignImage.ts`), so it is no
+   * place for a twist. `null` when none was written; a campaign made before
+   * the column has none.
+   */
+  description: Schema.NullOr(Schema.String),
   playerCount: Schema.Int,
   /** The session the DM is running or preparing; drives the "Session 12" badge. */
   currentSessionId: Schema.NullOr(SessionId),
@@ -62,6 +78,8 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
 export const CampaignCreate = Schema.Struct({
   name: Schema.NonEmptyString,
   partyName: Schema.optional(Schema.String),
+  /** Written before the one cover draw, so it is on the create form too. A blank one is none. */
+  description: Schema.optional(campaignDescription),
   playerCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 64 }))),
   visibility: Schema.optional(Visibility),
 });
@@ -70,6 +88,8 @@ export type CampaignCreate = typeof CampaignCreate.Type;
 export const CampaignUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   partyName: Schema.optional(Schema.NullOr(Schema.String)),
+  /** `null`, or a blank one, clears it. The cover is not redrawn: it is drawn once. */
+  description: Schema.optional(Schema.NullOr(campaignDescription)),
   playerCount: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 64 }))),
   currentSessionId: Schema.optional(Schema.NullOr(SessionId)),
   visibility: Schema.optional(Visibility),

@@ -1,4 +1,4 @@
-import type { Campaign, Visibility } from "@taverns/api";
+import { type Campaign, CAMPAIGN_DESCRIPTION_MAX, type Visibility } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -13,7 +13,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure, VisibilityField } from "../ui/form";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 
 /**
  * The campaign's own settings — and the one control the whole player half of
@@ -44,7 +44,9 @@ import { Field, SaveFailure, VisibilityField } from "../ui/form";
  * `partyName` and `playerCount` are the two fields the campaign screen already
  * renders in its subtitle and the campaign list renders on its card, and until
  * now neither was reachable after `NewCampaign` typed a name. `name` is here
- * for the same reason. `currentSessionId` is deliberately absent — which night
+ * for the same reason, and `description` because the Overview and the player's
+ * page draw it under the cover. Changing it does not redraw the cover, which
+ * is drawn once. `currentSessionId` is deliberately absent — which night
  * is current is a transition, owned by `StartRunDialog` and
  * `session/finish.ts`, and a text field pointing at a session is a second
  * answer to a question the server settles with a constraint.
@@ -69,6 +71,7 @@ export function CampaignDialog({
 }) {
   const [name, setName] = useState(campaign.name);
   const [partyName, setPartyName] = useState(campaign.partyName ?? "");
+  const [description, setDescription] = useState(campaign.description ?? "");
   const [playerText, setPlayerText] = useState(String(campaign.playerCount));
   // Opens on what is already stored — this is an edit, and the campaign has an
   // answer. `dm` is where a campaign *starts*; `CampaignCreate` is the place
@@ -101,6 +104,8 @@ export function CampaignDialog({
             // `partyName` is `optional(NullOr(String))` on update: a party that
             // has no name is a null, which is what clearing the field means.
             partyName: partyName.trim() === "" ? null : partyName.trim(),
+            // The same rule: an emptied description is no description.
+            description: description.trim() === "" ? null : description.trim(),
             playerCount,
             visibility,
           },
@@ -149,6 +154,21 @@ export function CampaignDialog({
               placeholder="The Gilded Spoon"
               value={partyName}
               onChange={(event) => setPartyName(event.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Description"
+            htmlFor="campaign-description"
+            hint="The pitch, as your players will read it. Leave the twists out."
+          >
+            <Textarea
+              id="campaign-description"
+              className="min-h-20"
+              maxLength={CAMPAIGN_DESCRIPTION_MAX}
+              placeholder="Caravans cross the white salt flats between glass storms, and the road remembers who walked it."
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
             />
           </Field>
 

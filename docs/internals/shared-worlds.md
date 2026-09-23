@@ -14,7 +14,7 @@ The migration ledger was rewritten as a clean baseline (`0001_init.ts` in place)
 
 There is no role column anywhere. Owner-ness is `play_group.owner_account_id`; creator-ness is `campaign.creator_account_id`, and the creator is the campaign's one DM. `apps/server/test/schema.test.ts` fails if `campaign_member.role` reappears. The creator proof is `CampaignCreatorActor` (`repo/CreatorActor.ts`), and it carries the campaign and its group, so a proof for one table cannot be spent on another. See [Visibility](visibility.md) for the gate itself.
 
-Owner and creator are different authorities and stay that way: the owner governs the world (rename, archive, Library shares); the creator governs their table (invitations, context moves). `groups.test.ts` pins that neither can do the other's act.
+Owner and creator are different authorities and stay that way: the owner governs the world (rename and describe, archive, Library shares); the creator governs their table (invitations, context moves). `groups.test.ts` pins that neither can do the other's act.
 
 ## Membership is eligibility, not participation
 

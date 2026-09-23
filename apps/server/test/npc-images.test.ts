@@ -187,6 +187,7 @@ const FERRYMAN: NpcCreate = {
     identity: {
       pronouns: "he/him",
       summary: "An old ferryman with a lantern, who takes names instead of coin.",
+      appearance: "Stooped, river-grey eyes, a patched oilskin coat.",
     },
     voice: { manner: "VOICE-NOT-VISUAL" },
     intent: { wants: "INTENT-NOT-VISUAL" },
@@ -241,6 +242,9 @@ describe("adding an NPC to the cast draws one portrait", () => {
   it("draws from the public persona only: never the name, the secrets or the instructions", async () => {
     const record = await recordOf(npc.id);
     expect(record?.prompt).toContain("the ferryman at the crossing");
+    expect(record?.prompt).toContain(
+      "How they look: Stooped, river-grey eyes, a patched oilskin coat.",
+    );
     expect(record?.prompt).toContain("takes names instead of coin");
     expect(record?.prompt).toContain("Pronouns: he/him.");
     expect(record?.prompt).toContain("Single subject, centred bust");
@@ -330,7 +334,10 @@ describe("adding an NPC to the cast draws one portrait", () => {
     await as(jo.token, (client) =>
       client.npcs.update({
         params: { campaignId: table, npcId: npc.id },
-        payload: { role: "the ferryman, retired", persona: { identity: { summary: "Older." } } },
+        payload: {
+          role: "the ferryman, retired",
+          persona: { identity: { summary: "Older.", appearance: "White-haired now." } },
+        },
       }),
     );
     const again = await run(
@@ -372,7 +379,9 @@ describe("the Library", () => {
         payload: {
           name: "Wren",
           role: "a lamplighter",
-          persona: { identity: { summary: "Soot on her sleeves." } },
+          persona: {
+            identity: { summary: "Soot on her sleeves.", appearance: "A long hooked pole." },
+          },
           privateMaterial: { secrets: "SECRET-SOURCE" },
         },
       }),
@@ -406,6 +415,7 @@ describe("the Library", () => {
     expect(record?.state).toBe("ready");
     expect(record?.campaign_id).toBe(table);
     expect(record?.prompt).toContain("a lamplighter");
+    expect(record?.prompt).toContain("How they look: A long hooked pole.");
     expect(record?.prompt).not.toContain("SECRET");
     expect(record?.prompt).not.toContain("Wren");
   });

@@ -53,6 +53,14 @@ export const defined = <A extends Record<string, unknown>>(record: A): Record<st
   Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
 
 /**
+ * A nullable prose column's value from a payload, trimmed: `undefined` stays
+ * omitted, and `null` or a blank is `null`. Absent is one value, not two — the
+ * column's own check refuses a blank (`0052_descriptions.ts`).
+ */
+export const proseColumn = (value: string | null | undefined): string | null | undefined =>
+  value === undefined ? undefined : value === null || value.trim() === "" ? null : value.trim();
+
+/**
  * `SET` assignments for a PATCH, always touching `updated_at`.
  *
  * An empty patch is legal on the wire and must not compile to `set ,

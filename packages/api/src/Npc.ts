@@ -13,6 +13,7 @@ import {
   NpcThreadId,
   NpcTurnId,
 } from "./Ids.js";
+import { APPEARANCE_MAX } from "./Character.js";
 import { NoteKind } from "./Note.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -52,12 +53,19 @@ const shortText = (max: number) => Schema.String.check(Schema.isMaxLength(max));
 const shortLines = (max: number) =>
   Schema.Array(Schema.String.check(Schema.isLengthBetween(1, max))).check(Schema.isMaxLength(12));
 
-/** The name, said aloud: pronouns, how to say it, and the one-paragraph summary. */
+/** The name, said aloud: pronouns, how to say it, the one-paragraph summary and the look. */
 export const NpcIdentity = Schema.Struct({
   pronouns: Schema.optional(shortText(40)),
   pronunciation: Schema.optional(shortText(80)),
   /** One paragraph of who they are — the *Basic* form's whole persona field. */
   summary: Schema.optional(shortText(2000)),
+  /**
+   * How they look, in a sentence or two — what a player sees across the
+   * table. Public, like everything in `NpcPersona`, and the line the portrait
+   * is drawn from first (`NpcImage.ts`), a character's `SheetStory.appearance`
+   * under the same bound.
+   */
+  appearance: Schema.optional(shortText(APPEARANCE_MAX)),
 });
 export type NpcIdentity = typeof NpcIdentity.Type;
 

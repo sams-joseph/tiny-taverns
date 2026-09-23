@@ -92,6 +92,7 @@ export const sharedWorldDetails = {
   id: worldId,
   name: "The Salt Company",
   ownerAccountId: theDmAccountId,
+  description: null,
   image: null,
   imagePending: false,
   archivedAt: null,
@@ -107,6 +108,7 @@ export const campaign = {
   creatorAccountId: theDmAccountId,
   name: "The Salt Road",
   partyName: "The Gilded Spoon",
+  description: null,
   playerCount: 4,
   currentSessionId: sessionId,
   visibility: "dm",
@@ -203,6 +205,7 @@ export const cazril = {
     identity: {
       pronouns: "he/him",
       summary: "An old ferryman who takes names instead of coin, and remembers every one.",
+      appearance: "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
     },
     voice: {
       manner: "Slow and dry. Answers a question with a smaller question.",

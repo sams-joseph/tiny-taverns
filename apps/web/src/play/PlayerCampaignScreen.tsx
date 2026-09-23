@@ -15,11 +15,13 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import { NpcAppearance } from "../cast/NpcAppearance";
 import { NpcAvatar } from "../cast/NpcAvatar";
 import { HobCover } from "../hob/HobCover";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
+import { Description } from "../ui/description";
 import { loadPlayerCampaignView } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -203,6 +205,7 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
         {view !== undefined && (
           <HobCover image={view.campaign.image} pending={view.campaign.imagePending} shape="band" />
         )}
+        {view !== undefined && <Description text={view.campaign.description} />}
 
         {view !== undefined &&
           (empty ? (
@@ -254,6 +257,7 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
                               {npc.persona.identity.summary}
                             </p>
                           )}
+                          <NpcAppearance appearance={npc.persona.identity?.appearance} />
                           <Button
                             variant="outline"
                             size="sm"

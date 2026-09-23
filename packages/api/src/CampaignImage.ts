@@ -1,4 +1,4 @@
-import type { Campaign } from "./Campaign.js";
+import { type Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 
 /**
  * The text an image model is given for a campaign's cover — **one
@@ -8,14 +8,18 @@ import type { Campaign } from "./Campaign.js";
  *
  * ### What goes in
  *
- * A campaign carries two player-facing words about itself, and both are read:
+ * A campaign carries three player-facing things about itself, and all are read:
  *
- * 1. **The name** — the one thing every campaign has. It is the subject, asked
- *    for as the place and mood it suggests, because the house style forbids
- *    lettering and a title in quotes is an invitation to write it.
- * 2. **The party's name**, when the table has given one — a hint at who the
+ * 1. **The description**, when the creator wrote one — the pitch every player
+ *    reads, and the scene itself: it comes first and the rest colours it.
+ * 2. **The name** — the one thing every campaign has. Without a description it
+ *    is the subject, asked for as the place and mood it suggests; with one, it
+ *    colours the mood. Either way it is shown rather than written, because the
+ *    house style forbids lettering and a title in quotes is an invitation to
+ *    write it.
+ * 3. **The party's name**, when the table has given one — a hint at who the
  *    story is about, never drawn as a face.
- * 3. **Style** — `HOUSE_COVER_STYLE` (`HouseStyle.ts`), the house style framed
+ * 4. **Style** — `HOUSE_COVER_STYLE` (`HouseStyle.ts`), the house style framed
  *    as a wide scene rather than a bust.
  *
  * ### What never goes in
@@ -31,37 +35,55 @@ import type { Campaign } from "./Campaign.js";
 const LABEL_MAX = 120;
 
 /** The parts of a campaign a cover reads. */
-export type CampaignImageSubject = Pick<Campaign, "name" | "partyName">;
+export type CampaignImageSubject = Pick<Campaign, "name" | "partyName" | "description">;
 
 export interface CampaignImageOptions {
   /** The style sentence(s) appended last; `HOUSE_COVER_STYLE` is the one there is. */
   readonly style: string;
 }
 
-const clean = (text: string | null | undefined): string | undefined => {
+const clean = (text: string | null | undefined, max = LABEL_MAX): string | undefined => {
   const trimmed = (text ?? "").replace(/\s+/g, " ").replace(/["“”]/g, "").trim();
-  return trimmed === "" ? undefined : trimmed.slice(0, LABEL_MAX).trim();
+  return trimmed === "" ? undefined : trimmed.slice(0, max).trim();
 };
 
+const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
+
 /**
- * Whether there is anything to draw: a name with any letters in it. A campaign
- * named only in spaces or quotes would be a cover of the house style alone, so
+ * Whether there is anything to draw: a name or a description with any letters
+ * in it. A campaign with neither would be a cover of the house style alone, so
  * a caller skips rather than drawing a stranger's scene.
  */
 export const campaignImageHasSubject = (campaign: CampaignImageSubject): boolean =>
-  clean(campaign.name) !== undefined;
+  clean(campaign.name) !== undefined ||
+  clean(campaign.description, CAMPAIGN_DESCRIPTION_MAX) !== undefined;
+
+const scene = (name: string | undefined, description: string | undefined): string => {
+  if (description !== undefined) {
+    return [
+      `Wide establishing scene for a fantasy adventure. ${sentence(description)}`,
+      name === undefined
+        ? undefined
+        : `The adventure is called ${name}; let that colour the mood, shown rather than written.`,
+    ]
+      .filter((part) => part !== undefined)
+      .join(" ");
+  }
+  return name === undefined
+    ? "Wide establishing scene for a fantasy adventure."
+    : `Wide establishing scene for a fantasy adventure called ${name}: the place and the ` +
+        "mood that title suggests, shown rather than written.";
+};
 
 export const campaignImagePromptFor = (
   campaign: CampaignImageSubject,
   options: CampaignImageOptions,
 ): string => {
   const name = clean(campaign.name);
+  const description = clean(campaign.description, CAMPAIGN_DESCRIPTION_MAX);
   const party = clean(campaign.partyName);
   return [
-    name === undefined
-      ? "Wide establishing scene for a fantasy adventure."
-      : `Wide establishing scene for a fantasy adventure called ${name}: the place and the ` +
-        "mood that title suggests, shown rather than written.",
+    scene(name, description),
     party === undefined
       ? undefined
       : `The adventuring party at its heart is known as ${party}; hint at them, small in the scene.`,

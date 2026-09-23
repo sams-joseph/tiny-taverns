@@ -1,4 +1,4 @@
-import type { CampaignId, Npc } from "@taverns/api";
+import { APPEARANCE_MAX, type CampaignId, type Npc } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -31,9 +31,9 @@ import {
  * ### Basic first, and *Advanced* is a press
  *
  * The design's §4.3: the first screen must not be a wall of prompt
- * engineering. *Basic* is a name, a role, who they are and how they talk;
- * *Advanced* is everything else — pronouns, phrases, motives, boundaries, and
- * the creator-only material — behind one disclosure. It opens already shown
+ * engineering. *Basic* is a name, a role, who they are, how they look and
+ * how they talk; *Advanced* is everything else — pronouns, phrases, motives,
+ * boundaries, and the creator-only material — behind one disclosure. It opens already shown
  * when an existing row has anything in it, so an edit never hides what was
  * written.
  *
@@ -143,6 +143,23 @@ export function NpcDialog({
               placeholder="An old ferryman who takes names instead of coin, and remembers every one."
               value={draft.summary}
               onChange={(event) => set("summary")(event.target.value)}
+            />
+          </Field>
+
+          {/* On the first screen because the portrait is drawn once, from the
+              public persona, as the NPC joins the cast (`NpcImage.ts`). */}
+          <Field
+            label="Appearance"
+            htmlFor="npc-appearance"
+            hint="How they look, as a player would see them. Their portrait is drawn from it."
+          >
+            <Textarea
+              id="npc-appearance"
+              className="min-h-16"
+              maxLength={APPEARANCE_MAX}
+              placeholder="Stooped and weathered, river-grey eyes, a lantern hung from his pole."
+              value={draft.appearance}
+              onChange={(event) => set("appearance")(event.target.value)}
             />
           </Field>
 

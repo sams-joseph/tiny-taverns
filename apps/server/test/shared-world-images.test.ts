@@ -289,7 +289,7 @@ describe("founding a Shared World draws one cover", () => {
     const renamed = await as(jo.token, (client) =>
       client.sharedWorlds.update({
         params: { worldId: world.id },
-        payload: { name: "The Salt Company, Reformed" },
+        payload: { name: "The Salt Company, Reformed", description: "Now a guild of smugglers." },
       }),
     );
     expect(renamed.image).not.toBeNull();
@@ -337,7 +337,7 @@ describe("promoting a campaign's context draws one cover too", () => {
     const world = await as(ilse.token, (client) =>
       client.campaigns.promoteSharedWorld({
         params: { campaignId: campaign.id },
-        payload: { name: "The Lantern Coast" },
+        payload: { name: "The Lantern Coast", description: "Cliffs lit by a thousand lanterns." },
       }),
     );
     expect(world.id).toBe(campaign.contextId);
@@ -347,6 +347,7 @@ describe("promoting a campaign's context draws one cover too", () => {
     const record = await recordOf(world.id);
     expect(record?.state).toBe("ready");
     expect(record?.account_id).toBe(ilse.actor.accountId);
+    expect(record?.prompt).toContain("fantasy world. Cliffs lit by a thousand lanterns.");
     expect(record?.prompt).toContain("called The Lantern Coast");
   });
 

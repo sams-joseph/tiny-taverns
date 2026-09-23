@@ -17,6 +17,7 @@ import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { useCampaignAct } from "./act";
 import { HobCover } from "../hob/HobCover";
+import { Description } from "../ui/description";
 import {
   CampaignChrome,
   CampaignSettingsButtons,
@@ -271,6 +272,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots }) {
       {/* The cover, when there is one, above everything the page is about. */}
       <div className="flex flex-col gap-6">
         <HobCover image={view.campaign.image} pending={view.campaign.imagePending} shape="band" />
+        <Description text={view.campaign.description} />
         {/* `@4xl` (56rem = 896px) is the *content column's* width, not the
           viewport's — `main` is the container. 896 is where the aside earns its
           place: 340 for it, 32 for the gap, and 524 left for the body. */}

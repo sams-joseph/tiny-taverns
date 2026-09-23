@@ -164,8 +164,11 @@ const stored = (key: string) =>
 
 const FILES = ["original.png", "card.webp", "full.webp"];
 
-const standalone = (who: Person, name: string, extra: { readonly partyName?: string } = {}) =>
-  as(who.token, (client) => client.campaigns.create({ payload: { name, ...extra } }));
+const standalone = (
+  who: Person,
+  name: string,
+  extra: { readonly partyName?: string; readonly description?: string } = {},
+) => as(who.token, (client) => client.campaigns.create({ payload: { name, ...extra } }));
 
 const findAs = (who: Person, campaignId: CampaignId) =>
   attempt(who.token, (client) => client.campaigns.findById({ params: { campaignId } }));
@@ -186,7 +189,10 @@ describe("the standalone create draws one cover", () => {
 
   beforeAll(async () => {
     requestsBefore = images.requests().length;
-    campaign = await standalone(jo, "The Salt Road", { partyName: "The Iron Crows" });
+    campaign = await standalone(jo, "The Salt Road", {
+      partyName: "The Iron Crows",
+      description: "Caravans cross white salt flats between glass storms.",
+    });
     await settled();
   }, 60_000);
 
@@ -200,6 +206,10 @@ describe("the standalone create draws one cover", () => {
     expect(record?.failure).toBeNull();
     expect(record?.model).toBe(MODEL);
     expect(record?.account_id).toBe(jo.actor.accountId);
+    // The description the create form wrote is the scene; the name colours it.
+    expect(record?.prompt).toContain(
+      "fantasy adventure. Caravans cross white salt flats between glass storms.",
+    );
     expect(record?.prompt).toContain("called The Salt Road");
     expect(record?.prompt).toContain("known as The Iron Crows");
     expect(record?.prompt).toContain("Wide landscape composition");
@@ -298,7 +308,11 @@ describe("the standalone create draws one cover", () => {
     await as(jo.token, (client) =>
       client.campaigns.update({
         params: { campaignId: campaign.id },
-        payload: { name: "The Salt Road, Revised", partyName: "The Crows" },
+        payload: {
+          name: "The Salt Road, Revised",
+          partyName: "The Crows",
+          description: "A different pitch entirely.",
+        },
       }),
     );
     const again = await run(

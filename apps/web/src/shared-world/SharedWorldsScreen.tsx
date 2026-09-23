@@ -22,6 +22,8 @@ import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { TopBar } from "../shell/TopBar";
+import { describedBy } from "../ui/describedBy";
+import { NewSharedWorldDescription } from "../ui/description";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
 import { sharedWorldsAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -74,11 +76,15 @@ function SharedWorldRow({ membership }: { readonly membership: SharedWorldMember
   );
 }
 
-/** Names a new Shared World. Everything else about it has a column default. */
+/**
+ * Names a new Shared World, and describes it if its founder wants to — before
+ * the one cover draw reads it. Everything else about it has a column default.
+ */
 function NewSharedWorld() {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -87,7 +93,8 @@ function NewSharedWorld() {
     setError(undefined);
     const token = await fetchCredential();
     const result = await runApiResult(
-      (client) => client.sharedWorlds.create({ payload: { name: name.trim() } }),
+      (client) =>
+        client.sharedWorlds.create({ payload: describedBy({ name: name.trim() }, description) }),
       token,
     );
 
@@ -101,19 +108,21 @@ function NewSharedWorld() {
       return;
     }
     setName("");
+    setDescription("");
     invalidate([reads.mySharedWorlds]);
-  }, [fetchCredential, invalidate, name]);
+  }, [description, fetchCredential, invalidate, name]);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          aria-label="Shared World name"
-          placeholder="The Salt Company"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="max-w-xs"
-        />
+    <div className="flex max-w-xl flex-col gap-3">
+      <Input
+        aria-label="Shared World name"
+        placeholder="The Salt Company"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="max-w-xs"
+      />
+      <NewSharedWorldDescription value={description} onChange={setDescription} />
+      <div>
         <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
           {busy ? "Working…" : "Create Shared World"}
         </Button>

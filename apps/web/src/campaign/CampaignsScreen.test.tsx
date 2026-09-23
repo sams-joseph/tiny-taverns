@@ -57,12 +57,38 @@ describe("the campaign-first home", () => {
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
   });
 
+  it("describes the Shared World a campaign is promoted into", async () => {
+    server.routes.set("GET /worlds", { status: 200, body: [] });
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [{ campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt }],
+    });
+    server.routes.set(`POST /campaigns/${campaignId}/shared-world`, {
+      status: 200,
+      body: { ...sharedWorldDetails, name: "The Roads Between" },
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
+    await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
+    await userEvent.type(screen.getByLabelText("Shared World description"), "Old trade roads.");
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/shared-world")).toEqual({
+        name: "The Roads Between",
+        description: "Old trade roads.",
+      }),
+    );
+  });
+
   it("connects a standalone campaign to an existing owned Shared World", async () => {
     const somebodyElsesWorld = {
       ...sharedWorldDetails,
       id: "5a1e2b3c-0000-4000-8000-00000000aaa2",
       name: "Somebody Else's World",
       ownerAccountId: "5a1e2b3c-0000-4000-8000-0000000000ff",
+      description: null,
     };
     server.routes.set("GET /worlds", {
       status: 200,
@@ -138,6 +164,7 @@ describe("the campaign-first home", () => {
       id: "5a1e2b3c-0000-4000-8000-00000000aaa4",
       name: "Somebody Else's Atlas",
       ownerAccountId: "5a1e2b3c-0000-4000-8000-0000000000ff",
+      description: null,
     };
     server.routes.set("GET /worlds", {
       status: 200,
@@ -185,6 +212,26 @@ describe("the campaign-first home", () => {
       expect(bodyOf(server, "POST", "/campaigns")).toEqual({ name: "The Long Winter" }),
     );
     await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`));
+  });
+
+  it("sends the description the form was given, trimmed, and omits a blank one", async () => {
+    server.routes.set("POST /campaigns", { status: 200, body: campaign });
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.type(
+      screen.getByLabelText("New campaign description"),
+      "  Snow that never ends, and what lives under it.  ",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/campaigns")).toEqual({
+        name: "The Long Winter",
+        description: "Snow that never ends, and what lives under it.",
+      }),
+    );
   });
 
   it("starts a connected campaign in a Shared World from the primary flow", async () => {

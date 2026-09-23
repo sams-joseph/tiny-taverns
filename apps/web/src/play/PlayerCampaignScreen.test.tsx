@@ -95,6 +95,10 @@ describe("a table you sit at", () => {
     expect(screen.queryByRole("button", { name: /Ask Hob/ })).toBeNull();
     expect(screen.getByText(/Only you can read that transcript/)).toBeTruthy();
     expect(screen.getByText(/does not automatically update NPC memory/)).toBeTruthy();
+    // A shared NPC's card carries its public look beside its summary.
+    expect(
+      screen.getByText("Stooped and weathered, river-grey eyes, a lantern hung from his pole."),
+    ).toBeTruthy();
     const talk = screen.getByRole("button", { name: /Talk privately/ });
     expect(talk.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/cast/${npcId}/talk`);
   });

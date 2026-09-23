@@ -20,7 +20,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { liveMemberAccountIds } from "./Memberships.js";
-import { defined, dieOnSqlError, setClause } from "./rows.js";
+import { defined, dieOnSqlError, proseColumn, setClause } from "./rows.js";
 import {
   ensureGroupReadable,
   groupReadable,
@@ -60,7 +60,8 @@ const addOwnerMember = (
 
 /**
  * Creates the group row and its structurally required owner membership inside
- * the caller's transaction.
+ * the caller's transaction. A campaign's hidden context is founded with a name
+ * alone; a description belongs to a world somebody made on purpose.
  *
  * Exported for `Campaigns.createStandalone`: the campaign-first façade still
  * uses a private one-campaign group until Shared Worlds replace the group
@@ -69,14 +70,19 @@ const addOwnerMember = (
  */
 export const foundGroup = (
   sql: SqlClient.SqlClient,
-  name: string,
+  world: { readonly name: string; readonly description?: string | undefined },
   ownerAccountId: AccountId,
   isSharedWorld = false,
 ): Effect.Effect<SharedWorld, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows = yield* sql<GroupRow>`
       insert into play_group ${sql.insert(
-        defined({ owner_account_id: ownerAccountId, name, is_shared_world: isSharedWorld }),
+        defined({
+          owner_account_id: ownerAccountId,
+          name: world.name,
+          description: proseColumn(world.description),
+          is_shared_world: isSharedWorld,
+        }),
       )}
       returning *, ${sharedWorldImageColumns(sql, "play_group")}
     `;
@@ -109,6 +115,7 @@ interface GroupRow {
   readonly id: SharedWorldId;
   readonly owner_account_id: AccountId;
   readonly name: string;
+  readonly description: string | null;
   readonly is_shared_world: boolean;
   readonly archived_at: Date | null;
   readonly created_at: Date;
@@ -164,6 +171,7 @@ const toGroup = (row: GroupRow, sign: SharedWorldImageSigner | undefined): Share
   return new SharedWorld({
     id: row.id,
     name: row.name,
+    description: row.description,
     ownerAccountId: row.owner_account_id,
     image: imageId !== null && sign !== undefined ? sign(imageId) : null,
     imagePending: row.image_state === "generating",
@@ -319,7 +327,7 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                return yield* foundGroup(sql, payload.name, actor.accountId, true);
+                return yield* foundGroup(sql, payload, actor.accountId, true);
               }),
             ),
           ),
@@ -327,9 +335,16 @@ export class Groups extends Context.Service<
         promote: (creator, payload) =>
           dieOnSqlError(
             Effect.gen(function* () {
+              // A hidden context has never had a description, so one given
+              // here is its first; none given leaves it without.
+              const columns = defined({
+                name: payload.name,
+                description: proseColumn(payload.description),
+                is_shared_world: true,
+              });
               const rows = yield* sql<GroupRow>`
                 update play_group
-                set name = ${payload.name}, is_shared_world = true, updated_at = now()
+                set ${setClause(sql, columns)}
                 where play_group.id = ${creator.group}
                   and play_group.owner_account_id = ${creator.actor.accountId}
                   and play_group.archived_at is null
@@ -454,7 +469,10 @@ export class Groups extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const columns = defined({ name: patch.name });
+              const columns = defined({
+                name: patch.name,
+                description: proseColumn(patch.description),
+              });
               const rows = yield* sql<GroupRow>`
                 update play_group set ${setClause(sql, columns)}
                 where play_group.id = ${id} and ${groupWritable(sql, actor, id)}

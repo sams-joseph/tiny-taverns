@@ -18,7 +18,14 @@ import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { admitToGroup, foundGroup } from "./Groups.js";
 import { addCreator, liveMemberAccountIds } from "./Memberships.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  defined,
+  dieOnSqlError,
+  proseColumn,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   campaignReadable,
   campaignWritable,
@@ -39,6 +46,7 @@ export interface CampaignRow extends ProvenanceColumns {
   readonly creator_account_id: AccountId;
   readonly name: string;
   readonly party_name: string | null;
+  readonly description: string | null;
   readonly player_count: number;
   readonly current_session_id: SessionId | null;
   readonly archived_at: Date | null;
@@ -103,6 +111,7 @@ export const toCampaign = (row: CampaignRow, sign: CampaignImageSigner | undefin
     creatorAccountId: row.creator_account_id,
     name: row.name,
     partyName: row.party_name,
+    description: row.description,
     playerCount: row.player_count,
     currentSessionId: row.current_session_id,
     image: campaignImages(row.image_state === "ready" ? row.image_id : null, sign),
@@ -204,6 +213,7 @@ export class Campaigns extends Context.Service<
                 creator_account_id: actor.accountId,
                 name: payload.name,
                 party_name: payload.partyName,
+                description: proseColumn(payload.description),
                 player_count: payload.playerCount,
                 visibility: payload.visibility,
               }),
@@ -285,7 +295,7 @@ export class Campaigns extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const group = yield* foundGroup(sql, payload.name, actor.accountId);
+                const group = yield* foundGroup(sql, { name: payload.name }, actor.accountId);
                 return yield* insert(group.id, payload, actor);
               }),
             ),
@@ -312,7 +322,11 @@ export class Campaigns extends Context.Service<
                   });
                 }
 
-                const context = yield* foundGroup(sql, sources[0]!.name, creator.actor.accountId);
+                const context = yield* foundGroup(
+                  sql,
+                  { name: sources[0]!.name },
+                  creator.actor.accountId,
+                );
                 const participants = yield* liveMemberAccountIds(sql, creator.campaign);
                 yield* Effect.forEach(
                   participants,
@@ -340,6 +354,7 @@ export class Campaigns extends Context.Service<
               const columns = defined({
                 name: patch.name,
                 party_name: patch.partyName,
+                description: proseColumn(patch.description),
                 player_count: patch.playerCount,
                 current_session_id: patch.currentSessionId,
                 visibility: patch.visibility,

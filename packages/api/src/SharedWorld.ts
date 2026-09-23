@@ -17,10 +17,26 @@ export class SharedWorldImages extends Schema.Class<SharedWorldImages>("SharedWo
   fullUrl: Schema.String,
 }) {}
 
+/**
+ * The bound on `SharedWorld.description`, shared by the forms, the schema and
+ * the column's own check (`0052_descriptions.ts`).
+ */
+export const SHARED_WORLD_DESCRIPTION_MAX = 600;
+
+const sharedWorldDescription = Schema.String.check(
+  Schema.isMaxLength(SHARED_WORLD_DESCRIPTION_MAX),
+);
+
 /** An explicit Shared World: optional context shared by connected campaigns. */
 export class SharedWorld extends Schema.Class<SharedWorld>("SharedWorld")({
   id: SharedWorldId,
   name: Schema.String,
+  /**
+   * What the world is, in a few sentences — the land, its age, its trouble.
+   * Every member reads it, and the cover is drawn from it
+   * (`SharedWorldImage.ts`). `null` when none was written.
+   */
+  description: Schema.NullOr(Schema.String),
   /** Who may rename, archive, restore and share Library sources into this world. */
   ownerAccountId: AccountId,
   /**
@@ -36,13 +52,18 @@ export class SharedWorld extends Schema.Class<SharedWorld>("SharedWorld")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/** Also the payload that promotes a campaign's hidden context into a Shared World. */
 export const SharedWorldCreate = Schema.Struct({
   name: Schema.NonEmptyString,
+  /** Written before the one cover draw. A blank one is none. */
+  description: Schema.optional(sharedWorldDescription),
 });
 export type SharedWorldCreate = typeof SharedWorldCreate.Type;
 
 export const SharedWorldUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
+  /** `null`, or a blank one, clears it. The cover is not redrawn. */
+  description: Schema.optional(Schema.NullOr(sharedWorldDescription)),
 });
 export type SharedWorldUpdate = typeof SharedWorldUpdate.Type;
 

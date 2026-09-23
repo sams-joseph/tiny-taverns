@@ -23,6 +23,7 @@ export interface NpcDraft {
   readonly name: string;
   readonly role: string;
   readonly summary: string;
+  readonly appearance: string;
   readonly manner: string;
   readonly pronouns: string;
   readonly pronunciation: string;
@@ -48,6 +49,7 @@ export const emptyDraft: NpcDraft = {
   name: "",
   role: "",
   summary: "",
+  appearance: "",
   manner: "",
   pronouns: "",
   pronunciation: "",
@@ -95,6 +97,7 @@ export const personaFrom = (draft: NpcDraft): NpcPersona =>
       pronouns: text(draft.pronouns),
       pronunciation: text(draft.pronunciation),
       summary: text(draft.summary),
+      appearance: text(draft.appearance),
     }),
     voice: section({
       manner: text(draft.manner),
@@ -118,11 +121,17 @@ export const personaFrom = (draft: NpcDraft): NpcPersona =>
 export const privateMaterialFrom = (draft: NpcDraft): NpcPrivateMaterial =>
   section({ secrets: text(draft.secrets), instructions: text(draft.instructions) }) ?? {};
 
-/** The form, opened on an existing row. */
-export const draftOf = (npc: Npc): NpcDraft => ({
+/**
+ * The form, opened on an existing row — a campaign NPC or a Library original,
+ * which carry the same two documents, so one reader serves both builders.
+ */
+export const draftOf = (
+  npc: Pick<Npc, "name" | "role" | "persona" | "privateMaterial">,
+): NpcDraft => ({
   name: npc.name,
   role: npc.role,
   summary: npc.persona.identity?.summary ?? "",
+  appearance: npc.persona.identity?.appearance ?? "",
   manner: npc.persona.voice?.manner ?? "",
   pronouns: npc.persona.identity?.pronouns ?? "",
   pronunciation: npc.persona.identity?.pronunciation ?? "",

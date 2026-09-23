@@ -206,6 +206,8 @@ describe("CastScreen", () => {
     await userEvent.type(within(dialog).getByLabelText("Name"), "Fen");
     await userEvent.type(within(dialog).getByLabelText("Role"), "the patron");
     await userEvent.type(within(dialog).getByLabelText("Who they are"), "Pays for silence.");
+    // On the first screen, because the portrait is drawn from it as the NPC lands.
+    await userEvent.type(within(dialog).getByLabelText("Appearance"), "Rings on every finger.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Advanced" }));
     await userEvent.type(within(dialog).getByLabelText("Secrets"), "Fen hired the hag.");
     await userEvent.type(within(dialog).getByLabelText("Phrases they use"), "Quiet, now.");
@@ -224,7 +226,10 @@ describe("CastScreen", () => {
     expect(sent).toMatchObject({
       name: "Fen",
       role: "the patron",
-      persona: { identity: { summary: "Pays for silence." }, voice: { phrases: ["Quiet, now."] } },
+      persona: {
+        identity: { summary: "Pays for silence.", appearance: "Rings on every finger." },
+        voice: { phrases: ["Quiet, now."] },
+      },
       privateMaterial: { secrets: "Fen hired the hag." },
     });
     expect(JSON.stringify(sent.persona)).not.toContain("hired the hag");
