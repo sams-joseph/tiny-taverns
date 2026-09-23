@@ -92,13 +92,13 @@ The web client sends requests through a client derived from `TavernsApi`. `Autho
 
 ## Where code lives
 
-- `apps/server`: Effect v4 server. `repo/` is every read and write, `repo/visibility.ts` the seam, `assistant/` Hob and the NPC agent, `live/` the doorbell, `migrations/` the forward-only ledger, `bin/` the import commands. Read `.repos/effect/MIGRATION.md` before writing Effect code; v4's published docs are thin and the vendored tree is the reference.
+- `apps/server`: Effect v4 server. `repo/` is every read and write, `repo/visibility.ts` the seam, `assistant/` Hob and the NPC agent, `live/` the doorbell, `storage/` the provider-neutral file storage adapter, `migrations/` the forward-only ledger, `bin/` the import commands. Read `.repos/effect/MIGRATION.md` before writing Effect code; v4's published docs are thin and the vendored tree is the reference.
 - `apps/web`: Vite + React. `api/` is the atom client and the key vocabulary, `shell/` the two nav rows, one directory per screen family, `test/` the route harness.
 - `packages/api`: the wire contract and the small pure helpers both sides share (`SheetGrants`, `Ruleset`, `Gear`, `Page`, `Query`). Builds to `dist`.
 - `packages/ui`: shadcn components on Base UI, the Tailwind bridge, the layering scale, the local tokens, and the adherence tests.
 - `packages/design-system`: the delivery. Read-only. Also installed as the `tiny-taverns-design` skill.
 - `.repos/`: vendored read-only references pinned to the installed versions.
-- `docs/internals/`: the pages this file points at: `visibility`, `shared-worlds`, `data-model`, `characters`, `corpora`, `live-session`, `hob`, `server`, `web-data`, `web-screens`, `design-system`.
+- `docs/internals/`: the pages this file points at: `visibility`, `shared-worlds`, `data-model`, `characters`, `corpora`, `live-session`, `hob`, `server`, `storage`, `web-data`, `web-screens`, `design-system`.
 
 ## Taste
 

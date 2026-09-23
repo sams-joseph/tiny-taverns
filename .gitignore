@@ -8,3 +8,5 @@ dist/
 !.env.example
 coverage/
 *.tsbuildinfo
+# The filesystem storage driver's default root (STORAGE_FS_ROOT).
+.storage/

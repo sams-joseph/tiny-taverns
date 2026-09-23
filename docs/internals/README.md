@@ -13,6 +13,7 @@ Before adding a paragraph, ask what a maintainer would get wrong without it. If 
 - [Live session](live-session.md): write-through live state, the doorbell, the SSE reconnect contract, finishing and carrying a fight, the recap and its player projection, the player live table.
 - [Hob](hob.md): tools not context, the round loop, proposals and the accept path, threads and toolkits per caller, configuration, diagnosing a model that will not call a tool, the NPC agent.
 - [Server](server.md): Effect v4, module resolution, listener ordering, the contract package and its `dist`, pagination, authentication, env files.
+- [Storage](storage.md): the provider-neutral cloud storage adapter, storage keys, the driver variable and its boot line, the file-system adapter, adding a provider.
 - [Web data](web-data.md): reads as atoms, keys and invalidation, mutations, the credential seam, the runner's atoms and stream hook, test harness traps.
 - [Web screens](web-screens.md): routing on a hash history, the shell and the creator/player relation, the signed-out gate, screen shape, authoring traps, the filter input standard, the Chronicle and sheet rules.
 - [Design system](design-system.md): tokens as the source of truth, the read-only package, the Tailwind bridge, layering, motion, shadcn on Base UI.
