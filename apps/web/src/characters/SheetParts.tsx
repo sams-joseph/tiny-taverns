@@ -165,23 +165,33 @@ export function HpTrack({
           <span className="ml-auto text-micro leading-none text-faint">Hit dice {hitDice}</span>
         )}
       </div>
-      {fraction !== undefined && (
-        <div className="h-2 overflow-hidden rounded-pill bg-surface-sunken">
-          <div
-            className={cn(
-              "h-full",
-              fraction === 0
-                ? "bg-crimson-400"
-                : fraction <= 0.34
-                  ? "bg-danger"
-                  : fraction <= 0.67
-                    ? "bg-accent"
-                    : "bg-success",
-            )}
-            style={{ width: `${String(Math.round(fraction * 100))}%` }}
-          />
-        </div>
-      )}
+      {fraction !== undefined && <HpBar fraction={fraction} />}
+    </div>
+  );
+}
+
+/**
+ * The hit-point bar on its own — the sheet's track and the roster card both draw
+ * it, so the colour steps are decided once. Presentational: the number beside it
+ * is the reader's, so the bar is hidden from assistive tech.
+ */
+export function HpBar({ fraction }: { readonly fraction: number }) {
+  return (
+    <div aria-hidden="true" className="h-2 overflow-hidden rounded-pill bg-surface-sunken">
+      <div
+        data-slot="hp-fill"
+        className={cn(
+          "h-full",
+          fraction === 0
+            ? "bg-crimson-400"
+            : fraction <= 0.34
+              ? "bg-danger"
+              : fraction <= 0.67
+                ? "bg-accent"
+                : "bg-success",
+        )}
+        style={{ width: `${String(Math.round(fraction * 100))}%` }}
+      />
     </div>
   );
 }

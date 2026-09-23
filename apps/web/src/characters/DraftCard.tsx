@@ -1,6 +1,7 @@
 import { Badge, Button, Icon, sectionHeadingVariants } from "@taverns/ui";
 import type { CharacterProposal } from "./draft";
 import { Portrait, SheetSection } from "./SheetParts";
+import { lineageLine } from "./sheet";
 import { AbilityCell } from "./SheetParts";
 
 /**
@@ -48,8 +49,7 @@ export function DraftCard({
   readonly keeping: boolean;
 }) {
   const sheet = draft.sheet;
-  const lineage = draft.subrace ?? draft.race;
-  const line = [lineage, draft.className].filter((part) => part !== null).join(" ");
+  const line = lineageLine(draft);
   const kit = sheet.inventory ?? [];
   const skills = sheet.skills ?? [];
   const spells = sheet.spellcasting?.known ?? [];

@@ -61,27 +61,67 @@ describe("your characters", () => {
 
     const brannoc = (await screen.findByText("Brannoc Duskharrow")).closest("div[data-slot=card]");
     expect(brannoc).not.toBeNull();
-    expect(within(brannoc as HTMLElement).getByText("Level 5 Half-orc Paladin")).toBeTruthy();
+    const card = within(brannoc as HTMLElement);
+    // The level is the portrait's badge, so the line under the name is the
+    // lineage alone rather than the descriptor saying the level twice.
+    expect(card.getByText("Level 5")).toBeTruthy();
+    expect(card.getByText("Half-orc Paladin")).toBeTruthy();
+    expect(card.queryByText("Level 5 Half-orc Paladin")).toBeNull();
     // `campaignId` is the join key; the name comes from `GET /me/campaigns`.
-    expect(within(brannoc as HTMLElement).getByText("The Salt Road")).toBeTruthy();
-    expect(within(brannoc as HTMLElement).getByText("44 / 52")).toBeTruthy();
+    expect(card.getByText("The Salt Road")).toBeTruthy();
+    expect(card.getByText("Hit points")).toBeTruthy();
+    expect(card.getByText("44 / 52")).toBeTruthy();
+    // The bar fills to the same two numbers, and green above two thirds.
+    const fill = (brannoc as HTMLElement).querySelector<HTMLElement>("[data-slot=hp-fill]");
+    expect(fill?.style.width).toBe("85%");
+    expect(fill?.className).toContain("bg-success");
+    // The footer: the live condition set, and who plays them.
+    expect(card.getByText("Blessed")).toBeTruthy();
+    expect(card.getByText("Ilse")).toBeTruthy();
 
     const sorrel = (await screen.findByText("Sorrel Ash")).closest("div[data-slot=card]");
     expect(within(sorrel as HTMLElement).getByText("The Hag's Bargain")).toBeTruthy();
+    expect(within(sorrel as HTMLElement).getByText("No conditions")).toBeTruthy();
   });
 
   /**
-   * `hpMax`, `ac` and `level` are all nullable, and a pill for each would be a
-   * stubbed zero on the one screen whose whole job is to be true about a row.
+   * AC is the column; initiative is the sheet's own `+1`; passive Perception is
+   * 10 plus the Wisdom modifier, because Brannoc's sheet has no Perception row.
+   */
+  it("draws AC, initiative and passive Perception in one box", async () => {
+    await renderRoster();
+    const brannoc = (await screen.findByText("Brannoc Duskharrow")).closest("div[data-slot=card]");
+    const cells = [...(brannoc as HTMLElement).querySelectorAll("dl > div")].map((cell) => [
+      cell.querySelector("dt")?.textContent,
+      cell.querySelector("dd")?.textContent,
+    ]);
+
+    expect(cells).toEqual([
+      ["AC", "18"],
+      ["Init", "+1"],
+      ["Passive", "11"],
+    ]);
+  });
+
+  /**
+   * `hpMax`, `ac` and `level` are all nullable, and a sheet nobody has written
+   * has no ability cells, so every one of these can be missing — and a zero in
+   * its place would be a stubbed value on the one screen whose whole job is to
+   * be true about a row.
    */
   it("omits a number the row does not have rather than showing a zero", async () => {
     await renderRoster();
     const sorrel = (await screen.findByText("Sorrel Ash")).closest("div[data-slot=card]");
-    const pills = within(sorrel as HTMLElement);
+    const card = within(sorrel as HTMLElement);
 
-    expect(pills.queryByText("HP")).toBeNull();
-    expect(pills.queryByText("AC")).toBeNull();
-    expect(pills.getByText("Level")).toBeTruthy();
+    expect(card.getByText("Level 1")).toBeTruthy();
+    expect(card.queryByText("Hit points")).toBeNull();
+    expect((sorrel as HTMLElement).querySelector("[data-slot=hp-fill]")).toBeNull();
+    // No AC, no DEX or WIS cell: nothing to put in the box, so no box.
+    expect((sorrel as HTMLElement).querySelector("dl")).toBeNull();
+    expect(card.queryByText("AC")).toBeNull();
+    expect(card.queryByText("Init")).toBeNull();
+    expect(card.queryByText("Passive")).toBeNull();
   });
 
   it("opens a sheet through a real link, keyed on the character", async () => {
