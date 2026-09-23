@@ -41,6 +41,12 @@ const NOT_CONTENT = [
   "character_option_proficiency",
   "character_option_subrace",
   "character_option_trait",
+  // A character's picture: who may see it is exactly who may see the
+  // character, through the character's own read, and every row is the image
+  // provider's work rather than a Hob turn's, so a `visibility` or `origin`
+  // here would be a second answer to a question the character already
+  // answers. See 0048_character_portraits.ts.
+  "character_portrait",
   "character_resource_request",
   "condition",
   "creature_armor_equipment",
@@ -92,6 +98,8 @@ const NOT_CONTENT = [
   "spell_class",
   "spell_damage_type",
   "spell_subclass",
+  // Prefixes whose stored files must be deleted: an outbox, not content.
+  "storage_deletion",
   "weapon_property",
 ];
 

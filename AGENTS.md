@@ -62,7 +62,7 @@ The commonest defect here is a change that works on the path you tested and is m
 
 ## Running and verifying
 
-- `pnpm db:up`, then `pnpm dev`. Imports run in the order `README.md` gives; a fresh database needs them all. The server logs one line per optional subsystem at boot (hosted sign-in, Hob) saying ON or OFF; believe the line, not the env file.
+- `pnpm db:up`, then `pnpm dev`. Imports run in the order `README.md` gives; a fresh database needs them all. The server logs one line per optional subsystem at boot (hosted sign-in, Hob, storage, portraits) saying ON or OFF; believe the line, not the env file.
 - A machine token from `pnpm -F server token:issue` pasted into the gallery's Server panel is the credential a build without Clerk has. Hosted sign-in and Hob are opt-in; unset is a supported mode for both and the suite runs with both off.
 - Smallest proof that the change works: `vitest run <file>` in the package you touched, plus `typecheck` for that package. CI runs `turbo run lint typecheck test build` and `pnpm format:check` (root Prettier is not a turbo task).
 - The server suite needs Postgres, is capped at eight workers, and each file owns a database. Both suites carry a 60s test budget because they are load-sensitive; a timeout under load is not the same failure as a pool refusal.
@@ -92,7 +92,7 @@ The web client sends requests through a client derived from `TavernsApi`. `Autho
 
 ## Where code lives
 
-- `apps/server`: Effect v4 server. `repo/` is every read and write, `repo/visibility.ts` the seam, `assistant/` Hob and the NPC agent, `live/` the doorbell, `storage/` the provider-neutral file storage adapter, `migrations/` the forward-only ledger, `bin/` the import commands. Read `.repos/effect/MIGRATION.md` before writing Effect code; v4's published docs are thin and the vendored tree is the reference.
+- `apps/server`: Effect v4 server. `repo/` is every read and write, `repo/visibility.ts` the seam, `assistant/` Hob and the NPC agent, `live/` the doorbell, `storage/` the provider-neutral file storage adapter, `portraits/` the portrait worker (the one background job) and its signed image URLs, `migrations/` the forward-only ledger, `bin/` the import commands. Read `.repos/effect/MIGRATION.md` before writing Effect code; v4's published docs are thin and the vendored tree is the reference.
 - `apps/web`: Vite + React. `api/` is the atom client and the key vocabulary, `shell/` the two nav rows, one directory per screen family, `test/` the route harness.
 - `packages/api`: the wire contract and the small pure helpers both sides share (`SheetGrants`, `Ruleset`, `Gear`, `Page`, `Query`). Builds to `dist`.
 - `packages/ui`: shadcn components on Base UI, the Tailwind bridge, the layering scale, the local tokens, and the adherence tests.

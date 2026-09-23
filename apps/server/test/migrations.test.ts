@@ -146,6 +146,7 @@ describe("migrations", () => {
       "character_option_proficiency",
       "character_option_subrace",
       "character_option_trait",
+      "character_portrait",
       "character_resource_request",
       "character_roll",
       "class_level",
@@ -211,6 +212,7 @@ describe("migrations", () => {
       "spell_class",
       "spell_damage_type",
       "spell_subclass",
+      "storage_deletion",
       "subclass",
       "weapon_property",
     ]);
@@ -266,6 +268,7 @@ describe("migrations", () => {
       { migration_id: 45, name: "npc_awareness_candidates" },
       { migration_id: 46, name: "campaign_invites" },
       { migration_id: 47, name: "shared_worlds" },
+      { migration_id: 48, name: "character_portraits" },
     ]);
   }, 60_000);
 
@@ -322,6 +325,7 @@ describe("migrations", () => {
       { migration_id: 45, name: "npc_awareness_candidates" },
       { migration_id: 46, name: "campaign_invites" },
       { migration_id: 47, name: "shared_worlds" },
+      { migration_id: 48, name: "character_portraits" },
     ]);
   }, 60_000);
 });

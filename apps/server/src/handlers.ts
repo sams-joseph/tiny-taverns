@@ -3,6 +3,7 @@ import {
   type CampaignId,
   CurrentActor,
   Heartbeat,
+  type HobAccepted,
   type LiveEvent,
   type NotFound,
   PlayerLiveHeartbeat,
@@ -50,6 +51,7 @@ import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
+import { Portraits } from "./portraits/Portraits.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
 import { Recap } from "./repo/Recap.js";
@@ -162,6 +164,7 @@ const MeLive = HttpApiBuilder.group(
     const memberships = yield* Memberships;
     const characters = yield* Characters;
     const spells = yield* Spells;
+    const portraits = yield* Portraits;
     return (
       handlers
         // The whole handler, and there is nothing for it to pass: `identity`
@@ -188,10 +191,21 @@ const MeLive = HttpApiBuilder.group(
         // insert has no row to derive one from. There is still nothing to check
         // here: `ensureCampaignReadable` refuses a campaign this credential does
         // not reach, and the owner is `CurrentActor`'s rather than an argument.
+        //
+        // The portrait is started after `createOwn` commits, never inside it:
+        // the job must find a committed row, and Hob's accept below calls the
+        // same `drawAfterCreate` after *its* transaction. It returns at once,
+        // with the character marked `portraitPending` when a draw started.
         .handle("createCharacter", ({ params, payload }) =>
-          characters.createOwn(params.campaignId, payload),
+          characters
+            .createOwn(params.campaignId, payload)
+            .pipe(Effect.flatMap(portraits.drawAfterCreate)),
         )
-        .handle("deleteCharacter", ({ params }) => characters.removeOwn(params.characterId))
+        // The delete's own trigger enqueued the portrait's files; this only
+        // drains them now rather than at the next minute's sweep.
+        .handle("deleteCharacter", ({ params }) =>
+          characters.removeOwn(params.characterId).pipe(Effect.tap(() => portraits.drainSoon)),
+        )
     );
   }),
 );
@@ -286,6 +300,21 @@ const CampaignInvitesLive = HttpApiBuilder.group(
  * do real damage. There is nothing to look up with — the token is the only thing
  * this handler has, and what it discloses is decided in `repo/Invites.ts`.
  */
+/**
+ * Portrait bytes, behind a signature instead of a credential; see the group's
+ * declaration and `portraits/Portraits.ts`.
+ */
+const PortraitsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "portraits",
+  Effect.fnUntraced(function* (handlers) {
+    const portraits = yield* Portraits;
+    return handlers.handle("image", ({ params, query }) =>
+      portraits.image({ ...params, e: query.e, s: query.s }),
+    );
+  }),
+);
+
 const InvitePreviewLive = HttpApiBuilder.group(
   TavernsApi,
   "invitePreview",
@@ -771,6 +800,7 @@ const HobLive = HttpApiBuilder.group(
     const threads = yield* HobThreads;
     const proposals = yield* Proposals;
     const dmActors = yield* CampaignCreatorActors;
+    const portraits = yield* Portraits;
 
     /**
      * Whose conversations a *listing* reaches — **one read, and the same
@@ -801,24 +831,38 @@ const HobLive = HttpApiBuilder.group(
         Result.isSuccess(proof) ? ("dm" as const) : ("own" as const),
       );
 
-    return handlers
-      .handle("status", ({ params }) => hob.status(params.campaignId))
-      .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload))
-      .handle("threads", ({ params }) =>
-        Effect.flatMap(reachAt(params.campaignId), (reach) =>
-          threads.list(reach, params.campaignId),
-        ),
-      )
-      .handle("turns", ({ params }) =>
-        Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
-          threads.turns(reach, params.campaignId, params.threadId),
-        ),
-      )
-      .handle("accept", ({ params }) =>
-        Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
-          proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
-        ),
-      );
+    return (
+      handlers
+        .handle("status", ({ params }) => hob.status(params.campaignId))
+        .handle("ask", ({ params, payload }) => hob.ask(params.campaignId, payload))
+        .handle("threads", ({ params }) =>
+          Effect.flatMap(reachAt(params.campaignId), (reach) =>
+            threads.list(reach, params.campaignId),
+          ),
+        )
+        .handle("turns", ({ params }) =>
+          Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
+            threads.turns(reach, params.campaignId, params.threadId),
+          ),
+        )
+        // A kept character draft is the second composer of a character, so it
+        // starts the portrait exactly as the form's create does, after the
+        // accept's transaction has committed.
+        .handle("accept", ({ params }) =>
+          Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
+            proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
+          ).pipe(
+            Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> =>
+              accepted.accepted === "character"
+                ? Effect.map(portraits.drawAfterCreate(accepted.character), (character) => ({
+                    ...accepted,
+                    character,
+                  }))
+                : Effect.succeed(accepted),
+            ),
+          ),
+        )
+    );
   }),
 );
 
@@ -1275,6 +1319,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     SharedWorldLibraryLive,
     SharedWorldMembersLive,
     InvitePreviewLive,
+    PortraitsLive,
     JoinLive,
     CampaignsLive,
     MembersLive,

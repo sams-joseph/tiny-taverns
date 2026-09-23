@@ -610,3 +610,39 @@ describe("a character sheet", () => {
     expect(screen.queryByText("Not here")).toBeNull();
   });
 });
+
+describe("the portrait on the sheet", () => {
+  const drawn = {
+    thumbUrl: "/portraits/p1/thumb?e=1&s=t",
+    cardUrl: "/portraits/p1/card?e=1&s=c",
+    fullUrl: "/portraits/p1/full?e=1&s=f",
+  };
+  const answering = (character: Record<string, unknown>) =>
+    server.routes.set("GET /me/characters", {
+      status: 200,
+      body: [{ character, seats: [brannocSeatRef] }, ownedSorrel],
+    });
+
+  it("says Hob is drawing, quietly, while the portrait is pending", async () => {
+    answering({ ...brannoc, portraitPending: true });
+    await renderSheet();
+    expect(await screen.findByText("Hob is drawing their portrait…")).toBeTruthy();
+    expect(document.querySelector("img[src*='/portraits/']")).toBeNull();
+  });
+
+  it("puts the thumb on both plates, and no drawing line, once it is ready", async () => {
+    answering({ ...brannoc, portrait: drawn });
+    await renderSheet();
+    await screen.findAllByText("Brannoc Duskharrow");
+    const images = document.querySelectorAll("img[src*='/portraits/p1/thumb']");
+    expect(images).toHaveLength(2);
+    expect(screen.queryByText("Hob is drawing their portrait…")).toBeNull();
+  });
+
+  it("draws the initials with no error chrome when there is none", async () => {
+    await renderSheet();
+    await screen.findAllByText("Brannoc Duskharrow");
+    expect(document.querySelector("img[src*='/portraits/']")).toBeNull();
+    expect(screen.queryByText(/portrait/i)).toBeNull();
+  });
+});

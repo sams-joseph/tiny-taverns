@@ -64,6 +64,10 @@ Two optional helpers exist. `optional` wraps a schema in `Union([schema, Null, A
 
 The redraft loop is `promptFor`'s `offered()`: a saved `turn.proposal` is rendered back into the next prompt (labels, the ranking rather than six cells, the appearance line, an encounter's `creatureId`s), so "make her a ranger instead" reaches a model that can see the druid it wrote. Accept comes before corrections; after it, every edit is an ordinary owner PATCH.
 
+### Portraits are not a tool
+
+Hob "draws" a character's portrait, but no toolkit carries a drawing tool, in any of the four. A tool is called at the model's discretion, and an image costs money and up to two minutes inside a four-round stream; a local text model cannot make images at all. The draw is the server's own job after a create commits ([Characters](characters.md), _The portrait_). Hob's part is the `appearance` line `proposeCharacter` writes, which the prompt reads.
+
 ### Direct resource spends
 
 The one Hob write outside a proposal is `spendCharacterResource`, offered only while a live fight has `encounter_run.allow_hob_direct_writes` on and PC counters exist (`directResourceToolkitOver`, `dmBindWithDirect`). The write is `repo/HobDirectWrites.ts`: it re-checks proof, live run and switch at write time, locks the turn for `tool_call_id` idempotency, and records an audit row the runner can undo. With the switch off the toolkit is byte-identical (`hob-direct-writes.test.ts`).

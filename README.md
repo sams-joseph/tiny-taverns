@@ -177,6 +177,28 @@ STORAGE_DRIVER=filesystem   # the only driver so far
 The adapter is provider-neutral. `docs/internals/storage.md` explains how to add a hosted
 provider.
 
+### Optional: character portraits
+
+Hob draws each new character once, after it is made, through an OpenAI-shaped image
+endpoint. Portraits are opt-in: they need an endpoint, a model, a URL-signing secret and
+storage (above), and the server logs `Portraits are OFF` naming whichever is missing. Each
+draw costs money on a hosted provider; the daily caps bound it.
+
+```bash
+# apps/server/.env.local — gitignored; see apps/server/.env.example
+PORTRAIT_API_URL=https://api.openai.com/v1
+PORTRAIT_MODEL=gpt-image-2.5-flare
+PORTRAIT_API_KEY=…                     # secret; never committed
+PORTRAIT_URL_SECRET=…                  # any long random string: openssl rand -hex 32
+# PORTRAIT_QUALITY=medium              # low | medium | high | auto (OpenAI only)
+# PORTRAIT_ACCOUNT_DAILY_LIMIT=10      # per account per UTC day
+# PORTRAIT_DAILY_LIMIT=200             # across every account per UTC day
+# PORTRAIT_CONCURRENCY=2               # draws at once in this process
+```
+
+A local `sd-server` (stable-diffusion.cpp) speaks the same shape; point `PORTRAIT_API_URL`
+at its `/v1`. How it works is `docs/internals/characters.md`, _The portrait_.
+
 ## Workspace commands
 
 Run from the repo root; Turborepo fans each task out across the workspace (respecting

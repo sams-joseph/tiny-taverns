@@ -282,6 +282,10 @@ export const character = {
   sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
   // The optimistic-concurrency counter every write bumps.
   version: 1,
+  // No portrait was drawn: the lettered plate, the state every character is
+  // in on a server with portraits off.
+  portrait: null,
+  portraitPending: false,
   ...provenance,
   ...stamps,
 };
