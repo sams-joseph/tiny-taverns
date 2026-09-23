@@ -36,6 +36,8 @@ const sharedNpc = {
   name: "Cazril",
   role: "the ferryman",
   persona: { identity: { summary: "Takes names, not coin." } },
+  image: null,
+  imagePending: false,
 };
 
 const sharedProposal = {

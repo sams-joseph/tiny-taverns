@@ -19,7 +19,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { npcFollowUpAtom } from "./load";
-import { NpcAvatar } from "./NpcCard";
+import { NpcAvatar } from "./NpcAvatar";
 
 type FollowUpTab = "all" | "proposals" | "awareness";
 
@@ -184,7 +184,7 @@ function FollowUpShell({
   return (
     <Card className="gap-3 p-card">
       <div className="flex items-start gap-3">
-        <NpcAvatar name={npc.name} />
+        <NpcAvatar name={npc.name} image={npc.image} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <SectionHeading size="title">{npc.name}</SectionHeading>

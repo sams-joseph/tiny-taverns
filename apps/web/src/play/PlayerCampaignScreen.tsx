@@ -15,6 +15,7 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import { NpcAvatar } from "../cast/NpcAvatar";
 import { HobCover } from "../hob/HobCover";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
@@ -160,8 +161,12 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
   const [resource, reload] = useApiAtom(playerCampaignAtom(campaignId));
 
   const view = resource.state === "ready" ? resource.value : undefined;
-  // A player can arrive while the cover is still being drawn; re-read until it lands.
-  useHobDrawingPolling(view?.campaign.imagePending === true, reload);
+  // A player can arrive while the cover, or a shared NPC's portrait, is still
+  // being drawn; re-read until it lands.
+  useHobDrawingPolling(
+    view !== undefined && (view.campaign.imagePending || view.npcs.some((npc) => npc.imagePending)),
+    reload,
+  );
   const empty =
     view !== undefined &&
     view.party.length === 0 &&
@@ -231,12 +236,17 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
                     {view.npcs.map((npc) => (
                       <Card key={npc.id}>
                         <CardHeader>
-                          <CardTitle>{npc.name}</CardTitle>
-                          {npc.role !== "" && (
-                            <p className="text-body-s leading-body text-muted-foreground">
-                              {npc.role}
-                            </p>
-                          )}
+                          <div className="flex items-start gap-2.5">
+                            <NpcAvatar name={npc.name} image={npc.image} />
+                            <div className="min-w-0 flex-1">
+                              <CardTitle>{npc.name}</CardTitle>
+                              {npc.role !== "" && (
+                                <p className="text-body-s leading-body text-muted-foreground">
+                                  {npc.role}
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3">
                           {npc.persona.identity?.summary !== undefined && (

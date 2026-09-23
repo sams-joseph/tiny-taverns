@@ -77,7 +77,7 @@ const followUp = {
   items: [
     {
       itemKind: "proposal",
-      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null },
+      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null, image: null },
       proposal,
       source: {
         channel: "rehearsal",
@@ -88,7 +88,7 @@ const followUp = {
     },
     {
       itemKind: "proposal",
-      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null },
+      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null, image: null },
       proposal: {
         ...proposal,
         id: "2b1f2a1e-0000-4000-8000-00000000f703",
@@ -110,6 +110,7 @@ const followUp = {
         name: "Marta",
         role: "retired innkeeper",
         archivedAt: cazril.updatedAt,
+        image: null,
       },
       candidate: awareness,
     },

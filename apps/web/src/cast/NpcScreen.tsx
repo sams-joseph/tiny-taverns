@@ -21,15 +21,16 @@ import {
   BackLink,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { DetailFacts, DetailSection } from "../ui/detail";
 import { Field, SaveFailure, Textarea } from "../ui/form";
 import { npcAtom, sessionNpcsAtom, type NpcDetail } from "./load";
-import { NpcAvatar } from "./NpcCard";
+import { NpcAvatar } from "./NpcAvatar";
 import { NpcDialog } from "./NpcDialog";
 import { useNpcRehearsal } from "./rehearsal";
 import { RehearsalPanel } from "./RehearsalPanel";
@@ -158,6 +159,13 @@ function NpcBody({
 }) {
   const { npc, knowledge, memories, proposals, awarenessCandidates } = detail;
   const invalidate = useInvalidate();
+  // A new NPC opens here the moment it is made, while Hob is still drawing its
+  // portrait. Re-read it, and the cast it came from, until it lands.
+  const rereadPortrait = useCallback(
+    () => invalidate([reads.npc(npc.id), reads.npcs(npc.campaignId)]),
+    [invalidate, npc.id, npc.campaignId],
+  );
+  useHobDrawingPolling(npc.imagePending, rereadPortrait);
   const rehearsal = useNpcRehearsal(npc.campaignId, npc.id, npc.name, () => {
     invalidate([
       reads.npcProposals(npc.id),
@@ -181,6 +189,7 @@ function NpcBody({
         <RehearsalPanel
           jumpOnOpen
           name={npc.name}
+          image={npc.image}
           rehearsal={usableRehearsal}
           reviewTarget={{ campaignId: npc.campaignId, npcId: npc.id }}
         />
@@ -200,11 +209,17 @@ function NpcBody({
       <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.45fr)]">
         <Card className="gap-4 p-card">
           <div className="flex items-start gap-3">
-            <NpcAvatar name={npc.name} size="lg" />
+            <NpcAvatar name={npc.name} image={npc.image} size="lg" />
             <div className="min-w-0 flex-1">
               <SectionHeading size="title">{npc.name}</SectionHeading>
               {npc.role !== "" && (
                 <p className="text-body-s leading-body text-muted-foreground">{npc.role}</p>
+              )}
+              {npc.imagePending && (
+                // Quiet, and nothing blocks: the drawing happens on the server.
+                <p role="status" className="text-micro leading-body text-muted-foreground">
+                  Hob is drawing their portrait…
+                </p>
               )}
             </div>
             <NpcDetailStatus npc={npc} proposals={proposals} currentSessionId={currentSessionId} />

@@ -27,7 +27,7 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   "run/RunScreen.tsx": 1,
   // Monograms: initials on an NPC's plate, and on a character's plate and
   // roster card, under the portrait when there is one.
-  "cast/NpcCard.tsx": 2,
+  "cast/NpcAvatar.tsx": 1,
   "characters/CharacterPortrait.tsx": 2,
   // Prose in the display face: the kit's one decorative line, and a draft's notes.
   "characters/CharacterCreateScreen.tsx": 1,
