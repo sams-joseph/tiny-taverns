@@ -45,6 +45,7 @@ export const campaign = {
   creatorAccountId: dmAccountId,
   name: "The Salt Road",
   partyName: "The Gilded Spoon",
+  description: null,
   playerCount: 4,
   currentSessionId: session12Id,
   visibility: "dm",

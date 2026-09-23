@@ -23,6 +23,8 @@ import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
+import { describedBy } from "../ui/describedBy";
+import { Description, NewCampaignDescription } from "../ui/description";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
@@ -120,6 +122,7 @@ function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -131,7 +134,7 @@ function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
       (client) =>
         client.sharedWorlds.createCampaign({
           params: { worldId: worldId },
-          payload: { name: name.trim() },
+          payload: describedBy({ name: name.trim() }, description),
         }),
       token,
     );
@@ -146,22 +149,24 @@ function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
       return;
     }
     setName("");
+    setDescription("");
     // The directory gains a card, and the founder gains a membership row — the
     // creator's participation is written in the same transaction, which is
     // what the campaign chrome reads the relation from.
     invalidate([reads.sharedWorld(worldId), reads.myCampaigns]);
-  }, [fetchCredential, worldId, invalidate, name]);
+  }, [description, fetchCredential, worldId, invalidate, name]);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          aria-label="New campaign name"
-          placeholder="The Salt Road"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="max-w-xs"
-        />
+    <div className="flex max-w-xl flex-col gap-3">
+      <Input
+        aria-label="New campaign name"
+        placeholder="The Salt Road"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="max-w-xs"
+      />
+      <NewCampaignDescription value={description} onChange={setDescription} />
+      <div>
         <Button
           variant="outline"
           onClick={() => void create()}
@@ -249,6 +254,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
               pending={view.sharedWorld.imagePending}
               shape="band"
             />
+            <Description text={view.sharedWorld.description} />
             <section className="flex flex-col gap-4" aria-label="Campaigns">
               <NewCampaign worldId={worldId} />
               {view.campaigns.length === 0 ? (

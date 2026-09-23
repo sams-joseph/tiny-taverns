@@ -30,6 +30,8 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { TopBar } from "../shell/TopBar";
+import { describedBy } from "../ui/describedBy";
+import { NewCampaignDescription, NewSharedWorldDescription } from "../ui/description";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { ArchivedDialog } from "./ArchivedDialog";
@@ -143,6 +145,7 @@ function SharedWorldTransitionDialog({
   const invalidate = useInvalidate();
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [target, setTarget] = useState(
     mode === "change"
       ? (worlds[0]?.sharedWorld.id ?? STANDALONE)
@@ -226,7 +229,7 @@ function SharedWorldTransitionDialog({
       (client) =>
         client.campaigns.promoteSharedWorld({
           params: { campaignId: campaign.id },
-          payload: { name: name.trim() },
+          payload: describedBy({ name: name.trim() }, description),
         }),
       token,
     );
@@ -318,6 +321,7 @@ function SharedWorldTransitionDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
+              <NewSharedWorldDescription value={description} onChange={setDescription} />
             </div>
           )}
           {error !== undefined && (
@@ -351,6 +355,7 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMem
   const invalidate = useInvalidate();
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [target, setTarget] = useState(STANDALONE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -360,14 +365,12 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMem
     setError(undefined);
     const token = await fetchCredential();
     const world = worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
+    const payload = describedBy({ name: name.trim() }, description);
     const result = await runApiResult(
       (client) =>
         world === undefined
-          ? client.campaigns.create({ payload: { name: name.trim() } })
-          : client.sharedWorlds.createCampaign({
-              params: { worldId: world.id },
-              payload: { name: name.trim() },
-            }),
+          ? client.campaigns.create({ payload })
+          : client.sharedWorlds.createCampaign({ params: { worldId: world.id }, payload }),
       token,
     );
 
@@ -387,10 +390,10 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMem
       to: "/campaigns/$campaignId",
       params: { campaignId: result.success.id },
     });
-  }, [fetchCredential, invalidate, name, navigate, target, worlds]);
+  }, [description, fetchCredential, invalidate, name, navigate, target, worlds]);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex max-w-xl flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         <Input
           aria-label="New campaign name"
@@ -421,6 +424,9 @@ function NewCampaign({ worlds }: { readonly worlds: ReadonlyArray<SharedWorldMem
             </SelectContent>
           </Select>
         )}
+      </div>
+      <NewCampaignDescription value={description} onChange={setDescription} />
+      <div>
         <Button onClick={() => void create()} disabled={busy || name.trim() === ""}>
           {busy ? "Working…" : "Start a campaign"}
         </Button>

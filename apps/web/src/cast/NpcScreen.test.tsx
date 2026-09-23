@@ -113,6 +113,14 @@ describe("NpcScreen", () => {
     expect(await screen.findByRole("heading", { name: "Cazril", level: 2 })).toBeInTheDocument();
     expect(screen.getByText("Cazril · the ferryman at the crossing")).toBeInTheDocument();
     expect(screen.getByText(/takes names instead of coin/)).toBeInTheDocument();
+    // The appearance line is public persona, drawn above the private half.
+    const look = screen.getByText(
+      "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
+    );
+    expect(
+      look.compareDocumentPosition(screen.getByRole("heading", { name: "Private material" })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText("Names keep. Coin sinks.")).toBeInTheDocument();
     expect(screen.getByText("Naming the hag")).toBeInTheDocument();
     // The private half, under its own heading with the sentence that says who sees it.
@@ -556,6 +564,9 @@ describe("NpcScreen", () => {
     expect(within(dialog).getByLabelText("Secrets")).toHaveValue(
       "The hag pays him in years. He has three left.",
     );
+    expect(within(dialog).getByLabelText("Appearance")).toHaveValue(
+      "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
+    );
     const role = within(dialog).getByLabelText("Role");
     await userEvent.clear(role);
     await userEvent.type(role, "the ferryman");
@@ -564,6 +575,14 @@ describe("NpcScreen", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const sent = bodyOf(server, "PATCH", `/npcs/${npcId}`) as Record<string, unknown>;
     expect(sent).toMatchObject({ expectedVersion: 2, role: "the ferryman" });
+    // The persona is replaced whole, so the look the form opened on goes back.
+    expect(sent).toMatchObject({
+      persona: {
+        identity: {
+          appearance: "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
+        },
+      },
+    });
     expect(sent["privateMaterial"]).toEqual({
       secrets: "The hag pays him in years. He has three left.",
     });

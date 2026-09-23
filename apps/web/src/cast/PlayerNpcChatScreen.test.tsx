@@ -7,6 +7,7 @@ import {
   installStubServer,
   noSession,
   npcId,
+  playerCazril,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 
@@ -41,6 +42,29 @@ describe("PlayerNpcChatScreen", () => {
     expect(
       screen.getByText(/does not automatically create or approve NPC memory/),
     ).toBeInTheDocument();
+  });
+
+  it("shows the NPC's public summary and appearance, and nothing private", async () => {
+    await renderChat();
+
+    expect(
+      await screen.findByText(
+        "Stooped and weathered, river-grey eyes, a lantern hung from his pole.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/takes names instead of coin/)).toBeInTheDocument();
+    expect(screen.queryByText("No public profile yet")).toBeNull();
+  });
+
+  it("draws an appearance alone as the profile, not as a missing one", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/player`, {
+      status: 200,
+      body: { ...playerCazril, persona: { identity: { appearance: "A tall shadow." } } },
+    });
+    await renderChat();
+
+    expect(await screen.findByText("A tall shadow.")).toBeInTheDocument();
+    expect(screen.queryByText("No public profile yet")).toBeNull();
   });
 
   it("keeps the manual fallback visible when Talk privately has no model", async () => {

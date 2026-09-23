@@ -48,6 +48,7 @@ export const otherCampaign = {
   id: otherCampaignId,
   name: "The Hag's Bargain",
   partyName: null,
+  description: null,
   currentSessionId: null,
   visibility: "shared",
 };

@@ -78,6 +78,26 @@ describe("the Shared Worlds list", () => {
     );
   });
 
+  it("founds a Shared World with its description, trimmed, for the one cover draw", async () => {
+    server.routes.set("POST /worlds", { status: 200, body: sharedWorld });
+    await renderCampaigns("/worlds", mintingSession());
+    await screen.findByText("The Salt Company");
+
+    await userEvent.type(screen.getByLabelText("Shared World name"), "The Reach");
+    await userEvent.type(
+      screen.getByLabelText("Shared World description"),
+      "  Chained islands over a storm.  ",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/worlds")).toEqual({
+        name: "The Reach",
+        description: "Chained islands over a storm.",
+      }),
+    );
+  });
+
   it("says what an empty list means, without a mode to blame", async () => {
     server.routes.set("GET /worlds", { status: 200, body: [] });
     await renderCampaigns("/worlds", mintingSession());
@@ -203,6 +223,26 @@ describe("one Shared World's screen", () => {
     );
   });
 
+  it("starts a campaign in this Shared World with its description", async () => {
+    server.routes.set(`POST /worlds/${worldId}/campaigns`, { status: 200, body: campaign });
+    await renderSharedWorld(mintingSession());
+    await screen.findByText("The Salt Road");
+
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.type(
+      screen.getByLabelText("New campaign description"),
+      "Snow that never ends.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/worlds/${worldId}/campaigns`)).toEqual({
+        name: "The Long Winter",
+        description: "Snow that never ends.",
+      }),
+    );
+  });
+
   it("keeps the roster informational and leaves onboarding with campaigns", async () => {
     await renderSharedWorld(mintingSession());
 
@@ -241,13 +281,49 @@ describe("one Shared World's screen", () => {
     const name = screen.getByRole("textbox", { name: "Name" });
     await userEvent.clear(name);
     await userEvent.type(name, "The Lantern Roads");
-    await userEvent.click(screen.getByRole("button", { name: "Save name" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/worlds/${worldId}`)).toEqual({
         name: "The Lantern Roads",
+        description: null,
       }),
     );
+  });
+
+  it("lets the owner rewrite the description, and clearing the box clears it", async () => {
+    server.routes.set(`GET /worlds/${worldId}`, {
+      status: 200,
+      body: { ...sharedWorldDetails, description: "Reed marshes at dusk." },
+    });
+    server.routes.set(`PATCH /worlds/${worldId}`, { status: 200, body: sharedWorldDetails });
+    await renderSharedWorld(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
+    const description = screen.getByRole("textbox", { name: "Description" });
+    expect(description).toHaveValue("Reed marshes at dusk.");
+    await userEvent.clear(description);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/worlds/${worldId}`)).toEqual({
+        name: sharedWorldDetails.name,
+        description: null,
+      }),
+    );
+  });
+
+  it("puts the world's description under its cover, and nothing when there is none", async () => {
+    server.routes.set(`GET /worlds/${worldId}`, {
+      status: 200,
+      body: { ...sharedWorldDetails, description: "Reed marshes at dusk." },
+    });
+    await renderSharedWorld(mintingSession());
+    const paragraph = await screen.findByText("Reed marshes at dusk.");
+    const directory = screen.getByRole("region", { name: "Campaigns" });
+    expect(
+      paragraph.compareDocumentPosition(directory) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows no Shared World settings to a non-owner", async () => {

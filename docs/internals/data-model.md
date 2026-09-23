@@ -4,7 +4,7 @@ How tables in `apps/server/src/migrations/` are shaped, and the rules a new tabl
 
 ## A column is earned by a reader
 
-A field becomes a column when something reads it as one: a screen filters or sorts on it, a seed copies it, a predicate names it, search indexes it. Everything else is display, and display lives in one `jsonb` document per row (`creature.body`, on the wire `statBlock`; `character.body`, on the wire `sheet`). The document is queried only by full text, and the two forms do not derive from each other: `ac = 17` filters, `"17 (chain shirt, shield)"` is what gets read out, and neither reconstructs the other. A sheet change that seems to need a column is a finding to report.
+A field becomes a column when something reads it as one: a screen filters or sorts on it, a seed copies it, a predicate names it, search indexes it. Everything else is display, and display lives in one `jsonb` document per row (`creature.body`, on the wire `statBlock`; `character.body`, on the wire `sheet`). The document is queried only by full text, and the two forms do not derive from each other: `ac = 17` filters, `"17 (chain shirt, shield)"` is what gets read out, and neither reconstructs the other. A sheet change that seems to need a column is a finding to report. A table with no document keeps its few display lines as plain nullable columns instead (`campaign.party_name`, and `description` on `campaign` and `play_group`, `0052_descriptions.ts`): one line of prose does not earn a `jsonb` body. An NPC's appearance, by contrast, is a key of the `persona` document it already has.
 
 Two absences that look like omissions and are not:
 

@@ -127,3 +127,32 @@ describe("a campaign's home page", () => {
     expect(covers()[0]!.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnCover.fullUrl));
   });
 });
+
+describe("a campaign's description", () => {
+  const PITCH = "Caravans cross the salt flats between glass storms.";
+
+  it("sits under the cover on the creator's Overview", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, image: drawnCover, description: PITCH },
+    });
+    await renderScreen(mintingSession());
+    const paragraph = await screen.findByText(PITCH);
+    await waitFor(() => expect(covers()).toHaveLength(1));
+    expect(
+      covers()[0]!.compareDocumentPosition(paragraph) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("reaches the player's page", async () => {
+    server.routes.set("GET /me/campaigns", membershipWith({}, "player"));
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, visibility: "shared", description: PITCH },
+    });
+    await renderAt(`/campaigns/${campaignId}`, (route) => (
+      <HostedSessionScope session={mintingSession()}>{route}</HostedSessionScope>
+    ));
+    expect(await screen.findByText(PITCH)).toBeInTheDocument();
+  });
+});

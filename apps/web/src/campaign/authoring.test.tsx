@@ -338,8 +338,29 @@ describe("sharing a campaign", () => {
       expect(bodyOf(server, "PATCH", campaignPath)).toEqual({
         name: "The Salt Road",
         partyName: "The Gilded Spoon",
+        description: null,
         playerCount: 4,
         visibility: "shared",
+      }),
+    );
+  });
+
+  it("opens on the stored description, sends it trimmed, and clears it with a null", async () => {
+    server.routes.set(`GET ${campaignPath}`, {
+      status: 200,
+      body: { ...campaign, description: "Salt flats and glass storms." },
+    });
+    server.routes.set(`PATCH ${campaignPath}`, { status: 200, body: campaign });
+    await openSettings();
+
+    const description = await screen.findByRole("textbox", { name: "Description" });
+    expect(description).toHaveValue("Salt flats and glass storms.");
+    await userEvent.clear(description);
+    await userEvent.type(description, "  The road remembers.  ");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", campaignPath)).toMatchObject({
+        description: "The road remembers.",
       }),
     );
   });

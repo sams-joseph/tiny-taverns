@@ -56,6 +56,7 @@ describe("NpcLibraryScreen", () => {
     await userEvent.type(within(dialog).getByLabelText("Name"), "Fen");
     await userEvent.type(within(dialog).getByLabelText("Role"), "the fence");
     await userEvent.type(within(dialog).getByLabelText("Who they are"), "Trades in copper names.");
+    await userEvent.type(within(dialog).getByLabelText("Appearance"), "Ink-stained cuffs.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Advanced" }));
     await userEvent.type(within(dialog).getByLabelText("Secrets"), "Keeps a false ledger.");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save source" }));
@@ -64,7 +65,9 @@ describe("NpcLibraryScreen", () => {
       expect(bodyOf(server, "POST", "/library/npcs")).toMatchObject({
         name: "Fen",
         role: "the fence",
-        persona: { identity: { summary: "Trades in copper names." } },
+        persona: {
+          identity: { summary: "Trades in copper names.", appearance: "Ink-stained cuffs." },
+        },
         privateMaterial: { secrets: "Keeps a false ledger." },
       }),
     );
@@ -76,6 +79,7 @@ describe("NpcLibraryScreen", () => {
       body: {
         worldId,
         ownerAccountId: cazrilSource.accountId,
+        description: null,
         kind: "npc",
         resourceId: cazrilSource.id,
         name: cazrilSource.name,
@@ -146,6 +150,7 @@ describe("NpcLibraryScreen", () => {
       body: {
         worldId: ownedWorldId,
         ownerAccountId: cazrilSource.accountId,
+        description: null,
         kind: "npc",
         resourceId: cazrilSource.id,
         name: cazrilSource.name,
