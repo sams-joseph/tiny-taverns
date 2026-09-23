@@ -205,7 +205,7 @@ export type HobDirectResourceUpdateId = typeof HobDirectResourceUpdateId.Type;
 /**
  * An encounter's battle map: the board a fight on that encounter is played on,
  * and the picture Hob drew of it. Its own id rather than the encounter's,
- * because a map is its own row (`0056_battle_maps.ts`) and the day maps are
+ * because a map is its own row (`0057_battle_maps.ts`) and the day maps are
  * reused across encounters the id must already be the map's.
  */
 export const BattleMapId = id("BattleMapId");

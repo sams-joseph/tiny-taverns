@@ -10,7 +10,7 @@ import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
  *
  * ### One map per encounter, and a board before a picture
  *
- * Every encounter has exactly one map (`0056_battle_maps.ts`), made in the
+ * Every encounter has exactly one map (`0057_battle_maps.ts`), made in the
  * same transaction as the encounter. The board is always `columns × rows`
  * squares of `feetPerCell` feet, laid over the picture at `alignment`; a map
  * Hob did not draw (nothing to draw from, images off, the budget spent, the
@@ -28,7 +28,7 @@ import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
 
 /**
  * The bound on the setting line, shared by the form, the schema, the tool and
- * the column's own check (`0056_battle_maps.ts`). A line, not a page: it says
+ * the column's own check (`0057_battle_maps.ts`). A line, not a page: it says
  * what the place looks like, and the picture is drawn from it.
  */
 export const ENCOUNTER_SETTING_MAX = 300;

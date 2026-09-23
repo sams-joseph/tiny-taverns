@@ -6,15 +6,16 @@
  * What a kind decides:
  *
  * - **`table` / `subjectColumn`** — its record (`character_portrait`,
- *   `campaign_image`, `shared_world_image`, `npc_image`), one row per subject, bound to the subject and its owner
+ *   `campaign_image`, `shared_world_image`, `npc_image`, `battle_map_image`), one row per subject, bound to the subject and its owner
  *   by a composite key (see `0049_campaign_images.ts` for why a table per kind).
  * - **`root`** — the first segment of its storage keys:
  *   `{root}/{accountId}/{subjectId}/{imageId}/`.
  * - **`tag` / `route`** — what its URL signatures cover and the path they name.
  *   The tag is inside the HMAC, so a signature minted for one kind's route can
  *   never open another's, whatever the ids.
- * - **`size`, `variants`, `position`** — what is asked for, the WebP sizes kept
- *   and where a crop keeps its subject.
+ * - **`size`, `variants`, `position`, `fit`** — what is asked for, the WebP
+ *   sizes kept, where a crop keeps its subject, and whether a variant is
+ *   cropped at all.
  *
  * What a kind does **not** decide: the house style, the daily budget, the
  * timeout, the concurrency and the deletion outbox are one for all of them.
@@ -40,6 +41,12 @@ export interface ImageKindSpec<Variant extends string> {
   readonly variants: Readonly<Record<Variant, VariantSize>>;
   /** Where `sharp`'s cover crop anchors: a bust keeps the head, a scene its middle. */
   readonly position: "top" | "centre";
+  /**
+   * `cover` crops each variant to its exact size; `inside` scales it to fit
+   * without cropping, keeping the original's aspect. A picture something is
+   * measured against (a battle map's grid) must never lose an edge.
+   */
+  readonly fit: "cover" | "inside";
 }
 
 export const IMAGE_KINDS = {
@@ -62,6 +69,7 @@ export const IMAGE_KINDS = {
       full: { width: 1024, height: 1024 },
     },
     position: "top",
+    fit: "cover",
   } satisfies ImageKindSpec<"thumb" | "card" | "full">,
   /**
    * A campaign's cover: a 3:2 landscape scene. `full` is the drawn 1536 × 1024,
@@ -82,6 +90,7 @@ export const IMAGE_KINDS = {
       full: { width: 1536, height: 1024 },
     },
     position: "centre",
+    fit: "cover",
   } satisfies ImageKindSpec<"card" | "full">,
   /**
    * A Shared World's cover: the campaign cover's shape exactly, because it is
@@ -100,6 +109,7 @@ export const IMAGE_KINDS = {
       full: { width: 1536, height: 1024 },
     },
     position: "centre",
+    fit: "cover",
   } satisfies ImageKindSpec<"card" | "full">,
   /**
    * A campaign NPC's portrait: a square bust, drawn and cut exactly as a
@@ -119,7 +129,29 @@ export const IMAGE_KINDS = {
       full: { width: 1024, height: 1024 },
     },
     position: "top",
+    fit: "cover",
   } satisfies ImageKindSpec<"thumb" | "card" | "full">,
+  /**
+   * An encounter's battle map: the cover's size and cost (the captain's
+   * decision), drawn top-down with no grid. **Never cropped** (`fit:
+   * "inside"`): the grid is aligned in the original's pixels, so a variant is
+   * the whole picture scaled, and a provider that answers another aspect ratio
+   * still lines up. Only the creator's map reads mint its URLs.
+   */
+  battleMap: {
+    table: "battle_map_image",
+    subjectColumn: "map_id",
+    root: "battle-map-images",
+    tag: "battle-map-image",
+    route: "/battle-map-images",
+    size: "1536x1024",
+    variants: {
+      card: { width: 768, height: 512 },
+      full: { width: 1536, height: 1024 },
+    },
+    position: "centre",
+    fit: "inside",
+  } satisfies ImageKindSpec<"card" | "full">,
 } as const;
 
 export type ImageKind = keyof typeof IMAGE_KINDS;
