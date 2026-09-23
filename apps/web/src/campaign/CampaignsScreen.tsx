@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  cardLinkClassName,
   CardHeader,
   CardTitle,
   Dialog,
@@ -61,7 +62,7 @@ function CampaignRow({
 }) {
   const campaign = membership.campaign;
   return (
-    <Card className="overflow-hidden">
+    <Card linked className="h-full overflow-hidden">
       <HobCover image={campaign.image} pending={campaign.imagePending} shape="card" />
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
@@ -69,7 +70,8 @@ function CampaignRow({
             <Link
               to="/campaigns/$campaignId"
               params={{ campaignId: campaign.id }}
-              className="text-heading no-underline hover:text-link-hover"
+              data-card-link
+              className={cardLinkClassName}
             >
               {campaign.name}
             </Link>
@@ -111,16 +113,6 @@ function CampaignRow({
             </Button>
           )
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto text-link"
-          nativeButton={false}
-          render={<Link to="/campaigns/$campaignId" params={{ campaignId: campaign.id }} />}
-        >
-          Open
-          <Icon name="chevron-right" size={15} />
-        </Button>
       </CardContent>
     </Card>
   );
@@ -438,7 +430,7 @@ export function CampaignsScreen() {
                 a game.
               </EmptyState>
             ) : (
-              <div className="grid gap-4 @3xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4">
                 {memberships.map((membership) => (
                   <CampaignRow
                     key={membership.campaign.id}

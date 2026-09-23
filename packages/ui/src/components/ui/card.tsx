@@ -19,22 +19,42 @@ const cardVariants = cva("group/card relative flex flex-col rounded-card border 
       sunken: "border-hairline bg-surface-sunken shadow-1",
       panel: "border-strong bg-surface-card shadow-2",
     },
+    /**
+     * A card that stands for one object opens it from anywhere on its face.
+     * The object's name is a real link carrying `cardLinkClassName`, whose
+     * `::after` covers the card; every other link or button inside is lifted
+     * above that overlay by `relative`, so secondary actions keep working and do
+     * not navigate. The focus ring lands on the card, not on the name.
+     */
+    linked: {
+      true: "transition-control hover:border-strong has-[a[data-card-link]:focus-visible]:ring-focus [&_:is(a,button):not([data-card-link])]:relative",
+      false: "",
+    },
   },
   defaultVariants: {
     tone: "default",
+    linked: false,
   },
 });
+
+/**
+ * The class for the one link in a `linked` card: pair it with
+ * `data-card-link` so the card can find it.
+ */
+const cardLinkClassName =
+  "text-inherit no-underline after:absolute after:inset-0 hover:text-inherit focus-visible:shadow-none";
 
 function Card({
   className,
   tone = "default",
+  linked = false,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof cardVariants>) {
   return (
     <div
       data-slot="card"
       data-tone={tone}
-      className={cn(cardVariants({ tone }), className)}
+      className={cn(cardVariants({ tone, linked }), className)}
       {...props}
     />
   );
@@ -97,4 +117,13 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent };
+export {
+  Card,
+  cardLinkClassName,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
+};

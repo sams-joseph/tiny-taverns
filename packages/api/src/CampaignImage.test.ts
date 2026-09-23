@@ -100,7 +100,7 @@ describe("campaignImageHasSubject", () => {
 describe("the house style", () => {
   it("keeps the portrait style a character has always been drawn in, word for word", () => {
     expect(HOUSE_PORTRAIT_STYLE).toBe(
-      "Painterly fantasy illustration, cool and low-key, slight grain, blue-hour light rather " +
+      "Fantasy illustration somewhat cartoony think World of Warcraft from Blizzard, cool and low-key, slight grain, blue-hour light rather " +
         "than firelight. Single subject, centred bust, plain dark background. No text, no " +
         "lettering, no frame, no watermark. Tasteful and non-graphic.",
     );

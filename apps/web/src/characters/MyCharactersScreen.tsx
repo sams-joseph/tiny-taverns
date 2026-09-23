@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  cardLinkClassName,
   Icon,
   sectionHeadingVariants,
   EmptyState,
@@ -150,7 +151,7 @@ function CharacterCard({
   ].flatMap((stat) => (stat.value === undefined ? [] : [{ ...stat, value: stat.value }]));
 
   return (
-    <Card className="relative h-full overflow-hidden transition-control hover:border-strong has-[a:focus-visible]:ring-focus">
+    <Card linked className="h-full overflow-hidden">
       <div className="relative aspect-4/3 overflow-hidden border-b border-hairline bg-surface-sunken">
         {/* The monogram, with Hob's portrait over it once there is one. */}
         <CharacterPortrait name={character.name} portrait={character.portrait} size="card" />
@@ -172,7 +173,8 @@ function CharacterCard({
             <Link
               to="/characters/$characterId"
               params={{ characterId: character.id }}
-              className="text-inherit after:absolute after:inset-0 hover:text-inherit focus-visible:shadow-none"
+              data-card-link
+              className={cardLinkClassName}
             >
               {character.name}
             </Link>
@@ -230,7 +232,7 @@ function CharacterCard({
         </div>
         {joinOptions.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" className="relative" onClick={() => setJoining(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setJoining(true)}>
               <Icon name="user-plus" size={14} />
               Add to campaign
             </Button>
