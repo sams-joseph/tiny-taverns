@@ -3,11 +3,14 @@ import { renderAt } from "../test/renderRoute";
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { apiUrl } from "../api/client";
 import {
   campaign,
   campaignId,
   character,
+  drawnPortrait,
   installStubServer,
+  partySeat,
   mintingSession,
   npcId,
   readAloud,
@@ -94,6 +97,18 @@ describe("a table you sit at", () => {
     expect(screen.getByText(/does not automatically update NPC memory/)).toBeTruthy();
     const talk = screen.getByRole("button", { name: /Talk privately/ });
     expect(talk.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/cast/${npcId}/talk`);
+  });
+
+  it("lays a party member's portrait over their initials", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: [{ ...partySeat, character: { ...character, portrait: drawnPortrait } }],
+    });
+    await renderScreen();
+
+    const name = await screen.findByText(character.name);
+    const plate = name.parentElement?.querySelector("img");
+    expect(plate?.getAttribute("src")).toBe(apiUrl(drawnPortrait.thumbUrl));
   });
 
   it("keeps the DM's nav off the player's bar", async () => {

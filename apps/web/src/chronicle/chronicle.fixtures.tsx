@@ -128,6 +128,7 @@ const combatant = {
   kind: "pc",
   conditions: [],
   visibility: "dm",
+  portrait: null,
   ...provenance,
   ...stamps,
 };

@@ -11,8 +11,9 @@ import { ownCharacter } from "./visibility.js";
  * `portraits/Portraits.ts`; this file is only rows.
  *
  * **Who may read a portrait is not decided here.** The wire carries a portrait
- * only as a field of `Character`, minted by `toCharacter` for a row a
- * visibility predicate already returned. The one read below that takes no
+ * only as a field of a `Character`, a `Combatant` or a player-table row, minted
+ * by `portraitImages` (`repo/Characters.ts`) for an id a visibility predicate
+ * already returned. The one read below that takes no
  * actor, {@link PortraitRecords} `readyPrefix`, runs only after the image route
  * has checked a signature that such a read minted.
  */

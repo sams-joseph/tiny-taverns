@@ -2,6 +2,7 @@ import type { PartySeat } from "@taverns/api";
 import { Badge, Button, Card, Icon } from "@taverns/ui";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 
 /**
  * The party: one `--row-h` row per **seat**, hairline-separated.
@@ -160,7 +161,12 @@ export function PartyList({
                 : "flex min-h-row flex-wrap items-center gap-2.5 border-t border-hairline px-card py-2"
             }
           >
-            <Icon name="shield" size={15} className="text-faint" />
+            <CharacterPortrait
+              name={character?.name ?? row.seat.displayName}
+              portrait={character?.portrait ?? null}
+              size="row"
+              fallback={<Icon name="shield" size={15} className="text-faint" />}
+            />
             <span className="text-body-s leading-body text-foreground">
               {character?.name ?? row.seat.displayName}
             </span>

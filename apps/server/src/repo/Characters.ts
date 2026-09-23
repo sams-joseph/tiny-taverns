@@ -26,7 +26,7 @@ import {
 import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { PortraitUrls } from "../portraits/PortraitUrls.js";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -36,7 +36,12 @@ import {
   setClause,
 } from "./rows.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
-import { ensureCampaignReadable, ownCharacter, usableInCampaign } from "./visibility.js";
+import {
+  characterSeatedAt,
+  ensureCampaignReadable,
+  ownCharacter,
+  usableInCampaign,
+} from "./visibility.js";
 
 /**
  * The character: **account-owned, top-level, one copy of playable state** —
@@ -113,19 +118,61 @@ export const portraitColumns = (sql: SqlClient.SqlClient, prefix = "") => sql`
 `;
 
 /**
+ * A ready portrait's id for a row that only *points* at a character — a
+ * combatant's `character_id` — as a scalar subquery aliased `portrait_id`.
+ *
+ * The pointer is provenance, not reach (`Combatant.characterId`). The id comes
+ * back only when `characterSeatedAt` finds a live seat holding that character
+ * which this actor may read at this campaign: the predicate that decides
+ * whether they may read the character at this table at all. A hidden seat, a
+ * retired one, or a character seated only at some other table answers `null`,
+ * and there is then no id in memory to sign.
+ *
+ * @param characterId the pointing column, e.g. `sql("combatant.character_id")`.
+ */
+export const seatedPortraitColumn = (
+  sql: SqlClient.SqlClient,
+  characterId: Statement.Identifier,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`
+  (select character_portrait.id from character_portrait
+   join character on character.id = character_portrait.character_id
+   where character_portrait.character_id = ${characterId}
+     and character_portrait.state = 'ready'
+     and ${characterSeatedAt(sql, campaignId, actor)}) as portrait_id
+`;
+
+/**
  * Signs a ready portrait's image paths; `PortraitUrls.imagesFor`. Absent when a
  * repository was built without the service (most repository tests), which
  * mints nothing — the same answer a server with no URL secret gives.
  */
 export type PortraitSigner = (portraitId: string) => Character["portrait"];
 
+/** The signer a repository layer was built with, or `undefined`; see {@link PortraitSigner}. */
+export const portraitSigner: Effect.Effect<PortraitSigner | undefined> = Effect.map(
+  Effect.serviceOption(PortraitUrls),
+  (urls) => Option.getOrUndefined(Option.map(urls, (service) => service.imagesFor)),
+);
+
+/**
+ * **The only place a portrait URL is minted.** `portraitId` must come from a
+ * read whose SQL already proved the reader may see the character — its own
+ * predicate beside {@link portraitColumns}, or {@link seatedPortraitColumn} —
+ * and that is what makes portrait visibility exactly character visibility.
+ */
+export const portraitImages = (
+  portraitId: string | null,
+  sign: PortraitSigner | undefined,
+): Character["portrait"] => (portraitId !== null && sign !== undefined ? sign(portraitId) : null);
+
 /**
  * One mapper per table — `repo/Party.ts` imports it rather than restating.
  *
- * **It is also the only place a portrait URL is minted**, and that is what
- * makes portrait visibility exactly character visibility: every read that
- * returns a character returns it through here, after its own predicate, so
- * whoever can load the character gets its picture and nobody else gets a URL.
+ * Every read that returns a character returns it through here, after its own
+ * predicate, so whoever can load the character gets its picture and nobody
+ * else gets a URL.
  */
 export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character => {
   if (row.portrait_state === undefined) {
@@ -149,10 +196,7 @@ export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character
     sheetUrl: row.sheet_url,
     sheet: row.body,
     version: row.version,
-    portrait:
-      row.portrait_state === "ready" && row.portrait_id !== null && sign !== undefined
-        ? sign(row.portrait_id)
-        : null,
+    portrait: portraitImages(row.portrait_state === "ready" ? row.portrait_id : null, sign),
     portraitPending: row.portrait_state === "generating",
     // Not `provenanceOf`: the shared character carries no `visibility` — who
     // at a table may see it is the seat's question now — so the row's inert
@@ -481,11 +525,7 @@ export class Characters extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* Effect.serviceOption(LiveEvents);
-      const portraitUrls = yield* Effect.serviceOption(PortraitUrls);
-      const sign = Option.match(portraitUrls, {
-        onNone: () => undefined,
-        onSome: (urls) => urls.imagesFor,
-      });
+      const sign = yield* portraitSigner;
       const asCharacter = (row: CharacterRow): Character => toCharacter(row, sign);
 
       const claimRequest = (

@@ -27,7 +27,7 @@ Any live client must implement this against `GET …/runs/:runId/events` (`handl
 - The turn marker is `encounter_run.active_combatant_id`, a pointer, not an index. Adding, removing and rerolling reorder the list, after which an index silently names a different creature.
 - There is no `player_view_enabled`. `encounter_run.visibility` is the share switch and `combatant.visibility` is hide-from-players. Both default to `dm`.
 - Hit points reaching zero set the number and nothing else: no delete, no invented condition, no turn advance.
-- A combatant snapshots every displayable field at seed time; `character_id` / `creature_id` are `on delete set null` and read by nothing. `encounter_run.encounter_name` is snapshotted too: it is what the fight was called that night, not what the template is called now.
+- A combatant snapshots every displayable field at seed time; `character_id` / `creature_id` are `on delete set null` and grant no reach. The one live field is `portrait`, and it is reached through the character's seat, not the pointer (`seatedPortraitColumn`, [Characters](characters.md), _The portrait_). A retired seat takes it off the row. `encounter_run.encounter_name` is snapshotted too: it is what the fight was called that night, not what the template is called now.
 - One live fight per session is `encounter_run_one_live_per_session`, a partial unique index on `(session_id) where ended_at is null`. `session.active_encounter_run_id` names it, is written only by starting and ending a run, and `session_active_encounter_run_fkey` is composite so a session cannot point at another session's fight.
 - Idempotency is `session_event_request_id_key`, a partial unique index on `(encounter_run_id, request_id)`; `requestAlreadyApplied` returns current state on a repeat.
 - `created_at` does not order rows inserted by one transaction: `now()` is transaction start, so seeded combatants share a timestamp and `initiativeOrder`'s tiebreak falls through to `id`.
@@ -82,6 +82,7 @@ It is a server-side repository because it has two consumers, the Chronicle and H
 
 - Seat proof comes first and is an active `campaign_character` row, not `combatant.character_id`. A member with no seat gets `null`.
 - The order is `you | ally | npc`. Only `you` carries exact `hpCurrent`/`hpMax`/`tempHp`; `npc` carries a band; `ally` carries no total. NPC armour class is never selected.
+- `you` and `ally` carry the character's `portrait`, selected in SQL by `seatedPortraitColumn`, so it is exactly what the party read would give the same reader. `npc` has no field for one.
 - The encounter's name is deliberately absent. A fight on the table may be something the DM has not said yet, so attachments key on `encounterId`.
 - Each visibility switch takes exactly one thing away, fail-closed: an unshared session is `null`; an unshared run is the night with `fight: null`; an unshared combatant drops the row and nulls `upNext` if it named it. That applies to a player's own row too.
 - It is not gated by the creator proof: that gate is for a read whose player projection diverges from the DM's, and this read has no DM projection. A DM calling it gets the identical narrow answer, which is how "what will my players see" is one request.

@@ -30,6 +30,7 @@ import { useNpcSessionChat } from "../cast/playerChat";
 import { RehearsalPanel } from "../cast/RehearsalPanel";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { actionRows } from "../characters/sheet";
 import {
   type LocalRoll,
@@ -93,6 +94,9 @@ function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
       <Badge variant={row.kind === "you" ? "default" : "secondary"}>
         {row.kind === "you" ? "You" : row.kind === "ally" ? "Ally" : "NPC"}
       </Badge>
+      {row.kind !== "npc" && row.portrait !== null && (
+        <CharacterPortrait name={row.displayName} portrait={row.portrait} size="row" />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-body-s leading-body font-medium text-foreground">

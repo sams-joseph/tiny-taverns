@@ -17,6 +17,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
 import { COMBATANT, RUNS } from "./liveTables.js";
 import { dieOnSqlError } from "./rows.js";
 import {
@@ -46,6 +47,8 @@ interface LiveCombatantRow {
   readonly hp_max: number;
   readonly temp_hp: number;
   readonly hp_band: PlayerLiveHpBand;
+  /** `seatedPortraitColumn`: the asker's own seat or a shared one, else `null`. */
+  readonly portrait_id: string | null;
 }
 
 /**
@@ -80,6 +83,7 @@ export class PlayerTable extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const sign = yield* portraitSigner;
 
       const activeSeats = (campaignId: CampaignId, actor: Actor) =>
         sql<ActiveSeatRow>`
@@ -118,6 +122,7 @@ export class PlayerTable extends Context.Service<
             hpMax: row.hp_max,
             tempHp: row.temp_hp,
             conditions: row.conditions,
+            portrait: portraitImages(row.portrait_id, sign),
           };
         }
         if (row.kind === "pc") {
@@ -130,6 +135,7 @@ export class PlayerTable extends Context.Service<
             playerName: row.player_name,
             initiative: row.initiative,
             conditions: row.conditions,
+            portrait: portraitImages(row.portrait_id, sign),
           };
         }
         return {
@@ -212,7 +218,8 @@ export class PlayerTable extends Context.Service<
                          when combatant.hp_current >= combatant.hp_max then 'unhurt'
                          when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
                          else 'hurt'
-                       end as hp_band
+                       end as hp_band,
+                       ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
                 from combatant
                 left join character on character.id = combatant.character_id
                 left join campaign_character seated

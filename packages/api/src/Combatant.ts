@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CharacterPortraitImages } from "./Character.js";
 import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -44,8 +45,9 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    *
    * `on delete set null`: retiring a character must not delete them out of a
    * fight that already happened. Nothing is ever read *through* this — every
-   * displayable field below is a snapshot — so it is provenance, not an access
-   * path.
+   * displayable field below is a snapshot, and `portrait` is reached through
+   * the character's seat, not this pointer — so it is provenance, not an
+   * access path.
    */
   characterId: Schema.NullOr(CharacterId),
   /** The bestiary entry this was seeded from, if any. Same rules as above. */
@@ -85,6 +87,14 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   conditions: Schema.Array(Schema.String),
   /** The per-row "Hide from players" override (`EncounterRunner.jsx:139`). */
   visibility: Visibility,
+  /**
+   * The portrait of the character this row was seeded from — **live, not a
+   * snapshot**, and present only while that character sits in a seat of this
+   * campaign the reader may see. The same URLs `Character.portrait` carries,
+   * so a combatant never shows a picture its character would not. `null` for
+   * an NPC, a hand-added row, a retired seat and a character without one.
+   */
+  portrait: Schema.NullOr(CharacterPortraitImages),
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,

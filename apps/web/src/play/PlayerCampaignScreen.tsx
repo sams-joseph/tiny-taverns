@@ -15,6 +15,7 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { TopBar } from "../shell/TopBar";
 import { loadPlayerCampaignView } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -62,7 +63,12 @@ function PartyMember({ seat }: { readonly seat: PartySeat }) {
 
   return (
     <div className="flex min-h-row flex-wrap items-center gap-2.5 border-t border-hairline px-card py-2 first:border-t-0">
-      <Icon name="shield" size={15} className="text-faint" />
+      <CharacterPortrait
+        name={character?.name ?? seat.seat.displayName}
+        portrait={character?.portrait ?? null}
+        size="row"
+        fallback={<Icon name="shield" size={15} className="text-faint" />}
+      />
       <span className="text-body-s leading-body text-foreground">
         {character?.name ?? seat.seat.displayName}
       </span>

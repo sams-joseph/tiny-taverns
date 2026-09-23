@@ -13,16 +13,16 @@ import {
   type PartySeatUpdate,
   type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer, Option } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
   type CharacterRow,
   type PortraitSigner,
   portraitColumns,
+  portraitSigner,
   toCharacter,
 } from "./Characters.js";
-import { PortraitUrls } from "../portraits/PortraitUrls.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import { requestAlreadyApplied, sessionRequestAlreadyApplied } from "./SessionEvents.js";
 import {
@@ -207,9 +207,7 @@ export class Party extends Context.Service<
       const live = yield* LiveEvents;
       // The seat read is a character read, so it signs portraits exactly as the
       // owner's does: whoever may see the character sees its picture.
-      const sign = Option.getOrUndefined(
-        Option.map(yield* Effect.serviceOption(PortraitUrls), (urls) => urls.imagesFor),
-      );
+      const sign = yield* portraitSigner;
 
       const ring = ({ sessionId }: { readonly sessionId: SessionId | undefined }) =>
         sessionId === undefined ? Effect.void : live.touched(sessionId);

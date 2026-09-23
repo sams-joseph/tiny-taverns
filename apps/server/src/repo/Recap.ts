@@ -15,7 +15,8 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { BEATS, type BeatRow, toBeat } from "./Beats.js";
-import { type CombatantRow, toCombatant } from "./Combatants.js";
+import { portraitSigner } from "./Characters.js";
+import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, toEncounterRun } from "./EncounterRuns.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
@@ -170,6 +171,7 @@ export class Recap extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const sign = yield* portraitSigner;
 
       /**
        * The runs on the far end of a carry-over, in whichever direction.
@@ -333,7 +335,7 @@ export class Recap extends Context.Service<
                 state.runIds.length === 0
                   ? []
                   : yield* sql<CombatantRow>`
-                      select combatant.* from combatant
+                      select ${combatantColumns(sql, campaignId, actor)} from combatant
                       where ${sql.in("combatant.encounter_run_id", state.runIds)}
                         and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
                       ${initiativeOrder(sql)}
@@ -342,7 +344,9 @@ export class Recap extends Context.Service<
               return new SessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId) =>
-                  rows.filter((combatant) => combatant.encounter_run_id === runId).map(toCombatant),
+                  rows
+                    .filter((combatant) => combatant.encounter_run_id === runId)
+                    .map((row) => toCombatant(row, sign)),
                 ).map((fight) => new RecapFight(fight)),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),

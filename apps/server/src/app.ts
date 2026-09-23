@@ -515,8 +515,9 @@ export const servicesOver = <E>(
     // they take it as a dependency. It is merged in as well, because the
     // streaming handler subscribes to it — and `Layer` memoises by identity, so
     // all three share one `PubSub` rather than one each, which is the whole
-    // point of a doorbell.
-    Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // point of a doorbell. A combatant carries its character's portrait, so it
+    // signs URLs too (`seatedPortraitColumn`).
+    Combatants.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
     Creatures.layer,
     // The DM gate the three live groups spend. It is a repository like any
     // other — one read of `campaign_member` through the shipped predicate —
@@ -611,7 +612,8 @@ export const servicesOver = <E>(
     Feats.layer,
     // What is live at one table, to a player. Its read writes nothing, but its
     // stream subscribes to the same contentless doorbell as the DM runner.
-    PlayerTable.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // Its `you` and `ally` rows carry portraits, so it signs URLs as well.
+    PlayerTable.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
     PrepItems.layer,
     // The accept path: the only writer of `origin = 'assistant'`. It composes
     // the ordinary create methods, so an accepted row is made by the same
@@ -633,8 +635,12 @@ export const servicesOver = <E>(
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
-    // for the same reason: nothing about reading a night changes it.
-    Recap.layer,
+    // for the same reason: nothing about reading a night changes it. The DM's
+    // recap is `Combatant`s, which sign portraits. `fresh`, because `Layer`
+    // memoises by identity and the bare `Recap.layer` the chronicle and Hob
+    // hold must stay unsigned: Hob's `sessionRecap` tool hands a recap to the
+    // model, and a signed URL is a bearer capability that must not leave us.
+    Layer.fresh(Recap.layer).pipe(Layer.provide(portraitUrls)),
     // Read-only, and the only place a `tsvector` is queried. No `LiveEvents`:
     // searching writes nothing and rings no doorbell.
     Search.layer,

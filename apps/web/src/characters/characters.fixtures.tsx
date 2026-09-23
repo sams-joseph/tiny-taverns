@@ -381,6 +381,7 @@ export const playing = (
                   hpMax: 52,
                   tempHp: 3,
                   conditions: ["Blessed"],
+                  portrait: null,
                 },
               ],
             },

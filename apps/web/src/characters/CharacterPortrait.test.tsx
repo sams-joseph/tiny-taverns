@@ -77,6 +77,37 @@ describe("CharacterPortrait", () => {
   });
 });
 
+describe("CharacterPortrait on a list row", () => {
+  it("draws the row's own icon, not the initials, when there is no portrait", () => {
+    const { container } = render(
+      <CharacterPortrait
+        name="Marta Vell"
+        portrait={null}
+        size="row"
+        fallback={<svg data-testid="shield" />}
+      />,
+    );
+    expect(container.querySelector("[data-testid=shield]")).not.toBeNull();
+    expect(container.textContent).toBe("");
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("lays the thumb over the initials when there is one, and keeps the icon out", () => {
+    const { container } = render(
+      <CharacterPortrait
+        name="Marta Vell"
+        portrait={portrait}
+        size="row"
+        fallback={<svg data-testid="shield" />}
+      />,
+    );
+    expect(container.querySelector("[data-testid=shield]")).toBeNull();
+    expect(container.textContent).toBe("MV");
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(apiUrl(portrait.thumbUrl));
+    expect((container.firstElementChild as HTMLElement).className).toContain("size-7");
+  });
+});
+
 describe("usePortraitPolling", () => {
   afterEach(() => vi.useRealTimers());
 

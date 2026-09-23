@@ -16,7 +16,9 @@ import {
   session,
   sessionEvent,
 } from "./run.fixtures";
+import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
+import { drawnPortrait } from "../campaign/campaign.fixtures";
 import { combatantWrites } from "./load";
 
 /**
@@ -83,6 +85,26 @@ describe("the runner", () => {
     expect(screen.getByText(/Round 1 · Brannoc is up/)).toBeInTheDocument();
     // The two halves of the fixtures' `sub` line, assembled for rendering.
     expect(initiative().getByText("Half-orc paladin · Ilse")).toBeInTheDocument();
+  });
+
+  it("marks every row with its icon when nobody has a portrait", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(rows().some((row) => row.querySelector("img") !== null)).toBe(false);
+  });
+
+  it("lays a PC's portrait on its row, and leaves the monster its skull", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [{ ...brannoc, portrait: drawnPortrait }, goblinBoss],
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+
+    const plate = rowFor("Brannoc").querySelector("img");
+    expect(plate?.getAttribute("src")).toBe(apiUrl(drawnPortrait.thumbUrl));
+    expect(plate?.getAttribute("loading")).toBe("lazy");
+    expect(rowFor("Goblin Boss").querySelector("img")).toBeNull();
   });
 
   it("keeps a combatant at zero hit points in the order, struck through", async () => {
