@@ -81,6 +81,9 @@ const NOT_CONTENT = [
   // Audit of Hob moving an existing resource counter. The character remains the
   // content row; this is a log/inverse tied to a live run and an assistant turn.
   "hob_direct_resource_update",
+  // The daily image budget's ledger: a spend per draw started, billed to an
+  // account and never read by anybody but the cap. See 0055_image_spend.ts.
+  "image_spend",
   "language",
   "magic_item_rarity",
   "magic_item_variant",

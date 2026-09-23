@@ -185,6 +185,7 @@ describe("migrations", () => {
       "group_library_share",
       "group_member",
       "hob_direct_resource_update",
+      "image_spend",
       "language",
       "magic_item",
       "magic_item_rarity",
@@ -283,6 +284,7 @@ describe("migrations", () => {
       { migration_id: 52, name: "descriptions" },
       { migration_id: 53, name: "campaign_move_keys" },
       { migration_id: 54, name: "account_threads" },
+      { migration_id: 55, name: "image_spend" },
     ]);
   }, 60_000);
 
@@ -346,6 +348,7 @@ describe("migrations", () => {
       { migration_id: 52, name: "descriptions" },
       { migration_id: 53, name: "campaign_move_keys" },
       { migration_id: 54, name: "account_threads" },
+      { migration_id: 55, name: "image_spend" },
     ]);
   }, 60_000);
 });
