@@ -585,6 +585,26 @@ describe("the conversation is still there", () => {
     expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
   });
 
+  it("shows the setting Hob wrote, which the battle map is drawn from on save", async () => {
+    server.threads = [aThread("Build me an ambush")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Six of them, in the reeds.",
+        proposal: { ...anEncounter, setting: "A flooded causeway between two stone huts" },
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob();
+
+    await waitFor(() => expect(screen.getByText("Song in the reeds")).toBeInTheDocument());
+    expect(screen.getByText("A flooded causeway between two stone huts")).toBeInTheDocument();
+  });
+
   /**
    * The one property the whole feature rests on, pinned from the read-back path
    * as well as from the live one.

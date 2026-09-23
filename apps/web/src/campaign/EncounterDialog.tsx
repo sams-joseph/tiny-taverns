@@ -1,11 +1,12 @@
-import type {
-  CampaignId,
-  CreatureId,
-  Difficulty,
-  Encounter,
-  EncounterCreatureId,
-  EncounterId,
-  Visibility,
+import {
+  type CampaignId,
+  type CreatureId,
+  type Difficulty,
+  type Encounter,
+  type EncounterCreatureId,
+  type EncounterId,
+  ENCOUNTER_SETTING_MAX,
+  type Visibility,
 } from "@taverns/api";
 import {
   Button,
@@ -54,6 +55,15 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * transaction across requests, and pretending otherwise by rolling back with
  * more requests would fail the same way one call later.
  *
+ * ### The setting line is the map's, and only the creator's
+ *
+ * *What the place looks like* is written here because the encounter's battle
+ * map is made with it and drawn from it once, as the encounter is created. It
+ * is stored on the map, not the encounter — a player may read a shared
+ * encounter, and nobody but the creator reads its map — so an edit reads it
+ * back through the creator's map read (`battleMaps.find`) and writes it through
+ * the encounter's own update. Changing it later redraws nothing.
+ *
  * ### What is deliberately not here
  *
  * A roster line carries a `visibility` of its own and this form does not offer
@@ -98,6 +108,7 @@ const parseTags = (raw: string): ReadonlyArray<string> => {
 
 interface Draft {
   readonly name: string;
+  readonly setting: string;
   readonly difficulty: Difficulty | null;
   readonly tags: ReadonlyArray<string>;
   readonly visibility: Visibility;
@@ -115,9 +126,13 @@ interface Draft {
  * what renders the backstop if one is ever missed.
  */
 const validate = (draft: Draft, lines: ReadonlyArray<RosterLine>) => {
-  const problems: { name?: string; tags?: string; roster?: string } = {};
+  const problems: { name?: string; setting?: string; tags?: string; roster?: string } = {};
 
   if (draft.name.trim() === "") problems.name = "Give it a name.";
+
+  if (draft.setting.trim().length > ENCOUNTER_SETTING_MAX) {
+    problems.setting = `Keep it to one line, ${ENCOUNTER_SETTING_MAX} characters at most.`;
+  }
 
   if (draft.tags.length > MAX_TAGS) {
     problems.tags = `Sixteen tags is the most an encounter carries. That is ${draft.tags.length}.`;
@@ -170,16 +185,20 @@ function EncounterForm({
   campaignId,
   encounter,
   initialRoster,
+  initialSetting,
   onClose,
   onSaved,
 }: {
   readonly campaignId: CampaignId;
   readonly encounter: Encounter | undefined;
   readonly initialRoster: ReadonlyArray<RosterLine>;
+  /** The map's setting line as stored; `""` for a new encounter or none. */
+  readonly initialSetting: string;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
   const [name, setName] = useState(encounter?.name ?? "");
+  const [setting, setSetting] = useState(initialSetting);
   const [difficulty, setDifficulty] = useState<string>(encounter?.difficulty ?? UNRATED);
   const [tagText, setTagText] = useState(encounter?.tags.join(", ") ?? "");
   // `dm` for a new encounter: the column default, and the only safe one to fail to.
@@ -192,6 +211,7 @@ function EncounterForm({
 
   const draft: Draft = {
     name,
+    setting,
     difficulty: difficulty === UNRATED ? null : (difficulty as Difficulty),
     tags: parseTags(tagText),
     visibility,
@@ -226,6 +246,7 @@ function EncounterForm({
     if (refused) return;
 
     const trimmed = draft.name.trim();
+    const settingLine = draft.setting.trim();
     const saved = await submit(
       (client) =>
         Effect.gen(function* () {
@@ -241,6 +262,7 @@ function EncounterForm({
                     ...(draft.difficulty === null ? {} : { difficulty: draft.difficulty }),
                     tags: draft.tags,
                     visibility: draft.visibility,
+                    ...(settingLine === "" ? {} : { setting: settingLine }),
                   },
                 })
               : yield* client.encounters.update({
@@ -250,6 +272,10 @@ function EncounterForm({
                     difficulty: draft.difficulty,
                     tags: draft.tags,
                     visibility: draft.visibility,
+                    // Only a changed line is sent; none clears it.
+                    ...(settingLine === initialSetting.trim()
+                      ? {}
+                      : { setting: settingLine === "" ? null : settingLine }),
                   },
                 });
 
@@ -323,6 +349,26 @@ function EncounterForm({
             value={name}
             aria-invalid={showProblems && problems.name !== undefined}
             onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+
+        <Field
+          label="What the place looks like"
+          htmlFor="encounter-setting"
+          hint={
+            encounter === undefined
+              ? "One line on the ground the fight is on, with no creatures in it. Hob draws the battle map from it once, as the encounter is made. Only you see the map."
+              : "The battle map was drawn once, when the encounter was made; changing this does not redraw it. Only you see it."
+          }
+          error={showProblems ? problems.setting : undefined}
+        >
+          <Input
+            id="encounter-setting"
+            maxLength={ENCOUNTER_SETTING_MAX}
+            placeholder="A boardwalk over black water, reed beds on both sides"
+            value={setting}
+            aria-invalid={showProblems && problems.setting !== undefined}
+            onChange={(event) => setSetting(event.target.value)}
           />
         </Field>
 
@@ -440,10 +486,16 @@ function EncounterForm({
   );
 }
 
+interface Loaded {
+  readonly roster: ReadonlyArray<RosterLine>;
+  readonly setting: string;
+}
+
 /**
- * An encounter's roster, keyed on the campaign and the encounter — or on
- * `undefined`, which is a new encounter and an empty list rather than a
- * request.
+ * What an edit starts from beyond the `Encounter` itself: its roster and its
+ * map's setting line, keyed on the campaign and the encounter — or on
+ * `undefined`, which is a new encounter, an empty list and no line rather than
+ * a request.
  *
  * The name rides on the row itself (`EncounterCreature.name`, resolved
  * server-side), and that is load-bearing rather than convenient: a roster line
@@ -452,7 +504,7 @@ function EncounterForm({
  * `creatures.list` would name some lines "unknown" about creatures that are
  * right there.
  */
-const rosterAtom = Atom.family(
+const formAtom = Atom.family(
   ({
     campaignId,
     encounterId,
@@ -463,11 +515,17 @@ const rosterAtom = Atom.family(
     apiAtom(
       (client) =>
         encounterId === undefined
-          ? Effect.succeed<ReadonlyArray<RosterLine>>([])
+          ? Effect.succeed<Loaded>({ roster: [], setting: "" })
           : Effect.map(
-              client.encounterCreatures.list({ params: { campaignId, encounterId } }),
-              (rows) =>
-                rows.map((row): RosterLine => ({
+              Effect.all(
+                {
+                  rows: client.encounterCreatures.list({ params: { campaignId, encounterId } }),
+                  map: client.battleMaps.find({ params: { campaignId, encounterId } }),
+                },
+                { concurrency: "unbounded" },
+              ),
+              ({ rows, map }): Loaded => ({
+                roster: rows.map((row): RosterLine => ({
                   key: row.id,
                   id: row.id,
                   creatureId: row.creatureId,
@@ -475,11 +533,13 @@ const rosterAtom = Atom.family(
                   count: row.count,
                   savedCount: row.count,
                 })),
+                setting: map.setting ?? "",
+              }),
             ),
-      // This encounter's own roster. `reads.encounters` is what a roster write
-      // already names — for the `creatureCount` on the card — so a save
-      // reaching this list too costs nothing and keeps a reopened dialog
-      // honest.
+      // This encounter's own roster and setting line. `reads.encounters` is
+      // what a roster write already names — for the `creatureCount` on the
+      // card — and what this form's save names, so a save reaching these too
+      // costs nothing and keeps a reopened dialog honest.
       encounterId === undefined ? [] : [reads.encounters(campaignId)],
     ),
 );
@@ -507,26 +567,27 @@ export function EncounterDialog({
    * the reason `campaign/load.ts` gives: two hooks here would be four states to
    * render inside a dialog that has room for one.
    */
-  const [roster, reload] = useApiAtom(rosterAtom({ campaignId, encounterId }));
+  const [loaded, reload] = useApiAtom(formAtom({ campaignId, encounterId }));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-label={encounter === undefined ? "New encounter" : "Edit encounter"}>
-        {roster.state === "loading" && (
+        {loaded.state === "loading" && (
           <div className="px-gutter py-gutter">
-            <Loading label="Reading the roster…" />
+            <Loading label="Reading the encounter…" />
           </div>
         )}
-        {roster.state === "failed" && (
+        {loaded.state === "failed" && (
           <div className="px-gutter py-gutter">
-            <ApiFailureNotice failure={roster.failure} onRetry={reload} />
+            <ApiFailureNotice failure={loaded.failure} onRetry={reload} />
           </div>
         )}
-        {roster.state === "ready" && (
+        {loaded.state === "ready" && (
           <EncounterForm
             campaignId={campaignId}
             encounter={encounter}
-            initialRoster={roster.value}
+            initialRoster={loaded.value.roster}
+            initialSetting={loaded.value.setting}
             onClose={onClose}
             onSaved={onSaved}
           />
