@@ -58,6 +58,73 @@ export const hpFraction = (current: number | null, max: number | null): number |
   return Math.max(0, Math.min(1, at / max));
 };
 
+/**
+ * `"Half-orc Paladin"` — the descriptor without its level, for a card that
+ * draws the level somewhere of its own.
+ *
+ * The same pick `0020`'s generated `descriptor` makes (the subrace stands in for
+ * the race when there is one), minus the `Level N` prefix. Building it from the
+ * columns rather than trimming the descriptor keeps it from depending on how a
+ * string was spelled.
+ */
+export const lineageLine = (character: {
+  readonly race: string | null;
+  /** Optional on a Hob draft, which may not name one. */
+  readonly subrace?: string | null | undefined;
+  readonly className: string | null;
+}): string | undefined => {
+  const line = [character.subrace ?? character.race, character.className]
+    .filter((part): part is string => part !== null && part.trim() !== "")
+    .join(" ");
+  return line === "" ? undefined : line;
+};
+
+/** `"+3"` → 3; anything that is not a signed or bare integer → undefined. */
+const signedNumber = (text: string | undefined): number | undefined => {
+  const trimmed = text?.trim();
+  if (trimmed === undefined || !/^[+-]?\d+$/.test(trimmed)) return undefined;
+  return Number(trimmed);
+};
+
+const abilityModifier = (sheet: CharacterSheet, label: string): number | undefined =>
+  signedNumber(
+    sheet.abilities.find((ability) => ability.label.trim().toUpperCase() === label)?.modifier,
+  );
+
+/**
+ * The initiative the card draws: what the sheet wrote, else the Dexterity
+ * modifier, which is what 2014 initiative is when nothing adds to it.
+ *
+ * The written value wins because it is the sheet's own claim (an Alert feat, a
+ * Jack of All Trades) and the sheet's pill draws it verbatim. With no DEX cell
+ * either, there is nothing to say and the answer is absent, never `+0`.
+ */
+export const initiativeOf = (sheet: CharacterSheet): string | undefined => {
+  const written = sheet.identity?.initiative?.trim();
+  if (written !== undefined && written !== "") return written;
+  const dex = abilityModifier(sheet, "DEX");
+  return dex === undefined ? undefined : dex < 0 ? String(dex) : `+${String(dex)}`;
+};
+
+/**
+ * Passive Perception — 10 plus the Perception bonus, the 2014 rule.
+ *
+ * The bonus is the sheet's `Perception` row when it wrote one. Without a bonus,
+ * it is the Wisdom modifier, plus the proficiency bonus when the row says
+ * proficient — and when that proficiency bonus is not written either, the sum
+ * cannot be made and the answer is absent rather than a guess one short.
+ */
+export const passivePerceptionOf = (sheet: CharacterSheet): number | undefined => {
+  const row = sheet.skills?.find((skill) => skill.name.trim().toLowerCase() === "perception");
+  const written = signedNumber(row?.bonus);
+  if (written !== undefined) return 10 + written;
+  const wis = abilityModifier(sheet, "WIS");
+  if (wis === undefined) return undefined;
+  if (row?.proficient !== true) return 10 + wis;
+  const proficiency = signedNumber(sheet.identity?.proficiency);
+  return proficiency === undefined ? undefined : 10 + wis + proficiency;
+};
+
 /** Which coins are actually held. An absent pile is absent, not a zero. */
 export const coins = (
   currency: Currency,

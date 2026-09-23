@@ -1,6 +1,7 @@
 import type { CampaignId, OwnedCharacter } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -16,8 +17,16 @@ import { AddToCampaignDialog } from "./AddToCampaignDialog";
 import { campaignsAvailableToJoin } from "./join";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
-import { hitPoints, rosterSummary } from "./sheet";
-import { Portrait, StatPill } from "./SheetParts";
+import {
+  hitPoints,
+  hpFraction,
+  initialsOf,
+  initiativeOf,
+  lineageLine,
+  passivePerceptionOf,
+  rosterSummary,
+} from "./sheet";
+import { HpBar } from "./SheetParts";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -81,6 +90,25 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * a badge for a state that changes per campaign.
  */
 
+/**
+ * One character, as the captain's card drawing lays it out: a lettered plate on
+ * the sunken surface with the level pinned in its corner, then the name, the
+ * lineage, the hit-point bar, the three numbers a table asks for across the
+ * screen (AC, initiative, passive Perception), and a line for conditions and
+ * who plays them.
+ *
+ * Every element is a field the row holds or a sum the sheet already makes, and
+ * each is drawn only when that answer exists — `level`, `ac` and `hpMax` are
+ * nullable and a fresh sheet has no ability cells, so a card can lose any of
+ * them and must not draw a zero in their place. The drawing's **colour swatch**
+ * is left out: nothing on the row or the account carries a colour.
+ *
+ * Below the drawing's footer, the two things the roster did before and the
+ * drawing does not show: where the character is seated, and the actions —
+ * *Add to campaign* and *Open sheet* — on a hairline-divided row of their own,
+ * so the card's top half stays a picture of the character and its bottom row
+ * is the only place to press.
+ */
 function CharacterCard({
   owned,
   campaignNames,
@@ -92,6 +120,12 @@ function CharacterCard({
 }) {
   const character = owned.character;
   const hp = hitPoints(character.hpCurrent, character.hpMax);
+  const fraction = hpFraction(character.hpCurrent, character.hpMax);
+  const lineage = lineageLine(character);
+  const player =
+    character.playerName !== null && character.playerName.trim() !== ""
+      ? character.playerName
+      : undefined;
   const [joining, setJoining] = useState(false);
   const joinOptions = campaignsAvailableToJoin(owned, memberships);
   // The tables this character is seated at, named. A seat whose campaign the
@@ -100,38 +134,77 @@ function CharacterCard({
   const tables = owned.seats.map(
     (seat) => campaignNames.get(seat.campaignId) ?? "A table you have left",
   );
+  // The three numbers, each only when there is an answer. A card with one keeps
+  // it a third of the box wide rather than stretching it into a headline.
+  const initiative = initiativeOf(character.sheet);
+  const passive = passivePerceptionOf(character.sheet);
+  const stats = [
+    { label: "AC", value: character.ac ?? undefined },
+    { label: "Init", value: initiative },
+    { label: "Passive", value: passive },
+  ].flatMap((stat) => (stat.value === undefined ? [] : [{ ...stat, value: stat.value }]));
 
   return (
-    <Card className="h-full">
-      <CardContent className="flex flex-1 flex-col gap-3 pt-card">
-        <div className="flex items-start gap-3">
-          <Portrait name={character.name} />
-          <div className="min-w-0 flex-1">
-            <p className={sectionHeadingVariants()}>{character.name}</p>
-            {character.descriptor !== null && character.descriptor !== "" && (
-              <p className="mt-1 text-caption leading-body text-muted-foreground">
-                {character.descriptor}
-              </p>
-            )}
-          </div>
+    <Card className="h-full overflow-hidden">
+      <div className="relative flex aspect-4/3 items-center justify-center border-b border-hairline bg-surface-sunken">
+        {/* A monogram, not art: there is no asset store, so no upload either. */}
+        <span
+          aria-hidden="true"
+          className="font-display text-display-xl leading-none font-semibold text-faint"
+        >
+          {initialsOf(character.name)}
+        </span>
+        {character.level !== null && (
+          <Badge variant="secondary" className="absolute top-3 left-3">
+            Level {character.level}
+          </Badge>
+        )}
+      </div>
+
+      <CardContent className="flex flex-1 flex-col gap-5 pt-card">
+        <div className="min-w-0">
+          <p className={sectionHeadingVariants({ size: "display" })}>{character.name}</p>
+          {lineage !== undefined && (
+            <p className="mt-1 text-body leading-body text-muted-foreground">{lineage}</p>
+          )}
         </div>
 
-        {/* Only the numbers the row actually holds. `hpMax` and `ac` are
-            nullable and `level` is too, so a pill for each is a pill that could
-            be a stubbed zero — the one thing the screens rule forbids.
-
-            Three fixed columns rather than a flex row, because the vocabulary is
-            fixed at three: a card with one number keeps that number a third of
-            the card wide, where flexing would stretch a lone `Level` across the
-            whole of it and read as the card's headline. */}
-        {(hp !== undefined || character.ac !== null || character.level !== null) && (
-          <div className="grid grid-cols-3 gap-1.5">
-            {hp !== undefined && <StatPill label="HP" value={hp} />}
-            {character.ac !== null && <StatPill label="AC" value={character.ac} />}
-            {character.level !== null && <StatPill label="Level" value={character.level} />}
+        {hp !== undefined && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-body-s leading-snug text-muted-foreground">Hit points</span>
+              <span className="font-mono text-mono-l leading-snug text-heading">{hp}</span>
+            </div>
+            {fraction !== undefined && <HpBar fraction={fraction} />}
           </div>
         )}
 
+        {stats.length > 0 && (
+          <dl className="grid grid-cols-3 divide-x divide-hairline rounded-md border border-hairline bg-surface-sunken">
+            {stats.map((stat) => (
+              <div key={stat.label} className="flex flex-col-reverse items-center gap-1 py-2.5">
+                <dt className="text-body-s leading-none text-muted-foreground">{stat.label}</dt>
+                <dd className="font-mono text-mono-l leading-none text-heading">{stat.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
+        <div className="mt-auto flex items-baseline justify-between gap-3 text-body-s leading-body">
+          <span
+            className={
+              character.conditions.length === 0
+                ? "min-w-0 text-muted-foreground"
+                : "min-w-0 text-foreground"
+            }
+          >
+            {character.conditions.length === 0 ? "No conditions" : character.conditions.join(", ")}
+          </span>
+          {player !== undefined && <span className="shrink-0 text-muted-foreground">{player}</span>}
+        </div>
+      </CardContent>
+
+      <div className="flex flex-col gap-3 border-t border-hairline px-card py-3">
         <div className="flex items-center gap-2">
           <Icon name="book-open" size={14} className="shrink-0 text-accent-ink" />
           <span className="min-w-0 flex-1 truncate text-caption leading-body text-foreground">
@@ -142,25 +215,24 @@ function CharacterCard({
             {tables.length === 0 ? "Not seated at a table" : tables.join(" · ")}
           </span>
         </div>
-
-        <div className="mt-auto flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {joinOptions.length > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setJoining(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setJoining(true)}>
               <Icon name="user-plus" size={14} />
               Add to campaign
             </Button>
           )}
           <Button
             variant="outline"
-            className="w-full"
             size="sm"
+            className="ml-auto"
             nativeButton={false}
             render={<Link to="/characters/$characterId" params={{ characterId: character.id }} />}
           >
             Open sheet
           </Button>
         </div>
-      </CardContent>
+      </div>
       {joining && (
         <AddToCampaignDialog
           owned={owned}

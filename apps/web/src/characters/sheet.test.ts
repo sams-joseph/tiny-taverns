@@ -9,6 +9,9 @@ import {
   hitPoints,
   hpFraction,
   initialsOf,
+  initiativeOf,
+  lineageLine,
+  passivePerceptionOf,
   rosterSummary,
   sectionInView,
   SHEET_SECTIONS,
@@ -61,6 +64,58 @@ describe("hit points", () => {
     // A clamp, because temporary hit points can put somebody over their own max
     // on a sheet the DM typed by hand.
     expect(hpFraction(80, 52)).toBe(1);
+  });
+});
+
+describe("the roster card's figures", () => {
+  const cells = (dex: string, wis: string): CharacterSheet => ({
+    ...emptyCharacterSheet,
+    abilities: [
+      { label: "DEX", score: "14", modifier: dex },
+      { label: "WIS", score: "12", modifier: wis },
+    ],
+  });
+
+  it("names the lineage from the columns, subrace first, without the level", () => {
+    expect(lineageLine({ race: "Half-orc", subrace: null, className: "Paladin" })).toBe(
+      "Half-orc Paladin",
+    );
+    expect(lineageLine({ race: "Elf", subrace: "Wood elf", className: "Druid" })).toBe(
+      "Wood elf Druid",
+    );
+    expect(lineageLine({ race: null, subrace: null, className: " " })).toBeUndefined();
+  });
+
+  it("takes the written initiative, else the DEX modifier, else nothing", () => {
+    expect(initiativeOf({ ...cells("+2", "+0"), identity: { initiative: "+7" } })).toBe("+7");
+    expect(initiativeOf(cells("+2", "+0"))).toBe("+2");
+    expect(initiativeOf(cells("-1", "+0"))).toBe("-1");
+    expect(initiativeOf(emptyCharacterSheet)).toBeUndefined();
+  });
+
+  it("adds 10 to the Perception bonus, and refuses to guess a missing half", () => {
+    // A written bonus is the sheet's claim and wins.
+    expect(
+      passivePerceptionOf({ ...cells("+0", "+1"), skills: [{ name: "Perception", bonus: "+6" }] }),
+    ).toBe(16);
+    // No row: an untrained check is the Wisdom modifier.
+    expect(passivePerceptionOf(cells("+0", "+1"))).toBe(11);
+    // Proficient with the bonus written on the identity card.
+    expect(
+      passivePerceptionOf({
+        ...cells("+0", "+2"),
+        identity: { proficiency: "+2" },
+        skills: [{ name: "Perception", proficient: true }],
+      }),
+    ).toBe(14);
+    // Proficient, but no proficiency bonus anywhere: the sum cannot be made.
+    expect(
+      passivePerceptionOf({
+        ...cells("+0", "+2"),
+        skills: [{ name: "Perception", proficient: true }],
+      }),
+    ).toBeUndefined();
+    expect(passivePerceptionOf(emptyCharacterSheet)).toBeUndefined();
   });
 });
 
