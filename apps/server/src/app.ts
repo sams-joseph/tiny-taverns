@@ -19,6 +19,14 @@ import {
   hobMaxTokens,
   hobModel,
   npcPlayerCampaignDailyLimit,
+  portraitAccountDailyLimit,
+  portraitApiKey,
+  portraitApiUrl,
+  portraitConcurrency,
+  portraitDailyLimit,
+  portraitModel,
+  portraitQuality,
+  portraitUrlSecret,
   storageDriver,
   storageFsRoot,
 } from "./Config.js";
@@ -57,6 +65,10 @@ import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
+import { ImageModel } from "./portraits/ImageModel.js";
+import { Portraits } from "./portraits/Portraits.js";
+import { PortraitUrls } from "./portraits/PortraitUrls.js";
+import { PortraitRecords } from "./repo/Portraits.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
 import { PrepItems } from "./repo/PrepItems.js";
 import { Proposals } from "./repo/Proposals.js";
@@ -301,6 +313,82 @@ export const storageFromConfig: Layer.Layer<ObjectStorage, Config.ConfigError | 
   );
 
 /**
+ * Whether this server can sign portrait image URLs: `PORTRAIT_URL_SECRET`, or
+ * nothing is minted. Its line is part of the portraits line below.
+ */
+export const portraitUrlsFromConfig: Layer.Layer<PortraitUrls, Config.ConfigError> = Layer.unwrap(
+  Effect.map(portraitUrlSecret, (secret) =>
+    Option.match(secret, {
+      onNone: () => PortraitUrls.off,
+      onSome: (value) => PortraitUrls.layer(value),
+    }),
+  ),
+);
+
+/**
+ * Whether Hob draws a portrait of each new character: the portraits half of
+ * the question `assistantFromConfig` answers, arranged the same way.
+ *
+ * **Unset is the default and what CI runs.** Generation needs four things —
+ * `PORTRAIT_API_URL` and `PORTRAIT_MODEL`, `PORTRAIT_URL_SECRET` so the result
+ * can be shown, and storage so it can be kept — and the OFF line names every
+ * one that is missing. Portraits already drawn are still served, and a deleted
+ * character's files still deleted, whenever storage is on.
+ *
+ * The ON line names the model, the endpoint, the quality and both daily caps,
+ * and **never the key**.
+ */
+export const portraitsFromConfig: Layer.Layer<
+  Portraits,
+  Config.ConfigError,
+  PortraitRecords | ObjectStorage | PortraitUrls
+> = Layer.unwrap(
+  Effect.gen(function* () {
+    const apiUrl = yield* portraitApiUrl;
+    const model = yield* portraitModel;
+    const secret = yield* portraitUrlSecret;
+    const storageOn = Option.isSome(yield* storageDriver);
+
+    const missing = [
+      ...(Option.isNone(apiUrl) ? ["PORTRAIT_API_URL"] : []),
+      ...(Option.isNone(model) ? ["PORTRAIT_MODEL"] : []),
+      ...(Option.isNone(secret) ? ["PORTRAIT_URL_SECRET"] : []),
+      ...(storageOn ? [] : ["STORAGE_DRIVER"]),
+    ];
+    if (Option.isNone(apiUrl) || Option.isNone(model) || missing.length > 0) {
+      yield* Effect.logInfo(
+        `Portraits are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
+          "so new characters keep their lettered plates. To turn them on, set them in " +
+          "apps/server/.env.local (see .env.example).",
+      );
+      return Portraits.layer({ generation: Option.none(), storageOn });
+    }
+
+    const quality = yield* portraitQuality;
+    const limits = {
+      perAccountPerDay: yield* portraitAccountDailyLimit,
+      perDay: yield* portraitDailyLimit,
+    };
+    const concurrency = yield* portraitConcurrency;
+    const apiKey = yield* portraitApiKey;
+    yield* Effect.logInfo(
+      `Portraits are ON: model ${model.value} at ${apiUrl.value}, quality ${quality}, ` +
+        `${String(limits.perAccountPerDay)} per account and ${String(limits.perDay)} in all per day.`,
+    );
+    return Portraits.layer({ generation: Option.some({ limits, concurrency }), storageOn }).pipe(
+      Layer.provide(
+        ImageModel.layer({
+          apiUrl: apiUrl.value,
+          model: model.value,
+          apiKey: Option.getOrUndefined(apiKey),
+          quality,
+        }).pipe(Layer.provide(NodeHttpClient.layerUndici)),
+      ),
+    );
+  }),
+);
+
+/**
  * Everything the handlers need, over whichever database it is given.
  *
  * Parameterised so the tests can mount the same wiring over a throwaway
@@ -339,6 +427,12 @@ export const servicesOver = <E>(
     Npcs | NpcKnowledge | NpcMemories | NpcThreads | NpcProposals | CampaignCreatorActors
   > = npcAgentFromConfig,
   storage: Layer.Layer<ObjectStorage, E | Config.ConfigError | StorageError> = storageFromConfig,
+  portraitUrls: Layer.Layer<PortraitUrls, E | Config.ConfigError> = portraitUrlsFromConfig,
+  portraits: Layer.Layer<
+    Portraits,
+    E | Config.ConfigError,
+    PortraitRecords | ObjectStorage | PortraitUrls
+  > = portraitsFromConfig,
 ): Layer.Layer<
   | Accounts
   | Authorization
@@ -375,6 +469,7 @@ export const servicesOver = <E>(
   | Npcs
   | NpcThreads
   | ObjectStorage
+  | Portraits
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -407,11 +502,12 @@ export const servicesOver = <E>(
     // The owner's half of the shared character. Most durable sheet writes do
     // not ring, but resource spends and rests are live table facts when a night
     // is open, so the repository takes the same doorbell the party uses.
-    Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // Both character reads sign portrait URLs, so both take `PortraitUrls`.
+    Characters.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
     // The campaign's half: the seats. The condition write-through and the
     // delta are live writes, so this is a live repository the way the old
     // campaign-scoped `Characters` was.
-    Party.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Party.layer.pipe(Layer.provide([LiveEvents.layer, portraitUrls])),
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -463,9 +559,11 @@ export const servicesOver = <E>(
       ]),
     ),
     NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
-    // Files, behind whichever provider `STORAGE_DRIVER` names. Nothing reads
-    // it yet; it is built here so its boot line is printed with the others.
+    // Files, behind whichever provider `STORAGE_DRIVER` names.
     storage,
+    // Hob's portraits: the worker, the image route and the deletion drain.
+    // The same memoised storage and URL layers the rest of the graph holds.
+    portraits.pipe(Layer.provide([PortraitRecords.layer, storage, portraitUrls])),
     // The NPC rehearsal loop: proposal tools write only review rows, never
     // destination campaign state. It reads the NPC, its transcript, and this
     // NPC's explicit facts/approved memories — no campaign-wide repositories.
@@ -525,7 +623,7 @@ export const servicesOver = <E>(
         // A player accepting a character draft goes through `createOwn`, so the
         // accept path holds `Characters` as well now — the same statement a
         // typed one takes, with `assistant_turn_id` on it.
-        Characters.layer,
+        Characters.layer.pipe(Layer.provide(portraitUrls)),
         EncounterCreatures.layer,
         Encounters.layer,
         // Group Hob's accepted chronicle line goes through the same
@@ -638,6 +736,7 @@ export const applicationOver = <E>(
     | Npcs
     | NpcThreads
     | Options
+    | Portraits
     | RuleArticles
     | Rolls
     | Party

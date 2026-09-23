@@ -13,10 +13,16 @@ import {
   type PartySeatUpdate,
   type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { type CharacterRow, toCharacter } from "./Characters.js";
+import {
+  type CharacterRow,
+  type PortraitSigner,
+  portraitColumns,
+  toCharacter,
+} from "./Characters.js";
+import { PortraitUrls } from "../portraits/PortraitUrls.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
 import { requestAlreadyApplied, sessionRequestAlreadyApplied } from "./SessionEvents.js";
 import {
@@ -104,39 +110,47 @@ const characterColumns = (sql: SqlClient.SqlClient) => sql`
   character.version as character_version, character.visibility as character_visibility,
   character.origin as character_origin,
   character.assistant_turn_id as character_assistant_turn_id,
-  character.created_at as character_created_at, character.updated_at as character_updated_at
+  character.created_at as character_created_at, character.updated_at as character_updated_at,
+  ${portraitColumns(sql, "character_")}
 `;
 
-const characterOf = (row: SeatWithCharacterRow): Character | null => {
+const characterOf = (row: SeatWithCharacterRow, sign?: PortraitSigner): Character | null => {
   if (row.character_id === null || row.character_name === null) return null;
-  return toCharacter({
-    id: row.character_id,
-    account_id: row.character_account_id!,
-    name: row.character_name,
-    player_name: row.character_player_name,
-    level: row.character_level,
-    race: row.character_race,
-    subrace: row.character_subrace,
-    class_name: row.character_class_name,
-    descriptor: row.character_descriptor,
-    ac: row.character_ac,
-    hp_max: row.character_hp_max,
-    hp_current: row.character_hp_current,
-    temp_hp: row.character_temp_hp!,
-    conditions: row.character_conditions!,
-    sheet_url: row.character_sheet_url,
-    body: row.character_body!,
-    version: row.character_version!,
-    visibility: row.character_visibility!,
-    origin: row.character_origin!,
-    assistant_turn_id: row.character_assistant_turn_id,
-    created_at: row.character_created_at!,
-    updated_at: row.character_updated_at!,
-  });
+  return toCharacter(
+    {
+      id: row.character_id,
+      account_id: row.character_account_id!,
+      name: row.character_name,
+      player_name: row.character_player_name,
+      level: row.character_level,
+      race: row.character_race,
+      subrace: row.character_subrace,
+      class_name: row.character_class_name,
+      descriptor: row.character_descriptor,
+      ac: row.character_ac,
+      hp_max: row.character_hp_max,
+      hp_current: row.character_hp_current,
+      temp_hp: row.character_temp_hp!,
+      conditions: row.character_conditions!,
+      sheet_url: row.character_sheet_url,
+      body: row.character_body!,
+      version: row.character_version!,
+      visibility: row.character_visibility!,
+      origin: row.character_origin!,
+      assistant_turn_id: row.character_assistant_turn_id,
+      created_at: row.character_created_at!,
+      updated_at: row.character_updated_at!,
+      // `undefined` survives to `toCharacter`'s check when the read forgot
+      // `portraitColumns`; `null` is the seat read's own "no portrait".
+      portrait_id: row.character_portrait_id as string | null,
+      portrait_state: row.character_portrait_state as CharacterRow["portrait_state"],
+    },
+    sign,
+  );
 };
 
-const toPartySeat = (row: SeatWithCharacterRow): PartySeat =>
-  new PartySeat({ seat: toSeat(row), character: characterOf(row) });
+const toPartySeat = (row: SeatWithCharacterRow, sign?: PortraitSigner): PartySeat =>
+  new PartySeat({ seat: toSeat(row), character: characterOf(row, sign) });
 
 export class Party extends Context.Service<
   Party,
@@ -191,6 +205,11 @@ export class Party extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
+      // The seat read is a character read, so it signs portraits exactly as the
+      // owner's does: whoever may see the character sees its picture.
+      const sign = Option.getOrUndefined(
+        Option.map(yield* Effect.serviceOption(PortraitUrls), (urls) => urls.imagesFor),
+      );
 
       const ring = ({ sessionId }: { readonly sessionId: SessionId | undefined }) =>
         sessionId === undefined ? Effect.void : live.touched(sessionId);
@@ -213,7 +232,7 @@ export class Party extends Context.Service<
           Effect.flatMap((rows) =>
             rows.length === 0
               ? new NotFound({ resource: "campaign_character", id })
-              : Effect.succeed(toPartySeat(rows[0]!)),
+              : Effect.succeed(toPartySeat(rows[0]!, sign)),
           ),
         );
 
@@ -231,7 +250,7 @@ export class Party extends Context.Service<
                   and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
                 order by campaign_character.joined_at asc, campaign_character.id asc
               `;
-              return rows.map(toPartySeat);
+              return rows.map((row) => toPartySeat(row, sign));
             }),
           ),
 
@@ -399,13 +418,14 @@ export class Party extends Context.Service<
                 characterId: CharacterId,
               ): Effect.Effect<Character, NotFound> =>
                 sql<CharacterRow>`
-                  select * from character where character.id = ${characterId}
+                  select character.*, ${portraitColumns(sql)} from character
+                  where character.id = ${characterId}
                 `.pipe(
                   Effect.orDie,
                   Effect.flatMap((rows) =>
                     rows.length === 0
                       ? new NotFound({ resource: "character", id: characterId })
-                      : Effect.succeed(toCharacter(rows[0]!)),
+                      : Effect.succeed(toCharacter(rows[0]!, sign)),
                   ),
                 );
 

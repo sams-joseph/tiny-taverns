@@ -1,7 +1,7 @@
 import type { Ability } from "@taverns/api";
 import { Badge, Button, Card, cn, Icon, SectionHeading } from "@taverns/ui";
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
-import { hpFraction, initialsOf, type SheetSectionId, type SheetSectionSpec } from "./sheet";
+import { hpFraction, type SheetSectionId, type SheetSectionSpec } from "./sheet";
 
 /**
  * `ui_kits/dm-screen/PlayerParts.jsx` in shipped components and theme names.
@@ -11,15 +11,16 @@ import { hpFraction, initialsOf, type SheetSectionId, type SheetSectionSpec } fr
  * that line runs through the middle of the drawing rather than around it: the
  * document is writable, so the prototype's clickable `DeathSaves` are real
  * buttons here — but its `AbilityBlock` rolls a check into a dice tray the
- * product has no endpoint for, its `Portrait` uploads to nowhere, and spending
- * a spell pip has no drawn place to put the result, so those three stay the
- * information they carry. A control that looks live and does nothing is worse
+ * product has no endpoint for, its `Portrait`'s upload button has no upload
+ * behind it (the plate itself is `CharacterPortrait.tsx`), and spending a spell
+ * pip has no drawn place to put the result, so those three stay the information
+ * they carry. A control that looks live and does nothing is worse
  * than an absent one, and that has not changed; what changed is which ones are
  * live.
  *
  * `Portrait` and `Seat` are two different plates in the delivery: a character's
- * and a person's. Only the first is here, because these two screens draw
- * characters. `party/RosterCard.tsx` is where the other one lives.
+ * and a person's. The first is `CharacterPortrait.tsx`, because these two
+ * screens draw characters. `party/RosterCard.tsx` is where the other one lives.
  */
 
 /**
@@ -65,36 +66,6 @@ export function SheetSection({
       </div>
       <div className="p-card">{children}</div>
     </Card>
-  );
-}
-
-/**
- * The lettered plate. There is no art in the system and none on the row, so this
- * is honest about being a placeholder — and, unlike the drawing, it carries no
- * upload button, because there is nothing behind one.
- */
-export function Portrait({
-  name,
-  size = "sm",
-}: {
-  readonly name: string;
-  /** `xs` is the 40px plate of the narrow sheet's summary header. */
-  readonly size?: "xs" | "sm" | "lg";
-}) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        "flex shrink-0 items-center justify-center border border-strong bg-accent-soft font-display leading-none font-semibold text-accent-ink",
-        size === "lg"
-          ? "size-16 text-display-m"
-          : size === "xs"
-            ? "size-10 text-title"
-            : "size-13 text-display-s",
-      )}
-    >
-      {initialsOf(name)}
-    </div>
   );
 }
 

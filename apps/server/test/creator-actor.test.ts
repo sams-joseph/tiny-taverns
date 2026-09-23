@@ -682,7 +682,10 @@ describe("the scope, counted", () => {
     // finding, reading turns, appending and building prompt context for the
     // shared live-session channel. They deliberately read through active table
     // presence, not a creator proof; only opening the channel is creator-gated.
-    expect(ungated).toBe(154);
+    // `PortraitRecords.start` is the one hundred and fifty-fifth: it records
+    // the owner's own character's portrait through `ownCharacter`, and a
+    // character is in no campaign, so there is nothing for a proof to prove.
+    expect(ungated).toBe(155);
   });
 });
 

@@ -14,13 +14,14 @@ import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
 import { AddToCampaignDialog } from "./AddToCampaignDialog";
+import { CharacterPortrait } from "./CharacterPortrait";
+import { usePortraitPolling } from "./portraitPolling";
 import { campaignsAvailableToJoin } from "./join";
 import { myCharactersAtom, type MyCharactersView } from "./load";
 import { NewCharacterAction } from "./NewCharacterAction";
 import {
   hitPoints,
   hpFraction,
-  initialsOf,
   initiativeOf,
   lineageLine,
   passivePerceptionOf,
@@ -150,17 +151,17 @@ function CharacterCard({
 
   return (
     <Card className="relative h-full overflow-hidden transition-control hover:border-strong has-[a:focus-visible]:ring-focus">
-      <div className="relative flex aspect-4/3 items-center justify-center border-b border-hairline bg-surface-sunken">
-        {/* A monogram, not art: there is no asset store, so no upload either. */}
-        <span
-          aria-hidden="true"
-          className="font-display text-display-xl leading-none font-semibold text-faint"
-        >
-          {initialsOf(character.name)}
-        </span>
+      <div className="relative aspect-4/3 overflow-hidden border-b border-hairline bg-surface-sunken">
+        {/* The monogram, with Hob's portrait over it once there is one. */}
+        <CharacterPortrait name={character.name} portrait={character.portrait} size="card" />
         {character.level !== null && (
           <Badge variant="secondary" className="absolute top-3 left-3">
             Level {character.level}
+          </Badge>
+        )}
+        {character.portraitPending && (
+          <Badge variant="outline" role="status" className="absolute bottom-3 left-3">
+            Hob is drawing…
           </Badge>
         )}
       </div>
@@ -279,6 +280,11 @@ function NothingYet({ view }: { readonly view: MyCharactersView }) {
 export function MyCharactersScreen() {
   const [resource, reload] = useApiAtom(myCharactersAtom);
   const view = resource.state === "ready" ? resource.value : undefined;
+  // While Hob draws any of them, re-read until the portraits land.
+  usePortraitPolling(
+    view?.characters.some((owned) => owned.character.portraitPending) === true,
+    reload,
+  );
 
   return (
     <>

@@ -438,6 +438,31 @@ export type CharacterSheet = typeof CharacterSheet.Type;
  */
 export const emptyCharacterSheet: CharacterSheet = { notes: "", abilities: [], traits: [] };
 
+/**
+ * Where a character's portrait loads from: three sizes of one WebP, each a
+ * short-lived signed path on this API (`/portraits/:portraitId/:variant?e=…&s=…`).
+ *
+ * **A path, not an absolute URL.** The server does not know the origin a
+ * browser reached it by; the client resolves each path against the API base
+ * URL it already sends every request to.
+ *
+ * **Minted only inside a read that already passed a visibility predicate** —
+ * the owner's `ownCharacter`, or a seat the reader may see — so the URL is that
+ * SQL decision carried forward for a day or so, never a second access path. An
+ * `<img>` cannot send the bearer header, which is why the signature is in the
+ * query string rather than a credential. A bad or expired one is `NotFound`.
+ */
+export class CharacterPortraitImages extends Schema.Class<CharacterPortraitImages>(
+  "CharacterPortraitImages",
+)({
+  /** 160 px square, for the 40 and 64 px plates at 2x. */
+  thumbUrl: Schema.String,
+  /** 640 px square, for the *My characters* card. */
+  cardUrl: Schema.String,
+  /** 1024 px square. */
+  fullUrl: Schema.String,
+}) {}
+
 export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
   /**
@@ -541,6 +566,20 @@ export class Character extends Schema.Class<Character>("Character")({
    * top-level character has no table.
    */
   version: Schema.Int,
+  /**
+   * The portrait Hob drew once, after the character was made — or `null`:
+   * none was drawn (portraits are off, there was nothing to draw from, the
+   * daily cap was reached, or the provider refused or failed), it is still
+   * being drawn, or this server cannot sign image URLs. Every `null` renders
+   * the same lettered plate; the reason is the server's record, not the wire's.
+   */
+  portrait: Schema.NullOr(CharacterPortraitImages),
+  /**
+   * The portrait is being drawn right now. A screen shows a quiet drawing state
+   * and re-reads the character until this is `false`; it never becomes `true`
+   * again for the same character, because a portrait is drawn once.
+   */
+  portraitPending: Schema.Boolean,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,

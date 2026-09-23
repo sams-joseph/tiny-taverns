@@ -1,6 +1,7 @@
 import { Badge, Button, Icon, sectionHeadingVariants } from "@taverns/ui";
 import type { CharacterProposal } from "./draft";
-import { Portrait, SheetSection } from "./SheetParts";
+import { CharacterPortrait } from "./CharacterPortrait";
+import { SheetSection } from "./SheetParts";
 import { lineageLine } from "./sheet";
 import { AbilityCell } from "./SheetParts";
 
@@ -59,7 +60,7 @@ export function DraftCard({
     <div className="flex min-w-0 flex-col gap-6">
       <SheetSection title="Who they are">
         <div className="flex items-start gap-3.5 pb-5">
-          <Portrait name={draft.name} size="lg" />
+          <CharacterPortrait name={draft.name} portrait={null} size="lg" />
           <div className="min-w-0 flex-1">
             <div className={sectionHeadingVariants({ size: "display" })}>{draft.name}</div>
             {/* The half-line, as the sheet's own `descriptor` will read it.

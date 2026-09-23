@@ -783,8 +783,8 @@ class CampaignInvitesGroup extends HttpApiGroup.make("campaignInvites")
 /**
  * What the holder of an invitation can ask before they have an account.
  *
- * **The only group in the product with no `Authorization` middleware except
- * `health`**, and the disclosure it makes is deliberate and bounded: the
+ * **One of the three groups with no `Authorization` middleware** (with
+ * `health` and `portraits`), and the disclosure it makes is deliberate and bounded: the
  * campaign's name, the DM's name and when the invitation dies, to whoever holds
  * a live token and nobody else. It exists so the step between a friend at the
  * table and the read-aloud text is a page that says what signing in gets you,
@@ -798,6 +798,32 @@ class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
   HttpApiEndpoint.post("read", "/invites/preview", {
     payload: InviteToken,
     success: InvitePreview,
+    error: NotFound,
+  }),
+) {}
+
+/**
+ * A character portrait's bytes — **the third group with no `Authorization`
+ * middleware**, because an `<img>` cannot send a bearer header.
+ *
+ * The capability is the signature instead. `Character.portrait` carries these
+ * paths already signed, and the server mints them only inside a read a SQL
+ * visibility predicate has allowed, so holding a URL means some read let you
+ * see that character within the last day or so. The signature covers the
+ * portrait, the size and the expiry; a forged, altered or expired one is the
+ * same `NotFound` as a portrait that does not exist, and so is a portrait that
+ * is not `ready`.
+ *
+ * Every parameter is a plain string on purpose: a malformed id or a missing
+ * `s` must be that same `NotFound`, not a 400 that says which part was wrong.
+ * The success is WebP bytes with `Cache-Control: private, immutable` until the
+ * expiry, `nosniff` and a `default-src 'none'` CSP.
+ */
+class PortraitsGroup extends HttpApiGroup.make("portraits").add(
+  HttpApiEndpoint.get("image", "/portraits/:portraitId/:variant", {
+    params: { portraitId: Schema.String, variant: Schema.String },
+    query: { e: Schema.optional(Schema.String), s: Schema.optional(Schema.String) },
+    success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
     error: NotFound,
   }),
 ) {}
@@ -2344,6 +2370,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(HealthGroup)
   .add(MeGroup)
   .add(InvitePreviewGroup)
+  .add(PortraitsGroup)
   .add(JoinGroup)
   .add(SharedWorldsGroup)
   .add(SharedWorldHistoryGroup)

@@ -236,6 +236,11 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Options.ts",
       "repo/Party.ts",
       "repo/PlayerTable.ts",
+      // A portrait row copies its owner from the character row the same
+      // transaction read through `ownCharacter`, and the composite key to
+      // `character (id, account_id)` refuses any other; the daily cap counts
+      // by it. Never a caller-supplied account.
+      "repo/Portraits.ts",
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
@@ -936,6 +941,9 @@ describe("a stranger reads nothing", () => {
               'ability_score',
               'account',
               'campaign_member',
+              -- A portrait is read only as a field of the character, through
+              -- the character's own shipped reads; it has no read of its own.
+              'character_portrait',
               'character_resource_request',
               'group_invite',
               'group_member',
@@ -978,6 +986,7 @@ describe("a stranger reads nothing", () => {
               'spell_class',
               'spell_damage_type',
               'spell_subclass',
+              'storage_deletion',
               'weapon_property'
             )
           order by table_name

@@ -8,7 +8,7 @@ The server keeps files (character portraits first) behind one Effect service, `O
 - **Operations**: `put` (bytes and a content type, replacing), `get` (metadata plus a byte stream, or `StorageNotFound`), `head` (metadata or `None`), `delete` (idempotent), `deletePrefix` (idempotent).
 - **`deletePrefix(p)` removes keys under `p/`**, at any depth. It does not remove an object stored at `p` itself, or `p2/…`. S3-style providers must list with the trailing slash to match.
 - **No bucket, region, endpoint or URL appears in the interface.** A provider's configuration is its adapter's business, read in its branch of `storageFromConfig`.
-- **Errors are ours**: `StorageNotFound`, `StorageError` and `StorageUnavailable`. `StorageError.message` names only the operation and the key; provider text goes in `cause`, which is for logs. Nothing in this module is on the wire yet. When a route exposes storage, map these errors to the contract's errors rather than passing them through.
+- **Errors are ours**: `StorageNotFound`, `StorageError` and `StorageUnavailable`. `StorageError.message` names only the operation and the key; provider text goes in `cause`, which is for logs. No storage error reaches the wire: the portrait image route maps `StorageNotFound` to the contract's `NotFound` and lets the other two be a 500.
 
 ## Configuration and the boot line
 
@@ -36,3 +36,10 @@ Every branch logs one line, as hosted sign-in and Hob do (`server.md`, _Env file
 3. **Pass the contract.** Call `objectStorageContract(name, layer)` from `apps/server/test/support/objectStorageContract.ts` and change nothing in it. It builds the layer once and gives each test its own key prefix, so it can run against a real bucket. Behaviour that belongs to one adapter goes in that adapter's own test file. If the adapter cannot meet a contract test, change the interface for every adapter; do not skip the test.
 
 `ObjectStorage.memory` is an in-process adapter that also passes the contract. Use it in tests of code that stores files but is not about storage.
+
+## Key layout
+
+Keys are derived from ids, never from anything a person typed, and never overwritten.
+
+- **Portraits**: `portraits/{accountId}/{characterId}/{portraitId}/` holds `original.png` (the provider's bytes, untouched, so provenance credentials survive), `full.webp` (1024), `card.webp` (640) and `thumb.webp` (160). The prefix is built by `portraitPrefix` in `repo/Portraits.ts` and written to `character_portrait.storage_prefix` at insert; one `deletePrefix` removes every size, and the account segment makes an account-wide purge one more.
+- **Deletion is an outbox**, `storage_deletion`, filled by a trigger when a portrait row is deleted and by a failed or interrupted draw, and drained through `deletePrefix`. A failed drain backs off a minute per attempt. See [Characters](characters.md), _The portrait_.

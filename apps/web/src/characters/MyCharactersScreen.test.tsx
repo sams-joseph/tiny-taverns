@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -10,6 +10,8 @@ import {
   noCharacters,
   noTables,
   onlyDmTables,
+  ownedBrannoc,
+  ownedSorrel,
   oneTable,
   otherCampaignId,
   partySeatAnswer,
@@ -285,5 +287,35 @@ describe("your characters", () => {
     // A normal way to run this app, so it points at the machine token rather
     // than at a sign-in that may not exist here.
     expect(screen.getByText(/pnpm -F server token:issue/)).toBeTruthy();
+  });
+
+  it("says Hob is drawing, re-reads, and lays the portrait over the monogram", async () => {
+    const drawn = {
+      thumbUrl: "/portraits/p1/thumb?e=1&s=t",
+      cardUrl: "/portraits/p1/card?e=1&s=c",
+      fullUrl: "/portraits/p1/full?e=1&s=f",
+    };
+    const pending = {
+      ...ownedBrannoc,
+      character: { ...ownedBrannoc.character, portraitPending: true },
+    };
+    server.routes.set("GET /me/characters", { status: 200, body: [pending, ownedSorrel] });
+    await renderRoster();
+    expect(await screen.findByText("Hob is drawing…")).toBeTruthy();
+    expect(document.querySelector("img[src*='/portraits/']")).toBeNull();
+
+    const ready = {
+      ...ownedBrannoc,
+      character: { ...ownedBrannoc.character, portraitPending: false, portrait: drawn },
+    };
+    server.routes.set("GET /me/characters", { status: 200, body: [ready, ownedSorrel] });
+    // The screen polls on its own; nothing here asks it to.
+    await waitFor(
+      () => expect(document.querySelector("img[src*='/portraits/p1/card']")).not.toBeNull(),
+      { timeout: 5_000 },
+    );
+    expect(screen.queryByText("Hob is drawing…")).toBeNull();
+    // Sorrel has no portrait: still the monogram, no image.
+    expect(document.querySelectorAll("img[src*='/portraits/']")).toHaveLength(1);
   });
 });

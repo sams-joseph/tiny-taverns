@@ -17,6 +17,14 @@ import { classifyFailure, type ApiFailure } from "./failure";
 /** Where the API lives. Vite inlines this at build time; defaults to dev. */
 const baseUrl: string = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3000";
 
+/**
+ * A path the API answered with — a signed portrait URL — made absolute against
+ * the same base every request goes to, joined the way the client joins its
+ * own paths so a base with a path prefix keeps it. The server does not know the origin a
+ * browser reached it by, so it sends paths and this is where they resolve.
+ */
+export const apiUrl = (path: string): string => `${baseUrl.replace(/\/+$/, "")}${path}`;
+
 export type TavernsClient = HttpApiClient.ForApi<typeof TavernsApi>;
 
 export const makeClient = (

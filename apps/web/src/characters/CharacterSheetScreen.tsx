@@ -65,13 +65,14 @@ import {
   slotRows,
   usesNote,
 } from "./sheet";
+import { CharacterPortrait } from "./CharacterPortrait";
+import { usePortraitPolling } from "./portraitPolling";
 import {
   AbilityCell,
   DeathSaveRow,
   HpTrack,
   KeyVal,
   Mark,
-  Portrait,
   SectionSpine,
   SheetSection,
   StatPill,
@@ -1276,7 +1277,7 @@ function IdentityCard({
           onClick={onToggle}
           className="flex w-full cursor-pointer items-center gap-2.75 p-2.75 text-left transition-control focus-visible:outline-none focus-visible:ring-focus @3xl:hidden"
         >
-          <Portrait name={character.name} size="xs" />
+          <CharacterPortrait name={character.name} portrait={character.portrait} size="xs" />
           <div className="min-w-0 flex-1">
             <p className={cn(sectionHeadingVariants(), "truncate")}>{character.name}</p>
             {summary.length > 0 && (
@@ -1301,9 +1302,16 @@ function IdentityCard({
         >
           {/* Wide: the portrait plate and the name over the card. */}
           <div className="hidden items-start gap-3 @3xl:flex">
-            <Portrait name={character.name} size="lg" />
+            <CharacterPortrait name={character.name} portrait={character.portrait} size="lg" />
             <p className={cn(sectionHeadingVariants(), "min-w-0")}>{character.name}</p>
           </div>
+          {character.portraitPending && (
+            // Quiet, and nothing blocks: the sheet stays editable and leaving is
+            // safe, because the drawing happens on the server.
+            <p role="status" className="text-micro leading-body text-muted-foreground">
+              Hob is drawing their portrait…
+            </p>
+          )}
           {(meta.length > 0 || (character.playerName !== null && character.playerName !== "")) && (
             <div>
               {meta.length > 0 && (
@@ -1702,6 +1710,8 @@ export function CharacterSheetScreen() {
   const view = resource.state === "ready" ? resource.value : undefined;
   const owned = view?.characters.find((row) => row.character.id === characterId);
   const character = owned?.character;
+  // While Hob draws, re-read until the portrait lands (or does not).
+  usePortraitPolling(character?.portraitPending === true, reload);
   /**
    * The banner's table is the character's **first** seat — `load.ts` picked the
    * same one to read the live table from, so the name and the numbers cannot

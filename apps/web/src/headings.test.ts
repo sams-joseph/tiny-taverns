@@ -23,11 +23,12 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   // numbers in the display face at `leading-none`, which no heading is.
   "characters/AbilityFields.tsx": 1,
   "characters/CharacterSheetScreen.tsx": 2,
-  "characters/SheetParts.tsx": 4,
+  "characters/SheetParts.tsx": 3,
   "run/RunScreen.tsx": 1,
-  // Monograms: initials on an NPC's plate and on a roster card's portrait.
+  // Monograms: initials on an NPC's plate, and on a character's plate and
+  // roster card, under the portrait when there is one.
   "cast/NpcCard.tsx": 2,
-  "characters/MyCharactersScreen.tsx": 1,
+  "characters/CharacterPortrait.tsx": 2,
   // Prose in the display face: the kit's one decorative line, and a draft's notes.
   "characters/CharacterCreateScreen.tsx": 1,
   "characters/DraftAside.tsx": 1,

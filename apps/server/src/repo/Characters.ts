@@ -25,6 +25,7 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { LiveEvents } from "../live/LiveEvents.js";
+import { PortraitUrls } from "../portraits/PortraitUrls.js";
 import { SqlClient } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
@@ -90,11 +91,47 @@ interface CharacterRow extends ProvenanceColumns {
   readonly version: number;
   readonly created_at: Date;
   readonly updated_at: Date;
+  /** From {@link portraitColumns}; `null` when the character has no portrait record. */
+  readonly portrait_id: string | null;
+  readonly portrait_state: "generating" | "ready" | "failed" | null;
 }
 
-/** One mapper per table — `repo/Party.ts` imports it rather than restating. */
-export const toCharacter = (row: CharacterRow): Character =>
-  new Character({
+/**
+ * The portrait's two facts beside a character row: `portrait_id` and
+ * `portrait_state`, as scalar subqueries so they fit a `select`, a `returning`
+ * and a column list alike. **Every read that becomes a `Character` names this
+ * fragment** — `toCharacter` dies on a row without it, so a path that forgot is
+ * a failed test rather than a character whose portrait silently vanished.
+ *
+ * @param prefix `"character_"` inside a seat read, whose columns are prefixed.
+ */
+export const portraitColumns = (sql: SqlClient.SqlClient, prefix = "") => sql`
+  (select character_portrait.id from character_portrait
+   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_id`)},
+  (select character_portrait.state from character_portrait
+   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_state`)}
+`;
+
+/**
+ * Signs a ready portrait's image paths; `PortraitUrls.imagesFor`. Absent when a
+ * repository was built without the service (most repository tests), which
+ * mints nothing — the same answer a server with no URL secret gives.
+ */
+export type PortraitSigner = (portraitId: string) => Character["portrait"];
+
+/**
+ * One mapper per table — `repo/Party.ts` imports it rather than restating.
+ *
+ * **It is also the only place a portrait URL is minted**, and that is what
+ * makes portrait visibility exactly character visibility: every read that
+ * returns a character returns it through here, after its own predicate, so
+ * whoever can load the character gets its picture and nobody else gets a URL.
+ */
+export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character => {
+  if (row.portrait_state === undefined) {
+    throw new Error("a character read did not select portraitColumns");
+  }
+  return new Character({
     id: row.id,
     accountId: row.account_id as Character["accountId"],
     name: row.name,
@@ -112,6 +149,11 @@ export const toCharacter = (row: CharacterRow): Character =>
     sheetUrl: row.sheet_url,
     sheet: row.body,
     version: row.version,
+    portrait:
+      row.portrait_state === "ready" && row.portrait_id !== null && sign !== undefined
+        ? sign(row.portrait_id)
+        : null,
+    portraitPending: row.portrait_state === "generating",
     // Not `provenanceOf`: the shared character carries no `visibility` — who
     // at a table may see it is the seat's question now — so the row's inert
     // column must not reach the wire.
@@ -120,6 +162,7 @@ export const toCharacter = (row: CharacterRow): Character =>
     createdAt: DateTime.fromDateUnsafe(row.created_at),
     updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   });
+};
 
 export type { CharacterRow };
 
@@ -438,6 +481,12 @@ export class Characters extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* Effect.serviceOption(LiveEvents);
+      const portraitUrls = yield* Effect.serviceOption(PortraitUrls);
+      const sign = Option.match(portraitUrls, {
+        onNone: () => undefined,
+        onSome: (urls) => urls.imagesFor,
+      });
+      const asCharacter = (row: CharacterRow): Character => toCharacter(row, sign);
 
       const claimRequest = (
         characterId: CharacterId,
@@ -457,7 +506,7 @@ export class Characters extends Context.Service<
 
       const readOwn = (id: CharacterId, actor: Actor): Effect.Effect<CharacterRow, NotFound> =>
         sql<CharacterRow>`
-          select * from character where character.id = ${id} and ${ownCharacter(sql, actor)}
+          select character.*, ${portraitColumns(sql)} from character where character.id = ${id} and ${ownCharacter(sql, actor)}
         `.pipe(
           Effect.orDie,
           Effect.flatMap((rows) =>
@@ -689,7 +738,7 @@ export class Characters extends Context.Service<
           Effect.gen(function* () {
             const actor = yield* CurrentActor;
             const rows = yield* sql<CharacterRow>`
-              select * from character
+              select character.*, ${portraitColumns(sql)} from character
               where ${ownCharacter(sql, actor)}
               order by character.created_at asc, character.id asc
             `;
@@ -706,7 +755,7 @@ export class Characters extends Context.Service<
             return rows.map(
               (row) =>
                 new OwnedCharacter({
-                  character: toCharacter(row),
+                  character: asCharacter(row),
                   seats: seats
                     .filter((seat) => seat.character_id === row.id)
                     .map(
@@ -750,9 +799,9 @@ export class Characters extends Context.Service<
                       ...assistantColumns(from),
                     }),
                   )}
-                  returning *
+                  returning character.*, ${portraitColumns(sql)}
                 `;
-                return toCharacter(rows[0]!);
+                return asCharacter(rows[0]!);
               }),
             ),
           ),
@@ -762,7 +811,7 @@ export class Characters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const before = yield* sql<CharacterRow>`
-                select * from character
+                select character.*, ${portraitColumns(sql)} from character
                 where character.id = ${id} and ${ownCharacter(sql, actor)}
               `;
               if (before.length === 0) return yield* new NotFound({ resource: "character", id });
@@ -815,7 +864,7 @@ export class Characters extends Context.Service<
                       ? sql`true`
                       : sql`character.version = ${patch.expectedVersion}`
                   }
-                returning *
+                returning character.*, ${portraitColumns(sql)}
               `;
               if (rows.length === 0) {
                 if (patch.expectedVersion !== undefined) {
@@ -829,7 +878,7 @@ export class Characters extends Context.Service<
                 }
                 return yield* new NotFound({ resource: "character", id });
               }
-              return toCharacter(rows[0]!);
+              return asCharacter(rows[0]!);
             }),
           ),
 
@@ -843,7 +892,7 @@ export class Characters extends Context.Service<
                     yield* readOwn(id, actor);
                     const claimed = yield* claimRequest(id, payload.requestId);
                     if (!claimed) {
-                      return { character: toCharacter(yield* readOwn(id, actor)), sessions: [] };
+                      return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
                     }
 
                     const rows = yield* sql<CharacterRow>`
@@ -870,7 +919,7 @@ export class Characters extends Context.Service<
                           updated_at = now()
                       from located
                       where character.id = located.id
-                      returning character.*
+                      returning character.*, ${portraitColumns(sql)}
                     `;
                     if (rows.length === 0) return yield* resourceMissing(payload.resourceId);
                     const sessions = yield* openSeatSessions(id, actor);
@@ -880,7 +929,7 @@ export class Characters extends Context.Service<
                       { resourceId: payload.resourceId, amount: payload.amount },
                       payload.requestId,
                     );
-                    return { character: toCharacter(rows[0]!), sessions };
+                    return { character: asCharacter(rows[0]!), sessions };
                   }),
                 )
                 .pipe(
@@ -902,7 +951,7 @@ export class Characters extends Context.Service<
                     if (liveFight !== undefined) return yield* restWhileFighting(liveFight);
                     const claimed = yield* claimRequest(id, payload.requestId);
                     if (!claimed) {
-                      return { character: toCharacter(yield* readOwn(id, actor)), sessions: [] };
+                      return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
                     }
 
                     const resources = before.body.resources ?? [];
@@ -942,7 +991,7 @@ export class Characters extends Context.Service<
                           updated_at = now()
                       where character.id = ${id}
                         and ${ownCharacter(sql, actor)}
-                      returning *
+                      returning character.*, ${portraitColumns(sql)}
                     `;
                     const sessions = yield* openSeatSessions(id, actor);
                     yield* appendTouched(
@@ -951,7 +1000,7 @@ export class Characters extends Context.Service<
                       { rest: payload.kind, hitDiceSpent, healing },
                       payload.requestId,
                     );
-                    return { character: toCharacter(rows[0]!), sessions };
+                    return { character: asCharacter(rows[0]!), sessions };
                   }),
                 )
                 .pipe(
