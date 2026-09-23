@@ -579,14 +579,25 @@ describe("when there is no cover", () => {
 
 describe("deleting a campaign", () => {
   it("queues its cover's files through the outbox, and the drain removes them", async () => {
-    // The product never deletes a campaign — it archives — so the row goes the
-    // way any future delete or cascade would take it.
+    // Through the creator's permanent delete, the one product path that
+    // deletes a campaign row.
     const campaign = await standalone(jo, "Brief Candle");
     await settled();
     const record = (await recordOf(campaign.id))!;
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(true);
+    const spent = () =>
+      sql(
+        (sql) => sql<{ readonly count: number }>`
+          select count(*)::int as count from image_spend where account_id = ${record.account_id}
+        `,
+      ).then((rows) => rows[0]!.count);
+    const spentBefore = await spent();
 
-    await sql((sql) => sql`delete from campaign where id = ${campaign.id}`);
+    await as(jo.token, (client) =>
+      client.campaigns.deletePermanently({ params: { campaignId: campaign.id } }),
+    );
+    // The day's budget is a ledger the delete does not touch.
+    expect(await spent()).toBe(spentBefore);
     expect(await recordOf(campaign.id)).toBeUndefined();
     await run(Effect.flatMap(HobImages, (worker) => worker.drainDeletions));
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);

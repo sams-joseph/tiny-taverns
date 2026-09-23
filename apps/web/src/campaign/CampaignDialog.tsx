@@ -7,13 +7,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Icon,
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
+import { membershipsAtom } from "./load";
 
 /**
  * The campaign's own settings — and the one control the whole player half of
@@ -51,9 +54,13 @@ import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
  * `session/finish.ts`, and a text field pointing at a session is a second
  * answer to a question the server settles with a constraint.
  *
- * Archiving is absent too: a campaign is someone's two years of Thursday
- * nights, `campaigns.archive` is the soft delete for it, and putting that
- * behind the same button as "rename it" is how it gets pressed by accident.
+ * Its foot names the campaign's three bigger acts (its Shared World,
+ * archiving, deleting) and hands each to its own dialog in `CampaignChrome`
+ * rather than doing any of them here. A campaign is someone's two years of
+ * Thursday nights, and putting a delete behind the same *Save changes* as
+ * "rename it" is how it gets pressed by accident; a separate confirmation that
+ * names the campaign is what makes the press deliberate. These live inside the
+ * campaign and nowhere on the campaign list.
  */
 
 /** Matches `CampaignUpdate.playerCount`, so the sentence beats the schema to it. */
@@ -63,12 +70,22 @@ export function CampaignDialog({
   campaign,
   onClose,
   onSaved,
+  onOpen,
 }: {
   readonly campaign: Campaign;
   readonly onClose: () => void;
   /** Re-reads the view: the name, the subtitle and the badge all move. */
   readonly onSaved: () => void;
+  /** Swap this dialog for one of the campaign's bigger acts. */
+  readonly onOpen: (what: "shared-world" | "archive" | "delete") => void;
 }) {
+  // Which Shared World, if any: the membership row names an explicit world and
+  // is null for a standalone campaign, whose hidden context is not a world.
+  const [memberships] = useApiAtom(membershipsAtom);
+  const world =
+    memberships.state === "ready"
+      ? (memberships.value.find((row) => row.campaign.id === campaign.id)?.sharedWorld ?? null)
+      : undefined;
   const [name, setName] = useState(campaign.name);
   const [partyName, setPartyName] = useState(campaign.partyName ?? "");
   const [description, setDescription] = useState(campaign.description ?? "");
@@ -202,6 +219,62 @@ export function CampaignDialog({
             shared="Your players can reach this campaign — and then see whatever inside it you have shared, and nothing else."
             hidden="This campaign is yours alone. Nothing in it reaches a player, however you have set a single note or encounter."
           />
+
+          {world !== undefined && (
+            <div className="flex flex-col gap-1.5 border-t border-hairline pt-4">
+              <span className="text-body-s leading-body font-semibold text-heading">
+                Shared World
+              </span>
+              <span className="text-caption leading-body text-muted-foreground">
+                {world === null
+                  ? "Standalone. Connect it to a Shared World to share a history with other campaigns."
+                  : `Part of ${world.name}.`}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-start"
+                disabled={busy}
+                onClick={() => onOpen("shared-world")}
+              >
+                <Icon name="map" size={14} />
+                {world === null ? "Connect to Shared World" : "Change Shared World"}
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5 border-t border-hairline pt-4">
+            <span className="text-body-s leading-body font-semibold text-heading">
+              Archive or delete
+            </span>
+            <span className="text-caption leading-body text-muted-foreground">
+              Archiving takes it off your list and keeps everything, and you can restore it.
+              Deleting removes it for good; its players keep their characters.
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {campaign.archivedAt === null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onOpen("archive")}
+                >
+                  <Icon name="archive" size={14} />
+                  Archive campaign
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-danger"
+                disabled={busy}
+                onClick={() => onOpen("delete")}
+              >
+                <Icon name="trash-2" size={14} />
+                Delete permanently
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* In the footer, beside the button that failed — see `EncounterDialog`. */}

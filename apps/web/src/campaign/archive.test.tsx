@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -10,27 +10,25 @@ import {
   installStubServer,
   mintingSession,
   renderCampaigns,
+  renderScreen,
   renderSharedWorld,
 } from "./campaign.fixtures";
 
 /**
- * Taking a campaign off the list, and bringing it back — from the group's
- * directory, where a campaign's card lives now.
+ * Taking a campaign off the list, and bringing it back. The archive lives
+ * inside the campaign (its Overview's actions menu, and its settings dialog);
+ * the lists' cards carry no campaign controls, and the shelf on the list is
+ * the way back.
  *
- * The captain asked to *delete* a campaign and this product archives one — so
- * what is under test is as much the **words** as the wire: a confirmation that
+ * What is under test is as much the **words** as the wire: a confirmation that
  * names the campaign, copy that says it is kept, and a way back that is one
- * press. A test that only checked the `DELETE` would pass against a screen
- * that had lost every one of those.
+ * press. Three properties would rot silently, and each has a test:
  *
- * Three properties are the ones that would rot silently, and each has a test:
- *
- * - **the shelf is a second URL, not a filter** — `GET /me/campaigns` is asked
+ * - **the shelf is a second URL, not a filter**: `GET /me/campaigns` is asked
  *   for the live list and nothing about archiving changes it;
- * - **archiving is the creator's** — a card for a table this account merely
- *   plays at, or merely shares a group with, carries no control, read off the
- *   card's own `relation`;
- * - **an open night is named, not ended** — the dialog reads the campaign row
+ * - **archiving is the creator's**: no card on any list offers it, and a
+ *   player's projection of the campaign has no actions menu;
+ * - **an open night is named, not ended**: the dialog reads the campaign row
  *   for the pointer, and the client sends one request.
  */
 
@@ -49,22 +47,22 @@ const membership = (relation: "creator" | "player", row: unknown = campaign) => 
   joinedAt: "2026-06-01T10:00:00.000Z",
 });
 
-/** The directory card, re-aimed per test. */
-const card = (relation: "creator" | "player" | "none", archivedAt: string | null = null) => ({
-  id: campaignId,
-  worldId,
-  creatorAccountId: campaign.creatorAccountId,
-  creatorName: "Wren Alderby",
-  name: campaign.name,
-  relation,
-  archivedAt,
-  createdAt: campaign.createdAt,
-});
-
-const aimDirectory = (relation: "creator" | "player" | "none", archivedAt: string | null = null) =>
+/** The Shared World directory, with the fixture campaign's card re-aimed per test. */
+const aimDirectory = (relation: "creator" | "player" | "none") =>
   server.routes.set(`GET /worlds/${worldId}/campaigns`, {
     status: 200,
-    body: [card(relation, archivedAt)],
+    body: [
+      {
+        id: campaignId,
+        worldId,
+        creatorAccountId: campaign.creatorAccountId,
+        creatorName: "Wren Alderby",
+        name: campaign.name,
+        relation,
+        archivedAt: null,
+        createdAt: campaign.createdAt,
+      },
+    ],
   });
 
 const paths = (method: string) =>
@@ -75,22 +73,36 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
+/** The campaign's own archive: its Overview's actions menu. */
+const openArchive = async () => {
+  await renderScreen(mintingSession());
+  await userEvent.click(await screen.findByRole("button", { name: "Campaign actions" }));
+  await userEvent.click(await screen.findByRole("menuitem", { name: "Archive campaign" }));
+};
+
 describe("archiving a campaign", () => {
   it("confirms with the campaign's own name before anything is sent", async () => {
-    await renderSharedWorld(mintingSession());
+    await openArchive();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
-
-    // The name is the check a row-level button cannot make — the DM reads back
-    // the thing they are about to shelve.
+    // The name is the check a bare button cannot make: the DM reads back the
+    // thing they are about to shelve.
     expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
     // …and nothing has been written yet.
     expect(paths("DELETE")).toEqual([]);
   });
 
+  it("is also reached from the campaign's settings", async () => {
+    await renderScreen(mintingSession());
+    await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
+    const settings = await screen.findByRole("dialog", { name: "Campaign settings" });
+    await userEvent.click(within(settings).getByRole("button", { name: "Archive campaign" }));
+
+    expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Campaign settings" })).toBeNull();
+  });
+
   it("says the campaign is kept and can be brought back, because that is the trade", async () => {
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await openArchive();
 
     expect(await screen.findByText(/Nothing in it is deleted/)).toBeTruthy();
     expect(screen.getByText(/bring it back whenever you like/)).toBeTruthy();
@@ -98,12 +110,9 @@ describe("archiving a campaign", () => {
 
   it("names an open night without offering to end one", async () => {
     // The fixture campaign points at session 12, and a finished session cannot
-    // be current — `0006_session_finished.ts` makes that structural — so a
-    // non-null pointer is exactly "there is a night open here". The dialog
-    // reads the campaign row itself: the card is a deliberate projection and
-    // does not carry the pointer.
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    // be current (`0006_session_finished.ts`), so a non-null pointer is exactly
+    // "there is a night open here".
+    await openArchive();
 
     expect(await screen.findByText(/A night is still open here/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Archive it" }));
@@ -121,33 +130,28 @@ describe("archiving a campaign", () => {
       body: { ...campaign, currentSessionId: null },
     });
 
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await openArchive();
 
     expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
     expect(screen.queryByText(/A night is still open here/)).toBeNull();
   });
 
-  it("re-reads the directory, and the card says Archived", async () => {
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
-    // A structural write, so the screen re-reads rather than guessing: the
-    // badge appears because the server says so.
-    aimDirectory("creator", archivedCampaign.archivedAt as string);
+  it("returns to the campaign list, where the shelf is", async () => {
+    await openArchive();
     nothingLive();
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
-    expect(await screen.findByText("Archived")).toBeTruthy();
+    await waitFor(() => expect(globalThis.location.hash).toBe("#/campaigns"));
+    expect(await screen.findByRole("button", { name: /Archived campaigns/ })).toBeTruthy();
   });
 
   it("keeps it when the confirmation is declined", async () => {
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await openArchive();
     await userEvent.click(await screen.findByRole("button", { name: "Keep it here" }));
 
     await waitFor(() => expect(screen.queryByText("Archive The Salt Road?")).toBeNull());
     expect(paths("DELETE")).toEqual([]);
-    expect(screen.getByText("The Salt Road")).toBeTruthy();
+    expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`);
   });
 
   it("stays open and says so when the write is refused", async () => {
@@ -156,12 +160,11 @@ describe("archiving a campaign", () => {
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     });
 
-    await renderSharedWorld(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
+    await openArchive();
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
     // Still on screen, with the failure in the footer rather than below a fold
-    // the DM never scrolls to — the rule `SaveFailure` exists for.
+    // the DM never scrolls to: the rule `SaveFailure` exists for.
     expect(await screen.findByRole("button", { name: "Archive it" })).toBeTruthy();
     expect(screen.getByText("Archive The Salt Road?")).toBeTruthy();
   });
@@ -227,16 +230,22 @@ describe("the shelf", () => {
   });
 });
 
-describe("somebody else's campaign", () => {
-  it("offers no archive control on a card you play at or merely see", async () => {
-    aimDirectory("player");
-    await renderSharedWorld(mintingSession());
-    expect(await screen.findByText("The Salt Road")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+describe("no list offers it", () => {
+  it.each(["creator", "player", "none"] as const)(
+    "draws no archive control on a Shared World's %s card",
+    async (relation) => {
+      aimDirectory(relation);
+      await renderSharedWorld(mintingSession());
+      expect(await screen.findByText("Run by Wren Alderby")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    },
+  );
 
-    aimDirectory("none");
-    await renderSharedWorld(mintingSession());
-    expect(await screen.findByText("Run by Wren Alderby")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+  it("gives a player's projection of the campaign no actions menu", async () => {
+    server.routes.set("GET /me/campaigns", { status: 200, body: [membership("player")] });
+    await renderScreen(mintingSession());
+
+    expect(await screen.findByText("The Salt Road")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Campaign actions" })).toBeNull();
   });
 });

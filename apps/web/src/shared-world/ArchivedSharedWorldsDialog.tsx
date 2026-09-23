@@ -10,12 +10,14 @@ import {
   Icon,
   Loading,
 } from "@taverns/ui";
+import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { DeleteSharedWorldDialog } from "./DeleteSharedWorldDialog";
 
 /** This atom is mounted only with the dialog, so the quiet shelf costs no directory read. */
 const archivedSharedWorldsAtom = apiAtom(
@@ -23,7 +25,18 @@ const archivedSharedWorldsAtom = apiAtom(
   [reads.mySharedWorlds],
 );
 
-function ArchivedSharedWorldRow({ sharedWorld }: { readonly sharedWorld: SharedWorld }) {
+/**
+ * One shelved world, with the owner's two ways off the shelf: *Restore*, or
+ * *Delete permanently* through the same typed-name confirmation the world's
+ * own screen uses (`DeleteSharedWorldDialog`), above this one.
+ */
+function ArchivedSharedWorldRow({
+  sharedWorld,
+  onDelete,
+}: {
+  readonly sharedWorld: SharedWorld;
+  readonly onDelete: () => void;
+}) {
   const { busy, failure, submit } = useMutation();
 
   const restore = async () => {
@@ -43,6 +56,17 @@ function ArchivedSharedWorldRow({ sharedWorld }: { readonly sharedWorld: SharedW
           <Icon name="refresh-cw" size={14} />
           {busy ? "Restoring…" : "Restore"}
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-danger"
+          disabled={busy}
+          aria-label={`Delete permanently: ${sharedWorld.name}`}
+          onClick={onDelete}
+        >
+          <Icon name="trash-2" size={14} />
+          Delete permanently
+        </Button>
       </div>
       <span className="text-caption leading-body text-muted-foreground">
         {sharedWorld.archivedAt === null
@@ -57,6 +81,7 @@ function ArchivedSharedWorldRow({ sharedWorld }: { readonly sharedWorld: SharedW
 export function ArchivedSharedWorldsDialog({ onClose }: { readonly onClose: () => void }) {
   const [resource, retry] = useApiAtom(archivedSharedWorldsAtom);
   const worlds = resource.state === "ready" ? resource.value : undefined;
+  const [deleting, setDeleting] = useState<SharedWorld | undefined>();
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -65,7 +90,8 @@ export function ArchivedSharedWorldsDialog({ onClose }: { readonly onClose: () =
           <DialogTitle>Archived Shared Worlds</DialogTitle>
           <DialogDescription>
             Worlds you own and have taken off the active list. Restoring one brings its Chronicle,
-            Hob memory, members, and Library shares back with it.
+            Hob memory, members, and Library shares back with it; deleting one removes them for
+            good.
           </DialogDescription>
         </DialogHeader>
 
@@ -82,7 +108,11 @@ export function ArchivedSharedWorldsDialog({ onClose }: { readonly onClose: () =
               </span>
             ) : (
               worlds.map((sharedWorld) => (
-                <ArchivedSharedWorldRow key={sharedWorld.id} sharedWorld={sharedWorld} />
+                <ArchivedSharedWorldRow
+                  key={sharedWorld.id}
+                  sharedWorld={sharedWorld}
+                  onDelete={() => setDeleting(sharedWorld)}
+                />
               ))
             ))}
         </div>
@@ -93,6 +123,13 @@ export function ArchivedSharedWorldsDialog({ onClose }: { readonly onClose: () =
           </Button>
         </DialogFooter>
       </DialogContent>
+      {deleting !== undefined && (
+        <DeleteSharedWorldDialog
+          sharedWorld={deleting}
+          onClose={() => setDeleting(undefined)}
+          onDeleted={() => setDeleting(undefined)}
+        />
+      )}
     </Dialog>
   );
 }

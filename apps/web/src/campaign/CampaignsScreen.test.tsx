@@ -10,10 +10,22 @@ import {
   installStubServer,
   mintingSession,
   renderCampaigns,
+  renderScreen,
 } from "./campaign.fixtures";
 
 const server = installStubServer();
 installMemoryStorage();
+
+/**
+ * The campaign's own Shared World control: its Overview's actions menu, since
+ * the campaign list's cards carry no controls.
+ */
+const openWorldControl = async (name: "Connect to Shared World" | "Change Shared World") => {
+  await renderScreen(mintingSession());
+  await userEvent.click(await screen.findByRole("button", { name: "Campaign actions" }));
+  await userEvent.click(await screen.findByRole("menuitem", { name }));
+  return screen.findByRole("dialog");
+};
 
 const openNewCampaign = async () => {
   await userEvent.click(screen.getByRole("button", { name: "New campaign" }));
@@ -44,6 +56,70 @@ describe("the campaign-first home", () => {
     expect(screen.queryByRole("link", { name: "Open" })).toBeNull();
   });
 
+  it("carries no campaign controls on a card, the creator's included", async () => {
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [
+        { campaign, relation: "creator", sharedWorld: null, joinedAt: campaign.createdAt },
+        {
+          campaign: { ...campaign, id: "2b1f2a1e-0000-4000-8000-00000000c0df", name: "Low Tide" },
+          relation: "creator",
+          sharedWorld: sharedWorldDetails,
+          joinedAt: campaign.createdAt,
+        },
+      ],
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    await screen.findByText("Low Tide");
+    const grid = screen
+      .getByRole("link", { name: "The Salt Road" })
+      .closest("[data-slot=card]")!.parentElement!;
+    // The world's name is a link to the world; nothing else on a card is one.
+    expect(
+      within(grid)
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["The Salt Company"]);
+    for (const name of [
+      "Connect to Shared World",
+      "Change Shared World",
+      "Archive",
+      "Delete permanently",
+    ]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.queryByRole("button", { name: /actions/i })).toBeNull();
+  });
+
+  it("shows a campaign's description on its card, and nothing when it has none", async () => {
+    server.routes.set("GET /me/campaigns", {
+      status: 200,
+      body: [
+        {
+          campaign: { ...campaign, description: "Caravans cross the white salt flats." },
+          relation: "creator",
+          sharedWorld: null,
+          joinedAt: campaign.createdAt,
+        },
+        {
+          campaign: { ...campaign, id: "2b1f2a1e-0000-4000-8000-00000000c0df", name: "Low Tide" },
+          relation: "player",
+          sharedWorld: null,
+          joinedAt: campaign.createdAt,
+        },
+      ],
+    });
+    await renderCampaigns("/campaigns", mintingSession());
+
+    const described = (await screen.findByRole("link", { name: "The Salt Road" })).closest(
+      "[data-slot=card]",
+    )!;
+    expect(described.textContent).toContain("Caravans cross the white salt flats.");
+    const bare = screen.getByRole("link", { name: "Low Tide" }).closest("[data-slot=card]")!;
+    expect(bare.querySelector("p")).toBeNull();
+  });
+
   it("promotes a standalone campaign into a named Shared World", async () => {
     server.routes.set("GET /worlds", { status: 200, body: [] });
     server.routes.set("GET /me/campaigns", {
@@ -54,11 +130,7 @@ describe("the campaign-first home", () => {
       status: 200,
       body: { ...sharedWorldDetails, name: "The Roads Between" },
     });
-    await renderCampaigns("/campaigns", mintingSession());
-
-    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
-    // A secondary action inside the linked card acts; it does not open the campaign.
-    expect(globalThis.location.hash).not.toContain(`/campaigns/${campaignId}`);
+    await openWorldControl("Connect to Shared World");
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
@@ -78,9 +150,7 @@ describe("the campaign-first home", () => {
       status: 200,
       body: { ...sharedWorldDetails, name: "The Roads Between" },
     });
-    await renderCampaigns("/campaigns", mintingSession());
-
-    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
+    await openWorldControl("Connect to Shared World");
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
     await userEvent.type(screen.getByLabelText("Shared World description"), "Old trade roads.");
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
@@ -116,9 +186,7 @@ describe("the campaign-first home", () => {
       status: 200,
       body: sharedWorldDetails,
     });
-    await renderCampaigns("/campaigns", mintingSession());
-
-    await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
+    await openWorldControl("Connect to Shared World");
     expect(screen.getByText(/current participants join the Shared World/)).toBeTruthy();
     expect(screen.getByText(/other world members can see its name/)).toBeTruthy();
     expect(
@@ -147,9 +215,7 @@ describe("the campaign-first home", () => {
       status: 200,
       body: standalone,
     });
-    await renderCampaigns("/campaigns", mintingSession());
-
-    await userEvent.click(await screen.findByRole("button", { name: "Change Shared World" }));
+    await openWorldControl("Change Shared World");
     expect(screen.getByText(/campaign keeps its content, invitations, Hob/)).toBeTruthy();
     expect(screen.getByText(/History already accepted there stays there/)).toBeTruthy();
     expect(screen.getByText(/everyone remains a member/)).toBeTruthy();
@@ -189,9 +255,7 @@ describe("the campaign-first home", () => {
       status: 200,
       body: destination,
     });
-    await renderCampaigns("/campaigns", mintingSession());
-
-    await userEvent.click(await screen.findByRole("button", { name: "Change Shared World" }));
+    await openWorldControl("Change Shared World");
     expect(screen.queryByRole("button", { name: "Make standalone" })).toBeNull();
     expect(screen.getByText(/Participants join a new destination/)).toBeTruthy();
     expect(screen.getByText(/everyone remains a member/)).toBeTruthy();

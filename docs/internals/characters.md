@@ -14,7 +14,7 @@ There is no DM-typed character, no assignment endpoint and no re-pointing. A cam
 
 `campaign_character` is the party join. It owns what the campaign knows about a character: when it joined and left, display snapshots (`display_name`, `player_display_name`, which survive later renames), and the campaign-scoped `visibility`. It is never a fork of state. `repo/Party.ts` serves it under `/campaigns/:campaignId/party`: `join` (the owner seats their own character; already seated is the same success), seat `update` (creator only), `leave` (the seat's owner or the creator), and `damage`.
 
-Retiring (`left_at`) is the only removal, and every reach through a seat requires `left_at is null`. `characterSeatedAt` in `repo/visibility.ts` is the campaign-side read: the union is over the seat, so a character is visible at a table exactly when a live seat holding it is.
+Retiring (`left_at`) is the only removal a seat has of its own, and every reach through a seat requires `left_at is null`. A campaign's permanent delete takes its seats with it and leaves every character standing ([Data model](data-model.md), _Deleting a campaign_). `characterSeatedAt` in `repo/visibility.ts` is the campaign-side read: the union is over the seat, so a character is visible at a table exactly when a live seat holding it is.
 
 Damage taken at one table is visible at every other table seating the character, because there is one row. `party.test.ts` and `character-live.test.ts` pin the shared state, the snapshot immutability and the atomic clamp.
 

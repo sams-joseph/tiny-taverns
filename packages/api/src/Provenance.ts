@@ -37,7 +37,10 @@ export type Origin = typeof Origin.Type;
 
 /**
  * The provenance pair carried by every content-bearing row. Enforced in the
- * database too: `origin = 'assistant'` exactly when `assistant_turn_id` is set.
+ * database too: `origin = 'assistant'` exactly when `assistant_turn_id` is set,
+ * with one exception. A Hob-drafted `Character` outlives a deleted campaign
+ * whose conversation drafted it, so its `assistantTurnId` can be null while its
+ * origin stays `assistant` (`0056_character_draft_provenance.ts`).
  */
 export const provenanceFields = {
   origin: Origin,

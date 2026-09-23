@@ -572,14 +572,25 @@ describe("when there is no cover", () => {
 
 describe("deleting a Shared World", () => {
   it("queues its cover's files through the outbox, and the drain removes them", async () => {
-    // The product never deletes a Shared World — it archives one — so the row
-    // goes the way any future delete or cascade would take it.
+    // Through the owner's permanent delete, the one product path that deletes
+    // an explicit world's row.
     const world = await found(jo, "Brief Candle");
     await settled();
     const record = (await recordOf(world.id))!;
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(true);
+    const spent = () =>
+      sql(
+        (sql) => sql<{ readonly count: number }>`
+          select count(*)::int as count from image_spend where account_id = ${record.account_id}
+        `,
+      ).then((rows) => rows[0]!.count);
+    const spentBefore = await spent();
 
-    await sql((sql) => sql`delete from play_group where id = ${world.id}`);
+    await as(jo.token, (client) =>
+      client.sharedWorlds.deletePermanently({ params: { worldId: world.id } }),
+    );
+    // The day's budget is a ledger the delete does not touch.
+    expect(await spent()).toBe(spentBefore);
     expect(await recordOf(world.id)).toBeUndefined();
     await run(Effect.flatMap(HobImages, (worker) => worker.drainDeletions));
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);

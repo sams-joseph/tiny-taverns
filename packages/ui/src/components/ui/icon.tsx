@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  Archive,
   ArrowBigUpDash,
   ArrowRight,
   ArrowUp,
@@ -25,6 +26,7 @@ import {
   Dice6,
   Dices,
   Droplet,
+  Ellipsis,
   EyeOff,
   Flag,
   Flame,
@@ -132,9 +134,12 @@ import {
  *
  * `arrow-up-down` is named by a captain's request rather than a kit delivery —
  * the sort control became an icon-button dropdown (2026-09-03), and no delivered
- * surface had ever drawn a sort glyph to copy.
+ * surface had ever drawn a sort glyph to copy. `ellipsis` and `archive` are the
+ * same kind of request (2026-09-23): the overflow button that carries a card's
+ * archive and delete, and the archive item in it.
  */
 export const icons = {
+  archive: Archive,
   "arrow-big-up-dash": ArrowBigUpDash,
   "arrow-right": ArrowRight,
   "arrow-up": ArrowUp,
@@ -159,6 +164,7 @@ export const icons = {
   "dice-6": Dice6,
   dices: Dices,
   droplet: Droplet,
+  ellipsis: Ellipsis,
   "eye-off": EyeOff,
   flag: Flag,
   flame: Flame,

@@ -57,12 +57,13 @@ Two routes are exempt, checked by path before the credential so neither waits on
 ## The shape every screen copies
 
 - One `Resource` per screen with three states, and as many atoms underneath as writes want to refresh independently ([Web data](web-data.md)).
-- Every creator campaign destination wears `campaign/CampaignChrome.tsx`: its bar, and the campaign-wide dialogs (settings, invites, finishing the night). A screen needing more passes an `extra` atom, combined with the view through `AsyncResult.all`, rather than opening a second resource; `CampaignChromeSlots` has no `reload`. A resource that re-runs per keystroke (the Chronicle's search) stays its own so it cannot blank the frame.
+- Every creator campaign destination wears `campaign/CampaignChrome.tsx`: its bar, and the campaign-wide dialogs (settings, invites, finishing the night, and its Shared World, archive and delete). A screen needing more passes an `extra` atom, combined with the view through `AsyncResult.all`, rather than opening a second resource; `CampaignChromeSlots` has no `reload`. A resource that re-runs per keystroke (the Chronicle's search) stays its own so it cannot blank the frame.
 - `useCampaignAct` (`campaign/act.tsx`) computes the campaign's press once, asking the session and the run separately: a live run, no session, or a night open with nothing on the table. The run is undefined in the last case too, which is what a two-way branch gets wrong. The per-screen bar and the Overview's card both call it; on the fight it would send you back to, the press is absent. Opening and finishing a night go through `session/start.ts` and `session/finish.ts`; see [Live session](live-session.md).
 - Do not render a field the API does not have; a stubbed `0` is worse than an absent line. Layout that depends on a column's width uses a container query, never a viewport breakpoint. `shell/ShellLayout.test.tsx` greps the shell for one and fails; what is left elsewhere is a dialog's `sm:max-w-*` and the gallery.
 - `Button` rendering an `<a>` needs `nativeButton={false}`; the accessible role stays `button`, so a test finds a button and reads its `href`.
 - jsdom here has no `localStorage` at all. Readers tolerate `undefined` (`storage()` in `auth/credential.ts`); a test that needs one installs it.
 - Archiving is one column and the archived shelf is a second URL, not a query parameter. `apps/web` never re-filters `archivedAt`; the affordances are read off the membership's `relation`.
+- A campaign card on a list opens the campaign and carries no campaign controls; its Shared World, archive and delete are inside the campaign. A card whose owner has commands gets `ui/ActionsMenu.tsx`, an overflow button that `<Card linked>` lifts above the link overlay. A permanent delete is armed by typing the name (`ui/confirmName.tsx`, `ui/confirmsName.ts`), one gate for both kinds.
 
 ## Forms and authoring traps
 

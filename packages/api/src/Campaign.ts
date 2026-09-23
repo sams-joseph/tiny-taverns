@@ -65,7 +65,12 @@ export class Campaign extends Schema.Class<Campaign>("Campaign")({
    * is drawn once.
    */
   imagePending: Schema.Boolean,
-  /** Campaigns are never deleted — two years of Thursday nights — only archived. */
+  /**
+   * Set while the campaign is on its creator's archive shelf. Archiving is the
+   * gentle default, because a campaign is two years of Thursday nights; the
+   * creator's permanent delete (`campaigns.deletePermanently`) is a separate,
+   * named act.
+   */
   archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,

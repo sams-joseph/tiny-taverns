@@ -111,6 +111,40 @@ export const admitToGroup = (
     `,
   );
 
+/**
+ * Gives a campaign a fresh hidden context of its creator's and moves it there.
+ * The context is founded, every live participant is admitted, and the campaign
+ * is repointed; the `on update cascade` keys carry memberships, seats and
+ * invitations along (`0053_campaign_move_keys.ts`). Membership of the context
+ * it leaves is not revoked.
+ *
+ * The caller holds the campaign's row lock. `Campaigns.disconnectSharedWorld`
+ * and `Groups.deletePermanently` both call this, so a table leaves a Shared
+ * World the same way whoever sends it.
+ */
+export const moveToOwnContext = (
+  sql: SqlClient.SqlClient,
+  campaign: {
+    readonly id: CampaignId;
+    readonly group_id: SharedWorldId;
+    readonly creator_account_id: AccountId;
+    readonly name: string;
+  },
+): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    const context = yield* foundGroup(sql, { name: campaign.name }, campaign.creator_account_id);
+    const participants = yield* liveMemberAccountIds(sql, campaign.id);
+    yield* Effect.forEach(participants, (accountId) => admitToGroup(sql, context.id, accountId), {
+      discard: true,
+    });
+    yield* sql`
+      update campaign
+      set group_id = ${context.id}, updated_at = now()
+      where campaign.id = ${campaign.id}
+        and campaign.group_id = ${campaign.group_id}
+    `;
+  });
+
 interface GroupRow {
   readonly id: SharedWorldId;
   readonly owner_account_id: AccountId;
@@ -238,6 +272,8 @@ export class Groups extends Context.Service<
       id: SharedWorldId,
     ) => Effect.Effect<SharedWorld, NotFound | Conflict, CurrentActor>;
     readonly restore: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
+    /** The owner's permanent delete; every campaign in it becomes standalone first. */
+    readonly deletePermanently: (id: SharedWorldId) => Effect.Effect<void, NotFound, CurrentActor>;
     /**
      * The group's roster — every live member's read, unlike a campaign's,
      * because the group is the social container and its roster is what it is.
@@ -528,6 +564,59 @@ export class Groups extends Context.Service<
               `;
               return yield* one(rows, id);
             }),
+          ),
+
+        /**
+         * The world and everything that belongs only to it, in one
+         * transaction; never a campaign.
+         *
+         * Every campaign in it, live or archived and whoever created it, is
+         * moved into a hidden context of its creator's first
+         * (`moveToOwnContext`). The world's delete then cascades what is left:
+         * its memberships, Chronicle and Story So Far, its Hob thread, its
+         * Library shares (instances already minted stand) and its cover, whose
+         * files the `shared_world_image` trigger queues on the storage outbox.
+         *
+         * `groupWritable` is the gate, so it is the owner's act on an explicit
+         * world and `NotFound` for anyone else or for a campaign's hidden
+         * context. It does not test `archived_at`, which is what lets the
+         * archived shelf offer this too. The world row is locked first, the
+         * lock `Campaigns.create` and `archive` take, so no campaign can land
+         * in a world that is going.
+         */
+        deletePermanently: (id) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const worlds = yield* sql<{ readonly id: SharedWorldId }>`
+                  select play_group.id from play_group
+                  where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
+                  for update
+                `;
+                if (worlds.length === 0) {
+                  return yield* new NotFound({ resource: "shared-world", id });
+                }
+
+                const campaigns = yield* sql<{
+                  readonly id: CampaignId;
+                  readonly group_id: SharedWorldId;
+                  readonly creator_account_id: AccountId;
+                  readonly name: string;
+                }>`
+                  select campaign.id, campaign.group_id, campaign.creator_account_id, campaign.name
+                  from campaign
+                  where campaign.group_id = ${id}
+                  order by campaign.created_at
+                  for update
+                `;
+                yield* Effect.forEach(campaigns, (campaign) => moveToOwnContext(sql, campaign), {
+                  discard: true,
+                });
+
+                yield* sql`delete from play_group where play_group.id = ${id}`;
+              }),
+            ),
           ),
 
         members: (id) =>

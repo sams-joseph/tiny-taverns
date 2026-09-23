@@ -1,6 +1,6 @@
 # Shared Worlds
 
-How campaigns relate to the container behind them: the hidden backing context every campaign has, the explicit Shared World a creator can opt into, campaign invitations, the atomic context moves (promote, connect, move, disconnect, archive), the Chronicle and Story So Far, and explicit Library sharing. Read this before touching `apps/server/src/repo/Groups.ts`, `GroupHistory.ts`, `Invites.ts`, `LibraryShares.ts` or anything under `/worlds`. The decision records live in `~/projects/firstmate/data/tav-group-architecture-plan/`.
+How campaigns relate to the container behind them: the hidden backing context every campaign has, the explicit Shared World a creator can opt into, campaign invitations, the atomic context moves (promote, connect, move, disconnect, archive), permanent delete, the Chronicle and Story So Far, and explicit Library sharing. Read this before touching `apps/server/src/repo/Groups.ts`, `GroupHistory.ts`, `Invites.ts`, `LibraryShares.ts` or anything under `/worlds`. The decision records live in `~/projects/firstmate/data/tav-group-architecture-plan/`.
 
 ## Two vocabularies, one table
 
@@ -14,7 +14,7 @@ The migration ledger was rewritten as a clean baseline (`0001_init.ts` in place)
 
 There is no role column anywhere. Owner-ness is `play_group.owner_account_id`; creator-ness is `campaign.creator_account_id`, and the creator is the campaign's one DM. `apps/server/test/schema.test.ts` fails if `campaign_member.role` reappears. The creator proof is `CampaignCreatorActor` (`repo/CreatorActor.ts`), and it carries the campaign and its group, so a proof for one table cannot be spent on another. See [Visibility](visibility.md) for the gate itself.
 
-Owner and creator are different authorities and stay that way: the owner governs the world (rename and describe, archive, Library shares); the creator governs their table (invitations, context moves). `groups.test.ts` pins that neither can do the other's act.
+Owner and creator are different authorities and stay that way: the owner governs the world (rename and describe, archive, delete, Library shares); the creator governs their table (invitations, context moves, archive, delete). `groups.test.ts` pins that neither can do the other's act.
 
 ## Membership is eligibility, not participation
 
@@ -40,6 +40,15 @@ All four live in `repo/Groups.ts` and `repo/Campaigns.ts`, each locking the camp
 Invariants across all of them: campaign ids, content and Hob threads keep their ids; Chronicle entries stay in the world that admitted them with their campaign provenance (the `campaignId` on an entry is provenance, never a join); source Library shares stop being usable and destination shares become usable, while instances already minted stand.
 
 Archiving (`DELETE /worlds/:worldId`) is owner-only and reversible. It succeeds only when the world holds no campaigns at all, archived ones included; otherwise `Conflict`. The archive transaction and campaign creation lock the same world row, so a table cannot race onto a retiring world. Only the world row changes; memberships, Chronicle, threads and shares remain. `GET /worlds/archived` is the owner's restoration shelf, and every active list and destination or share picker excludes archived worlds.
+
+## Permanent delete
+
+Archiving is the reversible default; delete is the named one-way act, owner- or creator-only, live or archived, gated in the web client on typing the name (`ui/confirmName.tsx`, `ui/confirmsName.ts`). Both are single transactions in the repositories and `permanent-delete.test.ts` sweeps every `campaign_id` and `group_id` column in the catalogue afterwards, so a table added later is covered without anyone listing it.
+
+- **A Shared World** (`DELETE /worlds/:worldId/permanent`, `Groups.deletePermanently`): every campaign in it, live or archived and whoever created it, is first moved into a fresh hidden context of its own creator's with its live participants admitted (`moveToOwnContext`, the same helper disconnect uses), so no table goes with somebody else's world. Deleting the `play_group` then cascades its memberships, Chronicle, Story So Far, Hob thread, Library shares (minted instances stand) and cover. It takes the world row lock that campaign creation and archive take. A hidden context is not a world here and answers `NotFound`.
+- **A campaign** (`DELETE /campaigns/:campaignId/permanent`, `Campaigns.deletePermanently`): refused with `Conflict` while `current_session_id` is set, because ending players' night is the table's act, not a side effect. Otherwise `delete from campaign` cascades everything the campaign owns ([Data model](data-model.md), _Deleting a campaign_). A standalone campaign's hidden context goes with it; a Shared World stays, keeps the Chronicle entries it accepted from the campaign with `campaign_id` null, and keeps its members' eligibility.
+
+In the web client a campaign's Shared World moves, archive and delete live inside the campaign, on its Overview's actions menu and in its settings dialog (`campaign/CampaignChrome.tsx`); the campaign list's cards and the Shared World directory's campaign cards carry no campaign controls. A Shared World's archive and delete are on its card's overflow menu for its owner, on its screen and in its settings. Both archived shelves offer _Restore_ and _Delete permanently_.
 
 ## The Chronicle
 

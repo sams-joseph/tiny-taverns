@@ -16,31 +16,25 @@ import { SaveFailure } from "../ui/form";
 import { campaignAtom } from "./load";
 
 /**
- * Taking a campaign off the list — the nearest thing this product has to
- * deleting one, and the dialog exists to say exactly how near.
+ * Taking a campaign off the list, the gentle alternative to deleting it, and
+ * the dialog exists to say exactly how gentle.
  *
- * **A campaign is never deleted.** `packages/api/src/Campaign.ts` has said so
- * since the first migration — *two years of Thursday nights* — and the write
- * behind this button is `DELETE /campaigns/:c`, which stamps `archived_at` and
- * nothing else. So the whole job of this dialog is to make that trade legible in
- * the two seconds a DM spends reading it: the campaign leaves the list, it is
- * kept, and one press brings it back. Saying less would read as a delete;
- * explaining the mechanism would be a lecture. Three sentences and a button
- * whose label is the act.
+ * The write behind this button is `DELETE /campaigns/:c`, which stamps
+ * `archived_at` and nothing else; the permanent delete is a separate act with
+ * its own typed-name confirmation (`DeleteCampaignDialog.tsx`). So the whole
+ * job of this dialog is to make the trade legible in the two seconds a DM
+ * spends reading it: the campaign leaves the list, it is kept, and one press
+ * brings it back. Three sentences and a button whose label is the act.
  *
- * ### Why a dialog rather than a button on the row
+ * ### Why a dialog, and where it is raised
  *
- * `campaign/CampaignDialog.tsx` records the reasoning this inherits: archiving
- * is deliberately not behind the same button as renaming, because a campaign is
- * somebody's two years of Thursday nights and that is how it gets pressed by
- * accident. A confirmation that **names the campaign** is what makes the press
- * deliberate — the DM reads back the thing they are about to shelve, which is
- * the one check a row-level button cannot offer.
- *
- * It is the DM's act and nobody else's: `CampaignsScreen` renders the control
- * only on a row whose `role` is `dm`, and `campaignWritable` refuses the write
- * for anyone else — so a player at a table sees no button and could not spend
- * one if they did.
+ * A confirmation that **names the campaign** is what makes the press
+ * deliberate: the DM reads back the thing they are about to shelve. It is
+ * raised from inside the campaign only (its Overview's actions menu and its
+ * settings dialog, both in `CampaignChrome.tsx`), never from a card on a list,
+ * so it is the creator's act by construction: a player's projection of the
+ * campaign has neither, and `campaignWritable` refuses the write for anyone
+ * else.
  *
  * ### A night in progress is named, not ended
  *
@@ -65,19 +59,17 @@ export function ArchiveDialog({
   onArchived,
 }: {
   /**
-   * The campaign being shelved — the two fields the confirmation needs.
-   * Narrower than `Campaign` so the group directory's card (a deliberate
-   * projection, not the row) can offer the shelf too; whether a night is open
-   * is read from the campaign atom below rather than trusted to the caller.
+   * The campaign being shelved: the two fields the confirmation needs. Whether
+   * a night is open is read from the campaign atom below rather than trusted
+   * to the caller.
    */
   readonly campaign: {
     readonly id: CampaignId;
     readonly name: string;
   };
   /**
-   * Extra reads the caller knows this shelving moves — the group directory's
-   * card, from the group screen. The dialog cannot name it itself: it does not
-   * know the group.
+   * Extra reads the caller knows this shelving moves: the Shared World
+   * directory, whose card says *Archived*.
    */
   readonly alsoInvalidates?: Invalidation;
   readonly onClose: () => void;
@@ -85,9 +77,8 @@ export function ArchiveDialog({
   readonly onArchived: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
-  // Whether a night is open here — the campaign's own row, which the frame has
-  // warm on every campaign screen and which costs the group screen one read
-  // the moment the dialog opens. `null` while it settles, so the line simply
+  // Whether a night is open here: the campaign's own row, which the frame has
+  // warm on every campaign screen. `null` while it settles, so the line simply
   // arrives when the answer does.
   const [row] = useApiAtom(campaignAtom(campaign.id));
   const currentSessionId = row.state === "ready" ? row.value.currentSessionId : null;

@@ -37,9 +37,15 @@ One cost: `on delete set null` is refused on a key containing a generated column
 
 ## Deferred keys, and a failed commit is a defect
 
-`deferrable initially deferred` is the default for any key whose two ends are written in either order or deleted by one cascade: the keys above, `encounter_creature.creature_id` (`0004_bestiary.ts`), and every content table's `assistant_turn_id` (`0010_assistant_conversation.ts`). `delete from campaign` cascades into `creature` and `encounter_creature` in one statement; an immediate `no action` fires before the referencing rows are gone and rejects a legal delete. Deferring moves the check to the end of the transaction, which under autocommit is still the end of that one statement, so a lone `delete from creature` on a roster is still refused.
+`deferrable initially deferred` is the default for any key whose two ends are written in either order or deleted by one cascade: the keys above, `encounter_creature.creature_id` (`0004_bestiary.ts`), and every content table's `assistant_turn_id` (`0010_assistant_conversation.ts`; `character`'s is the exception below). `delete from campaign` cascades into `creature` and `encounter_creature` in one statement; an immediate `no action` fires before the referencing rows are gone and rejects a legal delete. Deferring moves the check to the end of the transaction, which under autocommit is still the end of that one statement, so a lone `delete from creature` on a roster is still refused.
 
 `sql.withTransaction` wraps the commit in `Effect.orDie`, so a deferred constraint failing at COMMIT arrives as a defect: `Effect.result` does not catch it and `Effect.exit` does, while an immediate constraint still fails inside the transaction as a typed `SqlError`. A test asserting a refusal has to know which.
+
+## Deleting a campaign
+
+Every row that belongs to a campaign is keyed to it `on delete cascade`, directly or through its parent, so `Campaigns.deletePermanently` is one `delete from campaign` plus the empty hidden context. The keys that are not cascades decide what outlives it, and each is deliberate: `group_history_entry.campaign_id` empties (the entry is the world's, `0053`), a combatant's `character_id` and every `derived_from` empty, and account-owned rows (characters, Library originals) are only pointed at.
+
+The one survivor that pointed back into the campaign is a character a player kept from a Hob drafting thread at that table: its `assistant_turn_id` named a turn the thread cascade deletes, and under `0010`'s `no action` key the commit died. `0056_character_draft_provenance.ts` makes that one key `on delete set null` and relaxes the check to `assistant_turn_id is null or origin = 'assistant'`: the character still says Hob drafted it and no longer says which turn. Referential actions are not deferred, so the pointer empties inside the same cascade. Every other content table keeps the pinned trail, and `schema.test.ts` still proves a lone turn delete is refused. A new account-owned table that can be accepted from a campaign thread needs the same treatment, which `permanent-delete.test.ts` will show by failing.
 
 ## Nested tables carry no denormalised `campaign_id`
 

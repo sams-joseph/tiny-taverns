@@ -61,8 +61,11 @@ describe("the Shared Worlds list", () => {
     expect(await screen.findByText("The Salt Company")).toBeTruthy();
     // The owner's own sharedWorld says so; a sharedWorld you were invited into would not.
     expect(screen.getByText("Yours")).toBeTruthy();
-    const open = screen.getByRole("button", { name: /Open/ });
-    expect(open.getAttribute("href")).toBe(`/#/worlds/${worldId}`);
+    // The whole card opens the world through the link on its name.
+    expect(screen.getByRole("link", { name: "The Salt Company" }).getAttribute("href")).toBe(
+      `/#/worlds/${worldId}`,
+    );
+    expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
   });
 
   it("puts New Shared World in the bar and no create form in the body", async () => {
@@ -216,7 +219,7 @@ describe("one Shared World's screen", () => {
     await renderSharedWorld(mintingSession());
 
     expect(await screen.findByText("Playing")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Open/ }).getAttribute("href")).toBe(
+    expect(screen.getByRole("link", { name: "The Salt Road" }).getAttribute("href")).toBe(
       `/#/campaigns/${campaignId}`,
     );
   });
