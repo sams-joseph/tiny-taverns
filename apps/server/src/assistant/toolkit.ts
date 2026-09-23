@@ -1,4 +1,5 @@
 import {
+  APPEARANCE_MAX,
   type Ability,
   type AbilityBonus,
   ABILITY_KEYS,
@@ -998,8 +999,10 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
       `${nameSentence("background", "backgrounds", vocabulary.backgrounds)} ` +
       "If the race has a subrace, put that subrace in subrace; put a class specialty " +
       "like circle of the moon in subclass. Rank the " +
-      "six abilities most important first, name up to four skills, and write a " +
-      "short backstory in their own register. Do not give scores, modifiers, hit " +
+      "six abilities most important first, name up to four skills, write a " +
+      "short backstory in their own register, and put one or two sentences on how " +
+      "they look in appearance: age, build, hair, skin, eyes, clothing, one " +
+      "distinguishing mark. Do not give scores, modifiers, hit " +
       "points, armour class or a level — the standard array is applied for you " +
       "and the starting numbers are worked out from the class, race and subrace. Only " +
       "a suggestion: nothing is saved unless the player accepts it. Say one " +
@@ -1069,6 +1072,11 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary) =>
       bond: optionalText(400),
       ideal: optionalText(400),
       flaw: optionalText(400),
+      /**
+       * How they look — the one line a portrait is drawn from verbatim
+       * (`@taverns/api`'s `Portrait.ts`), since the backstory never is.
+       */
+      appearance: optionalText(APPEARANCE_MAX),
       /** Starting kit, as item names. It becomes `sheet.inventory`. */
       kit: optional(
         Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 80))).check(
@@ -2075,6 +2083,7 @@ export const playerHandlersFor = (
       bond,
       ideal,
       flaw,
+      appearance,
       kit,
       cantrips,
       spells,
@@ -2175,6 +2184,7 @@ export const playerHandlersFor = (
         ...(blank(bond) === undefined ? {} : { bond: blank(bond)! }),
         ...(blank(ideal) === undefined ? {} : { ideal: blank(ideal)! }),
         ...(blank(flaw) === undefined ? {} : { flaw: blank(flaw)! }),
+        ...(blank(appearance) === undefined ? {} : { appearance: blank(appearance)! }),
       };
       const modelKit = (kit ?? []).map((item) => item.trim()).filter((item) => item !== "");
 

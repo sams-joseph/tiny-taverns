@@ -60,9 +60,9 @@ A tool bound to a handler that always refuses is still a tool the model spends a
 
 Every parameter is one a small model is good at: labels, a ranking of six ability keys, prose. The server applies the standard array and derives every modifier (`abilitiesFrom`), because score and modifier are both stored strings and must not disagree; a short or duplicated ranking is repaired. Both composers then call `sheetGrantsFor` ([Characters](characters.md)).
 
-Two optional helpers exist. `optional` wraps a schema in `Union([schema, Null, AbsentWord])`, where `AbsentWord` is `Schema.Literals` over `ABSENT_WORDS` (`""`, `null`, `none` in their casings) decoded to null; a literal set rather than a string arm keeps the published enum's grammar, which is safe only because nothing through `optional` is free text. `optionalText` is the permissive arm for prose optionals (`bond`, `ideal`, `flaw`), where "None" might be meant, and the handler treats a blank as not given.
+Two optional helpers exist. `optional` wraps a schema in `Union([schema, Null, AbsentWord])`, where `AbsentWord` is `Schema.Literals` over `ABSENT_WORDS` (`""`, `null`, `none` in their casings) decoded to null; a literal set rather than a string arm keeps the published enum's grammar, which is safe only because nothing through `optional` is free text. `optionalText` is the permissive arm for prose optionals (`bond`, `ideal`, `flaw`, `appearance`), where "None" might be meant, and the handler treats a blank as not given.
 
-The redraft loop is `promptFor`'s `offered()`: a saved `turn.proposal` is rendered back into the next prompt (labels, the ranking rather than six cells, an encounter's `creatureId`s), so "make her a ranger instead" reaches a model that can see the druid it wrote. Accept comes before corrections; after it, every edit is an ordinary owner PATCH.
+The redraft loop is `promptFor`'s `offered()`: a saved `turn.proposal` is rendered back into the next prompt (labels, the ranking rather than six cells, the appearance line, an encounter's `creatureId`s), so "make her a ranger instead" reaches a model that can see the druid it wrote. Accept comes before corrections; after it, every edit is an ordinary owner PATCH.
 
 ### Direct resource spends
 

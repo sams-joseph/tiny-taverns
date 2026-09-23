@@ -316,8 +316,11 @@ export const JournalEntry = Schema.Struct({
 });
 export type JournalEntry = typeof JournalEntry.Type;
 
+/** The bound on `SheetStory.appearance`, shared by the form, Hob's tool and the schema. */
+export const APPEARANCE_MAX = 400;
+
 /**
- * The four lines the Story tab draws beside the backstory.
+ * The lines the Story tab draws beside the backstory.
  *
  * The backstory itself is `notes`, which has held it since `0012` — a second
  * key for the same prose would be two places to look for one paragraph.
@@ -327,6 +330,14 @@ export const SheetStory = Schema.Struct({
   ideal: Schema.optional(Schema.String),
   bond: Schema.optional(Schema.String),
   flaw: Schema.optional(Schema.String),
+  /**
+   * How they look, in a sentence or two — age, build, hair, clothing, a mark.
+   *
+   * Its own key rather than more `notes`, because `notes` is narrative and this
+   * is the one line the portrait prompt reads verbatim (`Portrait.ts`), where a
+   * backstory is deliberately never sent.
+   */
+  appearance: Schema.optional(Schema.String.check(Schema.isMaxLength(APPEARANCE_MAX))),
 });
 export type SheetStory = typeof SheetStory.Type;
 

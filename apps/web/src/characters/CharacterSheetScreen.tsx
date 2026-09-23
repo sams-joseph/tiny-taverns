@@ -692,6 +692,7 @@ function SheetDocument({
   const slots = slotRows(sheet);
   const story = sheet.story;
   const storyLines: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
+    { label: "Appearance", value: story?.appearance },
     { label: "Personality", value: story?.personality },
     { label: "Ideal", value: story?.ideal },
     { label: "Bond", value: story?.bond },

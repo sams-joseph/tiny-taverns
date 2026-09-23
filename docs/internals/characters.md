@@ -79,6 +79,8 @@ The server never nulls a dead `equipmentId`; a line whose row is absent draws as
 
 A field earns a column when something in the product reads it (a filter, a predicate, the seed); everything else is an optional key on `body`, which is why the drawn sheet cost no migration. `Ability` and `Trait` are the bestiary's shapes extended, not a second pair.
 
+`sheet.story.appearance` (at most `APPEARANCE_MAX`, 400 characters) is the one story line both composers write: the form's _Appearance_ box and `proposeCharacter`'s `appearance`, and the Story editor (`BackstoryDialog`) corrects it after. It is its own key rather than more `notes` because it is what a portrait is drawn from. `portraitPromptFor` in `packages/api/src/Portrait.ts` is the one implementation of that prompt, for the server and any screen that says what a portrait reads; it takes subject, appearance, up to two carried lines and the background, and never the name, backstory, bond/ideal/flaw or scores. `portraitHasSubject` is the guard a caller skips generation on.
+
 The abilities and skills editors (`characters/AbilityFields.tsx`, with `abilities.ts` and `skills.ts` as the tested pure halves) follow four rules. The dice are the browser's; the only request is the PATCH. `Ability.score` and `Ability.modifier` are both stored strings, so the modifier is always computed from the score and written in the same object literal; a stale modifier is recomputed, never carried. Saving throws and skill bonuses are not derived, because each needs a proficiency the document does not model. Unknown rows are preserved (a seventh cell or a homebrew skill survives a save from a form that never drew it) and blank rows are not written.
 
 ## `GET /me` and `GET /me/characters`

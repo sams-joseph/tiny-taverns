@@ -219,6 +219,7 @@ describe("a character sheet", () => {
     expect(screen.getByText(/The temple on the salt road/)).toBeTruthy();
     expect(screen.getByText("Session 11")).toBeTruthy();
     expect(screen.getByText("A road is a promise between two towns.")).toBeTruthy();
+    expect(screen.getByText(/a burn scar across the back of one hand/)).toBeTruthy();
 
     // Level ups.
     expect(screen.getByText(/Took the oath at the ferry crossing/)).toBeTruthy();

@@ -557,6 +557,42 @@ describe("editing the backstory", () => {
     carriesNothingRefused();
   });
 
+  it("edits the appearance line and keeps the story lines it does not draw", async () => {
+    await renderSheet();
+    await section("Story");
+    await userEvent.click(screen.getByRole("button", { name: "Edit backstory" }));
+
+    const box = await screen.findByRole("textbox", { name: "Appearance" });
+    await userEvent.clear(box);
+    await userEvent.type(box, "Older now, the beard gone white.");
+    await userEvent.click(screen.getByRole("button", { name: "Save backstory" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const sheet = (sent() as { sheet: Record<string, unknown> }).sheet;
+    expect(sheet["story"]).toEqual({
+      appearance: "Older now, the beard gone white.",
+      personality: "Answers questions slower than people expect.",
+      ideal: "A road is a promise between two towns.",
+      bond: "The temple's road marker.",
+      flaw: "He cannot let a debt stand.",
+    });
+    carriesNothingRefused();
+  });
+
+  it("drops a cleared appearance rather than sending an empty line", async () => {
+    await renderSheet();
+    await section("Story");
+    await userEvent.click(screen.getByRole("button", { name: "Edit backstory" }));
+
+    await userEvent.clear(await screen.findByRole("textbox", { name: "Appearance" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save backstory" }));
+
+    await waitFor(() => expect(sent()).toBeDefined());
+    const story = (sent() as { sheet: { story?: Record<string, unknown> } }).sheet.story;
+    expect(story).not.toHaveProperty("appearance");
+    expect(story?.["bond"]).toBe("The temple's road marker.");
+  });
+
   it("offers the backstory on a sheet nobody has written yet", async () => {
     server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
     await renderSheet(sorrelId);

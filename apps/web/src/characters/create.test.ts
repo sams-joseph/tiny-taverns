@@ -409,6 +409,13 @@ describe("the payload", () => {
     });
   });
 
+  it("writes the appearance line to the sheet's story, trimmed, and nothing when blank", () => {
+    expect(
+      payloadFrom(draftWith({ appearance: "  Tall, a green cloak.  " }), VOCABULARY).sheet?.story,
+    ).toEqual({ appearance: "Tall, a green cloak." });
+    expect(payloadFrom(draftWith({ appearance: "   " }), VOCABULARY)).not.toHaveProperty("sheet");
+  });
+
   it("writes the seeded ability cells into the sheet", () => {
     const payload = payloadFrom(
       seededDraft(

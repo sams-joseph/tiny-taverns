@@ -181,6 +181,7 @@ const fullSheet = {
   ],
   journal: [{ session: 11, text: "The ferryman took the coin and gave back a token." }],
   story: {
+    appearance: "Broad, grey at the temples, a burn scar across the back of one hand.",
     personality: "Answers questions slower than people expect.",
     ideal: "A road is a promise between two towns.",
     bond: "The temple's road marker.",
@@ -537,7 +538,10 @@ export const characterProposal = {
       ],
     },
     inventory: [{ name: "Herbalism kit" }],
-    story: { bond: "The herbal, half in a hand that is not hers." },
+    story: {
+      appearance: "Thirties, wiry, mud to the knees, a sprig of bog myrtle behind one ear.",
+      bond: "The herbal, half in a hand that is not hers.",
+    },
   },
   rationale: [
     "Wisdom is highest because druid casting keys off it, and you described someone who watches.",

@@ -1612,10 +1612,10 @@ const playerPrompt = (campaign: Campaign): string =>
     "",
     "They will describe a person in their own words. Read it, and offer them a whole",
     "character with proposeCharacter — a name, a race, a class, a background, the six abilities",
-    "ranked most important first, up to four skills, starting spells for a caster, a starting kit",
-    "and a short backstory in their register rather than yours. Do not ask clarifying questions",
-    "first: draft something, and let them correct it. Nothing you offer is saved until",
-    "they keep it.",
+    "ranked most important first, up to four skills, starting spells for a caster, a starting kit,",
+    "a line on how they look and a short backstory in their register rather than yours. Do not",
+    "ask clarifying questions first: draft something, and let them correct it. Nothing you",
+    "offer is saved until they keep it.",
     "",
     "Do not write ability scores or modifiers. Rank the six and the standard array is",
     "applied for you. For a caster, call listStartingSpells first and choose spellId",
@@ -1712,6 +1712,10 @@ const offered = (turn: HobTurn): string | undefined => {
         skills === "" ? undefined : `skills ${skills}`,
         identity?.subclass === undefined ? undefined : `subclass ${identity.subclass}`,
         identity?.background === undefined ? undefined : `background ${identity.background}`,
+        // Read back so "make her older" redrafts the look rather than losing it.
+        proposal.sheet.story?.appearance === undefined
+          ? undefined
+          : `appearance: ${proposal.sheet.story.appearance}`,
         proposal.sheet.notes === "" ? undefined : `backstory: ${proposal.sheet.notes}`,
       ].filter((part) => part !== undefined);
       return `[You offered the player a character called "${proposal.name}" — ${kept}: ${parts.join("; ")}]`;
