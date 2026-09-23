@@ -1,5 +1,12 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { Actor, type RaceBody, TavernsApi } from "@taverns/api";
+import {
+  Actor,
+  type Character,
+  emptyCharacterSheet,
+  type RaceBody,
+  type SpellLibraryCreate,
+  TavernsApi,
+} from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Option, Redacted } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
@@ -12,6 +19,7 @@ import { HobImages } from "../src/images/HobImages.js";
 import { ImageUrls } from "../src/images/ImageUrls.js";
 import { ImageRecords } from "../src/repo/Images.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
+import { importSystemSpells } from "../src/spells/import.js";
 import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
@@ -111,6 +119,7 @@ let stranger: Person;
 beforeAll(async () => {
   await run(importSystemEquipment());
   await run(importSystemOptions());
+  await run(importSystemSpells());
   // Signed up and invited nowhere: the account the captain could not make a
   // character with.
   fresh = await person("Ilse");
@@ -298,5 +307,255 @@ describe("creating a character with no campaign", () => {
       client.party.list({ params: { campaignId: campaign.id } }),
     );
     expect(JSON.stringify(party)).toContain("Late Arrival");
+  });
+});
+
+/** A homebrew first-level Wizard spell, for somebody's Library. */
+const wizardSpell = (name: string): SpellLibraryCreate => ({
+  name,
+  level: 1,
+  school: { index: "evocation", name: "Evocation" },
+  castingTime: "1 action",
+  range: "60 feet",
+  duration: "Instantaneous",
+  classes: [{ index: "wizard", name: "Wizard" }],
+});
+
+/** A first-level Wizard with one derived slot spent, and nothing picked yet. */
+const coreWizard = (token: string, name: string) =>
+  as(token, (client) =>
+    client.me.createCoreCharacter({
+      payload: {
+        name,
+        race: "Elf",
+        subrace: "High Elf",
+        className: "Wizard",
+        level: 1,
+        sheet: {
+          ...emptyCharacterSheet,
+          abilities: [{ label: "INT", score: "16", modifier: "+3" }],
+          spellcasting: {
+            ability: "INT",
+            save: "13",
+            attack: "+5",
+            slots: [{ level: 1, used: 1, total: 2 }],
+            known: [],
+          },
+          resources: [
+            {
+              id: "slot:1",
+              name: "1st-level slots",
+              used: 1,
+              max: 2,
+              recharge: "long",
+              derived: true,
+            },
+          ],
+        },
+      },
+    }),
+  );
+
+const spellbookOf = (token: string, character: Character) =>
+  as(token, (client) => client.me.characterSpells({ params: { characterId: character.id } }));
+
+const spellNames = (book: {
+  readonly spells: ReadonlyArray<{ readonly spell: { readonly name: string } }>;
+}) => book.spells.map((row) => row.spell.name);
+
+/** The sheet with one picked, prepared spell and the action a pick writes. */
+const picking = (
+  token: string,
+  character: Character,
+  spell: { readonly id: string; readonly name: string; readonly level: number },
+) =>
+  as(token, (client) =>
+    client.me.updateCharacter({
+      params: { characterId: character.id },
+      payload: {
+        expectedVersion: character.version,
+        sheet: {
+          ...character.sheet,
+          spellcasting: {
+            ...character.sheet.spellcasting,
+            known: [
+              ...(character.sheet.spellcasting?.known ?? []),
+              { name: spell.name, level: spell.level, spellId: spell.id as never, prepared: true },
+            ],
+          },
+          actions: [
+            ...(character.sheet.actions ?? []),
+            {
+              id: `spell:${spell.id}`,
+              name: spell.name,
+              source: "spell",
+              spellId: spell.id as never,
+              resource: "slot:1",
+              derived: true,
+            },
+          ],
+        },
+      },
+    }),
+  );
+
+describe("the sheet of a character at no table", () => {
+  it("offers the core spell list, and nothing anybody authored", async () => {
+    await as(fresh.token, (client) =>
+      client.library.createSpell({ payload: wizardSpell("Bog Light") }),
+    );
+    const wizard = await coreWizard(fresh.token, "Tamsin Reed");
+
+    const book = await spellbookOf(fresh.token, wizard);
+    expect(book).toMatchObject({ className: "Wizard", mode: "spellbook", highestSlotLevel: 1 });
+    expect(book.limits).toMatchObject({ cantripsKnown: 3, spellsKnown: 6, prepared: 4 });
+    expect(spellNames(book)).toContain("Magic Missile");
+    expect(spellNames(book)).toContain("Fire Bolt");
+    expect(spellNames(book)).not.toContain("Fireball");
+    // The account's own Library spell is not the core rules, exactly as its
+    // own Library race is not in the create form's pickers.
+    expect(spellNames(book)).not.toContain("Bog Light");
+    expect(book.spells.every((row) => row.spell.accountId === null)).toBe(true);
+  });
+
+  it("recomputes a level-up against the core rules", async () => {
+    const wizard = await coreWizard(fresh.token, "Hollis Fen");
+    const book = await spellbookOf(fresh.token, wizard);
+    const missile = book.spells.find((row) => row.spell.name === "Magic Missile")!.spell;
+    const picked = await picking(fresh.token, wizard, missile);
+
+    const leveled = await as(fresh.token, (client) =>
+      client.me.updateCharacter({
+        params: { characterId: wizard.id },
+        payload: { expectedVersion: picked.version, level: 5 },
+      }),
+    );
+    expect(leveled.level).toBe(5);
+    expect(leveled.sheet.spellcasting?.known?.map((spell) => spell.name)).toEqual([
+      "Magic Missile",
+    ]);
+    expect(leveled.sheet.resources?.find((resource) => resource.id === "slot:1")).toMatchObject({
+      max: 4,
+      used: 1,
+      derived: true,
+    });
+    expect(leveled.sheet.resources?.find((resource) => resource.id === "slot:3")).toMatchObject({
+      max: 2,
+      derived: true,
+    });
+    expect(leveled.sheet.actions?.find((row) => row.spellId === missile.id)).toMatchObject({
+      name: "Magic Missile",
+      derived: true,
+    });
+    // And the picker follows the level.
+    const higher = await spellbookOf(fresh.token, leveled);
+    expect(higher.highestSlotLevel).toBe(3);
+    expect(spellNames(higher)).toContain("Fireball");
+
+    // Nobody else reaches either half.
+    expect(
+      await refusal(stranger.token, (client) =>
+        client.me.characterSpells({ params: { characterId: wizard.id } }),
+      ),
+    ).toBe("NotFound");
+    expect(
+      await refusal(stranger.token, (client) =>
+        client.me.updateCharacter({ params: { characterId: wizard.id }, payload: { level: 6 } }),
+      ),
+    ).toBe("NotFound");
+  });
+
+  it("checks a subrace edit against the core rules", async () => {
+    const wizard = await coreWizard(fresh.token, "Ivo Marsh");
+    expect(
+      await refusal(fresh.token, (client) =>
+        client.me.updateCharacter({
+          params: { characterId: wizard.id },
+          payload: { subrace: "Hill Dwarf" },
+        }),
+      ),
+    ).toBe("Conflict");
+    // The account's own Library race is not the core rules either.
+    expect(
+      await refusal(fresh.token, (client) =>
+        client.me.updateCharacter({
+          params: { characterId: wizard.id },
+          payload: { race: "Marshborn", subrace: "Reed Marshborn" },
+        }),
+      ),
+    ).toBe("Conflict");
+  });
+
+  it("reads its campaign's vocabulary once seated, homebrew included, and back again when it leaves", async () => {
+    const dm = await person("Wen");
+    const campaign = await as(dm.token, (client) =>
+      campaignVia(client, { name: "The Fen Lights", visibility: "shared" }),
+    );
+    await run(admittedTo(campaign.id, fresh.actor, "Ilse"));
+    const ward = await as(dm.token, (client) =>
+      client.library.createSpell({ payload: wizardSpell("Salt Ward") }),
+    );
+    await as(dm.token, (client) =>
+      client.sharedWorldLibrary.share({
+        params: { worldId: campaign.contextId },
+        payload: { kind: "spell", resourceId: ward.id },
+      }),
+    );
+
+    const wizard = await coreWizard(fresh.token, "Nell Rook");
+    const missile = (await spellbookOf(fresh.token, wizard)).spells.find(
+      (row) => row.spell.name === "Magic Missile",
+    )!.spell;
+    const picked = await picking(fresh.token, wizard, missile);
+    expect(spellNames(await spellbookOf(fresh.token, picked))).not.toContain("Salt Ward");
+
+    const seat = await as(fresh.token, (client) =>
+      client.party.join({
+        params: { campaignId: campaign.id },
+        payload: { characterId: wizard.id },
+      }),
+    );
+
+    // Seating rewrites nothing on the sheet.
+    const seated = (await as(fresh.token, (client) => client.me.characters())).find(
+      (entry) => entry.character.id === wizard.id,
+    )!.character;
+    expect(seated.version).toBe(picked.version);
+    expect(seated.sheet).toEqual(picked.sheet);
+
+    // The campaign's vocabulary: the core rules, the table's shared homebrew,
+    // and the owner's own Library, which every campaign's pickers offer them.
+    const book = await spellbookOf(fresh.token, seated);
+    expect(spellNames(book)).toContain("Magic Missile");
+    expect(spellNames(book)).toContain("Salt Ward");
+    expect(spellNames(book)).toContain("Bog Light");
+
+    // A level-up now recomputes against the table, and the core pick survives
+    // it because the core rules are inside every campaign's vocabulary.
+    const wardPicked = await picking(
+      fresh.token,
+      seated,
+      book.spells.find((row) => row.spell.name === "Salt Ward")!.spell,
+    );
+    const leveled = await as(fresh.token, (client) =>
+      client.me.updateCharacter({
+        params: { characterId: wizard.id },
+        payload: { expectedVersion: wardPicked.version, level: 2 },
+      }),
+    );
+    expect(leveled.sheet.spellcasting?.known?.map((spell) => spell.name)).toEqual([
+      "Magic Missile",
+      "Salt Ward",
+    ]);
+
+    // Leaving the last table hands the sheet back to the core rules.
+    await as(fresh.token, (client) =>
+      client.party.leave({
+        params: { campaignId: campaign.id, campaignCharacterId: seat.seat.id },
+      }),
+    );
+    const after = await spellbookOf(fresh.token, leveled);
+    expect(spellNames(after)).toContain("Magic Missile");
+    expect(spellNames(after)).not.toContain("Salt Ward");
   });
 });

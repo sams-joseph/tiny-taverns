@@ -467,7 +467,10 @@ class MeGroup extends HttpApiGroup.make("me")
     HttpApiEndpoint.get("characters", "/characters", {
       success: Schema.Array(OwnedCharacter),
     }),
-    /** The bounded spell vocabulary for one owned character's picker. */
+    /**
+     * The bounded spell vocabulary for one owned character's picker: every
+     * table it sits at, or the core rules when it sits at none.
+     */
     HttpApiEndpoint.get("characterSpells", "/characters/:characterId/spells", {
       params: { characterId: CharacterId },
       success: CharacterSpellbook,

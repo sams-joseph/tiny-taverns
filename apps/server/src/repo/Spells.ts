@@ -1,6 +1,5 @@
 import {
   type AccountId,
-  type Actor,
   type CampaignId,
   type CharacterSheet,
   type CharacterSpellbook,
@@ -40,10 +39,12 @@ import {
   timeColumn,
 } from "./paging.js";
 import {
+  characterVocabulary,
   libraryRowReadable,
   libraryRowWritable,
   ownCharacter,
-  usableInCampaign,
+  type Vocabulary,
+  vocabularyAt,
 } from "./visibility.js";
 
 interface SpellRow extends ProvenanceColumns {
@@ -240,32 +241,6 @@ interface CharacterClassLevelRow {
   readonly body: { readonly spellcasting?: Record<string, unknown> };
 }
 
-const selectedCampaigns = (
-  sql: SqlClient.SqlClient,
-  characterId: CharacterId,
-  accountId: AccountId,
-): Effect.Effect<ReadonlyArray<CampaignId>> =>
-  sql<{ readonly campaign_id: CampaignId }>`
-    select campaign_id from campaign_character
-    where character_id = ${characterId}
-      and account_id = ${accountId}
-      and left_at is null
-  `.pipe(
-    Effect.map((rows) => rows.map((row) => row.campaign_id)),
-    Effect.orDie,
-  );
-
-const usableForAnySeat = (
-  sql: SqlClient.SqlClient,
-  table: string,
-  seats: ReadonlyArray<CampaignId>,
-  actor: Actor,
-): Statement.Fragment =>
-  sql.or([
-    libraryRowReadable(sql, table, actor),
-    ...seats.map((campaignId) => usableInCampaign(sql, table, campaignId, actor)),
-  ]);
-
 type SpellSourceBody = CharacterSpellRow["body"];
 
 const modifierOf = (body: SpellSourceBody, ability: string | undefined): number => {
@@ -365,7 +340,8 @@ interface SpellbookSource {
   readonly subclassName?: string | undefined;
   readonly level: number;
   readonly body: SpellSourceBody;
-  readonly seats: ReadonlyArray<CampaignId>;
+  /** `vocabularyAt` for a draft's context, `characterVocabulary` for a sheet. */
+  readonly vocabulary: Vocabulary;
 }
 
 const emptySpellRules = (source: SpellbookSource): CharacterSpellRules => ({
@@ -378,10 +354,10 @@ const emptySpellRules = (source: SpellbookSource): CharacterSpellRules => ({
   spells: [],
 });
 
-const spellbookRulesFor = (sql: SqlClient.SqlClient, actor: Actor, source: SpellbookSource) =>
+const spellbookRulesFor = (sql: SqlClient.SqlClient, source: SpellbookSource) =>
   Effect.gen(function* () {
     const className = source.className?.trim();
-    if (className === undefined || className === "" || source.seats.length === 0) {
+    if (className === undefined || className === "") {
       return emptySpellRules(source);
     }
 
@@ -389,7 +365,7 @@ const spellbookRulesFor = (sql: SqlClient.SqlClient, actor: Actor, source: Spell
       select id, name, body from character_option
       where kind = 'class'
         and lower(name) = lower(${className})
-        and ${usableForAnySeat(sql, "character_option", source.seats, actor)}
+        and ${source.vocabulary("character_option")}
       order by case when account_id is null and campaign_id is null then 0 else 1 end,
                created_at asc, id asc
       limit 1
@@ -437,7 +413,7 @@ const spellbookRulesFor = (sql: SqlClient.SqlClient, actor: Actor, source: Spell
     const spellRows = yield* sql<SpellRow>`
       select * from spell
       where ${sql.and([
-        usableForAnySeat(sql, "spell", source.seats, actor),
+        source.vocabulary("spell"),
         sql`(spell.level = 0 or spell.level <= ${highestSlotLevel})`,
         subclassName === undefined || subclassName === ""
           ? matchesClassList(sql, resolvedClassName)
@@ -549,12 +525,12 @@ export class Spells extends Context.Service<
               if (character === undefined)
                 return yield* new NotFound({ resource: "character", id });
               const level = Math.max(1, character.level ?? 1);
-              const rules = yield* spellbookRulesFor(sql, actor, {
+              const rules = yield* spellbookRulesFor(sql, {
                 className: character.class_name ?? undefined,
                 subclassName: character.body.identity?.subclass,
                 level,
                 body: character.body,
-                seats: yield* selectedCampaigns(sql, id, actor.accountId),
+                vocabulary: yield* characterVocabulary(sql, id, actor),
               });
               return { characterId: id, ...rules };
             }),
@@ -564,12 +540,12 @@ export class Spells extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              return yield* spellbookRulesFor(sql, actor, {
+              return yield* spellbookRulesFor(sql, {
                 className: draft.className,
                 subclassName: draft.subclassName,
                 level: Math.max(1, draft.level),
                 body: draft.sheet,
-                seats: [campaignId],
+                vocabulary: vocabularyAt(sql, [campaignId], actor),
               });
             }),
           ),

@@ -39,6 +39,7 @@ import {
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
+  characterVocabulary,
   coreRulesUsable,
   ensureCampaignReadable,
   ownCharacter,
@@ -249,44 +250,17 @@ const staleVersion = (expected: number, actual: number): Conflict =>
   });
 
 /**
- * Resolve a race/subrace pair against one vocabulary — a campaign's
- * (`usableInCampaign`, the predicate `Options.list` fills the pickers from) or
- * the core rules (`coreRulesUsable`, `Options.core`'s), so what is pickable is
- * exactly what validates.
- * Answers whether it resolved rather than failing, so a shared character can
- * be checked against every table it sits at.
- */
-const subraceResolves = (
-  sql: SqlClient.SqlClient,
-  vocabulary: Statement.Fragment,
-  race: string,
-  subrace: string,
-): Effect.Effect<boolean> =>
-  Effect.gen(function* () {
-    const rows = yield* sql<{ readonly name: string; readonly body: RaceBody }>`
-      select name, body from character_option
-      where kind = 'race'
-        and lower(name) = lower(${race})
-        and ${vocabulary}
-    `.pipe(Effect.orDie);
-    return rows.some((row) =>
-      row.body.subraces.some((candidate) => candidate.name.toLowerCase() === subrace.toLowerCase()),
-    );
-  });
-
-/**
- * A named subrace must be contained by the named race in **some** vocabulary
- * the character can be checked against. At creation that is the one the form
- * or Hob used: the campaign context's, or the core rules when there is no
- * campaign. On the shared sheet it is every table the character sits at,
- * because one character crossing campaigns cannot be bound to one table's
- * vocabulary — the continuity decision's own consequence. With no vocabulary to
- * check against, the label is free text, exactly as a race with no vocabulary
- * entry always was.
+ * A named subrace must be contained by the named race in the vocabulary the
+ * character is checked against, so what is pickable is exactly what
+ * validates. At creation that is the one the form or Hob used: the campaign
+ * context's (`usableInCampaign`, `Options.list`'s) or the core rules
+ * (`coreRulesUsable`, `Options.core`'s). On the shared sheet it is
+ * `characterVocabulary`: every table the character sits at, or the core rules
+ * when it sits at none.
  */
 const validateSubrace = (
   sql: SqlClient.SqlClient,
-  vocabularies: ReadonlyArray<Statement.Fragment>,
+  vocabulary: Statement.Fragment,
   race: string | null | undefined,
   subrace: string | null | undefined,
 ): Effect.Effect<void, Conflict> =>
@@ -295,27 +269,20 @@ const validateSubrace = (
     if (namedSubrace === undefined) return;
     const namedRace = present(race);
     if (namedRace === undefined) return yield* missingRaceForSubrace(namedSubrace);
-    if (vocabularies.length === 0) return;
 
-    for (const vocabulary of vocabularies) {
-      if (yield* subraceResolves(sql, vocabulary, namedRace, namedSubrace)) return;
-    }
-    return yield* subraceMismatch(namedRace, namedSubrace);
+    const rows = yield* sql<{ readonly name: string; readonly body: RaceBody }>`
+      select name, body from character_option
+      where kind = 'race'
+        and lower(name) = lower(${namedRace})
+        and ${vocabulary}
+    `.pipe(Effect.orDie);
+    const resolves = rows.some((row) =>
+      row.body.subraces.some(
+        (candidate) => candidate.name.toLowerCase() === namedSubrace.toLowerCase(),
+      ),
+    );
+    if (!resolves) return yield* subraceMismatch(namedRace, namedSubrace);
   });
-
-/** The campaigns a character is currently seated at — the validation targets. */
-const seatedCampaignsOf = (
-  sql: SqlClient.SqlClient,
-  characterId: CharacterId,
-): Effect.Effect<ReadonlyArray<CampaignId>> =>
-  sql<{ readonly campaign_id: CampaignId }>`
-    select campaign_character.campaign_id from campaign_character
-    where campaign_character.character_id = ${characterId}
-      and campaign_character.left_at is null
-  `.pipe(
-    Effect.map((rows) => rows.map((row) => row.campaign_id)),
-    Effect.orDie,
-  );
 
 interface SeatRefRow {
   readonly character_id: CharacterId;
@@ -567,7 +534,7 @@ export class Characters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* gate(actor);
-              yield* validateSubrace(sql, [vocabulary(actor)], payload.race, payload.subrace);
+              yield* validateSubrace(sql, vocabulary(actor), payload.race, payload.subrace);
               const rows = yield* sql<CharacterRow>`
                 insert into character ${sql.insert(
                   defined({
@@ -702,8 +669,8 @@ export class Characters extends Context.Service<
           const level = Math.max(1, nextLevel ?? before.level ?? 1);
           const className = present(nextClassName ?? before.class_name);
           if (className === undefined) return before.body;
-          const seats = yield* seatedCampaignsOf(sql, before.id);
           const actor = yield* CurrentActor;
+          const vocabulary = yield* characterVocabulary(sql, before.id, actor);
           const classRows = yield* sql<{
             readonly id: string;
             readonly name: string;
@@ -712,15 +679,7 @@ export class Characters extends Context.Service<
             select id, name, body from character_option
             where kind = 'class'
               and lower(name) = lower(${className})
-              and ${
-                seats.length === 0
-                  ? sql`false`
-                  : sql.or(
-                      seats.map((campaignId) =>
-                        usableInCampaign(sql, "character_option", campaignId, actor),
-                      ),
-                    )
-              }
+              and ${vocabulary("character_option")}
             order by case when account_id is null and campaign_id is null then 0 else 1 end,
                      created_at asc, id asc
             limit 1
@@ -751,15 +710,7 @@ export class Characters extends Context.Service<
                          spell_range, duration, class_names, subclass_names, body
                   from spell
                   where id = any(${knownIds})
-                    and ${
-                      seats.length === 0
-                        ? sql`false`
-                        : sql.or(
-                            seats.map((campaignId) =>
-                              usableInCampaign(sql, "spell", campaignId, actor),
-                            ),
-                          )
-                    }
+                    and ${vocabulary("spell")}
                     and (level = 0 or level <= ${highest})
                     and ${
                       subclassName === undefined
@@ -915,15 +866,8 @@ export class Characters extends Context.Service<
               const nextRace = patch.race === undefined ? rowBefore.race : patch.race;
               const nextSubrace = patch.subrace === undefined ? rowBefore.subrace : patch.subrace;
               if (nextRace !== rowBefore.race || nextSubrace !== rowBefore.subrace) {
-                const campaigns = yield* seatedCampaignsOf(sql, id);
-                yield* validateSubrace(
-                  sql,
-                  campaigns.map((campaignId) =>
-                    usableInCampaign(sql, "character_option", campaignId, actor),
-                  ),
-                  nextRace,
-                  nextSubrace,
-                );
+                const vocabulary = yield* characterVocabulary(sql, id, actor);
+                yield* validateSubrace(sql, vocabulary("character_option"), nextRace, nextSubrace);
               }
               const recomputedSheet =
                 patch.sheet === undefined &&

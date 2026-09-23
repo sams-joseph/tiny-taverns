@@ -690,6 +690,34 @@ describe("editing spells", () => {
     );
     carriesNothingRefused();
   });
+
+  it("names the core rules when a character at no table has nothing to pick", async () => {
+    server.routes.set("GET /me/characters", {
+      status: 200,
+      body: [{ character: brannoc, seats: [] }],
+    });
+    server.routes.set(`GET /me/characters/${brannocId}/spells`, {
+      status: 200,
+      body: {
+        characterId: brannocId,
+        className: "Paladin",
+        level: 1,
+        highestSlotLevel: 0,
+        mode: "none",
+        limits: {},
+        spells: [],
+      },
+    });
+
+    await renderSheet();
+    await userEvent.click(await screen.findByRole("button", { name: "Edit spells" }));
+    const dialog = await screen.findByRole("dialog", { name: "Choose spells" });
+    expect(
+      within(dialog).getByText(
+        "No spells are available for this class and level in the core rules.",
+      ),
+    ).toBeTruthy();
+  });
 });
 
 describe("adding gear", () => {

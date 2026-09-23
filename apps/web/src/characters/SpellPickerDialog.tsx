@@ -164,7 +164,9 @@ function SpellPickerBody({
         )}
         {book.spells.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
-            No spells are available for this class and level from any table this character is at.
+            {owned.seats.length === 0
+              ? "No spells are available for this class and level in the core rules."
+              : "No spells are available for this class and level from any table this character is at."}
           </p>
         ) : filtered.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
