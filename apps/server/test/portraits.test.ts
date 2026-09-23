@@ -8,7 +8,7 @@ import {
   type HobEvent,
   TavernsApi,
 } from "@taverns/api";
-import { Deferred, Effect, Layer, ManagedRuntime, Option, Redacted, Stream } from "effect";
+import { Context, Deferred, Effect, Layer, ManagedRuntime, Option, Redacted, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
@@ -20,6 +20,7 @@ import { importSystemEquipment } from "../src/equipment/import.js";
 import { imageRequestBody } from "../src/portraits/ImageModel.js";
 import { Portraits } from "../src/portraits/Portraits.js";
 import { PortraitUrls, expiryFor } from "../src/portraits/PortraitUrls.js";
+import { Characters } from "../src/repo/Characters.js";
 import { Party } from "../src/repo/Party.js";
 import { PortraitRecords } from "../src/repo/Portraits.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
@@ -86,8 +87,9 @@ const services = servicesOver(
   Portraits.layer({
     generation: Option.some({
       limits: { perAccountPerDay: PER_ACCOUNT, perDay: 100 },
+      // The production timeout (150 s). A short one here would race every
+      // ordinary draw on a slow runner; the timeout test builds its own worker.
       concurrency: 2,
-      timeout: "400 millis",
     }),
     storageOn: true,
   }).pipe(Layer.provide(images.layer)),
@@ -482,10 +484,55 @@ describe("when there is no portrait", () => {
   });
 
   it("records a draw that outlives the job timeout as timeout", async () => {
-    images.next({ kind: "hang" });
-    const character = await createAs(wren, { name: "Slow", race: "Gnome", className: "Wizard" });
-    await settled();
-    const record = await recordOf(character.id);
+    // A worker of its own, with a timeout a test can wait for, over an endpoint
+    // that never answers — so the outcome cannot depend on how fast the
+    // machine is. The shared worker keeps the production timeout.
+    const hanging = scriptedImages({ apiUrl: OPENAI, model: MODEL });
+    hanging.next({ kind: "hang" });
+    const created = await sql(
+      (sql) => sql<{ readonly id: CharacterId }>`
+        insert into character ${sql.insert({
+          account_id: wren.actor.accountId,
+          name: "Slow",
+          race: "Gnome",
+          class_name: "Wizard",
+        })}
+        returning id
+      `,
+    );
+    const id = created[0]!.id;
+    const character = (await run(
+      Effect.flatMap(Characters, (characters) => characters.mine).pipe(
+        Effect.provideService(CurrentActor, wren.actor),
+      ),
+    ).then((owned) => owned.find((entry) => entry.character.id === id)?.character))!;
+
+    await run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* Layer.build(
+            Portraits.layer({
+              generation: Option.some({
+                limits: { perAccountPerDay: 100, perDay: 100 },
+                concurrency: 1,
+                timeout: "200 millis",
+              }),
+              storageOn: false,
+            }).pipe(
+              Layer.provide([PortraitRecords.layer, ObjectStorage.memory, urls, hanging.layer]),
+            ),
+          );
+          const worker = Context.get(built, Portraits);
+          const answered = yield* worker.drawAfterCreate(character);
+          expect(answered.portraitPending).toBe(true);
+          yield* worker.idle;
+        }),
+      ).pipe(Effect.provideService(CurrentActor, wren.actor)),
+    );
+
+    expect(hanging.requests()).toHaveLength(1);
+    const record = await recordOf(id);
+    expect(record?.state).toBe("failed");
     expect(record?.failure).toBe("timeout");
     // Whatever might have been put is queued for deletion with the failure.
     const queued = await sql(

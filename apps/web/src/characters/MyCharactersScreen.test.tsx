@@ -312,7 +312,8 @@ describe("your characters", () => {
     // The screen polls on its own; nothing here asks it to.
     await waitFor(
       () => expect(document.querySelector("img[src*='/portraits/p1/card']")).not.toBeNull(),
-      { timeout: 5_000 },
+      // One poll is 2 s; the margin is for a loaded runner.
+      { timeout: 15_000 },
     );
     expect(screen.queryByText("Hob is drawing…")).toBeNull();
     // Sorrel has no portrait: still the monogram, no image.

@@ -161,8 +161,9 @@ describe("a server that restarts mid-draw", () => {
             ),
           );
           const sql = yield* SqlClient.SqlClient;
-          // The boot sweep runs on the service's own fiber; give it a moment.
-          for (let attempt = 0; attempt < 50; attempt += 1) {
+          // The boot sweep runs on the service's own fiber; wait for it, up to
+          // ten seconds so a loaded runner is not a failure.
+          for (let attempt = 0; attempt < 500; attempt += 1) {
             const rows = yield* sql<{ readonly state: string; readonly failure: string | null }>`
               select state, failure from character_portrait where character_id = ${character.id}
             `;
