@@ -579,7 +579,9 @@ function TopNav({
             // The hairline is on the sized box, not the container: `h-11` is a
             // border-box 44, so a border on a wrapper outside it would make the
             // row 45 and put every row below it a pixel out.
-            "flex h-11 items-center gap-4 px-page-sm @3xl/app:px-page",
+            // One step darker than the rows beneath it (`surface-page` under
+            // their `surface-card`), so the app's own row reads as the top level.
+            "flex h-11 items-center gap-4 bg-surface-page px-page-sm @3xl/app:px-page",
             campaignId !== undefined && "border-b border-hairline",
           )}
         >
