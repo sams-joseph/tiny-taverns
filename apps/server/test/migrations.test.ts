@@ -275,6 +275,7 @@ describe("migrations", () => {
       { migration_id: 49, name: "campaign_images" },
       { migration_id: 50, name: "shared_world_images" },
       { migration_id: 51, name: "npc_images" },
+      { migration_id: 52, name: "descriptions" },
     ]);
   }, 60_000);
 
@@ -335,6 +336,7 @@ describe("migrations", () => {
       { migration_id: 49, name: "campaign_images" },
       { migration_id: 50, name: "shared_world_images" },
       { migration_id: 51, name: "npc_images" },
+      { migration_id: 52, name: "descriptions" },
     ]);
   }, 60_000);
 });

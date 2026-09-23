@@ -28,7 +28,7 @@ import type { Prompt } from "effect/unstable/ai";
  * add a snapshot for the new version beside the old one; do not edit an
  * existing version's snapshot.
  */
-export const NPC_PROMPT_TEMPLATE_VERSION = "npc-prompt/1.4.0";
+export const NPC_PROMPT_TEMPLATE_VERSION = "npc-prompt/1.5.0";
 
 /** Who is on the other side of the conversation. */
 export type NpcAudience = "creator-rehearsal" | "player-direct" | "session-shared";
@@ -146,6 +146,7 @@ const publicIdentity = (npc: Npc): string | undefined => {
     field("Pronouns", identity?.pronouns),
     field("Pronunciation", identity?.pronunciation),
     field("Who they are", identity?.summary),
+    field("How they look", identity?.appearance),
     field("Manner of speaking", voice?.manner),
     list("Phrases they use", voice?.phrases),
     list("Lines they have said", voice?.exampleLines),
