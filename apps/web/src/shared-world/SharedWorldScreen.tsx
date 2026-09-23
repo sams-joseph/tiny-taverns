@@ -8,23 +8,19 @@ import {
   CardHeader,
   CardTitle,
   Icon,
-  Input,
   EmptyState,
   Loading,
 } from "@taverns/ui";
-import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
-import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
-import { useCredential } from "../auth/credential";
 import { ArchiveDialog } from "../campaign/ArchiveDialog";
+import { NewCampaignDialog } from "../campaign/NewCampaignDialog";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
-import { describedBy } from "../ui/describedBy";
-import { Description, NewCampaignDescription } from "../ui/description";
+import { Description } from "../ui/description";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
@@ -117,73 +113,6 @@ function CampaignCard({
   );
 }
 
-/** Names a new campaign in this Shared World; the founder becomes its creator. */
-function NewCampaign({ worldId }: { readonly worldId: SharedWorldId }) {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  const create = useCallback(async () => {
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.sharedWorlds.createCampaign({
-          params: { worldId: worldId },
-          payload: describedBy({ name: name.trim() }, description),
-        }),
-      token,
-    );
-
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError(
-        result.failure.kind === "unauthorized"
-          ? "That credential is not good for this."
-          : "That did not save. Try it again.",
-      );
-      return;
-    }
-    setName("");
-    setDescription("");
-    // The directory gains a card, and the founder gains a membership row — the
-    // creator's participation is written in the same transaction, which is
-    // what the campaign chrome reads the relation from.
-    invalidate([reads.sharedWorld(worldId), reads.myCampaigns]);
-  }, [description, fetchCredential, worldId, invalidate, name]);
-
-  return (
-    <div className="flex max-w-xl flex-col gap-3">
-      <Input
-        aria-label="New campaign name"
-        placeholder="The Salt Road"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        className="max-w-xs"
-      />
-      <NewCampaignDescription value={description} onChange={setDescription} />
-      <div>
-        <Button
-          variant="outline"
-          onClick={() => void create()}
-          disabled={busy || name.trim() === ""}
-        >
-          {busy ? "Working…" : "Start a campaign"}
-        </Button>
-      </div>
-      {error !== undefined && (
-        <p role="alert" className="text-body-s leading-body text-danger">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function MemberRow({ member }: { readonly member: SharedWorldMember }) {
   return (
     <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0">
@@ -201,6 +130,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
   const [archiving, setArchiving] = useState<SharedWorldCampaignCard | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [worldArchiveOpen, setWorldArchiveOpen] = useState(false);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
   const navigate = useNavigate();
 
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -256,7 +186,17 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
             />
             <Description text={view.sharedWorld.description} />
             <section className="flex flex-col gap-4" aria-label="Campaigns">
-              <NewCampaign worldId={worldId} />
+              {/* The section's own verb, so it lives in the section; the bar's
+                  one primary is the owner's settings. */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={() => setCreatingCampaign(true)}
+              >
+                <Icon name="plus" size={14} />
+                New campaign
+              </Button>
               {view.campaigns.length === 0 ? (
                 <EmptyState icon="book-open" title="Nothing being played yet">
                   Any member can start a campaign, and whoever starts one runs it.
@@ -296,6 +236,14 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
           alsoInvalidates={[reads.sharedWorld(worldId)]}
           onClose={() => setArchiving(undefined)}
           onArchived={() => setArchiving(undefined)}
+        />
+      )}
+
+      {creatingCampaign && view !== undefined && (
+        <NewCampaignDialog
+          context={{ kind: "world", world: view.sharedWorld }}
+          onClose={() => setCreatingCampaign(false)}
+          onCreated={() => undefined}
         />
       )}
 
