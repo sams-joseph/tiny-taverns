@@ -464,8 +464,13 @@ export class Spells extends Context.Service<
     readonly forCharacter: (
       id: CharacterId,
     ) => Effect.Effect<CharacterSpellbook, NotFound, CurrentActor>;
+    /**
+     * The spells a draft may start with, against its context: a campaign's
+     * vocabulary, or the core rules when `campaignId` is null (Hob drafting
+     * with no campaign).
+     */
     readonly forDraft: (
-      campaignId: CampaignId,
+      campaignId: CampaignId | null,
       draft: {
         readonly className?: string | undefined;
         readonly subclassName?: string | undefined;
@@ -545,7 +550,7 @@ export class Spells extends Context.Service<
                 subclassName: draft.subclassName,
                 level: Math.max(1, draft.level),
                 body: draft.sheet,
-                vocabulary: vocabularyAt(sql, [campaignId], actor),
+                vocabulary: vocabularyAt(sql, campaignId === null ? [] : [campaignId], actor),
               });
             }),
           ),

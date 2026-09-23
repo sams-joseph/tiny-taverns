@@ -303,6 +303,9 @@ describe("the API declaration", () => {
       "library",
       "live",
       "me",
+      // Hob drafting a character with no campaign: the account's own thread,
+      // against the core rules.
+      "meHob",
       "members",
       "notes",
       // The campaign's cast and the creator's rehearsal with each NPC —

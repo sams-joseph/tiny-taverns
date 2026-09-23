@@ -341,6 +341,64 @@ describe("an account must be reachable by something", () => {
   });
 });
 
+describe("a Hob thread has exactly one scope", () => {
+  /**
+   * `assistant_thread_one_scope` (`0054`): a campaign's, a Shared World's, or
+   * an account's alone. The four `conversationReachable` arms partition the
+   * table only while these three shapes are the only ones a row can take.
+   */
+  it("admits a campaign's, a world's and an account's, and refuses every other shape", async () => {
+    const outcomes = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const account = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "thread-scope" })}
+          returning id
+        `;
+        const accountId = account[0]!.id;
+        const campaign = yield* aCampaign(accountId, "thread scope");
+        const campaignId = campaign[0]!.id;
+        const groups = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign where id = ${campaignId}
+        `;
+        const groupId = groups[0]!.group_id;
+
+        const insert = (values: Record<string, string>) =>
+          sql`insert into assistant_thread ${sql.insert({ title: "Who?", ...values })}`.pipe(
+            Effect.result,
+            Effect.map((result) => result._tag),
+          );
+
+        return {
+          campaign: yield* insert({ campaign_id: campaignId }),
+          campaignOwned: yield* insert({ campaign_id: campaignId, account_id: accountId }),
+          world: yield* insert({ group_id: groupId }),
+          account: yield* insert({ account_id: accountId }),
+          nothing: yield* insert({}),
+          campaignAndWorld: yield* insert({ campaign_id: campaignId, group_id: groupId }),
+          worldOwned: yield* insert({ group_id: groupId, account_id: accountId }),
+          everything: yield* insert({
+            campaign_id: campaignId,
+            group_id: groupId,
+            account_id: accountId,
+          }),
+        };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(outcomes).toEqual({
+      campaign: "Success",
+      campaignOwned: "Success",
+      world: "Success",
+      account: "Success",
+      nothing: "Failure",
+      campaignAndWorld: "Failure",
+      worldOwned: "Failure",
+      everything: "Failure",
+    });
+  });
+});
+
 /**
  * A campaign written straight into the table, with the owner's membership row
  * beside it.

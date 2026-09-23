@@ -518,8 +518,8 @@ const charactersIndexRoute = createRoute({
  * fall-back-one-level a broken run link takes to its campaign.
  */
 /**
- * Writing down a character with **no campaign** — the core rules, and no Hob,
- * because its drafting thread is campaign-scoped. The static segment outranks
+ * Writing down a character with **no campaign** — the core rules, and Hob
+ * through the account's own thread (`/me/hob`). The static segment outranks
  * `$characterId` below, and `new` is not a character id anyway.
  */
 const coreCharacterCreateRoute = createRoute({

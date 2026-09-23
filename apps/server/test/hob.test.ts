@@ -17,6 +17,8 @@ import { aQuestionAboutIt, askedForABuild, Hob, printedTheCall } from "../src/as
 import {
   HobToolkit,
   NO_VOCABULARY,
+  coreToolkitListing,
+  coreToolkitOver,
   playerToolkitListing,
   playerToolkitOver,
 } from "../src/assistant/toolkit.js";
@@ -1784,6 +1786,20 @@ describe("the assistant seam", () => {
       "listStartingSpells",
       "proposeCharacter",
       "searchCampaign",
+    ]);
+  });
+
+  it("counts the core drafting toolkit: the player's without the campaign search", () => {
+    // Drafting with no campaign has no record to search, so it has no tool to
+    // search one with; the core rules are its whole vocabulary.
+    expect(Object.keys(coreToolkitOver(NO_VOCABULARY).tools).sort()).toEqual([
+      "listStartingSpells",
+      "proposeCharacter",
+    ]);
+    expect(Object.keys(coreToolkitListing(NO_VOCABULARY).tools).sort()).toEqual([
+      "listOptions",
+      "listStartingSpells",
+      "proposeCharacter",
     ]);
   });
 });

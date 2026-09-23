@@ -573,13 +573,16 @@ export const ownRowWritable = (
  * Whose conversation with Hob this is.
  *
  * `"dm"` is the campaign's own thread — `assistant_thread.account_id is null`,
- * the one the DM's panel resumes. `"own"` is this actor's, which is what a
- * player drafting a character has. **It is not a role**: a DM asking Hob is
- * `"dm"` because their conversation belongs to the campaign rather than to
- * them, and the discrimination is made once per request from the `CampaignCreatorActor`
- * proof rather than read off a row.
+ * the one the DM's panel resumes. `"own"` is this actor's at a campaign, which
+ * is what a player drafting a character there has. `"sharedWorld"` is a
+ * Shared World's one conversation. `"account"` is this actor's with no
+ * campaign and no world at all: character drafting against the core rules.
+ * **It is not a role**: a DM asking Hob is `"dm"` because their conversation
+ * belongs to the campaign rather than to them, and the discrimination is made
+ * once per request from the `CampaignCreatorActor` proof rather than read off
+ * a row.
  */
-export type ConversationReach = "dm" | "own" | "sharedWorld";
+export type ConversationReach = "dm" | "own" | "sharedWorld" | "account";
 
 /**
  * Threads of a conversation table this actor holds — **one fragment for reading
@@ -614,32 +617,50 @@ export type ConversationReach = "dm" | "own" | "sharedWorld";
  * restated — so a revoked membership, a credential minted for another table and
  * an unshared campaign each take a player's conversation away exactly as they
  * take their character away.
+ *
+ * `"account"` is {@link ownCharacter}'s shape, one table across: both scopes
+ * null and the owner the actor's own account, so it can never match a campaign
+ * or a world thread and no campaign or world thread can match it
+ * (`assistant_thread_one_scope`, `0054`). The scope it is handed is the account
+ * and must be the actor's; a different one reaches nothing. Credential scope is
+ * not applied, for `ownCharacter`'s reason: there is no campaign or world here
+ * for a scope to be about.
  */
 export const conversationReachable = (
   sql: SqlClient.SqlClient,
   table: string,
   reach: ConversationReach,
-  /** The campaign for `"dm"`/`"own"`, the **group** for `"sharedWorld"`. */
-  scopeId: CampaignId | SharedWorldId,
+  /**
+   * The campaign for `"dm"`/`"own"`, the **group** for `"sharedWorld"`, the
+   * actor's own account for `"account"`.
+   */
+  scopeId: CampaignId | SharedWorldId | AccountId,
   actor: Actor,
 ): Statement.Fragment =>
   reach === "own"
     ? ownRowWritable(sql, table, scopeId as CampaignId, actor)
-    : reach === "sharedWorld"
-      ? // The group's shared conversation: any live member, like the
-        // chronicle. Pinning `group_id` is what makes the three arms a
-        // partition — a campaign thread has none, so no thread answers two
-        // reaches. `account_id is null` is `0031`'s check restated where the
-        // reads happen.
-        sql.and([
-          sql`${sql(table)}.group_id = ${scopeId}`,
-          sql`${sql(table)}.account_id is null`,
-          groupReadable(sql, actor, scopeId as SharedWorldId),
+    : reach === "account"
+      ? sql.and([
+          sql`${sql(table)}.campaign_id is null`,
+          sql`${sql(table)}.group_id is null`,
+          sql`${sql(table)}.account_id = ${actor.accountId}`,
+          sql`${sql(table)}.account_id = ${scopeId}`,
         ])
-      : sql.and([
-          rowWritable(sql, table, scopeId as CampaignId, actor),
-          sql`${sql(table)}.account_id is null`,
-        ]);
+      : reach === "sharedWorld"
+        ? // The group's shared conversation: any live member, like the
+          // chronicle. Pinning `group_id` is what makes the four arms a
+          // partition — a campaign thread has none, so no thread answers two
+          // reaches. `account_id is null` is `0031`'s check restated where the
+          // reads happen.
+          sql.and([
+            sql`${sql(table)}.group_id = ${scopeId}`,
+            sql`${sql(table)}.account_id is null`,
+            groupReadable(sql, actor, scopeId as SharedWorldId),
+          ])
+        : sql.and([
+            rowWritable(sql, table, scopeId as CampaignId, actor),
+            sql`${sql(table)}.account_id is null`,
+          ]);
 
 /**
  * Turns of a conversation this actor holds.
@@ -667,7 +688,7 @@ export const conversationTurnReachable = (
   nested: NestedTable,
   reach: ConversationReach,
   parentId: string,
-  scopeId: CampaignId | SharedWorldId,
+  scopeId: CampaignId | SharedWorldId | AccountId,
   actor: Actor,
 ): Statement.Fragment =>
   sql.and([
@@ -1387,7 +1408,7 @@ export const ensureConversationReachable = (
   table: string,
   reach: ConversationReach,
   id: string,
-  scopeId: CampaignId | SharedWorldId,
+  scopeId: CampaignId | SharedWorldId | AccountId,
   actor: Actor,
 ): Effect.Effect<void, SqlError.SqlError | NotFound> =>
   ensure(

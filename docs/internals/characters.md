@@ -42,7 +42,7 @@ Whole-document writes race and that is accepted: two edits from two tabs do not 
 Creation names a campaign only as context, and needs none. The captain decided on 2026-09-23 that an account with no campaign and no Shared World can still make a character, so _New character_ on the roster (`characters/NewCharacterAction.tsx`) is always offered: straight to `#/characters/new` for an account at no table, otherwise a dialog listing each table beside _No campaign_.
 
 - `POST /me/campaigns/:campaignId/characters` is gated by `ensureCampaignReadable` and uses the campaign for the rules vocabulary (`options.list`), subrace validation and Hob's drafting thread.
-- `POST /me/characters` names nothing. The core rules are the vocabulary: `coreRulesUsable` in `repo/visibility.ts`, the bundle as a campaign's players see it, with no Library original, campaign copy or Shared World share. The form's pickers read it through `GET /library/options/core` and subrace validation reads the same predicate. There is no Hob: `assistant_thread` belongs to a campaign or a Shared World, so the screen opens on the form. Drafting without a campaign would need an account-scoped thread (a migration relaxing that scope, a reach for it in `conversationReachable`, and ask and accept endpoints outside `/campaigns/:c/hob`) with the player toolkit built over the core rules.
+- `POST /me/characters` names nothing. The core rules are the vocabulary: `coreRulesUsable` in `repo/visibility.ts`, the bundle as a campaign's players see it, with no Library original, campaign copy or Shared World share. The form's pickers read it through `GET /library/options/core` and subrace validation reads the same predicate. Hob drafts here through `/me/hob` (`MeHobGroup`): a thread of the account's own (`"account"` reach, `0054`), the core drafting toolkit, and an accept that materialises through `Characters.createCore`. The screen asks `GET /me/hob` first and opens on the describe stage only when a model is behind it; otherwise it opens on the form with no way back to a composer.
 
 Both are `Characters.insertOwn` behind a different gate and vocabulary, and neither writes a `campaign_character`. `account_id` is the actor's and has nowhere on the wire to go. The seat comes later through `party.join`, offered as Add to campaign on the roster and sheet (`characters/AddToCampaignDialog.tsx`). Until then no campaign party can read the character.
 
@@ -56,6 +56,8 @@ Seating a character changes the answer on the next read and rewrites nothing; th
 
 ## Hob drafting: `intent` selects the toolkit, `reachOf` reads the thread
 
+This section is the campaign path. With no campaign there is one surface and one reach (`/me/hob`, `"account"`), so neither question arises.
+
 A creator holds threads in both campaign sets (the campaign's shared thread and their own drafting threads), so `Hob.ask` cannot infer the surface from the creator proof. `HobAsk.intent: "character"` (sent unconditionally by `characters/draft.ts`) selects the drafting toolkit and a thread of the asker's own, for creator and player alike; absent keeps the campaign panel unchanged. `hob-character.test.ts` pins that the creator drafts too.
 
 Thread-naming operations (`turns`, `accept`) therefore read reach off the thread: `HobThreads.reachOf` selects through the OR of the two complete `conversationReachable` predicates and answers `"dm"` when `account_id` is null, `"own"` otherwise. Reach derived from the proof would let a creator draft a character they are then refused the keeping of. `threads.list` stays proof-derived because the panel's listing genuinely asks which set the panel shows. Accept takes no content payload; the row lands with `origin = 'assistant'` and every correction is an ordinary owner PATCH.
@@ -64,7 +66,7 @@ Thread-naming operations (`turns`, `accept`) therefore read reach off the thread
 
 A character's portrait is the first kind of Hob-drawn image. [Images](images.md) covers the capability every kind shares: the worker, the records, the signed routes, the shared daily budget, the house style and the deletion outbox. This section covers what is particular to characters.
 
-- **The trigger** is `HobImages.drawCharacter`, called by the handlers that make a character, the form's two creates and Hob's accept, after their transactions commit. Another way of making a character must call it too.
+- **The trigger** is `HobImages.drawCharacter`, called by the handlers that make a character, the form's two creates and Hob's two accepts (`HobLive`, `MeHobLive`), after their transactions commit. Another way of making a character must call it too.
 - **The record** is `character_portrait` (`0048_character_portraits.ts`): one row per character ever, bound to the character and its owner by the composite key to `character (id, account_id)`. A skipped row means there was no race, class, appearance or background (`portraitHasSubject`).
 - **The prompt** is `portraitPromptFor` in `packages/api/src/Portrait.ts` with `HOUSE_PORTRAIT_STYLE`, the one implementation; no client sends a prompt.
 - **Visibility is exactly the character's.** The wire carries `Character.portrait` (three signed paths, or `null`) and `portraitPending`. Every URL is minted by `portraitImages` in `repo/Characters.ts`, only for a portrait id that a read's own predicate returned. Two kinds of read return one:

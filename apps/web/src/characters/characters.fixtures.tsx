@@ -408,6 +408,15 @@ export const hobRoutes = (at: string = campaignId): ReadonlyArray<[string, Answe
   [`POST /campaigns/${at}/hob/ask`, drafted()],
 ];
 
+/**
+ * Hob drafting with no campaign (`/me/hob`), configured and reachable — or,
+ * with `available: false`, a server with no model behind it.
+ */
+export const coreHobRoutes = (available = true): ReadonlyArray<[string, Answer]> => [
+  ["GET /me/hob", { status: 200, body: { available, model: available ? "scripted-local" : null } }],
+  ["POST /me/hob/ask", drafted()],
+];
+
 /** Two characters, two tables. */
 export const twoTables = (): Map<string, Answer> =>
   new Map<string, Answer>([

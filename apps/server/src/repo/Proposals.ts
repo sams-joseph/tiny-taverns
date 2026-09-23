@@ -6,6 +6,7 @@ import {
   CurrentActor,
   type SharedWorldId,
   type HobAccepted,
+  type CharacterOwnCreate,
   type HobProposal,
   NotFound,
 } from "@taverns/api";
@@ -64,6 +65,10 @@ import type { ConversationReach } from "./visibility.js";
  * therefore cannot come to own a character drafted for somebody else. There is
  * no role check in `materialise` because there is nothing for one to refuse.
  *
+ * `acceptDraft` is the same yes for a thread with no campaign (`"account"`):
+ * it reaches only the actor's own thread, and a character is the one thing it
+ * can make, through `Characters.createCore` against the core rules.
+ *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
  * `apps/web`, which have no transaction across requests and say so.
@@ -72,6 +77,39 @@ import type { ConversationReach } from "./visibility.js";
 /** A proposal is one accept, and a second one is a conflict rather than a second row. */
 const alreadyAccepted = new Conflict({
   message: "that is already in the campaign",
+});
+
+/** The same, for a character kept from a drafting thread with no campaign. */
+const alreadyKept = new Conflict({
+  message: "that character is already kept",
+});
+
+/**
+ * A character draft as the create payload both accepts write — **copied, not
+ * computed.** `Ruleset.seedFor` ran when the proposal was made, so the row
+ * carries exactly what the card the player pressed *Keep them* on said — the
+ * same rule the roster follows, and the reason the accept can be read without
+ * knowing any arithmetic. Each seeded number is an optional key on the
+ * proposal, because one written before the seed existed simply has none and
+ * falls to the column default.
+ *
+ * `visibility` and the live trio stay absent for the reason
+ * `CharacterOwnCreate` has no field for them: a drafted character is unseated
+ * and unhurt by column default rather than by a value this file chose.
+ */
+const ownCreateFrom = (
+  proposal: Extract<HobProposal, { target: "character" }>,
+): CharacterOwnCreate => ({
+  name: proposal.name,
+  ...(proposal.race === null ? {} : { race: proposal.race }),
+  ...(proposal.subrace === undefined || proposal.subrace === null
+    ? {}
+    : { subrace: proposal.subrace }),
+  ...(proposal.className === null ? {} : { className: proposal.className }),
+  ...(proposal.level === undefined ? {} : { level: proposal.level }),
+  ...(proposal.ac === undefined ? {} : { ac: proposal.ac }),
+  ...(proposal.hpMax === undefined ? {} : { hpMax: proposal.hpMax }),
+  sheet: proposal.sheet,
 });
 
 /**
@@ -106,6 +144,17 @@ export class Proposals extends Context.Service<
      */
     readonly acceptSharedWorld: (
       groupId: SharedWorldId,
+      threadId: AssistantThreadId,
+      turnId: AssistantTurnId,
+    ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
+    /**
+     * The yes for a character drafted with no campaign: a turn of the actor's
+     * own account-scoped thread, materialised through `Characters.createCore`
+     * with the turn on it. Only a `character` proposal can live in such a
+     * thread; anything else is refused rather than filed somewhere its card
+     * never named.
+     */
+    readonly acceptDraft: (
       threadId: AssistantThreadId,
       turnId: AssistantTurnId,
     ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
@@ -185,34 +234,7 @@ export class Proposals extends Context.Service<
             return Effect.map(
               // `createOwn`, so `account_id` is the accepting credential's and
               // there is nowhere in a proposal to name anybody else.
-              // `visibility` and the live trio stay absent for the reason
-              // `CharacterOwnCreate` has no field for them: a drafted character
-              // is unseated and unhurt by column default rather than by a value
-              // this file chose.
-              //
-              // The three seeded numbers are **copied, not computed.**
-              // `Ruleset.seedFor` ran when the proposal was made, so the row
-              // carries exactly what the card the player pressed *Keep them* on
-              // said — the same rule the roster follows, and the reason the
-              // accept can be read without knowing any arithmetic. Each is an
-              // optional key on the proposal, because one written before the
-              // seed existed simply has none and falls to the column default.
-              characters.createOwn(
-                campaignId,
-                {
-                  name: proposal.name,
-                  ...(proposal.race === null ? {} : { race: proposal.race }),
-                  ...(proposal.subrace === undefined || proposal.subrace === null
-                    ? {}
-                    : { subrace: proposal.subrace }),
-                  ...(proposal.className === null ? {} : { className: proposal.className }),
-                  ...(proposal.level === undefined ? {} : { level: proposal.level }),
-                  ...(proposal.ac === undefined ? {} : { ac: proposal.ac }),
-                  ...(proposal.hpMax === undefined ? {} : { hpMax: proposal.hpMax }),
-                  sheet: proposal.sheet,
-                },
-                from,
-              ),
+              characters.createOwn(campaignId, ownCreateFrom(proposal), from),
               (character) => ({ accepted: "character" as const, character }),
             );
 
@@ -253,6 +275,39 @@ export class Proposals extends Context.Service<
                 });
                 yield* markAccepted(sql, turnId);
                 return accepted;
+              }),
+            ),
+          ),
+
+        acceptDraft: (threadId, turnId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const turn = yield* lockTurnForAccept(
+                  sql,
+                  "account",
+                  actor.accountId,
+                  threadId,
+                  turnId,
+                );
+                if (turn.proposal === null) {
+                  return yield* new NotFound({ resource: "proposal", id: turnId });
+                }
+                if (turn.accepted_at !== null) return yield* alreadyKept;
+                if (turn.proposal.target !== "character") {
+                  // Only the core drafting toolkit writes into these threads and
+                  // it proposes nothing else; the refusal is the same guard the
+                  // two accepts above keep against each other's members.
+                  return yield* new Conflict({
+                    message: "that belongs to a campaign or a Shared World — accept it there",
+                  });
+                }
+                const character = yield* characters.createCore(ownCreateFrom(turn.proposal), {
+                  assistantTurnId: turnId,
+                });
+                yield* markAccepted(sql, turnId);
+                return { accepted: "character" as const, character };
               }),
             ),
           ),

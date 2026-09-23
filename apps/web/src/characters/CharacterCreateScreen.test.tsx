@@ -7,6 +7,7 @@ import {
   brannocId,
   campaignId,
   campaignOptions,
+  coreHobRoutes,
   coreOptions,
   drafted,
   draftedNothing,
@@ -860,32 +861,130 @@ describe("writing down a character of your own", () => {
 /**
  * **No campaign at all** — the captain's decision of 2026-09-23. An account at
  * no table writes a character against the core rules, through
- * `POST /me/characters`, and Hob is not offered because its drafting thread is
- * campaign-scoped.
+ * `POST /me/characters`, and Hob drafts through `/me/hob` — a thread of the
+ * account's own — when a model is behind it.
  */
 describe("writing down a character with no campaign", () => {
   const corePath = "/me/characters";
+  const acceptPath = `/me/hob/threads/${draftThreadId}/turns/${draftTurnId}/accept`;
 
   beforeEach(() => {
     // Signed up and invited nowhere: the account that had no way in.
     server.routes = noTables();
     server.routes.set(`POST ${corePath}`, savedAs(brannoc));
+    for (const [route, answer] of coreHobRoutes(false)) server.routes.set(route, answer);
   });
 
-  it("opens on the form, with no Hob and nothing asked of one", async () => {
+  it("opens on the form when no model is behind Hob, with no way back to one", async () => {
     await renderCoreCreate();
 
     expect(await screen.findByLabelText(/^Name$/)).toBeTruthy();
     expect(screen.getByText("Using the core rules, with no campaign.")).toBeTruthy();
-    // No describe stage, no fork back to it, and no status read: a composer
-    // here would be a control with nothing that can answer it.
+    // No describe stage and no fork back to it: a composer here would be a
+    // control with nothing that can answer it.
     expect(screen.queryByLabelText("Describe your character")).toBeNull();
     expect(screen.queryByRole("button", { name: /Have Hob draft/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Fill it in myself/i })).toBeNull();
-    expect(server.calls.some((call) => call.pathname.includes("/hob"))).toBe(false);
+    // One status read and no question.
+    const hob = server.calls.filter((call) => call.pathname.includes("/hob"));
+    expect(hob.map((call) => `${call.method} ${call.pathname}`)).toEqual(["GET /me/hob"]);
     // Nor any campaign's vocabulary: the core rules are the one read.
     expect(server.calls.some((call) => call.pathname.includes("/campaigns/"))).toBe(false);
     expect(server.calls.map((call) => call.pathname)).toContain("/library/options/core");
+  });
+
+  it("opens on the form when Hob cannot be reached", async () => {
+    server.routes.delete("GET /me/hob");
+    await renderCoreCreate();
+    expect(await screen.findByLabelText(/^Name$/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Have Hob draft/i })).toBeNull();
+  });
+
+  it("opens on Hob's describe stage when a model is behind it", async () => {
+    for (const [route, answer] of coreHobRoutes()) server.routes.set(route, answer);
+    await renderCoreCreate();
+
+    expect(await screen.findByLabelText(/Describe your character/i)).toBeTruthy();
+    await fillItIn();
+    expect(await screen.findByLabelText(/^Name$/)).toBeTruthy();
+    // Both forks stay: back to the composer from the form.
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft it instead/i }));
+    expect(await screen.findByLabelText(/Describe your character/i)).toBeTruthy();
+  });
+
+  it("drafts with no campaign and keeps it through an accept that carries no content", async () => {
+    for (const [route, answer] of coreHobRoutes()) server.routes.set(route, answer);
+    server.routes.set(`POST ${acceptPath}`, {
+      status: 200,
+      body: { accepted: "character", character: brannoc },
+    });
+
+    await renderCoreCreate();
+    await userEvent.type(
+      await screen.findByLabelText(/Describe your character/i),
+      "A wood elf who grew up in a river town.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft the sheet/i }));
+
+    // The same draft card as at a table, saying where its spells came from.
+    expect(await screen.findByText("Sorrel Ash")).toBeTruthy();
+    expect(screen.getByText(/Produce Flame · Cantrip/)).toBeTruthy();
+    expect(screen.getByText("Picked from the core rules' spell list")).toBeTruthy();
+    expect(screen.getByText(/Wisdom is highest because druid casting keys off it/)).toBeTruthy();
+
+    // The question names no campaign and no surface: the account's own thread.
+    const asks = server.calls.filter((call) => call.pathname === "/me/hob/ask");
+    expect(asks).toHaveLength(1);
+    expect(JSON.parse(asks[0]?.body ?? "{}")).toEqual({
+      text: "A wood elf who grew up in a river town.",
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /Keep them/i }));
+
+    const accept = server.calls.find((call) => call.pathname.includes("/accept"));
+    expect(accept?.pathname).toBe(acceptPath);
+    expect(JSON.parse(accept?.body ?? "{}")).toEqual({});
+    // Made by the accept, not by the form's create.
+    expect(
+      server.calls.filter((call) => call.method === "POST" && call.pathname === corePath),
+    ).toHaveLength(0);
+    await waitFor(() => expect(window.location.hash).toBe(`#/characters/${brannocId}`));
+    expect(server.calls.some((call) => call.pathname.includes("/campaigns/"))).toBe(false);
+  });
+
+  it("asks again in the same thread on a redraft", async () => {
+    for (const [route, answer] of coreHobRoutes()) server.routes.set(route, answer);
+    await renderCoreCreate();
+    await userEvent.type(
+      await screen.findByLabelText(/Describe your character/i),
+      "A wood elf who grew up in a river town.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft the sheet/i }));
+    await screen.findByText("Sorrel Ash");
+
+    await userEvent.click(screen.getByRole("button", { name: "Darker backstory" }));
+
+    const asks = server.calls
+      .filter((call) => call.pathname === "/me/hob/ask")
+      .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+    expect(asks).toHaveLength(2);
+    expect(asks[0]).not.toHaveProperty("threadId");
+    expect(asks[1]).toEqual({ threadId: draftThreadId, text: "Darker backstory" });
+  });
+
+  it("never dead-ends when the model does not draft", async () => {
+    for (const [route, answer] of coreHobRoutes()) server.routes.set(route, answer);
+    server.routes.set("POST /me/hob/ask", draftedNothing());
+    await renderCoreCreate();
+    await userEvent.type(
+      await screen.findByLabelText(/Describe your character/i),
+      "A wood elf who grew up in a river town.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Have Hob draft the sheet/i }));
+
+    expect(await screen.findByText(/No sheet came back this time/)).toBeTruthy();
+    await fillItIn();
+    expect(await screen.findByLabelText(/^Name$/)).toBeTruthy();
   });
 
   it("offers the core rules and nothing a table added", async () => {

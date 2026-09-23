@@ -50,6 +50,8 @@ import {
 import {
   HobAccepted,
   HobAsk,
+  HobDraftAsk,
+  HobDraftStatus,
   HobEvent,
   HobStatus,
   HobThread,
@@ -1866,6 +1868,47 @@ class HobGroup extends HttpApiGroup.make("hob")
   .middleware(Authorization) {}
 
 /**
+ * Hob drafting a character with **no campaign** — the account's own
+ * conversation, against the core rules.
+ *
+ * `HobGroup`'s five, under `/me/hob` rather than a campaign. Nothing in any
+ * path names a scope because the scope is the caller: a thread here belongs to
+ * the account that started it and to no campaign or Shared World
+ * (`conversationReachable`'s `"account"` arm), so another account's thread id
+ * is the ordinary `NotFound`. Its toolkit is the drafting one built over the
+ * core rules (`coreRulesUsable`), with no campaign or Shared World tool in it,
+ * and `accept` can only ever make a character, through the same insert
+ * `me.createCoreCharacter` uses.
+ */
+class MeHobGroup extends HttpApiGroup.make("meHob")
+  .add(
+    HttpApiEndpoint.get("status", "/", {
+      success: HobDraftStatus,
+    }),
+    HttpApiEndpoint.post("ask", "/ask", {
+      payload: HobDraftAsk,
+      success: HttpApiSchema.StreamSse({ events: HobEvent }),
+      error: [NotFound, HobUnavailable],
+    }),
+    HttpApiEndpoint.get("threads", "/threads", {
+      success: Schema.Array(HobThread),
+    }),
+    HttpApiEndpoint.get("turns", "/threads/:threadId/turns", {
+      params: { threadId: AssistantThreadId },
+      success: Schema.Array(HobTurn),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("accept", "/threads/:threadId/turns/:turnId/accept", {
+      params: { threadId: AssistantThreadId, turnId: AssistantTurnId },
+      payload: Schema.Struct({}),
+      success: HobAccepted,
+      error: [NotFound, Conflict],
+    }),
+  )
+  .prefix("/me/hob")
+  .middleware(Authorization) {}
+
+/**
  * The campaign's cast: structured NPCs, creator rehearsal, player-direct chat,
  * and shared live-session conversation.
  *
@@ -2460,6 +2503,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(RollsGroup)
   .add(SearchGroup)
   .add(HobGroup)
+  .add(MeHobGroup)
   .add(NpcsGroup)
   .add(RunsGroup)
   .add(CombatantsGroup)

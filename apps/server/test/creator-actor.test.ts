@@ -690,7 +690,11 @@ describe("the scope, counted", () => {
     // `Options.core` are the one hundred and fifty-seventh: a character made
     // with no campaign and the core rules it is made from, in no campaign, so
     // there is no table whose creator a proof could name.
-    expect(ungated).toBe(157);
+    // `Proposals.acceptDraft` is the one hundred and fifty-eighth: Hob drafting
+    // that character, in a thread of the actor's own account, for the same
+    // reason. (Its spells are `Spells.forDraft` with no campaign, already
+    // counted.)
+    expect(ungated).toBe(158);
   });
 });
 
