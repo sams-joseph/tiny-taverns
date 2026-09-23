@@ -17,6 +17,7 @@ import type {
   SubraceBody,
 } from "@taverns/api";
 import {
+  APPEARANCE_MAX,
   asBackgroundOption,
   asClassOption,
   asRaceOption,
@@ -81,6 +82,8 @@ export interface CharacterDraft {
   readonly hpMax: string;
   readonly sheetUrl: string;
   readonly notes: string;
+  /** `sheet.story.appearance` — what a portrait is drawn from. */
+  readonly appearance: string;
   readonly abilities: ReadonlyArray<AbilityDraft>;
 }
 
@@ -99,6 +102,7 @@ export const emptyDraft: CharacterDraft = {
   hpMax: "",
   sheetUrl: "",
   notes: "",
+  appearance: "",
   abilities: abilityDrafts([]),
 };
 
@@ -345,6 +349,7 @@ export const payloadFrom = (
   const background = draft.background.trim();
   const sheetUrl = draft.sheetUrl.trim();
   const notes = draft.notes.trim();
+  const appearance = draft.appearance.trim().slice(0, APPEARANCE_MAX);
   // The corpora's half of the sheet, through the same `sheetGrantsFor` Hob's
   // `proposeCharacter` composes — level-1 class features, racial traits, the
   // three sources' proficiencies, the background's kit — so a hand-filled Hill
@@ -376,6 +381,8 @@ export const payloadFrom = (
     abilities,
     traits: grants.traits,
     ...(Object.keys(identity).length === 0 ? {} : { identity }),
+    // The same key Hob's `proposeCharacter` writes its appearance line to.
+    ...(appearance === "" ? {} : { story: { appearance } }),
     ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
     // The corpus's half of the Actions and Spellcasting sections, through the
     // same call Hob's `proposeCharacter` makes.
@@ -397,6 +404,7 @@ export const payloadFrom = (
     ...(hpMax === null || hpMax === undefined ? {} : { hpMax }),
     ...(sheetUrl === "" ? {} : { sheetUrl }),
     ...(notes === "" &&
+    appearance === "" &&
     abilities.length === 0 &&
     Object.keys(identity).length === 0 &&
     grants.proficiencies.length === 0 &&

@@ -180,6 +180,24 @@ describe("an owner creating their character", () => {
     expect(await rosterNames(fixture.jo, fixture.table.id)).not.toContain("Brannoc");
   });
 
+  it("keeps the form's appearance line on the sheet's story, as Hob's composer does", async () => {
+    const made = succeeded(
+      await createOwn(fixture.pim, fixture.table.id, {
+        name: "Looked At",
+        sheet: {
+          notes: "",
+          abilities: [],
+          traits: [],
+          story: { appearance: "Tall, scarred, a green cloak gone grey at the hem." },
+        },
+      }),
+    );
+    expect(made.sheet.story?.appearance).toBe("Tall, scarred, a green cloak gone grey at the hem.");
+    // And a sheet with no story at all still reads, which is every row before it.
+    const bare = succeeded(await createOwn(fixture.pim, fixture.table.id, { name: "Unlooked" }));
+    expect(bare.sheet.story).toBeUndefined();
+  });
+
   it("leaves the live trio at its defaults, and carries no disclosure toggle at all", async () => {
     const made = succeeded(
       await createOwn(fixture.pim, fixture.table.id, { name: "Untouched", hpMax: 9 }),

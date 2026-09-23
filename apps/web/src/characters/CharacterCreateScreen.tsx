@@ -49,7 +49,7 @@ import {
 import { DraftAside } from "./DraftAside";
 import { KitFields } from "./KitFields";
 import { DraftCard } from "./DraftCard";
-import { ABILITY_KEYS, type AbilityKey } from "@taverns/api";
+import { ABILITY_KEYS, APPEARANCE_MAX, type AbilityKey } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterCreateWrites, createOwnCharacter } from "./write";
@@ -937,6 +937,21 @@ export function CharacterCreateScreen() {
                     placeholder="A wood elf who grew up in a river town, apprenticed to a herbalist who turned out to be feeding something in the cellar."
                     value={draft.notes}
                     onChange={(event) => set("notes", event.target.value)}
+                  />
+                </Field>
+
+                <Field
+                  label="Appearance"
+                  htmlFor="new-character-appearance"
+                  hint="A sentence or two on how they look: age, build, hair, clothing, a mark someone would remember."
+                >
+                  <Textarea
+                    id="new-character-appearance"
+                    className="min-h-20"
+                    maxLength={APPEARANCE_MAX}
+                    placeholder="Thirties, wiry, mud to the knees, a sprig of bog myrtle behind one ear."
+                    value={draft.appearance}
+                    onChange={(event) => set("appearance", event.target.value)}
                   />
                 </Field>
               </CardContent>

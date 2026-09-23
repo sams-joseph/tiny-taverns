@@ -330,7 +330,7 @@ export const sheetSections = (sheet: CharacterSheet, writable = false): SheetSec
       written(sheet.notes) ||
       some(sheet.journal) ||
       (story !== undefined &&
-        [story.personality, story.ideal, story.bond, story.flaw].some(written)),
+        [story.appearance, story.personality, story.ideal, story.bond, story.flaw].some(written)),
     log: some(sheet.levelUps),
   };
 

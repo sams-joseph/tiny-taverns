@@ -163,6 +163,7 @@ export function DraftCard({
       )}
 
       {(sheet.notes !== "" ||
+        story?.appearance !== undefined ||
         story?.bond !== undefined ||
         story?.ideal !== undefined ||
         story?.flaw !== undefined) && (
@@ -172,6 +173,9 @@ export function DraftCard({
               <p className="font-display text-body-m leading-body whitespace-pre-wrap text-foreground">
                 {sheet.notes}
               </p>
+            )}
+            {story?.appearance !== undefined && (
+              <StoryLine label="Appearance" value={story.appearance} />
             )}
             {story?.bond !== undefined && <StoryLine label="Bond" value={story.bond} />}
             {story?.ideal !== undefined && <StoryLine label="Ideal" value={story.ideal} />}

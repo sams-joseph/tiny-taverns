@@ -118,6 +118,7 @@ describe("writing down a character of your own", () => {
     await retype(/^AC$/, "14");
     await retype(/Hit points/, "9");
     await type(/Who they are/, "Raised by the road.");
+    await type(/^Appearance$/, "Tall, a green cloak gone grey at the hem.");
     await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
 
     const post = server.calls.find((call) => call.method === "POST");
@@ -144,6 +145,8 @@ describe("writing down a character of your own", () => {
         // The corpora's identity keys — the race answers the speed and the
         // class the hit die, through the same `sheetGrantsFor` Hob composes.
         identity: { speed: "30 ft.", hitDice: "1/1 d8" },
+        // The look, on the same `story` key Hob's `proposeCharacter` writes.
+        story: { appearance: "Tall, a green cloak gone grey at the hem." },
         // And the one counter every class has, its hit dice, on `resources`.
         resources: [
           {
@@ -410,6 +413,7 @@ describe("writing down a character of your own", () => {
     expect(screen.getByText(/Produce Flame · Cantrip/)).toBeTruthy();
     expect(screen.getByText(/Cure Wounds · Prepared/)).toBeTruthy();
     expect(screen.getByText("Herbalism kit")).toBeTruthy();
+    expect(screen.getByText(/a sprig of bog myrtle behind one ear/)).toBeTruthy();
     // `rationale` is a parameter of `proposeCharacter` and is on the proposal,
     // so this is Hob's own argument rather than something the screen derived.
     expect(screen.getByText(/Wisdom is highest because druid casting keys off it/)).toBeTruthy();

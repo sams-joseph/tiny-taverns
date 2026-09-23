@@ -30,6 +30,7 @@ export * from "./Page.js";
 export * from "./Party.js";
 export * from "./PlayerLive.js";
 export * from "./PlayerRecap.js";
+export * from "./Portrait.js";
 export * from "./PrepItem.js";
 export * from "./Provenance.js";
 export * from "./Query.js";

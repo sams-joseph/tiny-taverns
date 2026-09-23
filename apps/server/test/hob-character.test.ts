@@ -193,6 +193,7 @@ const aDraft = (over: Record<string, unknown> = {}) =>
     bond: "The herbal, half in a hand that is not hers.",
     ideal: "Things grow back. Give them the room.",
     flaw: "Will not go underground without an argument first.",
+    appearance: "Thirties, wiry, mud to the knees, a sprig of bog myrtle behind one ear.",
     kit: ["Leather armour", "Scimitar", "Herbalism kit"],
     rationale: [
       "Wisdom is highest because druid casting keys off it, and you described someone who watches.",
@@ -387,7 +388,7 @@ describe("what the tool takes, and what the server works out", () => {
     // `optionalText` and the sentinel cannot reach it at all. `subclass` is the
     // nearest prose optional and carries the same hazard.
     const { events } = await ask(fixture.player, {
-      rounds: [aDraft({ subclass: "None", flaw: "" }), textChunks("As you like.")],
+      rounds: [aDraft({ subclass: "None", flaw: "", appearance: " " }), textChunks("As you like.")],
     });
     const proposed = proposedIn(events);
     if (proposed?.proposal.target !== "character") throw new Error("no character proposal");
@@ -396,6 +397,7 @@ describe("what the tool takes, and what the server works out", () => {
     // And a genuinely blank one is not written at all, so the sheet draws the
     // section's invitation rather than an empty line.
     expect(proposed.proposal.sheet.story?.flaw).toBeUndefined();
+    expect(proposed.proposal.sheet.story?.appearance).toBeUndefined();
   }, 60_000);
 
   it("offers the three vocabularies to the model, and no free text beside them", async () => {
@@ -617,6 +619,10 @@ describe("the accept makes a character, and it is the player's own", () => {
       "Choose 2 languages",
     ]);
     expect(character.sheet.proficiencies).not.toContain("Saving Throw: INT");
+    // The look is Hob's composer writing the same `story` key the form does.
+    expect(character.sheet.story?.appearance).toBe(
+      "Thirties, wiry, mud to the knees, a sprig of bog myrtle behind one ear.",
+    );
     // The class's saving throws land as marks on the cells, with the save
     // number read from the level-1 proficiency bonus the progression corpus
     // supplies — WIS ranked first is 15 raised to nothing (Elf moves DEX), so
@@ -991,6 +997,8 @@ describe("the redraft loop", () => {
     expect(opening).toContain("DEX > WIS > CON");
     expect(opening).toContain("Nature, Perception, Medicine, Survival");
     expect(opening).toContain("Circle of the Land (Marsh)");
+    // The look too, so "make her older" can change it rather than lose it.
+    expect(opening).toContain("appearance: Thirties, wiry");
     expect(opening).toContain("not yet accepted");
     // And the question that follows it.
     expect(opening).toContain("Make her a ranger instead.");
