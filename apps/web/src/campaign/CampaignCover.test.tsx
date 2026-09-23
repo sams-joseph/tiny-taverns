@@ -53,6 +53,10 @@ describe("CampaignCover", () => {
     );
     const img = container.querySelector("img")!;
     expect(img.getAttribute("src")).toBe(apiUrl(drawnCover.cardUrl));
+    expect(img.getAttribute("srcset")).toBe(
+      `${apiUrl(drawnCover.cardUrl)} 768w, ${apiUrl(drawnCover.fullUrl)} 1536w`,
+    );
+    expect(img.getAttribute("sizes")).toBe("auto, 100vw");
     expect(img.getAttribute("alt")).toBe("");
     expect(img.getAttribute("loading")).toBe("lazy");
     expect(img.className).toContain("object-cover");

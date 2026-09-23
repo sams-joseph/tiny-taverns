@@ -27,9 +27,9 @@ import { apiUrl } from "../api/client";
  * middle, which the cover framing (`HouseStyle.ts`) keeps clear:
  *
  * - `card` — the head of a campaign card on the list, bled to the card's edges
- *   (the card clips it to its radius), from the 768 × 512 size.
+ *   (the card clips it to its radius); its `src` is the 768 × 512 size.
  * - `band` — the top of a campaign's home page, the creator's Overview and the
- *   player's alike, from the 1536 × 1024 size: wide and shallow above the
+ *   player's alike; its `src` is the 1536 × 1024 size. Wide and shallow above the
  *   content, deeper once the column is narrow enough that a 4:1 strip would be
  *   a sliver. It sits in the page, never in the sticky chrome rows.
  */
@@ -43,6 +43,13 @@ export function CampaignCover({
   readonly shape: "card" | "band";
 }) {
   const src = image === null ? undefined : apiUrl(shape === "card" ? image.cardUrl : image.fullUrl);
+  // Both sizes, so a browser picks by the width it actually draws: a wide list
+  // card on a 2x screen wants the full size, a narrow band on a 1x screen the
+  // card size. `auto` is the lazy image's own rendered width where a browser
+  // supports it; `100vw` is the fallback where it does not. The widths are the
+  // campaign kind's variants (`apps/server/src/images/kinds.ts`).
+  const srcSet =
+    image === null ? undefined : `${apiUrl(image.cardUrl)} 768w, ${apiUrl(image.fullUrl)} 1536w`;
   // By URL rather than a flag, so a fresh URL (the cover arrived, or a later
   // read signed a new one) gets a fresh chance with nothing to reset.
   const [loadedSrc, setLoadedSrc] = useState<string>();
@@ -66,6 +73,8 @@ export function CampaignCover({
         <img
           key={src}
           src={src}
+          srcSet={srcSet}
+          sizes="auto, 100vw"
           alt=""
           loading="lazy"
           decoding="async"

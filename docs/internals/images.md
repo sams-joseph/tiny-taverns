@@ -69,4 +69,6 @@ Characters use `CharacterPortrait` ([Characters](characters.md), _The portrait_)
 - `card`: the head of each card on the campaign list, bled to the card's edges.
 - `band`: the top of the creator's Overview and of the player's campaign page. It sits in the page, never in the sticky chrome rows.
 
+Both shapes carry both sizes in `srcset`, with `sizes="auto, 100vw"`. The browser picks by the width it actually draws, so a wide card on a 2x screen loads the full size and a narrow band on a 1x screen loads the card size.
+
 When there is no cover, the plate renders nothing, so the screen looks as it did before covers existed; there is no placeholder art. A URL that fails to load collapses the plate the same way. While `imagePending`, the plate holds a band on the sunken surface that says _Hob is drawing…_. Pending screens re-read through `useHobDrawingPolling` (`apps/web/src/hob/drawingPolling.ts`, the same hook the character screens use): every two seconds for up to three minutes. The Overview invalidates `reads.campaign` and `reads.myCampaigns`, so the list is current when the creator goes back to it.
