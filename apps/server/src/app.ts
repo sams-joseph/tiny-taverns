@@ -360,8 +360,8 @@ export const hobImagesFromConfig: Layer.Layer<
     if (Option.isNone(apiUrl) || Option.isNone(model) || missing.length > 0) {
       yield* Effect.logInfo(
         `Hob-drawn images are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
-          "so new characters keep their lettered plates, new campaigns their plain cards and " +
-          "new NPCs their initials. " +
+          "so new characters keep their lettered plates, new campaigns and Shared Worlds their " +
+          "plain cards and new NPCs their initials. " +
           "To turn them on, set them in apps/server/.env.local (see .env.example).",
       );
       return HobImages.layer({ generation: Option.none(), storageOn });
