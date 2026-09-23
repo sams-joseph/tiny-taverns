@@ -46,7 +46,11 @@ Creation names a campaign only as context, and needs none. The captain decided o
 
 Both are `Characters.insertOwn` behind a different gate and vocabulary, and neither writes a `campaign_character`. `account_id` is the actor's and has nowhere on the wire to go. The seat comes later through `party.join`, offered as Add to campaign on the roster and sheet (`characters/AddToCampaignDialog.tsx`). Until then no campaign party can read the character.
 
-An unseated character has no table to read a vocabulary through afterwards: its spell picker (`Spells.forCharacter`) answers empty and a level change does not recompute its derived lines until it is seated.
+## The sheet's vocabulary: its tables, or the core rules
+
+After creation a character's sheet reads one vocabulary, decided in one place: `characterVocabulary` in `repo/visibility.ts`. The spell picker (`Spells.forCharacter`), the level-up recompute (`recomputeForLevel`) and the subrace check on an edit all take it. Seated, it is `usableInCampaign` over every live seat whose campaign the owner can still read, unioned, because one character at several tables cannot be bound to one table's rules. At no such table it is the core rules (`coreRulesUsable`), whatever campaign the character was drafted in: the row does not record that context. `vocabularyAt` is the same rule for a draft, which names its context campaign or none.
+
+Seating a character changes the answer on the next read and rewrites nothing; the sheet keeps what it was written with until the owner edits it or levels up, and leaving the last table hands it back to the core rules the same way. Nothing is lost on seating, because the core rules are inside every campaign's vocabulary for anyone who can read the campaign. The converse is not true: a level-up after leaving drops known spells the core rules do not have, as a level-up always drops spells the vocabulary no longer offers. The equipment picker and gear rows read the owner's Library (`library.equipment`), not a seat, so they are unaffected. `core-characters.test.ts` pins the unseated picker and recompute, the switch on seating and back on leaving, and the refusal for another account.
 
 `CharacterOwnCreate` is `CharacterOwnUpdate` with a required name and no `hpCurrent`: how hurt somebody already is belongs to the table. The delete uses `ownCharacter` too, so a player can never remove a character they could not edit.
 

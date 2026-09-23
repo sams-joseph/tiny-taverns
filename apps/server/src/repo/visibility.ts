@@ -2,6 +2,7 @@ import {
   type AccountId,
   type Actor,
   type CampaignId,
+  type CharacterId,
   type SharedWorldId,
   NotFound,
 } from "@taverns/api";
@@ -942,7 +943,8 @@ export const usableInCampaign = (
  * Rows of a corpus table in **the core rules**: the bundle, narrowed exactly as
  * {@link usableInCampaign} narrows it for a campaign's players (`visibility =
  * 'shared'`). What a character is written against when it has no campaign
- * context (`library.coreOptions`, `me.createCoreCharacter`).
+ * context (`library.coreOptions`, `me.createCoreCharacter`), and what its sheet
+ * reads while it sits at no table ({@link characterVocabulary}).
  *
  * It takes no actor because nothing in it is anybody's: no Library original, no
  * campaign copy and no Shared World share can match `unowned`, and the bundle
@@ -951,6 +953,75 @@ export const usableInCampaign = (
  */
 export const coreRulesUsable = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
   sql.and([unowned(sql, table), sql`${sql(table)}.visibility = 'shared'`]);
+
+/** Rows of a corpus table in one vocabulary, as a `where` clause. */
+export type Vocabulary = (table: string) => Statement.Fragment;
+
+/**
+ * The vocabulary of these tables — everything {@link usableInCampaign} reaches
+ * through any of them — or, with no table at all, **the core rules**.
+ *
+ * The one rule behind both halves of the question "what is this written
+ * against": a draft names the campaign that is its context (or none), and a
+ * character's sheet names the tables it sits at through
+ * {@link characterVocabulary}. Nothing else chooses between the two.
+ *
+ * The core rules are contained in every campaign's vocabulary for anybody who
+ * can read that campaign, because `usableInCampaign` keeps the bundle's
+ * `visibility = 'shared'` rows for players. So a sheet written against the core
+ * rules loses nothing when its character is later seated.
+ */
+export const vocabularyAt =
+  (sql: SqlClient.SqlClient, campaigns: ReadonlyArray<CampaignId>, actor: Actor): Vocabulary =>
+  (table) =>
+    campaigns.length === 0
+      ? coreRulesUsable(sql, table)
+      : sql.or(campaigns.map((campaignId) => usableInCampaign(sql, table, campaignId, actor)));
+
+/**
+ * **Which vocabulary one character's sheet reads** — the spell picker, the
+ * level-up recompute and the subrace check on an edit all ask here and nowhere
+ * else.
+ *
+ * - **Seated**: every table with a live seat for the character that the owner
+ *   can still read, unioned. A character at several tables is checked against
+ *   all of them, because one shared character cannot be bound to one table's
+ *   rules (the continuity decision). Where two tables both have a row of the
+ *   same name, the reader picks; the class lookups prefer the bundle's.
+ * - **Unseated**: the core rules, whatever campaign it was drafted in. The row
+ *   does not record that context, and a vocabulary nobody is at the table for
+ *   would be a campaign read with no seat behind it. A table the owner can no
+ *   longer read counts as no seat.
+ *
+ * Seating one later changes the answer on the next read and rewrites nothing:
+ * the sheet keeps what it was written with until the owner edits it or levels
+ * up. Leaving the last table hands it back to the core rules the same way.
+ *
+ * The caller has already proven the actor owns the character; the seats are
+ * the actor's own and each campaign keeps `usableInCampaign`'s own gate.
+ */
+export const characterVocabulary = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+  actor: Actor,
+): Effect.Effect<Vocabulary, SqlError.SqlError> =>
+  sql<{ readonly campaign_id: CampaignId }>`
+    select campaign.id as campaign_id
+    from campaign_character
+    join campaign on campaign.id = campaign_character.campaign_id
+    where campaign_character.character_id = ${characterId}
+      and campaign_character.account_id = ${actor.accountId}
+      and campaign_character.left_at is null
+      and ${campaignReadable(sql, actor)}
+  `.pipe(
+    Effect.map((rows) =>
+      vocabularyAt(
+        sql,
+        rows.map((row) => row.campaign_id),
+        actor,
+      ),
+    ),
+  );
 
 /**
  * Library originals **explicitly shared to the named campaign's group** — the

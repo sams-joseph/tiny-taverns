@@ -112,11 +112,17 @@ export const loadMyCharacters = (client: TavernsClient) =>
  */
 export const myCharactersAtom = apiAtom(loadMyCharacters, [reads.myCharacters]);
 
+/**
+ * One character's spell picker. Its vocabulary is the tables the character
+ * sits at, or the core rules at none (`characterVocabulary` on the server), so
+ * it also answers `reads.myCharacters`: a join or a leave moves the seats
+ * without touching the sheet.
+ */
 export const characterSpellsAtom = Atom.family((characterId: CharacterId) =>
   apiAtom(
     (client): Effect.Effect<CharacterSpellbook, unknown> =>
       client.me.characterSpells({ params: { characterId } }),
-    [reads.characterSpells(characterId)],
+    [reads.characterSpells(characterId), reads.myCharacters],
   ),
 );
 

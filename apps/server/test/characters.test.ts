@@ -469,20 +469,25 @@ describe("updateOwn: the owner's write, campaign-free", () => {
     expect(refused).toBeInstanceOf(Conflict);
   });
 
-  it("treats the labels as free text once no live seat remains", async () => {
-    // With no readable campaign to check against there is no vocabulary to
-    // contradict — exactly as a race with no vocabulary entry always was.
+  it("checks against the core rules once no live seat remains", async () => {
+    // With no readable campaign the sheet reads the core rules
+    // (`characterVocabulary`), which have no Sixpence Elf.
     const { character, seatId } = await run(
       aCharacterAt(fixture.saltRoad.id, fixture.pim, { name: "Wanderer" }),
     );
     await run(withActor(fixture.pim)(party.leave(fixture.saltRoad.id, seatId)));
 
-    const written = await run(
+    const refused = await run(
       withActor(fixture.pim)(
         characters.updateOwn(character.id, { race: "Elf", subrace: "Sixpence Elf" }),
-      ),
+      ).pipe(Effect.flip),
     );
-    expect(written.subrace).toBe("Sixpence Elf");
+    expect(refused).toBeInstanceOf(Conflict);
+    // A race label with no subrace is still free text.
+    const written = await run(
+      withActor(fixture.pim)(characters.updateOwn(character.id, { race: "Sixpence Elf" })),
+    );
+    expect(written.race).toBe("Sixpence Elf");
   });
 
   it("has no field for a live value, the owner, the toggle, or the counter itself", () => {

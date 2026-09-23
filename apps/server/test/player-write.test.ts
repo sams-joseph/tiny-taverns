@@ -409,18 +409,27 @@ describe("the columns: the live half is not expressible", () => {
     await editOwn(fixture.pim, fixture.brannoc.id, { race: "Half-orc", subrace: null });
   });
 
-  it("falls back to free text when the character is seated nowhere", async () => {
-    // No live seats means no vocabulary to resolve against — the same rule an
-    // unmatched race label has always had, met from the seatless side.
+  it("checks against the core rules when the character is seated nowhere", async () => {
+    // No live seat means the core rules (`characterVocabulary`), not free
+    // text: the sheet of a character at no table reads the same vocabulary
+    // its spell picker and level-up do.
     const { made, seatId } = await aFresh(fixture.pim, "Wanderer");
     await runtime.runPromise(
       withActor(fixture.pim)(party.leave(fixture.table.id, seatId)).pipe(Effect.orDie),
     );
-    const result = await editOwn(fixture.pim, made.id, {
+    const homebrew = await editOwn(fixture.pim, made.id, {
       race: "Utter Homebrew",
       subrace: "Even More So",
     });
-    expect(result._tag).toBe("Success");
+    expect(homebrew._tag).toBe("Failure");
+    expect(homebrew._tag === "Failure" && homebrew.failure).toBeInstanceOf(Conflict);
+    // Pim's own Library Elf offers High Elf, but a Library original is not the
+    // core rules.
+    const library = await editOwn(fixture.pim, made.id, { race: "Elf", subrace: "High Elf" });
+    expect(library._tag).toBe("Failure");
+    // A race with no subrace is still a free label.
+    const labelled = await editOwn(fixture.pim, made.id, { race: "Utter Homebrew" });
+    expect(labelled._tag).toBe("Success");
   });
 
   it("has no field for a live value, an owner, or a disclosure toggle", () => {
