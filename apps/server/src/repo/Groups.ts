@@ -8,6 +8,7 @@ import {
   type SharedWorldCampaignRelation,
   type SharedWorldCreate,
   type SharedWorldId,
+  SharedWorldImages,
   SharedWorldMember,
   SharedWorldMembership,
   type SharedWorldUpdate,
@@ -16,6 +17,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import type { SqlError } from "effect/unstable/sql";
 import { SqlClient } from "effect/unstable/sql";
+import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { liveMemberAccountIds } from "./Memberships.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
@@ -76,10 +78,12 @@ export const foundGroup = (
       insert into play_group ${sql.insert(
         defined({ owner_account_id: ownerAccountId, name, is_shared_world: isSharedWorld }),
       )}
-      returning *
+      returning *, ${sharedWorldImageColumns(sql, "play_group")}
     `;
     yield* addOwnerMember(sql, rows[0]!.id, ownerAccountId);
-    return toGroup(rows[0]!);
+    // Founded by this statement, so it has no cover to sign yet; its creator's
+    // handler starts the draw after the commit (`HobImages.drawSharedWorld`).
+    return toGroup(rows[0]!, undefined);
   });
 
 /**
@@ -109,18 +113,65 @@ interface GroupRow {
   readonly archived_at: Date | null;
   readonly created_at: Date;
   readonly updated_at: Date;
+  /** From {@link sharedWorldImageColumns}; `null` when the world has no cover record. */
+  readonly image_id: string | null;
+  readonly image_state: "generating" | "ready" | "failed" | null;
 }
 
-/** One mapper per table — imported wherever a second read needs it. */
-export const toGroup = (row: GroupRow): SharedWorld =>
-  new SharedWorld({
+/**
+ * The cover's two facts beside a `play_group` row, as scalar subqueries, the
+ * way `campaignImageColumns` sits beside a campaign. **Every read that becomes
+ * a `SharedWorld` names this fragment**: `toGroup` dies on a row without it.
+ * `world` is the name the statement gives the `play_group` row it returns.
+ */
+const sharedWorldImageColumns = (sql: SqlClient.SqlClient, world: string) => sql`
+  (select shared_world_image.id from shared_world_image
+   where shared_world_image.group_id = ${sql(`${world}.id`)}) as image_id,
+  (select shared_world_image.state from shared_world_image
+   where shared_world_image.group_id = ${sql(`${world}.id`)}) as image_state
+`;
+
+/** Signs a ready cover's paths; the Shared World kind of `ImageUrls.pathsFor`. */
+type SharedWorldImageSigner = (imageId: string) => SharedWorld["image"];
+
+/** The signer a repository layer was built with, or `undefined`, which mints nothing. */
+const sharedWorldImageSigner: Effect.Effect<SharedWorldImageSigner | undefined> = Effect.map(
+  imageSigner,
+  (sign: ImageSigner | undefined) =>
+    sign === undefined
+      ? undefined
+      : (imageId) => {
+          const paths = sign("sharedWorld", imageId);
+          return paths === null
+            ? null
+            : new SharedWorldImages({ cardUrl: paths.card, fullUrl: paths.full });
+        },
+);
+
+/**
+ * One mapper per table.
+ *
+ * **The only place a Shared World's cover URL is minted**, from a row whose own
+ * SQL already returned the world to this reader (`groupReadable` or
+ * `groupWritable`), which is what makes cover visibility exactly world
+ * visibility.
+ */
+const toGroup = (row: GroupRow, sign: SharedWorldImageSigner | undefined): SharedWorld => {
+  if (row.image_state === undefined) {
+    throw new Error("a Shared World read did not select sharedWorldImageColumns");
+  }
+  const imageId = row.image_state === "ready" ? row.image_id : null;
+  return new SharedWorld({
     id: row.id,
     name: row.name,
     ownerAccountId: row.owner_account_id,
+    image: imageId !== null && sign !== undefined ? sign(imageId) : null,
+    imagePending: row.image_state === "generating",
     archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
     createdAt: DateTime.fromDateUnsafe(row.created_at),
     updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   });
+};
 
 interface GroupMembershipRow extends GroupRow {
   readonly joined_at: Date;
@@ -199,18 +250,22 @@ export class Groups extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const sign = yield* sharedWorldImageSigner;
+      const asWorld = (row: GroupRow): SharedWorld => toGroup(row, sign);
+      const imageColumns = sharedWorldImageColumns(sql, "play_group");
+      const destinationImageColumns = sharedWorldImageColumns(sql, "destination");
 
       const one = (rows: ReadonlyArray<GroupRow>, id: SharedWorldId) =>
         rows.length === 0
           ? Effect.fail(new NotFound({ resource: "shared-world", id }))
-          : Effect.succeed(toGroup(rows[0]!));
+          : Effect.succeed(asWorld(rows[0]!));
 
       return {
         mine: dieOnSqlError(
           Effect.gen(function* () {
             const actor = yield* CurrentActor;
             const rows = yield* sql<GroupMembershipRow>`
-              select play_group.*, group_member.created_at as joined_at
+              select play_group.*, ${imageColumns}, group_member.created_at as joined_at
               from play_group
               join group_member
                 on group_member.group_id = play_group.id
@@ -224,7 +279,7 @@ export class Groups extends Context.Service<
             return rows.map(
               (row) =>
                 new SharedWorldMembership({
-                  sharedWorld: toGroup(row),
+                  sharedWorld: asWorld(row),
                   isOwner: row.owner_account_id === actor.accountId,
                   joinedAt: DateTime.fromDateUnsafe(row.joined_at),
                 }),
@@ -236,14 +291,14 @@ export class Groups extends Context.Service<
           Effect.gen(function* () {
             const actor = yield* CurrentActor;
             const rows = yield* sql<GroupRow>`
-              select * from play_group
+              select play_group.*, ${imageColumns} from play_group
               where play_group.owner_account_id = ${actor.accountId}
                 and ${groupReadable(sql, actor)}
                 and play_group.is_shared_world
                 and play_group.archived_at is not null
               order by play_group.archived_at desc, play_group.created_at desc
             `;
-            return rows.map(toGroup);
+            return rows.map(asWorld);
           }),
         ),
 
@@ -252,7 +307,7 @@ export class Groups extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<GroupRow>`
-                select * from play_group
+                select play_group.*, ${imageColumns} from play_group
                 where play_group.id = ${id} and ${groupReadable(sql, actor, id)}
               `;
               return yield* one(rows, id);
@@ -278,7 +333,7 @@ export class Groups extends Context.Service<
                 where play_group.id = ${creator.group}
                   and play_group.owner_account_id = ${creator.actor.accountId}
                   and play_group.archived_at is null
-                returning *
+                returning play_group.*, ${imageColumns}
               `;
               return yield* one(rows, creator.group);
             }),
@@ -289,7 +344,7 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const destinations = yield* sql<GroupRow>`
-                  select destination.*
+                  select destination.*, ${destinationImageColumns}
                   from campaign
                   join play_group as source on source.id = campaign.group_id
                   cross join play_group as destination
@@ -343,7 +398,7 @@ export class Groups extends Context.Service<
                     )
                 `;
 
-                return toGroup(destinations[0]!);
+                return asWorld(destinations[0]!);
               }),
             ),
           ),
@@ -353,7 +408,7 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const destinations = yield* sql<GroupRow>`
-                  select destination.*
+                  select destination.*, ${destinationImageColumns}
                   from campaign
                   join play_group as source on source.id = campaign.group_id
                   cross join play_group as destination
@@ -390,7 +445,7 @@ export class Groups extends Context.Service<
                   return yield* new NotFound({ resource: "campaign", id: creator.campaign });
                 }
 
-                return toGroup(destinations[0]!);
+                return asWorld(destinations[0]!);
               }),
             ),
           ),
@@ -403,7 +458,7 @@ export class Groups extends Context.Service<
               const rows = yield* sql<GroupRow>`
                 update play_group set ${setClause(sql, columns)}
                 where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning *
+                returning play_group.*, ${imageColumns}
               `;
               return yield* one(rows, id);
             }),
@@ -414,8 +469,8 @@ export class Groups extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const worlds = yield* sql<GroupRow>`
-                  select * from play_group
+                const worlds = yield* sql<{ readonly id: SharedWorldId }>`
+                  select play_group.id from play_group
                   where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
                   for update
                 `;
@@ -437,9 +492,9 @@ export class Groups extends Context.Service<
                 const rows = yield* sql<GroupRow>`
                   update play_group set archived_at = now(), updated_at = now()
                   where play_group.id = ${id}
-                  returning *
+                  returning play_group.*, ${imageColumns}
                 `;
-                return toGroup(rows[0]!);
+                return asWorld(rows[0]!);
               }),
             ),
           ),
@@ -451,7 +506,7 @@ export class Groups extends Context.Service<
               const rows = yield* sql<GroupRow>`
                 update play_group set archived_at = null, updated_at = now()
                 where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning *
+                returning play_group.*, ${imageColumns}
               `;
               return yield* one(rows, id);
             }),

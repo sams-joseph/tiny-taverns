@@ -19,6 +19,8 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchivedDialog } from "../campaign/ArchivedDialog";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
+import { HobCover } from "../hob/HobCover";
 import { TopBar } from "../shell/TopBar";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
 import { sharedWorldsAtom } from "./load";
@@ -38,7 +40,8 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 function SharedWorldRow({ membership }: { readonly membership: SharedWorldMembership }) {
   const sharedWorld = membership.sharedWorld;
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      <HobCover image={sharedWorld.image} pending={sharedWorld.imagePending} shape="card" />
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
@@ -130,6 +133,12 @@ export function SharedWorldsScreen() {
   const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
+  // A world founded here, or promoted from a campaign, lands on this list while
+  // Hob is still drawing its cover. Re-read until every card's has landed.
+  useHobDrawingPolling(
+    memberships?.some((membership) => membership.sharedWorld.imagePending) === true,
+    retry,
+  );
 
   return (
     <>

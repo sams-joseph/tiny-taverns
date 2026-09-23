@@ -986,6 +986,9 @@ describe("a stranger reads nothing", () => {
               'rule_choice_language',
               'rule_choice_proficiency',
               'rule_choice_trait',
+              -- A Shared World's cover is read only as a field of the world,
+              -- through the world's own shipped reads.
+              'shared_world_image',
               'skill',
               'spell_class',
               'spell_damage_type',

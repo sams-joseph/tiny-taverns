@@ -15,7 +15,7 @@ import {
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { CampaignCover } from "../campaign/CampaignCover";
+import { HobCover } from "../hob/HobCover";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
@@ -196,11 +196,7 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
         )}
 
         {view !== undefined && (
-          <CampaignCover
-            image={view.campaign.image}
-            pending={view.campaign.imagePending}
-            shape="band"
-          />
+          <HobCover image={view.campaign.image} pending={view.campaign.imagePending} shape="band" />
         )}
 
         {view !== undefined &&

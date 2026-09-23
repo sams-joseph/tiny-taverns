@@ -5,7 +5,7 @@
  * **One style, two framings.** The palette and the rules are the same words for
  * every kind of image; what differs is only the framing the place it shows
  * needs — a bust on a plate for a character, a wide scene under a card for a
- * campaign. Each framing is a whole style string, so a prompt builder appends
+ * campaign or a Shared World. Each framing is a whole style string, so a prompt builder appends
  * one constant and never assembles the style itself.
  */
 

@@ -6,7 +6,7 @@
  * What a kind decides:
  *
  * - **`table` / `subjectColumn`** — its record (`character_portrait`,
- *   `campaign_image`), one row per subject, bound to the subject and its owner
+ *   `campaign_image`, `shared_world_image`), one row per subject, bound to the subject and its owner
  *   by a composite key (see `0049_campaign_images.ts` for why a table per kind).
  * - **`root`** — the first segment of its storage keys:
  *   `{root}/{accountId}/{subjectId}/{imageId}/`.
@@ -76,6 +76,24 @@ export const IMAGE_KINDS = {
     root: "campaign-images",
     tag: "campaign-image",
     route: "/campaign-images",
+    size: "1536x1024",
+    variants: {
+      card: { width: 768, height: 512 },
+      full: { width: 1536, height: 1024 },
+    },
+    position: "centre",
+  } satisfies ImageKindSpec<"card" | "full">,
+  /**
+   * A Shared World's cover: the campaign cover's shape exactly, because it is
+   * shown in the same two places — the head of a card on the Shared World list
+   * (`card`) and a band above the world's own screen (`full`).
+   */
+  sharedWorld: {
+    table: "shared_world_image",
+    subjectColumn: "group_id",
+    root: "shared-world-images",
+    tag: "shared-world-image",
+    route: "/shared-world-images",
     size: "1536x1024",
     variants: {
       card: { width: 768, height: 512 },

@@ -32,7 +32,7 @@ Redemption admits a `group_member` before the `campaign_member` because the elig
 
 All four live in `repo/Groups.ts` and `repo/Campaigns.ts`, each locking the campaign and both contexts `for update`, and each answering `NotFound` for the shapes it refuses (`groups.test.ts` enumerates them):
 
-- **Promote** (`POST /campaigns/:id/shared-world`): needs the creator proof and ownership of the context; flips `is_shared_world` in place.
+- **Promote** (`POST /campaigns/:id/shared-world`): needs the creator proof and ownership of the context; flips `is_shared_world` in place. Like founding a world, it starts the world's cover after it commits ([Images](images.md)).
 - **Connect** (`…/shared-world/connect`): standalone campaign to a world the creator owns. Restores destination eligibility for every live participant, repoints the campaign, cascades the denormalised context id through memberships, seats and invitations, then deletes the empty automatic context. Refused for an already-connected campaign or another owner's world.
 - **Disconnect** (`…/shared-world/disconnect`): creates a fresh hidden context and admits every live participant. World ownership is irrelevant, so another owner's world cannot trap a table. Existing world membership is not revoked. Refused for a standalone campaign.
 - **Move** (`…/shared-world/move`): one transaction, not a public disconnect plus connect; participants are admitted to the destination before anything cascades. The source need not be owned by the creator. Refused for a standalone source, the current world, another owner's destination, or an archived destination.

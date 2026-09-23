@@ -19,6 +19,8 @@ import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { ArchiveDialog } from "../campaign/ArchiveDialog";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
+import { HobCover } from "../hob/HobCover";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
@@ -28,7 +30,7 @@ import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
- * One Shared World: its campaign directory, and its people.
+ * One Shared World: its cover, its campaign directory, and its people.
  *
  * **The directory is every campaign in the Shared World, with this reader's own
  * relation on each card** — `Created by you`, `Playing`, or a plain world
@@ -206,6 +208,15 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
   // The panel is the layout's, and its Shared World scope is the route's.
   const askHob = useShowHob();
 
+  // A world opens here the moment it is made, while Hob is still drawing its
+  // cover. Re-read the world, and the list it came from, until it lands.
+  const invalidate = useInvalidate();
+  const rereadCover = useCallback(
+    () => invalidate([reads.sharedWorld(worldId), reads.mySharedWorlds]),
+    [invalidate, worldId],
+  );
+  useHobDrawingPolling(view?.sharedWorld.imagePending === true, rereadCover);
+
   return (
     <>
       <TopBar
@@ -232,6 +243,12 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
         )}
         {view !== undefined && (
           <>
+            {/* The cover, when there is one, above everything the page is about. */}
+            <HobCover
+              image={view.sharedWorld.image}
+              pending={view.sharedWorld.imagePending}
+              shape="band"
+            />
             <section className="flex flex-col gap-4" aria-label="Campaigns">
               <NewCampaign worldId={worldId} />
               {view.campaigns.length === 0 ? (

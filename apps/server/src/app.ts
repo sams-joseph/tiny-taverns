@@ -374,8 +374,8 @@ export const hobImagesFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      `Hob-drawn images are ON (character portraits, campaign covers): model ${model.value} ` +
-        `at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
+      "Hob-drawn images are ON (character portraits, campaign and Shared World covers): " +
+        `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
     return HobImages.layer({ generation: Option.some({ limits, concurrency }), storageOn }).pipe(
@@ -501,7 +501,9 @@ export const servicesOver = <E>(
     // unsigned, because Hob hands what it reads to the model and a signed URL
     // is a bearer capability that must not leave us.
     Layer.fresh(Campaigns.layer).pipe(Layer.provide(imageUrls)),
-    Groups.layer,
+    // A Shared World read signs its cover's URLs, and is `fresh` for the same
+    // reason: the bare `Groups.layer` Hob reads a world through stays unsigned.
+    Layer.fresh(Groups.layer).pipe(Layer.provide(imageUrls)),
     // The chronicle renders recaps at share time, so it composes `Recap`.
     GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
     // The group's shared Library shelf — grants to copy, never content.

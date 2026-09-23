@@ -1,10 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
+import { apiUrl } from "../api/client";
 import {
   bodyOf,
   campaign,
   campaignId,
+  drawnWorldCover,
   sharedWorld,
   sharedWorldDetails,
   worldId,
@@ -398,5 +400,85 @@ describe("one Shared World's screen", () => {
         "Every lantern went dark on the same night.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe("a Shared World's cover", () => {
+  // The polling tests wait on the real two-second timer, so they give the
+  // re-read far more than one period to land on a loaded runner.
+  const covers = () => document.querySelectorAll("[data-slot=hob-cover]");
+
+  const listWith = (over: object) => ({
+    status: 200,
+    body: [
+      {
+        sharedWorld: { ...sharedWorldDetails, ...over },
+        isOwner: true,
+        joinedAt: campaign.createdAt,
+      },
+    ],
+  });
+  const worldWith = (over: object) => ({ status: 200, body: { ...sharedWorldDetails, ...over } });
+
+  it("heads a world's card on the list with its cover", async () => {
+    server.routes.set("GET /worlds", listWith({ image: drawnWorldCover }));
+    await renderCampaigns("/worlds", mintingSession());
+    await screen.findByText("The Salt Company");
+    expect(covers()).toHaveLength(1);
+    expect(covers()[0]!.querySelector("img")?.getAttribute("src")).toBe(
+      apiUrl(drawnWorldCover.cardUrl),
+    );
+  });
+
+  it("draws a card with no cover exactly as before", async () => {
+    await renderCampaigns("/worlds", mintingSession());
+    await screen.findByText("The Salt Company");
+    expect(covers()).toHaveLength(0);
+  });
+
+  it("says Hob is drawing on the list, and re-reads until the cover lands", async () => {
+    server.routes.set("GET /worlds", listWith({ imagePending: true }));
+    await renderCampaigns("/worlds", mintingSession());
+    expect(await screen.findByText("Hob is drawing…")).toHaveAttribute("role", "status");
+
+    server.routes.set("GET /worlds", listWith({ image: drawnWorldCover }));
+    await waitFor(() => expect(covers()[0]?.querySelector("img")).toBeTruthy(), {
+      timeout: 15_000,
+    });
+    expect(screen.queryByText("Hob is drawing…")).toBeNull();
+  });
+
+  it("puts the cover above the world's own screen, and none on its campaign cards", async () => {
+    server.routes.set(`GET /worlds/${worldId}`, worldWith({ image: drawnWorldCover }));
+    await renderSharedWorld(mintingSession());
+    await screen.findByText("The Salt Road");
+    await waitFor(() => expect(covers()).toHaveLength(1));
+    expect(covers()[0]!.querySelector("img")?.getAttribute("src")).toBe(
+      apiUrl(drawnWorldCover.fullUrl),
+    );
+    // Above the directory, in the page rather than the sticky chrome.
+    const directory = screen.getByRole("region", { name: "Campaigns" });
+    expect(
+      covers()[0]!.compareDocumentPosition(directory) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByRole("main").contains(covers()[0]!)).toBe(true);
+  });
+
+  it("re-reads the world on its screen while its cover is being drawn", async () => {
+    server.routes.set(`GET /worlds/${worldId}`, worldWith({ imagePending: true }));
+    await renderSharedWorld(mintingSession());
+    expect(await screen.findByText("Hob is drawing…")).toHaveAttribute("role", "status");
+
+    server.routes.set(`GET /worlds/${worldId}`, worldWith({ image: drawnWorldCover }));
+    await waitFor(() => expect(covers()[0]?.querySelector("img")).toBeTruthy(), {
+      timeout: 15_000,
+    });
+    expect(screen.queryByText("Hob is drawing…")).toBeNull();
+  });
+
+  it("draws the world's screen with no cover exactly as before", async () => {
+    await renderSharedWorld(mintingSession());
+    await screen.findByText("The Salt Road");
+    expect(covers()).toHaveLength(0);
   });
 });

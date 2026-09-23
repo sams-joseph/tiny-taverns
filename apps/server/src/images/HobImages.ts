@@ -9,6 +9,9 @@ import {
   NotFound,
   portraitHasSubject,
   portraitPromptFor,
+  SharedWorld,
+  sharedWorldImageHasSubject,
+  sharedWorldImagePromptFor,
 } from "@taverns/api";
 import {
   Cause,
@@ -37,8 +40,8 @@ import { renderImage } from "./render.js";
 
 /**
  * Hob draws a picture of a thing a person made, once, after it is made — a
- * character's portrait, a campaign's cover — and this is the server's **one
- * background worker**, the same for every kind (`kinds.ts`).
+ * character's portrait, a campaign's or a Shared World's cover — and this is
+ * the server's **one background worker**, the same for every kind (`kinds.ts`).
  *
  * ### The trigger
  *
@@ -46,7 +49,8 @@ import { renderImage } from "./render.js";
  * kind of thing **after** its transaction commits, with the row it returns:
  * {@link HobImages} `drawCharacter` from the form's `POST …/characters` and
  * Hob's accept, `drawCampaign` from `POST /campaigns` and
- * `POST /worlds/:worldId/campaigns`. It records the one image row the subject
+ * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
+ * `POST /campaigns/:campaignId/shared-world` (promotion). It records the one image row the subject
  * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
  * caps, the nothing-to-draw-from skip and the kind's rule about who may start
  * one) and hands a drawing row to a fiber. The request does not wait: a closed
@@ -98,7 +102,7 @@ export interface ImageGeneration {
 export class HobImages extends Context.Service<
   HobImages,
   {
-    /** Whether a new character or campaign will be drawn. */
+    /** Whether a new character, campaign or Shared World will be drawn. */
     readonly generating: boolean;
     /**
      * See the header. Answers the character again, `portraitPending` when a
@@ -107,6 +111,10 @@ export class HobImages extends Context.Service<
     readonly drawCharacter: (character: Character) => Effect.Effect<Character, never, CurrentActor>;
     /** The same for a campaign's cover: `imagePending` when a draw started. */
     readonly drawCampaign: (campaign: Campaign) => Effect.Effect<Campaign, never, CurrentActor>;
+    /** The same for a Shared World's cover: `imagePending` when a draw started. */
+    readonly drawSharedWorld: (
+      world: SharedWorld,
+    ) => Effect.Effect<SharedWorld, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
       kind: ImageKind,
@@ -317,6 +325,16 @@ export class HobImages extends Context.Service<
                   : undefined,
               ),
               (pending) => (pending ? new Campaign({ ...campaign, imagePending: true }) : campaign),
+            ),
+
+          drawSharedWorld: (world) =>
+            Effect.map(
+              start("sharedWorld", world.id, () =>
+                sharedWorldImageHasSubject(world)
+                  ? sharedWorldImagePromptFor(world, { style: HOUSE_COVER_STYLE })
+                  : undefined,
+              ),
+              (pending) => (pending ? new SharedWorld({ ...world, imagePending: true }) : world),
             ),
 
           image: (kind, request) =>

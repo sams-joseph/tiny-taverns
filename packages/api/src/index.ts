@@ -22,6 +22,7 @@ export * from "./HobDirectResourceUpdate.js";
 export * from "./Ids.js";
 export * from "./SharedWorld.js";
 export * from "./SharedWorldHistory.js";
+export * from "./SharedWorldImage.js";
 export * from "./LibraryShare.js";
 export * from "./Invite.js";
 export * from "./MagicItem.js";
