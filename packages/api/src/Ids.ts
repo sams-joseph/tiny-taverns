@@ -203,6 +203,15 @@ export const HobDirectResourceUpdateId = id("HobDirectResourceUpdateId");
 export type HobDirectResourceUpdateId = typeof HobDirectResourceUpdateId.Type;
 
 /**
+ * An encounter's battle map: the board a fight on that encounter is played on,
+ * and the picture Hob drew of it. Its own id rather than the encounter's,
+ * because a map is its own row (`0056_battle_maps.ts`) and the day maps are
+ * reused across encounters the id must already be the map's.
+ */
+export const BattleMapId = id("BattleMapId");
+export type BattleMapId = typeof BattleMapId.Type;
+
+/**
  * A campaign NPC — the structured, bounded persona a creator builds inside a
  * campaign and rehearses with (the NPC builder decisions of 2026-09-04). Not a
  * `CharacterId` and not a `CreatureId`: a speaking persona is a third thing,

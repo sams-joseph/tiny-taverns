@@ -181,6 +181,12 @@ export const HobProposal = Schema.Union([
     name: Schema.String,
     difficulty: Schema.NullOr(Difficulty),
     tags: Schema.Array(Schema.String),
+    /**
+     * The line the encounter's battle map is drawn from, when Hob wrote one;
+     * absent when it did not, and on every proposal made before there was one.
+     * The card shows it, because accepting draws the map from it.
+     */
+    setting: Schema.optional(Schema.String),
     roster: Schema.Array(HobRosterLine),
   }),
   /**

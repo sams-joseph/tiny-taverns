@@ -2,6 +2,7 @@ export * from "./Account.js";
 export * from "./ActionOverlay.js";
 export * from "./Actor.js";
 export * from "./Api.js";
+export * from "./BattleMap.js";
 export * from "./Beat.js";
 export * from "./Campaign.js";
 export * from "./CampaignImage.js";

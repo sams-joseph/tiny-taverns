@@ -135,8 +135,8 @@ describe("the API declaration", () => {
     // **The third is `images`**, one endpoint per kind of Hob-drawn image,
     // because an `<img>` cannot send the bearer header. Its capability is an
     // HMAC over the kind, the image, the size and an expiry, minted only inside
-    // a read of the character, the campaign, the Shared World or the NPC that
-    // a visibility predicate already allowed; every failure is the same
+    // a read of the character, the campaign, the Shared World, the NPC or the
+    // battle map that a visibility predicate already allowed; every failure is the same
     // `NotFound`. See the group's declaration and
     // `apps/server/src/images/ImageUrls.ts`.
     expect(unauthenticated).toEqual([
@@ -146,6 +146,7 @@ describe("the API declaration", () => {
       "images.campaign",
       "images.sharedWorld",
       "images.npc",
+      "images.battleMap",
     ]);
   });
 
@@ -277,6 +278,8 @@ describe("the API declaration", () => {
 
   it("declares the API groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
+      // An encounter's battle map: the creator's alone, under the encounter.
+      "battleMaps",
       "beats",
       "campaignInvites",
       "campaigns",

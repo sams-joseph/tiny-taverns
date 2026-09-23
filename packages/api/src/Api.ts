@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
+import { BattleMap, BattleMapUpdate } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import {
@@ -865,10 +866,11 @@ class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
  * per kind of image, each at the path its kind's signed URLs name.
  *
  * The capability is the signature instead. `Character.portrait`,
- * `Campaign.image`, `SharedWorld.image` and `Npc.image` carry these paths
- * already signed, and the server mints them only inside a read a SQL
- * visibility predicate has allowed, so holding a URL means some read let you
- * see that character, campaign, Shared World or NPC within the last day or so. The signature covers the kind, the image, the size and the expiry;
+ * `Campaign.image`, `SharedWorld.image`, `Npc.image` and `BattleMap.image`
+ * carry these paths already signed, and the server mints them only inside a
+ * read a SQL visibility predicate has allowed, so holding a URL means some read
+ * let you see that character, campaign, Shared World, NPC or battle map within
+ * the last day or so. The signature covers the kind, the image, the size and the expiry;
  * a forged, altered or expired one is the same `NotFound` as an image that does
  * not exist, and so is one that is not `ready` or a signature minted for
  * another kind's route.
@@ -911,6 +913,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** A campaign NPC's portrait. */
     HttpApiEndpoint.get("npc", "/npc-images/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** An encounter's battle map; its URLs are minted only on the creator's map reads. */
+    HttpApiEndpoint.get("battleMap", "/battle-map-images/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
@@ -1119,6 +1130,35 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
     }),
   )
   .prefix("/campaigns/:campaignId/encounters")
+  .middleware(Authorization) {}
+
+/**
+ * An encounter's battle map — **the creator's alone.** Every encounter has one,
+ * made with it; the picture is Hob's, drawn once as the encounter is made, and
+ * the grid is the DM's to line up. A player, a Shared World member and a
+ * stranger get `NotFound` from both endpoints, whether or not the encounter is
+ * shared: an encounter's name is not its layout. Showing a map to the table is
+ * a later play feature, with a player schema of its own.
+ *
+ * There is no create and no delete: the map is made and deleted with its
+ * encounter. There is no redraw either — a picture is drawn once.
+ */
+class BattleMapsGroup extends HttpApiGroup.make("battleMaps")
+  .add(
+    HttpApiEndpoint.get("find", "/", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      success: BattleMap,
+      error: NotFound,
+    }),
+    /** The grid, changed in place; see `BattleMapUpdate`. */
+    HttpApiEndpoint.patch("update", "/", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      payload: BattleMapUpdate,
+      success: BattleMap,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/encounters/:encounterId/map")
   .middleware(Authorization) {}
 
 /**
@@ -2526,6 +2566,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PartyGroup)
   .add(NotesGroup)
   .add(EncountersGroup)
+  .add(BattleMapsGroup)
   .add(CreaturesGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)
