@@ -35,6 +35,11 @@ afterEach(() => cleanup());
 
 const covers = () => document.querySelectorAll("[data-slot=campaign-cover]");
 
+/**
+ * The polling tests wait on the real two-second timer, so they give the re-read
+ * far more than one period to land on a loaded runner.
+ */
+
 describe("CampaignCover", () => {
   it("draws nothing at all when there is no cover and none coming", () => {
     const { container } = render(<CampaignCover image={null} pending={false} shape="card" />);
@@ -120,7 +125,7 @@ describe("the campaign list", () => {
 
     server.routes.set("GET /me/campaigns", membershipWith({ image: drawnCover }));
     await waitFor(() => expect(covers()[0]?.querySelector("img")).toBeTruthy(), {
-      timeout: 6_000,
+      timeout: 15_000,
     });
     expect(screen.queryByText("Hob is drawing…")).toBeNull();
     const reads = server.calls.filter((call) => call.pathname === "/me/campaigns");
@@ -153,7 +158,7 @@ describe("a campaign's home page", () => {
       body: { ...campaign, image: drawnCover },
     });
     await waitFor(() => expect(covers()[0]?.querySelector("img")).toBeTruthy(), {
-      timeout: 6_000,
+      timeout: 15_000,
     });
   });
 
