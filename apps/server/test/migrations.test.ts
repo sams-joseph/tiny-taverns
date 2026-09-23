@@ -208,6 +208,7 @@ describe("migrations", () => {
       "rule_section",
       "session",
       "session_event",
+      "shared_world_image",
       "skill",
       "spell",
       "spell_class",
@@ -271,6 +272,7 @@ describe("migrations", () => {
       { migration_id: 47, name: "shared_worlds" },
       { migration_id: 48, name: "character_portraits" },
       { migration_id: 49, name: "campaign_images" },
+      { migration_id: 50, name: "shared_world_images" },
     ]);
   }, 60_000);
 
@@ -329,6 +331,7 @@ describe("migrations", () => {
       { migration_id: 47, name: "shared_worlds" },
       { migration_id: 48, name: "character_portraits" },
       { migration_id: 49, name: "campaign_images" },
+      { migration_id: 50, name: "shared_world_images" },
     ]);
   }, 60_000);
 });

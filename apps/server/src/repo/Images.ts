@@ -4,25 +4,27 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
 import { StorageKey } from "../storage/ObjectStorage.js";
 import { dieOnSqlError } from "./rows.js";
-import { campaignWritable, ownCharacter } from "./visibility.js";
+import { campaignWritable, groupWritable, ownCharacter } from "./visibility.js";
 
 /**
  * Every statement about Hob-drawn images' records — one table per kind
- * (`character_portrait`, `campaign_image`; `images/kinds.ts`) — and the
- * `storage_deletion` outbox they share. The worker that draws and stores is
- * `images/HobImages.ts`; this file is only rows.
+ * (`character_portrait`, `campaign_image`, `shared_world_image`;
+ * `images/kinds.ts`) — and the `storage_deletion` outbox they share. The
+ * worker that draws and stores is `images/HobImages.ts`; this file is only rows.
  *
  * **Who may read an image is not decided here.** The wire carries an image only
- * as a field of its subject — a `Character` (and the rows that point at one),
- * or a `Campaign` — minted by that subject's own reads for an id a visibility
- * predicate already returned. The one read below that takes no actor,
+ * as a field of its subject — a `Character` (and the rows that point at one), a
+ * `Campaign` or a `SharedWorld` — minted by that subject's own reads for an id
+ * a visibility predicate already returned. The one read below that takes no actor,
  * {@link ImageRecords} `readyPrefix`, runs only after the image route has
  * checked a signature that such a read minted.
  *
  * **Who may start one is decided here**, per kind, by {@link OWNED_SUBJECT}:
  * the statement that finds the subject for this actor and names the account
  * the draw is billed to. A character is its owner's; a campaign is its
- * creator's, through `campaignWritable`, so a player's request draws nothing.
+ * creator's, through `campaignWritable`, so a player's request draws nothing;
+ * a Shared World is its owner's, through `groupWritable`, so a member's draws
+ * nothing either.
  */
 
 export type ImageFailure =
@@ -38,8 +40,8 @@ export interface ImageJob {
 
 /**
  * The daily budget, **shared by every kind**: one account's portraits and
- * campaign covers count against one per-account limit, and everybody's against
- * one overall limit. The cost is the same whatever is drawn, so a separate
+ * covers count against one per-account limit, and everybody's against one
+ * overall limit. The cost is the same whatever is drawn, so a separate
  * budget per kind would only multiply what one account can spend in a day.
  */
 export interface ImageLimits {
@@ -99,6 +101,14 @@ const OWNED_SUBJECT: {
     select campaign.id as subject_id, ${actor.accountId}::uuid as account_id from campaign
     where campaign.id = ${subjectId} and ${campaignWritable(sql, actor)}
     for update of campaign
+  `,
+  // `groupWritable` matches only an explicit world, and only for its owner —
+  // the account `shared_world_image_owner_fkey` names. A hidden context is not
+  // a Shared World, so nothing here can draw one.
+  sharedWorld: (sql, subjectId, actor) => sql`
+    select play_group.id as subject_id, ${actor.accountId}::uuid as account_id from play_group
+    where play_group.id = ${subjectId} and ${groupWritable(sql, actor)}
+    for update of play_group
   `,
 };
 

@@ -1,12 +1,36 @@
 import { Schema } from "effect";
 import { AccountId, CampaignId, SharedWorldId } from "./Ids.js";
 
+/**
+ * Where a Shared World's cover loads from: the same two sizes of one 3:2 WebP a
+ * campaign's cover has (`CampaignImages`), each a short-lived signed path on
+ * this API (`/shared-world-images/:imageId/:variant?e=…&s=…`).
+ *
+ * Minted only inside a read whose SQL already returned the world to this
+ * reader, so every member sees it and nobody else gets a URL. A bad or expired
+ * one is `NotFound`.
+ */
+export class SharedWorldImages extends Schema.Class<SharedWorldImages>("SharedWorldImages")({
+  /** 768 × 512, for the Shared World list's cards. */
+  cardUrl: Schema.String,
+  /** 1536 × 1024, the drawn size, for the band above the world's own screen. */
+  fullUrl: Schema.String,
+}) {}
+
 /** An explicit Shared World: optional context shared by connected campaigns. */
 export class SharedWorld extends Schema.Class<SharedWorld>("SharedWorld")({
   id: SharedWorldId,
   name: Schema.String,
   /** Who may rename, archive, restore and share Library sources into this world. */
   ownerAccountId: AccountId,
+  /**
+   * The cover Hob drew once, after the world was made (created, or promoted
+   * from a campaign's hidden context) — or `null`: none was drawn, it is still
+   * being drawn, or this server cannot sign URLs.
+   */
+  image: Schema.NullOr(SharedWorldImages),
+  /** The cover is being drawn right now; a screen re-reads until it clears. */
+  imagePending: Schema.Boolean,
   archivedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,

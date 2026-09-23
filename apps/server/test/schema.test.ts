@@ -98,6 +98,9 @@ const NOT_CONTENT = [
   // each section its own visibility would be a second answer to whether a
   // copied article is shared.
   "rule_section",
+  // A Shared World's cover: who may see it is exactly who may read the world,
+  // through the world's own reads. See 0050_shared_world_images.ts.
+  "shared_world_image",
   "skill",
   "spell_class",
   "spell_damage_type",

@@ -1,6 +1,6 @@
 # Storage: the cloud storage adapter
 
-The server keeps files (Hob-drawn images: character portraits and campaign covers) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
+The server keeps files (Hob-drawn images: character portraits, and campaign and Shared World covers) behind one Effect service, `ObjectStorage` in `apps/server/src/storage/ObjectStorage.ts`. Where they are hosted is not decided, and the code must not care: every provider is one implementation of that interface, chosen by an environment variable, and swapping providers means writing one adapter and nothing else.
 
 ## The interface is provider-neutral
 
@@ -41,5 +41,5 @@ Every branch logs one line, as hosted sign-in and Hob do (`server.md`, _Env file
 
 Keys are derived from ids, never from anything a person typed, and never overwritten.
 
-- **Hob-drawn images**: `{root}/{accountId}/{subjectId}/{imageId}/`, where the root is the kind's (`images/kinds.ts`): `portraits/…` for a character and `campaign-images/…` for a campaign, whose account is the campaign's creator. Each prefix holds `original.png` (the provider's bytes, untouched, so provenance credentials survive) and the kind's WebP variants: a portrait's `full.webp` (1024), `card.webp` (640) and `thumb.webp` (160), and a cover's `full.webp` (1536 × 1024) and `card.webp` (768 × 512). The prefix is built by `imagePrefix` in `repo/Images.ts` and written to the row's `storage_prefix` at insert. One `deletePrefix` removes every size, and the account segment means an account-wide purge takes one more call per root.
+- **Hob-drawn images**: `{root}/{accountId}/{subjectId}/{imageId}/`, where the root is the kind's (`images/kinds.ts`): `portraits/…` for a character, `campaign-images/…` for a campaign, whose account is the campaign's creator, and `shared-world-images/…` for a Shared World, whose account is its owner. Each prefix holds `original.png` (the provider's bytes, untouched, so provenance credentials survive) and the kind's WebP variants: a portrait's `full.webp` (1024), `card.webp` (640) and `thumb.webp` (160), and a cover's `full.webp` (1536 × 1024) and `card.webp` (768 × 512). The prefix is built by `imagePrefix` in `repo/Images.ts` and written to the row's `storage_prefix` at insert. One `deletePrefix` removes every size, and the account segment means an account-wide purge takes one more call per root.
 - **Deletion is an outbox**, `storage_deletion`. A trigger on every image table fills it when a row is deleted, and a failed or interrupted draw fills it too. It is drained through `deletePrefix`, and a failed drain backs off a minute per attempt. See [Images](images.md), _Deleting and archiving_.

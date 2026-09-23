@@ -92,6 +92,8 @@ export const sharedWorldDetails = {
   id: worldId,
   name: "The Salt Company",
   ownerAccountId: theDmAccountId,
+  image: null,
+  imagePending: false,
   archivedAt: null,
   createdAt: "2026-06-01T10:00:00.000Z",
   updatedAt: "2026-06-01T10:00:00.000Z",
@@ -301,6 +303,12 @@ export const character = {
 export const drawnCover = {
   cardUrl: "/campaign-images/2b1f2a1e-0000-4000-8000-00000000c001/card?e=1&s=c",
   fullUrl: "/campaign-images/2b1f2a1e-0000-4000-8000-00000000c001/full?e=1&s=f",
+};
+
+/** A Shared World's drawn cover, as `SharedWorld.image` carries it. */
+export const drawnWorldCover = {
+  cardUrl: "/shared-world-images/2b1f2a1e-0000-4000-8000-00000000c002/card?e=1&s=c",
+  fullUrl: "/shared-world-images/2b1f2a1e-0000-4000-8000-00000000c002/full?e=1&s=f",
 };
 
 export const drawnPortrait = {

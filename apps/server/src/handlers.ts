@@ -125,8 +125,12 @@ const CampaignsLive = HttpApiBuilder.group(
         .handle("create", ({ payload }) =>
           campaigns.createStandalone(payload).pipe(Effect.flatMap(images.drawCampaign)),
         )
+        // Promotion is the other way a Shared World is made, so it starts the
+        // world's cover exactly as `sharedWorlds.create` does, after it commits.
         .handle("promoteSharedWorld", ({ params, payload }) =>
-          asDm(params.campaignId, (creator) => groups.promote(creator, payload)),
+          asDm(params.campaignId, (creator) => groups.promote(creator, payload)).pipe(
+            Effect.flatMap(images.drawSharedWorld),
+          ),
         )
         .handle("connectSharedWorld", ({ params, payload }) =>
           asDm(params.campaignId, (creator) => groups.connect(creator, payload.worldId)),
@@ -264,7 +268,12 @@ const SharedWorldsLive = HttpApiBuilder.group(
       handlers
         .handle("list", () => groups.mine)
         .handle("archived", () => groups.archived)
-        .handle("create", ({ payload }) => groups.create(payload))
+        // The world's cover is started after the create commits, as a
+        // campaign's is; promoting a campaign's context is the other way a
+        // Shared World is made, and does the same.
+        .handle("create", ({ payload }) =>
+          groups.create(payload).pipe(Effect.flatMap(images.drawSharedWorld)),
+        )
         .handle("findById", ({ params }) => groups.findById(params.worldId))
         .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))
         .handle("archive", ({ params }) => groups.archive(params.worldId))
@@ -332,6 +341,9 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("campaign", ({ params, query }) =>
         images.image("campaign", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("sharedWorld", ({ params, query }) =>
+        images.image("sharedWorld", { ...params, e: query.e, s: query.s }),
       );
   }),
 );

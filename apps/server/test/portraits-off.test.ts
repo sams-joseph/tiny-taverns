@@ -85,6 +85,22 @@ describe("with no portrait configuration", () => {
     expect(rows[0]?.count).toBe(0);
   });
 
+  it("founds a Shared World with no cover and no record", async () => {
+    const world = await runtime.runPromise(
+      Effect.flatMap(clientFor(token), (client) =>
+        client.sharedWorlds.create({ payload: { name: "The Salt Company" } }),
+      ).pipe(Effect.orDie),
+    );
+    expect(world.image).toBeNull();
+    expect(world.imagePending).toBe(false);
+    const rows = await sql(
+      (sql) => sql<{ readonly count: number }>`
+        select count(*)::int as count from shared_world_image
+      `,
+    );
+    expect(rows[0]?.count).toBe(0);
+  });
+
   it("answers the image route with the same 404 as a bad signature", async () => {
     const response = await runtime.runPromise(
       HttpClient.get(
