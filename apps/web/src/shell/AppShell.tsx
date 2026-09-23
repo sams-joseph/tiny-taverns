@@ -420,7 +420,7 @@ function CampaignSharedWorldLink({ campaignId }: { readonly campaignId: Campaign
  * the row's height from moving and says nothing untrue in the meantime.
  *
  * **The name is the one elastic thing in the row, so it is the one that gives
- * way.** Inside the fixed title cell it truncates; below the row's own `@3xl` it
+ * way.** Inside the capped title group it truncates; below the row's own `@3xl` it
  * is `hidden` outright, because left as a plain shrinking flex item it squeezed
  * the *chevron* to zero width at 760 and took the way home with it. `min-w-4` is
  * the chevron's own width held as a floor. What is left below that is a
@@ -480,23 +480,24 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
  * the delivery's `inCampaign` read off the router instead of off a screen-id
  * list. A screen cannot render it by mistake and cannot forget it either.
  *
- * ### The tabs are anchored to a column, not to wherever the name ended
+ * ### The tabs start right after the name
  *
- * The name, the world chip and the night badge share **one cell of fixed
- * width**, so the first tab starts at the same x whatever the campaign is
- * called. Measured at 1440 it did not: the first tab sat at 428 for a campaign
- * named *The Hollow Crown* and would sit anywhere else for a campaign named
- * anything else, which is what made the row read as five things floating rather
- * than two columns. `w-96` is the widest the cell's own contents get — 375px
- * measured, with the chip's label at its `max-w-32` ceiling and a three-digit
- * session — rounded up onto the scale; past that the name truncates, which is
- * the one thing in here that is arbitrary length.
+ * The name, the world chip and the night badge are one group, and the tabs
+ * follow it at `ml-2`, so the row reads left to right from the page edge. An
+ * earlier version held the group in a fixed `w-96` cell so the first tab sat at
+ * one x for every campaign; the maintainer reversed that, preferring a row that
+ * is left aligned to one with a gap after a short name. Where the tabs start
+ * now depends on the name's length, and nothing should pin that x.
+ *
+ * The group is capped at `max-w-96` (the widest its contents get with the
+ * chip's label at its `max-w-32` ceiling and a three-digit session), and the
+ * tabs do not shrink, so a long name truncates rather than pushing the tabs off
+ * the row.
  *
  * ### Below `@5xl` it collapses, in a stated order
  *
- * The cell is fixed only while there is room for it. Under 1024 the chip drops
- * to its icon, the badge goes, and the cell becomes as wide as what is left —
- * the row's width is needed by the tabs, which are the controls. The row is not
+ * Under 1024 the chip drops to its icon and the badge goes, because the row's
+ * width is needed by the tabs, which are the controls. The row is not
  * a scroller: the action that once pushed those links past the edge now belongs
  * to the per-screen bar (`shell/TopBar.tsx`). Future overflow here is a layout
  * defect to solve, not another scrolling surface inside the page.
@@ -518,12 +519,12 @@ function CampaignRow({
     // decision says it should not have. Same shape as the global row above.
     <div className="@container">
       <div className="flex h-11.5 items-center px-page-sm @3xl/app:px-page">
-        <div className="flex min-w-0 items-center gap-3 @5xl:w-96 @5xl:shrink-0">
+        <div className="flex min-w-0 max-w-96 items-center gap-3">
           <CampaignHome campaignId={campaignId} />
           <CampaignSharedWorldLink campaignId={campaignId} />
           {relation === "creator" && <SessionBadge campaignId={campaignId} />}
         </div>
-        <nav aria-label="This campaign" className="ml-2 flex min-w-0 items-stretch self-stretch">
+        <nav aria-label="This campaign" className="ml-2 flex shrink-0 items-stretch self-stretch">
           {campaignNavFor(relation, campaignId).map((item) => (
             <CampaignNavLink key={item.label} item={item} active={item.section === section} />
           ))}

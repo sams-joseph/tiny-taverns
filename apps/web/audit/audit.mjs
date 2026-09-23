@@ -645,13 +645,16 @@ for (const width of widths) {
     rows.flatMap((r) => r.globalControls),
     26,
   );
-  // The lead cell is a fixed width only at `@5xl`; below it the cell is its
-  // contents, and a player's row carries no badge, so compare like with like.
-  for (const scenario of distinct(inCampaign.map((r) => r.scenario)))
-    expect(
-      `first campaign tab x (${scenario})`,
-      inCampaign.filter((r) => r.scenario === scenario).map((r) => r.campaignFirstTab?.x),
-    );
+  // The tabs follow the lead group, whatever the name's length: the first tab
+  // starts `ml-2` (8px) after the group's right edge.
+  for (const r of inCampaign)
+    if (r.campaignLead !== null && r.campaignFirstTab !== null) {
+      const gap = r.campaignFirstTab.x - r.campaignLead.right;
+      if (gap !== 8)
+        findings.push(
+          `${width}: ${r.screen}: first campaign tab is ${gap}px after the lead (want 8)`,
+        );
+    }
   expect(
     "sticky stack z-index",
     rows.map((r) => r.stackZ),

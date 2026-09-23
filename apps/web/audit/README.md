@@ -25,7 +25,7 @@ The screen list and the scenarios are shared with `src/shell/primaries.test.tsx`
 Per screen, per width, after the DOM has been still for 300ms:
 
 - the heights of the global row, the campaign row, the per-screen bar and the tab strip, and the sticky stack's total height and `z-index`;
-- the first campaign tab's x, the last item's right edge and the row's right edge;
+- the gap between the campaign lead group and the first tab, the last item's right edge and the row's right edge;
 - the height of every control on the global row;
 - `document.documentElement.scrollWidth` against `clientWidth`, and any chrome control drawn past the right edge (an ancestor's overflow clips it, and `scrollWidth` cannot see that);
 - `scrollWidth > clientWidth` on each chrome row;

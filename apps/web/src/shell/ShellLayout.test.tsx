@@ -145,9 +145,9 @@ describe("the persistent shell", () => {
   /**
    * jsdom computes no layout, so the pin is the class and the number is the
    * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 on all sixteen
-   * screens at every width, and the first campaign tab at x=424 (page edge 32,
-   * the `w-96` lead cell, `ml-2`) at 1024 and up. A `min-h-*` or a dropped
-   * `w-96` is what let sibling screens drift apart before.
+   * screens at every width, and the first campaign tab 8px (`ml-2`) after the
+   * lead group, which is capped at `max-w-96` so a long name truncates. A
+   * `min-h-*` is what let sibling screens drift apart before.
    */
   it("sizes every chrome row to a fixed height", async () => {
     await renderAt(`/campaigns/${campaignId}/cast/${npcId}`);
@@ -157,7 +157,7 @@ describe("the persistent shell", () => {
 
     expect(sections().parentElement).toHaveClass("h-11");
     expect(campaignNav().parentElement).toHaveClass("h-11.5");
-    expect(campaignNav().previousElementSibling).toHaveClass("@5xl:w-96", "@5xl:shrink-0");
+    expect(campaignNav().previousElementSibling).toHaveClass("max-w-96", "min-w-0");
     expect(bar?.children[0]).toHaveClass("h-19");
     expect(bar?.children[1]).toHaveClass("h-10");
     for (const row of [
