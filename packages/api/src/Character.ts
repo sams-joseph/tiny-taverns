@@ -316,7 +316,11 @@ export const JournalEntry = Schema.Struct({
 });
 export type JournalEntry = typeof JournalEntry.Type;
 
-/** The bound on `SheetStory.appearance`, shared by the form, Hob's tool and the schema. */
+/**
+ * The bound on an appearance line — a character's `SheetStory.appearance` and
+ * an NPC's `NpcIdentity.appearance` — shared by the forms, Hob's tool and the
+ * schemas.
+ */
 export const APPEARANCE_MAX = 400;
 
 /**

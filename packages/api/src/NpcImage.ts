@@ -1,3 +1,4 @@
+import { APPEARANCE_MAX } from "./Character.js";
 import type { Npc } from "./Npc.js";
 
 /**
@@ -14,10 +15,13 @@ import type { Npc } from "./Npc.js";
  *
  * 1. **Subject** — a bust, and the role when there is one (`"the ferryman at
  *    the crossing"`).
- * 2. **Who they are** — `persona.identity.summary`, bounded. An NPC has no
- *    appearance field; the summary is the nearest thing the creator writes.
- * 3. **Pronouns** — `persona.identity.pronouns`, when given.
- * 4. **Style** — `HOUSE_PORTRAIT_STYLE` (`HouseStyle.ts`), the bust framing a
+ * 2. **How they look** — `persona.identity.appearance`, the one line written
+ *    to be seen, and the primary description when the creator wrote it.
+ * 3. **Who they are** — `persona.identity.summary`, bounded: the nearest
+ *    thing to a look when there is no appearance line, and context when there
+ *    is one.
+ * 4. **Pronouns** — `persona.identity.pronouns`, when given.
+ * 5. **Style** — `HOUSE_PORTRAIT_STYLE` (`HouseStyle.ts`), the bust framing a
  *    character's portrait uses, so a cast and a party look like one table.
  *
  * ### What never goes in
@@ -55,22 +59,25 @@ const clean = (text: string | null | undefined, max: number): string | undefined
 const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 /**
- * Whether there is anything to draw: a role or a summary. An NPC that is only a
- * name would be a portrait of the house style alone, so a caller skips rather
- * than drawing a stranger.
+ * Whether there is anything to draw: a role, an appearance or a summary. An NPC
+ * that is only a name would be a portrait of the house style alone, so a caller
+ * skips rather than drawing a stranger.
  */
 export const npcImageHasSubject = (npc: NpcImageSubject): boolean =>
   clean(npc.role, ROLE_MAX) !== undefined ||
+  clean(npc.persona.identity?.appearance, APPEARANCE_MAX) !== undefined ||
   clean(npc.persona.identity?.summary, SUMMARY_MAX) !== undefined;
 
 export const npcImagePromptFor = (npc: NpcImageSubject, options: NpcImageOptions): string => {
   const role = clean(npc.role, ROLE_MAX);
+  const appearance = clean(npc.persona.identity?.appearance, APPEARANCE_MAX);
   const summary = clean(npc.persona.identity?.summary, SUMMARY_MAX);
   const pronouns = clean(npc.persona.identity?.pronouns, PRONOUNS_MAX);
   return [
     role === undefined
       ? "Head-and-shoulders portrait of a character in a fantasy adventure."
       : `Head-and-shoulders portrait of a character in a fantasy adventure: ${sentence(role)}`,
+    appearance === undefined ? undefined : `How they look: ${sentence(appearance)}`,
     summary === undefined ? undefined : sentence(summary),
     pronouns === undefined ? undefined : `Pronouns: ${sentence(pronouns)}`,
     options.style.trim(),
