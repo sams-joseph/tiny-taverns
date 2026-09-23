@@ -162,6 +162,21 @@ misspelled — check that before suspecting the key.
 Neither value is a secret: one identifies the frontend, the other only _verifies_ tokens.
 **`CLERK_SECRET_KEY` is deliberately not used anywhere in this repo** — don't add it.
 
+### Optional: object storage
+
+File storage is opt-in too. With `STORAGE_DRIVER` unset the server logs `Storage is OFF`
+and anything that stores files reports it unavailable. For local development, store files
+in a directory:
+
+```bash
+# apps/server/.env.local — gitignored; see apps/server/.env.example
+STORAGE_DRIVER=filesystem   # the only driver so far
+# STORAGE_FS_ROOT=…         # defaults to apps/server/.storage (gitignored)
+```
+
+The adapter is provider-neutral. `docs/internals/storage.md` explains how to add a hosted
+provider.
+
 ## Workspace commands
 
 Run from the repo root; Turborepo fans each task out across the workspace (respecting

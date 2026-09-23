@@ -1,5 +1,5 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
-import { NodeHttpClient } from "@effect/platform-node";
+import { NodeFileSystem, NodeHttpClient, NodePath } from "@effect/platform-node";
 import type { PgClient } from "@effect/sql-pg";
 import type { Authorization } from "@taverns/api";
 import { type Config, Effect, Layer, Option, type Redacted } from "effect";
@@ -19,6 +19,8 @@ import {
   hobMaxTokens,
   hobModel,
   npcPlayerCampaignDailyLimit,
+  storageDriver,
+  storageFsRoot,
 } from "./Config.js";
 import * as Database from "./Database.js";
 import { ApiLive } from "./handlers.js";
@@ -65,6 +67,8 @@ import { Search } from "./repo/Search.js";
 import { SessionEvents } from "./repo/SessionEvents.js";
 import { Sessions } from "./repo/Sessions.js";
 import { Spells } from "./repo/Spells.js";
+import * as FileSystemStorage from "./storage/FileSystemStorage.js";
+import { ObjectStorage, type StorageError } from "./storage/ObjectStorage.js";
 
 /**
  * Which identity provider is behind the seam — the one place in the server
@@ -260,6 +264,43 @@ export const npcAgentFromConfig: Layer.Layer<
 );
 
 /**
+ * Which object storage provider is behind `ObjectStorage`: the one place that
+ * names a driver and chooses, arranged as `assistantFromConfig` is.
+ *
+ * **Unset is the default configuration, and it is what CI runs.** No driver
+ * means `ObjectStorage.unavailable`: the server boots, the suite passes, and
+ * anything that needs storage answers `StorageUnavailable`. A driver name this
+ * server does not know is a `ConfigError` at boot, not a quiet OFF.
+ *
+ * **Both branches log, one line, every boot.** The ON line names the driver
+ * and where it writes. A hosted provider's line must name no credential.
+ *
+ * Adding a provider is one more branch here over one more adapter module; see
+ * `docs/internals/storage.md`.
+ */
+export const storageFromConfig: Layer.Layer<ObjectStorage, Config.ConfigError | StorageError> =
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const driver = yield* storageDriver;
+
+      if (Option.isNone(driver)) {
+        yield* Effect.logInfo(
+          "Storage is OFF: STORAGE_DRIVER is unset, so anything that stores files reports " +
+            "storage unavailable. To turn it on, set STORAGE_DRIVER in apps/server/.env.local " +
+            "(see .env.example).",
+        );
+        return ObjectStorage.unavailable;
+      }
+
+      const root = yield* storageFsRoot;
+      yield* Effect.logInfo(`Storage is ON: driver filesystem at ${root}.`);
+      return FileSystemStorage.layer({ root }).pipe(
+        Layer.provide([NodeFileSystem.layer, NodePath.layer]),
+      );
+    }),
+  );
+
+/**
  * Everything the handlers need, over whichever database it is given.
  *
  * Parameterised so the tests can mount the same wiring over a throwaway
@@ -297,6 +338,7 @@ export const servicesOver = <E>(
     E | Config.ConfigError,
     Npcs | NpcKnowledge | NpcMemories | NpcThreads | NpcProposals | CampaignCreatorActors
   > = npcAgentFromConfig,
+  storage: Layer.Layer<ObjectStorage, E | Config.ConfigError | StorageError> = storageFromConfig,
 ): Layer.Layer<
   | Accounts
   | Authorization
@@ -332,6 +374,7 @@ export const servicesOver = <E>(
   | NpcFollowUps
   | Npcs
   | NpcThreads
+  | ObjectStorage
   // A campaign's rules vocabulary, and the Library originals behind it. An
   // ordinary campaign-scoped repository composing the shipped predicates — no
   // `LiveEvents`, because writing a class changes nothing at a table tonight.
@@ -347,7 +390,7 @@ export const servicesOver = <E>(
   | SessionEvents
   | Sessions
   | Spells,
-  E | Config.ConfigError
+  E | Config.ConfigError | StorageError
 > =>
   Layer.mergeAll(
     Accounts.layer,
@@ -420,6 +463,9 @@ export const servicesOver = <E>(
       ]),
     ),
     NpcThreads.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // Files, behind whichever provider `STORAGE_DRIVER` names. Nothing reads
+    // it yet; it is built here so its boot line is printed with the others.
+    storage,
     // The NPC rehearsal loop: proposal tools write only review rows, never
     // destination campaign state. It reads the NPC, its transcript, and this
     // NPC's explicit facts/approved memories — no campaign-wide repositories.

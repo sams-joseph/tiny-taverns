@@ -1,4 +1,5 @@
 import { Config, Redacted } from "effect";
+import { fileURLToPath } from "node:url";
 
 /**
  * The database the committed `compose.yaml` brings up on `pnpm db:up`.
@@ -133,3 +134,27 @@ export const npcPlayerCampaignDailyLimit = Config.int("NPC_PLAYER_CAMPAIGN_DAILY
  * default for a key that differs per instance.
  */
 export const clerkJwtKey = Config.option(Config.string("CLERK_JWT_KEY"));
+
+/**
+ * Which object storage provider holds files, the choice `storageFromConfig` in
+ * `app.ts` makes.
+ *
+ * `Option` for the reason `hobApiUrl` is: unset is a supported mode, storage is
+ * OFF, and anything that needs it answers `StorageUnavailable`. A value that
+ * names no driver fails the boot rather than quietly meaning OFF, since a typo
+ * would otherwise look exactly like a deliberate choice.
+ *
+ * `filesystem` is the only driver so far. A hosted provider is a new value
+ * here and a new adapter; see `docs/internals/storage.md`.
+ */
+export const storageDriver = Config.option(Config.literals(["filesystem"], "STORAGE_DRIVER"));
+
+/**
+ * The directory the `filesystem` driver writes under. A relative value is
+ * resolved against the working directory. The default is `apps/server/.storage`,
+ * resolved from this module so it is the same place under `tsx` and under
+ * `node dist/main.js`, and it is gitignored.
+ */
+export const storageFsRoot = Config.string("STORAGE_FS_ROOT").pipe(
+  Config.withDefault(fileURLToPath(new URL("../.storage", import.meta.url))),
+);
