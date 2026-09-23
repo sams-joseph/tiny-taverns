@@ -23,7 +23,10 @@ import { NpcFollowUpScreen } from "./cast/NpcFollowUpScreen";
 import { NpcLibraryScreen } from "./cast/NpcLibraryScreen";
 import { NpcScreen } from "./cast/NpcScreen";
 import { PlayerNpcChatScreen } from "./cast/PlayerNpcChatScreen";
-import { CharacterCreateScreen } from "./characters/CharacterCreateScreen";
+import {
+  CharacterCreateScreen,
+  CoreCharacterCreateScreen,
+} from "./characters/CharacterCreateScreen";
 import { CharacterSheetScreen } from "./characters/CharacterSheetScreen";
 import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleRouteScreen } from "./chronicle/ChronicleRoute";
@@ -473,7 +476,7 @@ const runRoute = createRoute({
 
 /**
  * Writing down a character of your own — under the campaign used as creation
- * context, because the campaign is still *step one*: the character row is
+ * context, when there is one, because the campaign is *step one*: the character row is
  * account-owned and top-level, creation seats it nowhere, but the form and Hob
  * draft against that table's vocabulary and Hob's drafting thread is
  * campaign-scoped (`assistant_thread.campaign_id`). Putting the id in the URL
@@ -514,6 +517,17 @@ const charactersIndexRoute = createRoute({
  * A half-typed sheet link still knows it meant the roster, which is the same
  * fall-back-one-level a broken run link takes to its campaign.
  */
+/**
+ * Writing down a character with **no campaign** — the core rules, and no Hob,
+ * because its drafting thread is campaign-scoped. The static segment outranks
+ * `$characterId` below, and `new` is not a character id anyway.
+ */
+const coreCharacterCreateRoute = createRoute({
+  getParentRoute: () => charactersRoute,
+  path: "new",
+  component: CoreCharacterCreateScreen,
+});
+
 const charactersSplatRoute = createRoute({
   getParentRoute: () => charactersRoute,
   path: "$",
@@ -615,7 +629,12 @@ export const routeTree = rootRoute.addChildren([
       runRoute,
       campaignSplatRoute,
     ]),
-    charactersRoute.addChildren([charactersIndexRoute, characterRoute, charactersSplatRoute]),
+    charactersRoute.addChildren([
+      charactersIndexRoute,
+      coreCharacterCreateRoute,
+      characterRoute,
+      charactersSplatRoute,
+    ]),
     catchAllRoute,
   ]),
   standaloneRoute.addChildren([joinRoute, galleryRoute]),

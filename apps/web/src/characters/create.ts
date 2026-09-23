@@ -40,11 +40,12 @@ export const MAX_HP = 10_000;
 export const MAX_LEVEL = 100;
 
 /**
- * Every table this account is at, whichever side of it they sit — the
- * continuity decision made a creator a player too, so a character of your own
- * can go into a table you run exactly as into one you sit at. The old rule
- * filtered to `player` because a character used to be campaign-scoped and
- * DM-typed; neither is true any more.
+ * The tables *New character* offers as context beside *No campaign* — every
+ * table this account is at, whichever side of it they sit. The continuity
+ * decision made a creator a player too, so a character of your own can go
+ * into a table you run exactly as into one you sit at. The old rule filtered
+ * to `player` because a character used to be campaign-scoped and DM-typed;
+ * neither is true any more.
  */
 export const tablesForNewCharacter = (
   memberships: ReadonlyArray<CampaignMembership>,

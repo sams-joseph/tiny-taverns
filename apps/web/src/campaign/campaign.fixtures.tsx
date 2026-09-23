@@ -1002,6 +1002,13 @@ export const campaignOptions = [
   ...named([...bundledRace, marshfolkOption]),
 ];
 
+/** The core rules — the bundle and nothing anybody authored, as `GET /library/options/core` answers. */
+export const coreOptions = [
+  ...named(bundledBackgrounds),
+  ...named(bundledClasses),
+  ...named(bundledRace),
+];
+
 /**
  * The DM's Library — the bundle, plus the **originals** the two copies above
  * were made from.

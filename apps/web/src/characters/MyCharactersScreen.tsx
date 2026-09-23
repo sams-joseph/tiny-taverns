@@ -72,7 +72,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * It used to be in the list above, on the reasoning that *a player cannot write
  * anything*. **Half of that went when `ownRowWritable` shipped** and the rest
  * went with `POST /me/campaigns/:c/characters`: a player at a shared table
- * writes their own row now, and this is the screen they start from.
+ * writes their own row now, and this is the screen they start from. Since the
+ * captain's decision of 2026-09-23 so does an account at no table at all,
+ * through `POST /me/characters` and the core rules.
  *
  * What did not change is who owns what. A character created here is the
  * creator's — `account_id` is `CurrentActor`'s, server-side, and there is
@@ -83,9 +85,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * with it.
  *
  * The button is `NewCharacterAction`, which is *step one of the flow* rather
- * than a control on the form — the captain's reordering puts finding a table
- * first, and it folds the memberships this screen already read rather than
- * asking for them again.
+ * than a control on the form — the captain's reordering puts choosing the
+ * rules first (a table's, or none), and it folds the memberships this screen
+ * already read rather than asking for them again.
  *
  * A *Playing* badge goes too: seating is now a list of campaign names on the
  * card, and an unseated character says so in the same place rather than wearing
@@ -254,27 +256,29 @@ function CharacterCard({
  * Two silences, told apart — and neither papered over.
  *
  * An empty roster is exactly what it says: this account owns no character row.
- * *Why* is a question about the memberships `load.ts` already read. There used
- * to be a third branch — *tables, but none you play at*, for a DM whose only
- * memberships were their own — and it went with the continuity decision of
- * 2026-09-01: a creator is a player too now, so any table at all is somewhere a
- * character of your own can go, and `tablesForNewCharacter` never answers empty
- * while a membership exists.
+ * What to say next depends on the memberships `load.ts` already read, but
+ * neither answer is *wait*: since the captain's decision of 2026-09-23 a
+ * character needs no campaign, so an account at no table is offered the core
+ * rules rather than told it needs an invitation. There used to be a third
+ * branch — *tables, but none you play at*, for a DM whose only memberships were
+ * their own — and it went with the continuity decision of 2026-09-01: a creator
+ * is a player too now, so any table at all is somewhere a character of your own
+ * can go.
  */
 function NothingYet({ view }: { readonly view: MyCharactersView }) {
   if (view.memberships.length === 0) {
     return (
       <EmptyState icon="user" title="No characters yet">
-        Nobody has invited you to a table. Follow the link your DM sends you, and whatever they hand
-        you appears here.
+        Write one down with the core rules. It appears here first; when a DM invites you to a table,
+        add it to their campaign.
       </EmptyState>
     );
   }
 
   return (
     <EmptyState icon="user" title="No characters yet">
-      Write one down using any table&rsquo;s rules — the ones you run included. It appears here
-      first; add it to a campaign when you are ready.
+      Write one down using any table&rsquo;s rules — the ones you run included — or the core rules
+      alone. It appears here first; add it to a campaign when you are ready.
     </EmptyState>
   );
 }

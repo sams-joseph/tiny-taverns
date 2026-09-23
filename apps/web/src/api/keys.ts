@@ -178,6 +178,13 @@ export const reads = {
    */
   options: (campaignId: CampaignId): ReadKey => key`options:${campaignId}`,
 
+  /**
+   * The core rules: the shared bundle and nothing anybody authored — the create
+   * form's pickers when no campaign is the context. Nothing in the product
+   * writes it; an import does, and a reload reads it again.
+   */
+  coreOptions: "options:core" as ReadKey,
+
   // ----------------------------------------------------------------- a night
 
   /** *Before you sit down* — one night's checklist. */

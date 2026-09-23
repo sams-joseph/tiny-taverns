@@ -939,6 +939,20 @@ export const usableInCampaign = (
   ]);
 
 /**
+ * Rows of a corpus table in **the core rules**: the bundle, narrowed exactly as
+ * {@link usableInCampaign} narrows it for a campaign's players (`visibility =
+ * 'shared'`). What a character is written against when it has no campaign
+ * context (`library.coreOptions`, `me.createCoreCharacter`).
+ *
+ * It takes no actor because nothing in it is anybody's: no Library original, no
+ * campaign copy and no Shared World share can match `unowned`, and the bundle
+ * reads the same to every account. The reads that compose it still require
+ * `CurrentActor`, like every other read.
+ */
+export const coreRulesUsable = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
+  sql.and([unowned(sql, table), sql`${sql(table)}.visibility = 'shared'`]);
+
+/**
  * Library originals **explicitly shared to the named campaign's group** — the
  * third disjunct of {@link copyableIntoCampaign}, and the whole of what the
  * group Library sharing decision of 2026-09-01 adds to this file.

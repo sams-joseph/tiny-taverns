@@ -210,12 +210,17 @@ describe("your characters", () => {
     server.routes = noTables();
     await renderRoster();
 
+    // **At no table, and still not waiting.** The captain's decision of
+    // 2026-09-23: a character needs no campaign, so a fresh account is offered
+    // the core rules rather than told it needs an invitation first.
     await screen.findByText("No characters yet");
-    expect(screen.getByText(/Nobody has invited you to a table/)).toBeTruthy();
+    expect(screen.getByText(/Write one down with the core rules/)).toBeTruthy();
+    expect(screen.queryByText(/Nobody has invited you/)).toBeNull();
     expect(screen.getByText("Ilse Vantar · not at a table yet.")).toBeTruthy();
-    // Nothing to write into, so nothing offering to. (A `Button` rendering an
-    // `<a>` keeps the `button` role, so one query covers both shapes.)
-    expect(screen.queryByRole("button", { name: /New character/i })).toBeNull();
+    // (A `Button` rendering an `<a>` keeps the `button` role.)
+    expect(screen.getByRole("button", { name: /New character/i }).getAttribute("href")).toBe(
+      "/#/characters/new",
+    );
 
     cleanup();
     // **The inversion the continuity decision made.** A membership at a table
@@ -232,38 +237,59 @@ describe("your characters", () => {
   });
 
   /**
-   * The picker is *step one of the flow*, and its whole job is to name a table
-   * in the URL before the form exists — so what it is asserted on is where each
-   * shape sends the reader, not how it looks.
+   * The picker is *step one of the flow*, and its whole job is to name the
+   * rules in the URL before the form exists — so what it is asserted on is
+   * where each shape sends the reader, not how it looks.
    */
-  it("picks the table before the form, and shapes itself to how many there are", async () => {
-    // Two tables: a control, and a dialog naming both.
+  it("picks the rules before the form, and offers no campaign beside the tables", async () => {
+    // Two tables: a control, and a dialog naming both and *No campaign*.
     await renderRoster();
     await screen.findByText("Brannoc Duskharrow");
     await userEvent.click(screen.getByRole("button", { name: /New character/i }));
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", { name: "Which rules?" });
     // A `Button` rendering an `<a>` keeps the accessible role `button`, so the
     // query is by button and the assertion is on the `href` — the rule
     // `CLAUDE.md` records for `nativeButton={false}`.
-    const tables = within(dialog).getAllByRole("button", { name: /Salt Road|Hag's Bargain/ });
-    expect(tables.map((link) => link.textContent)).toEqual(["The Salt Road", "The Hag's Bargain"]);
+    const choices = within(dialog).getAllByRole("button", {
+      name: /Salt Road|Hag's Bargain|No campaign/,
+    });
+    expect(choices.map((link) => link.textContent)).toEqual([
+      "The Salt Road",
+      "The Hag's Bargain",
+      "No campaignCore rules only",
+    ]);
     // `/#/…` rather than `#/…` is what `createHashHistory` builds: the page's
     // own path, then the route behind the fragment.
-    expect(tables.map((link) => link.getAttribute("href"))).toEqual([
+    expect(choices.map((link) => link.getAttribute("href"))).toEqual([
       `/#/campaigns/${campaignId}/characters/new`,
       `/#/campaigns/${otherCampaignId}/characters/new`,
+      "/#/characters/new",
     ]);
 
     cleanup();
-    // One table: no question to ask, so no dialog — the control *is* the link.
+    // One table is still a choice, because *No campaign* is the other answer.
     server.routes = oneTable();
     await renderRoster();
 
     await screen.findByText("No characters yet");
-    const straight = screen.getByRole("button", { name: /New character/i });
-    expect(straight.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/characters/new`);
+    await userEvent.click(screen.getByRole("button", { name: /New character/i }));
+    const one = await screen.findByRole("dialog", { name: "Which rules?" });
+    expect(
+      within(one)
+        .getAllByRole("button", { name: /Salt Road|No campaign/ })
+        .map((link) => link.getAttribute("href")),
+    ).toEqual([`/#/campaigns/${campaignId}/characters/new`, "/#/characters/new"]);
+
+    cleanup();
+    // No table: nothing to ask, so no dialog — the control *is* the link.
+    server.routes = noTables();
+    await renderRoster();
+
+    await screen.findByText("No characters yet");
+    await userEvent.click(screen.getByRole("button", { name: /New character/i }));
     expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(window.location.hash).toBe("#/characters/new"));
   });
 
   it("says the server did not answer rather than an empty roster", async () => {

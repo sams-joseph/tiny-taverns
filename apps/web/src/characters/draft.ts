@@ -170,12 +170,13 @@ export const draftFailureFor = (failure: ApiFailure): string => {
  *   bound to it server-side from the request path, so this is the whole of what
  *   the client says about scope — there is no campaign in a payload and none in
  *   a tool parameter, which is the grounding property the DM's Hob has and this
- *   one keeps unchanged.
+ *   one keeps unchanged. `null` is a character with no campaign: Hob's drafting
+ *   thread is campaign-scoped, so nothing is asked and nothing can be.
  * @param enabled Whether to ask at all. The screen passes `false` until it knows
  *   the reader is a player at this table, so a status request is not made on a
  *   screen that is about to draw a refusal.
  */
-export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): CharacterDraft {
+export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolean): CharacterDraft {
   const fetchCredential = useCredential();
   const credentialRef = useRef(fetchCredential);
   credentialRef.current = fetchCredential;
@@ -211,7 +212,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
    * refusal without a request, and everybody else pays one small `GET`.
    */
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || campaignId === null) return;
     let live = true;
     void (async () => {
       const token = await credentialRef.current();
@@ -244,7 +245,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
 
   const ask = useCallback(
     (text: string) => {
-      if (asking || text.trim() === "") return;
+      if (asking || text.trim() === "" || campaignId === null) return;
       setAsked(true);
       setAsking(true);
       setWriting(false);
@@ -348,7 +349,7 @@ export function useCharacterDraft(campaignId: CampaignId, enabled: boolean): Cha
    */
   const keep = useCallback(async (): Promise<Result.Result<Character, string>> => {
     const threadId = thread.current;
-    if (threadId === undefined || turnId === undefined) {
+    if (campaignId === null || threadId === undefined || turnId === undefined) {
       return Result.fail("There is nothing to keep yet.");
     }
     setKeeping(true);

@@ -27,6 +27,7 @@ import {
 } from "../ruleset/vocabularies.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import {
+  coreRulesUsable,
   ensureCampaignReadable,
   usableInCampaign,
   libraryRowReadable,
@@ -153,6 +154,7 @@ const readOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
  * | -------------------- | ---------------------- | -------------------- |
  * | `list`               | `usableInCampaign`     |                      |
  * | `library*`           | `libraryRowReadable`   | `libraryRowWritable` |
+ * | `core`               | `coreRulesUsable`      |                      |
  *
  * **The bundle is immutable and no line here says so.** The write predicate
  * compares `account_id` to the account the credential resolved to; a bundled
@@ -212,6 +214,14 @@ export class Options extends Context.Service<
      */
     readonly libraryVocabulary: () => Effect.Effect<OptionVocabulary, never, CurrentActor>;
     readonly library: (
+      filter: OptionFilterValues,
+    ) => Effect.Effect<ReadonlyArray<CharacterOption>, never, CurrentActor>;
+    /**
+     * **The core rules**: the bundle as a campaign's players see it, and
+     * nothing anybody authored. What a character with no campaign context is
+     * written against. It cannot fail, for `library`'s reason.
+     */
+    readonly core: (
       filter: OptionFilterValues,
     ) => Effect.Effect<ReadonlyArray<CharacterOption>, never, CurrentActor>;
     readonly libraryFindById: (
@@ -330,6 +340,19 @@ export class Options extends Context.Service<
                   libraryRowReadable(sql, "character_option", actor),
                   ...ofKind(sql, filter.kind),
                 ])}
+                order by ${readOrder(sql)}
+                limit ${OPTION_LIMIT}
+              `;
+              return yield* hydrateAll(rows);
+            }),
+          ),
+
+        core: (filter) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<OptionRow>`
+                select * from character_option
+                where ${sql.and([coreRulesUsable(sql, "character_option"), ...ofKind(sql, filter.kind)])}
                 order by ${readOrder(sql)}
                 limit ${OPTION_LIMIT}
               `;

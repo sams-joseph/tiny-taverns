@@ -204,6 +204,22 @@ describe("the API declaration", () => {
     ]);
   });
 
+  /**
+   * A character with no campaign names nothing at all: no campaign to claim
+   * and, like every create here, no account.
+   */
+  it("gives `me.createCoreCharacter` nothing to name but its payload", () => {
+    const me = groups.find((group) => group.identifier === "me");
+    const core = endpointsOf(me as GroupShape).find(
+      (endpoint) => endpoint.identifier === "createCoreCharacter",
+    );
+
+    expect(core?.method).toBe("POST");
+    expect(core?.path).toBe("/me/characters");
+    expect(core?.params).toBeUndefined();
+    expect(core?.query).toBeUndefined();
+  });
+
   it("keeps the Shared World roster informational", () => {
     const worldMembers = groups.find((group) => group.identifier === "sharedWorldMembers");
 

@@ -39,6 +39,7 @@ import {
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
+  coreRulesUsable,
   ensureCampaignReadable,
   ownCharacter,
   usableInCampaign,
@@ -248,17 +249,16 @@ const staleVersion = (expected: number, actual: number): Conflict =>
   });
 
 /**
- * Resolve a race/subrace pair against one campaign's vocabulary — the same
- * check the create form and Hob make, composed over `usableInCampaign` — the
- * same predicate `Options.list` fills the pickers from, so what is pickable is
+ * Resolve a race/subrace pair against one vocabulary — a campaign's
+ * (`usableInCampaign`, the predicate `Options.list` fills the pickers from) or
+ * the core rules (`coreRulesUsable`, `Options.core`'s), so what is pickable is
  * exactly what validates.
  * Answers whether it resolved rather than failing, so a shared character can
  * be checked against every table it sits at.
  */
 const subraceResolves = (
   sql: SqlClient.SqlClient,
-  campaignId: CampaignId,
-  actor: Actor,
+  vocabulary: Statement.Fragment,
   race: string,
   subrace: string,
 ): Effect.Effect<boolean> =>
@@ -267,7 +267,7 @@ const subraceResolves = (
       select name, body from character_option
       where kind = 'race'
         and lower(name) = lower(${race})
-        and ${usableInCampaign(sql, "character_option", campaignId, actor)}
+        and ${vocabulary}
     `.pipe(Effect.orDie);
     return rows.some((row) =>
       row.body.subraces.some((candidate) => candidate.name.toLowerCase() === subrace.toLowerCase()),
@@ -275,18 +275,18 @@ const subraceResolves = (
   });
 
 /**
- * A named subrace must be contained by the named race in **some** campaign the
- * character can be checked against. At creation that is the campaign whose
- * rules vocabulary the form/Hob used — context only, not a seat; on the shared
- * sheet it is every table the character sits at, because one character crossing
- * campaigns cannot be bound to one table's vocabulary — the continuity
- * decision's own consequence. With no readable campaign to check against, the
- * label is free text, exactly as a race with no vocabulary entry always was.
+ * A named subrace must be contained by the named race in **some** vocabulary
+ * the character can be checked against. At creation that is the one the form
+ * or Hob used: the campaign context's, or the core rules when there is no
+ * campaign. On the shared sheet it is every table the character sits at,
+ * because one character crossing campaigns cannot be bound to one table's
+ * vocabulary — the continuity decision's own consequence. With no vocabulary to
+ * check against, the label is free text, exactly as a race with no vocabulary
+ * entry always was.
  */
 const validateSubrace = (
   sql: SqlClient.SqlClient,
-  campaignIds: ReadonlyArray<CampaignId>,
-  actor: Actor,
+  vocabularies: ReadonlyArray<Statement.Fragment>,
   race: string | null | undefined,
   subrace: string | null | undefined,
 ): Effect.Effect<void, Conflict> =>
@@ -295,10 +295,10 @@ const validateSubrace = (
     if (namedSubrace === undefined) return;
     const namedRace = present(race);
     if (namedRace === undefined) return yield* missingRaceForSubrace(namedSubrace);
-    if (campaignIds.length === 0) return;
+    if (vocabularies.length === 0) return;
 
-    for (const campaignId of campaignIds) {
-      if (yield* subraceResolves(sql, campaignId, actor, namedRace, namedSubrace)) return;
+    for (const vocabulary of vocabularies) {
+      if (yield* subraceResolves(sql, vocabulary, namedRace, namedSubrace)) return;
     }
     return yield* subraceMismatch(namedRace, namedSubrace);
   });
@@ -510,6 +510,14 @@ export class Characters extends Context.Service<
       from?: AssistantOrigin,
     ) => Effect.Effect<Character, NotFound | Conflict, CurrentActor>;
     /**
+     * The same insert with no campaign: the core rules (`coreRulesUsable`) are
+     * the vocabulary and there is no gate, because nothing is named. No `from`:
+     * Hob's drafting thread is campaign-scoped, so only the form reaches this.
+     */
+    readonly createCore: (
+      payload: CharacterOwnCreate,
+    ) => Effect.Effect<Character, Conflict, CurrentActor>;
+    /**
      * The owner's PATCH over the shared sheet. `expectedVersion`, when sent,
      * is the optimistic-concurrency check; see the header.
      */
@@ -542,6 +550,47 @@ export class Characters extends Context.Service<
       const live = yield* Effect.serviceOption(LiveEvents);
       const sign = yield* portraitSigner;
       const asCharacter = (row: CharacterRow): Character => toCharacter(row, sign);
+
+      /**
+       * The one insert both creates make — `createOwn` against a campaign's
+       * vocabulary behind that campaign's gate, `createCore` against the core
+       * rules behind none — so the two cannot disagree about what a new row is.
+       */
+      const insertOwn = <E>(
+        gate: (actor: Actor) => Effect.Effect<void, E>,
+        vocabulary: (actor: Actor) => Statement.Fragment,
+        payload: CharacterOwnCreate,
+        from: AssistantOrigin | undefined,
+      ) =>
+        dieOnSqlError(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* gate(actor);
+              yield* validateSubrace(sql, [vocabulary(actor)], payload.race, payload.subrace);
+              const rows = yield* sql<CharacterRow>`
+                insert into character ${sql.insert(
+                  defined({
+                    account_id: actor.accountId,
+                    name: payload.name,
+                    player_name: payload.playerName,
+                    level: payload.level,
+                    race: payload.race,
+                    subrace: payload.subrace,
+                    class_name: payload.className,
+                    ac: payload.ac,
+                    hp_max: payload.hpMax,
+                    sheet_url: payload.sheetUrl,
+                    body: payload.sheet && encodeSheet(payload.sheet),
+                    ...assistantColumns(from),
+                  }),
+                )}
+                returning character.*, ${portraitColumns(sql)}
+              `;
+              return asCharacter(rows[0]!);
+            }),
+          ),
+        );
 
       const claimRequest = (
         characterId: CharacterId,
@@ -827,38 +876,24 @@ export class Characters extends Context.Service<
         ),
 
         createOwn: (campaignId, payload, from) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                // The campaign is context only: it proves the caller may read
-                // the table whose vocabulary/Hob prompt produced this sheet,
-                // and it bounds subrace validation. Seating is the explicit
-                // `Party.join` act and is not performed here.
-                yield* ensureCampaignReadable(sql, campaignId, actor);
-                yield* validateSubrace(sql, [campaignId], actor, payload.race, payload.subrace);
-                const rows = yield* sql<CharacterRow>`
-                  insert into character ${sql.insert(
-                    defined({
-                      account_id: actor.accountId,
-                      name: payload.name,
-                      player_name: payload.playerName,
-                      level: payload.level,
-                      race: payload.race,
-                      subrace: payload.subrace,
-                      class_name: payload.className,
-                      ac: payload.ac,
-                      hp_max: payload.hpMax,
-                      sheet_url: payload.sheetUrl,
-                      body: payload.sheet && encodeSheet(payload.sheet),
-                      ...assistantColumns(from),
-                    }),
-                  )}
-                  returning character.*, ${portraitColumns(sql)}
-                `;
-                return asCharacter(rows[0]!);
-              }),
-            ),
+          insertOwn(
+            // The campaign is context only: it proves the caller may read the
+            // table whose vocabulary/Hob prompt produced this sheet, and it
+            // bounds subrace validation. Seating is the explicit `Party.join`
+            // act and is not performed here.
+            (actor) => ensureCampaignReadable(sql, campaignId, actor),
+            (actor) => usableInCampaign(sql, "character_option", campaignId, actor),
+            payload,
+            from,
+          ),
+
+        // No gate: the caller named nothing but themselves.
+        createCore: (payload) =>
+          insertOwn(
+            () => Effect.void,
+            () => coreRulesUsable(sql, "character_option"),
+            payload,
+            undefined,
           ),
 
         updateOwn: (id, patch) =>
@@ -881,7 +916,14 @@ export class Characters extends Context.Service<
               const nextSubrace = patch.subrace === undefined ? rowBefore.subrace : patch.subrace;
               if (nextRace !== rowBefore.race || nextSubrace !== rowBefore.subrace) {
                 const campaigns = yield* seatedCampaignsOf(sql, id);
-                yield* validateSubrace(sql, campaigns, actor, nextRace, nextSubrace);
+                yield* validateSubrace(
+                  sql,
+                  campaigns.map((campaignId) =>
+                    usableInCampaign(sql, "character_option", campaignId, actor),
+                  ),
+                  nextRace,
+                  nextSubrace,
+                );
               }
               const recomputedSheet =
                 patch.sheet === undefined &&

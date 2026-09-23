@@ -264,6 +264,9 @@ describe("the route table", () => {
       at: "/campaigns/$campaignId/characters/new",
       params: { campaignId: CAMPAIGN_ID },
     });
+    // With no campaign the form is the roster's own child: the core rules,
+    // named by nothing. The static segment wins over the sheet's id.
+    expect(landsOn("/characters/new").at).toBe("/characters/new");
   });
 
   it("falls back to the list rather than throwing on an id we never minted", () => {
