@@ -14,7 +14,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { reads } from "../api/keys";
-import { campaignOptionsAtom } from "../rules/load";
+import { campaignOptionsAtom, coreOptionsAtom } from "../rules/load";
 
 /**
  * Everything both character screens render, in one shape.
@@ -196,7 +196,9 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
 
 /**
  * What the create form reads: the roster's own value, plus **the vocabulary of
- * the one campaign this character is being drafted against.**
+ * the one campaign this character is being drafted against** — or, with no
+ * campaign, the core rules (`coreOptionsAtom`), which need no membership and
+ * pass straight through.
  *
  * Two atoms rather than a third call inside `loadMyCharacters`, and the split
  * is what each is keyed on: the roster names no campaign (`GET /me/characters`
@@ -240,7 +242,8 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
  */
 export interface NewCharacterView extends MyCharactersView {
   /**
-   * The classes, races and backgrounds this campaign context offers, as the account sees them.
+   * The classes, races and backgrounds this campaign context offers, as the
+   * account sees them, or the core rules when there is no campaign.
    *
    * `corpusRowReadable` ends in `isDm OR visibility = 'shared'`, so what
    * arrives here is already narrowed by the server — there is no client-side
@@ -253,7 +256,7 @@ export interface NewCharacterView extends MyCharactersView {
   readonly options: ReadonlyArray<CharacterOption>;
 }
 
-export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
+export const newCharacterAtom = Atom.family((campaignId: CampaignId | null) =>
   Atom.readable(
     (get): AsyncResult.AsyncResult<NewCharacterView, unknown> => {
       /**
@@ -266,7 +269,21 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
        * until the roster had arrived left the create screen loading for ever.
        */
       const roster = get(myCharactersAtom);
-      const vocabulary = get(campaignOptionsAtom(campaignId));
+      const vocabulary = get(vocabularyAtomFor(campaignId));
+
+      /**
+       * With no campaign there is no membership to decide anything: the core
+       * rules are everybody's, so both reads pass straight through.
+       */
+      if (campaignId === null) {
+        return combine(
+          get,
+          AsyncResult.map(AsyncResult.all({ roster, vocabulary }), ({ roster, vocabulary }) => ({
+            ...roster,
+            options: vocabulary,
+          })),
+        );
+      }
 
       if (!AsyncResult.isSuccess(roster)) {
         // `map` over a non-success carries the loading and failure states
@@ -312,7 +329,11 @@ export const newCharacterAtom = Atom.family((campaignId: CampaignId) =>
     // derived read and hand back the same cached failure.
     (refresh) => {
       refresh(myCharactersAtom);
-      refresh(campaignOptionsAtom(campaignId));
+      refresh(vocabularyAtomFor(campaignId));
     },
   ),
 );
+
+/** A campaign's vocabulary, or the core rules when there is no campaign. */
+const vocabularyAtomFor = (campaignId: CampaignId | null) =>
+  campaignId === null ? coreOptionsAtom : campaignOptionsAtom(campaignId);

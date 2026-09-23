@@ -28,7 +28,7 @@ The doorbell is keyed on the session. `currentSessionOf` answers the campaign's 
 
 ## What a player may write
 
-The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characters`, `PATCH /me/characters/:characterId`, `DELETE /me/characters/:characterId`, plus `spend` and `rest` below. Two boundaries, and neither may stand in for the other:
+The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characters`, `POST /me/characters`, `PATCH /me/characters/:characterId`, `DELETE /me/characters/:characterId`, plus `spend` and `rest` below. Two boundaries, and neither may stand in for the other:
 
 - Which rows: `ownCharacter` in `repo/visibility.ts`, `character.account_id = <actor>`, compared to nothing a caller supplied. Credential scope is deliberately not applied, because a top-level character is in no campaign for a scope to be about.
 - Which columns: `CharacterOwnUpdate`, a second schema rather than a field filter over a DM type. It carries the durable columns and the whole `sheet`. `hpCurrent`, `tempHp`, `conditions`, `visibility` and `accountId` have no field, so a control for them does not compile. Excess keys are dropped on encode and on decode, so a payload naming only live keys is an empty patch answering `200` unchanged.
@@ -37,9 +37,16 @@ The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characte
 
 Whole-document writes race and that is accepted: two edits from two tabs do not merge, and `expectedVersion` turns the loss into a `Conflict` instead of a silent overwrite.
 
-## Creation: campaign context first, then an explicit seat
+## Creation: a rules context first, then an explicit seat
 
-Creation names a campaign only as context. `POST /me/campaigns/:campaignId/characters` is gated by `ensureCampaignReadable` and uses the campaign for the rules vocabulary, subrace validation and Hob's drafting thread; it writes no `campaign_character`. `account_id` is the actor's and has nowhere on the wire to go. The seat comes later through `party.join`, offered as Add to campaign on the roster and sheet (`characters/AddToCampaignDialog.tsx`). Until then no campaign party can read the character.
+Creation names a campaign only as context, and needs none. The captain decided on 2026-09-23 that an account with no campaign and no Shared World can still make a character, so _New character_ on the roster (`characters/NewCharacterAction.tsx`) is always offered: straight to `#/characters/new` for an account at no table, otherwise a dialog listing each table beside _No campaign_.
+
+- `POST /me/campaigns/:campaignId/characters` is gated by `ensureCampaignReadable` and uses the campaign for the rules vocabulary (`options.list`), subrace validation and Hob's drafting thread.
+- `POST /me/characters` names nothing. The core rules are the vocabulary: `coreRulesUsable` in `repo/visibility.ts`, the bundle as a campaign's players see it, with no Library original, campaign copy or Shared World share. The form's pickers read it through `GET /library/options/core` and subrace validation reads the same predicate. There is no Hob: `assistant_thread` belongs to a campaign or a Shared World, so the screen opens on the form. Drafting without a campaign would need an account-scoped thread (a migration relaxing that scope, a reach for it in `conversationReachable`, and ask and accept endpoints outside `/campaigns/:c/hob`) with the player toolkit built over the core rules.
+
+Both are `Characters.insertOwn` behind a different gate and vocabulary, and neither writes a `campaign_character`. `account_id` is the actor's and has nowhere on the wire to go. The seat comes later through `party.join`, offered as Add to campaign on the roster and sheet (`characters/AddToCampaignDialog.tsx`). Until then no campaign party can read the character.
+
+An unseated character has no table to read a vocabulary through afterwards: its spell picker (`Spells.forCharacter`) answers empty and a level change does not recompute its derived lines until it is seated.
 
 `CharacterOwnCreate` is `CharacterOwnUpdate` with a required name and no `hpCurrent`: how hurt somebody already is belongs to the table. The delete uses `ownCharacter` too, so a player can never remove a character they could not edit.
 
@@ -53,7 +60,7 @@ Thread-naming operations (`turns`, `accept`) therefore read reach off the thread
 
 A character's portrait is the first kind of Hob-drawn image. [Images](images.md) covers the capability every kind shares: the worker, the records, the signed routes, the shared daily budget, the house style and the deletion outbox. This section covers what is particular to characters.
 
-- **The trigger** is `HobImages.drawCharacter`, called by the two handlers that make a character, the form's create and Hob's accept, after their transactions commit. A third way of making a character must call it too.
+- **The trigger** is `HobImages.drawCharacter`, called by the handlers that make a character, the form's two creates and Hob's accept, after their transactions commit. Another way of making a character must call it too.
 - **The record** is `character_portrait` (`0048_character_portraits.ts`): one row per character ever, bound to the character and its owner by the composite key to `character (id, account_id)`. A skipped row means there was no race, class, appearance or background (`portraitHasSubject`).
 - **The prompt** is `portraitPromptFor` in `packages/api/src/Portrait.ts` with `HOUSE_PORTRAIT_STYLE`, the one implementation; no client sends a prompt.
 - **Visibility is exactly the character's.** The wire carries `Character.portrait` (three signed paths, or `null`) and `portraitPending`. Every URL is minted by `portraitImages` in `repo/Characters.ts`, only for a portrait id that a read's own predicate returned. Two kinds of read return one:

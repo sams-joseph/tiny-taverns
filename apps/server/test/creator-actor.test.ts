@@ -686,8 +686,11 @@ describe("the scope, counted", () => {
     // Hob-drawn image of the actor's own subject — a character through
     // `ownCharacter`, which is in no campaign, or a campaign through
     // `campaignWritable`, which is already the creator predicate underneath —
-    // so there is nothing for a proof to prove.
-    expect(ungated).toBe(155);
+    // so there is nothing for a proof to prove. `Characters.createCore` and
+    // `Options.core` are the one hundred and fifty-seventh: a character made
+    // with no campaign and the core rules it is made from, in no campaign, so
+    // there is no table whose creator a proof could name.
+    expect(ungated).toBe(157);
   });
 });
 

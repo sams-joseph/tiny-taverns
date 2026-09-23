@@ -350,10 +350,12 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * invited yet — and this is the read whose empty answer says so.
  *
  * `createCharacter` is the one endpoint here that does name one, and the
- * exception is worth reading rather than treating as drift: creation still needs
- * the campaign whose rules vocabulary and Hob thread shaped the sheet. It is a
- * context claim, refused by `ensureCampaignReadable` exactly as every other
- * create in the product refuses a false one, but it writes no seat. What the
+ * exception is worth reading rather than treating as drift: a creation that
+ * wants a table's rules vocabulary and Hob thread names the campaign that shaped
+ * the sheet. It is a context claim, refused by `ensureCampaignReadable` exactly
+ * as every other create in the product refuses a false one, but it writes no
+ * seat. `createCoreCharacter` is the same insert with no campaign, against the
+ * core rules, for an account with no table or one that wants none. What the
  * endpoint still does not let a caller name is the *account* — so the API group's
  * real property is intact where it matters: nothing here answers about, or
  * writes for, anybody but the credential.
@@ -373,16 +375,17 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
  * takes nothing at all, so the account it answers about is the credential's by
  * construction.
  *
- * The three writes are the whole of what anybody may do to a `character` —
+ * The writes are the whole of what anybody may do to a `character` —
  * since the continuity decision there is no DM-typed character and no
- * assignment, so creators use these same three doors: **which rows** is
+ * assignment, so creators use these same doors: **which rows** is
  * ownership (`ownCharacter`), so no write here reaches a row `characters`
  * above would not already answer, and **which columns** is `CharacterOwnCreate`
  * / `CharacterOwnUpdate`, so what may move is a fact about which schema exists.
  *
  * - `createCharacter` — `CharacterOwnCreate`, gated by `ensureCampaignReadable`
  *   on the campaign used as context, with `account_id` from `CurrentActor` and
- *   nowhere on the wire to put one.
+ *   nowhere on the wire to put one. `createCoreCharacter` is the same with the
+ *   core rules as context and no gate, because it names nothing.
  * - `updateCharacter` — ownership plus `expectedVersion` over the shared state.
  * - `deleteCharacter` — the same clause, retiring the live seats with the row.
  */
@@ -504,10 +507,10 @@ class MeGroup extends HttpApiGroup.make("me")
     }),
     /**
      * **Writing down a character of your own** — the endpoint behind
-     * `#/campaigns/:c/characters/new`, and since the continuity decision the
-     * *only* way a `character` row comes into being: there is no DM-typed
-     * character, no assignment and no re-pointing, and creators write their
-     * own characters through this same door as everybody else.
+     * `#/campaigns/:c/characters/new`. With `createCoreCharacter` below and
+     * Hob's accept it is how a `character` row comes into being: there is no
+     * DM-typed character, no assignment and no re-pointing, and creators write
+     * their own characters through these same doors as everybody else.
      *
      * ### The one endpoint here that names a campaign, and what it means
      *
@@ -546,6 +549,23 @@ class MeGroup extends HttpApiGroup.make("me")
       payload: CharacterOwnCreate,
       success: Character,
       error: [NotFound, Conflict],
+    }),
+    /**
+     * **Writing one down with no campaign at all** — the captain's decision of
+     * 2026-09-23 that an account with no table, or one that wants none, can
+     * still make a character.
+     *
+     * The same insert as `createCharacter`, with the core rules
+     * (`library.coreOptions`) standing where a campaign's vocabulary would:
+     * subrace validation reads the bundle, and there is no campaign gate
+     * because there is no campaign to claim. It writes no seat, exactly as the
+     * campaign-context create does not. `Conflict` is a subrace the core race
+     * does not contain; there is no `NotFound` because nothing is named.
+     */
+    HttpApiEndpoint.post("createCoreCharacter", "/characters", {
+      payload: CharacterOwnCreate,
+      success: Character,
+      error: Conflict,
     }),
     /** Owner-only resource grains: one counter spend, and one rules-bounded rest. */
     HttpApiEndpoint.post("spendCharacterResource", "/characters/:characterId/spend", {
@@ -1272,6 +1292,17 @@ class LibraryGroup extends HttpApiGroup.make("library")
       success: OptionVocabulary,
     }),
     HttpApiEndpoint.get("options", "/options", {
+      query: OptionFilter,
+      success: Schema.Array(CharacterOption),
+    }),
+    /**
+     * **The core rules**: the bundled half of the list above, as every player
+     * sees it through any campaign (`coreRulesUsable`), with no Library
+     * original, campaign copy or Shared World share in it. It is the vocabulary
+     * a character is written against when no campaign is its context, the
+     * pickers behind `me.createCoreCharacter`.
+     */
+    HttpApiEndpoint.get("coreOptions", "/options/core", {
       query: OptionFilter,
       success: Schema.Array(CharacterOption),
     }),

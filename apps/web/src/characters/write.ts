@@ -62,12 +62,14 @@ export const saveOwnCharacter = (
   });
 
 /**
- * Writing one down for the first time — `POST /me/campaigns/:c/characters`.
+ * Writing one down for the first time — `POST /me/campaigns/:c/characters`
+ * with a campaign as context, `POST /me/characters` with `null` for none.
  *
- * **The campaign is context now, not a seat.** The insert needs a campaign for
- * the rules vocabulary and Hob thread that shaped the payload, and the server
- * refuses a false claim with `ensureCampaignReadable`; it no longer writes a
- * campaign-character row. Seating is the separate `party.join` call below.
+ * **The campaign is context, not a seat.** It names the rules vocabulary and
+ * Hob thread that shaped the payload, and the server refuses a false claim
+ * with `ensureCampaignReadable`. With no campaign the core rules are the
+ * vocabulary. Neither writes a campaign-character row; seating is the separate
+ * `party.join` call below.
  *
  * There is still nothing to guard here. Whose it is comes from the credential
  * on the server, and `CharacterOwnCreate` has no field for an account, a live
@@ -76,9 +78,12 @@ export const saveOwnCharacter = (
  */
 export const createOwnCharacter = (
   client: TavernsClient,
-  campaignId: CampaignId,
+  campaignId: CampaignId | null,
   payload: CharacterOwnCreate,
-) => client.me.createCharacter({ params: { campaignId }, payload });
+) =>
+  campaignId === null
+    ? client.me.createCoreCharacter({ payload })
+    : client.me.createCharacter({ params: { campaignId }, payload });
 
 /** Seat an existing owned character at one campaign, by the explicit party join. */
 export const joinCharacterToCampaign = (

@@ -40,6 +40,17 @@ export const campaignOptionsAtom = Atom.family((campaignId: CampaignId) =>
 );
 
 /**
+ * The core rules — what a character made with **no campaign** is built from:
+ * the bundle as a campaign's players see it, and no Library original. One of
+ * it, keyed on nothing, because it names nothing and reads the same to every
+ * account (`coreRulesUsable`).
+ */
+export const coreOptionsAtom = apiAtom(
+  (client) => client.library.coreOptions({ query: {} }),
+  [reads.coreOptions],
+);
+
+/**
  * The classes, races and backgrounds this account has authored, plus the bundle.
  *
  * **No key on the campaign**, because the read names none: a Library original

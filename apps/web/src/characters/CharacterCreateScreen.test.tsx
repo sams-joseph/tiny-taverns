@@ -7,6 +7,7 @@ import {
   brannocId,
   campaignId,
   campaignOptions,
+  coreOptions,
   drafted,
   draftedNothing,
   draftThreadId,
@@ -14,7 +15,9 @@ import {
   hobRoutes,
   installCharacterServer,
   longswordRow,
+  noTables,
   onlyDmTables,
+  renderCoreCreate,
   renderCreate,
   savedAs,
 } from "./characters.fixtures";
@@ -851,5 +854,65 @@ describe("writing down a character of your own", () => {
     expect(offered).toEqual(
       campaignOptions.filter((row) => row.kind === "race").map((row) => row.name),
     );
+  });
+});
+
+/**
+ * **No campaign at all** — the captain's decision of 2026-09-23. An account at
+ * no table writes a character against the core rules, through
+ * `POST /me/characters`, and Hob is not offered because its drafting thread is
+ * campaign-scoped.
+ */
+describe("writing down a character with no campaign", () => {
+  const corePath = "/me/characters";
+
+  beforeEach(() => {
+    // Signed up and invited nowhere: the account that had no way in.
+    server.routes = noTables();
+    server.routes.set(`POST ${corePath}`, savedAs(brannoc));
+  });
+
+  it("opens on the form, with no Hob and nothing asked of one", async () => {
+    await renderCoreCreate();
+
+    expect(await screen.findByLabelText(/^Name$/)).toBeTruthy();
+    expect(screen.getByText("Using the core rules, with no campaign.")).toBeTruthy();
+    // No describe stage, no fork back to it, and no status read: a composer
+    // here would be a control with nothing that can answer it.
+    expect(screen.queryByLabelText("Describe your character")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Have Hob draft/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Fill it in myself/i })).toBeNull();
+    expect(server.calls.some((call) => call.pathname.includes("/hob"))).toBe(false);
+    // Nor any campaign's vocabulary: the core rules are the one read.
+    expect(server.calls.some((call) => call.pathname.includes("/campaigns/"))).toBe(false);
+    expect(server.calls.map((call) => call.pathname)).toContain("/library/options/core");
+  });
+
+  it("offers the core rules and nothing a table added", async () => {
+    await renderCoreCreate();
+    await userEvent.click(await screen.findByRole("combobox", { name: "Race" }));
+    const offered = (await screen.findAllByRole("option")).map((option) => option.textContent);
+    expect(offered).toEqual(
+      coreOptions.filter((row) => row.kind === "race").map((row) => row.name),
+    );
+    expect(offered).not.toContain("Marshfolk");
+  });
+
+  it("names no campaign in the path, and lands on the shipped sheet", async () => {
+    await renderCoreCreate();
+
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Race", "Elf");
+    await pick("Class", "Druid");
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+
+    await waitFor(() => expect(window.location.hash).toBe(`#/characters/${brannocId}`));
+    const posts = server.calls.filter((call) => call.method === "POST");
+    expect(posts.map((call) => call.pathname)).toEqual([corePath]);
+    const body = bodyOf(server, "POST", corePath) as Record<string, unknown>;
+    expect(body).toMatchObject({ name: "Sorrel Ash", level: 1, race: "Elf", className: "Druid" });
+    for (const key of ["accountId", "campaignId", "hpCurrent", "visibility"]) {
+      expect(body).not.toHaveProperty(key);
+    }
   });
 });

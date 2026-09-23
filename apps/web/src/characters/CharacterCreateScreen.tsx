@@ -49,7 +49,7 @@ import {
 import { DraftAside } from "./DraftAside";
 import { KitFields } from "./KitFields";
 import { DraftCard } from "./DraftCard";
-import { ABILITY_KEYS, APPEARANCE_MAX, type AbilityKey } from "@taverns/api";
+import { ABILITY_KEYS, APPEARANCE_MAX, type AbilityKey, type CampaignId } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterCreateWrites, createOwnCharacter } from "./write";
@@ -57,8 +57,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * A player writing down a character of their own —
- * `#/campaigns/:campaignId/characters/new`, and **the first screen in the
- * product on which a non-DM creates anything.**
+ * `#/campaigns/:campaignId/characters/new` with a campaign as context, or
+ * `#/characters/new` with none — and **the first screen in the product on which
+ * a non-DM creates anything.**
  *
  * Until `POST /me/campaigns/:c/characters` shipped there was no such thing: a
  * player waited for their DM to type one up in `campaign/CharacterDialog.tsx`
@@ -86,6 +87,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * already has one context. A picker here would be a second answer to a
  * question the URL has already settled, and it would let a reader change the
  * vocabulary/Hob context without the URL saying so.
+ *
+ * ### No campaign is a context too
+ *
+ * By the captain's decision of 2026-09-23 an account needs no table to make a
+ * character: `#/characters/new` is the same screen with the core rules
+ * (`coreOptionsAtom`) as the vocabulary and `POST /me/characters` as the
+ * write. It has no membership to check and **no Hob**: the drafting thread is
+ * campaign-scoped (`assistant_thread` belongs to a campaign or a Shared
+ * World), so the describe stage would be a control that cannot answer, and the
+ * screen opens on the form instead.
  *
  * ### What is deliberately not on it
  *
@@ -143,6 +154,15 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  */
 export function CharacterCreateScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId/characters/new" });
+  return <CharacterCreate campaignId={campaignId} />;
+}
+
+/** The same screen with no campaign: the core rules, and no Hob. */
+export function CoreCharacterCreateScreen() {
+  return <CharacterCreate campaignId={null} />;
+}
+
+function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | null }) {
   const navigate = useNavigate();
   const [resource, reload] = useApiAtom(newCharacterAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
@@ -243,9 +263,15 @@ export function CharacterCreateScreen() {
    * It matters that this agrees with `tablesForNewCharacter`, which is what the
    * picker folds: a screen that drew a form the picker would never have offered
    * would be a second answer to the same question, reachable by typing a URL.
+   *
+   * With no campaign there is nothing to be refused: the core rules are
+   * everybody's, and so is the right to write a character of your own.
    */
-  const membership = view?.memberships.find((row) => row.campaign.id === campaignId);
-  const writable = membership !== undefined;
+  const membership =
+    campaignId === null
+      ? undefined
+      : view?.memberships.find((row) => row.campaign.id === campaignId);
+  const writable = campaignId === null || membership !== undefined;
 
   /**
    * The classes, races and backgrounds **this table** offers — the three
@@ -292,7 +318,9 @@ export function CharacterCreateScreen() {
    * time in five. One press, no state lost, and the form is the thing that was
    * always going to work.
    */
-  const [stage, setStage] = useState<"describe" | "form">("describe");
+  const [stage, setStage] = useState<"describe" | "form">(
+    campaignId === null ? "form" : "describe",
+  );
   const [prose, setProse] = useState("");
   const [kept, setKept] = useState<string | undefined>(undefined);
   const hob = useCharacterDraft(campaignId, writable);
@@ -342,7 +370,13 @@ export function CharacterCreateScreen() {
     <>
       <TopBar
         title="New character"
-        subtitle={writable ? `Using ${membership.campaign.name} as rules context.` : undefined}
+        subtitle={
+          campaignId === null
+            ? "Using the core rules, with no campaign."
+            : membership === undefined
+              ? undefined
+              : `Using ${membership.campaign.name} as rules context.`
+        }
       >
         <Button
           variant="secondary"
@@ -353,7 +387,9 @@ export function CharacterCreateScreen() {
           Cancel
         </Button>
       </TopBar>
-      {resource.state === "loading" && <Loading label="Reading your tables…" />}
+      {resource.state === "loading" && (
+        <Loading label={campaignId === null ? "Reading the rules…" : "Reading your tables…"} />
+      )}
       {resource.state === "failed" && (
         <div className="mx-auto w-full max-w-3xl">
           <ApiFailureNotice failure={resource.failure} onRetry={reload} />
@@ -533,14 +569,17 @@ export function CharacterCreateScreen() {
                 heading: *Fill it in myself* is a fork rather than a step, so
                 the only thing to say is that the other fork is still there. It
                 keeps whatever was typed on both sides — `prose` and `draft` are
-                separate pieces of state, so neither press loses the other. */}
-            <p className="flex flex-wrap items-center gap-2 text-caption leading-body text-muted-foreground">
-              Filling it in yourself.
-              <Button variant="ghost" size="sm" onClick={() => setStage("describe")}>
-                <Icon name="chevron-left" size={13} />
-                Have Hob draft it instead
-              </Button>
-            </p>
+                separate pieces of state, so neither press loses the other.
+                With no campaign there is no other fork, so nothing is said. */}
+            {campaignId !== null && (
+              <p className="flex flex-wrap items-center gap-2 text-caption leading-body text-muted-foreground">
+                Filling it in yourself.
+                <Button variant="ghost" size="sm" onClick={() => setStage("describe")}>
+                  <Icon name="chevron-left" size={13} />
+                  Have Hob draft it instead
+                </Button>
+              </p>
+            )}
             <Card>
               <CardContent className="flex flex-col gap-5 pt-card">
                 <Field
@@ -702,7 +741,11 @@ export function CharacterCreateScreen() {
                   <Field
                     label="Background"
                     htmlFor="new-character-background"
-                    hint="Where they come from. Your DM's own backgrounds are in this list."
+                    hint={
+                      campaignId === null
+                        ? "Where they come from."
+                        : "Where they come from. Your DM's own backgrounds are in this list."
+                    }
                   >
                     <Select
                       value={draft.background}

@@ -8,6 +8,7 @@ import {
   campaign,
   campaignId,
   campaignOptions,
+  coreOptions,
   character,
   sessionId,
   type Answer,
@@ -32,6 +33,7 @@ export {
   campaign,
   campaignId,
   campaignOptions,
+  coreOptions,
   longswordRow,
   sessionId,
 } from "../campaign/campaign.fixtures";
@@ -421,6 +423,8 @@ export const twoTables = (): Map<string, Answer> =>
     // Rules screen and the player's create form.
     [`GET /campaigns/${campaignId}/options`, { status: 200, body: campaignOptions }],
     [`GET /campaigns/${otherCampaignId}/options`, { status: 200, body: campaignOptions }],
+    // The core rules, for a character with no campaign: the bundle alone.
+    ["GET /library/options/core", { status: 200, body: coreOptions }],
     // Neither table is playing: the quiet state, which is what most of these
     // tests are about and the one the banner draws nothing for.
     quiet(campaignId),
@@ -706,6 +710,13 @@ export const renderCreate = async (
   hosted: HostedSession = noSession,
 ): Promise<void> => {
   await renderAt(`/campaigns/${at}/characters/new`, (screen) => (
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
+  ));
+};
+
+/** The create form with no campaign: the core rules, at `#/characters/new`. */
+export const renderCoreCreate = async (hosted: HostedSession = noSession): Promise<void> => {
+  await renderAt("/characters/new", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };

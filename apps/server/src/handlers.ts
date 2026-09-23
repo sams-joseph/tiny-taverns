@@ -200,8 +200,8 @@ const MeLive = HttpApiBuilder.group(
         .handle("restCharacter", ({ params, payload }) =>
           characters.rest(params.characterId, payload),
         )
-        // The one handler in this group whose path names a campaign, because an
-        // insert has no row to derive one from. There is still nothing to check
+        // The one handler in this group whose path names a campaign, because a
+        // create made in a campaign's context says which. There is still nothing to check
         // here: `ensureCampaignReadable` refuses a campaign this credential does
         // not reach, and the owner is `CurrentActor`'s rather than an argument.
         //
@@ -213,6 +213,11 @@ const MeLive = HttpApiBuilder.group(
           characters
             .createOwn(params.campaignId, payload)
             .pipe(Effect.flatMap(images.drawCharacter)),
+        )
+        // The same insert and the same portrait with no campaign: the core
+        // rules are the context, and there is nothing in the path to check.
+        .handle("createCoreCharacter", ({ payload }) =>
+          characters.createCore(payload).pipe(Effect.flatMap(images.drawCharacter)),
         )
         // The delete's own trigger enqueued the portrait's files; this only
         // drains them now rather than at the next minute's sweep.
@@ -548,6 +553,7 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("remove", ({ params }) => creatures.libraryRemove(params.creatureId))
       .handle("optionVocabulary", () => options.libraryVocabulary())
       .handle("options", ({ query }) => options.library(query))
+      .handle("coreOptions", ({ query }) => options.core(query))
       .handle("createOption", ({ payload }) => options.libraryCreate(payload))
       .handle("findOption", ({ params }) => options.libraryFindById(params.optionId))
       .handle("optionProgression", ({ params }) => progression.libraryRead(params.optionId))

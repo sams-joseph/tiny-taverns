@@ -37,6 +37,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 - **seat**: a character's membership of a campaign's party (`campaign_character`): the join, display snapshots and campaign-scoped visibility. Never a state fork. There is no seat that exists before a character.
 - **sheet**: the `jsonb` document on the character row (`body`, `sheet` on the wire). Everything that nothing filters, sorts or seeds on lives there.
 - **bundle**: the imported 2014 SRD and starter corpora: rows owned by nobody, `origin = 'system'`, written only by import commands.
+- **core rules**: the bundle's shared rows alone (`coreRulesUsable`), the vocabulary of a character made with no campaign.
 - **Library**: an account's own originals of any copyable corpus (creatures, options, spells, equipment, magic items, feats, rule articles). Library rows are in no campaign.
 - **instance**: the one campaign-owned copy the product still mints, inside `EncounterCreatures.create`, so a fight can track state. Enumerable by nothing and editable by nobody.
 - **share**: an explicit grant of a Library original to a Shared World (`group_library_share`), which is how homebrew reaches a table's other members.
