@@ -11,7 +11,7 @@
 
 /** The look: the delivery's *cool, low-key, slight grain, blue-hour rather than firelight*. */
 const HOUSE_PALETTE =
-  "Painterly fantasy illustration, cool and low-key, slight grain, blue-hour light rather " +
+  "Fantasy illustration somewhat cartoony think World of Warcraft from Blizzard, cool and low-key, slight grain, blue-hour light rather " +
   "than firelight.";
 
 /** What no image may carry, whatever it shows. */
