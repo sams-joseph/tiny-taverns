@@ -35,9 +35,13 @@ describe("the campaign-first home", () => {
     expect(screen.getByRole("button", { name: "The Salt Company" }).getAttribute("href")).toBe(
       `/#/worlds/${sharedWorldDetails.id}`,
     );
-    expect(screen.getByRole("button", { name: "Open" }).getAttribute("href")).toBe(
+    // The whole card opens the campaign through the link on its name; there is
+    // no separate Open control.
+    expect(screen.getByRole("link", { name: "The Salt Road" }).getAttribute("href")).toBe(
       `/#/campaigns/${campaignId}`,
     );
+    expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open" })).toBeNull();
   });
 
   it("promotes a standalone campaign into a named Shared World", async () => {
@@ -53,6 +57,8 @@ describe("the campaign-first home", () => {
     await renderCampaigns("/campaigns", mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Connect to Shared World" }));
+    // A secondary action inside the linked card acts; it does not open the campaign.
+    expect(globalThis.location.hash).not.toContain(`/campaigns/${campaignId}`);
     await userEvent.type(screen.getByLabelText("Shared World name"), "The Roads Between");
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 

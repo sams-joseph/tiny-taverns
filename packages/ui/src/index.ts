@@ -19,6 +19,7 @@ export {
   CardDescription,
   CardFooter,
   CardHeader,
+  cardLinkClassName,
   CardTitle,
 } from "./components/ui/card";
 export { Icon, icons } from "./components/ui/icon";
