@@ -21,6 +21,7 @@ import runCarryover from "../src/migrations/0007_run_carryover.js";
 import beats from "../src/migrations/0008_beats.js";
 import searchIndex from "../src/migrations/0009_search_index.js";
 import assistantConversation from "../src/migrations/0010_assistant_conversation.js";
+import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -54,6 +55,10 @@ afterAll(() => threadRuntime.dispose());
 /** A ninth, for source provenance added after the starter bundle existed. */
 const sourceRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_sources"));
 afterAll(() => sourceRuntime.dispose());
+
+/** A tenth, for the keys a campaign's move depends on, as they were before it could move. */
+const moveKeysRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_move_keys"));
+afterAll(() => moveKeysRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -276,6 +281,7 @@ describe("migrations", () => {
       { migration_id: 50, name: "shared_world_images" },
       { migration_id: 51, name: "npc_images" },
       { migration_id: 52, name: "descriptions" },
+      { migration_id: 53, name: "campaign_move_keys" },
     ]);
   }, 60_000);
 
@@ -337,6 +343,7 @@ describe("migrations", () => {
       { migration_id: 50, name: "shared_world_images" },
       { migration_id: 51, name: "npc_images" },
       { migration_id: 52, name: "descriptions" },
+      { migration_id: 53, name: "campaign_move_keys" },
     ]);
   }, 60_000);
 });
@@ -964,5 +971,167 @@ describe("adding source provenance after the starter bundle existed", () => {
       { table_name: "creature", source_entity_id: null, source_revision_id: null },
     ]);
     expect(measured.duplicateName).toBe("Success");
+  }, 60_000);
+});
+
+/** Every message down an error's `cause` chain, where Postgres names the key. */
+const describeError = (error: unknown): string => {
+  let cause: unknown = error;
+  const seen: Array<string> = [];
+  while (cause !== null && cause !== undefined) {
+    seen.push(String(cause));
+    cause = (cause as { readonly cause?: unknown }).cause;
+  }
+  return seen.join("\n");
+};
+
+describe("upgrading a database whose campaign keys predate moving a campaign", () => {
+  it("lets a campaign change context with its table, and leaves accepted history behind", async () => {
+    // `0001`, `0013` and `0030` gained `on update cascade` by being edited
+    // after databases had applied them, so those databases kept the keys
+    // restored below and every connect on them failed. The move is the one
+    // `Groups.connect` makes: admit the participants, then repoint the campaign.
+    const measured = await moveKeysRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+
+        yield* migrate;
+        yield* sql`
+          alter table campaign_member
+            drop constraint campaign_member_campaign_fkey,
+            add constraint campaign_member_campaign_fkey foreign key (campaign_id, group_id)
+              references campaign (id, group_id) on delete cascade
+        `;
+        yield* sql`
+          alter table campaign_character
+            drop constraint campaign_character_campaign_fkey,
+            add constraint campaign_character_campaign_fkey foreign key (campaign_id, group_id)
+              references campaign (id, group_id) on delete cascade
+        `;
+        yield* sql`
+          alter table group_invite
+            alter column campaign_id drop not null,
+            drop constraint group_invite_campaign_fkey,
+            add constraint group_invite_campaign_fkey foreign key (campaign_id, group_id)
+              references campaign (id, group_id) on delete set null (campaign_id)
+        `;
+        yield* sql`
+          alter table group_history_entry
+            drop constraint group_history_entry_campaign_id_fkey,
+            add constraint group_history_entry_campaign_fkey foreign key (campaign_id, group_id)
+              references campaign (id, group_id) on delete set null (campaign_id)
+        `;
+
+        const accounts = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert([
+            { name: "Jo", token_hash: "creator-hash" },
+            { name: "Sam", token_hash: "player-hash" },
+          ])}
+          returning id
+        `;
+        const [creator, player] = [accounts[0]!.id, accounts[1]!.id];
+        const campaign = yield* rawCampaign(sql, creator, "The Salt Road");
+        const contexts = yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign where id = ${campaign}
+        `;
+        const source = contexts[0]!.group_id;
+
+        // A seated player, an invitation and a night already in the record.
+        yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`
+              insert into group_member ${sql.insert({ group_id: source, account_id: player })}
+            `;
+            yield* sql`
+              insert into campaign_member ${sql.insert({
+                campaign_id: campaign,
+                group_id: source,
+                account_id: player,
+              })}
+            `;
+            yield* sql`
+              insert into campaign_character ${sql.insert({
+                campaign_id: campaign,
+                group_id: source,
+                account_id: player,
+                display_name: "Wren",
+              })}
+            `;
+          }),
+        );
+        yield* sql`
+          insert into group_invite ${sql.insert({
+            group_id: source,
+            campaign_id: campaign,
+            token_hash: "invite-hash",
+            expires_at: new Date(Date.now() + 86_400_000),
+          })}
+        `;
+        yield* sql`
+          insert into group_history_entry ${sql.insert({
+            group_id: source,
+            campaign_id: campaign,
+            source_kind: "manual",
+            body: "The ferry burned.",
+          })}
+        `;
+
+        const destination = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            const rows = yield* sql<{ readonly id: string }>`
+              insert into play_group ${sql.insert({
+                owner_account_id: creator,
+                name: "The Drowned Coast",
+                is_shared_world: true,
+              })}
+              returning id
+            `;
+            yield* sql`
+              insert into group_member ${sql.insert({ group_id: rows[0]!.id, account_id: creator })}
+            `;
+            return rows[0]!.id;
+          }),
+        );
+
+        const move = sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`
+              insert into group_member ${sql.insert({ group_id: destination, account_id: player })}
+            `;
+            yield* sql`update campaign set group_id = ${destination} where id = ${campaign}`;
+          }),
+        );
+
+        const refused = yield* move.pipe(Effect.flip, Effect.map(describeError));
+
+        // Twice: the second run meets the shape the first one wrote.
+        yield* campaignMoveKeys;
+        yield* campaignMoveKeys;
+        yield* move;
+
+        const followed = yield* sql<{ readonly table_name: string; readonly group_id: string }>`
+          select 'campaign_member' as table_name, group_id from campaign_member
+          where campaign_id = ${campaign}
+          union all
+          select 'campaign_character', group_id from campaign_character
+          where campaign_id = ${campaign}
+          union all
+          select 'group_invite', group_id from group_invite where campaign_id = ${campaign}
+        `;
+        const history = yield* sql<{ readonly group_id: string; readonly campaign_id: string }>`
+          select group_id, campaign_id from group_history_entry
+        `;
+        return { refused, followed, history, source, destination, campaign };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.refused).toContain("campaign_member_campaign_fkey");
+    expect(measured.followed).toHaveLength(4);
+    expect(new Set(measured.followed.map((row) => row.group_id))).toEqual(
+      new Set([measured.destination]),
+    );
+    expect(measured.history).toEqual([
+      { group_id: measured.source, campaign_id: measured.campaign },
+    ]);
   }, 60_000);
 });
