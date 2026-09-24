@@ -136,11 +136,10 @@ function NavigationMenuTrigger({
 }
 
 /**
- * A trigger's panel. Given a `hero` — a `NavigationMenuHero` — it is shadcn's
- * featured panel: the tile beside the column of links, and above it when the
- * panel has no room for both. That turn is `flex-wrap` on a panel capped at
- * the room the positioner leaves (`--available-width`), not a breakpoint, so
- * it answers how wide the panel can be wherever the trigger sits.
+ * A trigger's panel. Given a `hero` — a `NavigationMenuHero` — it is a
+ * featured panel: the tile as a banner across the top and the column of links
+ * under it, at every width. The panel is 28rem, capped at the room the
+ * positioner leaves (`--available-width`) wherever the trigger sits.
  */
 function NavigationMenuContent({
   className,
@@ -158,7 +157,7 @@ function NavigationMenuContent({
             // together are one `0.5` spacing step: the positioner holds the
             // popup's outer box to `--available-width`, and a panel as wide as
             // that is clipped by the borders.
-            "flex w-xl max-w-[calc(var(--available-width)-var(--spacing)*0.5)] flex-wrap gap-1.5 p-1.5",
+            "flex w-md max-w-[calc(var(--available-width)-var(--spacing)*0.5)] flex-col gap-1.5 p-1.5",
         className,
       )}
       {...props}
@@ -168,9 +167,7 @@ function NavigationMenuContent({
       ) : (
         <>
           {hero}
-          {/* The rows take all the room the tile leaves, and the tile only
-              grows when it has a line to itself, stacked above them. */}
-          <div className="flex min-w-0 grow-999 basis-72 flex-col">{children}</div>
+          <div className="flex min-w-0 flex-col">{children}</div>
         </>
       )}
     </NavigationMenuPrimitive.Content>
@@ -182,8 +179,8 @@ function NavigationMenuContent({
  * and one line about it. It is decoration, not a destination — the panel's
  * first link is where the part of the app starts — so it is not focusable and
  * the picture's `alt` is empty; the label and tagline are read as the panel's
- * text. The picture is 2:1 and covers its band, which is the tile's 1x width
- * tall beside the links and the same height across a stacked panel.
+ * text. It spans the panel's top, and the picture is a 4:1 banner that covers
+ * its band, the label and tagline under it on the tile's sunken surface.
  */
 function NavigationMenuHero({
   className,
@@ -203,7 +200,7 @@ function NavigationMenuHero({
     <div
       data-slot="navigation-menu-hero"
       className={cn(
-        "flex grow basis-48 flex-col self-start overflow-hidden rounded-sm border border-hairline bg-surface-sunken",
+        "flex flex-col overflow-hidden rounded-sm border border-hairline bg-surface-sunken",
         className,
       )}
       {...props}
@@ -214,7 +211,7 @@ function NavigationMenuHero({
         sizes={sizes}
         alt=""
         decoding="async"
-        className="h-24 w-full object-cover"
+        className="aspect-4/1 w-full object-cover"
       />
       <div className="flex flex-col gap-0.5 px-3 py-2.5">
         <p className="m-0 font-sans text-body-s font-semibold text-heading">{label}</p>

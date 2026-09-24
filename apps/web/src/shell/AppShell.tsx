@@ -20,9 +20,9 @@ import {
   type IconName,
 } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
-import campaignsHero1x from "./heroes/campaigns-384.webp";
+import campaignsHero1x from "./heroes/campaigns-448.webp";
 import campaignsHero2x from "./heroes/campaigns-768.webp";
-import libraryHero1x from "./heroes/library-384.webp";
+import libraryHero1x from "./heroes/library-448.webp";
 import libraryHero2x from "./heroes/library-768.webp";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
@@ -345,8 +345,8 @@ function GlobalNav({ section }: { readonly section: Section }) {
  * its picture, its name and one line about the part of the app it is.
  *
  * The picture is `heroes/`, made by `scripts/nav-heroes.mjs` at the hero's 1x
- * and 2x widths. The tile is 12rem beside the links and the panel's width when
- * it stacks on a phone, so `sizes` says both and the browser picks by density.
+ * and 2x widths. The banner spans the panel, 28rem at most and the phone's
+ * width below that, so `sizes` says both and the browser picks by density.
  */
 function GlobalPanel({
   label,
@@ -371,8 +371,8 @@ function GlobalPanel({
         hero={
           <NavigationMenuHero
             src={x1}
-            srcSet={`${x1} 384w, ${x2} 768w`}
-            sizes="(min-width: 40rem) 12rem, 100vw"
+            srcSet={`${x1} 448w, ${x2} 768w`}
+            sizes="(min-width: 30rem) 28rem, 100vw"
             label={label}
           >
             {hero.tagline}
