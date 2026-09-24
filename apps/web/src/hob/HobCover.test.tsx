@@ -21,12 +21,12 @@ describe("HobCover", () => {
   });
 
   it("holds a band that says Hob is drawing while it is pending", () => {
-    render(<HobCover image={null} pending shape="band" />);
+    render(<HobCover image={null} pending shape="hero" />);
     expect(screen.getByRole("status")).toHaveTextContent("Hob is drawing…");
     expect(document.querySelector("img")).toBeNull();
   });
 
-  it("loads the card size on a card and the full size on a band, decoratively", () => {
+  it("loads the card size on a card and the full size on a hero, decoratively", () => {
     const { container, rerender } = render(
       <HobCover image={drawnCover} pending={false} shape="card" />,
     );
@@ -43,7 +43,7 @@ describe("HobCover", () => {
     fireEvent.load(img);
     expect(container.querySelector("img")!.className).toContain("opacity-100");
 
-    rerender(<HobCover image={drawnCover} pending={false} shape="band" />);
+    rerender(<HobCover image={drawnCover} pending={false} shape="hero" />);
     expect(container.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnCover.fullUrl));
   });
 

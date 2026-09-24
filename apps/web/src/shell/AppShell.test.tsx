@@ -60,6 +60,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns": "/campaigns",
   "/_shell/worlds": "/worlds",
   "/_shell/worlds/$worldId": `/worlds/${worldId}`,
+  "/_shell/worlds/$worldId/chronicle": `/worlds/${worldId}/chronicle`,
   "/_shell/library": "/library",
   "/_shell/library/rules": "/library/rules",
   "/_shell/library/compendium": "/library/compendium",

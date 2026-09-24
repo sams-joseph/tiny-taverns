@@ -15,6 +15,7 @@ import {
   mintingSession,
   renderCampaigns,
   renderSharedWorld,
+  renderSharedWorldChronicle,
 } from "../campaign/campaign.fixtures";
 
 /**
@@ -156,7 +157,7 @@ describe("one Shared World's screen", () => {
     expect(screen.getByText("Run by Wren Alderby")).toBeTruthy();
   });
 
-  it("shows the accepted Story So Far above the Chronicle and marks newer entries", async () => {
+  const aimStory = () => {
     const summaryText = "The company followed the lantern road into the marsh.";
     const newerEntry = {
       id: "8a1d1f28-3a4b-4c6d-9e11-0d2f3c4b5a61",
@@ -191,7 +192,33 @@ describe("one Shared World's screen", () => {
       },
     });
 
+    return { summaryText, newerEntry };
+  };
+
+  it("summarises the Story So Far and the newest entries, and leads to the whole Chronicle", async () => {
+    const { summaryText, newerEntry } = aimStory();
     await renderSharedWorld(mintingSession());
+
+    const title = await screen.findByText("Story So Far");
+    // A summary card: its header's link is the way in, and its rows open nothing.
+    const card = title.closest("[data-slot=card]") as HTMLElement;
+    expect(within(card).getByText(summaryText)).toBeInTheDocument();
+    expect(within(card).getByText("Update needed")).toBeInTheDocument();
+    const latest = within(card).getByRole("region", { name: "Latest in the chronicle" });
+    expect(within(latest).getByText(newerEntry.title)).toBeInTheDocument();
+    expect(within(latest).queryAllByRole("link")).toEqual([]);
+    expect(within(card).getByRole("link", { name: "Read the chronicle" })).toHaveAttribute(
+      "href",
+      `/worlds/${worldId}/chronicle`,
+    );
+    // The composer and the Hob draft are the Chronicle page's, not the summary's.
+    expect(screen.queryByRole("textbox", { name: "Write the chronicle" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refresh with Hob" })).toBeNull();
+  });
+
+  it("keeps the Story So Far above the whole Chronicle on its own page, and marks newer entries", async () => {
+    const { summaryText } = aimStory();
+    await renderSharedWorldChronicle(mintingSession());
 
     const story = await screen.findByRole("region", { name: "Story So Far" });
     const chronicle = screen.getByRole("region", { name: "Chronicle" });
@@ -201,6 +228,12 @@ describe("one Shared World's screen", () => {
     expect(
       story.compareDocumentPosition(chronicle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    // Titled for what it is, under the world, with the way back to it.
+    expect(await screen.findByRole("heading", { level: 1, name: "Chronicle" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: /The Salt Company/ })).toHaveAttribute(
+      "href",
+      `/worlds/${worldId}`,
+    );
   });
 
   it("offers no way into a campaign this member does not participate in", async () => {
@@ -245,8 +278,7 @@ describe("one Shared World's screen", () => {
     await screen.findByText("The Salt Road");
 
     expect(screen.queryByLabelText("New campaign name")).toBeNull();
-    const section = screen.getByRole("region", { name: "Campaigns" });
-    await userEvent.click(within(section).getByRole("button", { name: "New campaign" }));
+    await userEvent.click(screen.getByRole("button", { name: "New campaign" }));
     const dialog = await screen.findByRole("dialog", { name: "New campaign" });
     expect(within(dialog).getByText(/A new table in The Salt Company/)).toBeTruthy();
     expect(within(dialog).queryByRole("combobox")).toBeNull();
@@ -292,14 +324,26 @@ describe("one Shared World's screen", () => {
     );
   });
 
-  it("puts the owner's settings in the bar, not the body", async () => {
+  it("puts the owner's management in the hero, as outline buttons beside the one primary", async () => {
     await renderSharedWorld(mintingSession());
 
     const settings = await screen.findByRole("button", { name: "Shared World settings" });
-    const header = screen.getByRole("heading", { level: 1 }).closest("header");
-    expect(header).not.toBeNull();
-    expect(header?.contains(settings)).toBe(true);
-    expect(screen.getByRole("main").contains(settings)).toBe(false);
+    const header = screen
+      .getByRole("heading", { level: 1, name: "The Salt Company" })
+      .closest("header")!;
+    expect(header.closest("[data-slot=overview-hero]")).not.toBeNull();
+    expect(header.contains(settings)).toBe(true);
+    expect(settings).toHaveClass("border-current");
+    const actions = within(header).getByRole("button", { name: "Shared World actions" });
+    await userEvent.click(actions);
+    expect(await screen.findByRole("menuitem", { name: "Archive Shared World" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Delete permanently" })).toBeTruthy();
+    // One peach primary, and it is every member's: New campaign.
+    const primaries = screen
+      .getAllByRole("button")
+      .filter((button) => button.classList.contains("bg-accent"));
+    expect(primaries.map((button) => button.textContent)).toEqual(["New campaign"]);
+    expect(header.contains(primaries[0]!)).toBe(true);
   });
 
   it("lets the owner rename the Shared World", async () => {
@@ -373,6 +417,10 @@ describe("one Shared World's screen", () => {
 
     await screen.findByText("The Salt Road");
     expect(screen.queryByRole("button", { name: "Shared World settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Shared World actions" })).toBeNull();
+    // A member can still found a campaign, and it is still the one primary.
+    const header = screen.getByRole("heading", { level: 1 }).closest("header")!;
+    expect(within(header).getByRole("button", { name: "New campaign" })).toHaveClass("bg-accent");
   });
 
   it("explains safe retirement and shows why a world with campaigns cannot be archived", async () => {
@@ -504,10 +552,8 @@ describe("one Shared World's screen", () => {
     );
     expect(historyReads(server.calls.slice(0, acceptAt()))).toHaveLength(1);
     expect(
-      await within(screen.getByRole("region", { name: "Chronicle" })).findByText(
-        "Every lantern went dark on the same night.",
-      ),
-    ).toBeInTheDocument();
+      await screen.findByRole("region", { name: "Latest in the chronicle" }),
+    ).toHaveTextContent("Every lantern went dark on the same night.");
   });
 });
 
@@ -588,5 +634,102 @@ describe("a Shared World's cover", () => {
     await renderSharedWorld(mintingSession());
     await screen.findByText("The Salt Road");
     expect(covers()).toHaveLength(0);
+  });
+});
+
+/**
+ * The top of the world's screen is the Overviews' hero (`OverviewHero` in
+ * `campaign/OverviewParts.tsx`). jsdom lays nothing out, so the overlap is
+ * asserted as what produces it: the cover's `data-picture`, which the header's
+ * `group-has-data-picture/hero:` utilities answer.
+ */
+describe("a Shared World's hero", () => {
+  const hero = () => document.querySelector<HTMLElement>("[data-slot=overview-hero]");
+  const cover = () => hero()?.querySelector("[data-slot=hob-cover]") ?? null;
+  const overlaps = () => hero()?.matches(":has([data-picture])") ?? false;
+  const worldWith = (over: object) =>
+    server.routes.set(`GET /worlds/${worldId}`, {
+      status: 200,
+      body: { ...sharedWorldDetails, ...over },
+    });
+  const renderHero = async () => {
+    await renderSharedWorld(mintingSession());
+    return screen.findByRole("heading", { level: 1, name: "The Salt Company" });
+  };
+
+  it("titles the page with the world's name, the one h1, and draws no bar", async () => {
+    const title = await renderHero();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(hero()?.contains(title)).toBe(true);
+    expect(title).toHaveClass("font-display");
+    expect(document.querySelector("[data-slot=page-header]")).toBeNull();
+  });
+
+  it("counts what the world's view already counts, and how long it has existed", async () => {
+    await renderHero();
+    expect(hero()!.querySelector("header p")).toHaveTextContent(
+      /^1 campaign·1 member·Since June 2026$/,
+    );
+  });
+
+  it("puts the description under the name, at the hero's measure", async () => {
+    worldWith({ description: "Reed marshes at dusk." });
+    await renderHero();
+    expect(within(hero()!).getByText("Reed marshes at dusk.")).toHaveClass("max-w-overview-pitch");
+  });
+
+  it("lays the header over a drawn cover", async () => {
+    worldWith({ image: drawnWorldCover });
+    await renderHero();
+    await waitFor(() => expect(cover()).toHaveAttribute("data-picture"));
+    expect(overlaps()).toBe(true);
+    expect(cover()).toHaveClass("h-overview-cover");
+    expect(cover()!.querySelector(".bg-linear-to-t")).toHaveClass("from-surface-page");
+    expect(hero()!.querySelector("header")).toHaveClass(
+      "group-has-data-picture/hero:-mt-overview-overlap",
+    );
+  });
+
+  // The same rule as the campaign's hero: the header rises by the overlap and
+  // the actions are padded down by it, so they never sit on the picture.
+  for (const description of [null, "Reed marshes at dusk."])
+    it(`keeps its actions below a drawn cover ${description ? "with" : "without"} a description`, async () => {
+      worldWith({ image: drawnWorldCover, description });
+      await renderHero();
+      await waitFor(() => expect(overlaps()).toBe(true));
+      const header = hero()!.querySelector("header")!;
+      expect(header).toHaveClass("items-end");
+      const actions = header.querySelector<HTMLElement>("[data-slot=overview-hero-actions]")!;
+      expect(actions.parentElement).toBe(header);
+      expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
+      // Capped at the inset header's width, so an owner's three buttons wrap
+      // inside the page's gutter at phone width rather than spilling past it.
+      expect(actions).toHaveClass("max-w-full");
+      expect(within(actions).getByRole("button", { name: "New campaign" })).toBeInTheDocument();
+    });
+
+  it("sits flat with no cover", async () => {
+    await renderHero();
+    expect(cover()).toBeNull();
+    expect(overlaps()).toBe(false);
+  });
+
+  it("sits flat under the band while Hob is drawing", async () => {
+    worldWith({ imagePending: true });
+    await renderHero();
+    expect(within(hero()!).getByText("Hob is drawing…")).toHaveAttribute("role", "status");
+    expect(overlaps()).toBe(false);
+  });
+
+  it("shares the Overview's centred columns: campaigns and story in the main, members aside", async () => {
+    await renderHero();
+    const page = hero()!.parentElement!;
+    expect(page).toHaveClass("mx-auto", "max-w-overview");
+    const aside = within(page).getByRole("complementary");
+    expect(within(aside).getByText("Members")).toBeInTheDocument();
+    expect(within(aside).getByText("Owner")).toBeInTheDocument();
+    const main = aside.previousElementSibling as HTMLElement;
+    expect(within(main).getByRole("region", { name: "Campaigns" })).toBeInTheDocument();
+    expect(within(main).getByText("Story So Far")).toBeInTheDocument();
   });
 });

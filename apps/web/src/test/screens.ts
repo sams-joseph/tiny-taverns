@@ -61,11 +61,12 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The seventeen screens, in the order the audit walks them. */
+/** The eighteen screens, in the order the audit walks them. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
   { name: "world", scenario: "creator", path: `/worlds/${worldId}` },
+  { name: "world-chronicle", scenario: "creator", path: `/worlds/${worldId}/chronicle` },
   { name: "overview", scenario: "creator", path: c },
   { name: "encounters", scenario: "creator", path: `${c}/encounters` },
   { name: "encounter", scenario: "creator", path: `${c}/encounters/${encounterId}` },

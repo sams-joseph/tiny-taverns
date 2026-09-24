@@ -52,3 +52,21 @@ export const sharedWorldViewAtom = Atom.family((worldId: SharedWorldId) =>
     [reads.sharedWorld(worldId), reads.mySharedWorlds],
   ),
 );
+
+/**
+ * The Chronicle and its Story So Far: one key, so a kept entry or summary
+ * refreshes the world screen's summary card and the Chronicle page together.
+ */
+export const historyAtom = Atom.family((worldId: SharedWorldId) =>
+  apiAtom(
+    (client) => client.sharedWorldHistory.list({ params: { worldId: worldId } }),
+    [reads.sharedWorldHistory(worldId)],
+  ),
+);
+
+export const summaryAtom = Atom.family((worldId: SharedWorldId) =>
+  apiAtom(
+    (client) => client.sharedWorldHistory.summary({ params: { worldId } }),
+    [reads.sharedWorldHistory(worldId)],
+  ),
+);

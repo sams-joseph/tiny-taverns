@@ -32,7 +32,10 @@ import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
 import { ServerScreen } from "./server/ServerScreen";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
-import { SharedWorldRouteScreen } from "./shared-world/SharedWorldRouteScreen";
+import {
+  SharedWorldChronicleRouteScreen,
+  SharedWorldRouteScreen,
+} from "./shared-world/SharedWorldRouteScreen";
 import { SharedWorldsScreen } from "./shared-world/SharedWorldsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
@@ -178,20 +181,32 @@ const campaignsRoute = createRoute({
 });
 
 /**
- * One Shared World: its campaign directory, people, history and Hob. One
- * `params.parse`, exactly as the campaign's parent does it, so a bad id is a
- * bad link that falls back to the campaign home.
+ * A Shared World's id, decoded once for every route under it, exactly as the
+ * campaign's parent does it, so a bad id is a bad link that falls back to the
+ * campaign home.
  */
+const worldParams = {
+  parse: ({ worldId }: { readonly worldId: string }) => {
+    const decoded = asWorldId(worldId);
+    return decoded === undefined ? false : { worldId: decoded };
+  },
+};
+
+/** One Shared World: its Overview — campaigns, Story So Far, members — and Hob. */
 const worldRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/worlds/$worldId",
-  params: {
-    parse: ({ worldId }) => {
-      const decoded = asWorldId(worldId);
-      return decoded === undefined ? false : { worldId: decoded };
-    },
-  },
+  params: worldParams,
   component: SharedWorldRouteScreen,
+  remountDeps: ({ params }) => params.worldId,
+});
+
+/** A Shared World's whole Chronicle, which its Overview summarises. */
+const worldChronicleRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/worlds/$worldId/chronicle",
+  params: worldParams,
+  component: SharedWorldChronicleRouteScreen,
   remountDeps: ({ params }) => params.worldId,
 });
 
@@ -632,6 +647,7 @@ export const routeTree = rootRoute.addChildren([
     campaignsRoute,
     worldsRoute,
     worldRoute,
+    worldChronicleRoute,
     libraryRoute,
     libraryRulesRoute,
     libraryCompendiumRoute,
@@ -698,6 +714,7 @@ export const routes = {
   campaigns: campaignsRoute,
   worlds: worldsRoute,
   world: worldRoute,
+  worldChronicle: worldChronicleRoute,
   library: libraryRoute,
   libraryRules: libraryRulesRoute,
   librarySpells: librarySpellsRoute,

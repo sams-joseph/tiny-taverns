@@ -1,8 +1,12 @@
-import { Card, SectionHeading } from "@taverns/ui";
+import { Card, SectionHeading, sectionHeadingVariants } from "@taverns/ui";
 import type { ReactNode } from "react";
+import { HobCover, type HobCoverImages } from "../hob/HobCover";
+import { Description } from "../ui/description";
 
 /**
- * The pieces every card on the Overview is built from.
+ * The pieces every Overview is built from — the campaign's, a player's, and a
+ * Shared World's (`shared-world/SharedWorldScreen.tsx`), which is the same page
+ * over a different object.
  *
  * The redesign draws its summary cards one way: a title on a hairline-ruled
  * header, sometimes a quiet figure beside it, the way to the tab that holds the
@@ -91,6 +95,83 @@ export function OverviewPage({
           {aside}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The top of an Overview, as the redesign (`Campaign Overview.dc.html`) draws
+ * it: the cover, and the object's header laid over the bottom of it. The
+ * campaign's (`CampaignHero.tsx`) and a Shared World's are this over their own
+ * row; each decides only its meta line and its actions.
+ *
+ * **The name is the page's `h1`.** An Overview is the object itself, so it
+ * draws no per-screen header (`TopBar`) and this is the only heading on it.
+ *
+ * **The header overlaps the cover only when there is a picture to overlap.**
+ * With one, it is pulled up over the picture's faded bottom and inset from its
+ * edges; with none — never drawn, Hob still drawing, the draw failed, the URL
+ * would not load — it sits flat under whatever is above it. What decides is
+ * `HobCover`'s `data-picture`, read through `group-has-*`, because a URL that
+ * fails is only discovered inside the cover and a second copy of that state
+ * here would be the one that forgot. The "Hob is drawing" band keeps its badge
+ * clear for the same reason: pending is not a picture.
+ *
+ * **The actions never sit on the picture.** Only the text rises over it. The
+ * actions are bottom-aligned in the header row and padded down by the same
+ * overlap the header rises by, so their top is at or below the cover's bottom
+ * however short the text beside them is (no pitch, no meta line) and whether
+ * they share its line or wrap to their own.
+ */
+export function OverviewHero({
+  image,
+  imagePending,
+  meta,
+  name,
+  description,
+  children,
+}: {
+  readonly image: HobCoverImages | null;
+  readonly imagePending: boolean;
+  /** The quiet facts above the name, joined by dots; a blank one is dropped. */
+  readonly meta: ReadonlyArray<string | null>;
+  readonly name: string;
+  readonly description: string | null;
+  /** The header's actions, at its far end. */
+  readonly children: ReactNode;
+}) {
+  const parts = meta.filter((part): part is string => part !== null && part.trim() !== "");
+
+  return (
+    <div
+      data-slot="overview-hero"
+      className="group/hero @container flex flex-col gap-6 has-data-picture:gap-0"
+    >
+      <HobCover image={image} pending={imagePending} shape="hero" />
+      <header className="relative flex flex-wrap items-end gap-6 group-has-data-picture/hero:-mt-overview-overlap group-has-data-picture/hero:px-6">
+        <div className="min-w-0 grow basis-md">
+          <p className="mb-0 flex flex-wrap items-center gap-2 text-label leading-none font-medium text-muted-foreground">
+            {parts.map((part, index) => (
+              <span key={part} className="contents">
+                {index > 0 && (
+                  <span aria-hidden className="text-faint">
+                    ·
+                  </span>
+                )}
+                <span>{part}</span>
+              </span>
+            ))}
+          </p>
+          <h1 className={sectionHeadingVariants({ size: "hero", className: "mt-3" })}>{name}</h1>
+          <Description text={description} className="mt-2.5 max-w-overview-pitch" />
+        </div>
+        <div
+          data-slot="overview-hero-actions"
+          className="flex max-w-full flex-none flex-wrap items-center gap-2 group-has-data-picture/hero:pt-overview-overlap"
+        >
+          {children}
+        </div>
+      </header>
     </div>
   );
 }

@@ -7,11 +7,11 @@ import {
   installMemoryStorage,
   installStubServer,
   mintingSession,
-  renderSharedWorld,
+  renderSharedWorldChronicle,
 } from "../campaign/campaign.fixtures";
 
 /**
- * The chronicle section on the Shared World screen — read-only plus the composer.
+ * A Shared World's Chronicle page — read-only plus the composer.
  *
  * What is pinned is the boundary's client half: the section draws only what
  * `GET /worlds/:w/history` answered (copies, admitted on purpose), and the
@@ -60,7 +60,7 @@ beforeEach(() => {
 describe("the chronicle section", () => {
   it("draws what was admitted, a recap copy badged as a played night", async () => {
     server.routes.set(`GET ${historyPath}`, { status: 200, body: [entry, manual] });
-    await renderSharedWorld(mintingSession());
+    await renderSharedWorldChronicle(mintingSession());
 
     expect(await screen.findByText("Session 12 — The crossing")).toBeTruthy();
     expect(screen.getByText("The ferryman is called Cazril.")).toBeTruthy();
@@ -70,7 +70,7 @@ describe("the chronicle section", () => {
   });
 
   it("says the empty state in words rather than looking broken", async () => {
-    await renderSharedWorld(mintingSession());
+    await renderSharedWorldChronicle(mintingSession());
     expect(await screen.findByText(/Nothing admitted yet/)).toBeTruthy();
     expect(screen.getByText(/No Story So Far has been kept yet/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Draft Story So Far with Hob" })).toBeTruthy();
@@ -78,7 +78,7 @@ describe("the chronicle section", () => {
 
   it("writes a manual entry and re-reads the one resource it changed", async () => {
     server.routes.set(`POST ${historyPath}`, { status: 200, body: manual });
-    await renderSharedWorld(mintingSession());
+    await renderSharedWorldChronicle(mintingSession());
 
     const box = await screen.findByRole("textbox", { name: "Write the chronicle" });
     await userEvent.type(box, "It rained on both tables.");
@@ -100,7 +100,7 @@ describe("the chronicle section", () => {
   });
 
   it("offers nothing to press with nothing typed", async () => {
-    await renderSharedWorld(mintingSession());
+    await renderSharedWorldChronicle(mintingSession());
     const button = await screen.findByRole("button", { name: "Write it down" });
     expect(button).toHaveProperty("disabled", true);
   });

@@ -212,7 +212,7 @@ function settled() {
       const now = performance.now();
       const ready =
         document.querySelector(
-          '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="campaign-hero"] h1',
+          '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="overview-hero"] h1',
         ) !== null && document.querySelector('[data-slot="loading"]') === null;
       if ((ready && now - last > 300) || now - started > 8000) {
         observer.disconnect();

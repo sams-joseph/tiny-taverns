@@ -24,7 +24,7 @@ The screen list and the scenarios are shared with `src/shell/primaries.test.tsx`
 
 Per screen, per width, after the DOM has been still for 300ms:
 
-- the heights of the global row, the campaign row, the per-screen bar and the tab strip, and the sticky stack's total height and `z-index`;
+- the heights of the global row, the campaign row, the per-screen bar and the tab strip, and the sticky stack's total height and `z-index` (a Shared World's screen, `world`, has no bar: like the Overviews its `h1` is the name in its hero, so its stack is the global row's);
 - inside a campaign, that there is no per-screen bar, that the stack is the two nav rows on every screen, and that `main`'s top, the header's `h1` and (from 896px up) the header's height are one value across the campaign's screens, both Overviews (the creator's and a player's) excepted for the last two because their `h1` is the campaign's name in the cover's hero;
 - the gap between the campaign lead group and the first tab, that the way home and the lead group are never squeezed, that the campaign's press sits after the last tab, the last item's right edge and the row's right edge;
 - the height of every control on the global row;

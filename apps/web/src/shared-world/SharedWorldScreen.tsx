@@ -8,29 +8,38 @@ import {
   cardLinkClassName,
   CardHeader,
   CardTitle,
-  Icon,
   EmptyState,
+  Icon,
   Loading,
+  SectionHeading,
 } from "@taverns/ui";
 import { useCallback, useState } from "react";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { NewCampaignDialog } from "../campaign/NewCampaignDialog";
+import { OverviewCard, OverviewHero, OverviewPage } from "../campaign/OverviewParts";
+import { monthOf } from "../chronicle/format";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { HobCover } from "../hob/HobCover";
-import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
-import { Description } from "../ui/description";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
 import { DeleteSharedWorldDialog } from "./DeleteSharedWorldDialog";
-import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
+import { StorySoFarCard } from "./StorySoFarCard";
 import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
-import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
- * One Shared World: its cover, its campaign directory, and its people.
+ * One Shared World: its Overview, on the campaign Overview's layout
+ * (`campaign/OverviewParts.tsx`) over the world's own reads.
+ *
+ * The hero is the world's cover with its name as the page's `h1`, a meta line
+ * of what the view already counts (campaigns, members) and how long the world
+ * has existed, its description, and its actions. The main column is what is
+ * played here — the campaign directory, then the *Story So Far* with the
+ * newest Chronicle entries, whose *Read the chronicle* opens the whole
+ * Chronicle on its own page (`SharedWorldChronicleScreen.tsx`). The aside is
+ * who is here.
  *
  * **The directory is every campaign in the Shared World, with this reader's own
  * relation on each card** — `Created by you`, `Playing`, or a plain world
@@ -40,9 +49,13 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * relation is not a link — one that lands on a 404 is worse than none.
  *
  * **Founding a campaign is any live member's act** (the governance decision),
- * and it makes the founder its creator and sole DM. The roster is context,
- * not a second onboarding workflow: people enter through campaign invitations,
- * which also establish the eligibility rows this screen reads.
+ * and it makes the founder its creator and sole DM, so *New campaign* is the
+ * screen's one primary, in the hero, for every member — the place a player's
+ * Overview puts its one door, *New character*. The owner's management sits
+ * beside it as outline buttons, as the creator's does on a campaign. The
+ * roster is context, not a second onboarding workflow: people enter through
+ * campaign invitations, which also establish the eligibility rows this screen
+ * reads.
  */
 
 const relationBadge = (relation: SharedWorldCampaignCard["relation"]) => {
@@ -50,6 +63,8 @@ const relationBadge = (relation: SharedWorldCampaignCard["relation"]) => {
   if (relation === "player") return <Badge variant="info">Playing</Badge>;
   return null;
 };
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * One campaign in the directory. A card this reader participates in opens the
@@ -93,14 +108,36 @@ function CampaignCard({ card }: { readonly card: SharedWorldCampaignCard }) {
   );
 }
 
-function MemberRow({ member }: { readonly member: SharedWorldMember }) {
+/** Who is here, as summary rows: informational, so a row opens nothing. */
+function MembersCard({ members }: { readonly members: ReadonlyArray<SharedWorldMember> }) {
   return (
-    <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline py-2.5 last:border-b-0">
-      <span className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground">
-        {member.name}
-      </span>
-      {member.isOwner && <Badge variant="secondary">Owner</Badge>}
-    </div>
+    <OverviewCard
+      title="Members"
+      meta={
+        <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
+          {members.length}
+        </span>
+      }
+    >
+      <ul>
+        {members.map((member) => (
+          <li
+            key={member.accountId}
+            className="flex min-h-row items-center gap-2.5 border-t border-hairline px-card py-2 first:border-t-0"
+          >
+            <Icon
+              name={member.isOwner ? "crown" : "user"}
+              size={14}
+              className="shrink-0 text-faint"
+            />
+            <span className="min-w-0 flex-1 truncate text-body-s leading-snug font-medium text-heading">
+              {member.name}
+            </span>
+            {member.isOwner && <Badge variant="secondary">Owner</Badge>}
+          </li>
+        ))}
+      </ul>
+    </OverviewCard>
   );
 }
 
@@ -120,9 +157,6 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
       (membership) => membership.sharedWorld.id === worldId && membership.isOwner,
     );
 
-  // The panel is the layout's, and its Shared World scope is the route's.
-  const askHob = useShowHob();
-
   // A world opens here the moment it is made, while Hob is still drawing its
   // cover. Re-read the world, and the list it came from, until it lands.
   const invalidate = useInvalidate();
@@ -132,95 +166,89 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
   );
   useHobDrawingPolling(view?.sharedWorld.imagePending === true, rereadCover);
 
+  const newCampaign = (
+    <Button size="sm" onClick={() => setCreatingCampaign(true)}>
+      <Icon name="plus" size={14} />
+      New campaign
+    </Button>
+  );
+
   return (
     <>
-      <TopBar
-        title={view?.sharedWorld.name ?? "Shared World"}
-        subtitle={
-          view === undefined
-            ? undefined
-            : `${view.members.length} ${view.members.length === 1 ? "member" : "members"} · ${view.campaigns.length} ${view.campaigns.length === 1 ? "campaign" : "campaigns"}`
-        }
-      >
-        {/* The owner's screen action, so it is the bar's — never a button
-            right-aligned above the body. */}
-        {ownsWorld && view !== undefined && (
-          <>
-            <Button size="sm" onClick={() => setSettingsOpen(true)}>
-              <Icon name="pencil" size={14} />
-              Shared World settings
-            </Button>
-            <ActionsMenu
-              label="Shared World actions"
-              items={[
-                {
-                  label: "Archive Shared World",
-                  icon: "archive",
-                  onSelect: () => setWorldArchiveOpen(true),
-                },
-                {
-                  label: "Delete permanently",
-                  icon: "trash-2",
-                  destructive: true,
-                  onSelect: () => setWorldDeleteOpen(true),
-                },
-              ]}
-            />
-          </>
-        )}
-      </TopBar>
-      <div className="flex flex-col gap-8">
-        {resource.state === "loading" && <Loading label="Reading the Shared World…" />}
-        {resource.state === "failed" && (
-          <ApiFailureNotice failure={resource.failure} onRetry={retry} />
-        )}
-        {view !== undefined && (
-          <>
-            {/* The cover, when there is one, above everything the page is about. */}
-            <HobCover
+      {view === undefined ? (
+        // The hero's `h1` is the world's name, which is not known yet: until it
+        // is, the ordinary bar holds the page's title.
+        <>
+          <TopBar title="Shared World" />
+          {resource.state === "failed" ? (
+            <ApiFailureNotice failure={resource.failure} onRetry={retry} />
+          ) : (
+            <Loading label="Reading the Shared World…" />
+          )}
+        </>
+      ) : (
+        <OverviewPage
+          lead={
+            <OverviewHero
               image={view.sharedWorld.image}
-              pending={view.sharedWorld.imagePending}
-              shape="band"
-            />
-            <Description text={view.sharedWorld.description} />
-            <section className="flex flex-col gap-4" aria-label="Campaigns">
-              {/* The section's own verb, so it lives in the section; the bar's
-                  one primary is the owner's settings. */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="self-start"
-                onClick={() => setCreatingCampaign(true)}
-              >
-                <Icon name="plus" size={14} />
-                New campaign
-              </Button>
-              {view.campaigns.length === 0 ? (
-                <EmptyState icon="book-open" title="Nothing being played yet">
-                  Any member can start a campaign, and whoever starts one runs it.
-                </EmptyState>
-              ) : (
-                <div className="grid gap-4 @3xl:grid-cols-2">
-                  {view.campaigns.map((card) => (
-                    <CampaignCard key={card.id} card={card} />
-                  ))}
-                </div>
+              imagePending={view.sharedWorld.imagePending}
+              meta={[
+                count(view.campaigns.length, "campaign", "campaigns"),
+                count(view.members.length, "member", "members"),
+                `Since ${monthOf(view.sharedWorld.createdAt)}`,
+              ]}
+              name={view.sharedWorld.name}
+              description={view.sharedWorld.description}
+            >
+              {newCampaign}
+              {ownsWorld && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+                    <Icon name="pencil" size={14} />
+                    Shared World settings
+                  </Button>
+                  <ActionsMenu
+                    label="Shared World actions"
+                    items={[
+                      {
+                        label: "Archive Shared World",
+                        icon: "archive",
+                        onSelect: () => setWorldArchiveOpen(true),
+                      },
+                      {
+                        label: "Delete permanently",
+                        icon: "trash-2",
+                        destructive: true,
+                        onSelect: () => setWorldDeleteOpen(true),
+                      },
+                    ]}
+                  />
+                </>
               )}
-            </section>
-
-            <SharedWorldChronicle worldId={worldId} onAskHob={askHob} />
-
-            <section className="flex max-w-2xl flex-col" aria-label="Members">
-              <span className="pb-1 text-label leading-snug font-semibold text-heading">
-                Members
-              </span>
-              {view.members.map((member) => (
-                <MemberRow key={member.accountId} member={member} />
-              ))}
-            </section>
-          </>
-        )}
-      </div>
+            </OverviewHero>
+          }
+          main={
+            <>
+              <section className="flex flex-col gap-3" aria-label="Campaigns">
+                <SectionHeading size="title">Campaigns</SectionHeading>
+                {view.campaigns.length === 0 ? (
+                  <EmptyState icon="book-open" title="Nothing being played yet">
+                    Any member can start a campaign, and whoever starts one runs it.
+                  </EmptyState>
+                ) : (
+                  <div className="grid gap-4 @2xl:grid-cols-2">
+                    {view.campaigns.map((card) => (
+                      <CampaignCard key={card.id} card={card} />
+                    ))}
+                  </div>
+                )}
+              </section>
+              <StorySoFarCard worldId={worldId} />
+            </>
+          }
+          aside={<MembersCard members={view.members} />}
+        />
+      )}
 
       {creatingCampaign && view !== undefined && (
         <NewCampaignDialog
