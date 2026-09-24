@@ -40,7 +40,7 @@ const slot = () => header()?.nextElementSibling;
 describe("the persistent shell", () => {
   it("keeps the header, the nav, the bar's slot and an open panel across destinations", async () => {
     await renderAt(`/campaigns/${campaignId}`);
-    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await screen.findByRole("heading", { level: 1, name: "The Salt Road" });
 
     await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
     await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
@@ -82,7 +82,7 @@ describe("the persistent shell", () => {
    */
   it.each(screens.map((entry) => [entry.name, entry] as const))(
     "draws %s's header where its route says",
-    async (_, { scenario, path }) => {
+    async (name, { scenario, path }) => {
       server.routes = scenarios[scenario]();
       await renderAt(path);
       await screen.findByRole("heading", { level: 1 });
@@ -95,7 +95,11 @@ describe("the persistent shell", () => {
       if (inCampaign) {
         expect(slot()).toBeEmptyDOMElement();
         expect(screen.getByRole("main").contains(title)).toBe(true);
-        expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
+        // The creator's Overview titles itself with the campaign's name, in
+        // the hero over its cover (`campaign/CampaignHero.tsx`); every other
+        // campaign tab with `PageHeader`'s in-content heading.
+        if (name === "overview") expect(title.closest("[data-slot=campaign-hero]")).not.toBeNull();
+        else expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
       } else {
         expect(slot()?.contains(title)).toBe(true);
         expect(title.closest("header")).toHaveAttribute("data-slot", "page-header");
@@ -168,7 +172,7 @@ describe("the persistent shell", () => {
    */
   it("docks the panel beside the whole shell, full height, not under the bars", async () => {
     await renderAt(`/campaigns/${campaignId}`);
-    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await screen.findByRole("heading", { level: 1, name: "The Salt Road" });
     await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
     await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
 
@@ -229,7 +233,7 @@ describe("the persistent shell", () => {
 
   it("keeps an open panel open on the way out of a campaign", async () => {
     await renderAt(`/campaigns/${campaignId}`);
-    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await screen.findByRole("heading", { level: 1, name: "The Salt Road" });
     await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
     await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
     const before = panel();

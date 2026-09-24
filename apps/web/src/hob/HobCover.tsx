@@ -37,11 +37,20 @@ export interface HobCoverImages {
  * - `card` — the head of a card on the campaign or Shared World list, bled to
  *   the card's edges (the card clips it to its radius); its `src` is the
  *   768 × 512 size.
- * - `band` — the top of a campaign's home page (the creator's Overview and the
- *   player's page alike) or a Shared World's screen; its `src` is the
+ * - `band` — the top of the player's page of a campaign or a Shared World's
+ *   screen; its `src` is the
  *   1536 × 1024 size. Wide and shallow above the content, deeper once the
  *   column is narrow enough that a 4:1 strip would be a sliver. It sits in the
  *   page, never in the sticky chrome rows.
+ * - `hero` — the creator's Overview, as the redesign draws it: a fixed height
+ *   that follows the window (`--overview-cover-h`) rather than a ratio, and the
+ *   bottom of the picture fading into the page so the header can sit over it
+ *   (`campaign/CampaignHero.tsx`). The same 1536 × 1024 size as `band`.
+ *
+ * `data-picture` is set while there is a picture to show and Hob is not
+ * drawing a new one: it is the one thing a caller may lay content over, and
+ * it is on the element rather than handed back because a URL that fails to
+ * load is only discovered in here.
  */
 export function HobCover({
   image,
@@ -50,7 +59,7 @@ export function HobCover({
 }: {
   readonly image: HobCoverImages | null;
   readonly pending: boolean;
-  readonly shape: "card" | "band";
+  readonly shape: "card" | "band" | "hero";
 }) {
   const src = image === null ? undefined : apiUrl(shape === "card" ? image.cardUrl : image.fullUrl);
   // Both sizes, so a browser picks by the width it actually draws: a wide list
@@ -72,11 +81,12 @@ export function HobCover({
   return (
     <div
       data-slot="hob-cover"
+      data-picture={showable && !pending ? "" : undefined}
       className={cn(
         "relative overflow-hidden bg-surface-sunken",
-        shape === "card"
-          ? "aspect-5/2 border-b border-hairline"
-          : "aspect-5/2 rounded-card border border-hairline @3xl:aspect-4/1",
+        shape === "card" && "aspect-5/2 border-b border-hairline",
+        shape === "band" && "aspect-5/2 rounded-card border border-hairline @3xl:aspect-4/1",
+        shape === "hero" && "h-overview-cover rounded-card border border-hairline shadow-1",
       )}
     >
       {showable && (
@@ -95,6 +105,14 @@ export function HobCover({
             "absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-(--dur-slow) ease-out",
             loaded && "opacity-100",
           )}
+        />
+      )}
+      {/* The bottom 45% of the picture fades into the page, which is what the
+          header over it is read against. */}
+      {shape === "hero" && showable && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-9/20 bg-linear-to-t from-surface-page to-transparent"
         />
       )}
       {pending && (

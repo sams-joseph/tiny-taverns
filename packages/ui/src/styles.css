@@ -290,8 +290,11 @@
   --spacing-chat-panel: var(--panel-chat-w);
   --spacing-overview-main: var(--overview-main-w);
   --spacing-overview-aside: var(--overview-aside-w);
+  --spacing-overview-cover: var(--overview-cover-h);
+  --spacing-overview-overlap: var(--overview-cover-overlap);
   --container-measure: var(--measure);
   --container-overview: var(--overview-w);
+  --container-overview-pitch: var(--overview-pitch-w);
 }
 
 /* --------------------------------------------------------------------------

@@ -86,7 +86,7 @@ describe("a campaign's home page", () => {
       body: { ...campaign, image: drawnCover },
     });
     await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "Overview" });
+    await screen.findByRole("heading", { name: "The Salt Road" });
     await waitFor(() => expect(covers()).toHaveLength(1));
     expect(covers()[0]!.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnCover.fullUrl));
   });
@@ -110,7 +110,7 @@ describe("a campaign's home page", () => {
 
   it("draws the Overview with no cover exactly as before", async () => {
     await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "Overview" });
+    await screen.findByRole("heading", { name: "The Salt Road" });
     expect(covers()).toHaveLength(0);
   });
 

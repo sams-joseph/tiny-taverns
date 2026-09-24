@@ -60,7 +60,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
   /** A rendered `href` is the route itself, which is what `renderAt` takes. */
   const destinations = async (): Promise<ReadonlyArray<{ label: string; path: string }>> => {
     await renderAt(`/campaigns/${campaignId}`);
-    await screen.findByRole("heading", { name: "Overview" });
+    await screen.findByRole("heading", { name: "The Salt Road" });
     // The campaign `<nav>` itself, not the header around it: the header also
     // holds the global row, whose items are above any campaign and are not this
     // campaign's destinations. That the two are different lists is the sixth

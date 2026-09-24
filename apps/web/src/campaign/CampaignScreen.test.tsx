@@ -38,11 +38,9 @@ describe("CampaignScreen", () => {
   it("renders the campaign the six endpoints describe", async () => {
     await renderScreen(mintingSession());
 
-    // **The campaign's name is the campaign row's title now, not the page's
-    // heading** — the bar has two rows since the sixth delivery and the lower
-    // one is titled with the table you are in, which is also the way home. The
-    // page's own heading is which of the campaign's screens this is.
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    // The campaign's name is both the campaign row's title, which is the way
+    // home, and the Overview's own heading, over its cover (`hero.test.tsx`).
+    expect(await screen.findByRole("heading", { name: "The Salt Road" })).toBeInTheDocument();
     const home = screen.getByTitle("Campaign home");
     expect(home).toHaveTextContent("The Salt Road");
     expect(home).toHaveAttribute("href", `/campaigns/${campaignId}`);
@@ -53,11 +51,6 @@ describe("CampaignScreen", () => {
     expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/worlds")).toBe(
       false,
     );
-    // The subtitle is assembled from two rows: the session's number, the
-    // campaign's party name, and how many are at the table — that last one moved
-    // here from the rail's footer when the rail became a top bar.
-    expect(screen.getByText("Session 12 · The Gilded Spoon · 4 players")).toBeInTheDocument();
-
     // The *Next session* card lists what is on deck as rows, each saying what
     // the wire knows about it: the difficulty band, `sum(encounter_creature.count)`
     // and the tags. Null difficulty is its own state, not a missing word.
@@ -73,7 +66,7 @@ describe("CampaignScreen", () => {
     });
 
     await renderScreen(mintingSession());
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "The Salt Road" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Shared World/ })).toBeNull();
   });
 
@@ -165,7 +158,7 @@ describe("CampaignScreen", () => {
     window.localStorage.setItem("taverns.token", "a-machine-token");
     await renderScreen();
 
-    await screen.findByRole("heading", { name: "Overview" });
+    await screen.findByRole("heading", { name: "The Salt Road" });
     expect(server.calls[0]?.authorization).toBe("Bearer a-machine-token");
   });
 

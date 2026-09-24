@@ -211,8 +211,9 @@ function settled() {
     const tick = () => {
       const now = performance.now();
       const ready =
-        document.querySelector('[data-slot="page-header"], [data-slot="page-heading"]') !== null &&
-        document.querySelector('[data-slot="loading"]') === null;
+        document.querySelector(
+          '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="campaign-hero"] h1',
+        ) !== null && document.querySelector('[data-slot="loading"]') === null;
       if ((ready && now - last > 300) || now - started > 8000) {
         observer.disconnect();
         resolve(ready);
@@ -790,13 +791,17 @@ for (const width of widths) {
     "campaign content top",
     inCampaign.map((r) => r.mainTop),
   );
+  // The creator's Overview is the one exception: it has no tab header, and its
+  // `h1` is the campaign's name in the hero, over the cover when there is one
+  // (`campaign/CampaignHero.tsx`), so it lands where the cover puts it.
+  const headed = inCampaign.filter((r) => r.screen !== "overview");
   expect(
     "campaign title y",
-    inCampaign.map((r) => r.headingTitle?.y),
+    headed.map((r) => r.headingTitle?.y),
   );
   expect(
     "campaign header height",
-    inCampaign.filter((r) => r.viewport >= 896).map((r) => r.heading?.h),
+    headed.filter((r) => r.viewport >= 896).map((r) => r.heading?.h),
     48,
   );
   // The way home survives every collapse whole: the chevron is at least its

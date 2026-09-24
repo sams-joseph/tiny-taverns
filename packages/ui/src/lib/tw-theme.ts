@@ -162,7 +162,7 @@ export const twTheme = {
   blur: ["scrim", "site-header"],
   ease: ["out", "in-out", "settle"],
   animate: ["dialog-in", "dialog-out"],
-  container: ["measure", "overview"],
+  container: ["measure", "overview", "overview-pitch"],
 } as const;
 
 /**
@@ -185,4 +185,6 @@ export const twSpacing = [
   "chat-panel",
   "overview-main",
   "overview-aside",
+  "overview-cover",
+  "overview-overlap",
 ] as const;

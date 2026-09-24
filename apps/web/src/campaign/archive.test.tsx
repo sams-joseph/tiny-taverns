@@ -93,7 +93,7 @@ describe("archiving a campaign", () => {
 
   it("is also reached from the campaign's settings", async () => {
     await renderScreen(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Settings/ }));
     const settings = await screen.findByRole("dialog", { name: "Campaign settings" });
     await userEvent.click(within(settings).getByRole("button", { name: "Archive campaign" }));
 

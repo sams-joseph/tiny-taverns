@@ -65,8 +65,8 @@ beforeEach(() => {
 
 const openInvites = async () => {
   await renderScreen(mintingSession());
-  await screen.findByRole("heading", { name: "Overview" });
-  await userEvent.click(await screen.findByRole("button", { name: "Invite" }));
+  await screen.findByRole("heading", { name: "The Salt Road" });
+  await userEvent.click(await screen.findByRole("button", { name: "Invite player" }));
 };
 
 describe("inviting a player", () => {
@@ -183,8 +183,8 @@ describe("inviting a player", () => {
     });
 
     await renderScreen(hosted);
-    await screen.findByRole("heading", { name: "Overview" });
-    await userEvent.click(await screen.findByRole("button", { name: "Invite" }));
+    await screen.findByRole("heading", { name: "The Salt Road" });
+    await userEvent.click(await screen.findByRole("button", { name: "Invite player" }));
     await screen.findByText(/Good until 18 August 2026, and only once\./);
 
     const readsOf = () =>

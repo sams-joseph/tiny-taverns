@@ -120,7 +120,7 @@ describe("deleting a campaign from inside it", () => {
   it("is also reached from the campaign's settings", async () => {
     noNight();
     await renderScreen(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Settings/ }));
     const settings = await screen.findByRole("dialog", { name: "Campaign settings" });
     await userEvent.click(within(settings).getByRole("button", { name: "Delete permanently" }));
 
