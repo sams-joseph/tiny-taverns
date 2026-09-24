@@ -12,6 +12,17 @@ import type { ReactNode } from "react";
  * a row is not a link and the card is not `linked`.
  */
 
+/**
+ * Who the Overview is drawn for. The creator's and a player's pages are one
+ * layout over two loads (`CampaignScreen.tsx`, `play/PlayerCampaignScreen.tsx`);
+ * a card that says something different to each takes this rather than a flag
+ * per difference, so the player's version of a card is one named branch.
+ */
+export type Audience = "creator" | "player";
+
+/** The id of the player Overview's shared-notes section, which their *All notes* opens. */
+export const SHARED_NOTES = "shared-with-you";
+
 /** The section link — accent-coloured, quiet, and a real `<a>`. */
 export const sectionLink =
   "text-label leading-none font-medium text-accent-ink hover:text-link-hover";
@@ -47,5 +58,39 @@ export function OverviewCard({
 export function OverviewEmpty({ children }: { readonly children: ReactNode }) {
   return (
     <p className="mb-0 px-card py-4 text-body-s leading-body text-muted-foreground">{children}</p>
+  );
+}
+
+/**
+ * The Overview's page: centred at its own width rather than the window's, what
+ * leads it (the live banner, the hero) on top, then two columns — all one
+ * width, so the header's left edge is the columns'.
+ *
+ * The columns are the drawing's own wrap rather than a breakpoint: `flex: 2 1
+ * 560px` beside `flex: 1 1 300px`, so the two stand side by side while 560 + 24
+ * + 300 fits and the aside drops under the whole main column when it does not —
+ * whatever narrows the page, a docked Hob panel included.
+ */
+export function OverviewPage({
+  lead,
+  main,
+  aside,
+}: {
+  readonly lead: ReactNode;
+  readonly main: ReactNode;
+  readonly aside: ReactNode;
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-overview flex-col gap-6">
+      {lead}
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="@container flex min-w-0 shrink grow-2 basis-overview-main flex-col gap-6">
+          {main}
+        </div>
+        <aside className="flex min-w-0 shrink grow basis-overview-aside flex-col gap-6">
+          {aside}
+        </aside>
+      </div>
+    </div>
   );
 }

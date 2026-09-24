@@ -2,7 +2,13 @@ import type { CampaignId, Note } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Icon } from "@taverns/ui";
 import { recentNotes } from "./overview";
-import { OverviewCard, OverviewEmpty, sectionLink } from "./OverviewParts";
+import {
+  type Audience,
+  OverviewCard,
+  OverviewEmpty,
+  SHARED_NOTES,
+  sectionLink,
+} from "./OverviewParts";
 import { agoOf, useNow } from "./when";
 
 /**
@@ -10,13 +16,20 @@ import { agoOf, useNow } from "./when";
  *
  * `view.notes` is already in the frame's read, so this costs no request. The
  * rows are a summary and open nothing; *All notes* is the way in.
+ *
+ * A player has no Notes tab: the shared notes are read in full lower on their
+ * own Overview (`play/PlayerCampaignScreen.tsx`), under `SHARED_NOTES`, so
+ * that section is where their *All notes* goes. Their `notes` are already only
+ * the shared ones — a DM note is never in a player's answer (`repo/visibility.ts`).
  */
 export function RecentNotes({
   notes,
   campaignId,
+  audience,
 }: {
   readonly notes: ReadonlyArray<Note>;
   readonly campaignId: CampaignId;
+  readonly audience: Audience;
 }) {
   const now = useNow();
   const recent = recentNotes(notes);
@@ -25,14 +38,22 @@ export function RecentNotes({
     <OverviewCard
       title="Recent notes"
       action={
-        <Link to="/campaigns/$campaignId/notes" params={{ campaignId }} className={sectionLink}>
-          All notes
-        </Link>
+        audience === "creator" ? (
+          <Link to="/campaigns/$campaignId/notes" params={{ campaignId }} className={sectionLink}>
+            All notes
+          </Link>
+        ) : (
+          <a href={`#${SHARED_NOTES}`} className={sectionLink}>
+            All notes
+          </a>
+        )
       }
     >
       {recent.length === 0 ? (
         <OverviewEmpty>
-          No notes yet. Whatever you write on the Notes tab shows up here.
+          {audience === "creator"
+            ? "No notes yet. Whatever you write on the Notes tab shows up here."
+            : "Nothing shared yet."}
         </OverviewEmpty>
       ) : (
         <ul>

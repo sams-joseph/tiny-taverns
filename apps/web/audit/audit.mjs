@@ -791,10 +791,12 @@ for (const width of widths) {
     "campaign content top",
     inCampaign.map((r) => r.mainTop),
   );
-  // The creator's Overview is the one exception: it has no tab header, and its
-  // `h1` is the campaign's name in the hero, over the cover when there is one
-  // (`campaign/CampaignHero.tsx`), so it lands where the cover puts it.
-  const headed = inCampaign.filter((r) => r.screen !== "overview");
+  // The Overviews, the creator's and a player's, are the exception: they have
+  // no tab header, and the `h1` is the campaign's name in the hero, over the
+  // cover when there is one (`campaign/CampaignHero.tsx`), so it lands where
+  // the cover puts it.
+  const heroed = new Set(["overview", "player-overview"]);
+  const headed = inCampaign.filter((r) => !heroed.has(r.screen));
   expect(
     "campaign title y",
     headed.map((r) => r.headingTitle?.y),

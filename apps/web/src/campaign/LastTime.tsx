@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { fightStory } from "../chronicle/fight";
 import { dayOf } from "../chronicle/format";
 import type { LastNight } from "./overview";
-import { OverviewCard, sectionLink } from "./OverviewParts";
+import { type Audience, OverviewCard, sectionLink } from "./OverviewParts";
 
 /** How many of the night's beats the card quotes before sending you to the rest. */
 const QUOTED = 3;
@@ -18,13 +18,20 @@ const QUOTED = 3;
  * the right length. A night with no beats is told by its fights, in the
  * Chronicle's own sentences (`chronicle/fight.ts`), and a night with neither
  * says so. The rest is one press away.
+ *
+ * A player's is the same card over `recap.readAsPlayer`: their beats are the
+ * shared ones and their fights carry no monster's numbers, and `fightStory`
+ * reads neither. A night with nothing shared is not a night where nothing was
+ * written, so the last sentence is theirs.
  */
 export function LastTime({
   lastNight,
   campaignId,
+  audience,
 }: {
   readonly lastNight: LastNight;
   readonly campaignId: CampaignId;
+  readonly audience: Audience;
 }) {
   const { session, recap } = lastNight;
   const played = session.startedAt ?? session.endedAt;
@@ -75,7 +82,9 @@ export function LastTime({
           })
         ) : (
           <p className="mb-0 text-body-s leading-body text-muted-foreground">
-            Nothing was written down that night.
+            {audience === "creator"
+              ? "Nothing was written down that night."
+              : "Nothing from that night has been shared with you."}
           </p>
         )}
       </div>

@@ -4,12 +4,17 @@ import { useCallback, useState } from "react";
 import { useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { CampaignChrome, type CampaignChromeSlots } from "./CampaignChrome";
+import {
+  CampaignChrome,
+  CampaignSettingsButtons,
+  type CampaignChromeSlots,
+} from "./CampaignChrome";
 import { CampaignHero } from "./CampaignHero";
 import { EncounterDialog } from "./EncounterDialog";
 import { LastTime } from "./LastTime";
 import { LiveBanner } from "./LiveBanner";
 import { NextSession } from "./NextSession";
+import { OverviewPage } from "./OverviewParts";
 import { lastNightAtom, type LastNight } from "./overview";
 import { PartyCard } from "./PartyCard";
 import { RecentNotes } from "./RecentNotes";
@@ -56,22 +61,19 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | u
 
   return (
     <>
-      {/* The redesign's page: centred at its own width rather than the
-          window's, the live banner above everything, then the cover with the
-          campaign's header over it, then two columns — all one width, so the
-          header's left edge is the columns'. */}
-      <div className="mx-auto flex w-full max-w-overview flex-col gap-6">
-        {view.session !== undefined && view.run !== undefined && (
-          <LiveBanner session={view.session} run={view.run} onFinish={finishSession} />
-        )}
-        <CampaignHero view={view} onOpen={openSettings} />
-        {/* The drawing's own wrap rather than a breakpoint: `flex: 2 1 560px`
-            beside `flex: 1 1 300px`, so the two stand side by side while
-            560 + 24 + 300 fits and the aside drops under the whole main column
-            when it does not — whatever narrows the page, a docked Hob panel
-            included. */}
-        <div className="flex flex-wrap items-start gap-6">
-          <div className="@container flex min-w-0 shrink grow-2 basis-overview-main flex-col gap-6">
+      <OverviewPage
+        lead={
+          <>
+            {view.session !== undefined && view.run !== undefined && (
+              <LiveBanner session={view.session} run={view.run} onFinish={finishSession} />
+            )}
+            <CampaignHero campaign={view.campaign}>
+              <CampaignSettingsButtons view={view} onOpen={openSettings} />
+            </CampaignHero>
+          </>
+        }
+        main={
+          <>
             <NextSession
               view={view}
               onRun={(encounter) => run(encounter.id)}
@@ -79,19 +81,23 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | u
               onAddEncounter={() => setEditing({ what: "encounter", encounter: undefined })}
               onEditEncounter={(encounter) => setEditing({ what: "encounter", encounter })}
             />
-            {lastNight !== undefined && <LastTime lastNight={lastNight} campaignId={campaignId} />}
-          </div>
-
-          <aside className="flex min-w-0 shrink grow basis-overview-aside flex-col gap-6">
+            {lastNight !== undefined && (
+              <LastTime lastNight={lastNight} campaignId={campaignId} audience="creator" />
+            )}
+          </>
+        }
+        aside={
+          <>
             <PartyCard
               party={view.party}
-              playerCount={view.campaign.playerCount}
               campaignId={campaignId}
+              audience="creator"
+              playerCount={view.campaign.playerCount}
             />
-            <RecentNotes notes={view.notes} campaignId={campaignId} />
-          </aside>
-        </div>
-      </div>
+            <RecentNotes notes={view.notes} campaignId={campaignId} audience="creator" />
+          </>
+        }
+      />
 
       {/* Keyed on what is being edited, so opening the dialog on a second row
           builds a fresh form rather than showing the first row's fields. */}

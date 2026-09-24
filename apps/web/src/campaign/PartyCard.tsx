@@ -69,20 +69,28 @@ function PartyRow({ row }: { readonly row: PartySeat }) {
  * Below the rows, how many people at the table have no character — a real read
  * (`campaign.playerCount` against the accounts holding a seat) that the drawing
  * leaves out and the Overview has always said.
+ *
+ * **A player's card is the same rows over a narrower list**, and two things go
+ * with the narrowing rather than being drawn wrong. `party.list` answers a
+ * player their own seat and the ones the creator shared, each whole, so every
+ * row they get may say its hit points and a seat kept to the DM is not a row at
+ * all. What cannot survive that is the count of players without a character —
+ * over a partial roster it would count the hidden seats' players as seatless —
+ * and *Manage*, since a player has no Party tab to be sent to.
  */
-export function PartyCard({
-  party,
-  playerCount,
-  campaignId,
-}: {
-  readonly party: ReadonlyArray<PartySeat>;
-  readonly playerCount: number;
-  readonly campaignId: CampaignId;
-}) {
+export function PartyCard(
+  props: {
+    readonly party: ReadonlyArray<PartySeat>;
+    readonly campaignId: CampaignId;
+  } & (
+    { readonly audience: "creator"; readonly playerCount: number } | { readonly audience: "player" }
+  ),
+) {
+  const { party, campaignId } = props;
   // A seat names the account that holds it, so "how many players have no
   // character" is the players minus the accounts with a live seat.
   const held = new Set(party.map((row) => row.seat.accountId));
-  const without = Math.max(0, playerCount - held.size);
+  const without = props.audience === "creator" ? Math.max(0, props.playerCount - held.size) : 0;
   const level = partyLevel(party);
 
   return (
@@ -96,20 +104,26 @@ export function PartyCard({
         )
       }
       action={
-        <Link
-          to="/campaigns/$campaignId/party"
-          params={{ campaignId }}
-          className={sectionLink}
-          // The visible word leads, so a voice-control user's "Manage" still
-          // names it, and the rest says what is managed.
-          aria-label="Manage party"
-        >
-          Manage
-        </Link>
+        props.audience === "creator" ? (
+          <Link
+            to="/campaigns/$campaignId/party"
+            params={{ campaignId }}
+            className={sectionLink}
+            // The visible word leads, so a voice-control user's "Manage" still
+            // names it, and the rest says what is managed.
+            aria-label="Manage party"
+          >
+            Manage
+          </Link>
+        ) : undefined
       }
     >
       {party.length === 0 ? (
-        <OverviewEmpty>Nobody has a character yet.</OverviewEmpty>
+        <OverviewEmpty>
+          {props.audience === "creator"
+            ? "Nobody has a character yet."
+            : "Nobody at the table has been shared with you yet."}
+        </OverviewEmpty>
       ) : (
         <ul>
           {party.map((row) => (

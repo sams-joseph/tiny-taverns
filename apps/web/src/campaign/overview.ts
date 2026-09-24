@@ -1,18 +1,26 @@
-import type { CampaignId, Encounter, Note, PartySeat, Session, SessionRecap } from "@taverns/api";
+import type { Beat, CampaignId, Encounter, Note, PartySeat, Session } from "@taverns/api";
 import { DateTime, Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import type { CarriedFight } from "../chronicle/fight";
 
 /**
  * The Overview's rules about its data, apart from its cards so each can be
  * tested on its own and the card files export only components.
  */
 
-/** The last night the table finished, read back. */
+/**
+ * The last night the table finished, read back — the creator's `SessionRecap`
+ * or a player's `PlayerSessionRecap`. *Last time* reads only the beats and how
+ * each fight went, which the two share, so one card can take either.
+ */
 export interface LastNight {
   readonly session: Session;
-  readonly recap: SessionRecap;
+  readonly recap: {
+    readonly beats: ReadonlyArray<Beat>;
+    readonly fights: ReadonlyArray<CarriedFight>;
+  };
 }
 
 /**
