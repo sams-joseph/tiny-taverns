@@ -13,3 +13,5 @@ coverage/
 # Playwright: `apps/web/e2e/README.md`.
 test-results/
 playwright-report/
+test-results-auth/
+playwright-report-auth/

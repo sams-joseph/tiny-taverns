@@ -11,5 +11,14 @@ export default [
     files: ["e2e/**/*.ts"],
     rules: { "no-restricted-syntax": "off", "react-hooks/rules-of-hooks": "off" },
   },
-  { ignores: ["vite.config.ts", "vitest.setup.ts", "playwright-report", "test-results"] },
+  {
+    ignores: [
+      "vite.config.ts",
+      "vitest.setup.ts",
+      "playwright-report",
+      "test-results",
+      "playwright-report-auth",
+      "test-results-auth",
+    ],
+  },
 ];

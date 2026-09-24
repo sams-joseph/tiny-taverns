@@ -1,21 +1,5 @@
-import { createServer } from "node:net";
 import { defineConfig, devices } from "@playwright/test";
-
-/**
- * A port nobody holds right now, so the suite never lands on somebody's 5173.
- * The config is evaluated again in every worker; the runner sets `E2E_PORT`
- * before it forks them, so they all agree on one server.
- */
-const freePort = () =>
-  new Promise<number>((resolve, reject) => {
-    const probe = createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      const port = typeof address === "object" && address !== null ? address.port : 0;
-      probe.close(() => resolve(port));
-    });
-  });
+import { freePort } from "./e2e/support/port";
 
 process.env.E2E_PORT ??= String(await freePort());
 const origin = `http://127.0.0.1:${process.env.E2E_PORT}`;
@@ -36,8 +20,8 @@ export default defineConfig({
   projects: [
     /**
      * The shell's geometry over the stub API, signed in with a machine token.
-     * An authenticated suite against a real server is a second project with
-     * its own `testDir` and `webServer` entry; see `e2e/README.md`.
+     * Signing in through Clerk against a real server is the authenticated
+     * suite's, in its own config (`playwright.auth.config.ts`).
      */
     {
       name: "layout",

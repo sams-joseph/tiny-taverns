@@ -53,10 +53,27 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
-  # The web Playwright suite (`apps/web/e2e/README.md`): Chromium over the
-  # fixture maps, so it needs neither the Postgres service nor the server.
+  # The web Playwright suites (`apps/web/e2e/README.md`). The layout suite is
+  # Chromium over the fixture maps and needs neither Postgres nor the server;
+  # the authenticated suite signs in through Clerk against the real server, on
+  # a database of its own it creates in this Postgres and drops afterwards.
   e2e:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: taverns
+          POSTGRES_PASSWORD: taverns
+          POSTGRES_DB: taverns
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U taverns -d taverns"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
 
     steps:
       - name: Checkout
@@ -94,14 +111,43 @@ jobs:
         run: pnpm -F web exec playwright install-deps chromium
 
       - name: Run the Playwright suite
+        id: layout
         run: pnpm -F web e2e
 
+      # A fork's pull request gets no repository secrets, so there the suite is
+      # skipped with a notice rather than failed. GitHub masks both values in
+      # the log; the suite never prints them and writes no traces.
+      - name: Run the authenticated Playwright suite
+        id: auth
+        if: ${{ !cancelled() }}
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          if [ -z "$CLERK_PUBLISHABLE_KEY" ] || [ -z "$CLERK_SECRET_KEY" ]; then
+            echo "::notice title=Authenticated e2e skipped::CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY are not available to this run (a fork's pull request?), so the authenticated Playwright suite did not run."
+            exit 0
+          fi
+          pnpm -F web e2e:auth
+
       - name: Upload the report and traces
-        if: failure()
+        if: ${{ failure() && steps.layout.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: |
             apps/web/playwright-report
             apps/web/test-results
+          retention-days: 14
+
+      # Screenshots, page snapshots and the stack's server and Vite logs; the
+      # suite records no traces, since a trace would carry the testing token.
+      - name: Upload the authenticated report
+        if: ${{ failure() && steps.auth.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-auth
+          path: |
+            apps/web/playwright-report-auth
+            apps/web/test-results-auth
           retention-days: 14
