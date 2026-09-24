@@ -42,7 +42,7 @@ import { MarketingScreen } from "./MarketingScreen";
  * break the one flow that is designed to run with no account, and would do it
  * silently — the marketing page renders perfectly well over an invitation.
  *
- * **`/gallery` must too, and the reason is a circle.** It holds `ServerPanel`,
+ * **`/server` must too, and the reason is a circle.** It holds `ServerPanel`,
  * which is where a machine token is pasted, and a machine token is the *only*
  * credential a build with no publishable key has. Gated, a developer with
  * neither would see the marketing page, whose call to action points at the
@@ -60,7 +60,7 @@ export function SignedOutGate(): ReactNode {
   // existing fails to compile here rather than silently never matching — which
   // for the join route would be a regression nothing else would catch.
   const exempt =
-    matchRoute({ to: "/join/$token" }) !== false || matchRoute({ to: "/gallery" }) !== false;
+    matchRoute({ to: "/join/$token" }) !== false || matchRoute({ to: "/server" }) !== false;
 
   if (exempt) return <Outlet />;
 

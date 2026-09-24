@@ -55,7 +55,6 @@ export type Section =
   | "campaigns"
   | "characters"
   | "library"
-  | "gallery"
   /* The campaign row. */
   | "overview"
   | "encounters"
@@ -68,7 +67,6 @@ export type Section =
 export function useSection(): Section {
   const matchRoute = useMatchRoute();
 
-  if (matchRoute({ to: "/gallery" })) return "gallery";
   // Above any campaign. `/library/rules` is a shelf inside Library, so a fuzzy
   // match on `/library` is what keeps the global row on the one destination.
   if (matchRoute({ to: "/library", fuzzy: true })) return "library";

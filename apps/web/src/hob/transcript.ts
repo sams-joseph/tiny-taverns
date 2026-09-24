@@ -6,8 +6,8 @@ import type { IconName } from "@taverns/ui";
  *
  * **Four kinds of artifact are produced here** — `encounter`, `note`, `beat`
  * and `chronicle`. The first three are what campaign Hob can materialise; the
- * last is Shared World Hob's one proposal. The rest of the union is the delivered specimen set, rendered
- * only by the gallery: nothing produces an `npc`, a `checklist` or a `rules`
+ * last is Shared World Hob's one proposal. The rest of the union is the delivered specimen set, held
+ * by `hob.fixtures.ts` for the tests: nothing produces an `npc`, a `checklist` or a `rules`
  * card, because there is no table for one to be saved into and a *Save to
  * session* button that could only fail is worse than a kind that cannot be
  * expressed.
@@ -74,7 +74,7 @@ interface ArtifactBase {
    * The turn that produced it, for anything Hob really offered.
    *
    * Not a display detail: it is what `POST …/accept` names, and it is what the
-   * accepted row's `assistantTurnId` will point at. The gallery's specimens use
+   * accepted row's `assistantTurnId` will point at. The test fixtures use
    * made-up strings because nothing accepts them.
    */
   readonly id: string;

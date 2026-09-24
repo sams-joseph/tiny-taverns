@@ -84,7 +84,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/characters/new": "/characters/new",
   "/_shell/characters/$": "/characters/not-a-uuid",
   "/_shell/characters/$characterId": `/characters/${characterId}`,
-  "/_standalone/gallery": "/gallery",
+  "/_standalone/server": "/server",
   "/_standalone/join/$token": "/join/aaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
@@ -119,19 +119,12 @@ describe("the shell's top bar", () => {
 
     const links = within(nav()).getAllByRole("link");
     // One row for every account — there is no mode left to branch on, so the
-    // items are the same items everywhere, join page and gallery included. This
-    // suite runs as a dev build, so the dev-only gallery entry is on the row.
-    expect(links.map((link) => link.textContent)).toEqual([
-      "Campaigns",
-      "Characters",
-      "Library",
-      "Components",
-    ]);
+    // items are the same items everywhere, join and Server pages included.
+    expect(links.map((link) => link.textContent)).toEqual(["Campaigns", "Characters", "Library"]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/#/campaigns",
       "/#/characters",
       "/#/library",
-      "/#/gallery",
     ]);
     // …and no role switch beside them, ever again: the relation is a fact
     // about a pair, read per campaign, and there is nothing global to toggle.
@@ -217,7 +210,7 @@ describe("the shell's top bar", () => {
     const row = nav().parentElement;
     expect(row).not.toBeNull();
     const controls = [...(row as HTMLElement).querySelectorAll<HTMLElement>("a[href], button")];
-    expect(controls.length).toBe(5);
+    expect(controls.length).toBe(4);
     for (const control of controls) {
       expect(control.className).toContain("h-6.5");
       expect(control.className).toContain("rounded-pill");
@@ -262,6 +255,16 @@ describe("the shell's top bar", () => {
    * campaign, the second row exists only inside one, and nothing appears on
    * both.*
    */
+  it.each([true, false])("has no Components item when DEV is %s", async (dev) => {
+    vi.stubEnv("DEV", dev);
+    try {
+      await renderAt("/campaigns");
+      expect(within(nav()).queryByRole("link", { name: "Components" })).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   describe("two tiers", () => {
     it("has no campaign row above a campaign", async () => {
       for (const path of [
@@ -274,7 +277,7 @@ describe("the shell's top bar", () => {
         "/library/equipment",
         "/library/magic-items",
         "/characters",
-        "/gallery",
+        "/server",
       ]) {
         await renderAt(path);
         expect(noCampaignNav()).toBeNull();

@@ -60,8 +60,7 @@ reference). It is pinned to a tag, not a branch, so it stays in lockstep with th
 git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect effect@<version>
 ```
 
-Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui`
-(the component gallery at `#/gallery` renders every primitive, and its test drives them) and
+Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui` and
 `@taverns/design-system` (tokens, the Alegreya font files and the brand icons all resolve
 through normal Vite imports), plus the shared `@taverns/tsconfig` and
 `@taverns/eslint-config` packages — so the wiring is proven, not decorative.
@@ -87,17 +86,6 @@ Two adherence rules from the designers are enforced in ESLint
 (`packages/eslint-config/design-system.js`): no raw hex colours or `px` literals in component
 code, and no importing component internals. `packages/ui/src/adherence.test.ts` extends the
 same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI-only).
-
-### The gallery
-
-`apps/web` renders a **component gallery** at `#/gallery`: every component, in every variant
-and size, on the surfaces it is meant to sit on, with the colour ramps, type scale, radii and
-elevation alongside. It is how you check a change against `packages/design-system/guidelines/`.
-A dev build links it from the global row as _Components_; a production build does not.
-
-```bash
-pnpm --filter web dev   # http://localhost:5173/#/gallery
-```
 
 ## Prerequisites
 
@@ -273,8 +261,8 @@ Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Even
 header, which a browser's `EventSource` sends by itself). `docs/internals/live-session.md` has the
 full contract the runner UI is written against.
 
-The `Server` section of the web gallery calls the live API through the client derived from
-that same declaration — paste a token there to see it list your campaigns.
+The web app's `#/server` page calls the live API through the client derived from that same
+declaration — paste a token there to see it list your campaigns.
 
 **The bestiary is campaign copies plus two bundled corpora in one list.** A campaign's own
 creatures live under it; `system` creatures are global, immutable and shared by every campaign,
@@ -376,8 +364,8 @@ exact versions). In v4 there is no `@effect/platform` package — the HTTP layer
 
 Vitest runs in every workspace project. Each has at least one real, passing test:
 
-- `apps/web` — React Testing Library tests that drive the gallery (tabs, dialog, toast,
-  toggles), plus tests of the derived API client as the browser bundles it.
+- `apps/web` — React Testing Library tests that drive every screen through the real route tree,
+  plus tests of the derived API client as the browser bundles it.
 - `apps/server` — migrations from empty to current, the visibility seam, a schema-adherence
   guard, the whole API through the derived client against a real in-process server, and a
   production-start smoke test that runs the real build output under plain `node`. Both

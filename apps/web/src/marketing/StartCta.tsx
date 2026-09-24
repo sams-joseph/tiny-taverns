@@ -35,7 +35,7 @@ import { useHostedSession } from "../auth/hostedSession";
  * It also closes a circle the gate would otherwise draw. The signed-out gate
  * shows this page whenever there is neither credential; if the button led
  * nowhere, a developer with no Clerk key and no token pasted yet could not
- * reach the panel that issues one. The gallery is exempt from the gate for that
+ * reach the panel that issues one. `/server` is exempt from the gate for that
  * reason (`SignedOutGate.tsx`), and this is what sends them there.
  */
 export function StartCta({
@@ -62,19 +62,7 @@ export function StartCta({
   }
 
   return (
-    <Button
-      size={size}
-      className={className}
-      nativeButton={false}
-      // `hash="server"` is `ServerPanel`'s own section, reached the way the
-      // gallery's specimen nav reaches it — never a bare `href="#server"`,
-      // which under a hash history replaces the route instead of scrolling
-      // within it. Measured: the scroll lands imprecisely on a cold load,
-      // because the gallery is long and grows under the restoration as its
-      // specimens paint. That is the gallery's own behaviour and not something
-      // this button can fix, so the sentence under it names the way there too.
-      render={<Link to="/gallery" hash="server" />}
-    >
+    <Button size={size} className={className} nativeButton={false} render={<Link to="/server" />}>
       Set up a developer token
       <Icon name="arrow-right" size={16} />
     </Button>
@@ -100,8 +88,8 @@ export function StartCtaNote(): ReactNode {
   // one form, wherever the reader meets it.
   return (
     <>
-      Hosted sign-in is not configured on this build, so the way in is a machine token — Components
-      &rarr; Server.
+      Hosted sign-in is not configured on this build, so the way in is a machine token on the Server
+      page.
     </>
   );
 }

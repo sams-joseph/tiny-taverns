@@ -147,17 +147,6 @@ const globalNav: ReadonlyArray<NavItem> = [
   { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
 ];
 
-// The gallery is a tool for building the product, not a peer of Campaigns, so
-// it is on the row only in a dev build. Read at render so a test can stub it.
-const galleryNav: NavItem = {
-  label: "Components",
-  icon: "panel-left",
-  link: { to: "/gallery" },
-  section: "gallery",
-};
-const globalNavItems = (): ReadonlyArray<NavItem> =>
-  import.meta.env.DEV ? [...globalNav, galleryNav] : globalNav;
-
 /**
  * The campaign row: the screens inside one table, derived from **what this
  * account is at it** rather than from a global mode.
@@ -603,7 +592,7 @@ function TopNav({
           </div>
 
           <nav aria-label="Sections" className="flex items-center gap-1">
-            {globalNavItems().map((item) => (
+            {globalNav.map((item) => (
               <GlobalNavLink key={item.label} item={item} active={item.section === section} />
             ))}
           </nav>
@@ -669,7 +658,7 @@ export function AppShell({
    * second region inside the frame takes the ref from the first, and the
    * overlay would size to it instead of to the content. `HobRegion` used
    * directly, with the dock inside it, is still the right thing where there is
-   * no shell, which is what the gallery's specimens do.
+   * no shell.
    *
    * A panel is inline simply by taking part in the frame's row, or an overlay
    * by positioning against the region — and the shell carries no chat state, no

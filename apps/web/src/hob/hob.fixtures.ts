@@ -11,7 +11,7 @@ import type { HobArtifact, HobContextChip, HobStarter, HobTurn } from "./transcr
  * own `exports` map, and ESLint forbids reaching into `ui_kits/`.
  *
  * **Only the first three are wired into the running app.** The thread is a
- * specimen: it is what the gallery renders and what the tests assert against.
+ * specimen: it is what the tests assert against.
  * Hob answers for real now, which makes this *more* dangerous rather than less
  * — do not let it reach a screen. A panel that appears to hold a conversation
  * the DM did not have is the failure this area is most able to cause.
@@ -119,7 +119,7 @@ export const SAMPLE_CHECKLIST: HobArtifact = {
  * The two kinds the delivery does not draw, and Hob really produces.
  *
  * Not transcribed from anything — there is nothing to transcribe. They are here
- * so the gallery can hold the two card bodies still, exactly as it holds the
+ * so the tests can hold the two card bodies still, exactly as they hold the
  * delivered ones, and because a body with no specimen is a body nobody looks at
  * until it is wrong on a screen. See `ARTIFACT_KINDS` in `transcript.ts`.
  */

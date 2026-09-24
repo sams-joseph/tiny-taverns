@@ -63,7 +63,7 @@ The commonest defect here is a change that works on the path you tested and is m
 ## Running and verifying
 
 - `pnpm db:up`, then `pnpm dev`. Imports run in the order `README.md` gives; a fresh database needs them all. The server logs one line per optional subsystem at boot (hosted sign-in, Hob, storage, Hob-drawn images) saying ON or OFF; believe the line, not the env file.
-- A machine token from `pnpm -F server token:issue` pasted into the gallery's Server panel is the credential a build without Clerk has. Hosted sign-in and Hob are opt-in; unset is a supported mode for both and the suite runs with both off.
+- A machine token from `pnpm -F server token:issue` pasted on the web app's `#/server` page is the credential a build without Clerk has. Hosted sign-in and Hob are opt-in; unset is a supported mode for both and the suite runs with both off.
 - Smallest proof that the change works: `vitest run <file>` in the package you touched, plus `typecheck` for that package. CI runs `turbo run lint typecheck test build` and `pnpm format:check` (root Prettier is not a turbo task).
 - The server suite needs Postgres, is capped at eight workers, and each file owns a database. Both suites carry a 60s test budget because they are load-sensitive; a timeout under load is not the same failure as a pool refusal.
 - Backend behaviour changes ship with a focused test. Boundary changes get a test that drives the refused path with a real actor minted the shipped way (`test/support/actors.ts`), not raw SQL.

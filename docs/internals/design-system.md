@@ -31,7 +31,7 @@ Four things about `packages/ui/src/styles.css` that are not derivable from readi
 
 ## Reach for the semantic token, not the ramp step
 
-A ramp step (`peach-300`) names a colour; a semantic alias (`accent`, `accent-ink`, `accent-soft`) names a job. A component that means "the accent" must say so, because that is what makes a palette swap a token-file edit instead of a sweep: the Mocha delivery retired `--verdigris-*` outright and cost class edits only where components had reached for the ramp. The one legitimate ramp-step site is `apps/web/src/gallery/Foundations.tsx`, where the swatch genuinely is that colour.
+A ramp step (`peach-300`) names a colour; a semantic alias (`accent`, `accent-ink`, `accent-soft`) names a job. A component that means "the accent" must say so, because that is what makes a palette swap a token-file edit instead of a sweep: the Mocha delivery retired `--verdigris-*` outright and cost class edits only where components had reached for the ramp.
 
 **The failure is silent.** Tailwind emits no rule for a utility whose theme name does not exist, so `text-verdigris-300` fails nothing; the element inherits body colour. Adopting a palette delivery therefore includes a grep for the retired ramp name across everything but the vendored tree, and it must come back empty. Related: Tailwind only emits utilities it scans in source, so a class injected at runtime to probe the theme in a browser measures nothing. Probe with a class the codebase already uses.
 
@@ -41,7 +41,7 @@ A ramp step (`peach-300`) names a colour; a semantic alias (`accent`, `accent-in
 
 ## Headings: one recipe
 
-Below the page title, every heading is `SectionHeading`, and heading type on an element that is not a heading (a card's name, an editable title) is `sectionHeadingVariants`. Level (`as`) and size are separate props, so the outline can stay honest while a card's title sits at `title` size under an `h2`. `apps/web/src/headings.test.ts` fails on a raw `h2`–`h6` and counts every other `font-display` outside the gallery against a list that says why it is not a heading (figures, monograms, the wordmark).
+Below the page title, every heading is `SectionHeading`, and heading type on an element that is not a heading (a card's name, an editable title) is `sectionHeadingVariants`. Level (`as`) and size are separate props, so the outline can stay honest while a card's title sits at `title` size under an `h2`. `apps/web/src/headings.test.ts` fails on a raw `h2`–`h6` and counts every other `font-display` against a list that says why it is not a heading (figures, monograms, the wordmark).
 
 ## Overlay layering: one scale
 

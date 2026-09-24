@@ -25,11 +25,11 @@ describe("AuthProvider with no publishable key", () => {
   it("renders its children rather than throwing", () => {
     render(
       <AuthProvider>
-        <p>the gallery</p>
+        <p>the app</p>
       </AuthProvider>,
     );
 
-    expect(screen.getByText("the gallery")).toBeInTheDocument();
+    expect(screen.getByText("the app")).toBeInTheDocument();
   });
 
   it("leaves consumers on the unconfigured session", () => {

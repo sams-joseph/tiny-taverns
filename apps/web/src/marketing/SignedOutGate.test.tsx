@@ -124,8 +124,8 @@ describe("the routes that render signed out", () => {
     expect(await screen.findByRole("heading", { name: "An invitation" })).toBeInTheDocument();
   });
 
-  it("still shows the gallery, which is where a developer token is pasted", async () => {
-    await renderAt("/gallery", wrap(session({})), "none");
+  it("still shows the Server page, which is where a developer token is pasted", async () => {
+    await renderAt("/server", wrap(session({})), "none");
 
     expect(marketing()).toBeNull();
     // `ServerPanel`'s own heading: the reason this route is exempt is that the
