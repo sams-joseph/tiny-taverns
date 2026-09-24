@@ -89,6 +89,19 @@ function stubApi() {
           const { scenarios } = await server.ssrLoadModule("/src/test/screens.ts");
           scenario = url.searchParams.get("name");
           routes = scenarios[scenario]();
+          // Every Overview hero is drawn with a pitch and a cover, so
+          // `heroState` can measure its slot with one and then without it, and
+          // the actions against the picture they must not sit on.
+          for (const [key, answer] of routes)
+            if (/^GET \/(campaigns|worlds)\/[^/]+$/.test(key) && answer.status === 200)
+              routes.set(key, {
+                ...answer,
+                body: {
+                  ...answer.body,
+                  description: "Four strangers walk a salt caravan to the coast.",
+                  image: { cardUrl: "/cover-image", fullUrl: "/cover-image" },
+                },
+              });
           unanswered = [];
           return send(200, { scenario, routes: routes.size });
         }
@@ -97,6 +110,12 @@ function stubApi() {
           unanswered = [];
           return send(200, answer);
         }
+        if (url.pathname === "/cover-image")
+          return send(
+            200,
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#556"/></svg>',
+            "image/svg+xml",
+          );
         const key = `${req.method} ${url.pathname}`;
         const answer = routes.get(key);
         if (answer === undefined) {
@@ -385,6 +404,39 @@ function measure() {
     barOverlaps,
     primaries,
   };
+}
+
+/**
+ * An Overview's hero: the description's slot against the actions beside it,
+ * and the actions' top against the cover's bottom. Measured as drawn, then
+ * again with the pitch taken out of the slot (and put back), so one fixture
+ * answers both "with" and "without a description".
+ */
+function heroState() {
+  const hero = document.querySelector('[data-slot="overview-hero"]');
+  if (hero === null) return null;
+  const slot = hero.querySelector('[data-slot="overview-hero-description"]');
+  const actions = hero.querySelector('[data-slot="overview-hero-actions"]');
+  const cover = hero.querySelector('[data-slot="hob-cover"][data-picture]');
+  const read = () => {
+    const s = slot.getBoundingClientRect();
+    const a = actions.getBoundingClientRect();
+    return {
+      slotH: Math.round(s.height * 10) / 10,
+      actionsH: Math.round(a.height * 10) / 10,
+      // Beside the slot rather than wrapped under it.
+      beside: Math.abs(a.top - s.top) < 1,
+      actionsBelowCover:
+        cover === null ? null : a.top >= cover.getBoundingClientRect().bottom - 0.5,
+    };
+  };
+  const pitch = slot.firstElementChild;
+  const drawn = { pitch: pitch !== null, ...read() };
+  if (pitch === null) return { drawn, empty: drawn };
+  slot.removeChild(pitch);
+  const empty = { pitch: false, ...read() };
+  slot.appendChild(pitch);
+  return { drawn, empty };
 }
 
 /** Scroll the document and ask what is under the bar: the chrome must win. */
@@ -709,6 +761,7 @@ try {
       await fetch(`${origin}/stub/__audit/unanswered`); // drop the previous screen's
       const ready = await go(screen.path);
       const metrics = await cdp.run(measure);
+      const hero = await cdp.run(heroState);
       const sticky = await cdp.run(stickyCheck);
       const scrollers = await cdp.run(innerScrollers);
       const unanswered = await (await fetch(`${origin}/stub/__audit/unanswered`)).json();
@@ -718,6 +771,7 @@ try {
         scenario,
         ready,
         ...metrics,
+        hero,
         sticky,
         scrollers,
         unanswered,
@@ -837,7 +891,34 @@ for (const width of widths) {
   }
 }
 
+console.log("\n## Overview heroes: description slot against the actions");
+console.log(["width", "screen", "pitch", "slot", "actions", "beside", "belowCover"].join("\t"));
+for (const r of results.filter((result) => result.hero !== null))
+  for (const state of r.hero.drawn.pitch ? [r.hero.drawn, r.hero.empty] : [r.hero.drawn])
+    console.log(
+      [
+        r.width,
+        r.screen,
+        state.pitch ? "yes" : "no",
+        state.slotH,
+        state.actionsH,
+        state.beside,
+        state.actionsBelowCover ?? "-",
+      ].join("\t"),
+    );
+
 const findings = [];
+for (const r of results.filter((result) => result.hero !== null))
+  for (const state of [r.hero.drawn, r.hero.empty]) {
+    const label = `${r.width} ${r.screen} (${state.pitch ? "with" : "without"} a description)`;
+    // Beside the actions, the slot is at least their height; wrapped under
+    // them it is its own height and the actions are the space.
+    if (state.beside && state.slotH + 0.5 < state.actionsH)
+      findings.push(
+        `${label}: description slot ${state.slotH} is shorter than the actions ${state.actionsH}`,
+      );
+    if (state.actionsBelowCover === false) findings.push(`${label}: the actions sit on the cover`);
+  }
 const distinct = (values) => [...new Set(values.filter((v) => v !== null && v !== undefined))];
 for (const width of widths) {
   const rows = results.filter((r) => r.width === width);

@@ -239,9 +239,18 @@ describe("the player Overview's hero", () => {
       await renderScreen();
       await waitFor(() => expect(overlaps()).toBe(true));
       const header = hero()!.querySelector("header")!;
-      expect(header).toHaveClass("items-end");
+      // The name's block rises over the picture and is at least the overlap
+      // tall, so the row under it, where the actions are, starts below it.
+      expect(header.querySelector("h1")!.parentElement).toHaveClass(
+        "group-has-data-picture/hero:min-h-overview-overlap",
+      );
       const actions = header.querySelector<HTMLElement>("[data-slot=overview-hero-actions]")!;
-      expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
+      // The description's slot shares the actions' wrapping row, so it is never
+      // shorter than they are while they sit beside it, pitch or none.
+      const slot = header.querySelector<HTMLElement>("[data-slot=overview-hero-description]")!;
+      expect(slot.parentElement).toBe(actions.parentElement);
+      expect(slot.parentElement).toHaveClass("flex", "flex-wrap");
+      expect(slot).toHaveTextContent(description ?? /^$/);
       expect(within(actions).getByRole("button", { name: "New character" })).toBeInTheDocument();
     });
 

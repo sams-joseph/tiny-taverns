@@ -117,11 +117,17 @@ export function OverviewPage({
  * here would be the one that forgot. The "Hob is drawing" band keeps its badge
  * clear for the same reason: pending is not a picture.
  *
- * **The actions never sit on the picture.** Only the text rises over it. The
- * actions are bottom-aligned in the header row and padded down by the same
- * overlap the header rises by, so their top is at or below the cover's bottom
- * however short the text beside them is (no pitch, no meta line) and whether
- * they share its line or wrap to their own.
+ * **The actions never sit on the picture.** Only the name and its meta line
+ * rise over it; with a picture that block is at least the overlap tall, so the
+ * row under it, where the actions are, starts at or below the cover's bottom.
+ *
+ * **The description's slot is never shorter than the actions.** The pitch and
+ * the actions share one wrapping row, so while they sit side by side the row
+ * is as tall as the taller of them: an absent pitch still reserves the
+ * buttons' own height, measured by the layout rather than restated, and a long
+ * one grows as it always did. When the row is too narrow for both, the actions
+ * wrap under the pitch and are themselves the space under the name, so an
+ * empty slot then takes none.
  */
 export function OverviewHero({
   image,
@@ -148,8 +154,8 @@ export function OverviewHero({
       className="group/hero @container flex flex-col gap-6 has-data-picture:gap-0"
     >
       <HobCover image={image} pending={imagePending} shape="hero" />
-      <header className="relative flex flex-wrap items-end gap-6 group-has-data-picture/hero:-mt-overview-overlap group-has-data-picture/hero:px-6">
-        <div className="min-w-0 grow basis-md">
+      <header className="relative flex flex-col gap-2.5 group-has-data-picture/hero:-mt-overview-overlap group-has-data-picture/hero:px-6">
+        <div className="group-has-data-picture/hero:min-h-overview-overlap">
           <p className="mb-0 flex flex-wrap items-center gap-2 text-label leading-none font-medium text-muted-foreground">
             {parts.map((part, index) => (
               <span key={part} className="contents">
@@ -163,13 +169,17 @@ export function OverviewHero({
             ))}
           </p>
           <h1 className={sectionHeadingVariants({ size: "hero", className: "mt-3" })}>{name}</h1>
-          <Description text={description} className="mt-2.5 max-w-overview-pitch" />
         </div>
-        <div
-          data-slot="overview-hero-actions"
-          className="flex max-w-full flex-none flex-wrap items-center gap-2 group-has-data-picture/hero:pt-overview-overlap"
-        >
-          {children}
+        <div className="flex flex-wrap gap-x-6 gap-y-4">
+          <div data-slot="overview-hero-description" className="min-w-0 grow basis-md">
+            <Description text={description} className="mb-0 max-w-overview-pitch" />
+          </div>
+          <div
+            data-slot="overview-hero-actions"
+            className="flex max-w-full flex-none flex-wrap items-center gap-2"
+          >
+            {children}
+          </div>
         </div>
       </header>
     </div>
