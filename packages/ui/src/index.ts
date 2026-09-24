@@ -89,6 +89,7 @@ export {
 export {
   NavigationMenu,
   NavigationMenuContent,
+  NavigationMenuHero,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,

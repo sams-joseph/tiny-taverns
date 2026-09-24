@@ -11,6 +11,7 @@ import {
   Kbd,
   NavigationMenu,
   NavigationMenuContent,
+  NavigationMenuHero,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
@@ -19,6 +20,10 @@ import {
   type IconName,
 } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
+import campaignsHero1x from "./heroes/campaigns-384.webp";
+import campaignsHero2x from "./heroes/campaigns-768.webp";
+import libraryHero1x from "./heroes/library-384.webp";
+import libraryHero2x from "./heroes/library-768.webp";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
@@ -221,6 +226,8 @@ const campaignNavFor = (
 /** One destination in a global item's panel. */
 interface GlobalEntry {
   readonly label: string;
+  /** One line under the label on what is there. */
+  readonly description: string;
   readonly link: LinkProps;
   /** This is the page you are on (or the list the page you are on is in). */
   readonly current: boolean;
@@ -274,13 +281,20 @@ function GlobalNav({ section }: { readonly section: Section }) {
   const campaigns: ReadonlyArray<GlobalEntry> = [
     {
       label: "Campaigns",
+      description: "Your tables: sessions, encounters, notes and the party",
       link: { to: "/campaigns" },
       current: matchRoute({ to: "/campaigns" }) !== false,
     },
-    { label: "Shared Worlds", link: { to: "/worlds" }, current: onWorlds },
+    {
+      label: "Shared Worlds",
+      description: "Settings several campaigns share, with one chronicle",
+      link: { to: "/worlds" },
+      current: onWorlds,
+    },
   ];
   const library: ReadonlyArray<GlobalEntry> = SHELVES.map((entry) => ({
     label: entry.label,
+    description: entry.description,
     link: { to: entry.to },
     current: entry.to === shelf,
   }));
@@ -292,6 +306,10 @@ function GlobalNav({ section }: { readonly section: Section }) {
           label="Campaigns"
           icon="layers"
           active={section === "campaigns"}
+          hero={{
+            image: [campaignsHero1x, campaignsHero2x],
+            tagline: "Prep the night, run it live, keep the record",
+          }}
           entries={campaigns}
         />
         {/* `footprints`, as the delivery names it — the same glyph the
@@ -301,6 +319,10 @@ function GlobalNav({ section }: { readonly section: Section }) {
           label="Library"
           icon="footprints"
           active={section === "library"}
+          hero={{
+            image: [libraryHero1x, libraryHero2x],
+            tagline: "Your originals and the 2014 rules, outside any campaign",
+          }}
           entries={library}
         />
         <NavigationMenuItem>
@@ -318,28 +340,50 @@ function GlobalNav({ section }: { readonly section: Section }) {
   );
 }
 
-/** A global item with a panel of destinations under it. */
+/**
+ * A global item with a panel of destinations under it, and the panel's hero:
+ * its picture, its name and one line about the part of the app it is.
+ *
+ * The picture is `heroes/`, made by `scripts/nav-heroes.mjs` at the hero's 1x
+ * and 2x widths. The tile is 12rem beside the links and the panel's width when
+ * it stacks on a phone, so `sizes` says both and the browser picks by density.
+ */
 function GlobalPanel({
   label,
   icon,
   active,
+  hero,
   entries,
 }: {
   readonly label: string;
   readonly icon: IconName;
   readonly active: boolean;
+  readonly hero: { readonly image: readonly [string, string]; readonly tagline: string };
   readonly entries: ReadonlyArray<GlobalEntry>;
 }) {
+  const [x1, x2] = hero.image;
   return (
     <NavigationMenuItem>
       <NavigationMenuTrigger active={active} title={label}>
         <GlobalLabel label={label} icon={icon} active={active} />
       </NavigationMenuTrigger>
-      <NavigationMenuContent>
+      <NavigationMenuContent
+        hero={
+          <NavigationMenuHero
+            src={x1}
+            srcSet={`${x1} 384w, ${x2} 768w`}
+            sizes="(min-width: 40rem) 12rem, 100vw"
+            label={label}
+          >
+            {hero.tagline}
+          </NavigationMenuHero>
+        }
+      >
         {entries.map((entry) => (
           <NavigationMenuLink
             key={entry.label}
             active={entry.current}
+            description={entry.description}
             render={<Link {...entry.link} activeOptions={{ exact: true }} activeProps={{}} />}
           >
             {entry.label}

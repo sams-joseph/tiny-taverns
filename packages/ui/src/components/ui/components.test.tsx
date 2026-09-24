@@ -21,6 +21,7 @@ import { Input } from "./input";
 import {
   NavigationMenu,
   NavigationMenuContent,
+  NavigationMenuHero,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
@@ -344,6 +345,76 @@ describe("NavigationMenu", () => {
     await user.click(campaigns);
     await user.click(await screen.findByRole("link", { name: "Shared Worlds" }));
     await waitFor(() => expect(campaigns).toHaveAttribute("aria-expanded", "false"));
+  });
+
+  describe("a featured panel", () => {
+    function Featured() {
+      return (
+        <NavigationMenu aria-label="Sections">
+          <NavigationMenuList>
+            <NavigationMenuItem>
+              <NavigationMenuTrigger>Library</NavigationMenuTrigger>
+              <NavigationMenuContent
+                hero={
+                  <NavigationMenuHero
+                    src="/hero-384.webp"
+                    srcSet="/hero-384.webp 384w, /hero-768.webp 768w"
+                    sizes="12rem"
+                    label="Library"
+                  >
+                    Your originals
+                  </NavigationMenuHero>
+                }
+              >
+                <NavigationMenuLink href="#creatures" description="Monster stat blocks">
+                  Creatures
+                </NavigationMenuLink>
+                <NavigationMenuLink href="#spells" description="Every spell">
+                  Spells
+                </NavigationMenuLink>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
+          </NavigationMenuList>
+        </NavigationMenu>
+      );
+    }
+
+    it("draws a decorative hero beside rows named by their titles and described by their lines", async () => {
+      const user = userEvent.setup();
+      render(<Featured />);
+      await user.click(screen.getByRole("button", { name: "Library" }));
+
+      const creatures = await screen.findByRole("link", { name: "Creatures" });
+      expect(creatures).toHaveAccessibleDescription("Monster stat blocks");
+      expect(screen.getByRole("link", { name: "Spells" })).toHaveAccessibleDescription(
+        "Every spell",
+      );
+
+      const hero = document.querySelector('[data-slot="navigation-menu-hero"]');
+      expect(hero).not.toBeNull();
+      const image = (hero as HTMLElement).querySelector("img");
+      expect(image).toHaveAttribute("alt", "");
+      expect(image).toHaveAttribute("srcset", "/hero-384.webp 384w, /hero-768.webp 768w");
+      expect(hero).toHaveTextContent("LibraryYour originals");
+      // Decoration: nothing in the tile takes focus, so the rows are the panel's
+      // only stops.
+      expect((hero as HTMLElement).querySelector("a, button, [tabindex]")).toBeNull();
+    });
+
+    it("walks the rows with the arrows past the hero", async () => {
+      const user = userEvent.setup();
+      render(<Featured />);
+
+      const library = screen.getByRole("button", { name: "Library" });
+      act(() => library.focus());
+      await user.keyboard("{ArrowDown}");
+      const creatures = await screen.findByRole("link", { name: "Creatures" });
+      await waitFor(() => expect(creatures).toHaveFocus());
+      await user.keyboard("{ArrowDown}");
+      expect(screen.getByRole("link", { name: "Spells" })).toHaveFocus();
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(library).toHaveFocus());
+    });
   });
 });
 
