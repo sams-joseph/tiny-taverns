@@ -100,7 +100,7 @@ describe("the party card", () => {
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAccessibleName("Manage party");
     expect(links[0]).toHaveTextContent("Manage");
-    expect(links[0]).toHaveAttribute("href", `/#${base}/party`);
+    expect(links[0]).toHaveAttribute("href", `${base}/party`);
   });
 
   it("draws a span of levels, and leaves out a stat nobody has written", async () => {
@@ -177,7 +177,7 @@ describe("the recent notes card", () => {
     const links = within(card).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveTextContent("All notes");
-    expect(links[0]).toHaveAttribute("href", `/#${base}/notes`);
+    expect(links[0]).toHaveAttribute("href", `${base}/notes`);
   });
 
   it("says so when there are none", async () => {
@@ -238,7 +238,7 @@ describe("the next session card", () => {
 
     expect(within(card).getByRole("link", { name: "All encounters" })).toHaveAttribute(
       "href",
-      `/#${base}/encounters`,
+      `${base}/encounters`,
     );
     // The checklist the drawing dropped is this card's own section.
     expect(within(card).getByRole("heading", { name: "Before you sit down" })).toBeInTheDocument();
@@ -353,7 +353,7 @@ describe("the live banner", () => {
 
     await userEvent.click(within(banner).getByRole("button", { name: "Back to the fight" }));
     await waitFor(() =>
-      expect(window.location.hash).toBe(`#${base}/sessions/${sessionId}/runs/${liveRun.id}`),
+      expect(window.location.pathname).toBe(`${base}/sessions/${sessionId}/runs/${liveRun.id}`),
     );
   });
 
@@ -391,7 +391,7 @@ describe("the last time card", () => {
     const links = within(card).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveTextContent("Read the chronicle");
-    expect(links[0]).toHaveAttribute("href", `/#${base}/chronicle`);
+    expect(links[0]).toHaveAttribute("href", `${base}/chronicle`);
   });
 
   it("tells a night with no beats by its fights, and one with neither says so", async () => {
