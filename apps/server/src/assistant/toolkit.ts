@@ -10,6 +10,7 @@ import {
   asBackgroundOption,
   asClassOption,
   asRaceOption,
+  CAMPAIGN_DESCRIPTION_MAX,
   CampaignId,
   type CharacterOption,
   type CharacterSheet,
@@ -51,6 +52,7 @@ import {
   SessionEvent,
   SessionId,
   SessionRecap,
+  type SharedWorldId,
   type Skill,
   type RaceEntry,
   type SubraceEntry,
@@ -93,10 +95,10 @@ import type { Spells } from "../repo/Spells.js";
  * and the second one is where the visibility seam gets re-derived slightly
  * wrong.
  *
- * **Nothing here creates campaign content, including the four `propose*`
- * tools.** A proposal is stashed in a `Ref` and saved on the conversation turn;
- * a note, a beat, an encounter or a character appears only when a human accepts
- * it, in `repo/Proposals.ts`. The one direct write Hob may make is slice 6's
+ * **Nothing here creates anything, including the `propose*` tools.** A
+ * proposal is stashed in a `Ref` and saved on the conversation turn; a note, a
+ * beat, an encounter, a character or a campaign appears only when a human
+ * accepts it, in `repo/Proposals.ts`. The one direct write Hob may make is slice 6's
  * audited spend of an existing resource counter, and that tool appears only
  * when the DM has turned on the current fight's switch.
  *
@@ -1417,6 +1419,88 @@ export const coreToolkitOver = (vocabulary: CharacterVocabulary) =>
 export const coreToolkitListing = (vocabulary: CharacterVocabulary) =>
   Toolkit.make(CoreListOptions, CoreListStartingSpells, proposeCharacterOver(vocabulary, "core"));
 
+/** A Shared World the asker may start a campaign in: live member, not archived. */
+export interface CampaignWorld {
+  readonly id: SharedWorldId;
+  readonly name: string;
+}
+
+/**
+ * `proposeCampaign`, built per request over **the asker's own Shared Worlds**,
+ * for the reason `proposeCharacter` is built over a vocabulary: the worlds a
+ * campaign may start in are a read, and the model should be held to them.
+ *
+ * The fields are the ones `NewCampaignDialog` writes (name, party name, the
+ * pitch its one cover is drawn from, where it lives), and the accept writes
+ * them through the same `campaignCreateFrom`. `sharedWorld` is a name rather
+ * than an id: names are what a small model can copy, and the handler resolves
+ * it against the same list the enum was built from. With no worlds it is free
+ * text that any value but absence is refused through, so the answer is always
+ * a standalone campaign.
+ */
+export const proposeCampaignOver = (worlds: ReadonlyArray<CampaignWorld>) => {
+  const names = [...new Set(worlds.map((world) => world.name))];
+  return Tool.make("proposeCampaign", {
+    description:
+      "Offer them a new campaign — a tabletop game they will run — built from what " +
+      "they described: a name, a party name if one fits, and a short pitch in " +
+      "description (the setting, the premise and the tone, in a few sentences; its " +
+      "cover picture is drawn from it). " +
+      (names.length === 0
+        ? "They are in no Shared World, so leave sharedWorld out; it will be a " +
+          "standalone campaign. "
+        : "It is a standalone campaign unless they ask for it to be part of one of " +
+          `their Shared Worlds: then put that world in sharedWorld, one of ${names
+            .map(quoted)
+            .join(", ")}, spelled exactly like that. `) +
+      "Only a suggestion: nothing is made unless they keep it. Say one short line " +
+      "about it and stop.",
+    parameters: Schema.Struct({
+      name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+      partyName: optionalText(120),
+      description: optionalText(CAMPAIGN_DESCRIPTION_MAX),
+      sharedWorld: optional(nameSchema(names)),
+    }),
+    success: Schema.String,
+    failure: proposalFailure,
+    failureMode: "return",
+  });
+};
+
+type CampaignDraft = Tool.Parameters<ReturnType<typeof proposeCampaignOver>>;
+
+/**
+ * **The account's own panel** — Hob on every screen outside a campaign or
+ * Shared World (`/me/hob` with no `intent`).
+ *
+ * The core drafting toolkit plus {@link proposeCampaignOver}, and nothing
+ * else: it has no campaign to read and no Shared World record, so it can draft
+ * the two things an account makes on its own — a character over the core
+ * rules and a new campaign. Campaign content (a note, an encounter) needs a
+ * campaign, and its tools are absent rather than refused.
+ */
+export const accountToolkitOver = (
+  vocabulary: CharacterVocabulary,
+  worlds: ReadonlyArray<CampaignWorld>,
+) =>
+  Toolkit.make(
+    CoreListStartingSpells,
+    proposeCharacterOver(vocabulary, "core"),
+    proposeCampaignOver(worlds),
+  );
+
+/** {@link accountToolkitOver} above the cap: the same three, plus the listing. */
+export const accountToolkitListing = (
+  vocabulary: CharacterVocabulary,
+  worlds: ReadonlyArray<CampaignWorld>,
+) =>
+  Toolkit.make(
+    CoreListOptions,
+    CoreListStartingSpells,
+    proposeCharacterOver(vocabulary, "core"),
+    proposeCampaignOver(worlds),
+  );
+
 /** The repositories a DM Hob tool call may reach — read-only, except the conditional direct counter writer. */
 export interface HobRepositories {
   readonly search: (typeof Search)["Service"];
@@ -2463,6 +2547,105 @@ export const coreBindListing = (
   const toolkit = coreToolkitListing(vocabulary);
   return Effect.flatMap(
     toolkit.toHandlers(toolkit.of(coreHandlersFor(repositories, actor, proposal, vocabulary))),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/** Whether a model's answer for an optional name meant "none". */
+const saidNothing = (value: string | null | undefined): boolean =>
+  value === null ||
+  value === undefined ||
+  (ABSENT_WORDS as ReadonlyArray<string>).includes(value.trim());
+
+/**
+ * `proposeCampaign`, bound. It resolves the world by name against the list the
+ * schema was built from; a name that is not one of them (the free-text shape,
+ * with no worlds or above the cap) is a `Conflict` the model reads and can
+ * correct, never a guess.
+ */
+const campaignHandlerFor =
+  (actor: Actor, proposal: ProposalSlot, worlds: ReadonlyArray<CampaignWorld>) =>
+  ({ name, partyName, description, sharedWorld }: CampaignDraft) =>
+    Effect.gen(function* () {
+      const { offer } = bind(actor, proposal);
+      const wanted = saidNothing(sharedWorld) ? undefined : sharedWorld!.trim();
+      const matching =
+        wanted === undefined
+          ? []
+          : worlds.filter((world) => world.name.toLowerCase() === wanted.toLowerCase());
+      if (wanted !== undefined && matching.length !== 1) {
+        return yield* new Conflict({
+          message:
+            matching.length === 0
+              ? worlds.length === 0
+                ? "they are in no Shared World, so leave sharedWorld out"
+                : `${quoted(wanted)} is not one of their Shared Worlds: use one of ` +
+                  `${worlds.map((world) => quoted(world.name)).join(", ")}, or leave it out`
+              : `two of their Shared Worlds are called ${quoted(wanted)}; leave sharedWorld ` +
+                "out and they can connect the campaign to one afterwards",
+        });
+      }
+      const world = matching[0];
+      const title = name.trim();
+      return yield* offer(
+        {
+          target: "campaign",
+          name: title,
+          partyName: blank(partyName) ?? null,
+          description: blank(description) ?? null,
+          world: world === undefined ? null : { id: world.id, name: world.name },
+        },
+        `Offered the campaign "${title}"${
+          world === undefined ? "" : ` in ${world.name}`
+        }. Say one short line about it and stop.`,
+      );
+    });
+
+/**
+ * The account panel's handlers: {@link coreHandlersFor}, the same drafting
+ * code the create screen's composer runs, plus `proposeCampaign`.
+ */
+const accountHandlersFor = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+  worlds: ReadonlyArray<CampaignWorld>,
+) => ({
+  ...coreHandlersFor(repositories, actor, proposal, vocabulary),
+  proposeCampaign: campaignHandlerFor(actor, proposal, worlds),
+});
+
+/** {@link accountToolkitOver}, bound to {@link accountHandlersFor}. */
+export const accountBindOver = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+  worlds: ReadonlyArray<CampaignWorld>,
+) => {
+  const toolkit = accountToolkitOver(vocabulary, worlds);
+  return Effect.flatMap(
+    toolkit.toHandlers(
+      toolkit.of(accountHandlersFor(repositories, actor, proposal, vocabulary, worlds)),
+    ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/** {@link accountBindOver} above {@link OPTION_ENUM_CAP}. */
+export const accountBindListing = (
+  repositories: DraftingRepositories,
+  actor: Actor,
+  proposal: ProposalSlot,
+  vocabulary: CharacterVocabulary,
+  worlds: ReadonlyArray<CampaignWorld>,
+) => {
+  const toolkit = accountToolkitListing(vocabulary, worlds);
+  return Effect.flatMap(
+    toolkit.toHandlers(
+      toolkit.of(accountHandlersFor(repositories, actor, proposal, vocabulary, worlds)),
+    ),
     (bound) => Effect.provideContext(toolkit, bound),
   );
 };

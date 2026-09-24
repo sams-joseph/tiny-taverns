@@ -1,10 +1,11 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
-import type { CampaignId, SharedWorldId } from "@taverns/api";
+import type { CampaignId, HobAccepted, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
-import { campaignId, worldId } from "../campaign/campaign.fixtures";
+import { campaign as aCampaignRow, campaignId, worldId } from "../campaign/campaign.fixtures";
+import { characterProposal } from "../characters/characters.fixtures";
 import type { HobScope } from "./conversation";
 import { ScopedHob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
@@ -194,7 +195,12 @@ const installHobServer = (): HobStub => {
             ? json(stub.acceptBody)
             : pathname.startsWith("/worlds/")
               ? json({ accepted: "sharedWorldHistory", entry: aHistoryRow })
-              : json({ accepted: "note", note: aNoteRow })
+              : pathname.startsWith("/me/")
+                ? json({
+                    accepted: "campaign",
+                    campaign: { ...aCampaignRow, origin: "assistant", assistantTurnId: turnId },
+                  })
+                : json({ accepted: "note", note: aNoteRow })
           : new Response(JSON.stringify(stub.acceptBody), {
               status: stub.acceptStatus,
               headers: { "content-type": "application/json" },
@@ -205,6 +211,12 @@ const installHobServer = (): HobStub => {
     if (pathname.endsWith("/turns")) return Promise.resolve(json(stub.turns));
 
     if (pathname.endsWith("/hob/threads")) return Promise.resolve(json(stub.threads));
+
+    // The account's own status names nothing it knows.
+    if (pathname === "/me/hob")
+      return Promise.resolve(
+        json({ available: stub.available, model: stub.available ? "local" : null }),
+      );
 
     if (pathname.endsWith("/hob"))
       return Promise.resolve(
@@ -249,6 +261,8 @@ const renderHob = (options?: {
   readonly open?: boolean;
   readonly campaign?: boolean;
   readonly world?: boolean;
+  readonly account?: boolean;
+  readonly onKept?: (accepted: HobAccepted) => void;
 }): void => {
   const hob = panelState(options?.open ?? true);
   render(
@@ -256,12 +270,15 @@ const renderHob = (options?: {
       <ScopedHob
         hob={hob}
         scope={
-          options?.world === true
-            ? worldScope
-            : options?.campaign === false
-              ? undefined
-              : campaignScope
+          options?.account === true
+            ? accountScope
+            : options?.world === true
+              ? worldScope
+              : options?.campaign === false
+                ? undefined
+                : campaignScope
         }
+        {...(options?.onKept === undefined ? {} : { onKept: options.onKept })}
       />
     </HostedSessionScope>,
   );
@@ -269,6 +286,7 @@ const renderHob = (options?: {
 
 const campaignScope: HobScope = { type: "campaign", id: campaignId as CampaignId };
 const worldScope: HobScope = { type: "sharedWorld", id: worldId as SharedWorldId };
+const accountScope: HobScope = { type: "account" };
 
 const delta = (text: string): Frame => ({ event: "delta", data: { text } });
 const tool = (name: string, phase: string, detail: string): Frame => ({
@@ -283,6 +301,8 @@ const proposed = (turn: string, proposal: unknown): Frame => ({
   event: "proposal",
   data: { turnId: turn, proposal },
 });
+
+const done = (): Frame => ({ event: "done", data: { reason: "stop" } });
 
 const threadId = "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d";
 const turnId = "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60";
@@ -347,11 +367,12 @@ describe("what the panel offers", () => {
     expect(server.paths).toEqual([]);
   });
 
-  it("offers no composer outside a scoped context, and says to open one", async () => {
+  it("offers no composer at a table whose verbs are not the reader's, and says where to go", async () => {
+    // No scope is a player's campaign: the panel's verbs there are the creator's.
     renderHob({ campaign: false });
 
     expect(composer()).toBeNull();
-    expect(screen.getByText(/needs a campaign or Shared World in view/)).toBeInTheDocument();
+    expect(screen.getByText(/Leave the campaign to ask it/)).toBeInTheDocument();
     // Nothing is asked either: there is no scoped record to ask about.
     expect(server.paths).toEqual([]);
   });
@@ -912,5 +933,117 @@ describe("Shared World Hob", () => {
 
     await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
     expect(screen.getByText("Current for this Shared World")).toBeInTheDocument();
+  });
+});
+
+describe("the account's own Hob, outside any campaign", () => {
+  const campaignProposal = {
+    target: "campaign",
+    name: "The Drowned Bell",
+    partyName: "The Lantern Crew",
+    description: "A river town where the church bell rings under the water.",
+    world: { id: worldId, name: "The Salt Company" },
+  };
+
+  it("asks `/me/hob` and offers a composer, with no campaign anywhere in a path", async () => {
+    renderHob({ account: true });
+
+    await waitFor(() => expect(composer()).not.toBeNull());
+    expect(server.paths).toContain("/me/hob");
+    expect(server.paths).toContain("/me/hob/threads");
+    expect(server.paths.some((path) => path.startsWith("/campaigns/"))).toBe(false);
+    // The strip says what it knows from here: the core rules and the model.
+    expect(screen.getByLabelText("What Hob knows")).toHaveTextContent("Core rules");
+    // Its starters are the two things it can draft, and no campaign prep.
+    expect(screen.getByText("Draft a character")).toBeInTheDocument();
+    expect(screen.getByText("Draft a campaign")).toBeInTheDocument();
+    expect(screen.queryByText("Build an encounter")).toBeNull();
+  });
+
+  it("asks as the panel, naming no intent", async () => {
+    server.frames = [began(threadId, turnId), delta("Tell me more."), done()];
+    renderHob({ account: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "A ghost story on a river.{Enter}");
+
+    expect(await screen.findByText("Tell me more.")).toBeInTheDocument();
+    expect(server.paths).toContain("/me/hob/ask");
+    expect(JSON.parse(server.bodies[0]!)).toEqual({ text: "A ghost story on a river." });
+  });
+
+  it("draws a campaign card, keeps it with ids alone, and opens what it made", async () => {
+    const kept: Array<HobAccepted> = [];
+    server.frames = [began(threadId, turnId), proposed(turnId, campaignProposal), done()];
+    renderHob({ account: true, onKept: (accepted) => kept.push(accepted) });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Draft me a campaign.{Enter}");
+
+    expect(await screen.findByText("The Drowned Bell")).toBeInTheDocument();
+    expect(screen.getByText("Campaign")).toBeInTheDocument();
+    expect(screen.getByText("In The Salt Company")).toBeInTheDocument();
+    expect(screen.getByText("The Lantern Crew")).toBeInTheDocument();
+    expect(
+      screen.getByText("A river town where the church bell rings under the water."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([`/me/hob/threads/${threadId}/turns/${turnId}/accept`]),
+    );
+    expect(await screen.findByText("In your campaigns")).toBeInTheDocument();
+    // The screen is told what was made, which is how the shell opens it.
+    expect(kept.map((accepted) => accepted.accepted)).toEqual(["campaign"]);
+
+    // And *Open it* opens it again.
+    await userEvent.click(screen.getByRole("button", { name: "Open it" }));
+    expect(kept).toHaveLength(2);
+  });
+
+  it("draws a character card the same way", async () => {
+    server.frames = [began(threadId, turnId), proposed(turnId, characterProposal), done()];
+    renderHob({ account: true });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Draft me a character.{Enter}");
+
+    expect(await screen.findByText("Sorrel Ash")).toBeInTheDocument();
+    // No `level` on this proposal: one made before the seed existed is level 1.
+    expect(screen.getByText("Wood elf Druid · Level 1")).toBeInTheDocument();
+    expect(screen.getByText(/mud to the knees/)).toBeInTheDocument();
+    expect(screen.getByText(/Wisdom is highest because druid casting/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep it" })).toBeEnabled();
+  });
+
+  it("cannot open a card kept on an earlier visit, so does not offer to", async () => {
+    server.threads = [
+      {
+        id: threadId,
+        campaignId: null,
+        worldId: null,
+        title: "A river",
+        createdAt: stamp,
+        updatedAt: stamp,
+      },
+    ];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Here it is.",
+        proposal: campaignProposal,
+        acceptedAt: stamp,
+        createdAt: stamp,
+      },
+    ];
+    renderHob({ account: true });
+
+    expect(await screen.findByText("In your campaigns")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open it" })).toBeDisabled();
   });
 });

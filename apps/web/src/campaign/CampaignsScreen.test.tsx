@@ -357,6 +357,24 @@ describe("the campaign-first home", () => {
     );
   });
 
+  it("sends the party name, trimmed, and omits a blank one, as Hob's accept does", async () => {
+    server.routes.set("POST /campaigns", { status: 200, body: campaign });
+    await renderCampaigns("/campaigns", mintingSession());
+    await screen.findByText("The Salt Road");
+
+    await openNewCampaign();
+    await userEvent.type(screen.getByLabelText("New campaign name"), "The Long Winter");
+    await userEvent.type(screen.getByLabelText("Party name"), "  The Snowbound  ");
+    await userEvent.click(screen.getByRole("button", { name: "Start a campaign" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/campaigns")).toEqual({
+        name: "The Long Winter",
+        partyName: "The Snowbound",
+      }),
+    );
+  });
+
   it("starts a connected campaign in a Shared World from the primary flow", async () => {
     server.routes.set(`POST /worlds/${sharedWorldDetails.id}/campaigns`, {
       status: 200,

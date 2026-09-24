@@ -9,8 +9,9 @@ import { Textarea } from "./form";
  * The display and the create forms' box are each spelled once here, so the
  * creator's Overview, the player's page and the world's screen draw the same
  * paragraph, and the two places a campaign is started (the campaign list and a
- * Shared World's screen) ask for it the same way; `describedBy` is how their
- * payloads carry it. The settings dialogs use a labelled `Field` instead, like
+ * Shared World's screen) ask for it the same way; `campaignCreateFrom` (a
+ * campaign's, shared with Hob's accept) and `describedBy` (a Shared World's) are
+ * how their payloads carry it. The settings dialogs use a labelled `Field` instead, like
  * every other box in them.
  */
 

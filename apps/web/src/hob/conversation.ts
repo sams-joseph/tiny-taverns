@@ -3,15 +3,17 @@ import type {
   AssistantTurnId,
   CampaignId,
   SharedWorldId,
+  HobAccepted,
   HobEvent,
+  HobThread,
   HobTurn as RecordedTurn,
 } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInvalidate } from "../api/atoms";
-import { makeClient, runApiResult } from "../api/client";
-import { reads } from "../api/keys";
+import { makeClient, runApiResult, type TavernsClient } from "../api/client";
+import { reads, type ReadKey } from "../api/keys";
 import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
 import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } from "./transcript";
@@ -40,8 +42,8 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  * ### A card is an offer, and Save is the only thing that writes
  *
  * An artifact turn is a proposal Hob made, saved on its turn and nothing else.
- * `save` calls `POST …/accept`, which materialises a real note, beat or
- * encounter with `origin: "assistant"` — that is the captain's
+ * `save` calls `POST …/accept`, which materialises a real note, beat,
+ * encounter, character or campaign with `origin: "assistant"` — that is the captain's
  * *generate with approval* decision, and this is the only button in the app
  * that reaches it.
  *
@@ -54,14 +56,18 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  *
  * ### Scope is explicit
  *
- * Campaign Hob and Shared World Hob have different server toolkits and accept
- * targets. The caller supplies exactly one scope, and this seam selects one API
- * group for the whole conversation. A screen with neither scope gets no
- * composer and makes no request.
+ * Campaign Hob, Shared World Hob and the account's own Hob have different
+ * server toolkits and accept targets. The caller supplies exactly one scope,
+ * and this seam selects one API group for the whole conversation
+ * (`callsFor`). `account` is every screen outside a campaign or Shared World:
+ * `/me/hob`, a thread of the reader's own, which drafts a character or a
+ * campaign. No scope at all is a player's campaign, where the panel's verbs
+ * are not theirs: no composer, and no request.
  */
 export type HobScope =
   | { readonly type: "campaign"; readonly id: CampaignId }
-  | { readonly type: "sharedWorld"; readonly id: SharedWorldId };
+  | { readonly type: "sharedWorld"; readonly id: SharedWorldId }
+  | { readonly type: "account" };
 
 interface ConversationStatus {
   readonly available: boolean;
@@ -108,6 +114,10 @@ export interface HobConversation {
   readonly unavailable: string | undefined;
   /** Accepts a proposal into the scoped record. The only write on this surface. */
   readonly save: ((artifact: HobArtifact) => void) | undefined;
+  /** Opens what a kept card made, when it made something with a screen of its own. */
+  readonly open: ((artifact: HobArtifact) => void) | undefined;
+  /** The cards `open` can open: those kept while this conversation was on screen. */
+  readonly openableArtifactIds: ReadonlyArray<string>;
   readonly discard: ((artifact: HobArtifact) => void) | undefined;
   readonly retry: ((artifact: HobArtifact) => void) | undefined;
   readonly reset: (() => void) | undefined;
@@ -131,6 +141,10 @@ const ACTIVITY: Record<string, string> = {
   listPlayedNights: "Looking through the played nights",
   nightStory: "Reading back a played night",
   proposeSharedWorldEntry: "Writing a Chronicle entry",
+  proposeCampaign: "Drafting a campaign",
+  proposeCharacter: "Drafting a character",
+  listStartingSpells: "Reading the starting spells",
+  listOptions: "Reading the core rules",
 };
 
 const activityFor = (name: string, detail: string): string => {
@@ -181,35 +195,198 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
   recorded.flatMap((turn) => {
     const said: ReadonlyArray<HobTurn> =
       turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }];
-    // `artifactFrom` answers `undefined` for a proposal this panel has no card
-    // for — today only a character draft, which is a player's and is offered
-    // into a thread this panel cannot reach. It cannot arrive; dropping it is
-    // what makes that true of the code rather than only of the predicate.
-    const card = turn.proposal === null ? undefined : artifactFrom(turn.id, turn.proposal);
-    return card === undefined
+    return turn.proposal === null
       ? said
-      : [...said, { id: `${turn.id}:card`, who: "artifact" as const, artifact: card }];
+      : [
+          ...said,
+          {
+            id: `${turn.id}:card`,
+            who: "artifact" as const,
+            artifact: artifactFrom(turn.id, turn.proposal),
+          },
+        ];
   });
+
+/** What the panel says it knows, read off whichever status the scope answers. */
+interface Opened {
+  readonly status: ConversationStatus;
+  readonly threads: ReadonlyArray<HobThread>;
+}
+
+/**
+ * The five calls of one scope's API group, chosen once.
+ *
+ * Three groups with the same shape (`hob`, `sharedWorldHob`, `meHob`), so the
+ * hook below is written once over this rather than branching at every call.
+ * `keeps` is what an accept in this scope changed, by the kind of row it made:
+ * the keys a screen behind the panel reads that row through.
+ */
+interface ScopeCalls {
+  readonly opened: (client: TavernsClient) => Effect.Effect<Opened, unknown, never>;
+  readonly turns: (
+    client: TavernsClient,
+    threadId: AssistantThreadId,
+  ) => Effect.Effect<ReadonlyArray<RecordedTurn>, unknown>;
+  readonly ask: (
+    client: TavernsClient,
+    payload: { readonly threadId?: AssistantThreadId; readonly text: string },
+  ) => Effect.Effect<Stream.Stream<HobEvent, unknown>, unknown>;
+  readonly accept: (
+    client: TavernsClient,
+    threadId: AssistantThreadId,
+    turnId: AssistantTurnId,
+  ) => Effect.Effect<HobAccepted, unknown>;
+  readonly keeps: (accepted: HobAccepted) => ReadonlyArray<ReadKey>;
+}
+
+const callsFor = (scope: HobScope): ScopeCalls => {
+  switch (scope.type) {
+    case "campaign": {
+      const campaignId = scope.id;
+      return {
+        opened: (client) =>
+          Effect.map(
+            Effect.all(
+              {
+                status: client.hob.status({ params: { campaignId } }),
+                threads: client.hob.threads({ params: { campaignId } }),
+              },
+              { concurrency: 2 },
+            ),
+            ({ status, threads }) => ({
+              status: {
+                available: status.available,
+                model: status.model,
+                label: status.campaign,
+                type: "campaign",
+              },
+              threads,
+            }),
+          ),
+        turns: (client, threadId) => client.hob.turns({ params: { campaignId, threadId } }),
+        ask: (client, payload) => client.hob.ask({ params: { campaignId }, payload }),
+        accept: (client, threadId, turnId) =>
+          client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
+        /**
+         * Both named, because the artifact's kind is the model's and this write
+         * does not branch on it. Over-naming costs a request nobody was going
+         * to make; under-naming costs a card that quietly says the wrong number.
+         *
+         * **A beat is deliberately not named**, and the residue is small and
+         * stated: a beat is assembled into a *recap*, whose key is the night's
+         * session id — which this panel does not have, because the beat's
+         * session is resolved server-side from `campaign.current_session_id`.
+         * So a recap card left open on the Chronicle while a beat is accepted
+         * stays as it was until it is reopened.
+         */
+        keeps: () => [reads.notes(campaignId), reads.encounters(campaignId)],
+      };
+    }
+    case "sharedWorld": {
+      const worldId = scope.id;
+      return {
+        opened: (client) =>
+          Effect.map(
+            Effect.all(
+              {
+                status: client.sharedWorldHob.status({ params: { worldId } }),
+                threads: client.sharedWorldHob.threads({ params: { worldId } }),
+              },
+              { concurrency: 2 },
+            ),
+            ({ status, threads }) => ({
+              status: {
+                available: status.available,
+                model: status.model,
+                label: status.sharedWorld,
+                type: "sharedWorld",
+              },
+              threads,
+            }),
+          ),
+        turns: (client, threadId) => client.sharedWorldHob.turns({ params: { worldId, threadId } }),
+        ask: (client, payload) => client.sharedWorldHob.ask({ params: { worldId }, payload }),
+        accept: (client, threadId, turnId) =>
+          client.sharedWorldHob.accept({ params: { worldId, threadId, turnId }, payload: {} }),
+        keeps: () => [reads.sharedWorldHistory(worldId)],
+      };
+    }
+    case "account":
+      return {
+        // The account's status names nothing it knows: outside a campaign
+        // Hob knows the core rules, which are the same for everybody.
+        opened: (client) =>
+          Effect.map(
+            Effect.all(
+              { status: client.meHob.status(), threads: client.meHob.threads() },
+              {
+                concurrency: 2,
+              },
+            ),
+            ({ status, threads }) => ({
+              status: {
+                available: status.available,
+                model: status.model,
+                label: "Core rules",
+                type: "account",
+              },
+              threads,
+            }),
+          ),
+        turns: (client, threadId) => client.meHob.turns({ params: { threadId } }),
+        // No `intent`: this is the panel, which drafts a campaign or a
+        // character. The create screen's composer names its own.
+        ask: (client, payload) => client.meHob.ask({ payload }),
+        accept: (client, threadId, turnId) =>
+          client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+        // A kept campaign is a row on the Campaigns list, and a card in its
+        // Shared World's directory when it named one; a kept character is a
+        // card on the roster.
+        keeps: (accepted) =>
+          accepted.accepted === "campaign"
+            ? [reads.myCampaigns, reads.sharedWorld(accepted.campaign.contextId)]
+            : [reads.myCharacters],
+      };
+  }
+};
 
 /**
  * Attach the panel to the server.
  *
- * @param scope The campaign or explicit Shared World in view. Hob's tools are
- *   bound to it server-side, so there is no scope id in a payload or tool
- *   parameter.
+ * @param scope The campaign or explicit Shared World in view, or the account
+ *   outside both. Hob's tools are bound to it server-side, so there is no scope
+ *   id in a payload or tool parameter.
  * @param open Whether the panel is showing. **Nothing is requested until it
  *   is**: the panel is closed on every screen by default, so asking whether a
  *   model is configured at mount would put a request on every page load for a
  *   surface nobody opened. Re-asking on each open is the deliberate other half
  *   — a server restarted with a model configured is then one panel toggle away
  *   from working, rather than a page reload.
+ * @param onKept What to do once a proposal is kept, with what it made. The
+ *   panel does not know the router; the account's panel opens a kept campaign
+ *   or character through this.
  */
-export function useHobConversation(scope: HobScope | undefined, open: boolean): HobConversation {
-  const campaignId = scope?.type === "campaign" ? scope.id : undefined;
-  const worldId = scope?.type === "sharedWorld" ? scope.id : undefined;
+export function useHobConversation(
+  scope: HobScope | undefined,
+  open: boolean,
+  onKept?: (accepted: HobAccepted) => void,
+): HobConversation {
+  /**
+   * The scope as one string, which is what every effect below keys on: a new
+   * object for the same scope on each render must not start a conversation
+   * over, and a different scope must.
+   */
+  const scopeKey =
+    scope === undefined ? undefined : scope.type === "account" ? "account" : scope.id;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const onKeptRef = useRef(onKept);
+  onKeptRef.current = onKept;
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<HobTurn>>([]);
   const [saved, setSaved] = useState<ReadonlyArray<string>>([]);
+  /** What each kept card made, by turn id: what *Open it* opens. */
+  const [kept, setKept] = useState<Readonly<Record<string, HobAccepted>>>({});
   const [asking, setAsking] = useState(false);
   /**
    * Whether words are currently arriving.
@@ -244,88 +421,32 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
   // quiet panel and not a broken one. The thread is what makes the panel worth
   // reopening: the evening is still there.
   useEffect(() => {
-    if (campaignId === undefined && worldId === undefined) {
+    const current = scopeRef.current;
+    if (current === undefined) {
       setStatus(undefined);
       return;
     }
     if (!open) return;
+    const calls = callsFor(current);
     let live = true;
     void (async () => {
       const token = await credentialRef.current();
-      const result = await runApiResult((client) => {
-        const head =
-          campaignId !== undefined
-            ? Effect.all(
-                {
-                  status: client.hob.status({ params: { campaignId } }),
-                  threads: client.hob.threads({ params: { campaignId } }),
-                },
-                { concurrency: 2 },
-              ).pipe(
-                Effect.map(
-                  ({
-                    status: current,
-                    threads,
-                  }): {
-                    readonly status: ConversationStatus;
-                    readonly threads: typeof threads;
-                  } => ({
-                    status: {
-                      available: current.available,
-                      model: current.model,
-                      label: current.campaign,
-                      type: "campaign",
-                    },
-                    threads,
-                  }),
-                ),
-              )
-            : Effect.all(
-                {
-                  status: client.sharedWorldHob.status({ params: { worldId: worldId! } }),
-                  threads: client.sharedWorldHob.threads({ params: { worldId: worldId! } }),
-                },
-                { concurrency: 2 },
-              ).pipe(
-                Effect.map(
-                  ({
-                    status: current,
-                    threads,
-                  }): {
-                    readonly status: ConversationStatus;
-                    readonly threads: typeof threads;
-                  } => ({
-                    status: {
-                      available: current.available,
-                      model: current.model,
-                      label: current.sharedWorld,
-                      type: "sharedWorld",
-                    },
-                    threads,
-                  }),
-                ),
-              );
-
-        return head.pipe(
-          Effect.flatMap(({ status: current, threads }) => {
-            const newest = threads[0];
-            return newest === undefined
-              ? Effect.succeed({ status: current, threadId: undefined, recorded: [] })
-              : Effect.map(
-                  campaignId !== undefined
-                    ? client.hob.turns({ params: { campaignId, threadId: newest.id } })
-                    : client.sharedWorldHob.turns({
-                        params: { worldId: worldId!, threadId: newest.id },
-                      }),
-                  (recorded) => ({
-                    status: current,
+      const result = await runApiResult(
+        (client) =>
+          calls.opened(client).pipe(
+            Effect.flatMap(({ status: known, threads }) => {
+              const newest = threads[0];
+              return newest === undefined
+                ? Effect.succeed({ status: known, threadId: undefined, recorded: [] })
+                : Effect.map(calls.turns(client, newest.id), (recorded) => ({
+                    status: known,
                     threadId: newest.id as AssistantThreadId | undefined,
                     recorded,
-                  }),
-                );
-          }),
-        );
-      }, token);
+                  }));
+            }),
+          ),
+        token,
+      );
       if (!live || Result.isFailure(result)) {
         // A failed read leaves the panel exactly as it was: `status` undefined
         // renders the *nothing is behind this* line, which is the honest thing
@@ -349,7 +470,7 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
     return () => {
       live = false;
     };
-  }, [campaignId, open, worldId]);
+  }, [scopeKey, open]);
 
   /** A half-written answer is abandoned, not left running, when this unmounts. */
   useEffect(
@@ -375,7 +496,9 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
 
   const send = useCallback(
     (text: string) => {
-      if ((campaignId === undefined && worldId === undefined) || asking) return;
+      const current = scopeRef.current;
+      if (current === undefined || asking) return;
+      const calls = callsFor(current);
 
       append({ id: `you-${nextId.current++}`, who: "user", text });
       setAsking(true);
@@ -403,10 +526,11 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
             return;
           case "proposal": {
             setActivity(undefined);
-            const card = artifactFrom(event.data.turnId, event.data.proposal);
-            if (card !== undefined) {
-              append({ id: `${event.data.turnId}:card`, who: "artifact", artifact: card });
-            }
+            append({
+              id: `${event.data.turnId}:card`,
+              who: "artifact",
+              artifact: artifactFrom(event.data.turnId, event.data.proposal),
+            });
             return;
           }
           case "failed":
@@ -431,9 +555,7 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
           // `null`, and `Schema.optional` refuses a null on the way back in —
           // a 400 on the first question of every conversation.
           continuing === undefined ? { text } : { threadId: continuing, text };
-        const stream = yield* campaignId !== undefined
-          ? client.hob.ask({ params: { campaignId }, payload })
-          : client.sharedWorldHob.ask({ params: { worldId: worldId! }, payload });
+        const stream = yield* calls.ask(client, payload);
         yield* Stream.runForEach(stream, (event) => Effect.sync(() => receive(event)));
       }).pipe(
         Effect.provide(FetchHttpClient.layer),
@@ -456,64 +578,41 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
 
       answering.current = Effect.runFork(answer);
     },
-    [append, asking, campaignId, say, worldId],
+    [append, asking, say],
   );
 
   /**
    * Accept a proposal into the scoped record — the one write on this surface.
    *
-   * It sends no content, only the ids: the note, the beat or the encounter is
-   * materialised from the proposal the *server* stored on that turn. That is
-   * what makes the `origin: "assistant"` it records worth having, and it is why
-   * this takes an artifact and reads nothing off it but its id.
+   * It sends no content, only the ids: the row is materialised from the
+   * proposal the *server* stored on that turn. That is what makes the
+   * `origin: "assistant"` it records worth having, and it is why this takes an
+   * artifact and reads nothing off it but its id.
    *
-   * **The screen behind the panel catches up now, and that is a limitation this
-   * file used to state and no longer has.** It read: *"the screen behind the
-   * panel is not reloaded, because the panel does not know what is behind it —
-   * a DM who accepts an encounter while looking at the campaign screen sees it
-   * on their next visit. Wiring a reload through the shell is a bigger seam
-   * than this feature earns."* Naming a resource is not a seam through the
-   * shell: the panel knows its campaign, an accepted proposal is a note or an
-   * encounter in it, and whichever screen is drawing those reads itself again.
-   * The panel still does not know what is behind it — it does not have to.
-   *
-   * Both are named because the artifact's kind is the model's and this write
-   * does not branch on it. Over-naming costs a request nobody was going to
-   * make; under-naming costs a card that quietly says the wrong number.
-   *
-   * **The third target, a beat, is deliberately not named**, and the residue is
-   * small and stated: a beat is assembled into a *recap*, whose key is the
-   * night's session id — which this panel does not have, because the beat's
-   * session is resolved server-side from `campaign.current_session_id`. So a
-   * recap card left open on the Chronicle while a beat is accepted stays as it
-   * was until it is reopened. It did that before this too, when accepting
-   * refreshed nothing at all.
+   * **The screen behind the panel catches up**: the panel does not know what is
+   * behind it and does not have to, because it knows its scope, and an accepted
+   * proposal is a row read through keys the scope names (`callsFor`'s `keeps`).
+   * Whichever screen is drawing those reads itself again.
    */
   const save = useCallback(
     (artifact: HobArtifact) => {
       const threadId = thread.current;
-      if ((campaignId === undefined && worldId === undefined) || threadId === undefined) return;
+      const current = scopeRef.current;
+      if (current === undefined || threadId === undefined) return;
+      const calls = callsFor(current);
       const turnId = artifact.id as AssistantTurnId;
 
       void (async () => {
         const token = await credentialRef.current();
         const result = await runApiResult(
-          (client) =>
-            campaignId !== undefined
-              ? client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} })
-              : client.sharedWorldHob.accept({
-                  params: { worldId: worldId!, threadId, turnId },
-                  payload: {},
-                }),
+          (client) => calls.accept(client, threadId, turnId),
           token,
         );
         if (Result.isSuccess(result)) {
-          setSaved((current) => [...current, turnId]);
-          invalidate(
-            campaignId !== undefined
-              ? [reads.notes(campaignId), reads.encounters(campaignId)]
-              : [reads.sharedWorldHistory(worldId!)],
-          );
+          setSaved((done) => [...done, turnId]);
+          setKept((made) => ({ ...made, [turnId]: result.success }));
+          invalidate(calls.keeps(result.success));
+          onKeptRef.current?.(result.success);
           return;
         }
         // In the thread, where the card is, for the reason `SaveFailure` sits
@@ -525,7 +624,16 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
         });
       })();
     },
-    [append, campaignId, invalidate, worldId],
+    [append, invalidate],
+  );
+
+  /** Opens what a kept card made, again: the same thing a keep does first. */
+  const openKept = useCallback(
+    (artifact: HobArtifact) => {
+      const made = kept[artifact.id];
+      if (made !== undefined) onKeptRef.current?.(made);
+    },
+    [kept],
   );
 
   const reset = useCallback(() => {
@@ -537,6 +645,7 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
     thread.current = undefined;
     setTurns([]);
     setSaved([]);
+    setKept({});
     setAsking(false);
     setWriting(false);
     setActivity(undefined);
@@ -550,7 +659,6 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
    * or world they were asked in. The read effect above adopts the new scope's
    * newest thread, and only onto an empty transcript, which this is what makes.
    */
-  const scopeKey = campaignId ?? worldId;
   const shownFor = useRef(scopeKey);
   useEffect(() => {
     if (shownFor.current === scopeKey) return;
@@ -569,7 +677,7 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
         ? []
         : [
             {
-              icon: status.type === "campaign" ? ("book-open" as const) : ("map" as const),
+              icon: status.type === "sharedWorld" ? ("map" as const) : ("book-open" as const),
               label: status.label,
               live: true,
             },
@@ -580,10 +688,13 @@ export function useHobConversation(scope: HobScope | undefined, open: boolean): 
     unavailable:
       status?.available === true
         ? undefined
-        : campaignId === undefined && worldId === undefined
-          ? "Hob needs a campaign or Shared World in view. Open one and ask again."
+        : scope === undefined
+          ? "Hob works for this table's creator here. Leave the campaign to ask it about " +
+            "your own characters and campaigns."
           : "No model is configured behind Hob. Set HOB_API_URL and HOB_MODEL in apps/server/.env.local, then restart the server.",
-    save: campaignId === undefined && worldId === undefined ? undefined : save,
+    save: scope === undefined ? undefined : save,
+    open: scope?.type === "account" ? openKept : undefined,
+    openableArtifactIds: Object.keys(kept),
     discard: undefined,
     retry: undefined,
     reset: turns.length > 0 ? reset : undefined,

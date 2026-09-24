@@ -146,6 +146,53 @@ function RulesBody({ artifact }: { readonly artifact: HobArtifact & { kind: "rul
   );
 }
 
+/**
+ * A campaign Hob drafted: where it will live, the party, and the pitch its one
+ * cover is drawn from — the three things the create form asks for besides the
+ * name, shown before they are kept because keeping draws the cover.
+ */
+function CampaignBody({ artifact }: { readonly artifact: HobArtifact & { kind: "campaign" } }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {artifact.partyName !== undefined && (
+        <p className="flex items-center gap-2 text-body-s leading-snug text-muted-foreground">
+          <Icon name="users" size={14} className="shrink-0 text-faint" />
+          <span>{artifact.partyName}</span>
+        </p>
+      )}
+      {artifact.pitch !== undefined && (
+        <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+          {artifact.pitch}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A character the account's panel drafted: how they look, and Hob's reasons. */
+function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "character" } }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {artifact.appearance !== undefined && (
+        <p className="text-body-s leading-body text-foreground">{artifact.appearance}</p>
+      )}
+      {artifact.rationale.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {artifact.rationale.map((line) => (
+            <li
+              key={line}
+              className="flex items-start gap-2 text-caption leading-body text-muted-foreground"
+            >
+              <Icon name="wand-sparkles" size={12} className="mt-0.5 shrink-0 text-faint" />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
   switch (artifact.kind) {
     case "encounter":
@@ -161,6 +208,10 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <NpcBody artifact={artifact} />;
     case "checklist":
       return <ChecklistBody artifact={artifact} />;
+    case "campaign":
+      return <CampaignBody artifact={artifact} />;
+    case "character":
+      return <CharacterBody artifact={artifact} />;
     default:
       return <RulesBody artifact={artifact} />;
   }
@@ -189,6 +240,8 @@ export function ArtifactCard({
   const meta = ARTIFACT_KINDS[artifact.kind];
   const chronicle = artifact.kind === "chronicle";
   const story = artifact.kind === "story";
+  const campaign = artifact.kind === "campaign";
+  const character = artifact.kind === "character";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -290,7 +343,11 @@ export function ArtifactCard({
                 ? "Current for this Shared World"
                 : chronicle
                   ? "In the Shared World Chronicle"
-                  : "In tonight’s session"}
+                  : campaign
+                    ? "In your campaigns"
+                    : character
+                      ? "On your roster"
+                      : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -301,7 +358,9 @@ export function ArtifactCard({
                   ? "Keep as Story So Far"
                   : chronicle
                     ? "Add to Chronicle"
-                    : "Save to session"}
+                    : campaign || character
+                      ? "Keep it"
+                      : "Save to session"}
               </Button>
             )}
             <Button

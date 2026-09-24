@@ -64,6 +64,12 @@ export interface HobPanelProps {
   readonly onRename?: (artifact: HobArtifact, title: string) => void;
   readonly onRefine?: (artifact: HobArtifact, chip: string) => void;
   readonly onOpenArtifact?: (artifact: HobArtifact) => void;
+  /**
+   * Which saved cards *Open it* can open. A card kept in an earlier visit has
+   * no row id on its turn to open, so the button is disabled there rather than
+   * doing nothing.
+   */
+  readonly openableArtifactIds?: ReadonlyArray<string>;
   /** Start over. Absent while there is no thread to start over from. */
   readonly onNewThread?: () => void;
   readonly onClose?: () => void;
@@ -86,6 +92,7 @@ export function HobPanel({
   onRename,
   onRefine,
   onOpenArtifact,
+  openableArtifactIds = [],
   onNewThread,
   onClose,
 }: HobPanelProps) {
@@ -169,7 +176,9 @@ export function HobPanel({
                     onRetry={onRetry}
                     onRename={onRename}
                     onRefine={onRefine}
-                    onOpen={onOpenArtifact}
+                    onOpen={
+                      openableArtifactIds.includes(turn.artifact.id) ? onOpenArtifact : undefined
+                    }
                   />
                 );
             }

@@ -51,6 +51,8 @@ import { SessionEvents } from "../repo/SessionEvents.js";
 import { Sessions } from "../repo/Sessions.js";
 import { Spells } from "../repo/Spells.js";
 import {
+  accountBindListing,
+  accountBindOver,
   type AwarenessSlot,
   type CharacterVocabulary,
   coreBindListing,
@@ -696,19 +698,26 @@ export class Hob extends Context.Service<
           ),
 
           /**
-           * Drafting with no campaign — the player's drafting surface over the
-           * core rules, in a thread that belongs to the asker's account alone.
+           * The account's own conversation, with no campaign — two surfaces
+           * over one thread set, told apart by `ask.intent` as `ask`'s are.
+           *
+           * `intent: "character"` is the create screen's composer: the
+           * player's drafting surface over the core rules. Absent is the panel
+           * on every screen outside a campaign or Shared World, which drafts a
+           * character the same way or a campaign (`accountBindOver`).
            *
            * A parallel assembly for `askSharedWorld`'s reason: this surface
-           * holds **no campaign and no Shared World repository**. The
-           * vocabulary is `Options.core` and the spells `Spells.forDraft(null, …)`,
-           * both `coreRulesUsable`, and the toolkit (`coreBindOver`) has no
-           * search to reach anything else with.
+           * holds **no campaign and no Shared World record**. The vocabulary
+           * is `Options.core` and the spells `Spells.forDraft(null, …)`, both
+           * `coreRulesUsable`; the one other read is `Groups.mine`, the names
+           * of the worlds the asker may start a campaign in, which is what
+           * the Shared Worlds list already shows them.
            */
           askDraft: (ask) =>
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const account = actor.accountId;
+              const panel = ask.intent !== "character";
 
               // Resolved before a byte of stream, so a thread id that is not
               // this account's is a 404 and the model is never called.
@@ -729,37 +738,62 @@ export class Hob extends Context.Service<
               const finished = yield* Ref.make("stop");
 
               // Read here, while `CurrentActor` is ambient, for the reason the
-              // campaign vocabulary is: it decides the shape of a tool.
+              // campaign vocabulary is: they decide the shape of a tool.
               const vocabulary = vocabularyOf(yield* repositories.options.core({}));
+              const worlds = panel
+                ? (yield* groups.mine).map(({ sharedWorld }) => ({
+                    id: sharedWorld.id,
+                    name: sharedWorld.name,
+                  }))
+                : [];
               const drafting = {
                 spells: repositories.spells,
                 equipment: repositories.equipment,
               };
-              const system = corePrompt();
+              const system = panel ? accountPrompt() : corePrompt();
               const answering: Stream.Stream<
                 HobEvent,
                 AiError.AiError | Schema.SchemaError,
                 LanguageModel.LanguageModel
-              > = vocabulary.listed
-                ? conversation(
-                    coreBindListing(drafting, actor, proposal, vocabulary),
-                    system,
-                    history,
-                    ask,
-                    finished,
-                    { proposal },
-                  )
-                : conversation(
-                    coreBindOver(drafting, actor, proposal, vocabulary),
-                    system,
-                    history,
-                    ask,
-                    finished,
-                    { proposal },
-                  );
+              > = panel
+                ? vocabulary.listed
+                  ? conversation(
+                      accountBindListing(drafting, actor, proposal, vocabulary, worlds),
+                      system,
+                      history,
+                      ask,
+                      finished,
+                      { proposal },
+                    )
+                  : conversation(
+                      accountBindOver(drafting, actor, proposal, vocabulary, worlds),
+                      system,
+                      history,
+                      ask,
+                      finished,
+                      { proposal },
+                    )
+                : vocabulary.listed
+                  ? conversation(
+                      coreBindListing(drafting, actor, proposal, vocabulary),
+                      system,
+                      history,
+                      ask,
+                      finished,
+                      { proposal },
+                    )
+                  : conversation(
+                      coreBindOver(drafting, actor, proposal, vocabulary),
+                      system,
+                      history,
+                      ask,
+                      finished,
+                      { proposal },
+                    );
 
-              // The player's drafting gates: a draft is wanted unless this
-              // was a question about the one on screen.
+              // The composer's drafting gates: a draft is wanted unless this
+              // was a question about the one on screen. The panel is general
+              // chat, so only an explicit build ask earns the report there.
               return yield* deliver({
                 threadId: thread.id,
                 answerId,
@@ -767,7 +801,7 @@ export class Hob extends Context.Service<
                 proposal,
                 finished,
                 asked: ask.text,
-                surface: "own",
+                surface: panel ? "account" : "own",
                 save: (turn) =>
                   threads
                     .append("account", account, thread.id, turn)
@@ -804,7 +838,7 @@ const deliver = (options: {
   readonly proposal: ProposalSlot;
   readonly finished: Ref.Ref<string>;
   readonly asked: string;
-  readonly surface: "dm" | "own";
+  readonly surface: BuildSurface;
   readonly save: (turn: TurnDraft) => Effect.Effect<unknown, unknown>;
   readonly languageModel: LanguageModel.Service;
   /** The log line's opening words when the answer fails. */
@@ -1382,6 +1416,7 @@ const FENCED = /```[\s\S]*?```/g;
  */
 const BUILD_ARGUMENTS: ReadonlyArray<string> = [
   "creatureId",
+  "partyName",
   "abilityOrder",
   "readAloud",
   "sourceExcerpt",
@@ -1477,6 +1512,22 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "beats",
 ];
 
+/**
+ * The things the account's own panel can build: a campaign and a character.
+ * Deliberately no "game" or "world": *"what game should I run?"* is chat, and
+ * a Shared World is not something this surface makes.
+ */
+const ACCOUNT_NOUNS: ReadonlyArray<string> = [
+  "campaign",
+  "campaigns",
+  "table",
+  "adventure",
+  "character",
+  "characters",
+  "hero",
+  "pc",
+];
+
 /** *"build me something"* names no table and is still a build ask. */
 const VAGUE_NOUNS: ReadonlyArray<string> = ["something", "anything", "one", "it"];
 
@@ -1556,9 +1607,9 @@ const longestAt = (
  * Exported for the tests, which is where the whole of the judgement is visible:
  * the table there is the specification.
  */
-export const askedForABuild = (asked: string): boolean => {
+export const askedForABuild = (asked: string, nouns: ReadonlyArray<string> = DM_NOUNS): boolean => {
   const tokens = words(asked);
-  const wanted = DM_NOUNS.map((noun) => words(noun).join(" ")).filter((noun) => noun !== "");
+  const wanted = nouns.map((noun) => words(noun).join(" ")).filter((noun) => noun !== "");
   for (let at = 0; at < tokens.length; at += 1) {
     const strong = longestAt(MAKE_VERBS, tokens, at);
     const verb = strong ?? longestAt(WANT_VERBS, tokens, at);
@@ -1591,9 +1642,21 @@ export const aQuestionAboutIt = (asked: string): boolean => {
   return opener !== undefined && QUESTION_OPENERS.includes(opener) && asked.trimEnd().endsWith("?");
 };
 
+/**
+ * Whose gates apply: a campaign's creator's panel (`dm`), a drafting composer
+ * (`own`), or the account's own panel (`account`), which is general chat like
+ * the creator's and builds a campaign or a character.
+ */
+export type BuildSurface = "dm" | "own" | "account";
+
 /** The judgement, once. See the block comment above for all four gates. */
-const wouldNotBuild = (reach: "dm" | "own", asked: string, said: string): boolean =>
-  printedTheCall(said) || (reach === "dm" ? askedForABuild(asked) : !aQuestionAboutIt(asked));
+const wouldNotBuild = (surface: BuildSurface, asked: string, said: string): boolean =>
+  printedTheCall(said) ||
+  (surface === "dm"
+    ? askedForABuild(asked)
+    : surface === "account"
+      ? askedForABuild(asked, ACCOUNT_NOUNS)
+      : !aQuestionAboutIt(asked));
 
 /**
  * What the person is told, in their own terms.
@@ -1605,17 +1668,21 @@ const wouldNotBuild = (reach: "dm" | "own", asked: string, said: string): boolea
  * phrasing the person got wrong — and both name the model, which is the same
  * voice `unreadable` already uses.
  */
-const unbuilt = (reach: "dm" | "own"): HobEvent => ({
+const unbuilt = (surface: BuildSurface): HobEvent => ({
   event: "failed",
   data: new HobFailure({
     message:
-      reach === "dm"
-        ? "Hob answered in words and built nothing you can save — this model did not make " +
-          "a usable build tool call, which smaller models often do not. Ask again, or " +
-          "write it yourself; a model that handles tool calls better offers a card more often."
-        : "Hob answered in words and drafted no sheet — this model did not make a usable " +
-          "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
-          "in yourself; you can change any of it afterwards.",
+      surface === "account"
+        ? "Hob answered in words and drafted nothing you can keep — this model did not make " +
+          "a usable drafting call, which smaller models often do not. Ask again, or start " +
+          "it yourself from the Campaigns or Characters screen."
+        : surface === "dm"
+          ? "Hob answered in words and built nothing you can save — this model did not make " +
+            "a usable build tool call, which smaller models often do not. Ask again, or " +
+            "write it yourself; a model that handles tool calls better offers a card more often."
+          : "Hob answered in words and drafted no sheet — this model did not make a usable " +
+            "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
+            "in yourself; you can change any of it afterwards.",
   }),
 });
 
@@ -1811,6 +1878,33 @@ const corePrompt = (): string =>
   ].join("\n");
 
 /**
+ * What Hob is told on **the account's own panel**, outside any campaign.
+ *
+ * It can draft the two things an account makes on its own and read nothing
+ * else, so it says both, says what it cannot see, and keeps the character
+ * drafting rules word for word so the two drafting surfaces cannot drift.
+ */
+const accountPrompt = (): string =>
+  [
+    "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for playing",
+    "tabletop roleplaying games. Right now you are helping somebody outside any campaign.",
+    "",
+    "You can draft two things for them. When they want a new campaign to run, offer it",
+    "with proposeCampaign: a name, a party name if one fits, and a short pitch. When",
+    "they want a character, draft one with proposeCharacter against the core rules, as",
+    "follows.",
+    "",
+    ...DRAFTING,
+    "",
+    "If they ask for a change to a campaign you offered, offer the whole campaign again,",
+    "keeping everything they did not ask you to change.",
+    "",
+    "You cannot see any campaign's record, notes or players from here, and you should",
+    "say so if asked: to plan inside a campaign, they open it and ask there. Do not claim",
+    "to know anybody's campaign. Keep replies to a sentence or two.",
+  ].join("\n");
+
+/**
  * How much of a saved conversation is sent back to the model.
  *
  * A thread is durable now and can run to hundreds of turns; a local model's
@@ -1897,6 +1991,18 @@ const offered = (turn: HobTurn): string | undefined => {
         proposal.sheet.notes === "" ? undefined : `backstory: ${proposal.sheet.notes}`,
       ].filter((part) => part !== undefined);
       return `[You offered the player a character called "${proposal.name}" — ${kept}: ${parts.join("; ")}]`;
+    }
+    // Read back so "make it darker" redrafts the campaign rather than
+    // starting a new one from the first message.
+    case "campaign": {
+      const parts = [
+        proposal.world === null ? "standalone" : `in the Shared World "${proposal.world.name}"`,
+        proposal.partyName === null ? undefined : `party "${proposal.partyName}"`,
+        proposal.description === null ? undefined : `pitch: ${proposal.description}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered a campaign called "${proposal.name}" — ${
+        turn.acceptedAt === null ? "not yet kept" : "kept"
+      }: ${parts.join("; ")}]`;
     }
     case "sharedWorldHistory":
       return `[You offered the Shared World a Chronicle entry — ${kept}: ${proposal.body}]`;

@@ -309,10 +309,14 @@ export function useCharacterDraft(campaignId: CampaignId | null, enabled: boolea
         // question of every conversation.
         const stream =
           campaignId === null
-            ? // No campaign: the account's own drafting surface, which drafts
-              // and does nothing else, so there is no `intent` to name.
+            ? // No campaign: the account's own conversation. `intent` says this
+              // is the composer rather than the panel, whose toolkit would also
+              // offer a campaign this screen has no card for.
               yield* client.meHob.ask({
-                payload: continuing === undefined ? { text } : { threadId: continuing, text },
+                payload:
+                  continuing === undefined
+                    ? { text, intent: "character" }
+                    : { threadId: continuing, text, intent: "character" },
               })
             : yield* client.hob.ask({
                 params: { campaignId },

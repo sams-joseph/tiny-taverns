@@ -90,6 +90,27 @@ export const CampaignCreate = Schema.Struct({
 });
 export type CampaignCreate = typeof CampaignCreate.Type;
 
+/**
+ * The create payload **both composers of a campaign** write: the form
+ * (`NewCampaignDialog`) and Hob's accept (`Proposals.acceptDraft`). One
+ * function, so the two cannot disagree about what a new campaign starts with.
+ * Each prose field is trimmed, and a blank one is omitted rather than sent, so
+ * the column default applies and optional keys stay optional.
+ */
+export const campaignCreateFrom = (draft: {
+  readonly name: string;
+  readonly partyName?: string | null | undefined;
+  readonly description?: string | null | undefined;
+}): CampaignCreate => {
+  const partyName = draft.partyName?.trim() ?? "";
+  const description = draft.description?.trim() ?? "";
+  return {
+    name: draft.name.trim(),
+    ...(partyName === "" ? {} : { partyName }),
+    ...(description === "" ? {} : { description }),
+  };
+};
+
 export const CampaignUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   partyName: Schema.optional(Schema.NullOr(Schema.String)),

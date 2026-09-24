@@ -984,10 +984,11 @@ const HobLive = HttpApiBuilder.group(
 );
 
 /**
- * Hob drafting a character with no campaign — `HobLive`'s five with one
- * reach, the caller's own account (`"account"`), so there is no proof to
- * resolve and no two sets to tell apart. A kept draft starts the portrait
- * after the accept commits, as `createCoreCharacter` does.
+ * Hob with no campaign — `HobLive`'s five with one reach, the caller's own
+ * account (`"account"`), so there is no proof to resolve and no two sets to
+ * tell apart. A kept character starts its portrait after the accept commits,
+ * as `createCoreCharacter` does, and a kept campaign its cover, as
+ * `campaigns.create` does.
  */
 const MeHobLive = HttpApiBuilder.group(
   TavernsApi,
@@ -1015,14 +1016,24 @@ const MeHobLive = HttpApiBuilder.group(
       )
       .handle("accept", ({ params }) =>
         proposals.acceptDraft(params.threadId, params.turnId).pipe(
-          Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> =>
-            accepted.accepted === "character"
-              ? Effect.map(images.drawCharacter(accepted.character), (character) => ({
+          Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> => {
+            switch (accepted.accepted) {
+              case "character":
+                return Effect.map(images.drawCharacter(accepted.character), (character) => ({
                   ...accepted,
                   character,
-                }))
-              : Effect.succeed(accepted),
-          ),
+                }));
+              // A kept campaign is the third way one is made, so it starts the
+              // cover exactly as `campaigns.create` does, after the commit.
+              case "campaign":
+                return Effect.map(images.drawCampaign(accepted.campaign), (campaign) => ({
+                  ...accepted,
+                  campaign,
+                }));
+              default:
+                return Effect.succeed(accepted);
+            }
+          }),
         ),
       );
   }),

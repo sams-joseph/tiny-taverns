@@ -4,17 +4,14 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Four kinds of artifact are produced here** — `encounter`, `note`, `beat`
- * and `chronicle`. The first three are what campaign Hob can materialise; the
- * last is Shared World Hob's one proposal. The rest of the union is the delivered specimen set, held
- * by `hob.fixtures.ts` for the tests: nothing produces an `npc`, a `checklist` or a `rules`
- * card, because there is no table for one to be saved into and a *Save to
- * session* button that could only fail is worse than a kind that cannot be
- * expressed.
- *
- * The fourth accept target — a **character**, which a player has Hob draft — is
- * deliberately not one of these. It is offered into a player's own thread, this
- * panel is the DM's, and the two are disjoint by predicate; see `artifactFrom`.
+ * **Seven kinds of artifact are produced here.** `encounter`, `note`
+ * (and read-aloud) and `beat` are what campaign Hob can materialise; `chronicle`
+ * and `story` are Shared World Hob's; `campaign` and `character` are what the
+ * account's own panel drafts outside any campaign. The rest of the union is the
+ * delivered specimen set, held by `hob.fixtures.ts` for the tests: nothing
+ * produces an `npc`, a `checklist` or a `rules` card, because there is no table
+ * for one to be saved into and a *Save to session* button that could only fail
+ * is worse than a kind that cannot be expressed.
  *
  * It is written as data rather than as JSX because the delivered prototype
  * hard-codes each artifact body inline (`ChatParts.jsx`'s `EncounterBody`,
@@ -32,11 +29,11 @@ import type { IconName } from "@taverns/ui";
  * cannot express them is better than a card that renders a badge over an empty
  * body. They come back when the designers draw them.
  *
- * **`note` and `beat` are ours, and are the only two additions.** The delivery
- * has no entry for either, and both are things Hob can now actually offer to
- * save — a plain prep note and a line about what happened at the table. Both
- * take glyphs the delivery already asked for (`pencil`, `flag`), so the icon
- * table did not grow.
+ * **`note`, `beat`, `campaign` and `character` are ours.** The delivery has
+ * no entry for any of them, and each is something Hob can actually offer to
+ * keep. All four take glyphs the delivery already asked for (`pencil`, `flag`,
+ * `layers` — the Campaigns item on the global row — and `user-round`), so the
+ * icon table did not grow.
  */
 export const ARTIFACT_KINDS = {
   encounter: { icon: "swords", label: "Encounter", variant: "default" },
@@ -48,6 +45,8 @@ export const ARTIFACT_KINDS = {
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
+  campaign: { icon: "layers", label: "Campaign", variant: "default" },
+  character: { icon: "user-round", label: "Character", variant: "magic" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -114,6 +113,21 @@ export type HobArtifact =
       readonly voice: string;
     })
   | (ArtifactBase & { readonly kind: "checklist"; readonly items: ReadonlyArray<HobChecklistItem> })
+  | (ArtifactBase & {
+      readonly kind: "campaign";
+      /** The Shared World it will be made in; absent is a standalone campaign. */
+      readonly world?: string;
+      readonly partyName?: string;
+      /** The pitch its one cover is drawn from, when Hob wrote one. */
+      readonly pitch?: string;
+    })
+  | (ArtifactBase & {
+      readonly kind: "character";
+      /** Hob's reasons, one line each — the drafting screen's *What Hob did*. */
+      readonly rationale: ReadonlyArray<string>;
+      /** The line the portrait is drawn from, when Hob wrote one. */
+      readonly appearance?: string;
+    })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
 /**
@@ -126,10 +140,7 @@ export type HobArtifact =
  * absent because no shipped column holds a creature's XP. The rule is the one
  * every screen here follows — do not render a field the API does not have.
  */
-export const artifactFrom = (
-  turnId: AssistantTurnId,
-  proposal: HobProposal,
-): HobArtifact | undefined => {
+export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): HobArtifact => {
   switch (proposal.target) {
     case "encounter": {
       const creatures = proposal.roster.reduce((total, line) => total + line.count, 0);
@@ -178,23 +189,40 @@ export const artifactFrom = (
         chips: [],
         text: proposal.text,
       };
+    case "campaign":
+      return {
+        id: turnId,
+        kind: "campaign",
+        title: proposal.name,
+        meta: proposal.world === null ? "Standalone campaign" : `In ${proposal.world.name}`,
+        chips: [],
+        ...(proposal.world === null ? {} : { world: proposal.world.name }),
+        ...(proposal.partyName === null ? {} : { partyName: proposal.partyName }),
+        ...(proposal.description === null ? {} : { pitch: proposal.description }),
+      };
     /**
-     * **A character draft has no card here, and that is not an omission.**
-     *
-     * `HobProposal` grew a fourth member when the captain reversed *players do
-     * not talk to Hob*, so this switch has to be total — but a `character` is
-     * a player's own draft, offered by the player toolkit into a player's own
-     * thread, and this panel is the DM's. The two conversations are disjoint by
-     * predicate (`repo/visibility.ts`'s `conversationReachable`), so nothing
-     * reachable from here can produce one.
-     *
-     * Nor would drawing it as a generic artifact be right if one arrived: the
-     * delivered `ChatParts.jsx` has no character body, and *Save to session*
-     * means something else. The drafting surface draws its own card, on the
-     * screen the draft belongs to — `characters/DraftCard.tsx`.
+     * A character the account's panel drafted. The create screen's composer
+     * draws its own, fuller card (`characters/DraftCard.tsx`) beside the form
+     * it accelerates; here it is a card among the conversation's, with the
+     * descriptor and Hob's reasons, and the sheet is one *Open it* away.
      */
-    case "character":
-      return undefined;
+    case "character": {
+      const descriptor = [proposal.race, proposal.className]
+        .filter((part): part is string => part !== null)
+        .join(" ");
+      const appearance = proposal.sheet.story?.appearance;
+      return {
+        id: turnId,
+        kind: "character",
+        title: proposal.name,
+        meta: [descriptor, `Level ${String(proposal.level ?? 1)}`]
+          .filter((part) => part !== "")
+          .join(" · "),
+        chips: [],
+        rationale: proposal.rationale,
+        ...(appearance === undefined ? {} : { appearance }),
+      };
+    }
   }
 };
 

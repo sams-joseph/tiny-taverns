@@ -1,4 +1,5 @@
 import {
+  campaignCreateFrom,
   type AssistantThreadId,
   type AssistantTurnId,
   type CampaignId,
@@ -66,8 +67,11 @@ import type { ConversationReach } from "./visibility.js";
  * no role check in `materialise` because there is nothing for one to refuse.
  *
  * `acceptDraft` is the same yes for a thread with no campaign (`"account"`):
- * it reaches only the actor's own thread, and a character is the one thing it
- * can make, through `Characters.createCore` against the core rules.
+ * it reaches only the actor's own thread, and makes the two things such a
+ * thread can hold: a character, through `Characters.createCore` against the
+ * core rules, or a campaign, through `Campaigns.createStandalone` or
+ * `Campaigns.create` with the payload `campaignCreateFrom` builds for the form
+ * too. The asker becomes the campaign's creator, exactly as by the form.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
@@ -79,9 +83,9 @@ const alreadyAccepted = new Conflict({
   message: "that is already in the campaign",
 });
 
-/** The same, for a character kept from a drafting thread with no campaign. */
+/** The same, for a character or a campaign kept from the account's own thread. */
 const alreadyKept = new Conflict({
-  message: "that character is already kept",
+  message: "that is already kept",
 });
 
 /**
@@ -241,6 +245,15 @@ export class Proposals extends Context.Service<
               (character) => ({ accepted: "character" as const, character }),
             );
 
+          case "campaign":
+            // Only the account's own panel offers one, into a thread no
+            // campaign reaches; the account accept below is where it is kept.
+            return Effect.fail(
+              new Conflict({
+                message: "that is a new campaign — keep it from your own Hob conversation",
+              }),
+            );
+
           case "sharedWorldHistory":
           case "sharedWorldSummary":
             // Only a group thread ever carries one — the group toolkit is the
@@ -298,19 +311,44 @@ export class Proposals extends Context.Service<
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.accepted_at !== null) return yield* alreadyKept;
-                if (turn.proposal.target !== "character") {
-                  // Only the core drafting toolkit writes into these threads and
-                  // it proposes nothing else; the refusal is the same guard the
-                  // two accepts above keep against each other's members.
+                const from = { assistantTurnId: turnId };
+                const proposal = turn.proposal;
+                const accepted: HobAccepted | undefined =
+                  proposal.target === "character"
+                    ? {
+                        accepted: "character" as const,
+                        character: yield* characters.createCore(ownCreateFrom(proposal), from),
+                      }
+                    : proposal.target === "campaign"
+                      ? {
+                          accepted: "campaign" as const,
+                          // The world was one the asker could create in when
+                          // Hob offered it; the ordinary create asks again, so
+                          // a world left or archived since is its `NotFound`.
+                          campaign:
+                            proposal.world === null
+                              ? yield* campaigns.createStandalone(
+                                  campaignCreateFrom(proposal),
+                                  from,
+                                )
+                              : yield* campaigns.create(
+                                  proposal.world.id,
+                                  campaignCreateFrom(proposal),
+                                  from,
+                                ),
+                        }
+                      : undefined;
+                if (accepted === undefined) {
+                  // Only the account's own toolkits write into these threads
+                  // and they propose nothing else; the refusal is the same
+                  // guard the two accepts above keep against each other's
+                  // members.
                   return yield* new Conflict({
                     message: "that belongs to a campaign or a Shared World — accept it there",
                   });
                 }
-                const character = yield* characters.createCore(ownCreateFrom(turn.proposal), {
-                  assistantTurnId: turnId,
-                });
                 yield* markAccepted(sql, turnId);
-                return { accepted: "character" as const, character };
+                return accepted;
               }),
             ),
           ),
