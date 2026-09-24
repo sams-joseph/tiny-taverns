@@ -691,17 +691,25 @@ describe("a Shared World's hero", () => {
   });
 
   // The same rule as the campaign's hero: the header rises by the overlap and
-  // the actions are padded down by it, so they never sit on the picture.
+  // the actions sit in the row under the name's block, so never on the picture.
   for (const description of [null, "Reed marshes at dusk."])
     it(`keeps its actions below a drawn cover ${description ? "with" : "without"} a description`, async () => {
       worldWith({ image: drawnWorldCover, description });
       await renderHero();
       await waitFor(() => expect(overlaps()).toBe(true));
       const header = hero()!.querySelector("header")!;
-      expect(header).toHaveClass("items-end");
+      // The name's block rises over the picture and is at least the overlap
+      // tall, so the row under it, where the actions are, starts below it.
+      expect(header.querySelector("h1")!.parentElement).toHaveClass(
+        "group-has-data-picture/hero:min-h-overview-overlap",
+      );
       const actions = header.querySelector<HTMLElement>("[data-slot=overview-hero-actions]")!;
-      expect(actions.parentElement).toBe(header);
-      expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
+      // The description's slot shares the actions' wrapping row, so it is never
+      // shorter than they are while they sit beside it, pitch or none.
+      const slot = header.querySelector<HTMLElement>("[data-slot=overview-hero-description]")!;
+      expect(slot.parentElement).toBe(actions.parentElement);
+      expect(slot.parentElement).toHaveClass("flex", "flex-wrap");
+      expect(slot).toHaveTextContent(description ?? /^$/);
       // Capped at the inset header's width, so an owner's three buttons wrap
       // inside the page's gutter at phone width rather than spilling past it.
       expect(actions).toHaveClass("max-w-full");
