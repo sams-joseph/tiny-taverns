@@ -477,6 +477,40 @@ describe("deleting an encounter", () => {
   });
 });
 
+describe("deleting a campaign permanently", () => {
+  it("takes its encounters' maps and pictures, queues the files, and keeps the spend", async () => {
+    const rue = await person("Rue");
+    const doomed = await campaignOf(rue, "Doomed Table");
+    const encounter = await encounterAt(rue, doomed, { name: "Last", setting: "A burning jetty" });
+    await settled();
+    const map = await mapOf(rue, doomed, encounter.id);
+    const record = (await recordOf(map.id))!;
+    expect(record.state).toBe("ready");
+    const spent = await spentBy(rue);
+
+    await as(rue.token, (client) =>
+      client.campaigns.deletePermanently({ params: { campaignId: doomed } }),
+    );
+    const left = await sql(
+      (sql) => sql<{ readonly maps: number; readonly images: number }>`
+        select
+          (select count(*)::int from battle_map where campaign_id = ${doomed}) as maps,
+          (select count(*)::int from battle_map_image where campaign_id = ${doomed}) as images
+      `,
+    );
+    expect(left[0]).toEqual({ maps: 0, images: 0 });
+    const queued = await sql(
+      (sql) => sql<{ readonly count: number }>`
+        select count(*)::int as count from storage_deletion where prefix = ${record.storage_prefix}
+      `,
+    );
+    expect(queued[0]?.count).toBe(1);
+    await run(Effect.flatMap(HobImages, (worker) => worker.drainDeletions));
+    for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);
+    expect(await spentBy(rue)).toBe(spent);
+  });
+});
+
 describe("the grid", () => {
   let encounterId: EncounterId;
 
