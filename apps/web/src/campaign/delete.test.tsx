@@ -7,7 +7,6 @@ import {
   campaignId,
   sharedWorldDetails,
   worldId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
@@ -26,7 +25,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const campaignDelete = `/campaigns/${campaignId}/permanent`;
 const worldDelete = `/worlds/${worldId}/permanent`;
@@ -43,7 +41,6 @@ const noNight = () =>
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
   server.routes.set(`DELETE ${campaignDelete}`, { status: 204, body: undefined });
   server.routes.set(`DELETE ${worldDelete}`, { status: 204, body: undefined });
 });

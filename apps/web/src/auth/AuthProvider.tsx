@@ -1,11 +1,8 @@
 import { ClerkProvider, useAuth } from "@clerk/react";
 import { useEffect, useMemo, type PropsWithChildren, type ReactNode } from "react";
+import { ClerkRequired } from "./ClerkRequired";
 import { publishableKey } from "./config";
-import {
-  forgetHostedSession,
-  publishHostedSession,
-  useSignOutForgetsMachineToken,
-} from "./credential";
+import { forgetHostedSession, publishHostedSession } from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
 import { hostedAuthNavigation } from "./navigation";
 import { router } from "../routes";
@@ -13,36 +10,15 @@ import { router } from "../routes";
 const navigation = hostedAuthNavigation(router.history);
 
 /**
- * Signing out forgets the pasted machine token as well.
- *
- * A component rather than a call in `HostedSessionScope` itself, because the
- * hook reads `HostedSessionContext` and the scope is the thing *providing* it —
- * called there it would read the context one level up, which is the
- * unconfigured default, and would then never do anything at all. Rendered as a
- * child it sees the session that was just published.
- */
-function SignOutForgetsMachineToken(): null {
-  useSignOutForgetsMachineToken();
-  return null;
-}
-
-/**
- * Publishes a hosted session to the app, and hangs the rules that follow from
- * one off it.
- *
- * There is exactly one such rule today and it is the reported sign-out defect:
- * signing out has to forget the pasted machine token too, or the app never
- * returns to the marketing page. It hangs here rather than on a screen for the
- * reason `SignInSurface` hangs in the shell — a sign-out can happen from any
- * page, through the vendor's own account menu, and a rule each screen had to
- * remember to mount is one a new screen will forget.
+ * Publishes a hosted session to the app: into React through the context, and
+ * out of it through `publishHostedSession` for the atom client layer.
  *
  * **Split out from the bridge below so the composition is testable without the
- * vendor.** The bridge is Clerk's `useAuth()` and cannot be mounted in jsdom;
- * this is the part worth asserting on, and a test gives it a `HostedSession` of
- * its own and flips it. Every consumer, including the signed-out gate, is then
- * looking at exactly the tree the app builds rather than at one a test wired by
- * hand.
+ * vendor.** The bridge is Clerk's `useAuth()` and cannot be mounted in jsdom; a
+ * test gives this a `HostedSession` of its own (`test/session.ts`), and so does
+ * the layout suite's stand-in (`e2e/stub/StubAuthProvider.tsx`). Every consumer,
+ * including the signed-out gate, is then looking at exactly the tree the app
+ * builds rather than at one wired by hand.
  */
 export function HostedSessionScope({
   session,
@@ -58,12 +34,7 @@ export function HostedSessionScope({
   publishHostedSession(session);
   useEffect(() => forgetHostedSession, []);
 
-  return (
-    <HostedSessionContext value={session}>
-      <SignOutForgetsMachineToken />
-      {children}
-    </HostedSessionContext>
-  );
+  return <HostedSessionContext value={session}>{children}</HostedSessionContext>;
 }
 
 /**
@@ -105,15 +76,13 @@ function HostedSessionBridge({ children }: PropsWithChildren): ReactNode {
 }
 
 /**
- * Mounts the hosted identity provider — but only when one is configured.
+ * Mounts the hosted identity provider, which the app cannot run without.
  *
- * The conditional is the load-bearing part, and it mirrors the server's
- * `IdentityProvider.disabled`. Clerk's own quickstart prints a hard
- * `throw new Error("Add your Clerk Publishable Key")` here; that single line
- * is the difference between an opt-in dependency and a mandatory one, and it
- * would make `pnpm -F web dev` fail for anyone who has never opened the Clerk
- * dashboard. With no key the app renders exactly as it did before any of this
- * existed, and every consumer falls through to `NO_HOSTED_SESSION`.
+ * Clerk is a prerequisite: the browser signs in through it and has no other
+ * credential. With no publishable key the app is `ClerkRequired`, a notice
+ * saying what to configure, rather than a sign-in that cannot open. (Machine
+ * tokens still authenticate on the server, for its tests and scripts; no
+ * browser path uses one.)
  *
  * The branch is taken on an environment variable inlined at build time, so it
  * cannot flip between renders and the hook order below it is stable.
@@ -122,7 +91,7 @@ export function AuthProvider({ children }: PropsWithChildren): ReactNode {
   const key = publishableKey();
 
   if (key === undefined) {
-    return <>{children}</>;
+    return <ClerkRequired />;
   }
 
   return (

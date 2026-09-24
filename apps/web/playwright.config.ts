@@ -19,7 +19,7 @@ export default defineConfig({
   },
   projects: [
     /**
-     * The shell's geometry over the stub API, signed in with a machine token.
+     * The shell's geometry over the stub API, signed in with a stand-in session.
      * Signing in through Clerk against a real server is the authenticated
      * suite's, in its own config (`playwright.auth.config.ts`).
      */

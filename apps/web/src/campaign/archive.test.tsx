@@ -6,7 +6,6 @@ import {
   campaign,
   campaignId,
   worldId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
@@ -33,7 +32,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const shelf = "/me/campaigns/archived";
 
@@ -70,7 +68,6 @@ const paths = (method: string) =>
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 /** The campaign's own archive: its Overview's actions menu. */

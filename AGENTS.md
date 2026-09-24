@@ -63,7 +63,7 @@ The commonest defect here is a change that works on the path you tested and is m
 ## Running and verifying
 
 - `pnpm db:up`, then `pnpm dev`. Imports run in the order `README.md` gives; a fresh database needs them all. The server logs one line per optional subsystem at boot (hosted sign-in, Hob, storage, Hob-drawn images) saying ON or OFF; believe the line, not the env file.
-- A machine token from `pnpm -F server token:issue` pasted on the web app's `/server` page is the credential a build without Clerk has. Hosted sign-in and Hob are opt-in; unset is a supported mode for both and the suite runs with both off.
+- Clerk is a prerequisite for running the app (`README.md`, "Clerk"); the browser has no other way in. To check something in a real browser, sign in as the dev instance's `+clerk_test` users the way `e2e:auth` does (`apps/web/e2e/auth/support/`) and never create, change or delete a Clerk user. Machine tokens (`pnpm -F server token:issue`) are server-side only, for tests, scripts and `curl`. Hob is opt-in; the server suite runs with Clerk and Hob both off.
 - Smallest proof that the change works: `vitest run <file>` in the package you touched, plus `typecheck` for that package. CI runs `turbo run lint typecheck test build`, `pnpm format:check` (root Prettier is not a turbo task) and, in its own job, `pnpm -F web e2e` and `pnpm -F web e2e:auth` (Clerk sign-in against the real server; needs the dev instance's keys and `pnpm db:up`, and skips without the keys).
 - The server suite needs Postgres, is capped at eight workers, and each file owns a database. Both suites carry a 60s test budget because they are load-sensitive; a timeout under load is not the same failure as a pool refusal.
 - Backend behaviour changes ship with a focused test. Boundary changes get a test that drives the refused path with a real actor minted the shipped way (`test/support/actors.ts`), not raw SQL.
@@ -88,7 +88,7 @@ Never open one unless asked. Titles are short and imperative, matching the histo
 
 ## How it works
 
-The web client sends requests through a client derived from `TavernsApi`. `Authorization` resolves one actor per request from either a machine token or a hosted session token. Handlers call repository methods that require `CurrentActor` and filter in SQL. Live play writes through to Postgres and rings a contentless doorbell; clients re-read through the ordinary API. Hob is a tool loop over those same repository methods with a proposal column between it and the record. Full vocabulary: `docs/internals/glossary.md`.
+The web client sends requests through a client derived from `TavernsApi`. `Authorization` resolves one actor per request from either a hosted session token (the browser) or a machine token (tests and scripts). Handlers call repository methods that require `CurrentActor` and filter in SQL. Live play writes through to Postgres and rings a contentless doorbell; clients re-read through the ordinary API. Hob is a tool loop over those same repository methods with a proposal column between it and the record. Full vocabulary: `docs/internals/glossary.md`.
 
 ## Where code lives
 

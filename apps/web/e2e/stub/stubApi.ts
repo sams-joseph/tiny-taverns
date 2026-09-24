@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 
 /**
@@ -25,10 +26,12 @@ export const COVER_PITCH = "Four strangers walk a salt caravan to the coast.";
  */
 const shims: Record<string, string> = {
   "\0e2e:vitest": "export const vi = new Proxy({}, { get: () => () => undefined });",
-  "\0e2e:renderRoute": `export const TEST_MACHINE_TOKEN = "a-test-token";
-export const renderAt = () => { throw new Error("renderAt is not available to the stub API"); };`,
+  "\0e2e:renderRoute":
+    'export const renderAt = () => { throw new Error("renderAt is not available to the stub API"); };',
   "\0e2e:auth": "export const HostedSessionScope = ({ children }) => children;",
 };
+
+const STUB_AUTH_PROVIDER = fileURLToPath(new URL("StubAuthProvider.tsx", import.meta.url));
 
 interface Answer {
   readonly status: number;
@@ -42,8 +45,13 @@ export function stubApi(): Plugin {
     name: "e2e-stub-api",
     // Ahead of Vite's own resolver, which would otherwise answer first.
     enforce: "pre",
-    resolveId(id, _importer, options) {
-      if (options?.ssr !== true) return undefined;
+    resolveId(id, importer, options) {
+      // The browser's one substitution: `main.tsx` mounts the stand-in session
+      // instead of Clerk (`StubAuthProvider.tsx`).
+      if (options?.ssr !== true)
+        return id === "./auth/AuthProvider" && importer?.endsWith("/src/main.tsx") === true
+          ? STUB_AUTH_PROVIDER
+          : undefined;
       if (id === "vitest") return "\0e2e:vitest";
       if (id.endsWith("/test/renderRoute")) return "\0e2e:renderRoute";
       if (id.endsWith("/auth/AuthProvider")) return "\0e2e:auth";

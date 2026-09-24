@@ -16,9 +16,7 @@ import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { readMachineToken } from "../auth/credential";
 import { useHostedSession } from "../auth/hostedSession";
-import { publishableKey } from "../auth/config";
 import { SignInSurface } from "../auth/SignInSurface";
 import { dayOf } from "../chronicle/format";
 import { TopBar } from "../shell/TopBar";
@@ -131,12 +129,6 @@ export function JoinScreen() {
   const { busy, failure, submit } = useMutation();
   const [redeemed, setRedeemed] = useState<InviteRedeemed | undefined>();
 
-  // Both credential kinds, the same pair `auth/credential.ts` resolves per call
-  // — a hosted session when there is one, otherwise the machine token the
-  // Server panel wrote. A developer with no Clerk key can still follow a link.
-  const credentialled = signedIn || readMachineToken() !== "";
-  const hostedAvailable = publishableKey() !== undefined;
-
   const join = async () => {
     // The tables this account sits at, which is the whole of what joining
     // changes for the person doing it. The DM's invitation list moves too, and
@@ -195,22 +187,19 @@ export function JoinScreen() {
                 This invitation is good until {dayOf(preview.expiresAt)}, and only once.
               </p>
 
-              {credentialled ? (
+              {signedIn ? (
                 <Button disabled={busy} onClick={() => void join()}>
                   {busy ? "Taking your seat…" : "Take your seat"}
                 </Button>
               ) : (
                 <div className="flex flex-col items-start gap-3">
                   <p className="max-w-measure text-body-s leading-body text-muted-foreground">
-                    {hostedAvailable
-                      ? "Sign in, or make an account — it takes a moment, and it is what the seat is kept under."
-                      : "Hosted sign-in is not configured here, so take a machine token from Components → Server first."}
+                    Sign in, or make an account — it takes a moment, and it is what the seat is kept
+                    under.
                   </p>
                   {/* Clerk's own chrome, unthemed on purpose — `SignInSurface`
                       says why at length, and this page is exactly the audience
-                      that decision is now load-bearing for. It renders nothing
-                      at all when no publishable key is configured, which is what
-                      keeps this page working for a developer who has none. */}
+                      that decision is now load-bearing for. */}
                   <SignInSurface />
                 </div>
               )}

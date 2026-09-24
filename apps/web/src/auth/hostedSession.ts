@@ -6,14 +6,17 @@ import { createContext, use } from "react";
  * Deliberately vendor-free, and for the same reason `IdentityProvider` is on
  * the server: nothing below this line should be able to tell which vendor is
  * behind it. `AuthProvider` is the only file in `apps/web` that imports
- * `@clerk/react` for state, and `SignInSurface` the only one that imports it
- * for chrome. Everything else — `ServerPanel` included — talks to this shape.
+ * `@clerk/react` for state, and `SignInSurface` and `StartCta` the only ones
+ * that import it for chrome. Everything else talks to this shape.
  *
- * The three states are distinct on purpose:
+ * The states are distinct on purpose:
  *
- *  - `configured: false` — no publishable key. Not an error, and not a
- *    degraded mode: it is how a developer who has never opened the vendor's
- *    dashboard runs the app. The whole surface simply is not offered.
+ *  - `configured: false` — no vendor provider is mounted above. The running
+ *    app never renders in this state (with no publishable key `AuthProvider`
+ *    shows the setup message instead); it is what a component rendered with no
+ *    provider sees — a screen in a test, or the layout suite's stand-in
+ *    session — and it is why vendor chrome such as `SignInSurface` renders
+ *    nothing there.
  *  - `configured: true, signedIn: false` — sign-in is available, nobody has.
  *  - `signedIn: true` — `fetchToken` can produce a credential.
  *
@@ -32,7 +35,7 @@ export interface HostedSession {
    * **This exists for the signed-out gate and nothing else** (see
    * `marketing/SignedOutGate.tsx`). Everything else in the app treats "not
    * signed in yet" and "not signed in" alike, because both mean the same thing
-   * to a request: fall through to the machine token. The gate cannot, because
+   * to a request: no credential. The gate cannot, because
    * it renders a whole different page for the two, and a `signedIn: false`
    * that has not settled would paint the marketing homepage over the app for
    * as long as the vendor's script takes to answer.
@@ -58,8 +61,7 @@ export interface HostedSession {
  * The unconfigured session: no provider, nobody signed in, no token.
  *
  * This is the context default, which is what makes every consumer work when
- * it is rendered with no provider above it at all — a screen in a test, or
- * the whole app for a developer with no publishable key.
+ * it is rendered with no provider above it at all, as a screen in a test is.
  */
 export const NO_HOSTED_SESSION: HostedSession = {
   configured: false,

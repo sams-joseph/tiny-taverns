@@ -18,24 +18,17 @@ const READY =
   '[data-slot="page-header"], [data-slot="page-heading"], [data-slot="overview-hero"] h1';
 
 /**
- * How the browser holds a credential. `machine-token` is what a build without
- * hosted sign-in has (a token pasted on `/server`); `none` is signed out. A
- * hosted session is the authenticated suite's (`e2e/auth/`), which signs in
- * through Clerk against a real server rather than through this fixture.
+ * The page is signed in by the stub server's stand-in session
+ * (`e2e/stub/StubAuthProvider.tsx`), with no Clerk and no token. Signing in
+ * through Clerk against a real server is the authenticated suite's
+ * (`e2e/auth/`).
  */
-export type Credential = "machine-token" | "none";
-
 export class App {
-  constructor(
-    readonly page: Page,
-    private readonly credential: Credential,
-  ) {}
+  constructor(readonly page: Page) {}
 
   /** Load a screen from cold, over its scenario's wire, and wait for it to settle. */
   async open(screen: Screen): Promise<void> {
     await this.page.setExtraHTTPHeaders({ [SCENARIO_HEADER]: screen.scenario });
-    if (this.credential === "machine-token")
-      await this.page.addInitScript(() => localStorage.setItem("taverns.token", "e2e-token"));
     await this.page.goto(screen.path);
     await this.settle();
   }
@@ -110,15 +103,14 @@ export async function box(locator: Locator) {
  * gap in the fixtures rather than the layout, and matters only when the screen
  * then drew a failure notice (every layout test asserts it did not).
  */
-export const test = base.extend<{ credential: Credential; app: App }>({
-  credential: ["machine-token", { option: true }],
-  app: async ({ page, credential }, use, testInfo) => {
+export const test = base.extend<{ app: App }>({
+  app: async ({ page }, use, testInfo) => {
     const unanswered = new Set<string>();
     page.on("response", (response) => {
       const key = response.headers()[UNANSWERED_HEADER];
       if (key !== undefined) unanswered.add(key);
     });
-    await use(new App(page, credential));
+    await use(new App(page));
     // A route still answering a re-read (the Hob-drawing poll) when the page
     // closes would otherwise fail the test after its last assertion.
     await page.unrouteAll({ behavior: "ignoreErrors" });

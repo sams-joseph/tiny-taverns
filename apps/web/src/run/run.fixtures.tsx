@@ -3,7 +3,6 @@ import { renderAt } from "../test/renderRoute";
 import { EncounterRunId, HobDirectResourceUpdateId, SessionId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { type HostedSession } from "../auth/hostedSession";
 import {
   brannoc,
   campaign,
@@ -46,6 +45,7 @@ export {
   playerCazril,
   session,
 } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 export const sessionId = Schema.decodeSync(SessionId)(sessionIdRaw);
 export const runId = Schema.decodeSync(EncounterRunId)(runIdRaw);
@@ -350,13 +350,6 @@ export const installRunServer = (): RunStubServer => {
   return server;
 };
 
-const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 /**
  * Annotated `void`: Testing Library's `RenderResult` names a type inside
  * `@testing-library/dom`, which pnpm's isolated layout puts out of reach of an
@@ -364,7 +357,7 @@ const noSession: HostedSession = {
  */
 export const renderRunner = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 

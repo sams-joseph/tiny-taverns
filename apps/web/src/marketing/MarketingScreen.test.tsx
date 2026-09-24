@@ -1,7 +1,6 @@
 import { cleanup, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { renderAt } from "../test/renderRoute";
-import { installMemoryStorage } from "../test/storage";
 
 /**
  * The homepage itself: what it says, where its links go, and — the half worth
@@ -16,15 +15,9 @@ import { installMemoryStorage } from "../test/storage";
  * external attribution, since a wrong link still looks like a link.
  */
 
-installMemoryStorage();
-
-beforeEach(() => {
-  window.localStorage.clear();
-});
-
 afterEach(cleanup);
 
-/** The homepage is what `/` is for a reader with no credential of any kind. */
+/** The homepage is what `/` is for a reader who is not signed in. */
 const renderHome = () => renderAt("/", undefined, "none");
 
 describe("the marketing homepage", () => {
@@ -189,25 +182,16 @@ describe("the marketing homepage", () => {
   });
 
   /**
-   * The wrinkle `StartCta.tsx` had to answer, in the state this suite runs in:
-   * `vite.config.ts` pins the publishable key empty, so hosted sign-in is
-   * unconfigured here exactly as it is on a developer's machine. The button
-   * must not be missing (a page built around a call to action reads as broken
-   * without one) and must not be dead — so it points at the one credential this
-   * build genuinely has, and says so.
+   * Clerk's sign-up is the call to action, and every Clerk component throws
+   * without `ClerkProvider` above it — which jsdom never has, since
+   * `vite.config.ts` pins the publishable key empty. With no vendor the button
+   * is absent rather than dead, and nothing offers a token in its place.
    */
-  it("offers the developer token when there is no hosted sign-up to open", async () => {
+  it("offers no sign-up and no token where no vendor is mounted", async () => {
     await renderHome();
 
-    // A `Button` rendering an `<a>` keeps the `button` role — that is what
-    // `nativeButton={false}` is for — so this asks for a button and reads its
-    // `href`, which is the shape every route-as-a-button assertion here takes.
-    const cta = screen.getAllByRole("button", { name: /Set up a developer token/ });
-    expect(cta).toHaveLength(3);
-    for (const button of cta) {
-      expect(button).toHaveAttribute("href", "/server");
-    }
-    expect(screen.getByText(/Hosted sign-in is not configured on this build/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start a campaign" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /developer token/ })).toBeNull();
+    expect(screen.queryByText(/machine token/)).toBeNull();
   });
 });

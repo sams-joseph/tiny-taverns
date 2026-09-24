@@ -11,11 +11,10 @@ import { router } from "./routes";
  * never real falls back to. Read that file's own notes, including what a host
  * has to do now that every route is a real path.
  *
- * Nothing here asks whether anyone is signed in. Every screen loads through
- * `api/atoms.ts`, whose client resolves whichever credential exists — hosted
- * session or pasted machine token — per request, and renders the `unauthorized`
- * notice when neither does. That is what keeps `pnpm -F web dev` working for a developer who has
- * never opened the Clerk dashboard.
+ * Nothing here asks whether anyone is signed in. The root route's
+ * `SignedOutGate` decides between the marketing page and the app, and every
+ * screen loads through `api/atoms.ts`, whose client resolves the hosted
+ * session's token per request.
  */
 export function App() {
   return <RouterProvider router={router} />;

@@ -20,7 +20,7 @@ import { apiUrl } from "../api/client";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import { noSession } from "../characters/characters.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 const server = installCharacterServer();
 
@@ -101,7 +101,7 @@ const roll = {
 
 const renderTable = async () => {
   await renderAt(`/campaigns/${campaignId}/table`, (route) => (
-    <HostedSessionScope session={noSession}>{route}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{route}</HostedSessionScope>
   ));
 };
 

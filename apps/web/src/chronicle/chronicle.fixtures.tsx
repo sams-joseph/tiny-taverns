@@ -3,8 +3,8 @@ import { renderAt } from "../test/renderRoute";
 import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
-import { NO_HOSTED_SESSION } from "../auth/hostedSession";
 import { page } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The Chronicle's test wire: two nights, one fight that crosses them, and a
@@ -338,6 +338,6 @@ export const installChronicleServer = (): StubServer => {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
 export const renderChronicle = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
-    <HostedSessionScope session={NO_HOSTED_SESSION}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

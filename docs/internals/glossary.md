@@ -5,7 +5,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 ## People and reach
 
 - **maintainer**: the person building Tiny Taverns. Older docs and decision records call them "the captain".
-- **account**: one signed-in identity (`account`), reached by a machine token or a hosted session. It carries no role anywhere. `apps/server/src/Accounts.ts`.
+- **account**: one signed-in identity (`account`), reached by a hosted session (the browser) or a machine token (tests and scripts). It carries no role anywhere. `apps/server/src/Accounts.ts`.
 - **actor**: `{ accountId, scope }` resolved by `Authorization` for one request. `scope` is the credential's reach (the whole account, one Shared World, or one campaign), never a role. `packages/api/src/Actor.ts`.
 - **creator**: the account that created a campaign (`campaign.creator_account_id`) and is its sole DM. Creator-ness is a fact about a pair, proven per request by `CampaignCreatorActor` (`apps/server/src/repo/CreatorActor.ts`).
 - **member / participant**: an account with a live `campaign_member` row, which is what reaches campaign content. Membership is participation at a table; eligibility for it comes from the backing context.

@@ -51,7 +51,7 @@ import { StartCta, StartCtaNote } from "./StartCta";
  *    cutting it flattened two sections it was not part of — `Start` carries
  *    that band now, and `Start`'s own note is where that is written down.
  *  - **The email capture is gone**, and `StartCta.tsx` is what replaced it —
- *    read that file for the wrinkle it had to answer.
+ *    read that file for what it does with no vendor above it.
  *  - **Every link that led nowhere is gone** rather than rendered as dead text:
  *    Bestiary, Changelog, Player view, Status, Contact, Privacy, Getting
  *    started, Keyboard shortcuts, Import a monster, Printable sheets. What is

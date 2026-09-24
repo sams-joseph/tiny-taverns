@@ -82,7 +82,6 @@ describe("the route table", () => {
       { to: "/campaigns", at: "/campaigns" },
       { to: "/worlds", at: "/worlds" },
       { to: "/library", at: "/library" },
-      { to: "/server", at: "/server" },
       {
         to: "/campaigns/$campaignId",
         params: { campaignId: CAMPAIGN_ID },

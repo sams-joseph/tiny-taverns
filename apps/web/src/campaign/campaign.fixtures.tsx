@@ -4,6 +4,7 @@ import { ABILITY_KEYS } from "@taverns/api";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
 import { campaignId, encounterId, npcId, runId, sessionId, worldId } from "../test/ids";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The campaign view's test wire: fixtures, a stub server, and one way in.
@@ -1545,20 +1546,13 @@ export const mintingSession = (): HostedSession & { readonly minted: () => numbe
   };
 };
 
-export const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 /**
  * Annotated `void`, not left inferred: Testing Library's `RenderResult` names a
  * type inside `@testing-library/dom`, which pnpm's isolated layout puts out of
  * reach of an exported signature here — the same TS2742 the server hits with
  * `@clerk/shared`. Nothing needs the handle anyway; queries go through `screen`.
  */
-export const renderScreen = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderScreen = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
@@ -1573,13 +1567,13 @@ export const renderScreen = async (hosted: HostedSession = noSession): Promise<v
  * `CampaignChrome` over the same `loadCampaignView`, so the stub server serves
  * every one of them without a route being added.
  */
-export const renderEncounters = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderEncounters = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/encounters`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
-export const renderNotes = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderNotes = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/notes`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
@@ -1594,7 +1588,7 @@ export const renderNotes = async (hosted: HostedSession = noSession): Promise<vo
  */
 export const renderCampaigns = async (
   path: "/campaigns" | "/worlds" | "/" = "/campaigns",
-  hosted: HostedSession = noSession,
+  hosted: HostedSession = TEST_SESSION,
 ): Promise<void> => {
   await renderAt(path, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
@@ -1602,7 +1596,7 @@ export const renderCampaigns = async (
 };
 
 /** The Shared World above the fixture campaign — its directory and roster. */
-export const renderSharedWorld = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderSharedWorld = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/worlds/${worldId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
@@ -1610,7 +1604,7 @@ export const renderSharedWorld = async (hosted: HostedSession = noSession): Prom
 
 /** The Shared World's whole Chronicle, which its screen summarises. */
 export const renderSharedWorldChronicle = async (
-  hosted: HostedSession = noSession,
+  hosted: HostedSession = TEST_SESSION,
 ): Promise<void> => {
   await renderAt(`/worlds/${worldId}/chronicle`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
@@ -1618,20 +1612,11 @@ export const renderSharedWorldChronicle = async (
 };
 
 /** The party screen, which is where a character is written since the split. */
-export const renderParty = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderParty = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
-
-/**
- * jsdom here ships **no** `localStorage` at all, so exercising the stored
- * machine token needs one installed. It lives in `test/storage.ts` now — every
- * rendered route needs a credential since the signed-out gate landed, not only
- * this screen's — and is re-exported here so the call sites did not have to
- * move with it.
- */
-export { installMemoryStorage } from "../test/storage";
 
 /** The JSON body of the first call matching a method and a path fragment. */
 export const bodyOf = (server: StubServer, method: string, fragment: string): unknown => {

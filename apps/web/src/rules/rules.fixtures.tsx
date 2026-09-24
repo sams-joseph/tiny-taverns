@@ -1,6 +1,5 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { vi } from "vitest";
-import { type HostedSession } from "../auth/hostedSession";
 import {
   bloodswornOption,
   bloodswornOriginalId,
@@ -47,6 +46,7 @@ export {
   saltRunnerOptionId,
   saltRunnerOriginalId,
 } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 const base = `/campaigns/${campaignId}`;
 
@@ -305,17 +305,10 @@ export const installRulesServer = (): RulesStubServer => {
   return server;
 };
 
-export const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderRules = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/rules`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 
@@ -330,6 +323,6 @@ export const renderRules = async (): Promise<void> => {
  */
 export const renderOptionLibrary = async (): Promise<void> => {
   await renderAt("/library/rules", (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

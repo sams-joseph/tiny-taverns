@@ -6,13 +6,12 @@ import {
   bodyOf,
   campaignId,
   cazril,
-  installMemoryStorage,
   installStubServer,
-  noSession,
   npcId,
   sessionId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The Cast screen against a stubbed wire decoded by the real client: the
@@ -22,18 +21,16 @@ import { renderAt } from "../test/renderRoute";
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 afterEach(() => cleanup());
 
 const renderCast = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/cast`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 

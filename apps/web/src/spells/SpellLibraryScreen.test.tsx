@@ -3,14 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import type { HostedSession } from "../auth/hostedSession";
-import {
-  installMemoryStorage,
-  installStubServer,
-  mintingSession,
-  noSession,
-  page,
-} from "../campaign/campaign.fixtures";
+import { installStubServer, mintingSession, page } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The spells shelf, on the standard Library pattern.
@@ -24,13 +19,12 @@ import { renderAt } from "../test/renderRoute";
  * standard facts-then-copy shape.
  */
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => server.reset());
 
 const LIST = "GET /library/spells";
 
-const renderSpells = async (hosted: HostedSession = noSession): Promise<void> => {
+const renderSpells = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt("/library/spells", (tree) => (
     <HostedSessionScope session={hosted}>{tree}</HostedSessionScope>
   ));

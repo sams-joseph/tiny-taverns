@@ -3,7 +3,6 @@ import { renderAt } from "../test/renderRoute";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type HostedSession } from "../auth/hostedSession";
 import {
   brannoc,
   campaign,
@@ -19,6 +18,7 @@ import {
   partySeat,
 } from "../campaign/campaign.fixtures";
 import { installRunServer, renderRunner } from "../run/run.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The two ways out of a night, proved to be one write.
@@ -72,16 +72,9 @@ const alsoAnswerTheCampaignView = (over: boolean) => {
   server.routes.set(`GET ${sessionPath}/combatants`, { status: 200, body: [brannoc, goblinBoss] });
 };
 
-const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 const renderCampaign = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 

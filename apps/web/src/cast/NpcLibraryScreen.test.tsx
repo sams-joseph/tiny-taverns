@@ -9,17 +9,14 @@ import {
   cazrilSource,
   sharedWorldDetails,
   worldId,
-  installMemoryStorage,
   installStubServer,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 afterEach(() => cleanup());

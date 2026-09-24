@@ -20,9 +20,8 @@ export function ShellLayout() {
 }
 
 /**
- * The same shell without the Hob panel, for the two routes outside the
- * persistent layout: the invitation page, which has nobody to ask on behalf of
- * yet, and the Server page, where a developer is still connecting.
+ * The same shell without the Hob panel, for the route outside the persistent
+ * layout: the invitation page, which has nobody to ask on behalf of yet.
  */
 export function StandaloneLayout() {
   return <Frame hob={undefined} />;

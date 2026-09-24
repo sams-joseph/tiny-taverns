@@ -89,7 +89,6 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/characters/new": "/characters/new",
   "/_shell/characters/$": "/characters/not-a-uuid",
   "/_shell/characters/$characterId": `/characters/${characterId}`,
-  "/_standalone/server": "/server",
   "/_standalone/join/$token": "/join/aaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
@@ -467,7 +466,6 @@ describe("the shell's top bar", () => {
         "/library/equipment",
         "/library/magic-items",
         "/characters",
-        "/server",
       ]) {
         await renderAt(path);
         expect(noCampaignNav()).toBeNull();

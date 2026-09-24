@@ -108,8 +108,9 @@ export const identityFromConfig: Layer.Layer<IdentityProvider, Config.ConfigErro
     const jwtKey = yield* clerkJwtKey;
     if (Option.isNone(jwtKey)) {
       yield* Effect.logInfo(
-        "Hosted sign-in is OFF: CLERK_JWT_KEY is unset, so machine tokens are the only " +
-          "credential. To turn it on, set it in apps/server/.env.local (see .env.example).",
+        "Hosted sign-in is OFF: CLERK_JWT_KEY is unset, so machine tokens (tests and scripts) " +
+          "are the only credential and the web app cannot sign in. Set it in " +
+          "apps/server/.env.local (see .env.example).",
       );
       return IdentityProvider.disabled;
     }

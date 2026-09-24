@@ -6,7 +6,6 @@ import {
   encounter,
   encounterId,
   goblinId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   page,
@@ -45,7 +44,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const prepPath = `/campaigns/${campaignId}/sessions/${sessionId}/prep`;
 const encountersPath = `/campaigns/${campaignId}/encounters`;
@@ -53,7 +51,6 @@ const notesPath = `/campaigns/${campaignId}/notes`;
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 /** Everything asked for since `server.calls.length = 0`, as `METHOD /path`. */

@@ -1,7 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
-import { type HostedSession } from "../auth/hostedSession";
 import {
   campaignId,
   character,
@@ -44,6 +43,7 @@ export {
   partySeat,
   seatId,
 } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 const base = `/campaigns/${campaignId}`;
 
@@ -262,16 +262,9 @@ export const installPartyServer = (): PartyStubServer => {
   return server;
 };
 
-export const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderParty = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

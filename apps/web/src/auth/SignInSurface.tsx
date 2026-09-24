@@ -25,10 +25,10 @@ import { useHostedSession } from "./hostedSession";
 export function SignInSurface(): ReactNode {
   const { configured } = useHostedSession();
 
-  // No publishable key: the surface is not offered at all, rather than
-  // offered and broken. Returning before any Clerk component is rendered is
-  // what keeps the app runnable with no vendor configured — `Show` and the
-  // buttons all require `ClerkProvider` above them, which is not mounted.
+  // No vendor provider above: the surface is not offered at all, rather than
+  // offered and broken — `Show` and the buttons all require `ClerkProvider`
+  // above them. The running app always has one; a screen test, and the layout
+  // suite's stand-in session, do not.
   //
   // Both conditions, not just the context flag. `AuthProvider` mounts
   // `ClerkProvider` on exactly the second one, so this is the same question

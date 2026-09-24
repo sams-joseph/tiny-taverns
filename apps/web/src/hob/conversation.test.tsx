@@ -3,12 +3,12 @@ import type { CampaignId, HobAccepted, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type HostedSession } from "../auth/hostedSession";
 import { campaign as aCampaignRow, campaignId, worldId } from "../campaign/campaign.fixtures";
 import { characterProposal } from "../characters/characters.fixtures";
 import type { HobScope } from "./conversation";
 import { ScopedHob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The client half of the assistant: what the panel offers, and what it does
@@ -241,13 +241,6 @@ const installHobServer = (): HobStub => {
 
 const server = installHobServer();
 
-const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 const panelState = (open: boolean): HobPanelState => ({
   open,
   inline: true,
@@ -266,7 +259,7 @@ const renderHob = (options?: {
 }): void => {
   const hob = panelState(options?.open ?? true);
   render(
-    <HostedSessionScope session={noSession}>
+    <HostedSessionScope session={TEST_SESSION}>
       <ScopedHob
         hob={hob}
         scope={
@@ -799,7 +792,7 @@ describe("a change of scope under an open panel", () => {
 
     const hob = panelState(true);
     const at = (scope: HobScope) => (
-      <HostedSessionScope session={noSession}>
+      <HostedSessionScope session={TEST_SESSION}>
         <ScopedHob hob={hob} scope={scope} />
       </HostedSessionScope>
     );
