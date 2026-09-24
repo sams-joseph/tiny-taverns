@@ -13,6 +13,7 @@ import type {
 import { Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 import { collectPages, WHOLE_LIST } from "../api/page";
+import type { LastNight } from "../campaign/overview";
 
 /** Everything the player's view of a table renders, in one shape. */
 export interface PlayerCampaignView {
@@ -28,27 +29,31 @@ export interface PlayerCampaignView {
   readonly notes: ReadonlyArray<Note>;
   /** NPCs the DM explicitly made player-facing. No private material or usage metadata. */
   readonly npcs: ReadonlyArray<PlayerNpc>;
+  /**
+   * The newest finished night the DM shared, told through the player's recap —
+   * `undefined` until there is one.
+   */
+  readonly lastNight: LastNight | undefined;
 }
 
 /**
- * One Effect for the screen, the rule `campaign/load.ts` set — and three calls
- * rather than six, because **this is not the DM's load with rows dropped.**
+ * One Effect for the screen, the rule `campaign/load.ts` set — and its own
+ * calls rather than the DM's, because **this is not the DM's load with rows
+ * dropped.**
  *
  * Every endpoint here is one a player may actually call. The DM's view composes
  * `runs.list`, which is behind the creator gate and answers a player a 404, so a
  * narrowed version of that load would fail as a whole for the audience it was
- * narrowed for. What is absent is absent because another screen owns it:
- *
- * - **the nights** — the player Chronicle reads `recap.readAsPlayer`; a generic
- *   session list would mostly be empty because sessions start private.
- * - **the fight** — the live table is `GET /campaigns/:c/table`, whose answer is
- *   the player-only projection, not the DM's run with fields dropped.
- *
- * Each is a screen with a projection of its own, not this overview's aside.
+ * narrowed for. *Last time* is the same: `sessions.list` answers a player only
+ * the nights their DM shared, and the recap is `recap.readAsPlayer`, whose
+ * `PlayerSessionRecap` has no field for a monster's numbers — never the DM's
+ * `recap.read`. What is absent is absent because another screen owns it: the
+ * fight is the live table, `GET /campaigns/:c/table`, whose answer is the
+ * player-only projection.
  */
 export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [campaign, party, notes, npcs] = yield* Effect.all(
+    const [campaign, party, notes, npcs, sessions] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.party.list({ params: { campaignId } }),
@@ -56,11 +61,23 @@ export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: Taver
           client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
         ),
         client.npcs.playerList({ params: { campaignId } }),
+        client.sessions.list({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     );
+    // Newest first, and the open night is the one with no `endedAt`.
+    const last = sessions.find((row) => row.endedAt !== null);
+    const lastNight =
+      last === undefined
+        ? undefined
+        : ({
+            session: last,
+            recap: yield* client.recap.readAsPlayer({
+              params: { campaignId, sessionId: last.id },
+            }),
+          } satisfies LastNight);
 
-    return { campaign, party, notes, npcs } satisfies PlayerCampaignView;
+    return { campaign, party, notes, npcs, lastNight } satisfies PlayerCampaignView;
   });
 
 export interface PlayerTableView {

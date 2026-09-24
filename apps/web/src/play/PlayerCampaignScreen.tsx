@@ -1,7 +1,6 @@
-import type { CampaignId, Note, PartySeat } from "@taverns/api";
+import type { CampaignId, Note } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -17,11 +16,13 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { NpcAppearance } from "../cast/NpcAppearance";
 import { NpcAvatar } from "../cast/NpcAvatar";
-import { HobCover } from "../hob/HobCover";
-import { CharacterPortrait } from "../characters/CharacterPortrait";
+import { CampaignHero } from "../campaign/CampaignHero";
+import { LastTime } from "../campaign/LastTime";
+import { OverviewPage, SHARED_NOTES } from "../campaign/OverviewParts";
+import { PartyCard } from "../campaign/PartyCard";
+import { RecentNotes } from "../campaign/RecentNotes";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
-import { Description } from "../ui/description";
 import { loadPlayerCampaignView } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -30,66 +31,29 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * Navigation has no global mode now: this screen is chosen by the reader's
  * relation to the campaign in the URL, and it is not the DM screen with rows
- * hidden. What it shares is the shell, the load rule and the three states.
+ * hidden. What it shares with the creator's Overview is the layout and the
+ * cards — the hero, the two columns, *Last time*, *Party*, *Recent notes*
+ * (`campaign/CampaignScreen.tsx`), each told it is drawing for a player — and
+ * never the load: every read behind it is one a player may make (`load.ts`).
  *
- * **Nothing on it can fail for the audience it is for.** Every read behind it is
- * one a player may make (see `load.ts`); there is no tab a player cannot open,
- * no control that would 404, and no docked *Ask Hob* panel — a player's Hob
- * surface is the character-drafting composer, not the DM's session-writing
- * chat.
+ * **Nothing on it can fail for the audience it is for.** There is no tab a
+ * player cannot open, no control that would 404, and no docked *Ask Hob* panel
+ * — a player's Hob surface is the character-drafting composer, not the DM's
+ * session-writing chat.
  *
- * It is deliberately small. The character sheet, the Chronicle and the live
- * table are separate screens with their own narrow projections; drawing a
- * placeholder for any of them here would be the stubbed field the screens rule
- * forbids. What this overview has is who the DM shared with the table and what
- * prose the DM chose to share, so that is what this says.
+ * The main column is what the DM shared for reading: the last night, the
+ * people the table can talk to, and the notes in full. The aside is the
+ * table: the seats this player may see, and the notes touched last. The
+ * creator's *Next session* is prep, which is the DM's, and *Open threads* and
+ * *At the table* are left out on both pages (the captain's answers 5 and 7).
  *
  * **One control writes, and it is only the door into the create flow.** *New
- * character* goes to `/campaigns/:c/characters/new` because this screen is
- * already at one table. Creating the character does **not** seat it here; table
- * presence is the explicit `campaign_character` row created by the party-join
- * flow, so this link makes an owned character and nothing more.
+ * character* — the page's one peach, in the hero where the creator's
+ * management sits — goes to `/campaigns/:c/characters/new` because this screen
+ * is already at one table. Creating the character does **not** seat it here;
+ * table presence is the explicit `campaign_character` row created by the
+ * party-join flow, so this link makes an owned character and nothing more.
  */
-
-/**
- * One character, read-only.
- *
- * Not `PartyList`: that row carries a pencil and a `Shared` badge, and both are
- * the DM's questions. A player is answered only their own row and the shared
- * ones, so "shared" is true of nearly everything here and would say nothing —
- * the rule a `Player` badge on every row of a mode's list falls to as well.
- */
-function PartyMember({ seat }: { readonly seat: PartySeat }) {
-  const character = seat.character;
-  const detail = [
-    character?.descriptor ?? null,
-    seat.seat.playerDisplayName ?? character?.playerName ?? null,
-  ].filter((part): part is string => part !== null && part !== "");
-
-  return (
-    <div className="flex min-h-row flex-wrap items-center gap-2.5 border-t border-hairline px-card py-2 first:border-t-0">
-      <CharacterPortrait
-        name={character?.name ?? seat.seat.displayName}
-        portrait={character?.portrait ?? null}
-        size="row"
-        fallback={<Icon name="shield" size={15} className="text-faint" />}
-      />
-      <span className="text-body-s leading-body text-foreground">
-        {character?.name ?? seat.seat.displayName}
-      </span>
-      {detail.length > 0 && (
-        <span className="text-body-s leading-body text-muted-foreground">{detail.join(" · ")}</span>
-      )}
-      <span className="ml-auto flex items-center gap-4">
-        {(character?.conditions ?? []).map((condition) => (
-          <Badge key={condition} variant="secondary">
-            {condition}
-          </Badge>
-        ))}
-      </span>
-    </div>
-  );
-}
 
 /**
  * A note the DM shared.
@@ -130,13 +94,15 @@ function SharedNote({ note }: { readonly note: Note }) {
 
 function Section({
   title,
+  id,
   children,
 }: {
   readonly title: string;
+  readonly id?: string;
   readonly children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section id={id} className="flex scroll-mt-(--chrome-height) flex-col gap-3">
       <SectionHeading size="subtitle">{title}</SectionHeading>
       {children}
     </section>
@@ -156,6 +122,7 @@ const playerCampaignAtom = Atom.family((campaignId: CampaignId) =>
     reads.party(campaignId),
     reads.notes(campaignId),
     reads.npcs(campaignId),
+    reads.sessions(campaignId),
   ]),
 );
 
@@ -173,42 +140,45 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
     view !== undefined &&
     view.party.length === 0 &&
     view.notes.length === 0 &&
-    view.npcs.length === 0;
+    view.npcs.length === 0 &&
+    view.lastNight === undefined;
+
+  const newCharacter = (
+    <Button
+      size="sm"
+      nativeButton={false}
+      render={<Link to="/campaigns/$campaignId/characters/new" params={{ campaignId }} />}
+    >
+      <Icon name="user-plus" size={14} />
+      New character
+    </Button>
+  );
+
+  if (view === undefined) {
+    // The hero's `h1` is the campaign's name, which is not known yet: until it
+    // is, the tab's ordinary header holds the page's title and its one verb.
+    return (
+      <>
+        <TopBar title="A table">{newCharacter}</TopBar>
+        {resource.state === "failed" ? (
+          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+        ) : (
+          <Loading label="Reading the table…" />
+        )}
+      </>
+    );
+  }
 
   return (
-    <>
-      <TopBar
-        title={view?.campaign.name ?? "A table"}
-        subtitle={
-          view === undefined
-            ? undefined
-            : view.campaign.partyName !== null && view.campaign.partyName !== ""
-              ? view.campaign.partyName
-              : "You are at this table."
-        }
-      >
-        <Button
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/campaigns/$campaignId/characters/new" params={{ campaignId }} />}
-        >
-          <Icon name="user-plus" size={14} />
-          New character
-        </Button>
-      </TopBar>
-      <div className="flex flex-col gap-8">
-        {resource.state === "loading" && <Loading label="Reading the table…" />}
-        {resource.state === "failed" && (
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        )}
+    <OverviewPage
+      lead={<CampaignHero campaign={view.campaign}>{newCharacter}</CampaignHero>}
+      main={
+        <>
+          {view.lastNight !== undefined && (
+            <LastTime lastNight={view.lastNight} campaignId={campaignId} audience="player" />
+          )}
 
-        {view !== undefined && (
-          <HobCover image={view.campaign.image} pending={view.campaign.imagePending} shape="band" />
-        )}
-        {view !== undefined && <Description text={view.campaign.description} />}
-
-        {view !== undefined &&
-          (empty ? (
+          {empty && (
             // The ordinary outcome of joining, and the one the invitation page
             // already warns about: a campaign a DM has shared but has put
             // nothing shared inside. It is the master toggle and the row-level
@@ -217,80 +187,79 @@ export function PlayerCampaignScreen({ campaignId }: { readonly campaignId: Camp
               Your DM decides what the table can read. Whatever they share — the party, the
               read-aloud text — appears here.
             </EmptyState>
-          ) : (
-            <>
-              {view.party.length > 0 && (
-                <Section title="The party">
-                  <Card>
-                    {view.party.map((seat) => (
-                      <PartyMember key={seat.seat.id} seat={seat} />
-                    ))}
-                  </Card>
-                </Section>
-              )}
+          )}
 
-              {view.npcs.length > 0 && (
-                <Section title="People you can talk to">
-                  <p className="text-body-s leading-body text-muted-foreground">
-                    Talk privately opens your own conversation with a player-facing NPC. Only you
-                    can read that transcript, and it does not automatically update NPC memory.
-                  </p>
-                  <div className="grid gap-4 @3xl:grid-cols-2">
-                    {view.npcs.map((npc) => (
-                      <Card key={npc.id}>
-                        <CardHeader>
-                          <div className="flex items-start gap-2.5">
-                            <NpcAvatar name={npc.name} image={npc.image} />
-                            <div className="min-w-0 flex-1">
-                              <CardTitle>{npc.name}</CardTitle>
-                              {npc.role !== "" && (
-                                <p className="text-body-s leading-body text-muted-foreground">
-                                  {npc.role}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                          {npc.persona.identity?.summary !== undefined && (
-                            <p className="text-body-s leading-body text-foreground">
-                              {npc.persona.identity.summary}
+          {view.npcs.length > 0 && (
+            <Section title="People you can talk to">
+              <p className="text-body-s leading-body text-muted-foreground">
+                Talk privately opens your own conversation with a player-facing NPC. Only you can
+                read that transcript, and it does not automatically update NPC memory.
+              </p>
+              <div className="grid gap-4 @2xl:grid-cols-2">
+                {view.npcs.map((npc) => (
+                  <Card key={npc.id}>
+                    <CardHeader>
+                      <div className="flex items-start gap-2.5">
+                        <NpcAvatar name={npc.name} image={npc.image} />
+                        <div className="min-w-0 flex-1">
+                          <CardTitle>{npc.name}</CardTitle>
+                          {npc.role !== "" && (
+                            <p className="text-body-s leading-body text-muted-foreground">
+                              {npc.role}
                             </p>
                           )}
-                          <NpcAppearance appearance={npc.persona.identity?.appearance} />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            nativeButton={false}
-                            render={
-                              <Link
-                                to="/campaigns/$campaignId/cast/$npcId/talk"
-                                params={{ campaignId, npcId: npc.id }}
-                              />
-                            }
-                          >
-                            <Icon name="mic" size={14} />
-                            Talk privately
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </Section>
-              )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-3">
+                      {npc.persona.identity?.summary !== undefined && (
+                        <p className="text-body-s leading-body text-foreground">
+                          {npc.persona.identity.summary}
+                        </p>
+                      )}
+                      <NpcAppearance appearance={npc.persona.identity?.appearance} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={
+                          <Link
+                            to="/campaigns/$campaignId/cast/$npcId/talk"
+                            params={{ campaignId, npcId: npc.id }}
+                          />
+                        }
+                      >
+                        <Icon name="mic" size={14} />
+                        Talk privately
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </Section>
+          )}
 
-              {view.notes.length > 0 && (
-                <Section title="Shared with you">
-                  <div className="flex flex-col gap-4">
-                    {view.notes.map((note) => (
-                      <SharedNote key={note.id} note={note} />
-                    ))}
-                  </div>
-                </Section>
-              )}
-            </>
-          ))}
-      </div>
-    </>
+          {view.notes.length > 0 && (
+            <Section title="Shared with you" id={SHARED_NOTES}>
+              <div className="flex flex-col gap-4">
+                {view.notes.map((note) => (
+                  <SharedNote key={note.id} note={note} />
+                ))}
+              </div>
+            </Section>
+          )}
+        </>
+      }
+      aside={
+        <>
+          <PartyCard party={view.party} campaignId={campaignId} audience="player" />
+          {/* Only with notes to summarise: its *All notes* is the section above,
+              which is drawn only then. */}
+          {view.notes.length > 0 && (
+            <RecentNotes notes={view.notes} campaignId={campaignId} audience="player" />
+          )}
+        </>
+      }
+    />
   );
 }

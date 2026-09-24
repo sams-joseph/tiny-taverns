@@ -95,10 +95,12 @@ describe("the persistent shell", () => {
       if (inCampaign) {
         expect(slot()).toBeEmptyDOMElement();
         expect(screen.getByRole("main").contains(title)).toBe(true);
-        // The creator's Overview titles itself with the campaign's name, in
-        // the hero over its cover (`campaign/CampaignHero.tsx`); every other
-        // campaign tab with `PageHeader`'s in-content heading.
-        if (name === "overview") expect(title.closest("[data-slot=campaign-hero]")).not.toBeNull();
+        // Both Overviews, the creator's and a player's, title themselves with
+        // the campaign's name, in the hero over its cover
+        // (`campaign/CampaignHero.tsx`); every other campaign tab with
+        // `PageHeader`'s in-content heading.
+        if (name === "overview" || name === "player-overview")
+          expect(title.closest("[data-slot=campaign-hero]")).not.toBeNull();
         else expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
       } else {
         expect(slot()?.contains(title)).toBe(true);

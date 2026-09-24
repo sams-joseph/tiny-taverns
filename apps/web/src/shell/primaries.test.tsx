@@ -47,3 +47,18 @@ describe("the primary budget", () => {
     });
   }
 });
+
+/**
+ * The player's Overview has no campaign press on its row, so its one primary
+ * is its own: *New character*, in the hero where the creator's management sits.
+ * Asserted by name so a screen that lost it would not pass as "at most one".
+ */
+it("keeps New character as the player Overview's one primary", async () => {
+  const entry = screens.find((s) => s.name === "player-overview")!;
+  server.routes = scenarios[entry.scenario]();
+  await renderAt(entry.path);
+  await screen.findByRole("heading", { level: 1 });
+  await waitFor(() => expect(document.querySelector('[data-slot="loading"]')).toBeNull());
+  expect(primaries().map((button) => button.textContent)).toEqual(["New character"]);
+  expect(primaries()[0]?.closest("[data-slot=campaign-hero]")).not.toBeNull();
+});

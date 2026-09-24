@@ -1,13 +1,19 @@
+import type { Campaign } from "@taverns/api";
 import { sectionHeadingVariants } from "@taverns/ui";
+import type { ReactNode } from "react";
 import { monthOf } from "../chronicle/format";
 import { HobCover } from "../hob/HobCover";
 import { Description } from "../ui/description";
-import { CampaignSettingsButtons, type CampaignChromeSlots } from "./CampaignChrome";
-import type { CampaignView } from "./load";
 
 /**
- * The top of the creator's Overview, as the redesign (`Campaign Overview.dc.html`)
- * draws it: the cover, and the campaign's header laid over the bottom of it.
+ * The top of the Overview, as the redesign (`Campaign Overview.dc.html`) draws
+ * it: the cover, and the campaign's header laid over the bottom of it.
+ *
+ * **One hero for both audiences; only the actions differ.** The creator's are
+ * the campaign's management as outline buttons (`CampaignSettingsButtons`); a
+ * player's is the one door they have from here, *New character*
+ * (`play/PlayerCampaignScreen.tsx`). Everything else it reads is `Campaign`,
+ * which a player is answered whole, so there is no narrower header to draw.
  *
  * **The campaign's name is this page's `h1`.** Every other campaign tab titles
  * itself with which tab it is (`TopBar`); the Overview is the campaign itself,
@@ -30,20 +36,15 @@ import type { CampaignView } from "./load";
  * question 7); nothing stores a schedule. What the line carries is the party's
  * name, which the per-screen subtitle used to, and how long the table has been
  * running, from `createdAt`.
- *
- * The drawing's *Settings* drops the sharing control's word. The captain kept
- * it: the button reads *Settings* and then *Private* or *Shared*, because the
- * current answer must be legible without opening anything
- * (`CampaignChrome.tsx`, *The sharing control*).
  */
 export function CampaignHero({
-  view,
-  onOpen,
+  campaign,
+  children,
 }: {
-  readonly view: CampaignView;
-  readonly onOpen: CampaignChromeSlots["openSettings"];
+  readonly campaign: Campaign;
+  /** The header's actions, at its far end. */
+  readonly children: ReactNode;
 }) {
-  const { campaign } = view;
   const meta = [campaign.partyName, `Since ${monthOf(campaign.createdAt)}`].filter(
     (part): part is string => part !== null && part.trim() !== "",
   );
@@ -73,9 +74,7 @@ export function CampaignHero({
           </h1>
           <Description text={campaign.description} className="mt-2.5 max-w-overview-pitch" />
         </div>
-        <div className="flex flex-none flex-wrap items-center gap-2">
-          <CampaignSettingsButtons view={view} onOpen={onOpen} />
-        </div>
+        <div className="flex flex-none flex-wrap items-center gap-2">{children}</div>
       </header>
     </div>
   );
