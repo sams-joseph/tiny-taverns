@@ -9,17 +9,7 @@ import type {
   SessionId,
 } from "@taverns/api";
 import { Link, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import {
-  Badge,
-  Button,
-  Card,
-  cn,
-  Icon,
-  Input,
-  tabsTriggerVariants,
-  SectionHeading,
-  BackLink,
-} from "@taverns/ui";
+import { Badge, Button, Card, Icon, Input, SectionHeading, BackLink } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useEffect, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -35,6 +25,7 @@ import { NpcAvatar } from "./NpcAvatar";
 import { NpcDialog } from "./NpcDialog";
 import { useNpcRehearsal } from "./rehearsal";
 import { RehearsalPanel } from "./RehearsalPanel";
+import { TabRow, type Collapse } from "../shell/TabRow";
 
 /**
  * One NPC: the persona as the creator wrote it, the rehearsal beside it, and
@@ -62,13 +53,17 @@ import { RehearsalPanel } from "./RehearsalPanel";
  */
 type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory" | "awareness" | "proposals";
 
-const NPC_TABS: ReadonlyArray<{ readonly id: NpcTab; readonly label: string }> = [
+const NPC_TABS: ReadonlyArray<{
+  readonly id: NpcTab;
+  readonly label: string;
+  readonly collapse?: Collapse;
+}> = [
   { id: "profile", label: "Profile" },
   { id: "rehearsal", label: "Rehearsal" },
-  { id: "knowledge", label: "Knowledge" },
-  { id: "memory", label: "Memory" },
-  { id: "awareness", label: "Hob research" },
-  { id: "proposals", label: "Proposals" },
+  { id: "knowledge", label: "Knowledge", collapse: "xl" },
+  { id: "memory", label: "Memory", collapse: "xl" },
+  { id: "awareness", label: "Hob research", collapse: "2xl" },
+  { id: "proposals", label: "Proposals", collapse: "2xl" },
 ];
 
 const tabForHash = (hash: string): NpcTab =>
@@ -124,6 +119,11 @@ export function NpcScreen() {
   );
 }
 
+/**
+ * The NPC's own tabs, on the header's tab row. Six do not fit a phone, so the
+ * narrow strip keeps the two used at the table and puts the rest in its *More*
+ * menu (`shell/TabRow.tsx`).
+ */
 function NpcTabs({
   active,
   onChange,
@@ -132,20 +132,17 @@ function NpcTabs({
   readonly onChange: (tab: NpcTab) => void;
 }) {
   return (
-    <nav aria-label="NPC sections" className="flex items-stretch gap-1">
-      {NPC_TABS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={cn(tabsTriggerVariants(), "h-auto self-stretch px-3.25")}
-          data-state={active === item.id ? "active" : "inactive"}
-          aria-current={active === item.id ? "page" : undefined}
-          onClick={() => onChange(item.id)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </nav>
+    <TabRow
+      label="NPC sections"
+      moreLabel="More about this NPC"
+      items={NPC_TABS.map((item) => ({
+        key: item.id,
+        label: item.label,
+        active: active === item.id,
+        onSelect: () => onChange(item.id),
+        ...(item.collapse !== undefined && { collapse: item.collapse }),
+      }))}
+    />
   );
 }
 

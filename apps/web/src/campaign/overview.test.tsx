@@ -45,6 +45,10 @@ beforeEach(() => {
 const base = `/campaigns/${campaignId}`;
 
 /** The card a heading heads — the nearest `Card` around it. */
+/** The campaign row, which carries the campaign's press on every tab. */
+const campaignRow = (): HTMLElement =>
+  screen.getByRole("navigation", { name: "This campaign" }).parentElement!;
+
 const cardOf = async (title: string): Promise<HTMLElement> => {
   const heading = await screen.findByRole("heading", { name: title });
   const card = heading.closest<HTMLElement>("[data-slot='card']");
@@ -292,7 +296,11 @@ describe("the next session card", () => {
     const card = await cardOf("Nothing is running yet");
 
     expect(within(card).getByText("No encounters yet")).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "Start session" })).toBeInTheDocument();
+    // The press that opens the night is the campaign row's, not the card's.
+    expect(within(card).queryByRole("button", { name: "Start session" })).toBeNull();
+    expect(
+      within(campaignRow()).getByRole("button", { name: "Start session" }),
+    ).toBeInTheDocument();
     expect(within(card).getByText(/No session in the works/)).toBeInTheDocument();
     // Nothing is open, so there is nothing to finish.
     expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
@@ -325,12 +333,10 @@ describe("the live banner", () => {
       within(banner).getByText("Round 3 of Ambush in the reeds · started 48 min ago"),
     ).toBeInTheDocument();
 
-    // One way back on the whole screen, and it is the banner's outline one:
-    // the *Next session* card does not draw the press a second time.
-    const back = screen.getAllByRole("button", { name: "Back to the fight" });
-    expect(back).toHaveLength(1);
-    expect(banner).toContainElement(back[0]!);
-    expect(back[0]).not.toHaveClass("bg-accent");
+    // One way back on the whole screen, and it is the campaign row's press:
+    // neither the banner nor the *Next session* card draws it a second time.
+    const back = await within(campaignRow()).findByRole("button", { name: "Back to the fight" });
+    expect(screen.getAllByRole("button", { name: "Back to the fight" })).toEqual([back]);
 
     // Finishing the night stays reachable while a fight is on the table.
     const finish = screen.getAllByRole("button", { name: "Finish the night" });
@@ -341,7 +347,7 @@ describe("the live banner", () => {
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
   });
 
-  it("goes back to the fight", async () => {
+  it("goes back to the fight from the campaign row", async () => {
     onTheTable(null);
     await renderScreen(mintingSession());
 
@@ -351,7 +357,9 @@ describe("the live banner", () => {
     // No start stamp, so no elapsed time rather than a guessed one.
     expect(within(banner).getByText("Round 3 of Ambush in the reeds")).toBeInTheDocument();
 
-    await userEvent.click(within(banner).getByRole("button", { name: "Back to the fight" }));
+    await userEvent.click(
+      await within(campaignRow()).findByRole("button", { name: "Back to the fight" }),
+    );
     await waitFor(() =>
       expect(window.location.pathname).toBe(`${base}/sessions/${sessionId}/runs/${liveRun.id}`),
     );

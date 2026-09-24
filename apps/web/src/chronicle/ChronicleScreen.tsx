@@ -356,13 +356,13 @@ function Chronicle({
           {/* Dropped whole in read-aloud mode, which is what the toggle means.
 
               **Not sticky**, though the delivery draws it `position: sticky; top:
-              0` (`Chronicle.jsx:177`). The scroll container here is the shell's
-              column, and `TopBar` is already sticky at its top — so an aside
-              pinned to the same edge parks its own first line underneath the bar
-              rather than beside the timeline. The offset that would fix it is
-              the per-screen bar's height, which is not a token and changes with
-              whether the bar has a subtitle. A short aside that scrolls away is
-              a smaller cost than a heading nobody can read. */}
+              0` (`Chronicle.jsx:177`). The window is the scroller and the
+              chrome stack is already sticky at its top, so an aside pinned to
+              the same edge parks its own first line underneath the campaign
+              row rather than beside the timeline. Pinning it under the chrome
+              (`top-(--chrome-height)`) is the fix if it ever needs to stay; a
+              short aside that scrolls away is a smaller cost than a heading
+              nobody can read. */}
           {!readAloud && (
             <aside className="@4xl:w-aside @4xl:shrink-0">
               <Card tone="sunken">

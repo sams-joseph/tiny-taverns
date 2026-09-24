@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { campaignId, installStubServer, npcId } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { scenarios, screens } from "../test/screens";
 
 /**
  * The shell is a layout route: mounted once, and the same nodes from one screen
@@ -30,9 +31,11 @@ const header = () => sections().closest("header");
 const campaignNav = () => screen.getByRole("navigation", { name: "This campaign" });
 /** The sidebar the Hob panel is; it slides off-canvas rather than unmounting. */
 const panel = () => document.querySelector("[data-slot=sidebar]");
-/** The layout's bar slot: the element a screen's `TopBar` portals into. */
-const slotOf = (title: string) =>
-  screen.getByRole("heading", { level: 1, name: title }).closest("header")?.parentElement;
+/**
+ * The layout's bar slot: the element a screen's `TopBar` portals into, last in
+ * the sticky stack after the two nav rows' `<header>`.
+ */
+const slot = () => header()?.nextElementSibling;
 
 describe("the persistent shell", () => {
   it("keeps the header, the nav, the bar's slot and an open panel across destinations", async () => {
@@ -46,7 +49,7 @@ describe("the persistent shell", () => {
       header: header(),
       sections: sections(),
       panel: panel(),
-      slot: slotOf("Overview"),
+      slot: slot(),
     };
     expect(before.slot).toBeTruthy();
 
@@ -56,12 +59,50 @@ describe("the persistent shell", () => {
     expect(header()).toBe(before.header);
     expect(sections()).toBe(before.sections);
     expect(panel()).toBe(before.panel);
-    expect(slotOf("Notes")).toBe(before.slot);
+    expect(slot()).toBe(before.slot);
     // …and the panel is still open: its state is the layout's, not the screen's.
     expect(panel()).toHaveAttribute("data-state", "expanded");
-    // One bar, not the old screen's left behind beside the new one.
+    // One header, not the old screen's left behind beside the new one.
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+
+    // …and out of the campaign the same slot carries the bar again.
+    await userEvent.click(within(sections()).getByRole("link", { name: "Campaigns" }));
+    await screen.findByRole("heading", { level: 1, name: "Campaigns" });
+    expect(slot()).toBe(before.slot);
+    expect(slot()?.querySelector("h1")).toHaveTextContent("Campaigns");
   });
+
+  /**
+   * **Inside a campaign there is no per-screen bar** — the captain's decision
+   * of 2026-09-23, from the Overview redesign: the campaign row is the last
+   * chrome row on every tab, and the screen's title, verbs and tabs are the top
+   * of its content. Above a campaign the bar stays. `TopBar` decides from the
+   * route, so this walks every screen the audit measures, a player's included,
+   * and asks where each one's `h1` landed.
+   */
+  it.each(screens.map((entry) => [entry.name, entry] as const))(
+    "draws %s's header where its route says",
+    async (_, { scenario, path }) => {
+      server.routes = scenarios[scenario]();
+      await renderAt(path);
+      await screen.findByRole("heading", { level: 1 });
+      // The route wrappers draw a header of their own while the relation
+      // settles, so ask once the screen behind them has loaded.
+      await waitFor(() => expect(document.querySelector('[data-slot="loading"]')).toBeNull());
+      const title = screen.getByRole("heading", { level: 1 });
+      const inCampaign = path.startsWith(`/campaigns/${campaignId}`);
+
+      if (inCampaign) {
+        expect(slot()).toBeEmptyDOMElement();
+        expect(screen.getByRole("main").contains(title)).toBe(true);
+        expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
+      } else {
+        expect(slot()?.contains(title)).toBe(true);
+        expect(title.closest("header")).toHaveAttribute("data-slot", "page-header");
+      }
+    },
+    30_000,
+  );
 
   it("pins one chrome stack while an ordinary screen uses the document scroll", async () => {
     await renderAt("/campaigns");
@@ -144,30 +185,45 @@ describe("the persistent shell", () => {
 
   /**
    * jsdom computes no layout, so the pin is the class and the number is the
-   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 on every audited
-   * screen at every width, and the first campaign tab 8px (`ml-2`) after the
-   * lead group, which is capped at `max-w-96` so a long name truncates. A
-   * `min-h-*` is what let sibling screens drift apart before.
+   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 wherever there is a
+   * bar, a 91px chrome stack on every campaign tab at every width, and one
+   * title y and header height across a campaign's tabs. A `min-h-*` is what let
+   * sibling screens drift apart before.
    */
   it("sizes every chrome row to a fixed height, the bar's from its wrap breakpoint up", async () => {
-    await renderAt(`/campaigns/${campaignId}/cast/${npcId}`);
+    await renderAt("/library/spells");
     const bar = (await screen.findByRole("heading", { level: 1 })).closest(
       "[data-slot=page-header]",
     );
 
     expect(sections().parentElement).toHaveClass("h-11");
-    expect(campaignNav().parentElement).toHaveClass("h-11.5");
-    expect(campaignNav().previousElementSibling).toHaveClass("max-w-96", "min-w-0");
     // Narrow, the bar's actions wrap on their own row rather than overlap;
     // `apps/web/audit` measures that they do not.
     expect(bar?.children[0]).toHaveClass("flex-wrap", "@4xl/app:h-19", "@4xl/app:flex-nowrap");
     expect(bar?.querySelector("[data-slot=page-header-actions]")).toHaveClass("flex-wrap");
     expect(bar?.children[1]).toHaveClass("h-10");
-    for (const row of [
-      sections().parentElement,
-      campaignNav().parentElement,
-      ...(bar?.children ?? []),
-    ])
+    for (const row of [sections().parentElement, ...(bar?.children ?? [])])
+      expect(row?.className).not.toMatch(/\bmin-h-/);
+  });
+
+  it("gives a campaign tab the two nav rows and its header in content, with the same reserved lines", async () => {
+    await renderAt(`/campaigns/${campaignId}/cast/${npcId}`);
+    const heading = (await screen.findByRole("heading", { level: 1 })).closest(
+      "[data-slot=page-heading]",
+    );
+
+    expect(campaignNav().parentElement).toHaveClass("h-11.5");
+    expect(campaignNav().previousElementSibling).toHaveClass("max-w-96", "min-w-0");
+    // The title's two lines are reserved and the row does not wrap from the
+    // breakpoint up, so the content under the header starts at one y on every
+    // tab; the NPC's own tabs are a row of their own below it.
+    expect(screen.getByRole("heading", { level: 1 }).parentElement).toHaveClass("h-12");
+    expect(heading?.children[0]).toHaveClass("flex-wrap", "@4xl/app:flex-nowrap");
+    expect(heading?.children[1]).toHaveClass("h-10");
+    expect(
+      within(heading as HTMLElement).getByRole("navigation", { name: "NPC sections" }),
+    ).toBeInTheDocument();
+    for (const row of [campaignNav().parentElement, ...(heading?.children ?? [])])
       expect(row?.className).not.toMatch(/\bmin-h-/);
   });
 

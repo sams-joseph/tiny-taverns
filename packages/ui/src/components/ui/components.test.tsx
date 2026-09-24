@@ -340,6 +340,30 @@ describe("PageHeader", () => {
     expect(cell).toHaveClass("h-12");
     expect(document.querySelector("[data-slot=page-header-actions]")).toBeNull();
   });
+
+  it("draws the same header in content without the bar's band or gutters", () => {
+    render(
+      <PageHeader
+        placement="content"
+        title="Cast"
+        actions={<button type="button">New NPC</button>}
+        tabs={<a href="#profile">Profile</a>}
+      />,
+    );
+    const header = screen.getByRole("heading", { level: 1, name: "Cast" }).closest("header");
+    expect(header).toHaveAttribute("data-slot", "page-heading");
+    expect(header).not.toHaveClass("bg-surface-card");
+    expect(header?.children[0]?.className).not.toMatch(/\bpx-page|\bh-19\b/);
+    // The reserved lines and the wrap rule are the bar's, so siblings still line up.
+    expect(screen.getByRole("heading", { level: 1 }).parentElement).toHaveClass("h-12");
+    expect(header?.children[0]).toHaveClass("flex-wrap", "@4xl/app:flex-nowrap");
+    // The tab strip draws its own hairline, since there is no band under it.
+    expect(screen.getByRole("link", { name: "Profile" }).parentElement).toHaveClass(
+      "h-10",
+      "border-b",
+      "@container",
+    );
+  });
 });
 
 describe("states", () => {

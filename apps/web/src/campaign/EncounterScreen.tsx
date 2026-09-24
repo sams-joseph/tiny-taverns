@@ -27,9 +27,10 @@ import { NoteDialog } from "./NoteDialog";
  * grid is shown where the map says it sits; lining it up is a control of its
  * own that this page does not have yet.
  *
- * **Run is the page's one primary**, and the campaign's own press stands down
- * on this route (`shell/TopBar.tsx`): both are `useCampaignAct`'s `run`, so a
- * fight already on the table is where either would go, and the label says so.
+ * **Run is the page's one primary**, and the campaign row's own press stands
+ * down on this route (`CampaignRow` in `shell/AppShell.tsx`): both are
+ * `useCampaignAct`'s `run`, so a fight already on the table is where either
+ * would go, and the label says so.
  */
 export function EncounterScreen() {
   const { campaignId, encounterId } = useParams({

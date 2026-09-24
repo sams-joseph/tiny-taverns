@@ -25,17 +25,19 @@ The screen list and the scenarios are shared with `src/shell/primaries.test.tsx`
 Per screen, per width, after the DOM has been still for 300ms:
 
 - the heights of the global row, the campaign row, the per-screen bar and the tab strip, and the sticky stack's total height and `z-index`;
-- the gap between the campaign lead group and the first tab, the last item's right edge and the row's right edge;
+- inside a campaign, that there is no per-screen bar, that the stack is the two nav rows on every screen, and that `main`'s top, the header's `h1` and (from 896px up) the header's height are one value across the campaign's screens;
+- the gap between the campaign lead group and the first tab, that the way home and the lead group are never squeezed, that the campaign's press sits after the last tab, the last item's right edge and the row's right edge;
 - the height of every control on the global row;
 - `document.documentElement.scrollWidth` against `clientWidth`, and any chrome control drawn past the right edge (an ancestor's overflow clips it, and `scrollWidth` cannot see that);
 - `scrollWidth > clientWidth` on each chrome row;
-- any two controls in the per-screen bar whose boxes intersect (a flex row that cannot shrink further draws its items over one another, which neither check above sees);
+- any control in a campaign screen's header drawn past the content's edge;
+- any two controls in the per-screen bar or a campaign screen's header whose boxes intersect (a flex row that cannot shrink further draws its items over one another, which neither check above sees);
 - after scrolling the document 400px, whether the stack is still at `top: 0` and `elementFromPoint` still lands in it;
 - after that same scroll, any `sticky` element in `main` stuck above the chrome's bottom edge (under it rather than below it);
 - any element in `main`, outside a dialog, that scrolls vertically on its own — pages scroll with the window;
-- how many `Button`s paint the accent fill, and whether each is in the bar or the body.
+- how many `Button`s paint the accent fill, and whether each is in the bar, the campaign row, a campaign screen's header or the body.
 
-Then, at each width, it opens Hob on the Overview and walks Notes, Party, the runner, the Library and back. At each step it records whether the panel and header are the same DOM nodes (marked on the first step), whether _Ask Hob_ is still pressed, the panel's box and `z-index`, and `scrollWidth` with the panel open. Inline (from 1020 up) the panel must be a full-height column beside the whole shell: top 0, the viewport's height, flush with the right edge, with the sticky stack's right edge meeting its left and `main` ending before it; it then puts a 2000px spacer in `main`, scrolls the document 400px, and requires the panel still at `0` and viewport-tall and the stack still at `top: 0`. Every screen scrolls with the window, so every step must actually scroll the 400px. As an overlay, the panel must not cover the bar.
+Then, at each width, it opens Hob on the Overview and walks Notes, Party, the runner, the Library and back. At each step it records whether the panel and header are the same DOM nodes (marked on the first step), whether _Ask Hob_ is still pressed, the panel's box and `z-index`, and `scrollWidth` with the panel open, and anything in the chrome drawn past the column the panel leaves it. Inline (from 1020 up) the panel must be a full-height column beside the whole shell: top 0, the viewport's height, flush with the right edge, with the sticky stack's right edge meeting its left and `main` ending before it; it then puts a 2000px spacer in `main`, scrolls the document 400px, and requires the panel still at `0` and viewport-tall and the stack still at `top: 0`. Every screen scrolls with the window, so every step must actually scroll the 400px. As an overlay, the panel must not cover the bar.
 
 The report prints one table per width, then the Hob walk, then **Findings**: any value that differs across screens where the rule says it should not, or breaks a rule. A clean run is `Findings (0)`.
 

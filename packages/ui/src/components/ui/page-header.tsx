@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cn } from "../../lib/utils";
+
 /**
  * The per-screen header: what you are looking at, and what you can do to it.
  *
@@ -8,6 +10,18 @@ import type { ReactNode } from "react";
  * `--fs-display-m`, because this is no longer the only display-sized thing on
  * the screen.
  *
+ * ### Two placements, one header
+ *
+ * `bar` is the per-screen bar: a card-coloured band under the nav rows, inside
+ * the app's sticky chrome, carrying the page gutters. `content` is the same
+ * header drawn at the top of a page's own content instead, with no band, no
+ * gutters of its own (the page already has them) and a gutter below it. Inside
+ * a campaign every screen is a tab of one thing, and the captain's decision of
+ * 2026-09-23 takes the bar off all of them: the campaign row is the last chrome
+ * row there, and the screen's title, its verbs and its own tabs are content.
+ * Both placements are this one component so the title, the reserved lines and
+ * the wrap rule below cannot drift apart.
+ *
  * ### The height is fixed, and the subtitle's line is reserved whether or not
  * there is one
  *
@@ -15,10 +29,11 @@ import type { ReactNode } from "react";
  * 89 with one, 141 on the Cast at 760 where the action cluster wrapped under the
  * title. So the content's top edge moved 152 → 180 → 220 walking across one
  * campaign's own tabs, and the page appeared to jump every time a DM changed
- * tab. It is one row of `h-19` now, whose title cell is `h-12` — the display
- * line, the 4px gap and the body line, which is what a title *and* a subtitle
- * measure — and the cell is that tall with a subtitle or without, so the title
- * lands at the same y on every screen in the product.
+ * tab. The title cell is `h-12` — the display line, the 4px gap and the body
+ * line, which is what a title *and* a subtitle measure — and the cell is that
+ * tall with a subtitle or without, so the title and whatever follows the
+ * header land at the same y on every screen. The bar is one row of `h-19`
+ * around it.
  *
  * `mb-0` on the subtitle is not decoration: the delivered `base.css` gives every
  * `p` a `0 0 var(--s-5)` margin, and that 12px below the subtitle was two thirds
@@ -26,21 +41,21 @@ import type { ReactNode } from "react";
  *
  * **From the `@4xl/app` container up, nothing wraps.** A fixed height and a
  * wrapping row are the same bug written twice; the title truncates instead —
- * the title is the one part of the bar that is arbitrary length, so it is the
- * one that gives way.
+ * the title is the one part of the header that is arbitrary length, so it is
+ * the one that gives way.
  *
  * **Below it, the actions take their own row and wrap.** A phone has no width
  * to give: at 390 the Cast's five controls in one unwrapping row were drawn on
  * top of one another (the shell audit's overlap check), and shrinking them
- * would shrink tap targets. So the narrow bar is the title's reserved `h-12`
- * and then as many rows of actions as the screen has, and its height follows
- * the screen there; the fixed-height guarantee is a desktop one.
+ * would shrink tap targets. So the narrow header is the title's reserved
+ * `h-12` and then as many rows of actions as the screen has, and its height
+ * follows the screen there; the fixed-height guarantee is a desktop one.
  *
  * ### Screen actions live here, never in the body
  *
- * `actions` is the screen's verbs, and a screen's one peach primary is among
- * them. A screen-level button right-aligned in the body is the same control
- * drawn in the wrong place; a card's own verbs stay on the card.
+ * `actions` is the screen's verbs. A screen-level button right-aligned in the
+ * body is the same control drawn in the wrong place; a card's own verbs stay on
+ * the card.
  *
  * ### Tabs get their own row, below the header — the captain's rule
  *
@@ -52,15 +67,26 @@ import type { ReactNode } from "react";
  * So `tabs` is a distinct full-width 40px row under the title row, inside the
  * same header so the strip's underline lands on the header's own bottom hairline
  * (`tabsTriggerVariants`' `-mb-px`). A tab-scoped action does not belong in
- * `actions` or on the tab row; it goes inside that tab's content.
+ * `actions` or on the tab row; it goes inside that tab's content. The row is a
+ * `@container`, so a strip that collapses its own items asks how wide the strip
+ * is rather than how wide the window is.
  *
  * The gutters answer the app shell's `app` container, which is the column this
  * header is drawn in.
  */
-function PageHeader({ title, subtitle, actions, tabs }: PageHeaderProps) {
+function PageHeader({ title, subtitle, actions, tabs, placement = "bar" }: PageHeaderProps) {
+  const bar = placement === "bar";
   return (
-    <header data-slot="page-header" className="border-b border-hairline bg-surface-card">
-      <div className="flex flex-wrap items-center gap-x-gutter gap-y-2.5 px-page-sm py-3.5 @3xl/app:px-page @4xl/app:h-19 @4xl/app:flex-nowrap @4xl/app:py-0">
+    <header
+      data-slot={bar ? "page-header" : "page-heading"}
+      className={bar ? "border-b border-hairline bg-surface-card" : "mb-gutter"}
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-gutter gap-y-2.5 @4xl/app:flex-nowrap",
+          bar && "px-page-sm py-3.5 @3xl/app:px-page @4xl/app:h-19 @4xl/app:py-0",
+        )}
+      >
         {/* `h-12` is the reserved pair of lines; see above. The title block is
             top-aligned inside it so the `h1` sits at the same y whether a
             subtitle follows it or not. */}
@@ -91,8 +117,16 @@ function PageHeader({ title, subtitle, actions, tabs }: PageHeaderProps) {
       </div>
       {tabs !== undefined && (
         // `items-stretch` with no bottom padding: the strip's items reach the
-        // header's hairline, exactly as the campaign row's do.
-        <div className="flex h-10 items-stretch px-page-sm @3xl/app:px-page">{tabs}</div>
+        // hairline, exactly as the campaign row's do. In the bar that is the
+        // bar's own; in content the strip draws one, under the title row.
+        <div
+          className={cn(
+            "@container flex h-10 items-stretch",
+            bar ? "px-page-sm @3xl/app:px-page" : "mt-3 border-b border-hairline",
+          )}
+        >
+          {tabs}
+        </div>
       )}
     </header>
   );
@@ -105,6 +139,12 @@ interface PageHeaderProps {
   readonly actions?: ReactNode;
   /** A tab strip, on its own row below the title — never beside it. */
   readonly tabs?: ReactNode;
+  /**
+   * `bar` (the default) is the band in the app's chrome; `content` is the same
+   * header at the top of the page's content, which is where a campaign's tabs
+   * draw theirs. See above.
+   */
+  readonly placement?: "bar" | "content";
 }
 
 export { PageHeader };
