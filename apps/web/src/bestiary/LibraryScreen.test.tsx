@@ -447,11 +447,10 @@ describe("LibraryScreen", () => {
     await renderLibrary(mintingSession());
     await screen.findByText("Bog Owlbear");
 
-    const item = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", {
+    const item = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("button", {
       name: "Library",
     });
-    expect(item).toHaveAttribute("href", "/library");
-    expect(item).toHaveAttribute("aria-current", "page");
+    expect(item).toHaveAttribute("aria-current", "true");
     expect(
       within(screen.getByRole("navigation", { name: "Sections" })).queryByRole("link", {
         name: "Rules",

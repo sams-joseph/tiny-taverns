@@ -37,10 +37,10 @@ import { membershipsAtom } from "../campaign/load";
  * remembered: being inside a campaign is the same fact as no global item being
  * lit.
  *
- * The global row is `Shared Worlds | Characters | Library`, plus `Components` in a dev build. A world's
- * own screen is *within* Groups; a character sheet is *within* the roster it
- * was opened from, so both light `characters` — the same containment a fight
- * has with its campaign's Overview.
+ * The global row is `Campaigns | Library | Characters`. The Shared Worlds are
+ * in the Campaigns panel, so a world's screens light `campaigns`; a character
+ * sheet is *within* the roster it was opened from, so it lights `characters` —
+ * the same containment a fight has with its campaign's Overview.
  *
  * **There is one Library section.** `/library` and its shelves all light
  * *Library* on the global row and let the screen's own tabs say which shelf is

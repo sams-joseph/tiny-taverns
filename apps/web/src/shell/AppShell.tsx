@@ -9,6 +9,12 @@ import {
   cn,
   Icon,
   Kbd,
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
   navPillVariants,
   type IconName,
 } from "@taverns/ui";
@@ -19,6 +25,7 @@ import { SignInSurface } from "../auth/SignInSurface";
 import { useCampaignAct } from "../campaign/act";
 import { campaignAtom, campaignNightAtom } from "../campaign/load";
 import { HobFrame, HobRegion } from "../hob/HobDock";
+import { SHELVES, useActiveShelf } from "../library/shelves";
 import {
   useCampaignId,
   useCampaignRelation,
@@ -27,7 +34,6 @@ import {
   type Section,
 } from "./location";
 import { TopBarSlot } from "./slots";
-import { navLinkProps } from "./navLink";
 import { TabRow, type Collapse } from "./TabRow";
 
 /**
@@ -111,16 +117,6 @@ import { TabRow, type Collapse } from "./TabRow";
 interface NavItem {
   readonly label: string;
   /**
-   * The glyph, on the global row only.
-   *
-   * The campaign row draws labels and nothing else — `CampItem` in the delivery
-   * renders `{item.label}` and no icon, and `CAMP_DM`/`CAMP_PLAYER` carry no
-   * `icon` key to render. That is not only the drawing: six labelled items
-   * beside a name and a badge is the widest thing in this bar, and the icons
-   * were the part of it carrying no information the label did not.
-   */
-  readonly icon?: IconName;
-  /**
    * Where it goes, and **which section it is**, as one thing.
    *
    * `link` is `LinkProps` rather than a hand-built href, so a nav item pointing
@@ -137,28 +133,6 @@ interface NavItem {
    */
   readonly collapse?: Collapse;
 }
-
-/**
- * The global row: everything that is above any campaign, and the same four
- * items for every account — there is no mode left to branch on.
- *
- * `Campaigns` leads: the table is the primary thing somebody came here to
- * create or join. `Characters` is
- * account-owned and campaign-scoped nowhere — `GET /me/characters` is the one
- * read on `character` with no campaign in its path. `Library` is the
- * account-owned originals (monsters, rules, spells, equipment, magic items),
- * in no campaign, so it genuinely belongs above one; every account has a
- * Library, so there is no relation to gate it on.
- */
-const globalNav: ReadonlyArray<NavItem> = [
-  { label: "Campaigns", icon: "layers", link: { to: "/campaigns" }, section: "campaigns" },
-  // Account-owned and campaign-scoped nowhere: `GET /me/characters` is the one
-  // read on `character` with no campaign in its path.
-  { label: "Characters", icon: "user", link: { to: "/characters" }, section: "characters" },
-  // `footprints`, as the delivery names it — the same glyph the bestiary's own
-  // empty state wears, which is what makes the two read as one corpus.
-  { label: "Library", icon: "footprints", link: { to: "/library" }, section: "library" },
-];
 
 /**
  * The campaign row: the screens inside one table, derived from **what this
@@ -244,33 +218,153 @@ const campaignNavFor = (
   ];
 };
 
+/** One destination in a global item's panel. */
+interface GlobalEntry {
+  readonly label: string;
+  readonly link: LinkProps;
+  /** This is the page you are on (or the list the page you are on is in). */
+  readonly current: boolean;
+}
+
 /**
- * The global row's control — `navPillVariants`, the row's one recipe, which
- * `@taverns/ui` keeps beside the campaign row's underline. *Ask Hob* wears the
- * same one, because the alternative was what shipped: the four nav items at
- * 26px and *Ask Hob* wearing `Button size="sm"` at 32, measured, on a 44px row.
+ * The global row: everything that is above any campaign, the same three items
+ * for every account — there is no mode left to branch on — built on
+ * `@taverns/ui`'s `NavigationMenu`.
  *
- * The item is lit by `item.section`, not by `Link`'s own notion of active: a
+ * 1. **Campaigns** leads, and opens onto *Campaigns* and *Shared Worlds*: the
+ *    table is the primary thing somebody came here to create or join, and a
+ *    Shared World is the thing several tables connect to, so the two are one
+ *    part of the app. A world's own screen lights this item.
+ * 2. **Library** opens onto every shelf, from `library/shelves.ts` — the same
+ *    list the Library's own tab row draws, so the two cannot disagree. It is
+ *    the account-owned originals, in no campaign, so it genuinely belongs
+ *    above one; every account has a Library, so there is nothing to gate it on.
+ * 3. **Characters** is a plain link. It is account-owned and campaign-scoped
+ *    nowhere — `GET /me/characters` is the one read on `character` with no
+ *    campaign in its path — and it has no second page to list.
+ *
+ * ### A trigger is a button, and its page is the panel's first link
+ *
+ * The two items with panels are disclosure buttons, as shadcn's and Base UI's
+ * are, not links that also open a menu: a control that navigates on a click
+ * and discloses on a keypress cannot tell a screen reader which it is. The
+ * pages stay one pointer click away because a panel opens on hover — the
+ * click is on the link under it — and a keyboard reaches the first link with
+ * Enter then Tab, or ArrowDown.
+ *
+ * ### What is lit
+ *
+ * An item is lit by `section` rather than by `Link`'s own notion of active: a
  * nav item is lit for a whole *part of the app* — a character sheet lights
- * Characters — which is broader than whether this URL is the current one.
+ * Characters — which is broader than whether this URL is the current one. The
+ * panel's own link for the page you are on carries `aria-current="page"`.
+ * Inside a campaign nothing on this row is lit, because the campaign row says
+ * where you are (see this file's header).
  *
- * Below the row's `@2xl` the label is for screen readers and the tooltip only:
- * the row's second collapse, after the wordmark, and the one that lets it fit a
- * phone (at 390 the labelled row ran past the window's edge).
+ * Below the row's `@2xl` each item is its icon: the label is for screen readers
+ * and the tooltip only — the row's second collapse, after the wordmark, and the
+ * one that lets it fit a phone. A trigger keeps its chevron, which is what says
+ * it opens something.
  */
-function GlobalNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
+function GlobalNav({ section }: { readonly section: Section }) {
+  const matchRoute = useMatchRoute();
+  const shelf = useActiveShelf();
+  const onWorlds = matchRoute({ to: "/worlds", fuzzy: true }) !== false;
+
+  const campaigns: ReadonlyArray<GlobalEntry> = [
+    {
+      label: "Campaigns",
+      link: { to: "/campaigns" },
+      current: matchRoute({ to: "/campaigns" }) !== false,
+    },
+    { label: "Shared Worlds", link: { to: "/worlds" }, current: onWorlds },
+  ];
+  const library: ReadonlyArray<GlobalEntry> = SHELVES.map((entry) => ({
+    label: entry.label,
+    link: { to: entry.to },
+    current: entry.to === shelf,
+  }));
+
   return (
-    <Link
-      {...item.link}
-      {...navLinkProps(active)}
-      title={item.label}
-      className={navPillVariants({ state: active ? "here" : "idle" })}
-    >
-      {item.icon !== undefined && (
-        <Icon name={item.icon} size={13} className={active ? "text-accent-ink" : undefined} />
-      )}
-      <span className="@max-2xl:sr-only">{item.label}</span>
-    </Link>
+    <NavigationMenu aria-label="Sections">
+      <NavigationMenuList>
+        <GlobalPanel
+          label="Campaigns"
+          icon="layers"
+          active={section === "campaigns"}
+          entries={campaigns}
+        />
+        {/* `footprints`, as the delivery names it — the same glyph the
+            bestiary's own empty state wears, which is what makes the two read
+            as one corpus. */}
+        <GlobalPanel
+          label="Library"
+          icon="footprints"
+          active={section === "library"}
+          entries={library}
+        />
+        <NavigationMenuItem>
+          <NavigationMenuLink
+            variant="pill"
+            active={section === "characters"}
+            title="Characters"
+            render={<Link to="/characters" activeOptions={{ exact: true }} activeProps={{}} />}
+          >
+            <GlobalLabel label="Characters" icon="user" active={section === "characters"} />
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+      </NavigationMenuList>
+    </NavigationMenu>
+  );
+}
+
+/** A global item with a panel of destinations under it. */
+function GlobalPanel({
+  label,
+  icon,
+  active,
+  entries,
+}: {
+  readonly label: string;
+  readonly icon: IconName;
+  readonly active: boolean;
+  readonly entries: ReadonlyArray<GlobalEntry>;
+}) {
+  return (
+    <NavigationMenuItem>
+      <NavigationMenuTrigger active={active} title={label}>
+        <GlobalLabel label={label} icon={icon} active={active} />
+      </NavigationMenuTrigger>
+      <NavigationMenuContent>
+        {entries.map((entry) => (
+          <NavigationMenuLink
+            key={entry.label}
+            active={entry.current}
+            render={<Link {...entry.link} activeOptions={{ exact: true }} activeProps={{}} />}
+          >
+            {entry.label}
+          </NavigationMenuLink>
+        ))}
+      </NavigationMenuContent>
+    </NavigationMenuItem>
+  );
+}
+
+/** A global control's glyph and its label, which is screen-reader only below `@2xl`. */
+function GlobalLabel({
+  label,
+  icon,
+  active,
+}: {
+  readonly label: string;
+  readonly icon: IconName;
+  readonly active: boolean;
+}) {
+  return (
+    <>
+      <Icon name={icon} size={13} className={active ? "text-accent-ink" : undefined} />
+      <span className="@max-2xl:sr-only">{label}</span>
+    </>
   );
 }
 
@@ -636,11 +730,7 @@ function TopNav({
             </span>
           </div>
 
-          <nav aria-label="Sections" className="flex items-center gap-1">
-            {globalNav.map((item) => (
-              <GlobalNavLink key={item.label} item={item} active={item.section === section} />
-            ))}
-          </nav>
+          <GlobalNav section={section} />
 
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {/* There is no role switch beside this any more: the relation is a

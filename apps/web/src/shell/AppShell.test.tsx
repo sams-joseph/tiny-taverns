@@ -1,9 +1,10 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
 import type { RouteIds } from "@tanstack/react-router";
 import { Schema } from "effect";
+import { SHELVES } from "../library/shelves";
 import type { routeTree } from "../routes";
 import { renderAt } from "../test/renderRoute";
 
@@ -15,7 +16,7 @@ import { renderAt } from "../test/renderRoute";
  * **There is no role switch to test any more, and that is the finding.** The
  * relation is per campaign — `useCampaignRelation`, off the membership read —
  * so the same campaign URL draws creator chrome to its creator and the two
- * player screens to a player, and the global row is the same four items
+ * player screens to a player, and the global row is the same three items
  * everywhere.
  *
  * What is enumerated below is `RouteIds` of the real route tree rather than a
@@ -99,6 +100,35 @@ const reachable = Object.entries(everyRoute).filter(
 
 /** The global row: everything above a campaign. */
 const nav = () => screen.getByRole("navigation", { name: "Sections" });
+/** The global row's controls, in order: two panel triggers and a link. */
+const globalControls = () =>
+  [...nav().querySelectorAll<HTMLElement>("a[href], button")].map((control) => ({
+    role: control.tagName === "A" ? "link" : "button",
+    name: control.textContent,
+  }));
+const trigger = (name: "Campaigns" | "Library") => within(nav()).getByRole("button", { name });
+/** The open panel, which portals out of the `nav` to the body. */
+const panel = () =>
+  waitFor(() => {
+    const popup = document.querySelector<HTMLElement>('[data-slot="navigation-menu-popup"]');
+    expect(popup).not.toBeNull();
+    return popup as HTMLElement;
+  });
+const panelLinks = async () =>
+  within(await panel())
+    .getAllByRole("link")
+    .map((link) => ({
+      name: link.textContent,
+      href: link.getAttribute("href"),
+      current: link.getAttribute("aria-current"),
+    }));
+/** The one panel entry marked as the page you are on. */
+const currentEntry = async (item: "Campaigns" | "Library") => {
+  await userEvent.click(trigger(item));
+  const current = (await panelLinks()).filter((link) => link.current === "page");
+  return current.map((link) => link.name);
+};
+
 /** The campaign row, which exists only inside a campaign. */
 const campaignNav = () => screen.getByRole("navigation", { name: "This campaign" });
 const noCampaignNav = () => screen.queryByRole("navigation", { name: "This campaign" });
@@ -121,15 +151,17 @@ describe("the shell's top bar", () => {
   it.each(reachable)("carries the same global row at %s", async (_id, path) => {
     await renderAt(path);
 
-    const links = within(nav()).getAllByRole("link");
     // One row for every account — there is no mode left to branch on, so the
     // items are the same items everywhere, join and Server pages included.
-    expect(links.map((link) => link.textContent)).toEqual(["Campaigns", "Characters", "Library"]);
-    expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/campaigns",
-      "/characters",
-      "/library",
+    expect(globalControls()).toEqual([
+      { role: "button", name: "Campaigns" },
+      { role: "button", name: "Library" },
+      { role: "link", name: "Characters" },
     ]);
+    expect(within(nav()).getByRole("link", { name: "Characters" })).toHaveAttribute(
+      "href",
+      "/characters",
+    );
     // …and no role switch beside them, ever again: the relation is a fact
     // about a pair, read per campaign, and there is nothing global to toggle.
     expect(screen.queryByLabelText("Role")).toBeNull();
@@ -139,8 +171,11 @@ describe("the shell's top bar", () => {
     vi.stubEnv("DEV", false);
     try {
       await renderAt("/campaigns");
-      const links = within(nav()).getAllByRole("link");
-      expect(links.map((link) => link.textContent)).toEqual(["Campaigns", "Characters", "Library"]);
+      expect(globalControls().map((control) => control.name)).toEqual([
+        "Campaigns",
+        "Library",
+        "Characters",
+      ]);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -148,34 +183,111 @@ describe("the shell's top bar", () => {
 
   it("lights Characters from a sheet, because a sheet is within the roster", async () => {
     await renderAt(`/characters/${characterId}`);
-    expect(within(nav()).getByText("Characters").closest("a")?.getAttribute("aria-current")).toBe(
+    expect(within(nav()).getByRole("link", { name: "Characters" })).toHaveAttribute(
+      "aria-current",
       "page",
     );
-    expect(
-      within(nav()).getByText("Campaigns").closest("a")?.getAttribute("aria-current"),
-    ).toBeNull();
+    expect(trigger("Campaigns")).not.toHaveAttribute("aria-current");
+    expect(trigger("Library")).not.toHaveAttribute("aria-current");
+  });
+
+  describe("the Campaigns item", () => {
+    it("opens onto Campaigns and Shared Worlds", async () => {
+      await renderAt("/library");
+      const campaigns = trigger("Campaigns");
+      expect(campaigns).toHaveAttribute("aria-expanded", "false");
+      await userEvent.click(campaigns);
+      expect(campaigns).toHaveAttribute("aria-expanded", "true");
+      expect(await panelLinks()).toEqual([
+        { name: "Campaigns", href: "/campaigns", current: null },
+        { name: "Shared Worlds", href: "/worlds", current: null },
+      ]);
+    });
+
+    it.each([
+      ["/campaigns", "Campaigns"],
+      ["/worlds", "Shared Worlds"],
+      [`/worlds/${worldId}`, "Shared Worlds"],
+      [`/worlds/${worldId}/chronicle`, "Shared Worlds"],
+    ])("is lit at %s, with %s as the current entry", async (path, entry) => {
+      await renderAt(path);
+      expect(trigger("Campaigns")).toHaveAttribute("aria-current", "true");
+      expect(trigger("Library")).not.toHaveAttribute("aria-current");
+      expect(within(nav()).getByRole("link", { name: "Characters" })).not.toHaveAttribute(
+        "aria-current",
+      );
+      expect(await currentEntry("Campaigns")).toEqual([entry]);
+    });
+
+    it("goes to the Shared Worlds from its panel, and closes", async () => {
+      await renderAt("/campaigns");
+      await userEvent.click(trigger("Campaigns"));
+      await userEvent.click(within(await panel()).getByRole("link", { name: "Shared Worlds" }));
+      await waitFor(() => expect(globalThis.location.pathname).toBe("/worlds"));
+      await waitFor(() => expect(trigger("Campaigns")).toHaveAttribute("aria-expanded", "false"));
+      expect(trigger("Campaigns")).toHaveAttribute("aria-current", "true");
+    });
+
+    it("opens from the keyboard, and Escape hands focus back to it", async () => {
+      await renderAt("/characters");
+      const campaigns = trigger("Campaigns");
+      act(() => campaigns.focus());
+      await userEvent.keyboard("{ArrowDown}");
+      expect(campaigns).toHaveAttribute("aria-expanded", "true");
+      const first = within(await panel()).getByRole("link", { name: "Campaigns" });
+      await waitFor(() => expect(first).toHaveFocus());
+      await userEvent.keyboard("{ArrowDown}");
+      expect(within(await panel()).getByRole("link", { name: "Shared Worlds" })).toHaveFocus();
+
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(campaigns).toHaveAttribute("aria-expanded", "false"));
+      expect(campaigns).toHaveFocus();
+
+      // The row itself is walked with the arrows, triggers and link alike.
+      await userEvent.keyboard("{ArrowRight}");
+      expect(trigger("Library")).toHaveFocus();
+      await userEvent.keyboard("{ArrowRight}");
+      expect(within(nav()).getByRole("link", { name: "Characters" })).toHaveFocus();
+    });
   });
 
   describe("the Library item", () => {
-    it("is lit at every Library shelf, with Rules no longer a global peer", async () => {
-      for (const path of [
-        "/library",
-        "/library/rules",
-        "/library/spells",
-        "/library/equipment",
-        "/library/magic-items",
-      ]) {
+    it("opens onto every shelf, the same list as the Library's own tabs", async () => {
+      await renderAt("/library/spells");
+      const tabs = within(screen.getByRole("navigation", { name: "Library shelves" }))
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]);
+
+      await userEvent.click(trigger("Library"));
+      const entries = await panelLinks();
+      expect(entries.map((entry) => [entry.name, entry.href])).toEqual(
+        SHELVES.map((shelf) => [shelf.label, shelf.to]),
+      );
+      // The tab row keeps some shelves in its *More* menu on a narrow row, and
+      // jsdom draws both; every one it links is on the panel, in its order.
+      expect(tabs.length).toBeGreaterThan(0);
+      for (const tab of tabs)
+        expect(entries.map((entry) => [entry.name, entry.href])).toContainEqual(tab);
+    });
+
+    it.each(SHELVES.map((shelf) => [shelf.to, shelf.label]))(
+      "is lit at %s, with %s as the current entry",
+      async (path, label) => {
         await renderAt(path);
-        expect(
-          within(nav()).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
-        ).toBe("page");
-        expect(
-          within(nav()).getByRole("link", { name: "Campaigns" }).getAttribute("aria-current"),
-        ).toBeNull();
+        expect(trigger("Library")).toHaveAttribute("aria-current", "true");
+        expect(trigger("Campaigns")).not.toHaveAttribute("aria-current");
         expect(within(nav()).queryByRole("link", { name: "Rules" })).toBeNull();
         expect(noCampaignNav()).toBeNull();
-        cleanup();
-      }
+        expect(await currentEntry("Library")).toEqual([label]);
+      },
+    );
+
+    it("goes to a shelf from its panel", async () => {
+      await renderAt("/campaigns");
+      await userEvent.click(trigger("Library"));
+      await userEvent.click(within(await panel()).getByRole("link", { name: "Magic items" }));
+      await waitFor(() => expect(globalThis.location.pathname).toBe("/library/magic-items"));
+      await waitFor(() => expect(trigger("Library")).toHaveAttribute("aria-current", "true"));
     });
 
     it("lands an old bestiary bookmark on the campaign, with the Library above", async () => {
@@ -184,7 +296,7 @@ describe("the shell's top bar", () => {
       // it named, and the Library on the global row is where the corpus lives.
       await renderAt(`/campaigns/${campaignId}/bestiary`);
       expect(screen.queryByRole("link", { name: "Bestiary" })).toBeNull();
-      expect(within(nav()).getByRole("link", { name: "Library" })).toBeTruthy();
+      expect(trigger("Library")).toBeTruthy();
       await waitFor(() =>
         expect(
           within(campaignNav())
@@ -214,6 +326,7 @@ describe("the shell's top bar", () => {
     const row = nav().parentElement;
     expect(row).not.toBeNull();
     const controls = [...(row as HTMLElement).querySelectorAll<HTMLElement>("a[href], button")];
+    // Campaigns and Library (panel triggers), Characters, and Ask Hob.
     expect(controls.length).toBe(4);
     for (const control of controls) {
       expect(control.className).toContain("h-6.5");
@@ -263,7 +376,7 @@ describe("the shell's top bar", () => {
     vi.stubEnv("DEV", dev);
     try {
       await renderAt("/campaigns");
-      expect(within(nav()).queryByRole("link", { name: "Components" })).toBeNull();
+      expect(within(nav()).queryByText("Components")).toBeNull();
     } finally {
       vi.unstubAllEnvs();
     }
@@ -318,8 +431,12 @@ describe("the shell's top bar", () => {
       // fact.
       await renderAt(`/campaigns/${campaignId}/notes`);
 
-      for (const link of within(nav()).getAllByRole("link")) {
-        expect(link.getAttribute("aria-current")).toBeNull();
+      for (const control of [
+        trigger("Campaigns"),
+        trigger("Library"),
+        within(nav()).getByRole("link", { name: "Characters" }),
+      ]) {
+        expect(control).not.toHaveAttribute("aria-current");
       }
       await waitFor(() =>
         expect(

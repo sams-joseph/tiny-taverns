@@ -543,6 +543,61 @@ function pressAskHob() {
   return button !== undefined;
 }
 
+/** The global row's panel triggers, with where to press each. */
+function globalTriggers() {
+  return [...document.querySelectorAll('nav[aria-label="Sections"] button')].map((button) => {
+    const box = button.getBoundingClientRect();
+    return {
+      name: button.textContent.trim(),
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2,
+    };
+  });
+}
+
+/**
+ * The open panel: whether its trigger says so, its box against the viewport,
+ * its links, whether the first of them is what a pointer at its centre lands
+ * on (the panel is on top of the chrome it opens from), and whether opening it
+ * made the page any wider.
+ */
+function globalPanel(name) {
+  const trigger = [...document.querySelectorAll('nav[aria-label="Sections"] button')].find(
+    (button) => button.textContent.trim() === name,
+  );
+  const popup = document.querySelector('[data-slot="navigation-menu-popup"]');
+  if (popup === null) return { expanded: trigger?.getAttribute("aria-expanded"), popup: null };
+  const box = popup.getBoundingClientRect();
+  const links = [...popup.querySelectorAll("a[href]")];
+  const first = links[0]?.getBoundingClientRect();
+  const hit =
+    first === undefined
+      ? null
+      : document.elementFromPoint(first.x + first.width / 2, first.y + first.height / 2);
+  return {
+    expanded: trigger?.getAttribute("aria-expanded"),
+    popup: {
+      left: Math.round(box.left),
+      right: Math.round(box.right),
+      bottom: Math.round(box.bottom),
+    },
+    links: links.map((link) => link.textContent.trim()),
+    onTop: hit !== null && links[0].contains(hit),
+    scrollWidth: document.documentElement.scrollWidth,
+    viewport: { w: document.documentElement.clientWidth, h: window.innerHeight },
+  };
+}
+
+function panelClosed() {
+  return {
+    popup: document.querySelector('[data-slot="navigation-menu-popup"]') !== null,
+    expanded: [...document.querySelectorAll('nav[aria-label="Sections"] button')].map((button) =>
+      button.getAttribute("aria-expanded"),
+    ),
+    focus: document.activeElement?.textContent?.trim() ?? null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 
 const port = await freePort();
@@ -571,6 +626,7 @@ console.error(`audit: vite on ${origin}; chromium pid ${chromium.pid}`);
 
 const results = [];
 const hob = [];
+const panels = [];
 let cdp;
 try {
   const debugPort = new URL(browserWs).port;
@@ -632,6 +688,37 @@ try {
         scrollers,
         unanswered,
       });
+    }
+
+    // The global row's panels: pressed with a real pointer, on a Library shelf
+    // (the page with the longest panel's owner lit), measured open, then shut
+    // with Escape — which must close it and leave focus on its trigger.
+    if (only === undefined || only.includes("panels")) {
+      const spells = screens.find((s) => s.name === "spells");
+      await load(spells.scenario, spells.path);
+      for (const trigger of await cdp.run(globalTriggers)) {
+        for (const type of ["mouseMoved", "mousePressed", "mouseReleased"])
+          await cdp.send("Input.dispatchMouseEvent", {
+            type,
+            x: trigger.x,
+            y: trigger.y,
+            button: "left",
+            clickCount: 1,
+          });
+        await sleep(400);
+        const open = await cdp.run(globalPanel, trigger.name);
+        // Off the trigger first, or hover would hold it open past the Escape.
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: height - 1 });
+        for (const type of ["keyDown", "keyUp"])
+          await cdp.send("Input.dispatchKeyEvent", {
+            type,
+            key: "Escape",
+            code: "Escape",
+            windowsVirtualKeyCode: 27,
+          });
+        await sleep(400);
+        panels.push({ width, trigger: trigger.name, ...open, closed: await cdp.run(panelClosed) });
+      }
     }
 
     // The Hob panel across navigation: open it on the Overview, walk through
@@ -907,6 +994,39 @@ for (const width of widths) {
   }
 }
 
+for (const p of panels) {
+  const at = `${p.width}: the ${p.trigger} panel`;
+  if (p.popup === null) {
+    findings.push(`${at} did not open`);
+    continue;
+  }
+  if (p.expanded !== "true") findings.push(`${at}: its trigger is not aria-expanded`);
+  if (p.links.length === 0) findings.push(`${at} has no links`);
+  if (p.popup.left < 0 || p.popup.right > p.viewport.w || p.popup.bottom > p.viewport.h)
+    findings.push(`${at} is drawn past the viewport: ${JSON.stringify(p.popup)}`);
+  if (p.scrollWidth > p.viewport.w)
+    findings.push(`${at}: scrollWidth ${p.scrollWidth} != ${p.viewport.w}`);
+  if (!p.onTop) findings.push(`${at}: its first link is under something`);
+  if (p.closed.popup || p.closed.expanded.includes("true"))
+    findings.push(`${at}: still open after Escape`);
+  if (p.closed.focus !== p.trigger)
+    findings.push(`${at}: Escape left focus on "${p.closed.focus}", not its trigger`);
+}
+
+console.log(`\n## Global panels`);
+for (const p of panels)
+  console.log(
+    [
+      p.width,
+      p.trigger,
+      p.popup === null ? "closed" : `${p.popup.left}..${p.popup.right} to y ${p.popup.bottom}`,
+      `links=${p.links?.join("|") ?? "-"}`,
+      `onTop=${p.onTop}`,
+      `scrollW=${p.scrollWidth}`,
+      `after Esc: focus=${p.closed.focus}`,
+    ].join("\t"),
+  );
+
 console.log(`\n## Hob across navigation`);
 for (const h of hob)
   console.log(
@@ -938,4 +1058,4 @@ console.log(`\n## Findings (${findings.length})`);
 for (const finding of findings) console.log(`- ${finding}`);
 
 if (args.json !== undefined)
-  writeFileSync(args.json, JSON.stringify({ results, hob, findings }, null, 2));
+  writeFileSync(args.json, JSON.stringify({ results, hob, panels, findings }, null, 2));

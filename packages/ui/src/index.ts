@@ -86,6 +86,14 @@ export {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
+export {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "./components/ui/navigation-menu";
 export { FilterInput } from "./components/ui/filter-input";
 export { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 export {
