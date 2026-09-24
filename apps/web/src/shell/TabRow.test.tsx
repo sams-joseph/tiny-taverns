@@ -9,8 +9,8 @@ import { renderAt } from "../test/renderRoute";
  * campaign row, whose six tabs and press do not fit a phone.
  *
  * jsdom applies no container query, so every item and every band's *More* is
- * in the document here and the widths are the shell audit's
- * (`apps/web/audit/`). What is pinned is the plan the classes carry: which
+ * in the document here and the widths are the Playwright suite's
+ * (`apps/web/e2e/`). What is pinned is the plan the classes carry: which
  * items leave the row at which step, and that the trigger shown at each step
  * holds exactly those.
  */

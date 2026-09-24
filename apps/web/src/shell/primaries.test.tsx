@@ -2,7 +2,8 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { installStubServer } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
-import { scenarios, screens } from "../test/screens";
+import { scenarios } from "../test/scenarios";
+import { screens } from "../test/screens";
 
 /**
  * One peach primary per screen, at most.
@@ -11,7 +12,7 @@ import { scenarios, screens } from "../test/screens";
  * thing to do"; two of them say nothing. Phase 3 of the shell cleanup demoted
  * every card's own primary to `outline` and moved the campaign's verb into the
  * bar, and this is the test that remembers the rule afterwards. It walks the
- * same screens as the browser audit (`apps/web/audit/`), over the same
+ * same screens as the Playwright suite (`apps/web/e2e/`), over the same
  * fixture maps, and counts `Button`'s default variant, which is the only thing
  * that paints `bg-accent` on a `[data-slot=button]`.
  */

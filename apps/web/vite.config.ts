@@ -1,6 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -19,6 +19,8 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    // `e2e/` is Playwright's (`pnpm -F web e2e`).
+    exclude: [...configDefaults.exclude, "e2e/**"],
     /**
      * Hosted sign-in is off for the test run, always.
      *

@@ -517,7 +517,7 @@ describe("the runner", () => {
     expect(panel().getByText("1d6+2")).toBeInTheDocument();
   });
 
-  // Heights are the browser's (`pnpm -F web shell-audit` walks the runner);
+  // Heights are the browser's (`pnpm -F web e2e` measures the runner);
   // what jsdom can pin is who scrolls. The window does, and only the window:
   // the runner is a document screen (no `fill`), so nothing between these
   // cards and the page may bound a height or scroll on its own.

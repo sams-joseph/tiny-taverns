@@ -6,17 +6,17 @@ backend, sharing config and a component library across a pnpm + Turborepo worksp
 
 ## Stack
 
-| Concern         | Choice                                                                                  |
-| --------------- | --------------------------------------------------------------------------------------- |
-| Package manager | [pnpm](https://pnpm.io) workspaces                                                      |
-| Task runner     | [Turborepo](https://turborepo.dev)                                                      |
-| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)  |
-| Backend         | [Effect](https://effect.website) v4 (beta) HTTP server + `@effect/platform-node`        |
-| Language        | TypeScript (`strict`, ESM everywhere)                                                   |
-| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens |
-| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives         |
-| Lint / format   | ESLint (flat config) + Prettier                                                         |
-| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library)                                  |
+| Concern         | Choice                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| Package manager | [pnpm](https://pnpm.io) workspaces                                                           |
+| Task runner     | [Turborepo](https://turborepo.dev)                                                           |
+| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)       |
+| Backend         | [Effect](https://effect.website) v4 (beta) HTTP server + `@effect/platform-node`             |
+| Language        | TypeScript (`strict`, ESM everywhere)                                                        |
+| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens      |
+| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives              |
+| Lint / format   | ESLint (flat config) + Prettier                                                              |
+| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library), [Playwright](https://playwright.dev) |
 
 ## Layout
 
@@ -395,11 +395,15 @@ nothing. The server suite runs at most eight files concurrently because each fre
 applies the complete DDL ledger; leaving worker count proportional to host cores can exhaust
 Postgres's shared lock table even while its connection limit has ample room.
 
-No Playwright E2E is included: for boilerplate the value did not justify the extra CI
-weight. Add it later under `apps/web` if an end-to-end smoke test becomes useful.
+`apps/web` also has a Playwright suite, `pnpm -F web e2e`, that measures the shell's layout
+in Chromium (overflow, fixed chrome heights, alignment across a campaign's tabs, the Hob
+panel, the global nav panels, the Overview heroes) over the same fixture maps, served by a
+stub API inside Vite, so it needs no database or API server. `apps/web/e2e/README.md` says
+how to run, debug and extend it; install its browser once with
+`pnpm -F web exec playwright install chromium`.
 
 ## Continuous integration
 
 `.github/workflows/ci.yml` installs pnpm + Node, runs `pnpm install --frozen-lockfile`,
-then `pnpm turbo run lint typecheck test build`. The repo is local-only for now (no
-remote configured); the workflow is ready for when one is added.
+then `pnpm turbo run lint typecheck test build` and `pnpm format:check`. A second job runs
+the web Playwright suite and uploads its HTML report and traces when it fails.

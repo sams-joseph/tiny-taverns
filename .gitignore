@@ -10,3 +10,6 @@ coverage/
 *.tsbuildinfo
 # The filesystem storage driver's default root (STORAGE_FS_ROOT).
 .storage/
+# Playwright: `apps/web/e2e/README.md`.
+test-results/
+playwright-report/

@@ -1,9 +1,9 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
-import { ABILITY_KEYS, CampaignId } from "@taverns/api";
-import { Schema } from "effect";
+import { ABILITY_KEYS } from "@taverns/api";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
+import { campaignId, encounterId, npcId, runId, sessionId, worldId } from "../test/ids";
 
 /**
  * The campaign view's test wire: fixtures, a stub server, and one way in.
@@ -18,13 +18,11 @@ import { type HostedSession } from "../auth/hostedSession";
  * to a shape upstream is one edit, not two. Add new ones here.
  */
 
-export const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
-export const sessionId = "2b1f2a1e-0000-4000-8000-000000000501";
-export const encounterId = "2b1f2a1e-0000-4000-8000-000000000601";
+/** The ids a screen's path names are `test/ids.ts`'s, which says why. */
+export { campaignId, encounterId, npcId, runId, sessionId, worldId };
 export const sketchId = "2b1f2a1e-0000-4000-8000-000000000602";
 export const prepItemId = "2b1f2a1e-0000-4000-8000-000000000701";
 export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
-export const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
 export const npcThreadId = "2b1f2a1e-0000-4000-8000-00000000e001";
 export const goblinId = "2b1f2a1e-0000-4000-8000-000000000a01";
 export const hagId = "2b1f2a1e-0000-4000-8000-000000000a02";
@@ -52,7 +50,6 @@ export const dwarvishLanguageId = "2b1f2a1e-0000-4000-8000-000000000f32";
 export const athleticsSkillId = "2b1f2a1e-0000-4000-8000-000000000f41";
 export const athleticsProficiencyId = "2b1f2a1e-0000-4000-8000-000000000f51";
 export const darkvisionTraitId = "2b1f2a1e-0000-4000-8000-000000000f61";
-export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 export const combatantId = "2b1f2a1e-0000-4000-8000-000000000d01";
 export const goblinCombatantId = "2b1f2a1e-0000-4000-8000-000000000d02";
 export const spellId = "2b1f2a1e-0000-4000-8000-000000000f01";
@@ -84,9 +81,6 @@ export const page = (
 
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
 const provenance = { origin: "authored", assistantTurnId: null };
-
-/** The Shared World the fixture campaign lives in — one per shared server. */
-export const worldId = "5a1e2b3c-0000-4000-8000-00000000aaa1";
 
 export const sharedWorldDetails = {
   id: worldId,

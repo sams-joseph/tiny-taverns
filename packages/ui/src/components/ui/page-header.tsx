@@ -46,7 +46,7 @@ import { cn } from "../../lib/utils";
  *
  * **Below it, the actions take their own row and wrap.** A phone has no width
  * to give: at 390 the Cast's five controls in one unwrapping row were drawn on
- * top of one another (the shell audit's overlap check), and shrinking them
+ * top of one another (the web Playwright suite's overlap check), and shrinking them
  * would shrink tap targets. So the narrow header is the title's reserved
  * `h-12` and then as many rows of actions as the screen has, and its height
  * follows the screen there; the fixed-height guarantee is a desktop one.
