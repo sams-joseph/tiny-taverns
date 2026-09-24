@@ -1,14 +1,16 @@
 import type { Encounter, Note } from "@taverns/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { BackLink, Badge, Button, Card, EmptyState, Icon, SectionHeading } from "@taverns/ui";
 import { useCallback, useState } from "react";
 import { useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
+import { ActionsMenu } from "../ui/ActionsMenu";
 import { DetailFacts } from "../ui/detail";
 import { useGridAdjustment } from "./AdjustGrid";
 import { BattleMapBoard, describeBoard } from "./BattleMapBoard";
 import { CampaignChrome } from "./CampaignChrome";
+import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
 import { DifficultyBadge, describeRoster } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import { encounterPageAtom, type EncounterPage } from "./load";
@@ -32,12 +34,17 @@ import { NoteDialog } from "./NoteDialog";
  * down on this route (`CampaignRow` in `shell/AppShell.tsx`): both are
  * `useCampaignAct`'s `run`, so a fight already on the table is where either
  * would go, and the label says so.
+ *
+ * *Delete encounter* sits in the page's actions menu beside *Edit*, as the
+ * campaign's own delete does on its Overview, never on a list card.
  */
 export function EncounterScreen() {
   const { campaignId, encounterId } = useParams({
     from: "/_shell/campaigns/$campaignId/encounters/$encounterId",
   });
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editingNote, setEditingNote] = useState<Note>();
   const find = (encounters: ReadonlyArray<Encounter>) =>
     encounters.find((row) => row.id === encounterId);
@@ -63,6 +70,17 @@ export function EncounterScreen() {
                   <Icon name="pencil" size={14} />
                   Edit
                 </Button>
+                <ActionsMenu
+                  label="Encounter actions"
+                  items={[
+                    {
+                      label: "Delete encounter",
+                      icon: "trash-2",
+                      destructive: true,
+                      onSelect: () => setDeleting(true),
+                    },
+                  ]}
+                />
                 <Button size="sm" onClick={() => run(encounter.id)}>
                   <Icon name="swords" size={13} />
                   {view.run === undefined ? "Run" : "Back to the fight"}
@@ -105,6 +123,18 @@ export function EncounterScreen() {
                 encounter={encounter}
                 onClose={() => setEditing(false)}
                 onSaved={() => setEditing(false)}
+              />
+            )}
+            {deleting && (
+              <DeleteEncounterDialog
+                campaignId={campaignId}
+                encounter={encounter}
+                openNight={view.session?.id}
+                attachedNotes={notes.length}
+                onClose={() => setDeleting(false)}
+                onDeleted={() =>
+                  void navigate({ to: "/campaigns/$campaignId/encounters", params: { campaignId } })
+                }
               />
             )}
             {editingNote !== undefined && (
