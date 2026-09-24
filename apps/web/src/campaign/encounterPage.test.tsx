@@ -204,10 +204,55 @@ describe("an encounter's page", () => {
     expect(screen.queryByRole("heading", { name: "Battle map" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Encounter actions" })).toBeNull();
   });
 
   it("falls back to the list from an id it could not read", async () => {
     await renderAt(`/campaigns/${campaignId}/encounters/not-a-uuid`);
     expect(await screen.findByRole("link", { name: "Ambush in the reeds" })).toBeInTheDocument();
+  });
+});
+
+describe("deleting an encounter", () => {
+  const deletePath = pagePath;
+  const listPath = `/campaigns/${campaignId}/encounters`;
+  const reads = (path: string) =>
+    server.calls.filter((call) => call.method === "GET" && call.pathname === path).length;
+
+  const openConfirmation = async () => {
+    await renderAt(pagePath);
+    await screen.findByRole("heading", { name: "Battle map" });
+    await userEvent.click(screen.getByRole("button", { name: "Encounter actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete encounter" }));
+    return screen.findByRole("dialog", { name: /Delete Ambush in the reeds/ });
+  };
+
+  it("says what goes and what stays, and cancelling writes nothing", async () => {
+    const dialog = await openConfirmation();
+    expect(within(dialog).getByText(/creature list, and its battle map and picture/)).toBeVisible();
+    expect(within(dialog).getByText(/attached to it stays on the Notes tab/)).toBeVisible();
+    expect(within(dialog).getByText(/fight on the table now keeps its/)).toBeVisible();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
+    expect(globalThis.location.pathname).toBe(pagePath);
+  });
+
+  it("deletes, lands on the Encounters tab and re-reads the list and the notes", async () => {
+    server.routes.set(`DELETE ${deletePath}`, { status: 204, body: undefined });
+    const dialog = await openConfirmation();
+    const listBefore = reads(listPath);
+    const notesBefore = reads(`/campaigns/${campaignId}/notes`);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete encounter" }));
+
+    await waitFor(() => expect(globalThis.location.pathname).toBe(listPath));
+    expect(
+      server.calls.filter((call) => call.method === "DELETE" && call.pathname === deletePath),
+    ).toHaveLength(1);
+    // The Encounters tab and the Overview's Next session both draw from this read.
+    await waitFor(() => expect(reads(listPath)).toBeGreaterThan(listBefore));
+    expect(reads(`/campaigns/${campaignId}/notes`)).toBeGreaterThan(notesBefore);
   });
 });
