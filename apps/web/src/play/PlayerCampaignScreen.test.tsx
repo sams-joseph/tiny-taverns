@@ -230,6 +230,21 @@ describe("the player Overview's hero", () => {
     expect(overlaps()).toBe(true);
   });
 
+  for (const description of [null, "Four strangers walk a salt caravan to the coast."])
+    it(`keeps New character below a drawn cover ${description ? "with" : "without"} a pitch`, async () => {
+      server.routes.set(`GET ${base}`, {
+        status: 200,
+        body: { ...campaign, image: drawnCover, description },
+      });
+      await renderScreen();
+      await waitFor(() => expect(overlaps()).toBe(true));
+      const header = hero()!.querySelector("header")!;
+      expect(header).toHaveClass("items-end");
+      const actions = header.querySelector<HTMLElement>("[data-slot=campaign-hero-actions]")!;
+      expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
+      expect(within(actions).getByRole("button", { name: "New character" })).toBeInTheDocument();
+    });
+
   it("sits flat with no cover", async () => {
     await renderScreen();
     await screen.findByRole("heading", { level: 1, name: campaign.name });

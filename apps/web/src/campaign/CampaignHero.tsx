@@ -28,6 +28,12 @@ import { Description } from "../ui/description";
  * here would be the one that forgot. The "Hob is drawing" band keeps its badge
  * clear for the same reason: pending is not a picture.
  *
+ * **The actions never sit on the picture.** Only the text rises over it. The
+ * actions are bottom-aligned in the header row and padded down by the same
+ * overlap the header rises by, so their top is at or below the cover's bottom
+ * however short the text beside them is (no pitch, no meta line) and whether
+ * they share its line or wrap to their own.
+ *
  * ### What the drawing's header asks for that the data does not have
  *
  * Its meta line reads *"D&D 5e · Every other Thursday · Since March 2026"*. The
@@ -74,7 +80,12 @@ export function CampaignHero({
           </h1>
           <Description text={campaign.description} className="mt-2.5 max-w-overview-pitch" />
         </div>
-        <div className="flex flex-none flex-wrap items-center gap-2">{children}</div>
+        <div
+          data-slot="campaign-hero-actions"
+          className="flex flex-none flex-wrap items-center gap-2 group-has-data-picture/hero:pt-overview-overlap"
+        >
+          {children}
+        </div>
       </header>
     </div>
   );

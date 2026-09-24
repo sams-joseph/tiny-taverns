@@ -125,6 +125,24 @@ describe("the Overview's hero", () => {
     expect(cover()).toHaveClass("h-overview-cover");
   });
 
+  // The header rises by the overlap; the actions are padded down by the same
+  // amount and bottom-aligned, so their top is never above the cover's bottom
+  // whatever the text beside them measures.
+  for (const description of [null, "Four strangers walk a salt caravan to the coast."])
+    it(`keeps its actions below a drawn cover ${description ? "with" : "without"} a pitch`, async () => {
+      withCampaign({ image: drawnCover, description });
+      await renderHero();
+      await waitFor(() => expect(overlaps()).toBe(true));
+      const header = hero()!.querySelector("header")!;
+      expect(header).toHaveClass("items-end");
+      const actions = header.querySelector("[data-slot=campaign-hero-actions]")!;
+      expect(actions.parentElement).toBe(header);
+      expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
+      expect(
+        within(actions as HTMLElement).getByRole("button", { name: "Invite player" }),
+      ).toBeInTheDocument();
+    });
+
   it("sits flat with no cover", async () => {
     await renderHero();
     expect(cover()).toBeNull();
