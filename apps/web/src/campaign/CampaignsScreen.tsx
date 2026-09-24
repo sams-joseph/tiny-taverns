@@ -1,4 +1,4 @@
-import type { CampaignMembership, CampaignSharedWorld, SharedWorldMembership } from "@taverns/api";
+import type { CampaignMembership, CampaignSharedWorld } from "@taverns/api";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Badge,
@@ -15,7 +15,6 @@ import {
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
-import { NewSharedWorldDialog } from "../shared-world/NewSharedWorldDialog";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { ArchivedDialog } from "./ArchivedDialog";
@@ -98,64 +97,14 @@ function CampaignRow({
   );
 }
 
-/**
- * Every Shared World this account belongs to, and the way to found one. That
- * press is this section's, so it lives in the section rather than the bar,
- * whose one primary is *New campaign*.
- */
-function SharedWorldDirectory({
-  worlds,
-  onNew,
-}: {
-  readonly worlds: ReadonlyArray<SharedWorldMembership>;
-  readonly onNew: () => void;
-}) {
-  return (
-    <section className="flex flex-col gap-2" aria-label="Shared Worlds">
-      <span className="text-label leading-snug font-semibold text-heading">Shared Worlds</span>
-      {worlds.length === 0 ? (
-        <p className="text-body-s leading-body text-muted-foreground">
-          Shared Worlds you create or join will appear here. Found one when several campaigns should
-          share a history and Hob's memory.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {worlds.map(({ sharedWorld, isOwner }) => (
-            <Button
-              key={sharedWorld.id}
-              variant="secondary"
-              size="sm"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/worlds/$worldId"
-                  params={{ worldId: sharedWorld.id }}
-                  aria-label={`Open Shared World ${sharedWorld.name}`}
-                />
-              }
-            >
-              <Icon name="map" size={14} />
-              {sharedWorld.name}
-              {isOwner && <Badge variant="outline">Yours</Badge>}
-            </Button>
-          ))}
-        </div>
-      )}
-      <Button variant="outline" size="sm" className="self-start" onClick={onNew}>
-        <Icon name="plus" size={14} />
-        New Shared World
-      </Button>
-    </section>
-  );
-}
-
 export function CampaignsScreen() {
   const [resource, retry] = useApiAtom(membershipsAtom);
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [shelfOpen, setShelfOpen] = useState(false);
-  const [creating, setCreating] = useState<"campaign" | "world" | undefined>();
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
   const memberships = resource.state === "ready" ? resource.value : undefined;
+  // Only the New campaign dialog's world choice reads this.
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
   // While Hob draws a new campaign's cover, re-read until it lands.
   useHobDrawingPolling(
@@ -166,7 +115,7 @@ export function CampaignsScreen() {
   return (
     <>
       <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play.">
-        <Button size="sm" onClick={() => setCreating("campaign")}>
+        <Button size="sm" onClick={() => setCreating(true)}>
           <Icon name="plus" size={14} />
           New campaign
         </Button>
@@ -203,22 +152,20 @@ export function CampaignsScreen() {
               <Icon name="history" size={14} />
               Archived campaigns
             </Button>
-            <SharedWorldDirectory worlds={worlds} onNew={() => setCreating("world")} />
           </>
         )}
       </div>
 
       {shelfOpen && <ArchivedDialog onClose={() => setShelfOpen(false)} />}
-      {creating === "campaign" && (
+      {creating && (
         <NewCampaignDialog
           context={{ kind: "choose", worlds }}
-          onClose={() => setCreating(undefined)}
+          onClose={() => setCreating(false)}
           onCreated={(campaign) =>
             navigate({ to: "/campaigns/$campaignId", params: { campaignId: campaign.id } })
           }
         />
       )}
-      {creating === "world" && <NewSharedWorldDialog onClose={() => setCreating(undefined)} />}
     </>
   );
 }
