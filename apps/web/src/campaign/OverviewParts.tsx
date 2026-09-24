@@ -125,7 +125,9 @@ export function OverviewPage({
  * the actions share one wrapping row, so while they sit side by side the row
  * is as tall as the taller of them: an absent pitch still reserves the
  * buttons' own height, measured by the layout rather than restated, and a long
- * one grows as it always did. When the row is too narrow for both, the actions
+ * one grows as it always did. Beside a taller pitch the buttons sit at the
+ * bottom of that row, level with the slot's bottom, not centred in it. When
+ * the row is too narrow for both, the actions
  * wrap under the pitch and are themselves the space under the name, so an
  * empty slot then takes none.
  */
@@ -176,7 +178,7 @@ export function OverviewHero({
           </div>
           <div
             data-slot="overview-hero-actions"
-            className="flex max-w-full flex-none flex-wrap items-center gap-2"
+            className="flex max-w-full flex-none flex-wrap content-end items-end gap-2"
           >
             {children}
           </div>

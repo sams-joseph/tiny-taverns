@@ -17,6 +17,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test, type App } from "../support
  *   share a row, with a pitch and without one, so the name's distance from the
  *   row below it does not depend on whether there is a pitch. Wrapped under the
  *   slot, the actions are themselves the space and an empty slot takes none.
+ * - **The buttons sit at the bottom of that row**, level with the slot's
+ *   bottom, rather than centred beside a long pitch.
  */
 
 const heroed = ["overview", "player-overview", "world"].map((name) =>
@@ -35,8 +37,8 @@ const withCover = (page: Page, change: Record<string, unknown>) =>
 
 /**
  * The description's slot against the actions beside it, as drawn and again
- * with the pitch taken out of the slot (and put back), so one fixture answers
- * both "with" and "without a description".
+ * with the pitch made long, and with it taken out of the slot (each put back),
+ * so one fixture answers "with", "with a long" and "without a description".
  */
 async function descriptionReservesTheActions(app: App) {
   const states = await app.page.evaluate(() => {
@@ -47,15 +49,29 @@ async function descriptionReservesTheActions(app: App) {
       const s = slot.getBoundingClientRect();
       const a = actions.getBoundingClientRect();
       // Beside the slot rather than wrapped under it.
-      return { pitch, slot: s.height, actions: a.height, beside: Math.abs(a.top - s.top) < 1 };
+      // The buttons' own bottom, not the cluster's, which the row stretches.
+      const buttons = Math.max(
+        ...[...actions.children].map((c) => c.getBoundingClientRect().bottom),
+      );
+      return {
+        pitch,
+        slot: s.height,
+        actions: a.height,
+        beside: Math.abs(a.top - s.top) < 1,
+        gap: Math.abs(buttons - s.bottom),
+      };
     };
     const pitch = slot.firstElementChild;
     const drawn = read(pitch !== null);
     if (pitch === null) return [drawn];
+    const text = pitch.textContent;
+    pitch.textContent = `${text} `.repeat(12);
+    const long = read(true);
+    pitch.textContent = text;
     slot.removeChild(pitch);
     const empty = read(false);
     slot.appendChild(pitch);
-    return [drawn, empty];
+    return [drawn, long, empty];
   });
   expect(states[0]!.pitch, "the stub draws a pitch").toBe(true);
   for (const state of states)
@@ -63,6 +79,14 @@ async function descriptionReservesTheActions(app: App) {
       expect
         .soft(state.slot, `the slot ${state.pitch ? "with" : "without"} a pitch`)
         .toBeGreaterThanOrEqual(state.actions - 0.5);
+  for (const state of states)
+    if (state.beside)
+      expect
+        .soft(
+          state.gap,
+          `the buttons end level with the slot ${state.pitch ? "with" : "without"} a pitch`,
+        )
+        .toBeLessThanOrEqual(1);
 }
 
 for (const width of WIDTHS) {

@@ -146,6 +146,8 @@ describe("the Overview's hero", () => {
       expect(slot.parentElement).toBe(actions.parentElement);
       expect(slot.parentElement).toHaveClass("flex", "flex-wrap");
       expect(slot).toHaveTextContent(description ?? /^$/);
+      // Beside a taller pitch the buttons sit at the row's bottom, not its middle.
+      expect(actions).toHaveClass("content-end", "items-end");
       expect(within(actions).getByRole("button", { name: "Invite player" })).toBeInTheDocument();
     });
 
