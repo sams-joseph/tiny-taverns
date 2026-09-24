@@ -14,7 +14,7 @@ export interface HobCoverImages {
 
 /**
  * A cover: the landscape Hob drew once, after a campaign or a Shared World was
- * made, as a band across the top of whatever shows it.
+ * made, across the top of whatever shows it.
  *
  * **Absent is the current look.** With no cover — images are off, there was
  * nothing to draw from, the provider refused, or the URL failed to load (an
@@ -37,15 +37,12 @@ export interface HobCoverImages {
  * - `card` — the head of a card on the campaign or Shared World list, bled to
  *   the card's edges (the card clips it to its radius); its `src` is the
  *   768 × 512 size.
- * - `band` — the top of the player's page of a campaign or a Shared World's
- *   screen; its `src` is the
- *   1536 × 1024 size. Wide and shallow above the content, deeper once the
- *   column is narrow enough that a 4:1 strip would be a sliver. It sits in the
- *   page, never in the sticky chrome rows.
- * - `hero` — the creator's Overview, as the redesign draws it: a fixed height
- *   that follows the window (`--overview-cover-h`) rather than a ratio, and the
- *   bottom of the picture fading into the page so the header can sit over it
- *   (`campaign/CampaignHero.tsx`). The same 1536 × 1024 size as `band`.
+ * - `hero` — the top of an Overview (a campaign's, a player's, a Shared
+ *   World's), as the redesign draws it: a fixed height that follows the window
+ *   (`--overview-cover-h`) rather than a ratio, and the bottom of the picture
+ *   fading into the page so the header can sit over it
+ *   (`campaign/OverviewParts.tsx`'s `OverviewHero`); its `src` is the
+ *   1536 × 1024 size. It sits in the page, never in the sticky chrome rows.
  *
  * `data-picture` is set while there is a picture to show and Hob is not
  * drawing a new one: it is the one thing a caller may lay content over, and
@@ -59,11 +56,11 @@ export function HobCover({
 }: {
   readonly image: HobCoverImages | null;
   readonly pending: boolean;
-  readonly shape: "card" | "band" | "hero";
+  readonly shape: "card" | "hero";
 }) {
   const src = image === null ? undefined : apiUrl(shape === "card" ? image.cardUrl : image.fullUrl);
   // Both sizes, so a browser picks by the width it actually draws: a wide list
-  // card on a 2x screen wants the full size, a narrow band on a 1x screen the
+  // card on a 2x screen wants the full size, a narrow hero on a 1x screen the
   // card size. `auto` is the lazy image's own rendered width where a browser
   // supports it; `100vw` is the fallback where it does not. The widths are the
   // cover kinds' variants (`apps/server/src/images/kinds.ts`).
@@ -85,7 +82,6 @@ export function HobCover({
       className={cn(
         "relative overflow-hidden bg-surface-sunken",
         shape === "card" && "aspect-5/2 border-b border-hairline",
-        shape === "band" && "aspect-5/2 rounded-card border border-hairline @3xl:aspect-4/1",
         shape === "hero" && "h-overview-cover rounded-card border border-hairline shadow-1",
       )}
     >

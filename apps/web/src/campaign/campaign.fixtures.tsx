@@ -1614,6 +1614,15 @@ export const renderSharedWorld = async (hosted: HostedSession = noSession): Prom
   ));
 };
 
+/** The Shared World's whole Chronicle, which its screen summarises. */
+export const renderSharedWorldChronicle = async (
+  hosted: HostedSession = noSession,
+): Promise<void> => {
+  await renderAt(`/worlds/${worldId}/chronicle`, (screen) => (
+    <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
+  ));
+};
+
 /** The party screen, which is where a character is written since the split. */
 export const renderParty = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (

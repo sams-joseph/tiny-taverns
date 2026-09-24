@@ -60,5 +60,20 @@ it("keeps New character as the player Overview's one primary", async () => {
   await screen.findByRole("heading", { level: 1 });
   await waitFor(() => expect(document.querySelector('[data-slot="loading"]')).toBeNull());
   expect(primaries().map((button) => button.textContent)).toEqual(["New character"]);
-  expect(primaries()[0]?.closest("[data-slot=campaign-hero]")).not.toBeNull();
+  expect(primaries()[0]?.closest("[data-slot=overview-hero]")).not.toBeNull();
+});
+
+/**
+ * A Shared World's Overview has no campaign row either, and founding a
+ * campaign is any member's act, so its one primary is *New campaign*, in the
+ * hero beside the owner's outline management.
+ */
+it("keeps New campaign as the Shared World's one primary", async () => {
+  const entry = screens.find((s) => s.name === "world")!;
+  server.routes = scenarios[entry.scenario]();
+  await renderAt(entry.path);
+  await screen.findByRole("heading", { level: 1 });
+  await waitFor(() => expect(document.querySelector('[data-slot="loading"]')).toBeNull());
+  expect(primaries().map((button) => button.textContent)).toEqual(["New campaign"]);
+  expect(primaries()[0]?.closest("[data-slot=overview-hero]")).not.toBeNull();
 });

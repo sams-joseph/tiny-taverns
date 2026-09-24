@@ -100,8 +100,13 @@ describe("the persistent shell", () => {
         // (`campaign/CampaignHero.tsx`); every other campaign tab with
         // `PageHeader`'s in-content heading.
         if (name === "overview" || name === "player-overview")
-          expect(title.closest("[data-slot=campaign-hero]")).not.toBeNull();
+          expect(title.closest("[data-slot=overview-hero]")).not.toBeNull();
         else expect(title.closest("header")).toHaveAttribute("data-slot", "page-heading");
+      } else if (name === "world") {
+        // A Shared World's screen is its Overview: the same hero, so no bar,
+        // and its `h1` is the world's name over its cover.
+        expect(slot()).toBeEmptyDOMElement();
+        expect(title.closest("[data-slot=overview-hero]")).not.toBeNull();
       } else {
         expect(slot()?.contains(title)).toBe(true);
         expect(title.closest("header")).toHaveAttribute("data-slot", "page-header");

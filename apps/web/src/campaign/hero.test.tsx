@@ -35,7 +35,7 @@ const withCampaign = (over: object) =>
     body: { ...campaign, ...over },
   });
 
-const hero = () => document.querySelector<HTMLElement>("[data-slot=campaign-hero]");
+const hero = () => document.querySelector<HTMLElement>("[data-slot=overview-hero]");
 const cover = () => hero()?.querySelector("[data-slot=hob-cover]") ?? null;
 const overlaps = () => hero()?.matches(":has([data-picture])") ?? false;
 
@@ -135,7 +135,7 @@ describe("the Overview's hero", () => {
       await waitFor(() => expect(overlaps()).toBe(true));
       const header = hero()!.querySelector("header")!;
       expect(header).toHaveClass("items-end");
-      const actions = header.querySelector("[data-slot=campaign-hero-actions]")!;
+      const actions = header.querySelector("[data-slot=overview-hero-actions]")!;
       expect(actions.parentElement).toBe(header);
       expect(actions).toHaveClass("group-has-data-picture/hero:pt-overview-overlap");
       expect(

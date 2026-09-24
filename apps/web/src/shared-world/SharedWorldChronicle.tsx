@@ -5,13 +5,13 @@ import type {
 } from "@taverns/api";
 import { Badge, Button, Card, CardContent, Loading } from "@taverns/ui";
 import { useState } from "react";
-import { Atom } from "effect/unstable/reactivity";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure, Textarea } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { historyAtom, summaryAtom } from "./load";
 
 /**
  * The sharedWorld's chronicle — report §3.5 on screen, read-only plus one composer.
@@ -23,20 +23,6 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * Nothing here reads through a campaign, so nothing here can leak one
  * creator's unplayed prep to another — the boundary is which rows exist.
  */
-
-const historyAtom = Atom.family((worldId: SharedWorldId) =>
-  apiAtom(
-    (client) => client.sharedWorldHistory.list({ params: { worldId: worldId } }),
-    [reads.sharedWorldHistory(worldId)],
-  ),
-);
-
-const summaryAtom = Atom.family((worldId: SharedWorldId) =>
-  apiAtom(
-    (client) => client.sharedWorldHistory.summary({ params: { worldId } }),
-    [reads.sharedWorldHistory(worldId)],
-  ),
-);
 
 function StorySoFar({
   summary,
