@@ -20,8 +20,8 @@ const READY =
 /**
  * How the browser holds a credential. `machine-token` is what a build without
  * hosted sign-in has (a token pasted on `/server`); `none` is signed out. A
- * hosted-session value belongs to the authenticated suite `e2e/README.md`
- * describes, alongside its own sign-in setup.
+ * hosted session is the authenticated suite's (`e2e/auth/`), which signs in
+ * through Clerk against a real server rather than through this fixture.
  */
 export type Credential = "machine-token" | "none";
 

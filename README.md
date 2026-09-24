@@ -148,7 +148,9 @@ you set the key and it still says OFF, the file is in the wrong place or the var
 misspelled — check that before suspecting the key.
 
 Neither value is a secret: one identifies the frontend, the other only _verifies_ tokens.
-**`CLERK_SECRET_KEY` is deliberately not used anywhere in this repo** — don't add it.
+**`CLERK_SECRET_KEY` is deliberately not used by the app or the server** — don't add it to
+either. Its one reader is the authenticated Playwright suite, which runs in Node beside them
+and never hands it to either (`apps/web/e2e/README.md`).
 
 ### Optional: object storage
 
@@ -400,10 +402,15 @@ in Chromium (overflow, fixed chrome heights, alignment across a campaign's tabs,
 panel, the global nav panels, the Overview heroes) over the same fixture maps, served by a
 stub API inside Vite, so it needs no database or API server. `apps/web/e2e/README.md` says
 how to run, debug and extend it; install its browser once with
-`pnpm -F web exec playwright install chromium`.
+`pnpm -F web exec playwright install chromium`. A second suite, `pnpm -F web e2e:auth`,
+signs in through Clerk's development instance against the real server and a throwaway
+database; it needs `pnpm db:up` and the instance's publishable and secret keys in the
+environment, and skips without them (same README).
 
 ## Continuous integration
 
 `.github/workflows/ci.yml` installs pnpm + Node, runs `pnpm install --frozen-lockfile`,
 then `pnpm turbo run lint typecheck test build` and `pnpm format:check`. A second job runs
-the web Playwright suite and uploads its HTML report and traces when it fails.
+the web Playwright suites and uploads their reports when they fail. The authenticated suite
+reads the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
+without them (a fork's pull request) it is skipped with a notice.

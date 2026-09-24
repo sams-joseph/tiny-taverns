@@ -94,6 +94,9 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@clerk/testing':
+        specifier: ^2.2.37
+        version: 2.2.37(@playwright/test@1.63.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -118,6 +121,9 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       '@types/react':
         specifier: ^19.0.2
         version: 19.2.17
@@ -133,6 +139,9 @@ importers:
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -456,6 +465,10 @@ packages:
     resolution: {integrity: sha512-/haECiKneGkRXkedhNHYp8tK9kjDpWIf6vtWhd+zeJ+HE6a7A9UOcajLUipvbqe834iAJAewhzUretCSrhAglg==}
     engines: {node: '>=20.9.0'}
 
+  '@clerk/backend@3.19.0':
+    resolution: {integrity: sha512-pnT31jTQDOaPjAf5q79lUPsiCcyVfs5iakzHxaD9801ruaUgo6Uc0FxO3L/Htyl45YTlWShbEAcWjf+ZqteZww==}
+    engines: {node: '>=20.9.0'}
+
   '@clerk/react@6.12.11':
     resolution: {integrity: sha512-qetJGDcQMHg7GY9H1VK1znSyMEoxe//dgP+qCWjD81wMm9EiDy0ShYP9aNu9fe2CxEe/7eX8Ax+iemZA5GuexQ==}
     engines: {node: '>=20.9.0'}
@@ -473,6 +486,30 @@ packages:
       react:
         optional: true
       react-dom:
+        optional: true
+
+  '@clerk/shared@4.34.0':
+    resolution: {integrity: sha512-zzpCsm25gJFFg0G5MKcEEaFHRbKCaywlsorbuD70RiC2ySVOaIYoy6tn6cLoBNpV2nXusk4sR9EQpMQYZr6+uA==}
+    engines: {node: '>=20.9.0'}
+    peerDependencies:
+      react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
+      react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@clerk/testing@2.2.37':
+    resolution: {integrity: sha512-pzOmx4mLqL7OoLRKvV+UV8WDFkD//RJd6XD1zHwFHUoszFvue8XFvpbFilIuMfu7N9Ncj+HlsAY4yvaKsnpfqw==}
+    engines: {node: '>=20.9.0'}
+    peerDependencies:
+      '@playwright/test': ^1
+      cypress: ^13 || ^14 || ^15
+    peerDependenciesMeta:
+      '@playwright/test':
+        optional: true
+      cypress:
         optional: true
 
   '@csstools/color-helpers@5.1.0':
@@ -1542,6 +1579,9 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
+  '@types/pg@8.23.1':
+    resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
+
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
     peerDependencies:
@@ -2004,6 +2044,10 @@ packages:
   dot-prop@6.0.1:
     resolution: {integrity: sha512-tE7ztYzXHIeyvc7N+hR3oi7FIbf/NIjVP9hmAt3yMXzrQ072/fpjGLx2GxNxGxUl5V73MEqYzioOMoVhGMJ5cA==}
     engines: {node: '>=10'}
+
+  dotenv@17.2.2:
+    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
+    engines: {node: '>=12'}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -2534,6 +2578,9 @@ packages:
   js-cookie@3.0.7:
     resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
     engines: {node: '>=20'}
+
+  js-cookie@3.0.8:
+    resolution: {integrity: sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -3937,6 +3984,15 @@ snapshots:
       - react
       - react-dom
 
+  '@clerk/backend@3.19.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@clerk/shared': 4.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      standardwebhooks: 1.0.0
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - react
+      - react-dom
+
   '@clerk/react@6.12.11(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@clerk/shared': 4.26.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3953,6 +4009,27 @@ snapshots:
     optionalDependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
+
+  '@clerk/shared@4.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@tanstack/query-core': 5.101.4
+      dequal: 2.0.3
+      glob-to-regexp: 0.4.1
+      js-cookie: 3.0.8
+    optionalDependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+
+  '@clerk/testing@2.2.37(@playwright/test@1.63.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@clerk/backend': 3.19.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@clerk/shared': 4.34.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      dotenv: 17.2.2
+    optionalDependencies:
+      '@playwright/test': 1.63.0
+    transitivePeerDependencies:
+      - react
+      - react-dom
 
   '@csstools/color-helpers@5.1.0': {}
 
@@ -4742,6 +4819,12 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/pg@8.23.1':
+    dependencies:
+      '@types/node': 22.20.1
+      pg-protocol: 1.15.0
+      pg-types: 2.2.0
+
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
       '@types/react': 19.2.17
@@ -5189,6 +5272,8 @@ snapshots:
   dot-prop@6.0.1:
     dependencies:
       is-obj: 2.0.0
+
+  dotenv@17.2.2: {}
 
   dotenv@17.4.2: {}
 
@@ -5771,6 +5856,8 @@ snapshots:
   jose@6.2.7: {}
 
   js-cookie@3.0.7: {}
+
+  js-cookie@3.0.8: {}
 
   js-tokens@4.0.0: {}
 

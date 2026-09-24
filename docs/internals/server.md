@@ -102,6 +102,8 @@ Four SDK traps:
 - That conversion is string surgery on a 2048-bit RSA SPKI PEM; any other key yields a wrong JWK and every token fails as "invalid signature", which reads like an attack. The layer validates the key size at boot; keep that.
 - Passing `authorizedParties` makes `azp` mandatory. It is fed from `ALLOWED_ORIGINS`, the same list CORS uses, so allowlist and audience cannot drift.
 
+**The authenticated Playwright suite (`apps/web/e2e/README.md`) is the one place a secret key is read**, in Node beside the stack and never passed into it: `@clerk/testing` needs it for a testing token, and the suite fetches the instance's JWKS and hands the server the PEM a developer would paste. The server's own suite keeps generating keypairs in-process (`test/support/identity.ts`) and needs no vendor account.
+
 **Provisioning is just-in-time and there is no deletion path.** An unrecognised subject gets an account on first request (`insert … on conflict do nothing` plus a re-read, which settles two tabs racing); machine accounts are never linked to a Clerk sign-in. Nothing may wire an external event to `delete from account`: `campaign.account_id` cascades, so a replayed webhook would erase a creator's history. `DEFAULT_ACCOUNT_NAME` is `"Someone"`, because the first authenticated request is as often a player following an invitation as a creator.
 
 ## Env files: two apps, two loaders

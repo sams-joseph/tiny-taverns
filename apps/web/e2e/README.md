@@ -37,6 +37,18 @@ The widths are 1440, 1024, 760 and 390: wide; just above Hob's inline breakpoint
 - **A width:** add it to `WIDTHS` in `e2e/support/app.ts`, saying which breakpoint band it adds.
 - **A check:** put it in the spec for its concern as a `test.step` whose name is the rule, with a comment saying what it guards and why jsdom cannot.
 
-## An authenticated suite
+## The authenticated suite
 
-Everything here runs as a machine-token account against the stub. A suite that signs in through hosted sign-in (Clerk, with `@clerk/testing`) against a real server is a second project in `playwright.config.ts` with its own `testDir` (`e2e/auth/`), a setup project that signs in and saves `storageState`, and a second `webServer` entry for the API server and its database. The `credential` fixture option in `e2e/support/app.ts` is where a hosted-session value would go.
+Everything above runs as a machine-token account against the stub. `e2e/auth/` signs in through Clerk's development instance with [`@clerk/testing`](https://clerk.com/docs/testing/playwright) against the real API server and a database of its own, and asserts through the real UI: signing in provisions an account, a DM's invitation brings a player (in a second browser context) into the Party, and signing out returns to the homepage.
+
+```bash
+pnpm db:up                                  # or E2E_AUTH_DATABASE_URL=<a Postgres it may create databases on>
+set -a; . <your keys file>; set +a          # CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY, kept outside the repo
+pnpm -F web e2e:auth
+```
+
+- **Its own config**, `playwright.auth.config.ts`, rather than a second project here: Playwright starts every `webServer` and runs global setup whichever project is selected, and the layout suite must keep needing neither Postgres nor keys. With either key unset every test skips and says why; CI does the same for a fork's pull request, which gets no repository secrets.
+- **`global-setup.ts` owns the stack**, because the server's database and verification key must exist before it boots and Playwright starts `webServer` entries before global setup. It refuses anything but `pk_test_`/`sk_test_` keys, runs `clerkSetup()` (a testing token that lets an automated browser past bot protection), checks read-only that the two test users exist, fetches the instance's JWT public key from its public JWKS and converts it to the PEM `CLERK_JWT_KEY` takes, then `support/stack.ts` creates `taverns_e2e_auth_<random>` on `E2E_AUTH_DATABASE_URL` (default: the compose database on 5433), starts the API server and Vite on free ports, and returns the teardown that stops those two process ids and drops the database. The secret key is stripped from both children's environment: the server verifies offline and never holds one, and the browser only ever gets the publishable key.
+- **The users are the instance's two `+clerk_test` users** (`support/clerk.ts`), made by hand in the dashboard. The suite never creates, changes or deletes a Clerk user. `signIn` uses the email-code strategy, which such an address passes with `424242` and no mail. Every test signs in afresh: a signed-out session is ended at Clerk, so a shared `storageState` would die with the sign-out test. One worker, since the tests share the users and the database.
+- **Accounts are named "Someone"** on this instance, whose session token carries no `name` claim (`DEFAULT_ACCOUNT_NAME`, `docs/internals/server.md`). `accountName` reads the claim, so the assertions follow if the dashboard ever adds one.
+- **Nothing it writes carries a key.** No traces (a trace records every request, and each Frontend API request carries the testing token in its query string); a failure keeps a screenshot, the page snapshot and `test-results-auth/stack/{server,vite}.log`, which CI uploads as `playwright-report-auth`.
