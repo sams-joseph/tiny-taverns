@@ -1,4 +1,9 @@
-import type { Campaign, SharedWorld, SharedWorldMembership } from "@taverns/api";
+import {
+  type Campaign,
+  campaignCreateFrom,
+  type SharedWorld,
+  type SharedWorldMembership,
+} from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -20,14 +25,17 @@ import { useInvalidate } from "../api/atoms";
 import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
-import { describedBy } from "../ui/describedBy";
 import { NewCampaignDescription } from "../ui/description";
 
 const STANDALONE = "standalone";
 
 /**
- * Starts a campaign: a name, where it lives, and the pitch its one cover is
- * drawn from. The founder becomes its creator and sole DM.
+ * Starts a campaign: a name, where it lives, the party, and the pitch its one
+ * cover is drawn from. The founder becomes its creator and sole DM.
+ *
+ * Hob drafts the same fields from the account's own panel, and both composers
+ * build the payload with `campaignCreateFrom`, so a campaign kept from a Hob
+ * card and one started here cannot disagree about what a campaign starts with.
  *
  * The one form for both places a campaign is started. From the campaign list
  * it may go anywhere — standalone (`POST /campaigns`) or into one of the
@@ -51,6 +59,7 @@ export function NewCampaignDialog({
   const fetchCredential = useCredential();
   const invalidate = useInvalidate();
   const [name, setName] = useState("");
+  const [partyName, setPartyName] = useState("");
   const [description, setDescription] = useState("");
   const [target, setTarget] = useState(context.kind === "world" ? context.world.id : STANDALONE);
   const [busy, setBusy] = useState(false);
@@ -65,7 +74,7 @@ export function NewCampaignDialog({
       context.kind === "world"
         ? context.world
         : worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
-    const payload = describedBy({ name: name.trim() }, description);
+    const payload = campaignCreateFrom({ name, partyName, description });
     const result = await runApiResult(
       (client) =>
         world === undefined
@@ -115,6 +124,13 @@ export function NewCampaignDialog({
             value={name}
             disabled={busy}
             onChange={(event) => setName(event.target.value)}
+          />
+          <Input
+            aria-label="Party name"
+            placeholder="Party name (optional)"
+            value={partyName}
+            disabled={busy}
+            onChange={(event) => setPartyName(event.target.value)}
           />
           {worlds.length > 0 && (
             <Select value={target} onValueChange={(value) => setTarget(String(value))}>

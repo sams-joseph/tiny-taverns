@@ -932,11 +932,13 @@ describe("writing down a character with no campaign", () => {
     expect(screen.getByText("Picked from the core rules' spell list")).toBeTruthy();
     expect(screen.getByText(/Wisdom is highest because druid casting keys off it/)).toBeTruthy();
 
-    // The question names no campaign and no surface: the account's own thread.
+    // The question names no campaign, and says it is the drafting composer
+    // rather than the account's panel: the account's own thread.
     const asks = server.calls.filter((call) => call.pathname === "/me/hob/ask");
     expect(asks).toHaveLength(1);
     expect(JSON.parse(asks[0]?.body ?? "{}")).toEqual({
       text: "A wood elf who grew up in a river town.",
+      intent: "character",
     });
 
     await userEvent.click(screen.getByRole("button", { name: /Keep them/i }));
@@ -969,7 +971,11 @@ describe("writing down a character with no campaign", () => {
       .map((call) => JSON.parse(call.body) as Record<string, unknown>);
     expect(asks).toHaveLength(2);
     expect(asks[0]).not.toHaveProperty("threadId");
-    expect(asks[1]).toEqual({ threadId: draftThreadId, text: "Darker backstory" });
+    expect(asks[1]).toEqual({
+      threadId: draftThreadId,
+      text: "Darker backstory",
+      intent: "character",
+    });
   });
 
   it("never dead-ends when the model does not draft", async () => {
