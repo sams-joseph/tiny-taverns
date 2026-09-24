@@ -18,6 +18,8 @@ import {
   HobToolkit,
   NO_VOCABULARY,
   coreToolkitListing,
+  accountToolkitListing,
+  accountToolkitOver,
   coreToolkitOver,
   playerToolkitListing,
   playerToolkitOver,
@@ -1679,6 +1681,11 @@ describe("what counts as asking for a build", () => {
     const drafting: { readonly parametersSchema: { readonly fields: object } } =
       playerToolkitOver(NO_VOCABULARY).tools.proposeCharacter;
     expect(Object.keys(drafting.parametersSchema.fields)).toContain("abilityOrder");
+    const campaign: { readonly parametersSchema: { readonly fields: object } } = accountToolkitOver(
+      NO_VOCABULARY,
+      [],
+    ).tools.proposeCampaign;
+    expect(Object.keys(campaign.parametersSchema.fields)).toContain("partyName");
   }, 60_000);
 
   it("keeps the naming convention the detector reads", () => {
@@ -1695,10 +1702,17 @@ describe("what counts as asking for a build", () => {
       "proposeNpcAwareness",
     ]);
     expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
+    const account = Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools);
+    expect(account.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
+      "proposeCampaign",
+      "proposeCharacter",
+    ]);
     // And nothing that builds is spelled another way: every remaining tool is a
     // read, by the list `the assistant seam` above pins.
     expect(
-      [...dm, ...player].filter((name) => /^(draft|offer|suggest|create)[A-Z]/.test(name)),
+      [...dm, ...player, ...account].filter((name) =>
+        /^(draft|offer|suggest|create)[A-Z]/.test(name),
+      ),
     ).toEqual([]);
   });
 });
@@ -1799,6 +1813,22 @@ describe("the assistant seam", () => {
     expect(Object.keys(coreToolkitListing(NO_VOCABULARY).tools).sort()).toEqual([
       "listOptions",
       "listStartingSpells",
+      "proposeCharacter",
+    ]);
+  });
+
+  it("counts the account panel's toolkit: the core drafting one plus proposeCampaign", () => {
+    // Outside any campaign Hob drafts the two things an account makes on its
+    // own. Campaign content needs a campaign; its tools are absent here.
+    expect(Object.keys(accountToolkitOver(NO_VOCABULARY, []).tools).sort()).toEqual([
+      "listStartingSpells",
+      "proposeCampaign",
+      "proposeCharacter",
+    ]);
+    expect(Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools).sort()).toEqual([
+      "listOptions",
+      "listStartingSpells",
+      "proposeCampaign",
       "proposeCharacter",
     ]);
   });

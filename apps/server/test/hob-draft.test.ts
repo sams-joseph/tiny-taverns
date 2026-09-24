@@ -177,8 +177,11 @@ const ask = async (
   const events = await as(token, (client) =>
     Effect.flatMap(
       client.meHob.ask({
+        // The create screen's composer, which says so: the account's panel
+        // asks without `intent` and is `hob-account.test.ts`'s.
         payload: {
           text: options.text ?? DESCRIBED,
+          intent: "character",
           ...(options.threadId === undefined ? {} : { threadId: options.threadId }),
         },
       }),
@@ -297,7 +300,9 @@ describe("the thread belongs to the account and nothing else", () => {
     const before = model.requests().length;
     expect(
       await refusal(stranger.token, (client) =>
-        client.meHob.ask({ payload: { threadId, text: "Make her a ranger." } }),
+        client.meHob.ask({
+          payload: { threadId, text: "Make her a ranger.", intent: "character" },
+        }),
       ),
     ).toBe("NotFound");
     expect(model.requests().length).toBe(before);

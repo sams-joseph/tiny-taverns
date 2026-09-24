@@ -1940,17 +1940,20 @@ class HobGroup extends HttpApiGroup.make("hob")
   .middleware(Authorization) {}
 
 /**
- * Hob drafting a character with **no campaign** — the account's own
- * conversation, against the core rules.
+ * Hob with **no campaign** — the account's own conversation: the panel on
+ * every screen outside a campaign or Shared World, and the character create
+ * screen's drafting composer.
  *
  * `HobGroup`'s five, under `/me/hob` rather than a campaign. Nothing in any
  * path names a scope because the scope is the caller: a thread here belongs to
  * the account that started it and to no campaign or Shared World
  * (`conversationReachable`'s `"account"` arm), so another account's thread id
- * is the ordinary `NotFound`. Its toolkit is the drafting one built over the
- * core rules (`coreRulesUsable`), with no campaign or Shared World tool in it,
- * and `accept` can only ever make a character, through the same insert
- * `me.createCoreCharacter` uses.
+ * is the ordinary `NotFound`. Its toolkits hold no campaign or Shared World
+ * read: character drafting over the core rules (`coreRulesUsable`), plus
+ * campaign drafting on the panel (`HobDraftAsk.intent`). `accept` can make a
+ * character, through the insert `me.createCoreCharacter` uses, or a campaign,
+ * through the insert `campaigns.create` (or a Shared World's `createCampaign`)
+ * uses, with its one cover drawn after the accept commits.
  */
 class MeHobGroup extends HttpApiGroup.make("meHob")
   .add(

@@ -19,6 +19,8 @@ import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { foundGroup, moveToOwnContext } from "./Groups.js";
 import { addCreator } from "./Memberships.js";
 import {
+  type AssistantOrigin,
+  assistantColumns,
   defined,
   dieOnSqlError,
   proseColumn,
@@ -133,13 +135,16 @@ export class Campaigns extends Context.Service<
   {
     readonly list: Effect.Effect<ReadonlyArray<Campaign>, never, CurrentActor>;
     readonly findById: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    /** `from` is Hob's accept (`Proposals.acceptDraft`); no create payload carries it. */
     readonly create: (
       groupId: SharedWorldId,
       payload: CampaignCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     /** Campaign-first creation; its private group is transitional plumbing. */
     readonly createStandalone: (
       payload: CampaignCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Campaign, never, CurrentActor>;
     /** Moves a connected campaign into a new automatic context of its own. */
     readonly disconnectSharedWorld: (
@@ -208,7 +213,12 @@ export class Campaigns extends Context.Service<
           ? Effect.fail(new NotFound({ resource: "campaign", id }))
           : Effect.succeed(asCampaign(rows[0]!));
 
-      const insert = (groupId: SharedWorldId, payload: CampaignCreate, actor: Actor) =>
+      const insert = (
+        groupId: SharedWorldId,
+        payload: CampaignCreate,
+        actor: Actor,
+        from: AssistantOrigin | undefined,
+      ) =>
         Effect.gen(function* () {
           const rows = yield* sql<CampaignRow>`
             insert into campaign ${sql.insert(
@@ -220,6 +230,7 @@ export class Campaigns extends Context.Service<
                 description: proseColumn(payload.description),
                 player_count: payload.playerCount,
                 visibility: payload.visibility,
+                ...assistantColumns(from),
               }),
             )}
             returning campaign.*, ${campaignImageColumns(sql)}
@@ -266,7 +277,7 @@ export class Campaigns extends Context.Service<
          * credential does not reach is a 404 naming the group, not a defect
          * at COMMIT.
          */
-        create: (groupId, payload) =>
+        create: (groupId, payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -285,7 +296,7 @@ export class Campaigns extends Context.Service<
                 if (active.length === 0) {
                   return yield* new NotFound({ resource: "shared-world", id: groupId });
                 }
-                return yield* insert(groupId, payload, actor);
+                return yield* insert(groupId, payload, actor, from);
               }),
             ),
           ),
@@ -294,13 +305,13 @@ export class Campaigns extends Context.Service<
          * The campaign-first path. The private group is deliberately named
          * after the campaign and remains hidden until explicitly promoted.
          */
-        createStandalone: (payload) =>
+        createStandalone: (payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 const group = yield* foundGroup(sql, { name: payload.name }, actor.accountId);
-                return yield* insert(group.id, payload, actor);
+                return yield* insert(group.id, payload, actor, from);
               }),
             ),
           ),

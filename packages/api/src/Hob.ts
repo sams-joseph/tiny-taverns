@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
+import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { Character, CharacterSheet } from "./Character.js";
 import { Difficulty, Encounter } from "./Encounter.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
@@ -140,28 +141,30 @@ export type HobRosterLine = typeof HobRosterLine.Type;
 /**
  * What Hob is offering to add, if the person who asked says yes.
  *
- * **One member per accept target**, five now with the Shared World chronicle, each one
- * shipped table: a `note` (prep prose or read-aloud), a `beat` (the DM's line
- * about what happened), an `encounter` (a template and its roster), and a
- * `character` (a player's own, drafted for them). The union is discriminated on
- * `target` for the reason `SearchHit` is discriminated on `source` — `roster`
- * exists only on an encounter and `title` only on the thing that has one, and a
+ * **One member per accept target**, each one a shipped table: a `note` (prep
+ * prose or read-aloud), a `beat` (the DM's line about what happened), an
+ * `encounter` (a template and its roster), a `character` (the asker's own,
+ * drafted for them), the Shared World's Chronicle entry and Story So Far, and a
+ * `campaign` (the asker's new table). The union is discriminated on `target`
+ * for the reason `SearchHit` is discriminated on `source` — `roster` exists
+ * only on an encounter and `title` only on the thing that has one, and a
  * nullable field the client renders anyway is the failure this schema style
  * exists to prevent.
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
- * anything here.** The panel's Hob has `proposeNote`, `proposeBeat` and
- * `proposeEncounter`; the drafting surface's has `proposeCharacter` and nothing
- * else (`HobAsk.intent` is what picks it, for creator and player alike). So the
+ * anything here.** A campaign's panel has `proposeNote`, `proposeBeat` and
+ * `proposeEncounter`; the drafting composer's has `proposeCharacter` and
+ * nothing else (`HobAsk.intent` and `HobDraftAsk.intent` pick it); the
+ * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
  * halves of this union are reachable from disjoint conversations: a character
- * proposal only ever lives in the asker's *own* thread and materialises into
- * their own ownership, and a member who cannot write the campaign holds no
- * thread an encounter could be accepted from. That is a pair of predicates,
- * not a check anywhere. See `assistant/toolkit.ts` and `repo/visibility.ts`'s
- * `conversationReachable`.
+ * or a campaign proposal only ever lives in the asker's *own* thread and
+ * materialises into their own ownership, and a member who cannot write the
+ * campaign holds no thread an encounter could be accepted from. That is a set
+ * of predicates, not a check anywhere. See `assistant/toolkit.ts` and
+ * `repo/visibility.ts`'s `conversationReachable`.
  *
  * It is deliberately **not** a general artifact framework. The delivered
- * `ChatParts.jsx` draws eight kinds; the ones that are not one of these four
+ * `ChatParts.jsx` draws eight kinds; the ones that are not one of these
  * have nowhere to go, so proposing one would be a card whose *Save* button
  * could only lie.
  */
@@ -291,6 +294,26 @@ export const HobProposal = Schema.Union([
     text: Schema.String,
     lastWorldSeq: Schema.Int,
   }),
+  /**
+   * A new campaign, drafted in the account's own conversation (`/me/hob`) —
+   * the one member offered with no campaign or Shared World in view.
+   *
+   * The fields are the ones `NewCampaignDialog` writes, and both go through
+   * `campaignCreateFrom`, so a form and a draft start a campaign the same way.
+   * `world` is a Shared World the asker is a live member of, **resolved when
+   * the proposal is made**: the id is what the accept creates the campaign in,
+   * and the name is the card's display half, a snapshot exactly as a roster
+   * line's creature name is. Null is a standalone campaign. The accept checks
+   * the world again through the ordinary create, so a world left or archived
+   * in between is the create's own refusal.
+   */
+  Schema.Struct({
+    target: Schema.Literal("campaign"),
+    name: Schema.String,
+    partyName: Schema.NullOr(Schema.String),
+    description: Schema.NullOr(Schema.String.check(Schema.isMaxLength(CAMPAIGN_DESCRIPTION_MAX))),
+    world: Schema.NullOr(Schema.Struct({ id: SharedWorldId, name: Schema.String })),
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -381,14 +404,18 @@ export const HobAsk = Schema.Struct({
 export type HobAsk = typeof HobAsk.Type;
 
 /**
- * A question to the drafting surface with no campaign (`/me/hob/ask`).
+ * A question to the account's own Hob, with no campaign (`/me/hob/ask`).
  *
- * `HobAsk` without `intent`: this surface drafts a character and nothing else,
- * so there is no second surface for the field to name.
+ * Two surfaces share this endpoint, as two share `HobAsk`'s: the character
+ * create screen's drafting composer and the docked panel on every screen
+ * outside a campaign or Shared World. `intent: "character"` is the composer
+ * saying so, and it gets the character-drafting toolkit and nothing else.
+ * Absent means the panel, whose toolkit drafts a character or a campaign.
  */
 export const HobDraftAsk = Schema.Struct({
   threadId: Schema.optional(AssistantThreadId),
   text: turnText,
+  intent: Schema.optional(Schema.Literal("character")),
 });
 export type HobDraftAsk = typeof HobDraftAsk.Type;
 
@@ -540,6 +567,12 @@ export const HobAccepted = Schema.Union([
     accepted: Schema.Literal("sharedWorldSummary"),
     summary: SharedWorldHistorySummary,
   }),
+  /**
+   * The campaign an account kept from its own conversation, created by the
+   * same insert `POST /campaigns` (or a Shared World's create) uses, with its
+   * cover started after the accept commits. The asker is its creator.
+   */
+  Schema.Struct({ accepted: Schema.Literal("campaign"), campaign: Campaign }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 

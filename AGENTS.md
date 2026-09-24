@@ -55,7 +55,7 @@ The commonest defect here is a change that works on the path you tested and is m
 - **Contract.** Anything on the wire is declared in `packages/api`. The server implements it and the web client is derived from it; change the schema and both follow. Array-valued query params go through `queryArray`.
 - **Projections.** Creator and player. If you widened what a creator reads, ask what the player path answers now.
 - **Composers.** A character can be made by the form and by Hob; both call `sheetGrantsFor` and `seedFor` so they cannot disagree. A new grant goes in the shared function, not in one caller.
-- **Toolkits.** Creator, player drafting, Shared World, NPC. A tool added to one is a decision about the other three.
+- **Toolkits.** Creator, player drafting, account panel, Shared World, NPC. A tool added to one is a decision about the other four.
 - **Reads and writes.** A read atom names the keys it answers; a write names the keys it changed, including what moved that it never sent (a computed count on another card).
 - **Reverse states.** Archive needs restore; share needs unshare; connect needs disconnect. One-way doors are bugs.
 - **Docs.** If the change makes `docs/internals/` inaccurate, rewrite the affected text.
