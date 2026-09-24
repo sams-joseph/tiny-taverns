@@ -418,7 +418,7 @@ describe("LibraryScreen", () => {
     // signed-out gate landed, a visitor with *no* credential at all never
     // reaches this route — `marketing/SignedOutGate.tsx` renders the homepage
     // above every match — so the reachable 401 is a stale or revoked machine
-    // token, which is what this installs. Measured in Chromium: `#/library`
+    // token, which is what this installs. Measured in Chromium: `/library`
     // with an empty `localStorage` draws *"Run the fight, not the
     // spreadsheet"*, not this notice.
     window.localStorage.setItem("taverns.token", "a-token-the-server-forgot");
@@ -450,7 +450,7 @@ describe("LibraryScreen", () => {
     const item = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", {
       name: "Library",
     });
-    expect(item).toHaveAttribute("href", "/#/library");
+    expect(item).toHaveAttribute("href", "/library");
     expect(item).toHaveAttribute("aria-current", "page");
     expect(
       within(screen.getByRole("navigation", { name: "Sections" })).queryByRole("link", {

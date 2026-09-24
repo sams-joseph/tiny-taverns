@@ -92,7 +92,7 @@ describe("deleting a campaign from inside it", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(paths("DELETE")).toEqual([campaignDelete]));
-    await waitFor(() => expect(globalThis.location.hash).toBe("#/campaigns"));
+    await waitFor(() => expect(globalThis.location.pathname).toBe("/campaigns"));
     expect(await screen.findByText("No campaign yet")).toBeTruthy();
   });
 
@@ -141,7 +141,7 @@ describe("deleting a campaign from inside it", () => {
 
     await waitFor(() => expect(paths("DELETE")).toEqual([campaignDelete]));
     expect(screen.getByRole("dialog", { name: /Delete The Salt Road permanently/ })).toBeTruthy();
-    expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`);
+    expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}`);
   });
 });
 
@@ -191,7 +191,7 @@ describe("deleting a Shared World", () => {
 
     expect(await screen.findByRole("menuitem", { name: "Archive" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete permanently" })).toBeTruthy();
-    expect(globalThis.location.hash).toBe("#/worlds");
+    expect(globalThis.location.pathname).toBe("/worlds");
   });
 
   it("offers no menu on a world somebody else owns", async () => {
@@ -247,7 +247,7 @@ describe("deleting a Shared World", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(paths("DELETE")).toEqual([worldDelete]));
-    await waitFor(() => expect(globalThis.location.hash).toBe("#/worlds"));
+    await waitFor(() => expect(globalThis.location.pathname).toBe("/worlds"));
   });
 
   it("is also reached from the world's settings", async () => {

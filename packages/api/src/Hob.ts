@@ -528,7 +528,7 @@ export const HobAccepted = Schema.Union([
    * `origin: "assistant"`.
    *
    * The whole row, like the three above, and here it earns its keep twice over:
-   * the screen navigates straight to `#/characters/:id` on the id, and
+   * the screen navigates straight to `/characters/:id` on the id, and
    * every correction from that moment on is an ordinary `PATCH
    * /me/characters/:id` against exactly this value.
    */

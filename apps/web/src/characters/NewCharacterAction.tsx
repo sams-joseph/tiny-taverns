@@ -31,7 +31,7 @@ import { tablesForNewCharacter } from "./create";
  *
  * **It is always offered.** By the captain's decision of 2026-09-23 a character
  * needs no campaign: *No campaign* is a context too, the core rules with no
- * table's homebrew (`#/characters/new`, `POST /me/characters`, and Hob through
+ * table's homebrew (`/characters/new`, `POST /me/characters`, and Hob through
  * `/me/hob`). It
  * used to draw nothing for an account at no table, which left somebody who had
  * just signed up with no way to make anything. Two shapes:

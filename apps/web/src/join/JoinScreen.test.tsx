@@ -185,9 +185,9 @@ describe("following an invitation", () => {
     const open = await screen.findByRole("button", { name: /Open The Salt Road/ });
     // **The player's route, never the DM's.** Redeeming mints a `player`
     // membership; the DM's campaign screen composes `runs.list`, which is behind
-    // the `DmActor` gate, so `#/campaigns/:c` would have answered a brand new
+    // the `DmActor` gate, so `/campaigns/:c` would have answered a brand new
     // player a 404 on the first thing they pressed in the product.
-    expect(open.getAttribute("href")).toBe(`/#/campaigns/${campaignId}`);
+    expect(open.getAttribute("href")).toBe(`/campaigns/${campaignId}`);
   });
 
   it("gives every dead link the same sentence", async () => {

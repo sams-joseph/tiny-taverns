@@ -61,10 +61,6 @@ const TOKEN = "Nk9-b3JkZXJfb2ZfdGhlX2ZlcnJ5bWFu";
 beforeEach(() => {
   server.reset();
   window.localStorage.clear();
-  // The subpath fixtures below move the page's own path, and jsdom keeps one
-  // `location` for the whole file — so it is put back rather than left for the
-  // next test to inherit.
-  window.history.replaceState({}, "", "/");
 });
 
 const openInvites = async () => {
@@ -86,10 +82,9 @@ describe("inviting a player", () => {
     await userEvent.click(screen.getByRole("button", { name: "Make a link" }));
 
     // The whole link, composed in the browser because only the browser knows
-    // its own origin — and carrying the token in the **fragment**, which is
-    // what keeps it out of the server's access log.
-    const link = await screen.findByText(new RegExp(`#/join/${TOKEN}$`));
-    expect(link.textContent).toContain(`#/join/${TOKEN}`);
+    // its own origin.
+    const link = await screen.findByText(new RegExp(`/join/${TOKEN}$`));
+    expect(link.textContent).toBe(`${window.location.origin}/join/${TOKEN}`);
     expect(screen.getByText("Copy this now — it is shown once")).toBeTruthy();
 
     expect(bodyOf(server, "POST", "/invites")).toEqual({ label: "Ilse" });
@@ -97,62 +92,26 @@ describe("inviting a player", () => {
 
   /**
    * The link is the one URL this product hands to somebody who is not already
-   * standing in the app, so it has to be right wherever the app is served
-   * from. Both shapes are asserted whole — origin, path and fragment — because
-   * a link that is merely *plausible* is one a stranger discovers is wrong.
+   * standing in the app, so it is asserted whole: the origin and the join
+   * route, and nothing of the page the DM minted it on. Hosting under a subpath
+   * is the router's `basepath`, pinned in `routes.test.ts`.
    */
-  describe("the link survives being hosted anywhere", () => {
-    const mintLink = async (): Promise<string> => {
-      server.routes.set(`GET ${invitesPath}`, { status: 200, body: [] });
-      server.routes.set(`POST ${invitesPath}`, {
-        status: 200,
-        body: { invite: waiting, token: TOKEN },
-      });
-      await openInvites();
-      await userEvent.click(await screen.findByRole("button", { name: "Make a link" }));
-      const link = await screen.findByText(new RegExp(`#/join/${TOKEN}$`));
-      return link.textContent ?? "";
-    };
-
-    it("is the plain URL when the app is served from a root", async () => {
-      expect(await mintLink()).toBe(`${window.location.origin}/#/join/${TOKEN}`);
+  it("is the origin and the join route, and nothing of the page it was made on", async () => {
+    server.routes.set(`GET ${invitesPath}`, { status: 200, body: [] });
+    server.routes.set(`POST ${invitesPath}`, {
+      status: 200,
+      body: { invite: waiting, token: TOKEN },
     });
+    await openInvites();
+    expect(window.location.pathname).toBe(`/campaigns/${campaignId}`);
+    await userEvent.click(await screen.findByRole("button", { name: "Make a link" }));
+    const link = await screen.findByText(new RegExp(`/join/${TOKEN}$`));
 
-    it("keeps the prefix when the app is served under a subpath", async () => {
-      // What a deployment to `example.com/taverns/` looks like from inside the
-      // page: same origin, a path in front of the app.
-      window.history.replaceState({}, "", "/taverns/");
-
-      expect(await mintLink()).toBe(`${window.location.origin}/taverns/#/join/${TOKEN}`);
-    });
-
-    it("keeps the token in the fragment, and out of the path", async () => {
-      window.history.replaceState({}, "", "/taverns/");
-      const url = new URL(await mintLink());
-
-      // The disclosure property, asserted rather than assumed: a browser never
-      // sends a fragment in a request line, a redirect or a `Referer`, so the
-      // token reaches no access log on the way to being redeemed.
-      expect(url.hash).toBe(`#/join/${TOKEN}`);
-      expect(url.pathname).toBe("/taverns/");
-      expect(url.pathname).not.toContain(TOKEN);
-      expect(url.search).not.toContain(TOKEN);
-    });
-
-    /**
-     * The page's own query string is not part of the invitation. `createHref`
-     * carries `location.search` along with the path, so a link minted while
-     * the DM was on a URL with one used to hand that query string to whoever
-     * they sent it to. Cosmetic — the token stays in the fragment — but this
-     * is a URL a person reads before they trust it.
-     */
-    it("drops the page's query string", async () => {
-      window.history.replaceState({}, "", "/taverns/?foo=1&bar=2");
-      const url = new URL(await mintLink());
-
-      expect(url.search).toBe("");
-      expect(url.toString()).toBe(`${window.location.origin}/taverns/#/join/${TOKEN}`);
-    });
+    const url = new URL(link.textContent ?? "");
+    expect(url.origin).toBe(window.location.origin);
+    expect(url.pathname).toBe(`/join/${TOKEN}`);
+    expect(url.search).toBe("");
+    expect(url.hash).toBe("");
   });
 
   it("names who took one, and offers to take the seat back", async () => {

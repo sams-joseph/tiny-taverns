@@ -26,7 +26,7 @@ installMemoryStorage();
 beforeEach(() => {
   server.reset();
   window.localStorage.clear();
-  globalThis.location.hash = "";
+  globalThis.history.replaceState(null, "", "/");
 });
 afterEach(() => cleanup());
 

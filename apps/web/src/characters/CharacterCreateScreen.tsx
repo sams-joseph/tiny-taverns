@@ -57,8 +57,8 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
  * A player writing down a character of their own —
- * `#/campaigns/:campaignId/characters/new` with a campaign as context, or
- * `#/characters/new` with none — and **the first screen in the product on which
+ * `/campaigns/:campaignId/characters/new` with a campaign as context, or
+ * `/characters/new` with none — and **the first screen in the product on which
  * a non-DM creates anything.**
  *
  * Until `POST /me/campaigns/:c/characters` shipped there was no such thing: a
@@ -91,7 +91,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * ### No campaign is a context too
  *
  * By the captain's decision of 2026-09-23 an account needs no table to make a
- * character: `#/characters/new` is the same screen with the core rules
+ * character: `/characters/new` is the same screen with the core rules
  * (`coreOptionsAtom`) as the vocabulary and `POST /me/characters` as the
  * write. It has no membership to check. Hob drafts here too, over `/me/hob`: a
  * thread of the reader's own account and a toolkit built over the core rules.

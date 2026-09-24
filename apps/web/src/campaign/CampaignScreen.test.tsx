@@ -45,10 +45,10 @@ describe("CampaignScreen", () => {
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     const home = screen.getByTitle("Campaign home");
     expect(home).toHaveTextContent("The Salt Road");
-    expect(home).toHaveAttribute("href", `/#/campaigns/${campaignId}`);
+    expect(home).toHaveAttribute("href", `/campaigns/${campaignId}`);
     expect(screen.getByRole("link", { name: "The Salt Company — Shared World" })).toHaveAttribute(
       "href",
-      `/#/worlds/${sharedWorld.id}`,
+      `/worlds/${sharedWorld.id}`,
     );
     expect(server.calls.some((call) => call.method === "GET" && call.pathname === "/worlds")).toBe(
       false,
@@ -101,7 +101,7 @@ describe("CampaignScreen", () => {
     expect(await screen.findByText("Brannoc")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Manage party" })).toHaveAttribute(
       "href",
-      `/#/campaigns/${campaignId}/party`,
+      `/campaigns/${campaignId}/party`,
     );
   });
 
@@ -259,7 +259,7 @@ describe("CampaignScreen", () => {
     // reader ends up — the player's own screen, on `replace` so *Back* returns
     // them where they came from rather than here.
     await waitFor(() => {
-      expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`);
+      expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}`);
     });
     // Not one control of this screen is drawn on the way.
     // Not one control of *this screen* is drawn on the way — the sharing

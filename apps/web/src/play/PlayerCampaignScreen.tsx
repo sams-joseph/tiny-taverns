@@ -45,7 +45,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * prose the DM chose to share, so that is what this says.
  *
  * **One control writes, and it is only the door into the create flow.** *New
- * character* goes to `#/campaigns/:c/characters/new` because this screen is
+ * character* goes to `/campaigns/:c/characters/new` because this screen is
  * already at one table. Creating the character does **not** seat it here; table
  * presence is the explicit `campaign_character` row created by the party-join
  * flow, so this link makes an owned character and nothing more.

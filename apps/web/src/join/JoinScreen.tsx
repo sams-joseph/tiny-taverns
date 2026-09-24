@@ -38,10 +38,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * Three things about it are decisions rather than layout.
  *
- * **The token never leaves the fragment except in a `POST` body.** `routes.ts`
- * says why: a browser does not send a fragment to a server, so the secret stays
- * out of access logs and out of the `Referer` of anything this page links to.
- * Nothing here puts it in a query string, and nothing renders it.
+ * **The token goes to the API only in a `POST` body.** It arrives as a path
+ * segment (`/join/<token>`, a trade `routes.tsx` records), but nothing here puts
+ * it in an API request line or a query string, and nothing renders it.
  *
  * **Every refusal reads the same, because the server answers the same.** An
  * expired, withdrawn, already-accepted or invented token is one `NotFound` — a

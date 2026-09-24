@@ -237,7 +237,7 @@ const campaignNavFor = (
  * `data-active` rather than a hand-rolled class: it is the attribute Base UI's
  * own tab sets, and the same one the campaign row's recipe keys on.
  *
- * `Link` renders a real `<a href="#/…">`, so a section is still middle-clickable
+ * `Link` renders a real `<a href="/…">`, so a section is still middle-clickable
  * and copyable — the property the hand-built anchors were here for, and it
  * survives because the href is what the router builds rather than what a
  * template guessed.

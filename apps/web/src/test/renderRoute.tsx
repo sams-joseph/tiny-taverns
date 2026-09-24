@@ -1,5 +1,5 @@
 import { RegistryProvider } from "@effect/atom-react";
-import { createHashHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createBrowserHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { readMachineToken, writeMachineToken } from "../auth/credential";
@@ -38,10 +38,10 @@ export const TEST_MACHINE_TOKEN = "a-test-token";
  * previous test's URL into the next, and the failure would look like a screen
  * bug rather than a fixture one.
  *
- * **The real `createHashHistory`, not a memory history**, because half of what
- * these tests assert is an `href`, and only the hash history builds the `#/…`
- * the product actually renders. `window.location.hash` is set first because
- * that is where a hash history reads its initial location from.
+ * **The real browser history, not a memory history**, because half of what
+ * these tests assert is an `href` or the address bar after a navigation, and
+ * the browser history is what the product runs on. The URL is set first
+ * because that is where a browser history reads its initial location from.
  *
  * **A fresh `RegistryProvider` per render, and this one is a trap rather than a
  * tidiness.** `@effect/atom-react`'s `RegistryContext` defaults to a
@@ -68,10 +68,11 @@ export const renderAt = async (
     ensureStorage();
     if (readMachineToken() === "") writeMachineToken(TEST_MACHINE_TOKEN);
   }
-  globalThis.location.hash = `#${path}`;
+  globalThis.history.replaceState(null, "", path);
   const router = createRouter({
     routeTree,
-    history: createHashHistory(),
+    history: createBrowserHistory(),
+    basepath: import.meta.env.BASE_URL,
     // Off in tests for the reason it is off in the app: nothing here has a
     // loader, so a preload would only be a second render nobody asked for.
     defaultPreload: false,
@@ -89,14 +90,3 @@ export const renderAt = async (
   );
   render(<>{wrap === undefined ? tree : wrap(tree)}</>);
 };
-
-/**
- * An `href` as this app renders one.
- *
- * `createHashHistory` builds a link as *the current path*, then the route in
- * the fragment — `/#/campaigns`, not `#/campaigns` — so a link stays correct
- * when the app is served from somewhere other than the root. The route is the
- * part these tests are about; this is here so the leading path does not have to
- * be repeated at every assertion.
- */
-export const hashHref = (path: string): string => `/#${path}`;

@@ -60,13 +60,11 @@ import { StartCta, StartCtaNote } from "./StartCta";
  *    line are gone** for the same reason the pricing table is: there is no
  *    version 2.4 and there is no plan to be under.
  *
- * ### In-page links are `<Link hash>`, never a bare `href="#features"`
+ * ### In-page links are `<Link to="/" hash>`
  *
- * The app is on a hash history because an invitation token travels in the
- * fragment (`routes.tsx`). A bare fragment therefore *replaces the route* and
- * throws the reader onto the campaign list; `<Link to="/" hash="features">`
- * builds `#/#features`, which the hash history reads as the route `/` with the
- * fragment `features`, and `scrollRestoration` performs the scroll.
+ * `<Link to="/" hash="features">` renders `/#features` and scrolls through the
+ * router's `scrollRestoration`, so the anchor names its page as well as its
+ * section.
  */
 
 /** Where the page's own sections are, so a link and a heading cannot drift. */

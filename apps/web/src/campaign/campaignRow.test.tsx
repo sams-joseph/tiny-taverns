@@ -66,10 +66,7 @@ const actLabel = (): string | undefined =>
     .find((label) => /Start session|Start an encounter|Back to the fight/.test(label));
 
 describe("the campaign's chrome, across every destination it offers", () => {
-  /**
-   * A rendered `href` is `/#/…` under the hash history, so the route behind it
-   * is what is left once the `/#` is dropped — which is what `renderAt` takes.
-   */
+  /** A rendered `href` is the route itself, which is what `renderAt` takes. */
   const destinations = async (): Promise<ReadonlyArray<{ label: string; path: string }>> => {
     await renderAt(`/campaigns/${campaignId}`);
     await screen.findByRole("heading", { name: "Overview" });
@@ -82,7 +79,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       .getAllByRole("link")
       .map((link) => ({
         label: link.textContent ?? "",
-        path: (link.getAttribute("href") ?? "").replace(/^\/#/, ""),
+        path: link.getAttribute("href") ?? "",
       }));
     cleanup();
     return found;

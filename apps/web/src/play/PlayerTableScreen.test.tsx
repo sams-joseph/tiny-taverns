@@ -387,7 +387,7 @@ describe("PlayerTableScreen", () => {
     await renderSheet(brannocId);
 
     const action = await screen.findByRole("button", { name: /Go to the table/ });
-    expect(action.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/table`);
+    expect(action.getAttribute("href")).toBe(`/campaigns/${campaignId}/table`);
   });
 
   it("explains the quiet state instead of inventing table controls", async () => {

@@ -59,7 +59,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *   *Add to campaign* action below is that verb; it uses existing memberships,
  *   not an invitation-code flow.
  * - **The join card** — paste a code, *Claim a seat*. Following an invitation is
- *   `#/join/<token>`, a screen that already exists and reads the invitation
+ *   `/join/<token>`, a screen that already exists and reads the invitation
  *   before anybody signs in. A second, weaker way in would be a second answer to
  *   what an invitation is.
  * - ***Send to the DM*** and **the portrait upload**. Neither has anything

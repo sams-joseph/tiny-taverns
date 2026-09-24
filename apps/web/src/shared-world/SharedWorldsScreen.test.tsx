@@ -63,7 +63,7 @@ describe("the Shared Worlds list", () => {
     expect(screen.getByText("Yours")).toBeTruthy();
     // The whole card opens the world through the link on its name.
     expect(screen.getByRole("link", { name: "The Salt Company" }).getAttribute("href")).toBe(
-      `/#/worlds/${worldId}`,
+      `/worlds/${worldId}`,
     );
     expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
   });
@@ -90,7 +90,7 @@ describe("the Shared Worlds list", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/worlds")).toEqual({ name: "The Hag's Bargain Co" }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${worldId}`));
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`/worlds/${worldId}`));
   });
 
   it("founds a Shared World with its description, trimmed, for the one cover draw", async () => {
@@ -220,7 +220,7 @@ describe("one Shared World's screen", () => {
 
     expect(await screen.findByText("Playing")).toBeTruthy();
     expect(screen.getByRole("link", { name: "The Salt Road" }).getAttribute("href")).toBe(
-      `/#/campaigns/${campaignId}`,
+      `/campaigns/${campaignId}`,
     );
   });
 
@@ -399,7 +399,7 @@ describe("one Shared World's screen", () => {
     expect(
       await screen.findByText(/Move or disconnect every campaign.*Archived campaigns count too/),
     ).toBeTruthy();
-    expect(globalThis.location.hash).toBe(`#/worlds/${worldId}`);
+    expect(globalThis.location.pathname).toBe(`/worlds/${worldId}`);
   });
 
   it("returns to the directory after archiving an empty Shared World", async () => {
@@ -416,7 +416,7 @@ describe("one Shared World's screen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Archive Shared World" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive it" }));
 
-    await waitFor(() => expect(globalThis.location.hash).toBe("#/worlds"));
+    await waitFor(() => expect(globalThis.location.pathname).toBe("/worlds"));
   });
 
   it("opens Shared World Hob and refreshes the Chronicle when a proposal is kept", async () => {

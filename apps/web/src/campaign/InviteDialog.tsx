@@ -92,46 +92,19 @@ const sentenceFor = (invite: CampaignInvite): string => {
 };
 
 /**
- * The whole link, composed here because only the browser knows where it is.
+ * The whole link, composed here because only the browser knows its origin.
  *
- * The router builds everything after the origin — the path, and the token in
- * the fragment — so the one place an invitation link is written down cannot
- * spell the route slightly differently from the route that reads it. **The
- * token is in the fragment and that is the point**: a browser never sends a
- * fragment to a server, so this link can be pasted, opened and followed
- * without the secret reaching an access log. See `routes.tsx`.
- *
- * ### It has to survive being hosted under a subpath
- *
- * A DM copies this link out of the product and into a chat, so it is the one
- * URL here that is read somewhere the app is not already running — nothing
- * else re-resolves it, and a wrong one 404s at a stranger's first screen. So
- * it is **resolved against the page's own URL** rather than glued to
- * `location.origin`: served from `example.com/taverns/` the link keeps the
- * `/taverns/` prefix, and served from a root it is unchanged. `new URL`
- * resolves whichever shape `createHref` hands back — an absolute path today,
- * a bare `#…` fragment if it ever changes — against the same base a browser
- * would use for the equivalent `<a href>`, which is exactly the question being
- * asked. `campaign/invites.test.tsx` pins both hosting shapes.
+ * The router builds everything after the origin — the router's `basepath`, then
+ * `/join/<token>` — so the one place an invitation link is written down cannot
+ * spell the route differently from the route that reads it, and a build served
+ * under a subpath hands out links under it. `history.createHref` over the
+ * built location is the same call `Link` makes, so this link and every rendered
+ * one cannot disagree. The page's own query string and fragment are not part
+ * of it. `routes.test.ts` and `campaign/invites.test.tsx` pin both.
  */
 const linkFor = (router: RegisteredRouter, token: string): string => {
   const { publicHref } = router.buildLocation({ to: "/join/$token", params: { token } });
-  // `history.createHref`, **not** `buildLocation(…).href`. The latter is the
-  // route as the router thinks of it — `/join/<token>` — and pasting that after
-  // an origin would put the secret in the *path*, where every log and every
-  // `Referer` would carry it. `createHref` is what turns a route into the URL
-  // this app is actually reachable at, which on a hash history means the page's
-  // own path and the route behind a `#`. It is the same call `Link` makes, so
-  // this link and every rendered one cannot disagree.
-  const href = router.history.createHref(publicHref);
-  const url = new URL(href, globalThis.location.href);
-  // `createHref` carries the page's own `search` as well as its path, so an
-  // invitation minted while the DM happened to be on `…?foo=1` would post that
-  // query string to whoever the link is sent to. Harmless — the token is in
-  // the fragment either way — but it is noise in a URL a person reads, and the
-  // route this link names takes no query parameters at all.
-  url.search = "";
-  return url.toString();
+  return new URL(router.history.createHref(publicHref), globalThis.location.origin).toString();
 };
 
 function InviteRow({

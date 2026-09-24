@@ -545,7 +545,7 @@ class MeGroup extends HttpApiGroup.make("me")
     }),
     /**
      * **Writing down a character of your own** — the endpoint behind
-     * `#/campaigns/:c/characters/new`. With `createCoreCharacter` below and
+     * `/campaigns/:c/characters/new`. With `createCoreCharacter` below and
      * Hob's accept it is how a `character` row comes into being: there is no
      * DM-typed character, no assignment and no re-pointing, and creators write
      * their own characters through these same doors as everybody else.
