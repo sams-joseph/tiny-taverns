@@ -1,21 +1,22 @@
 import markUrl from "@taverns/design-system/assets/icon/mark-on-dark-256.png";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import { Link, useMatchRoute, useParams, type LinkProps } from "@tanstack/react-router";
 import type { CampaignId, CampaignRelation } from "@taverns/api";
 import {
   BackLink,
   Badge,
+  Button,
   cn,
   Icon,
   Kbd,
   navPillVariants,
-  tabsTriggerVariants,
   type IconName,
 } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApiAtom } from "../api/atoms";
 import { SignInSurface } from "../auth/SignInSurface";
+import { useCampaignAct } from "../campaign/act";
 import { campaignAtom, campaignNightAtom } from "../campaign/load";
 import { HobFrame, HobRegion } from "../hob/HobDock";
 import {
@@ -26,10 +27,13 @@ import {
   type Section,
 } from "./location";
 import { TopBarSlot } from "./slots";
+import { navLinkProps } from "./navLink";
+import { TabRow, type Collapse } from "./TabRow";
 
 /**
- * The shell: **two nav rows**, a per-screen bar under them, then the body —
- * and, when it is docked, the Hob panel beside all four, full height.
+ * The shell: **two nav rows**, a per-screen bar under them above any campaign,
+ * then the body — and, when it is docked, the Hob panel beside all of it, full
+ * height.
  *
  * This is `ui_kits/dm-screen/AppShell.jsx` built out of the shipped components
  * and the theme's names — the prototype's inline styles and hand-rolled hover
@@ -40,8 +44,10 @@ import { TopBarSlot } from "./slots";
  * `shell/ShellLayout.tsx` is the only thing that renders it, as the component
  * of a pathless layout route, so the header, both rows, the bar's slot and the
  * Hob panel are the same nodes from one screen to the next. A screen reaches
- * into it at exactly one point: `TopBar`, which portals into the slot. Nothing
- * travels down from a screen as a prop, and nothing here is about a screen.
+ * into it at exactly one point: `TopBar`, which portals into the slot — and,
+ * inside a campaign, where there is no per-screen bar, draws the same header at
+ * the top of the screen's content instead. Nothing travels down from a screen
+ * as a prop, and nothing here is about a screen.
  *
  * ### Navigation has two tiers, and the rule is the shape rather than a habit
  *
@@ -59,11 +65,9 @@ import { TopBarSlot } from "./slots";
  * campaign screens appear in no global list.
  *
  * **The campaign row sources itself.** The way home is built from the route,
- * the name from `campaignAtom` and the creator's badge from `campaignNightAtom`.
- * A screen used to hand the row its name, badge and action, and the screens that
- * forgot drew a row missing them. The action has since moved off this row into
- * the per-screen bar (`shell/TopBar.tsx`) — where it sources itself the same
- * way, for the same reason.
+ * the name from `campaignAtom`, and the creator's badge and the campaign's own
+ * press from `campaignNightAtom`. A screen used to hand the row its name, badge
+ * and action, and the screens that forgot drew a row missing them.
  *
  * **The 260px rail is gone, and the width it took is still the point.** The
  * second delivery replaced it with one 56px row and gave the content the 260px
@@ -87,6 +91,10 @@ import { TopBarSlot } from "./slots";
  * wrapped, so the content's top edge moved by 80px between tabs of the same
  * campaign. `PageHeader` reserves the subtitle line whether or not a screen has one
  * and the row does not wrap, so the number above is the number on every screen.
+ *
+ * Inside a campaign the chrome is the first two rows and nothing else — 90px on
+ * every tab at every width — because there is no per-screen bar there: the
+ * screen's header is the top of its content (see `TopBar`).
  *
  * ### Nothing here asks the window how wide it is
  *
@@ -123,6 +131,11 @@ interface NavItem {
    */
   readonly link: LinkProps;
   readonly section: Section;
+  /**
+   * The campaign row's width below which this item waits in the row's *More*
+   * menu instead — see `CampaignRow` for the order.
+   */
+  readonly collapse?: Collapse;
 }
 
 /**
@@ -208,103 +221,55 @@ const campaignNavFor = (
       label: "Party",
       link: { to: "/campaigns/$campaignId/party", params: { campaignId } },
       section: "party",
+      collapse: "lg",
     },
     {
       label: "Notes",
       link: { to: "/campaigns/$campaignId/notes", params: { campaignId } },
       section: "notes",
+      collapse: "lg",
     },
     {
       label: "Cast",
       link: { to: "/campaigns/$campaignId/cast", params: { campaignId } },
       section: "cast",
+      collapse: "xl",
     },
     {
       label: "Chronicle",
       link: { to: "/campaigns/$campaignId/chronicle", params: { campaignId } },
       section: "chronicle",
+      collapse: "xl",
     },
   ];
 };
-
-/**
- * The props both rows' items share — everything except how they are dressed.
- *
- * **The active state is `item.section`, not `Link`'s own `activeProps`**, and
- * that is deliberate: a nav item is lit for a whole *part of the app* — a fight
- * lights its campaign's Overview, a character sheet lights Characters — which is
- * a broader question than whether this exact URL is the current one.
- * `data-active` rather than a hand-rolled class: it is the attribute Base UI's
- * own tab sets, and the same one the campaign row's recipe keys on.
- *
- * `Link` renders a real `<a href="/…">`, so a section is still middle-clickable
- * and copyable — the property the hand-built anchors were here for, and it
- * survives because the href is what the router builds rather than what a
- * template guessed.
- */
-const navLinkProps = (active: boolean) =>
-  ({
-    // **`Link` marks itself active on a prefix by default, and this bar's
-    // question is not that one.** `item.section` answers the broader one above;
-    // `Link` would additionally light *Characters* while a sheet is open, because
-    // `/characters` is a prefix of the URL, and *Overview* on every screen inside
-    // a campaign, because the campaign index is a prefix of all of them. `exact`
-    // narrows its notion of active to "this is the page", which is always a case
-    // `item.section` also calls active, so the two agree instead of fighting.
-    // That matters because `Link` spreads its own `aria-current="page"` **after**
-    // everything else and there is no way to turn that off; `activeProps={{}}`
-    // only stops it appending a stray `active` class to the recipe's.
-    activeOptions: { exact: true },
-    activeProps: {},
-    "aria-current": active ? ("page" as const) : undefined,
-    "data-active": active ? "" : undefined,
-  }) satisfies Partial<LinkProps> & Record<string, unknown>;
 
 /**
  * The global row's control — `navPillVariants`, the row's one recipe, which
  * `@taverns/ui` keeps beside the campaign row's underline. *Ask Hob* wears the
  * same one, because the alternative was what shipped: the four nav items at
  * 26px and *Ask Hob* wearing `Button size="sm"` at 32, measured, on a 44px row.
+ *
+ * The item is lit by `item.section`, not by `Link`'s own notion of active: a
+ * nav item is lit for a whole *part of the app* — a character sheet lights
+ * Characters — which is broader than whether this URL is the current one.
+ *
+ * Below the row's `@2xl` the label is for screen readers and the tooltip only:
+ * the row's second collapse, after the wordmark, and the one that lets it fit a
+ * phone (at 390 the labelled row ran past the window's edge).
  */
 function GlobalNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
   return (
     <Link
       {...item.link}
       {...navLinkProps(active)}
+      title={item.label}
       className={navPillVariants({ state: active ? "here" : "idle" })}
     >
       {item.icon !== undefined && (
         <Icon name={item.icon} size={13} className={active ? "text-accent-ink" : undefined} />
       )}
-      {item.label}
-    </Link>
-  );
-}
-
-/**
- * A campaign-row item, wearing `Tabs`' own recipe.
- *
- * The delivery asks for this in as many words — `CampItem`'s comment is
- * *"campaign row items carry the 2px accent underline the system uses for
- * Tabs"* — and `tabsTriggerVariants` is that recipe, exported from `@taverns/ui`
- * for exactly this. Reproducing the class list here would be a second copy to
- * keep in step with the designers, and the whole point of the shared recipe is
- * that a tab strip inside a screen and the row above it move together.
- *
- * Label only: see `NavItem.icon`.
- */
-function CampaignNavLink({ item, active }: { readonly item: NavItem; readonly active: boolean }) {
-  return (
-    <Link
-      {...item.link}
-      {...navLinkProps(active)}
-      // `h-auto self-stretch` so the item reaches the full 46px of the row
-      // rather than keeping the tab strip's 36px, which is what lands the
-      // underline on the header's own hairline (with the recipe's `-mb-px`).
-      // `px-3.25` is `CampItem`'s 13px.
-      className={cn(tabsTriggerVariants(), "h-auto self-stretch px-3.25")}
-    >
-      {item.label}
+      <span className="@max-2xl:sr-only">{item.label}</span>
     </Link>
   );
 }
@@ -447,7 +412,7 @@ function CampaignHome({ campaignId }: { readonly campaignId: CampaignId }) {
  *
  * The badge is this row's decoration, so it is the row's second collapse and it
  * goes at the same width the chip's label does: the campaign's own screens say
- * which night it is in their subtitle, and a narrow bar has to keep its
+ * which night it is in their subtitle, and a narrow row has to keep its
  * controls. A player's row has none because a player's session read is
  * visibility-gated and a badge that appears for some nights and not others says
  * something it does not mean to.
@@ -461,6 +426,53 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
     <div className="hidden shrink-0 @5xl:block">
       <Badge variant="secondary">Session {session.number}</Badge>
     </div>
+  );
+}
+
+/**
+ * The campaign's own press — *Start session*, *Start an encounter* or *Back to
+ * the fight* — at the right end of the campaign row, on every one of its tabs.
+ * The creator's only, which is the delivery's `!player` guard held as a shape
+ * instead of a check: at a table this account merely plays at,
+ * `campaignNightAtom` is visibility-gated and is never asked.
+ *
+ * **It sources itself from the route**, as the rest of the row does and for the
+ * same reason: it was once a prop a screen passed, and the screens that forgot
+ * drew chrome missing it (`campaign/campaignRow.test.tsx` is that bug's record).
+ * `useCampaignAct` computes which of the three it is once; on the fight it
+ * would send you back to, it is absent.
+ *
+ * **It is the screen's one peach primary**, on every campaign tab, so a tab's
+ * own create verb is `secondary` or `outline` and the Overview's cards carry no
+ * press of their own.
+ *
+ * Below the row's `@2xl` it is its icon: the label stays the accessible name
+ * and the tooltip, and the three states have three glyphs.
+ *
+ * Two campaign screens go without it, because their own peach is their next
+ * step: one encounter's page, whose *Run* is this press aimed at that encounter
+ * (`campaign/EncounterScreen.tsx`, the same `run` from the same
+ * `useCampaignAct`, so it goes back to a live fight exactly as this would), and
+ * the character create form, a flow whose way out is *Cancel*, not a fight.
+ */
+function CampaignAct({ campaignId }: { readonly campaignId: CampaignId }) {
+  const { act, dialogs } = useCampaignAct(campaignId);
+  return (
+    <>
+      {act !== undefined && (
+        <Button
+          size="sm"
+          title={act.label}
+          onClick={act.press}
+          // Square once it is its icon, the size of the row's other controls.
+          className="ml-auto shrink-0 @max-2xl:w-8 @max-2xl:px-0"
+        >
+          <Icon name={act.icon} size={13} />
+          <span className="@max-2xl:sr-only">{act.label}</span>
+        </Button>
+      )}
+      {dialogs}
+    </>
   );
 }
 
@@ -483,13 +495,32 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
  * tabs do not shrink, so a long name truncates rather than pushing the tabs off
  * the row.
  *
- * ### Below `@5xl` it collapses, in a stated order
+ * ### The campaign's press is at its right end
  *
- * Under 1024 the chip drops to its icon and the badge goes, because the row's
- * width is needed by the tabs, which are the controls. The row is not
- * a scroller: the action that once pushed those links past the edge now belongs
- * to the per-screen bar (`shell/TopBar.tsx`). Future overflow here is a layout
- * defect to solve, not another scrolling surface inside the page.
+ * The prototype of the Overview redesign draws it there, and the captain chose
+ * the row over the per-screen bar it had moved to (2026-09-23). It was taken off
+ * this row once because it overflowed at 760 — the row's last item reached
+ * x=788 and the shell's clip cut the label mid-word — so the row now makes room
+ * for it by collapsing, rather than by scrolling: **no chrome row is a scroll
+ * container**, and overflow here is a layout defect.
+ *
+ * ### It collapses in a stated order
+ *
+ * Each step is a container query on this row, so it answers how wide the row
+ * is — beside a docked Hob panel as much as on a phone:
+ *
+ * 1. Below `@5xl` the chip drops to its icon and the badge goes: decoration
+ *    first, and the icon is still the way to the world.
+ * 2. Below `@3xl` the name goes — the chevron keeps the way home — and the
+ *    tabs tighten from 13px to 10px a side.
+ * 3. Below `@2xl` the press is its icon.
+ * 4. Below `@xl` *Cast* and *Chronicle* wait in a *More* menu at the end of the
+ *    tabs.
+ * 5. Below `@lg` *Party* and *Notes* join them, leaving *Overview* and
+ *    *Encounters* — the night's two screens — on the row.
+ *
+ * Above `@3xl` a long name gives way before any of that, by truncating. A
+ * player's row is three tabs and no press, and fits a phone without a step.
  */
 function CampaignRow({
   campaignId,
@@ -499,6 +530,11 @@ function CampaignRow({
   readonly section: Section;
 }) {
   const relation = useCampaignRelation(campaignId);
+  const matchRoute = useMatchRoute();
+  // Decoded only on the encounter's own route, never on the list's splat.
+  const onEncounter = useParams({ strict: false }).encounterId !== undefined;
+  const ownPeach =
+    onEncounter || matchRoute({ to: "/campaigns/$campaignId/characters/new" }) !== false;
 
   return (
     // The `@container` is the bare row and the padding is on the box inside it,
@@ -513,11 +549,20 @@ function CampaignRow({
           <CampaignSharedWorldLink campaignId={campaignId} />
           {relation === "creator" && <SessionBadge campaignId={campaignId} />}
         </div>
-        <nav aria-label="This campaign" className="ml-2 flex shrink-0 items-stretch self-stretch">
-          {campaignNavFor(relation, campaignId).map((item) => (
-            <CampaignNavLink key={item.label} item={item} active={item.section === section} />
-          ))}
-        </nav>
+        <TabRow
+          label="This campaign"
+          moreLabel="More of this campaign"
+          // `mr-3` is the least room between the last tab and the press.
+          className="mr-3 ml-2 shrink-0"
+          items={campaignNavFor(relation, campaignId).map((item) => ({
+            key: item.label,
+            label: item.label,
+            link: item.link,
+            active: item.section === section,
+            ...(item.collapse !== undefined && { collapse: item.collapse }),
+          }))}
+        />
+        {relation === "creator" && !ownPeach && <CampaignAct campaignId={campaignId} />}
       </div>
     </div>
   );

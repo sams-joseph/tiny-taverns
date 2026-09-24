@@ -64,11 +64,35 @@ const ITEM =
   "rounded-xs font-sans text-body-s text-foreground " +
   "cursor-pointer transition-control outline-none select-none " +
   "data-highlighted:bg-slate-700 " +
+  // The page you are on, when a menu stands in for a row of tabs.
+  "aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink " +
   "data-disabled:pointer-events-none data-disabled:opacity-50";
 
 function DropdownMenuItem({ className, ...props }: MenuPrimitive.Item.Props) {
   return (
     <MenuPrimitive.Item data-slot="dropdown-menu-item" className={cn(ITEM, className)} {...props} />
+  );
+}
+
+/**
+ * A row that goes somewhere rather than doing something: a destination that
+ * did not fit on a tab row. It renders an `<a>` (pass the router's `Link` as
+ * `render`), and it closes the menu, because the page under it is about to be
+ * a different one. The destination you are on carries `aria-current`, and
+ * every item reads that the way the radio group reads its chosen one.
+ */
+function DropdownMenuLinkItem({
+  className,
+  closeOnClick = true,
+  ...props
+}: MenuPrimitive.LinkItem.Props) {
+  return (
+    <MenuPrimitive.LinkItem
+      data-slot="dropdown-menu-link-item"
+      closeOnClick={closeOnClick}
+      className={cn(ITEM, className)}
+      {...props}
+    />
   );
 }
 
@@ -135,6 +159,7 @@ export {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuLinkItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,

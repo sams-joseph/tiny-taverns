@@ -198,7 +198,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ---------------------------------------------------------------------------
 // What is measured. Each function runs inside the page.
 
-/** Wait until the screen's bar is up and the DOM has been still for 300ms. */
+/**
+ * Wait until the screen's header is up — the bar above a campaign, the heading
+ * at the top of the content inside one — and the DOM has been still for 300ms.
+ */
 function settled() {
   return new Promise((resolve) => {
     const started = performance.now();
@@ -208,7 +211,7 @@ function settled() {
     const tick = () => {
       const now = performance.now();
       const ready =
-        document.querySelector('[data-slot="page-header"]') !== null &&
+        document.querySelector('[data-slot="page-header"], [data-slot="page-heading"]') !== null &&
         document.querySelector('[data-slot="loading"]') === null;
       if ((ready && now - last > 300) || now - started > 8000) {
         observer.disconnect();
@@ -245,8 +248,16 @@ function measure() {
   const header = document.querySelector('[data-slot="page-header"]');
   const bar = header?.firstElementChild ?? null;
   const tabs = header?.children[1] ?? null;
+  // Inside a campaign there is no bar: the same header is the top of `main`.
+  const heading = document.querySelector('main [data-slot="page-heading"]');
+  const headingTabs = heading?.children[1] ?? null;
   const stack = document.querySelector(".sticky.top-0");
   const main = document.querySelector("main");
+  // `main`'s content edge: its box less the page gutter.
+  const contentRight =
+    main === null
+      ? viewport
+      : main.getBoundingClientRect().right - parseFloat(getComputedStyle(main).paddingRight);
 
   // Anything in the chrome drawn past the viewport's right edge: clipped by an
   // ancestor's overflow, so `scrollWidth` alone never sees it.
@@ -259,16 +270,28 @@ function measure() {
             `${(el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30)} @${round(el.getBoundingClientRect().right)}`,
         )
     : [];
+  // The same question of the in-content heading, against the content's edge:
+  // the frame clips sideways, so a tab strip running past it is invisible to
+  // `scrollWidth` too.
+  const headingPastEdge = heading
+    ? [...heading.querySelectorAll("a, button, input, h1")]
+        .filter(visible)
+        .filter((el) => el.getBoundingClientRect().right > contentRight + 0.5)
+        .map(
+          (el) =>
+            `${(el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30)} @${round(el.getBoundingClientRect().right)}`,
+        )
+    : [];
   // Header controls drawn on top of one another: a flex row whose children
   // cannot shrink any further overflows into its neighbour, and neither the
   // viewport edge nor `scrollWidth` sees that.
-  const barControls = header
-    ? [...header.querySelectorAll("a, button, input, h1")]
-        .filter(visible)
-        .filter((el) => !el.parentElement.closest("a, button"))
-        // A switch's native input is a clipped 1px box behind its thumb.
-        .filter((el) => el.getBoundingClientRect().width > 2)
-    : [];
+  const barControls = [header, heading]
+    .filter((el) => el !== null)
+    .flatMap((el) => [...el.querySelectorAll("a, button, input, h1")])
+    .filter(visible)
+    .filter((el) => !el.parentElement.closest("a, button"))
+    // A switch's native input is a clipped 1px box behind its thumb.
+    .filter((el) => el.getBoundingClientRect().width > 2);
   const label = (el) =>
     (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30);
   const barOverlaps = [];
@@ -287,9 +310,26 @@ function measure() {
     .filter((el) => el.classList.contains("bg-accent"))
     .map(
       (el) =>
-        `${el.textContent.trim()} (${el.closest('[data-slot="page-header"]') ? "bar" : "body"})`,
+        `${el.textContent.trim()} (${
+          el.closest('[data-slot="page-header"]')
+            ? "bar"
+            : campaignRow?.contains(el)
+              ? "row"
+              : el.closest('[data-slot="page-heading"]')
+                ? "heading"
+                : "body"
+        })`,
     );
-  const campaignItems = campaignNav ? [...campaignNav.querySelectorAll("a")].filter(visible) : [];
+  // The row's tabs and, when some have collapsed, its *More* trigger.
+  const campaignItems = campaignNav
+    ? [...campaignNav.querySelectorAll("a, button")].filter(visible)
+    : [];
+  // The way home: the lead group's first control. It must survive every
+  // collapse whole, never squeezed under the tabs.
+  const home = campaignNav?.previousElementSibling?.querySelector("a") ?? null;
+  const act = campaignRow
+    ? ([...campaignRow.querySelectorAll('[data-slot="button"]')].filter(visible).at(-1) ?? null)
+    : null;
 
   return {
     title: document.querySelector("h1")?.textContent?.trim() ?? null,
@@ -313,9 +353,23 @@ function measure() {
       : [],
     campaignFirstTab: box(campaignItems[0] ?? null),
     campaignLastItem: box(campaignItems.at(-1) ?? null),
+    campaignTabs: campaignItems.map(
+      (el) => el.textContent.trim() || el.getAttribute("aria-label") || "",
+    ),
+    campaignHome: box(home),
+    // The lead group may shrink only by truncating the name inside it; if its
+    // own contents spill, the chip or the badge is being drawn under the tabs.
+    campaignLeadSpills: campaignNav?.previousElementSibling
+      ? campaignNav.previousElementSibling.scrollWidth >
+        campaignNav.previousElementSibling.clientWidth
+      : null,
+    campaignAct: act === null ? null : { ...box(act), label: act.textContent.trim() },
     bar: box(bar),
     barActions: box(header?.querySelector('[data-slot="page-header-actions"]') ?? null),
     tabs: box(tabs),
+    heading: box(heading?.firstElementChild ?? null),
+    headingTitle: box(heading?.querySelector("h1") ?? null),
+    headingTabs: box(headingTabs),
     stackHeight: box(stack)?.h ?? null,
     stackZ: stack ? getComputedStyle(stack).zIndex : null,
     mainTop: box(main)?.y ?? null,
@@ -323,8 +377,10 @@ function measure() {
       globalRow: rowOverflow(globalRow),
       campaignRow: rowOverflow(campaignRow),
       bar: rowOverflow(bar),
+      headingTabs: rowOverflow(headingTabs),
     },
     pastEdge,
+    headingPastEdge,
     barOverlaps,
     primaries,
   };
@@ -397,6 +453,22 @@ function hobState() {
           h: Math.round(height),
           right: Math.round(right),
         }))(el.getBoundingClientRect());
+  // Beside a docked panel the rows are narrower than the window; nothing in
+  // them may be drawn past the column they have.
+  const chromePastEdge =
+    stack === null
+      ? []
+      : [...stack.querySelectorAll("a, button, [data-slot=badge]")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+          })
+          .filter(
+            (el) => el.getBoundingClientRect().right > stack.getBoundingClientRect().right + 0.5,
+          )
+          .map((el) =>
+            (el.textContent || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30),
+          );
   let overlayCoversBar = null;
   let panelZ = null;
   if (panel !== null) {
@@ -448,6 +520,7 @@ function hobState() {
     afterScroll,
     panelZ,
     overlayCoversBar,
+    chromePastEdge,
     samePanel: panel?.__auditMark === true,
     sameHeader: header?.__auditMark === true,
   };
@@ -603,8 +676,11 @@ for (const width of widths) {
       "tabs",
       "stack",
       "mainTop",
+      "h1.y",
+      "head",
       "tab1.x",
       "last.right",
+      "act",
       "row.right",
       "actions.right",
       "ctrls",
@@ -620,11 +696,14 @@ for (const width of widths) {
         px(r.globalRow, "h"),
         px(r.campaignRow, "h"),
         px(r.bar, "h"),
-        px(r.tabs, "h"),
+        px(r.tabs ?? r.headingTabs, "h"),
         r.stackHeight,
         r.mainTop,
+        px(r.headingTitle, "y"),
+        px(r.heading, "h"),
         px(r.campaignFirstTab, "x"),
         px(r.campaignLastItem, "right"),
+        r.campaignAct === null ? "-" : `${r.campaignAct.x}+${r.campaignAct.w}`,
         px(r.campaignRow, "right"),
         px(r.barActions, "right"),
         [...new Set(r.globalControls)].join("/"),
@@ -669,8 +748,19 @@ for (const width of widths) {
   );
   expect(
     "tab strip height",
-    rows.map((r) => r.tabs?.h),
+    rows.flatMap((r) => [r.tabs?.h, r.headingTabs?.h]),
     40,
+  );
+  // Inside a campaign there is no per-screen bar (the captain's decision of
+  // 2026-09-23): the chrome is the two nav rows and the header's hairline
+  // (44 + 46 + 1) on every tab at every width, and the screen's header is the
+  // top of its content.
+  for (const r of inCampaign)
+    if (r.bar !== null) findings.push(`${width}: ${r.screen}: a per-screen bar inside a campaign`);
+  expect(
+    "campaign chrome height",
+    inCampaign.map((r) => r.stackHeight),
+    91,
   );
   expect(
     "global control height",
@@ -681,7 +771,7 @@ for (const width of widths) {
   // starts `ml-2` (8px) after the group's right edge.
   for (const r of inCampaign)
     if (r.campaignLead !== null && r.campaignFirstTab !== null) {
-      const gap = r.campaignFirstTab.x - r.campaignLead.right;
+      const gap = Math.round((r.campaignFirstTab.x - r.campaignLead.right) * 10) / 10;
       if (gap !== 8)
         findings.push(
           `${width}: ${r.screen}: first campaign tab is ${gap}px after the lead (want 8)`,
@@ -692,11 +782,47 @@ for (const width of widths) {
     rows.map((r) => r.stackZ),
     "10",
   );
-  // One content top edge for every campaign screen without a tab strip.
+  // One content top edge for every campaign screen, so sibling tabs line up:
+  // the same `main` top, the same title y, and — from `PageHeader`'s wrap
+  // breakpoint up, where its row does not wrap — the same header height, so
+  // whatever follows the header starts at one y too.
   expect(
     "campaign content top",
-    inCampaign.filter((r) => r.tabs === null && fixedBar(r)).map((r) => r.mainTop),
+    inCampaign.map((r) => r.mainTop),
   );
+  expect(
+    "campaign title y",
+    inCampaign.map((r) => r.headingTitle?.y),
+  );
+  expect(
+    "campaign header height",
+    inCampaign.filter((r) => r.viewport >= 896).map((r) => r.heading?.h),
+    48,
+  );
+  // The way home survives every collapse whole: the chevron is at least its
+  // own 16px and the first tab starts after it.
+  for (const r of inCampaign)
+    if (
+      r.campaignHome === null ||
+      r.campaignHome.w < 16 ||
+      (r.campaignFirstTab !== null && r.campaignHome.right > r.campaignFirstTab.x)
+    )
+      findings.push(
+        `${width}: ${r.screen}: the way home is squeezed (${JSON.stringify(r.campaignHome)})`,
+      );
+  for (const r of inCampaign)
+    if (r.campaignLeadSpills)
+      findings.push(`${width}: ${r.screen}: the campaign row's lead spills out of its box`);
+  // The campaign's press is on the row after its last item, never over it.
+  for (const r of inCampaign)
+    if (
+      r.campaignAct !== null &&
+      r.campaignLastItem !== null &&
+      r.campaignAct.x < r.campaignLastItem.right
+    )
+      findings.push(
+        `${width}: ${r.screen}: the campaign's press at ${r.campaignAct.x} overlaps the tabs ending at ${r.campaignLastItem.right}`,
+      );
   for (const r of rows) {
     const at = `${width}: ${r.screen}`;
     if (!r.ready) findings.push(`${at}: never settled (no bar, or still loading)`);
@@ -705,6 +831,8 @@ for (const width of widths) {
       findings.push(`${at}: scrollWidth ${r.scrollWidth} != viewport ${r.viewport}`);
     if (r.pastEdge.length > 0)
       findings.push(`${at}: chrome past the right edge: ${r.pastEdge.join(", ")}`);
+    if (r.headingPastEdge.length > 0)
+      findings.push(`${at}: header past the content's edge: ${r.headingPastEdge.join(", ")}`);
     for (const [row, over] of Object.entries(r.overflow))
       if (over) findings.push(`${at}: ${row} overflows its box`);
     if (
@@ -717,6 +845,15 @@ for (const width of widths) {
       );
     if (r.barOverlaps.length > 0)
       findings.push(`${at}: header controls overlap: ${r.barOverlaps.join(", ")}`);
+    if (
+      r.campaignRow !== null &&
+      r.campaignAct === null &&
+      r.scenario === "creator" &&
+      // The fight the press would go back to, and an encounter's page, whose
+      // own *Run* is the press aimed at that encounter.
+      !["run", "encounter"].includes(r.screen)
+    )
+      findings.push(`${at}: no campaign press on the row`);
     if (r.primaries.length > 1)
       findings.push(`${at}: ${r.primaries.length} primaries (${r.primaries.join(", ")})`);
     if (r.sticky?.scrolls && (r.sticky.stackTopAfterScroll !== 0 || !r.sticky.chromeOnTop))
@@ -732,6 +869,10 @@ for (const width of widths) {
     if (h.overlayCoversBar) findings.push(`${width}: hob at ${h.step}: the panel covers the bar`);
     if (h.scrollWidth !== h.viewport.w)
       findings.push(`${width}: hob at ${h.step}: scrollWidth ${h.scrollWidth} != ${h.viewport.w}`);
+    if (h.chromePastEdge.length > 0)
+      findings.push(
+        `${width}: hob at ${h.step}: chrome past the column's edge: ${h.chromePastEdge.join(", ")}`,
+      );
     if (!h.inline) continue;
     // Inline, the panel is a full-height column beside the whole shell: top 0,
     // the viewport's height, flush with the right edge, and the chrome and

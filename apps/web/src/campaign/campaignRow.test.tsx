@@ -15,9 +15,8 @@ import { campaign, campaignId, installStubServer } from "./campaign.fixtures";
  * It was not intermittent and it was not the width. The badge and the campaign
  * action were props a screen passed to the shell, and the Party and the
  * Chronicle each composed a shell of their own that passed neither. Both are
- * read from `campaignNightAtom` now — the badge by the campaign row and the
- * press by the per-screen bar — and the shell is mounted once by the layout
- * route, so no screen can draw either short.
+ * read from `campaignNightAtom` by the campaign row now, and the shell is
+ * mounted once by the layout route, so no screen can draw either short.
  *
  * ### Why it is written as an enumeration, and not as five assertions
  *
@@ -38,32 +37,24 @@ beforeEach(() => {
   server.reset();
 });
 
-/** The two-row nav: one `<header>`, holding the campaign row and its badge. */
+/** The campaign row: its name and badge, its tabs, and the campaign's press. */
 const campaignRow = (): HTMLElement => {
-  const nav = screen.getByRole("navigation", { name: "This campaign" });
-  const header = nav.closest("header");
-  expect(header).not.toBeNull();
-  return header as HTMLElement;
+  const row = screen.getByRole("navigation", { name: "This campaign" }).parentElement;
+  expect(row).not.toBeNull();
+  return row as HTMLElement;
 };
 
-/**
- * The per-screen bar, which is the other `<header>` — found by its `h1` rather
- * than by its position, because it is portalled into the layout's slot and its
- * place in the document is the layout's business rather than this test's.
- */
-const screenBar = (): HTMLElement => {
-  const heading = screen.getByRole("heading", { level: 1 });
-  const header = heading.closest("header");
-  expect(header).not.toBeNull();
-  return header as HTMLElement;
-};
+const ACT = /Start session|Start an encounter|Back to the fight/;
 
-/** The label on the campaign's own press, wherever in the bar it is drawn. */
-const actLabel = (): string | undefined =>
-  within(screenBar())
+/** Every press of the campaign's on the screen, and where each is. */
+const acts = (): ReadonlyArray<string> =>
+  screen
     .queryAllByRole("button")
-    .map((button) => button.textContent ?? "")
-    .find((label) => /Start session|Start an encounter|Back to the fight/.test(label));
+    .filter((button) => ACT.test(button.textContent ?? ""))
+    .map(
+      (button) =>
+        `${button.textContent ?? ""}${campaignRow().contains(button) ? "" : " (off the row)"}`,
+    );
 
 describe("the campaign's chrome, across every destination it offers", () => {
   /** A rendered `href` is the route itself, which is what `renderAt` takes. */
@@ -85,7 +76,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
     return found;
   };
 
-  it("carries the night on the row and the campaign's own press on the bar", async () => {
+  it("carries the night and the campaign's own press on the row, on every tab", async () => {
     const where = await destinations();
     // Overview, Encounters, Party, Notes, Cast, Chronicle.
     // Named so that a row that silently lost an item is a failure rather than a
@@ -99,7 +90,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
       "Chronicle",
     ]);
 
-    const seen: Array<{ label: string; badge: string; act: string | undefined }> = [];
+    const seen: Array<{ label: string; badge: string; acts: ReadonlyArray<string> }> = [];
     for (const entry of where) {
       await renderAt(entry.path);
       // The row settles once the membership read has: the route wrapper's
@@ -110,25 +101,26 @@ describe("the campaign's chrome, across every destination it offers", () => {
       // *inside the row* — the Chronicle's spine draws a card named for the same
       // session, and finding that one would prove nothing about the bar.
       const badge = await within(campaignRow()).findByText(/^Session \d+$/);
-      seen.push({ label: entry.label, badge: badge.textContent ?? "", act: actLabel() });
+      await within(campaignRow()).findByRole("button", { name: ACT });
+      // The screen's own content has loaded too, so a second press drawn in
+      // it would be counted.
+      await screen.findByRole("heading", { level: 1 });
+      seen.push({ label: entry.label, badge: badge.textContent ?? "", acts: acts() });
       cleanup();
     }
 
-    // One value, rendered five times — not five branches that happen to agree.
+    // One value, rendered six times — not six branches that happen to agree.
     // `act.tsx`'s `actFor` computes the press once; a screen that decided for
-    // itself is exactly what this is here to catch.
-    //
-    // **The Overview is the one with no press on its bar**, and that is the
-    // decision of 2026-09-22 rather than a screen forgetting: its *Tonight*
-    // card carries the same press already — from the same `useCampaignAct` — and
-    // two peach buttons on one screen is the budget the bar exists to keep.
+    // itself is exactly what this is here to catch. And one each: the
+    // Overview's *Tonight* card used to carry a second, which two peach
+    // buttons on one screen cannot afford.
     expect(seen).toEqual([
-      { label: "Overview", badge: "Session 12", act: undefined },
-      { label: "Encounters", badge: "Session 12", act: "Start an encounter" },
-      { label: "Party", badge: "Session 12", act: "Start an encounter" },
-      { label: "Notes", badge: "Session 12", act: "Start an encounter" },
-      { label: "Cast", badge: "Session 12", act: "Start an encounter" },
-      { label: "Chronicle", badge: "Session 12", act: "Start an encounter" },
+      { label: "Overview", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Encounters", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Party", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Notes", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Cast", badge: "Session 12", acts: ["Start an encounter"] },
+      { label: "Chronicle", badge: "Session 12", acts: ["Start an encounter"] },
     ]);
   }, 30_000);
 
@@ -139,50 +131,69 @@ describe("the campaign's chrome, across every destination it offers", () => {
     });
 
     const where = await destinations();
-    const seen: Array<{ label: string; badges: number; act: string | undefined }> = [];
+    const seen: Array<{ label: string; badges: number; acts: ReadonlyArray<string> }> = [];
     for (const entry of where) {
       await renderAt(entry.path);
       await screen.findByRole("navigation", { name: "This campaign" });
       // Waiting on the press is waiting on the load: it is the last thing the
-      // chrome draws, so a count of zero badges taken before it would be the
-      // loading state rather than the answer. On the Overview the press is the
-      // *Tonight* card's, which is the same read and settles with it.
-      await screen.findByRole("button", { name: /Start session/ });
+      // row draws, so a count of zero badges taken before it would be the
+      // loading state rather than the answer.
+      await within(campaignRow()).findByRole("button", { name: /Start session/ });
+      await screen.findByRole("heading", { level: 1 });
       seen.push({
         label: entry.label,
         // An absent session must render *nothing* — not an empty badge and not
         // a placeholder, which is the other way this could have been "fixed".
         badges: within(campaignRow()).queryAllByText(/^Session/).length,
-        act: actLabel(),
+        acts: acts(),
       });
       cleanup();
     }
 
     expect(seen).toEqual([
-      { label: "Overview", badges: 0, act: undefined },
-      { label: "Encounters", badges: 0, act: "Start session" },
-      { label: "Party", badges: 0, act: "Start session" },
-      { label: "Notes", badges: 0, act: "Start session" },
-      { label: "Cast", badges: 0, act: "Start session" },
-      { label: "Chronicle", badges: 0, act: "Start session" },
+      { label: "Overview", badges: 0, acts: ["Start session"] },
+      { label: "Encounters", badges: 0, acts: ["Start session"] },
+      { label: "Party", badges: 0, acts: ["Start session"] },
+      { label: "Notes", badges: 0, acts: ["Start session"] },
+      { label: "Cast", badges: 0, acts: ["Start session"] },
+      { label: "Chronicle", badges: 0, acts: ["Start session"] },
     ]);
   }, 30_000);
 
   /**
-   * **The campaign row is navigation and nothing else now.** *Start session* was
-   * the one verb on it, pushed right past six tabs, and it is what overflowed
-   * the row: measured in Chromium at 760 the row's last item reached x=788
-   * against a row ending at 760, so the shell's `overflow-hidden` cut the label
-   * mid-word — invisible to `scrollWidth`, because nothing there scrolled. A
-   * button back on this row is that bug returning.
+   * **The press is the row's last thing, after the tabs, and it is the only
+   * button there besides the tabs' own *More*.** It was once taken off this row
+   * because it overflowed it: measured in Chromium at 760 the row's last item
+   * reached x=788 against a row ending at 760, and the shell's clip cut the
+   * label mid-word — invisible to `scrollWidth`. It is back because the captain
+   * chose the row (2026-09-23), and the row now collapses to make room for it
+   * (`CampaignRow`); the pixels are the shell audit's (`apps/web/audit/`).
+   * What jsdom can pin is the shape: the label can go to the screen reader
+   * alone, and the press follows the nav rather than sitting inside it.
    */
-  it("leaves no button on the campaign row", async () => {
+  it("puts the press after the tabs, with a label that can give way to its icon", async () => {
     await renderAt(`/campaigns/${campaignId}/encounters`);
-    await screen.findByRole("navigation", { name: "This campaign" });
-    await within(screenBar()).findByRole("button", { name: /Start an encounter/ });
+    const press = await within(campaignRow()).findByRole("button", {
+      name: "Start an encounter",
+    });
+    const nav = screen.getByRole("navigation", { name: "This campaign" });
 
-    const row = screen.getByRole("navigation", { name: "This campaign" }).parentElement;
-    expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).queryAllByRole("button")).toEqual([]);
+    expect(nav.contains(press)).toBe(false);
+    expect(nav.compareDocumentPosition(press) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(press).toHaveAttribute("title", "Start an encounter");
+    expect(within(press).getByText("Start an encounter")).toHaveClass("@max-2xl:sr-only");
+    // Nothing on the row but the tabs, their *More* and the press.
+    expect(
+      within(campaignRow())
+        .queryAllByRole("button")
+        .filter((button) => !nav.contains(button)),
+    ).toEqual([press]);
+  }, 30_000);
+
+  it("draws no press on the create form, whose own next step is its peach", async () => {
+    await renderAt(`/campaigns/${campaignId}/characters/new`);
+    await screen.findByRole("heading", { level: 1, name: "New character" });
+    await within(campaignRow()).findByText(/^Session \d+$/);
+    expect(within(campaignRow()).queryByRole("button", { name: ACT })).toBeNull();
   }, 30_000);
 });

@@ -2,7 +2,6 @@ import type { Encounter, Session } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
-import { useCampaignAct } from "./act";
 import type { CampaignView } from "./load";
 import { encounterDetail, openingReadAloud } from "./overview";
 import { sectionLink } from "./OverviewParts";
@@ -85,13 +84,13 @@ function EncounterRow({
 
 /**
  * The night being prepared: what it is called, what it opens on, what is on
- * deck and what is still to do — and the press that starts it.
+ * deck and what is still to do.
  *
  * The one card on the page about the next thing to happen, so it wears the
- * accent rule and carries the campaign's press (`useCampaignAct`, the same
- * value the chrome draws on every other tab). While a fight is on the table the
- * live banner above carries the way back to it, so the press is not drawn
- * twice.
+ * accent rule. The press that starts the night is not on it: it is the
+ * campaign row's, at the row's end on every tab (`CampaignAct` in
+ * `shell/AppShell.tsx`), and one peach primary per screen leaves none for the
+ * card.
  *
  * **What the drawing has that the wire does not** is left out rather than
  * stubbed: a scheduled date (a session has when it *ran*, not when it is
@@ -116,7 +115,6 @@ export function NextSession({
   readonly onAddEncounter: () => void;
   readonly onEditEncounter: (encounter: Encounter) => void;
 }) {
-  const { act, dialogs } = useCampaignAct(view.campaign.id);
   const { session, run: live } = view;
   const count = view.encounters.length;
   const onDeck = view.encounters.slice(0, ON_DECK);
@@ -138,13 +136,6 @@ export function NextSession({
               : `${String(count)} ${count === 1 ? "encounter" : "encounters"} on deck`}
           </p>
         </div>
-        {act !== undefined && live === undefined && (
-          <Button className="shrink-0 self-start" onClick={act.press}>
-            <Icon name={act.icon} size={14} />
-            {act.label}
-          </Button>
-        )}
-        {dialogs}
       </div>
 
       {opening !== undefined && (

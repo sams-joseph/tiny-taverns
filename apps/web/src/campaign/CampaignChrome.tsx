@@ -36,11 +36,12 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * Whether the table is shared, who is invited, and finishing the night are facts
  * about the *campaign* rather than about whichever of its screens is open, so
  * they live here and every destination gets the same ones. A screen supplies its
- * own title, its own top-bar controls and its own body.
+ * own title, its own header controls and its own body; the header is drawn at
+ * the top of the content, because a campaign has no per-screen bar
+ * (`shell/TopBar.tsx`).
  *
- * The name, the way home and the session badge are the campaign row's, which
- * reads them itself (`shell/AppShell.tsx`); the campaign's own press is the
- * per-screen bar's, which reads it the same way (`shell/TopBar.tsx`). A
+ * The name, the way home, the session badge and the campaign's own press are
+ * the campaign row's, which reads them itself (`shell/AppShell.tsx`). A
  * destination used to hand them to the shell, and the two that composed a shell
  * of their own drew a row without the night or the press; `campaignRow.test.tsx`
  * still visits every destination the row offers.
@@ -97,7 +98,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * ### The sharing control is on the Overview and nowhere else
  *
  * *Private* / *Shared* and *Invite* are the campaign's own settings, so they sit
- * on the campaign's home screen rather than being repeated on all three bars.
+ * on the campaign's home screen rather than being repeated on every tab.
  * The rule they were written for still holds — the current answer must be
  * legible as a **word** without opening anything, because an absent badge is not
  * a fail-closed default a DM can read — and the Overview is where a DM lands

@@ -675,12 +675,9 @@ describe("starting a session", () => {
   /**
    * The campaign's own press, whichever of its three things it is.
    *
-   * It is drawn twice on the Overview, and both are the delivery's:
-   * `AppShell.jsx` puts one on the campaign row (where it belongs to the
-   * campaign and follows you across all six of its screens) and `CampOverview`
-   * puts one in the "Next session" card (the contextual, primary one). They are
-   * one value now — `CampaignAct` — so a test takes the first and the assertion
-   * on the pair being identical is below.
+   * It is the campaign row's, at the row's right end on every one of the
+   * campaign's tabs — the Overview redesign's placement, which the captain
+   * chose on 2026-09-23 — and the Overview's cards carry none of their own.
    */
   const pressAct = async (name: string) =>
     userEvent.click((await screen.findAllByRole("button", { name }))[0]!);
@@ -746,17 +743,16 @@ describe("starting a session", () => {
     // for a session that is already running.
     await renderScreen(mintingSession());
 
-    // **Exactly one**, and it is the *Next session* card's. The chrome used to draw a
-    // second — the campaign row's, and since 2026-09-22 the per-screen bar's —
-    // but the bar leaves the press to the card on the Overview, which is the
-    // one screen whose body already carries it. Two peach buttons on one screen
-    // is the budget this keeps (`shell/TopBar.tsx`).
+    // **Exactly one**, and it is the campaign row's. The *Next session* card used
+    // to carry a second on the Overview; two peach buttons on one screen is
+    // the budget the row's press keeps (`shell/AppShell.tsx`).
     const press = await waitFor(() => {
       const found = screen.getAllByRole("button", { name: "Start an encounter" });
       expect(found).toHaveLength(1);
       return found;
     });
-    expect(press[0]!.closest("header")).toBeNull();
+    const row = screen.getByRole("navigation", { name: "This campaign" }).parentElement;
+    expect(row?.contains(press[0]!)).toBe(true);
     expect(screen.queryByRole("button", { name: "Start session" })).toBeNull();
 
     await userEvent.click(press[0]!);
@@ -840,7 +836,7 @@ describe("starting a session", () => {
 
     // Exactly one encounter is live, so the campaign says which — the
     // fixtures' `active: true`.
-    // One press on the Overview, the card's — see above.
+    // One press on the Overview, the row's — see above.
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: "Back to the fight" })).toHaveLength(1),
     );
