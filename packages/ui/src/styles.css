@@ -288,7 +288,10 @@
   --spacing-rail: var(--rail-w);
   --spacing-aside: var(--aside-w);
   --spacing-chat-panel: var(--panel-chat-w);
+  --spacing-overview-main: var(--overview-main-w);
+  --spacing-overview-aside: var(--overview-aside-w);
   --container-measure: var(--measure);
+  --container-overview: var(--overview-w);
 }
 
 /* --------------------------------------------------------------------------

@@ -58,16 +58,12 @@ describe("CampaignScreen", () => {
     // here from the rail's footer when the rail became a top bar.
     expect(screen.getByText("Session 12 · The Gilded Spoon · 4 players")).toBeInTheDocument();
 
-    // Twice, and both are the delivery's: the "Next session" card names the
-    // first encounter as a stat, and the grid under it draws its card.
-    expect(screen.getAllByText("Ambush in the reeds")).toHaveLength(2);
-    expect(screen.getByText("Medium")).toBeInTheDocument();
-    expect(screen.getByText("Marsh")).toBeInTheDocument();
-    // `sum(encounter_creature.count)` leads the description, as the prototype
-    // draws it; the note hanging off this encounter follows.
-    expect(screen.getByText("6 creatures · 1 note")).toBeInTheDocument();
-    // Null difficulty is its own state, not a missing badge.
-    expect(screen.getByText("Unrated")).toBeInTheDocument();
+    // The *Next session* card lists what is on deck as rows, each saying what
+    // the wire knows about it: the difficulty band, `sum(encounter_creature.count)`
+    // and the tags. Null difficulty is its own state, not a missing word.
+    expect(screen.getByText("Ambush in the reeds")).toBeInTheDocument();
+    expect(screen.getByText("Medium · 6 creatures · Marsh, Night")).toBeInTheDocument();
+    expect(screen.getByText("Unrated · 1 creature · Boss")).toBeInTheDocument();
   });
 
   it("does not expose a standalone campaign's backing context as a Shared World", async () => {
@@ -91,11 +87,11 @@ describe("CampaignScreen", () => {
     expect(screen.getByText("Read aloud")).toBeInTheDocument();
   });
 
-  it("draws the party as a strip, with the way to the screen that authors it", async () => {
+  it("draws the party as a summary, with the way to the screen that authors it", async () => {
     // **The characters moved to the Party screen with the delivery's nav** —
-    // the campaign row has one *Party* destination, so the strip here is the
+    // the campaign row has one *Party* destination, so the card here is the
     // Overview's summary of it rather than the list. The list itself, with the
-    // derived descriptor and the live hit points, is `party/PartyScreen`.
+    // seat's verbs, is `party/PartyScreen`.
     await renderScreen(mintingSession());
 
     expect(await screen.findByText("Brannoc")).toBeInTheDocument();

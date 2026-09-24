@@ -6,8 +6,9 @@ import { DateTime } from "effect";
  * `chronicle-data.js` spells a night *"2 August 2026"*, so that is what this
  * produces — spelled out rather than left to `toLocaleDateString`, which would
  * put a different string on a DM's screen than on a test's and hand the record
- * an American month order half the time. Same reasoning as `SessionCard`'s
- * `clockOf`, which writes its own clock rather than reaching for `Intl`.
+ * an American month order half the time. Same reasoning as
+ * `campaign/NextSession.tsx`'s `clockOf`, which writes its own clock rather
+ * than reaching for `Intl`.
  *
  * UTC throughout, because every timestamp on the wire is
  * `Schema.DateTimeUtcFromString` and a night that starts at 19:00 local should
@@ -35,7 +36,7 @@ export const dayOf = (at: DateTime.Utc): string => {
   return `${String(date.getUTCDate())} ${MONTHS[date.getUTCMonth()] ?? ""} ${String(date.getUTCFullYear())}`;
 };
 
-/** `21:04` — the same clock `campaign/SessionCard.tsx` writes. */
+/** `21:04` — the same clock `campaign/NextSession.tsx` writes. */
 export const clockOf = (at: DateTime.Utc): string => {
   const date = DateTime.toDateUtc(at);
   return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
