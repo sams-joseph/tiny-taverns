@@ -4,6 +4,7 @@ import { CharacterId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
+import { brannocId } from "../test/ids";
 import {
   campaign,
   campaignId,
@@ -38,7 +39,7 @@ export {
   sessionId,
 } from "../campaign/campaign.fixtures";
 
-export const brannocId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
+export { brannocId };
 export const sorrelId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000902");
 export const strangerId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-0000000009ff");
 

@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { campaignId, installStubServer, npcId } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
-import { scenarios, screens } from "../test/screens";
+import { scenarios } from "../test/scenarios";
+import { screens } from "../test/screens";
 
 /**
  * The shell is a layout route: mounted once, and the same nodes from one screen
@@ -87,7 +88,7 @@ describe("the persistent shell", () => {
    * of 2026-09-23, from the Overview redesign: the campaign row is the last
    * chrome row on every tab, and the screen's title, verbs and tabs are the top
    * of its content. Above a campaign the bar stays. `TopBar` decides from the
-   * route, so this walks every screen the audit measures, a player's included,
+   * route, so this walks every screen the Playwright suite measures, a player's included,
    * and asks where each one's `h1` landed.
    */
   it.each(screens.map((entry) => [entry.name, entry] as const))(
@@ -181,7 +182,7 @@ describe("the persistent shell", () => {
   });
 
   /**
-   * The geometry is the audit's (`apps/web/audit/`): inline, the panel's top is
+   * The geometry is the Playwright suite's (`apps/web/e2e/`): inline, the panel's top is
    * 0, its height is the viewport's, and the chrome's right edge meets its left.
    * What jsdom can see is the shape that produces it — the panel is the frame's
    * own column beside the shell, in a slot pinned at the viewport's height, and
@@ -206,7 +207,7 @@ describe("the persistent shell", () => {
 
   /**
    * jsdom computes no layout, so the pin is the class and the number is the
-   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 wherever there is a
+   * Playwright suite's (`apps/web/e2e/`): 44 / 46 / 76 / 40 wherever there is a
    * bar, a 91px chrome stack on every campaign tab at every width, and one
    * title y and header height across a campaign's tabs. A `min-h-*` is what let
    * sibling screens drift apart before.
@@ -219,7 +220,7 @@ describe("the persistent shell", () => {
 
     expect(sections().parentElement).toHaveClass("h-11");
     // Narrow, the bar's actions wrap on their own row rather than overlap;
-    // `apps/web/audit` measures that they do not.
+    // `apps/web/e2e` measures that they do not.
     expect(bar?.children[0]).toHaveClass("flex-wrap", "@4xl/app:h-19", "@4xl/app:flex-nowrap");
     expect(bar?.querySelector("[data-slot=page-header-actions]")).toHaveClass("flex-wrap");
     expect(bar?.children[1]).toHaveClass("h-10");

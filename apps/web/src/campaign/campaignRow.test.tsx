@@ -167,7 +167,7 @@ describe("the campaign's chrome, across every destination it offers", () => {
    * reached x=788 against a row ending at 760, and the shell's clip cut the
    * label mid-word — invisible to `scrollWidth`. It is back because the captain
    * chose the row (2026-09-23), and the row now collapses to make room for it
-   * (`CampaignRow`); the pixels are the shell audit's (`apps/web/audit/`).
+   * (`CampaignRow`); the pixels are the Playwright suite's (`apps/web/e2e/`).
    * What jsdom can pin is the shape: the label can go to the screen reader
    * alone, and the press follows the nav rather than sitting inside it.
    */

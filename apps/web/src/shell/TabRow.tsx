@@ -28,7 +28,7 @@ import { navLinkProps } from "./navLink";
  * row's own box — never the window: the campaign row is a container, and
  * `PageHeader`'s tab strip is one. They are a fixed ladder rather than a
  * measurement, so what collapses where is written down beside the items and
- * the shell audit (`apps/web/audit/`) measures that it holds.
+ * the Playwright suite (`apps/web/e2e/`) measures that it holds.
  */
 
 /** A step of the ladder: below `2xl` (42rem) of the row, below `xl`, … */

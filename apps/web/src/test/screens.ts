@@ -1,67 +1,27 @@
-import {
-  campaign,
-  campaignId,
-  encounterId,
-  fullCampaign,
-  npcId,
-  runId,
-  sessionId,
-  worldId,
-  type Answer,
-} from "../campaign/campaign.fixtures";
-import { brannocId, twoTables } from "../characters/characters.fixtures";
-import { fullChronicle } from "../chronicle/chronicle.fixtures";
-import { fullParty } from "../party/party.fixtures";
-import { fullRules } from "../rules/rules.fixtures";
-import { liveFight } from "../run/run.fixtures";
+import { brannocId, campaignId, encounterId, npcId, runId, sessionId, worldId } from "./ids";
 
 /**
- * The screens the shell is measured on, and the wire each is read over.
+ * The screens the shell is measured on.
  *
  * One list for two readers: `shell/primaries.test.tsx` renders every screen in
- * jsdom, and `apps/web/audit/audit.mjs` serves these maps over HTTP to a real
- * Chromium, so the browser audit needs no Postgres and answers with exactly
- * the JSON the screen tests assert against.
- *
- * A scenario is one account's view of the wire. The maps are merged in order
- * and a later key wins, so the fight's running session is what the creator's
- * campaign row shows. A screen the merged map cannot answer shows up in the
- * audit's `unanswered` column rather than as a silent 404.
+ * jsdom, and the Playwright suite (`apps/web/e2e/`) measures every screen in a
+ * real Chromium. Each names the scenario (`test/scenarios.ts`) whose wire it is
+ * read over. This file imports nothing but ids, because Playwright loads it
+ * outside Vitest.
  */
-export const scenarios = {
-  // `fullParty` and `fullRules` are each `fullCampaign` plus overrides, so the
-  // Chronicle's sessions go after them or the campaign's own list wins back.
-  // The membership is the campaign's, not the Chronicle's world-less one, so
-  // the campaign row carries its Shared World chip; the encounters are the
-  // campaign's too, so the Encounters list and one encounter's page have one.
-  creator: () => {
-    const routes = new Map([...fullParty(), ...fullRules(), ...fullChronicle(), ...liveFight()]);
-    const campaignOwn = fullCampaign();
-    for (const route of ["GET /me/campaigns", `GET /campaigns/${campaignId}/encounters`]) {
-      const answer = campaignOwn.get(route);
-      if (answer !== undefined) routes.set(route, answer);
-    }
-    return routes;
-  },
-  // The campaign's reads, with `twoTables`' memberships seating this account
-  // as a player — the composition `PlayerCampaignScreen.test.tsx` makes.
-  player: () =>
-    new Map([
-      ...fullCampaign(),
-      ...twoTables(),
-      [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
-    ]),
-} satisfies Record<string, () => Map<string, Answer>>;
+
+/** One account's view of the wire; `test/scenarios.ts` holds the maps. */
+export type Scenario = "creator" | "player";
 
 export interface Screen {
   readonly name: string;
-  readonly scenario: keyof typeof scenarios;
+  readonly scenario: Scenario;
   readonly path: string;
 }
 
 const c = `/campaigns/${campaignId}`;
 
-/** The eighteen screens, in the order the audit walks them. */
+/** The eighteen screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
