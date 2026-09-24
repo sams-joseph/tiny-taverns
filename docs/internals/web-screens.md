@@ -2,18 +2,20 @@
 
 Routing, the shell, the signed-out gate, the shape every screen copies, the authoring and filter conventions, and the traps in the Chronicle, the character sheet and the Hob panel. Read this before adding a route, a screen, a dialog or a filter box. Reads and writes are [Web data](web-data.md); tokens, layering and motion are [Design system](design-system.md).
 
-## Routing: a hash history, and why
+## Routing: real paths
 
-`apps/web/src/routes.tsx` is the whole route table and the one `createRouter`. It runs on `createHashHistory`, and that is not negotiable: `#/join/<token>` carries the invitation secret, and a browser never sends the fragment in a request line, a redirect or a `Referer`. A query string or path segment would put the token in every access log on the way. One route needing that is enough for the whole app.
+`apps/web/src/routes.tsx` is the whole route table and the one `createRouter`, on the browser history: every route is a path (`/campaigns/<id>`, `/join/<token>`), and a `#fragment` is only an in-page anchor. The app ran on a hash history to keep the invitation token out of access logs; the maintainer decided on 2026-09-23 that clean URLs are worth that, since an invitation is single-use. The API still takes the token in a `POST` body, never its own request line.
+
+- Every non-file path must be served `index.html`. Vite's dev server and `vite preview` do it; a static host needs the rewrite `README.md` names, or a reload on a deep link is a 404. The router's `basepath` is Vite's `base` (`import.meta.env.BASE_URL`), so a subpath deployment is one setting.
 
 - A bad id is a bad link, not a crash. Every branded id decodes in `params.parse`, which returns `false` for anything the product did not mint; the router rejects that candidate and keeps matching, and every legible level has a `$` splat child, so a truncated run link lands on its campaign. Do not throw: a throw becomes a `PathParamError` and a rendered apology.
 - Every product route sits under the pathless layout route `_shell` (`shell/ShellLayout.tsx`); `/join/$token` and `/server` sit under `_standalone`, the same shell without the Hob panel. A pathless id prefixes every child's id, so `useParams({ from })` and `RouteIds` say `/_shell/campaigns/$campaignId`, while `to`, `matchRoute` and `fullPath` are paths and do not.
 - `remountDeps` is set on every route whose params name a different thing so nothing loaded for one survives into another. It remounts the leaf, never the layout. The campaign index deliberately has none; it is what everything else falls back to.
-- A rendered `href` is `/#/…`. Imperative links go through `router.history.createHref(router.buildLocation(…).publicHref)` resolved against `location.href`. `buildLocation(…).href` is the route as the router sees it (`/join/<token>`); pasted after an origin it puts the secret in the path. `campaign/InviteDialog.tsx` is the one caller; `campaign/invites.test.tsx` pins both hosting shapes.
+- A rendered `href` is the path under the basepath. An imperative absolute link goes through `router.history.createHref(router.buildLocation(…).publicHref)` resolved against `location.origin`, which is what carries the basepath; `buildLocation(…).href` does not. `campaign/InviteDialog.tsx` is the one caller; `routes.test.ts` pins the basepath and `campaign/invites.test.tsx` the whole link.
 - `Link` spreads `aria-current="page"` on any prefix match and `activeProps={{}}` does not stop it. Nav items pass `activeOptions={{ exact: true }}` so the bar's own section rule decides what is lit (`navLinkProps` in `shell/AppShell.tsx`).
-- In-page anchors are `<Link to="…" hash="…">`, never `href="#foo"`: under a hash history a bare fragment replaces the whole route. `scrollRestoration: true` performs the scroll.
+- In-page anchors are `<Link to="…" hash="…">`, so the anchor names its page and the router's `scrollRestoration: true` performs the scroll.
 
-Testing: `src/test/renderRoute.tsx`'s `renderAt(path)` renders the real tree at a real URL on a real hash history, a fresh router and `RegistryProvider` per render, and must be awaited because the first match resolves inside a `Suspense`. Screens are not mountable on their own. `shell/AppShell.test.tsx` enumerates `Record<RouteIds<typeof routeTree>, string | undefined>`, so a new route does not compile until it has a URL, splats included.
+Testing: `src/test/renderRoute.tsx`'s `renderAt(path)` renders the real tree at a real URL on a real browser history, a fresh router and `RegistryProvider` per render, and must be awaited because the first match resolves inside a `Suspense`. Screens are not mountable on their own. `shell/AppShell.test.tsx` enumerates `Record<RouteIds<typeof routeTree>, string | undefined>`, so a new route does not compile until it has a URL, splats included.
 
 ## The shell: mounted once, two rows, one section
 

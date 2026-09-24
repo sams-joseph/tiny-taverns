@@ -654,7 +654,7 @@ describe("the runner", () => {
 
     expect(await screen.findByText("NPC proposals waiting")).toBeInTheDocument();
     const link = screen.getByRole("button", { name: "Cazril · 1 pending" });
-    expect(link).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
+    expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#proposals`);
   });
 
   it("says where to get a credential rather than looking broken", async () => {

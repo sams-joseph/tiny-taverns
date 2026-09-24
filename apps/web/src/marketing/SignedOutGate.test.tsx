@@ -110,14 +110,14 @@ describe("the signed-out gate", () => {
 
 /**
  * The two routes the gate must not swallow, and the first is a security
- * property rather than a convenience: `#/join/<token>` previews an invitation
+ * property rather than a convenience: `/join/<token>` previews an invitation
  * *before* the reader has an account, which is the whole point of it. A gate
  * that reached it would break the one flow designed to run with no credential,
  * and would do it silently — the homepage renders perfectly well over an
  * invitation.
  */
 describe("the routes that render signed out", () => {
-  it("still shows the invitation preview at #/join/<token>", async () => {
+  it("still shows the invitation preview at /join/<token>", async () => {
     await renderAt(`/join/${TOKEN}`, wrap(session({})), "none");
 
     expect(marketing()).toBeNull();

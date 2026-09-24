@@ -100,7 +100,7 @@ describe("a table you sit at", () => {
       screen.getByText("Stooped and weathered, river-grey eyes, a lantern hung from his pole."),
     ).toBeTruthy();
     const talk = screen.getByRole("button", { name: /Talk privately/ });
-    expect(talk.getAttribute("href")).toBe(`/#/campaigns/${campaignId}/cast/${npcId}/talk`);
+    expect(talk.getAttribute("href")).toBe(`/campaigns/${campaignId}/cast/${npcId}/talk`);
   });
 
   it("lays a party member's portrait over their initials", async () => {
@@ -127,7 +127,7 @@ describe("a table you sit at", () => {
     // *Chronicle* is here because its screen now is, and it points at the
     // player's own route — `recap.readAsPlayer`, not the gated `recap.read`.
     expect(screen.getByRole("link", { name: /Chronicle/ }).getAttribute("href")).toBe(
-      `/#/campaigns/${campaignId}/chronicle`,
+      `/campaigns/${campaignId}/chronicle`,
     );
   });
 

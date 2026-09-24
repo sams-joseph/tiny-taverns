@@ -723,7 +723,7 @@ export const renderCreate = async (
   ));
 };
 
-/** The create form with no campaign: the core rules, at `#/characters/new`. */
+/** The create form with no campaign: the core rules, at `/characters/new`. */
 export const renderCoreCreate = async (hosted: HostedSession = noSession): Promise<void> => {
   await renderAt("/characters/new", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>

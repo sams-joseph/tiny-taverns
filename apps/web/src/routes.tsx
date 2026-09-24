@@ -6,12 +6,7 @@ import {
   NpcId,
   SessionId,
 } from "@taverns/api";
-import {
-  createHashHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
@@ -46,28 +41,28 @@ import { ShellLayout, StandaloneLayout } from "./shell/ShellLayout";
 import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
 
 /**
- * Where you are, in the URL — TanStack Router over a hash history.
+ * Where you are, in the URL — TanStack Router over the browser's own history.
  *
- * ### It is still the hash, and that is a decision rather than an inheritance
+ * ### Every route is a real path
  *
- * **`#/join/<token>` carries a real secret.** A browser never sends the
- * fragment to a server: it is not in the request line, it is not in a redirect,
- * and browsers strip it from the `Referer` of everything the page goes on to
- * load or link to. So an invitation link can be pasted into a chat, opened,
- * and redeemed without the token ever reaching an access log — ours or a CDN's.
- * A query string would put it in every one of those places. That is why the
- * route is shaped this way, and it is the reason the whole app stays on
- * `createHashHistory` rather than the browser history TanStack defaults to:
- * one route needing the fragment is enough, and two history kinds in one app is
- * a second answer to where the URL lives.
+ * `/campaigns/<id>/…`, `/characters/<id>`, `/join/<token>`: the route is the
+ * path, and a `#fragment` is only ever an in-page anchor. The app ran on a hash
+ * history until the maintainer decided on 2026-09-23 that the URL should be
+ * clean. The hash's one real argument was the invitation token — a browser
+ * never sends a fragment, so `#/join/<token>` kept it out of access logs — and
+ * that trade was accepted knowingly: an invitation is single-use, so the token
+ * a log records is spent once it is redeemed.
  *
- * It costs nothing else. `#/…` needs no server rewrite rule, which is what a
- * static SPA has to arrange for a real path, and a reload still keeps you on
- * the campaign you were reading.
+ * **A real path needs the host to answer it.** Every path that is not a file
+ * has to be served `index.html`, or a reload on `/campaigns/<id>` is a 404.
+ * Vite's dev server and `vite preview` do that already; a static host needs a
+ * rewrite rule, which `README.md` names. The app may be served under a
+ * subpath: the router's `basepath` is Vite's `base`, so the two are set in one
+ * place (`vite.config.ts`) and cannot disagree.
  *
  * **The runner names all three ids, and that is what makes a mid-fight reload
  * work.** A laptop lid closes, a browser updates, a tab is restored a day
- * later: the hash alone finds the fight again, with no local state and no
+ * later: the URL alone finds the fight again, with no local state and no
  * "which one was I running?" lookup. It is also the shape the API already has —
  * campaign, session, run — so the route decodes straight into the path params
  * every live endpoint takes.
@@ -79,8 +74,8 @@ import { SpellLibraryScreen } from "./spells/SpellLibraryScreen";
  * router **reject that route candidate and keep matching** — so a truncated id
  * falls back to the nearest ancestor that was still legible rather than
  * throwing during render or landing on a not-found page. That is the whole of
- * how `#/campaigns/<bad>` reaches the campaign list and
- * `#/campaigns/<good>/sessions/<bad>/runs/<good>` reaches the campaign: each
+ * how `/campaigns/<bad>` reaches the campaign list and
+ * `/campaigns/<good>/sessions/<bad>/runs/<good>` reaches the campaign: each
  * level that can still be read has a `$` splat child pointing at its own
  * screen, and matching backtracks into it. `routes.test.ts` pins every case.
  *
@@ -115,7 +110,7 @@ const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
 
 /**
- * An invitation token, as it may appear in a hash.
+ * An invitation token, as it may appear in a link.
  *
  * 32 bytes of `randomBytes` in base64url, whose alphabet is exactly this — so a
  * link that lost characters to a chat client's line wrapping is refused here
@@ -134,7 +129,7 @@ const asToken = (raw: string | undefined): string | undefined =>
  * has to be *inside* the router rather than around it, because two routes are
  * exempt and one of those exemptions is a security property — see
  * `marketing/SignedOutGate.tsx`, which is where the whole of it is written
- * down, including why `#/join/<token>` may never be swallowed by it.
+ * down, including why `/join/<token>` may never be swallowed by it.
  */
 const rootRoute = createRootRoute({ component: SignedOutGate });
 
@@ -552,9 +547,8 @@ const characterRoute = createRoute({
 /**
  * Following an invitation, before there is anybody to follow it as.
  *
- * **The token lives in the fragment and nowhere else** — see this file's note
- * at the top, which is the whole reason the app is on a hash history. The page
- * reads it here and puts it in a `POST` body.
+ * The token is a path segment, and so reaches access logs — accepted, see this
+ * file's note at the top. The page reads it here and puts it in a `POST` body.
  *
  * It names no campaign, because the holder does not know which one it is yet —
  * that is what the page is for. Remounted on the token: a second invitation
@@ -642,20 +636,17 @@ export const routeTree = rootRoute.addChildren([
 ]);
 
 /**
- * The one router, on the one history.
+ * The one router, on the browser history (TanStack's default).
  *
- * `createHashHistory` is the decision recorded at the top of this file, not a
- * default. It is also what makes an in-page anchor safe: a hash history parses
- * `#/server#token` as the route `/server` with the fragment `token`, so an
- * in-page link scrolls without throwing the reader back to the campaign list —
- * which is what a bare `href="#token"` would do.
+ * `basepath` is Vite's `base` (`import.meta.env.BASE_URL`), so a build served
+ * under a subpath routes and links under it without a second setting.
  *
- * `scrollRestoration` is what performs that scroll, since the browser's own
- * fragment is the whole of `/server#token` and matches no element.
+ * `scrollRestoration` restores the scroll on back and forward, and scrolls to
+ * the element a `Link`'s `hash` names.
  */
 export const router = createRouter({
   routeTree,
-  history: createHashHistory(),
+  basepath: import.meta.env.BASE_URL,
   scrollRestoration: true,
   defaultPreload: false,
 });

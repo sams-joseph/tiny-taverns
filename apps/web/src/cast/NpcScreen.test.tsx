@@ -452,7 +452,7 @@ describe("NpcScreen", () => {
 
     expect(await within(panel).findByText(/proposal is waiting/)).toBeInTheDocument();
     const review = within(panel).getByRole("button", { name: "Review in Cast" });
-    expect(review).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
+    expect(review).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#proposals`);
     await waitFor(() => {
       const reads = server.calls.filter(
         (call) => call.method === "GET" && call.pathname.endsWith(`/npcs/${npcId}/proposals`),
@@ -544,7 +544,7 @@ describe("NpcScreen", () => {
     await screen.findByRole("heading", { name: "Cazril", level: 2 });
 
     await userEvent.click(screen.getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}/cast`));
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/cast`));
     expect(
       server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/archive")),
     ).toBe(true);

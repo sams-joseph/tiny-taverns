@@ -1,5 +1,5 @@
 import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
-import { createHashHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
+import { createBrowserHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { routeTree } from "./routes";
@@ -16,10 +16,9 @@ import { routeTree } from "./routes";
  * `router.buildLocation`, which is the router's own way of writing a link and
  * the one this app renders through.
  *
- * A memory history rather than the hash history the app runs on: this file is
- * about *which route a path is*, and the fragment is a transport for the path
- * rather than part of it. `test/renderRoute.tsx` uses the real hash history,
- * because what it asserts is `href`s.
+ * A memory history for most of it: this file is about *which route a path is*.
+ * The cases about the address bar itself — a deep link, a reload — use the
+ * browser history the app runs on, as `test/renderRoute.tsx` does.
  */
 
 const CAMPAIGN_ID = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
@@ -147,21 +146,51 @@ describe("the route table", () => {
     expect(landsOn("/join").at).toBe("/$");
   });
 
-  it("puts the token in the fragment and nowhere else in the URL", () => {
-    // The hash history is the whole of this property, so it is asserted against
-    // the real one rather than the memory history the rest of this file uses.
-    // Everything before the `#` is the page's own path: no query string, no
-    // path segment, nothing a request line or a `Referer` would carry.
-    globalThis.location.hash = "";
-    const router = createRouter({ routeTree, history: createHashHistory() });
+  it("writes an invitation link as a plain path", () => {
     // `history.createHref` over the built location is exactly what `Link`
-    // renders, and what `campaign/InviteDialog.tsx` pastes after the origin.
+    // renders, and what `campaign/InviteDialog.tsx` resolves against the page.
+    globalThis.history.replaceState(null, "", "/");
+    const router = createRouter({ routeTree, history: createBrowserHistory() });
     const href = router.history.createHref(
       router.buildLocation({ to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" } })
         .publicHref,
     );
-    expect(href).toBe("/#/join/aG93LWRvLXlvdS1kbw");
-    expect(href.slice(0, href.indexOf("#"))).not.toContain("aG93LWRvLXlvdS1kbw");
+    expect(href).toBe("/join/aG93LWRvLXlvdS1kbw");
+  });
+
+  it("writes an invitation link under the basepath when the app is served under one", () => {
+    // `routes.tsx` sets `basepath` to Vite's `base`; a build for
+    // `example.com/taverns/` hands out links a stranger can open there.
+    const router = createRouter({
+      routeTree,
+      basepath: "/taverns/",
+      history: createMemoryHistory({ initialEntries: ["/taverns/campaigns"] }),
+    });
+    const href = router.history.createHref(
+      router.buildLocation({ to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" } })
+        .publicHref,
+    );
+    expect(href).toBe("/taverns/join/aG93LWRvLXlvdS1kbw");
+  });
+
+  it("opens a deep link from the address bar, and opens it again on reload", async () => {
+    const path = `/campaigns/${CAMPAIGN_ID}/sessions/${SESSION_ID}/runs/${RUN_ID}`;
+    globalThis.history.replaceState(null, "", path);
+
+    // A reload is a new router over the same address bar: nothing but the URL
+    // survives it, so both must land on the fight the URL names.
+    for (let load = 0; load < 2; load++) {
+      const router = createRouter({ routeTree, history: createBrowserHistory() });
+      await router.load();
+      const leaf = router.state.matches.at(-1);
+      expect(leaf?.fullPath).toBe("/campaigns/$campaignId/sessions/$sessionId/runs/$runId");
+      expect(leaf?.params).toEqual({
+        campaignId: CAMPAIGN_ID,
+        sessionId: SESSION_ID,
+        runId: RUN_ID,
+      });
+      expect(globalThis.location.pathname).toBe(path);
+    }
   });
 
   it("routes no campaign corpus screen at all, which is the instancing decision", () => {
@@ -280,7 +309,7 @@ describe("the route table", () => {
     expect(landsOn("/").at).toBe("/");
   });
 
-  it("has no component gallery: `#/gallery` is an unknown route like any other", () => {
+  it("has no component gallery: `/gallery` is an unknown route like any other", () => {
     expect(landsOn("/gallery").at).toBe("/$");
   });
 

@@ -497,7 +497,7 @@ describe("a character sheet", () => {
       within(header as HTMLElement)
         .getByRole("link", { name: "Characters" })
         .getAttribute("href"),
-    ).toBe("/#/characters");
+    ).toBe("/characters");
   });
 
   /**

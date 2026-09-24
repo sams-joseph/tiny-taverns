@@ -35,7 +35,7 @@ const openNewCampaign = async () => {
 beforeEach(() => {
   server.reset();
   window.localStorage.clear();
-  globalThis.location.hash = "";
+  globalThis.history.replaceState(null, "", "/");
 });
 
 describe("the campaign-first home", () => {
@@ -45,12 +45,12 @@ describe("the campaign-first home", () => {
     expect(await screen.findByText("The Salt Road")).toBeTruthy();
     expect(screen.getByText("Created by you")).toBeTruthy();
     expect(screen.getByRole("button", { name: "The Salt Company" }).getAttribute("href")).toBe(
-      `/#/worlds/${sharedWorldDetails.id}`,
+      `/worlds/${sharedWorldDetails.id}`,
     );
     // The whole card opens the campaign through the link on its name; there is
     // no separate Open control.
     expect(screen.getByRole("link", { name: "The Salt Road" }).getAttribute("href")).toBe(
-      `/#/campaigns/${campaignId}`,
+      `/campaigns/${campaignId}`,
     );
     expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open" })).toBeNull();
@@ -137,7 +137,9 @@ describe("the campaign-first home", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/shared-world")).toEqual({ name: "The Roads Between" }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`/worlds/${sharedWorldDetails.id}`),
+    );
   });
 
   it("describes the Shared World a campaign is promoted into", async () => {
@@ -203,7 +205,9 @@ describe("the campaign-first home", () => {
         worldId: sharedWorldDetails.id,
       }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`/worlds/${sharedWorldDetails.id}`),
+    );
   });
 
   it("makes a connected campaign standalone with the consequences stated", async () => {
@@ -272,7 +276,7 @@ describe("the campaign-first home", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/shared-world/move")).toEqual({ worldId: destination.id }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${destination.id}`));
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`/worlds/${destination.id}`));
   });
 
   it("puts New campaign in the bar and no create form in the body", async () => {
@@ -314,7 +318,7 @@ describe("the campaign-first home", () => {
       "That did not save. Try it again.",
     );
     expect(screen.getByLabelText("New campaign name")).toHaveValue("The Long Winter");
-    expect(globalThis.location.hash).toBe("#/campaigns");
+    expect(globalThis.location.pathname).toBe("/campaigns");
   });
 
   it("creates from one name and opens the campaign", async () => {
@@ -329,7 +333,7 @@ describe("the campaign-first home", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/campaigns")).toEqual({ name: "The Long Winter" }),
     );
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`));
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}`));
   });
 
   it("sends the description the form was given, trimmed, and omits a blank one", async () => {
@@ -375,7 +379,7 @@ describe("the campaign-first home", () => {
     expect(
       server.calls.some((call) => call.method === "POST" && call.pathname === "/campaigns"),
     ).toBe(false);
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`));
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}`));
   });
 
   it("makes the empty state about campaigns rather than containers", async () => {
@@ -426,7 +430,9 @@ describe("founding a Shared World from the campaign list", () => {
     );
     // Standalone: no campaign is promoted or connected on the way.
     expect(server.calls.some((call) => call.pathname.includes("/shared-world"))).toBe(false);
-    await waitFor(() => expect(globalThis.location.hash).toBe(`#/worlds/${sharedWorldDetails.id}`));
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`/worlds/${sharedWorldDetails.id}`),
+    );
   });
 
   it("says when founding fails and keeps the dialog", async () => {
@@ -438,7 +444,7 @@ describe("founding a Shared World from the campaign list", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create Shared World" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("That did not save.");
-    expect(globalThis.location.hash).toBe("#/campaigns");
+    expect(globalThis.location.pathname).toBe("/campaigns");
   });
 
   it("closes on Cancel without writing", async () => {

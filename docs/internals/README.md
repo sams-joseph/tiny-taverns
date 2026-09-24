@@ -16,5 +16,5 @@ Before adding a paragraph, ask what a maintainer would get wrong without it. If 
 - [Images](images.md): what Hob draws once after a create, the table of kinds, the shared worker, budget and house style, visibility through the subject's own reads, adding a kind.
 - [Storage](storage.md): the provider-neutral cloud storage adapter, storage keys, the driver variable and its boot line, the file-system adapter, adding a provider.
 - [Web data](web-data.md): reads as atoms, keys and invalidation, mutations, the credential seam, the runner's atoms and stream hook, test harness traps.
-- [Web screens](web-screens.md): routing on a hash history, the shell and the creator/player relation, the signed-out gate, screen shape, authoring traps, the filter input standard, the Chronicle and sheet rules.
+- [Web screens](web-screens.md): routing on real paths and what a host must serve, the shell and the creator/player relation, the signed-out gate, screen shape, authoring traps, the filter input standard, the Chronicle and sheet rules.
 - [Design system](design-system.md): tokens as the source of truth, the read-only package, the Tailwind bridge, layering, motion, shadcn on Base UI.

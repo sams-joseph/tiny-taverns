@@ -141,7 +141,7 @@ describe("archiving a campaign", () => {
     nothingLive();
     await userEvent.click(await screen.findByRole("button", { name: "Archive it" }));
 
-    await waitFor(() => expect(globalThis.location.hash).toBe("#/campaigns"));
+    await waitFor(() => expect(globalThis.location.pathname).toBe("/campaigns"));
     expect(await screen.findByRole("button", { name: /Archived campaigns/ })).toBeTruthy();
   });
 
@@ -151,7 +151,7 @@ describe("archiving a campaign", () => {
 
     await waitFor(() => expect(screen.queryByText("Archive The Salt Road?")).toBeNull());
     expect(paths("DELETE")).toEqual([]);
-    expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}`);
+    expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}`);
   });
 
   it("stays open and says so when the write is refused", async () => {

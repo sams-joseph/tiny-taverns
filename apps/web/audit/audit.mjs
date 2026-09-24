@@ -7,7 +7,7 @@
 //   pnpm -F web shell-audit --only=overview,notes --json=/tmp/audit.json
 
 // The measuring functions below are serialised and run inside the page.
-/* global document, window, location, localStorage, getComputedStyle, MutationObserver */
+/* global document, window, localStorage, getComputedStyle, MutationObserver, PopStateEvent */
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -510,7 +510,7 @@ try {
 
   const load = async (scenario, path) => {
     await fetch(`${origin}/stub/__audit/scenario?name=${scenario}`);
-    await cdp.send("Page.navigate", { url: `${origin}/#${path}` });
+    await cdp.send("Page.navigate", { url: `${origin}${path}` });
     await sleep(300);
     await cdp.run(() => localStorage.setItem("taverns.token", "audit-token"));
     await cdp.send("Page.reload", { ignoreCache: false });
@@ -518,7 +518,12 @@ try {
     await cdp.run(settled);
   };
   const go = async (path) => {
-    await cdp.run((to) => (location.hash = `#${to}`), path);
+    // In-page, as a click would: the router's browser history re-reads the
+    // address bar on `popstate`, so the shell stays mounted across the step.
+    await cdp.run((to) => {
+      window.history.pushState(null, "", to);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, path);
     await sleep(100);
     return cdp.run(settled);
   };

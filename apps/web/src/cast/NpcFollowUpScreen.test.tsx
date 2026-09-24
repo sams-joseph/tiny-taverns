@@ -150,11 +150,11 @@ describe("NpcFollowUpScreen", () => {
 
     expect(screen.getAllByRole("button", { name: "Review in NPC Proposals" })[0]).toHaveAttribute(
       "href",
-      `/#/campaigns/${campaignId}/cast/${npcId}#proposals`,
+      `/campaigns/${campaignId}/cast/${npcId}#proposals`,
     );
     expect(screen.getByRole("button", { name: "Review in Hob research" })).toHaveAttribute(
       "href",
-      `/#/campaigns/${campaignId}/cast/${awareness.npcId}#awareness`,
+      `/campaigns/${campaignId}/cast/${awareness.npcId}#awareness`,
     );
   });
 

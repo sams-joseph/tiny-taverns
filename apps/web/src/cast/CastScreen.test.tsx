@@ -99,14 +99,14 @@ describe("CastScreen", () => {
     // Both ways in point at the NPC's own screen.
     expect(screen.getByRole("link", { name: "Cazril" })).toHaveAttribute(
       "href",
-      `/#/campaigns/${campaignId}/cast/${npcId}`,
+      `/campaigns/${campaignId}/cast/${npcId}`,
     );
     expect(within(card!).getByRole("button", { name: "Rehearse" })).toHaveAttribute(
       "href",
-      `/#/campaigns/${campaignId}/cast/${npcId}`,
+      `/campaigns/${campaignId}/cast/${npcId}`,
     );
     const followUp = screen.getByRole("button", { name: /NPC follow-up/ });
-    expect(followUp).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/follow-up`);
+    expect(followUp).toHaveAttribute("href", `/campaigns/${campaignId}/cast/follow-up`);
     expect(within(followUp).getByText("1")).toBeInTheDocument();
     // And *Cast* is the lit item on the campaign row.
     const row = screen.getByRole("navigation", { name: "This campaign" });
@@ -144,7 +144,7 @@ describe("CastScreen", () => {
     expect(within(card!).getByText("Player-facing")).toBeInTheDocument();
     expect(within(card!).getByText("Open at table")).toBeInTheDocument();
     const review = within(card!).getByRole("button", { name: "1 pending" });
-    expect(review).toHaveAttribute("href", `/#/campaigns/${campaignId}/cast/${npcId}#proposals`);
+    expect(review).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#proposals`);
   });
 
   it("says what to do next when the cast is empty, and when nothing matches", async () => {
@@ -236,7 +236,7 @@ describe("CastScreen", () => {
 
     // A new NPC lands on its own screen, where the rehearsal is.
     await waitFor(() =>
-      expect(globalThis.location.hash).toBe(`#/campaigns/${campaignId}/cast/${created.id}`),
+      expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/cast/${created.id}`),
     );
   }, 20_000);
 

@@ -122,9 +122,9 @@ describe("the shell's top bar", () => {
     // items are the same items everywhere, join and Server pages included.
     expect(links.map((link) => link.textContent)).toEqual(["Campaigns", "Characters", "Library"]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/#/campaigns",
-      "/#/characters",
-      "/#/library",
+      "/campaigns",
+      "/characters",
+      "/library",
     ]);
     // …and no role switch beside them, ever again: the relation is a fact
     // about a pair, read per campaign, and there is nothing global to toggle.
@@ -303,7 +303,7 @@ describe("the shell's top bar", () => {
       // Every one of them names the campaign, because every endpoint behind
       // them does — which is the same fact that makes the row exist at all.
       for (const link of links) {
-        expect(link.getAttribute("href")).toContain(`/#/campaigns/${campaignId}`);
+        expect(link.getAttribute("href")).toContain(`/campaigns/${campaignId}`);
       }
     });
 
@@ -342,7 +342,7 @@ describe("the shell's top bar", () => {
       // renders each of them the projection that is theirs.
       await renderAt(`/campaigns/${campaignId}/bestiary`);
       expect(screen.getByTitle("Campaign home").getAttribute("href")).toBe(
-        `/#/campaigns/${campaignId}`,
+        `/campaigns/${campaignId}`,
       );
     });
   });

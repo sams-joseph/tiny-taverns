@@ -19,7 +19,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * **Your library of classes, races and backgrounds** — where one is written,
  * in no campaign at all.
  *
- * `#/library/rules`, inside the global *Library* destination, which is where a
+ * `/library/rules`, inside the global *Library* destination, which is where a
  * monster is already authored. It is the second screen over the Library model
  * and it is the same model: `character_option` carries the ownership pair
  * `creature` does, and the four predicates behind both were already generic

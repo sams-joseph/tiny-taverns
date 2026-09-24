@@ -220,6 +220,14 @@ Each maps to `turbo run <task>`; you can also target one package, e.g.
 pnpm --filter web dev
 ```
 
+Every route is a real path (`/campaigns/<id>`, `/join/<token>`), so whatever serves the
+built `apps/web/dist` must answer every path that is not a file with `index.html`, or a
+reload or a shared link 404s. The dev server and `pnpm --filter web preview` already do.
+A static host needs a rewrite of all non-file paths to `/index.html` (Netlify
+`/* /index.html 200`, a Vercel or Cloudflare Pages SPA rewrite, nginx
+`try_files $uri /index.html`). To serve the app under a subpath, set Vite's `base`; the
+router takes its basepath from it.
+
 **Server (Effect.ts)** — starts on <http://localhost:3000> (override with `PORT`). It runs
 pending migrations on boot, so `pnpm db:up` has to have happened first:
 
@@ -261,7 +269,7 @@ Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Even
 header, which a browser's `EventSource` sends by itself). `docs/internals/live-session.md` has the
 full contract the runner UI is written against.
 
-The web app's `#/server` page calls the live API through the client derived from that same
+The web app's `/server` page calls the live API through the client derived from that same
 declaration — paste a token there to see it list your campaigns.
 
 **The bestiary is campaign copies plus two bundled corpora in one list.** A campaign's own

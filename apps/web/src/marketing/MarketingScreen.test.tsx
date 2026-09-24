@@ -1,6 +1,6 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { hashHref, renderAt } from "../test/renderRoute";
+import { renderAt } from "../test/renderRoute";
 import { installMemoryStorage } from "../test/storage";
 
 /**
@@ -12,11 +12,8 @@ import { installMemoryStorage } from "../test/storage";
  * table advertised plans for a product with no billing; the email capture
  * promised a link this product never sends.
  *
- * The rest are about links. Under a hash history a bare `href="#features"`
- * replaces the whole route and throws the reader onto the campaign list, so an
- * in-page anchor has to be `<Link to="/" hash="…">` and render as `/#/#features`
- * — that is a real defect this page could carry invisibly, since a wrong anchor
- * still looks like a link.
+ * The rest are about links: every one is a route the app has, or the one
+ * external attribution, since a wrong link still looks like a link.
  */
 
 installMemoryStorage();
@@ -27,7 +24,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-/** The homepage is what `#/` is for a reader with no credential of any kind. */
+/** The homepage is what `/` is for a reader with no credential of any kind. */
 const renderHome = () => renderAt("/", undefined, "none");
 
 describe("the marketing homepage", () => {
@@ -145,14 +142,13 @@ describe("the marketing homepage", () => {
     expect(screen.queryByText(/the link is on its way/)).toBeNull();
   });
 
-  it("builds in-page anchors through the router, never as a bare fragment", async () => {
+  it("links its in-page anchors to the homepage's own sections", async () => {
     await renderHome();
 
     const nav = screen.getByRole("navigation", { name: "This page" });
-    // `/#/#features`, not `#features`: the route, then the fragment inside it.
     expect(within(nav).getByRole("link", { name: "Features" })).toHaveAttribute(
       "href",
-      `${hashHref("/")}#features`,
+      "/#features",
     );
     expect(within(nav).queryByRole("link", { name: "Components" })).toBeNull();
   });
@@ -176,10 +172,10 @@ describe("the marketing homepage", () => {
       expect(screen.queryByRole("link", { name: gone })).toBeNull();
     }
 
-    // App links are hash-history routes; the one external link is the legal
-    // source attribution and has a real URL.
+    // App links are routes; the one external link is the legal source
+    // attribution and has a real URL.
     for (const link of screen.getAllByRole("link")) {
-      expect(link.getAttribute("href")).toMatch(/^(?:\/#\/|https:\/\/github\.com\/5e-bits\/)/);
+      expect(link.getAttribute("href")).toMatch(/^(?:\/|https:\/\/github\.com\/5e-bits\/)/);
     }
   });
 
@@ -209,7 +205,7 @@ describe("the marketing homepage", () => {
     const cta = screen.getAllByRole("button", { name: /Set up a developer token/ });
     expect(cta).toHaveLength(3);
     for (const button of cta) {
-      expect(button).toHaveAttribute("href", hashHref("/server"));
+      expect(button).toHaveAttribute("href", "/server");
     }
     expect(screen.getByText(/Hosted sign-in is not configured on this build/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start a campaign" })).toBeNull();

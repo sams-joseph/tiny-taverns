@@ -139,8 +139,8 @@ describe("your characters", () => {
       return within(card as HTMLElement).getByRole("link");
     });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      `/#/characters/${brannocId}`,
-      `/#/characters/${sorrelId}`,
+      `/characters/${brannocId}`,
+      `/characters/${sorrelId}`,
     ]);
   });
 
@@ -155,7 +155,7 @@ describe("your characters", () => {
 
     // The other three still have nothing behind them: there is no approval
     // queue and no column for one, no asset store, and following an invitation
-    // is `#/join/<token>`, which reads it before anybody signs in.
+    // is `/join/<token>`, which reads it before anybody signs in.
     for (const name of [/Join a game/i, /Claim a seat/i, /Send to the DM/i]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
@@ -181,7 +181,7 @@ describe("your characters", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Add to campaign" });
     // The button sits over the card's stretched link and must not also follow it.
-    expect(window.location.hash).not.toContain(`/characters/${brannocId}`);
+    expect(window.location.pathname).not.toContain(`/characters/${brannocId}`);
     expect(within(dialog).getByText(/The character stays yours/)).toBeTruthy();
     expect(within(dialog).queryByRole("button", { name: /Add to The Salt Road/i })).toBeNull();
     await userEvent.click(
@@ -219,7 +219,7 @@ describe("your characters", () => {
     expect(screen.getByText("Ilse Vantar · not at a table yet.")).toBeTruthy();
     // (A `Button` rendering an `<a>` keeps the `button` role.)
     expect(screen.getByRole("button", { name: /New character/i }).getAttribute("href")).toBe(
-      "/#/characters/new",
+      "/characters/new",
     );
 
     cleanup();
@@ -259,12 +259,10 @@ describe("your characters", () => {
       "The Hag's Bargain",
       "No campaignCore rules only",
     ]);
-    // `/#/…` rather than `#/…` is what `createHashHistory` builds: the page's
-    // own path, then the route behind the fragment.
     expect(choices.map((link) => link.getAttribute("href"))).toEqual([
-      `/#/campaigns/${campaignId}/characters/new`,
-      `/#/campaigns/${otherCampaignId}/characters/new`,
-      "/#/characters/new",
+      `/campaigns/${campaignId}/characters/new`,
+      `/campaigns/${otherCampaignId}/characters/new`,
+      "/characters/new",
     ]);
 
     cleanup();
@@ -279,7 +277,7 @@ describe("your characters", () => {
       within(one)
         .getAllByRole("button", { name: /Salt Road|No campaign/ })
         .map((link) => link.getAttribute("href")),
-    ).toEqual([`/#/campaigns/${campaignId}/characters/new`, "/#/characters/new"]);
+    ).toEqual([`/campaigns/${campaignId}/characters/new`, "/characters/new"]);
 
     cleanup();
     // No table: nothing to ask, so no dialog — the control *is* the link.
@@ -289,7 +287,7 @@ describe("your characters", () => {
     await screen.findByText("No characters yet");
     await userEvent.click(screen.getByRole("button", { name: /New character/i }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    await waitFor(() => expect(window.location.hash).toBe("#/characters/new"));
+    await waitFor(() => expect(window.location.pathname).toBe("/characters/new"));
   });
 
   it("says the server did not answer rather than an empty roster", async () => {
