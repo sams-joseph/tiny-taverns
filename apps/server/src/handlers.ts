@@ -106,7 +106,9 @@ const asDmOf = Effect.map(
  * accept in `HobLive`), as a character's handlers call `drawCharacter`.
  *
  * The map was inserted with the encounter; the creator proof finds it, and
- * `drawBattleMap` records the one picture it will ever have. Answers the
+ * `drawBattleMap` records the one picture it will ever have. The roster's
+ * creature types go with it: empty after the form's create, which carries no
+ * roster, and the accepted roster after Hob's, which commits it first. Answers the
  * encounter unchanged — `Encounter` carries no map, because a player may read
  * a shared encounter — and never fails: a picture is not worth failing a
  * create for.
@@ -118,8 +120,13 @@ const drawEncounterMapOf = Effect.map(
       // With images off there is nothing to start, so nothing to read.
       images.generating
         ? creators.of(encounter.campaignId).pipe(
-            Effect.flatMap((creator) => maps.forEncounter(creator, encounter.id)),
-            Effect.flatMap((map) => images.drawBattleMap(map, encounter)),
+            Effect.flatMap((creator) =>
+              Effect.all([
+                maps.forEncounter(creator, encounter.id),
+                maps.rosterTypes(creator, encounter.id),
+              ]),
+            ),
+            Effect.flatMap(([map, types]) => images.drawBattleMap(map, encounter, types)),
             Effect.catchTag("NotFound", () => Effect.void),
             Effect.as(encounter),
           )

@@ -32,7 +32,8 @@ import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support
 
 /**
  * **Every encounter has one battle map, and Hob draws its picture once, as the
- * encounter is made, from the setting line — for the creator's eyes only.** The
+ * encounter is made, from its setting line or, without one, its name, tags and
+ * roster types — for the creator's eyes only.** The
  * fifth kind of Hob-drawn image, over the same worker, signer, records and
  * daily ledger as the portraits and covers (`npc-images.test.ts`).
  *
@@ -45,7 +46,7 @@ import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support
 const OPENAI = "https://api.openai.com/v1";
 const MODEL = "gpt-image-2.5-flare";
 const SECRET = Redacted.make("battle-map-test-secret");
-const PER_ACCOUNT = 4;
+const PER_ACCOUNT = 12;
 
 const images = scriptedImages({ apiUrl: OPENAI, model: MODEL });
 
@@ -397,23 +398,77 @@ describe("Hob's accepted encounter", () => {
   });
 });
 
-describe("when there is no picture", () => {
-  it("keeps a blank board for an encounter with no setting line, and spends nothing", async () => {
+describe("an encounter with only a name", () => {
+  it("still draws once, from its name and tags, and counts against the day", async () => {
     const before = mapRequests().length;
     const spent = await spentBy(jo);
     const encounter = await encounterAt(jo, table, { name: "Goblin ambush", tags: ["Road"] });
     await settled();
-    expect(mapRequests().length).toBe(before);
-    expect(await spentBy(jo)).toBe(spent);
+    expect(mapRequests().length - before).toBe(1);
+    expect(await spentBy(jo)).toBe(spent + 1);
     const map = await mapOf(jo, table, encounter.id);
-    expect(map.image).toBeNull();
-    expect(map.imagePending).toBe(false);
+    expect(map.setting).toBeNull();
+    expect(map.image).not.toBeNull();
     expect([map.grid, map.columns, map.rows]).toEqual(["square", 24, 16]);
-    const record = await recordOf(map.id);
-    expect(record?.failure).toBe("skipped");
-    expect(record?.prompt).toBeNull();
+    const prompt = (await recordOf(map.id))!.prompt!;
+    expect(prompt).toContain("a fight called Goblin ambush");
+    expect(prompt).toContain("Its feel: Road.");
+    expect(prompt.toLowerCase()).toContain("no creatures");
+    // The form's create carries no roster, so there are no types to read.
+    expect(prompt).not.toContain("would be found");
   });
 
+  it("reads the types on Hob's accepted roster, never the creatures' names", async () => {
+    const hag = await run(
+      Effect.flatMap(Creatures, (creatures) =>
+        creatures.libraryCreate({
+          name: "Mirelight Hag",
+          type: "Fey",
+          size: "Medium",
+          cr: "2",
+          ac: 14,
+          hp: 40,
+        }),
+      ).pipe(Effect.provideService(CurrentActor, jo.actor)),
+    );
+    rounds.push(
+      toolCallChunks("proposeEncounter", {
+        name: "Lights on the water",
+        creatures: [{ creatureId: hag.id, count: 1 }],
+      }),
+      textChunks("There you are."),
+    );
+    const events = await run(
+      Effect.gen(function* () {
+        const hob = yield* Hob;
+        const stream = yield* hob.ask(table, { text: "Something eerie." });
+        return Array.from(yield* Stream.runCollect(stream)) as ReadonlyArray<HobEvent>;
+      }).pipe(Effect.provideService(CurrentActor, jo.actor)),
+    );
+    const began = events.find((event) => event.event === "began");
+    if (began?.event !== "began") throw new Error("no began event");
+
+    const before = mapRequests().length;
+    const accepted = await as(jo.token, (client) =>
+      client.hob.accept({
+        params: { campaignId: table, threadId: began.data.threadId, turnId: began.data.turnId },
+        payload: {},
+      }),
+    );
+    if (accepted.accepted !== "encounter") throw new Error("accepted something else");
+    await settled();
+
+    expect(mapRequests().length - before).toBe(1);
+    const map = await mapOf(jo, table, accepted.encounter.id);
+    const prompt = (await recordOf(map.id))!.prompt!;
+    expect(prompt).toContain("a fight called Lights on the water");
+    expect(prompt).toContain("where fey creatures would be found");
+    expect(prompt).not.toContain("Mirelight");
+    expect(prompt).not.toContain("Hag");
+  });
+});
+
+describe("when there is no picture", () => {
   it("records a refusal and still keeps the board", async () => {
     const bram = await person("Bram");
     const own = await campaignOf(bram, "Bram's Table");

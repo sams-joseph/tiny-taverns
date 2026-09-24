@@ -16,6 +16,14 @@ const REEDS = {
   name: "Ambush in the reeds",
   tags: ["Marsh", "Night"],
   setting: "A boardwalk over black water, reed beds on both sides and a sunken barge",
+  creatureTypes: ["humanoid"],
+};
+
+const GOBLINS = {
+  name: "Goblin ambush",
+  tags: [],
+  setting: null,
+  creatureTypes: [],
 };
 
 describe("battleMapPromptFor", () => {
@@ -27,6 +35,74 @@ describe("battleMapPromptFor", () => {
         "Night. " +
         HOUSE_MAP_STYLE,
     );
+  });
+
+  it("lets a setting line lead, and reads no creature types beside it", () => {
+    const prompt = battleMapPromptFor(REEDS, style);
+    expect(
+      prompt.startsWith("Top-down battle map for a tabletop roleplaying game: A boardwalk"),
+    ).toBe(true);
+    expect(prompt).not.toContain("humanoid");
+  });
+
+  it("draws a place from the name alone", () => {
+    expect(battleMapPromptFor(GOBLINS, style)).toBe(
+      "Top-down battle map for a tabletop roleplaying game, of a place that suits a fight " +
+        "called Goblin ambush; let the name shape the place, shown rather than written. " +
+        HOUSE_MAP_STYLE,
+    );
+  });
+
+  it("adds the tags to a name-only place", () => {
+    const prompt = battleMapPromptFor({ ...GOBLINS, tags: ["Forest", "Dusk"] }, style);
+    expect(prompt).toContain("Goblin ambush");
+    expect(prompt).toContain("Its feel: Forest, Dusk.");
+  });
+
+  it("hints at the place from the roster's creature types, never drawing them", () => {
+    const prompt = battleMapPromptFor(
+      { ...GOBLINS, creatureTypes: ["Humanoid (goblinoid)", "beast"] },
+      style,
+    );
+    expect(prompt).toContain(
+      "Choose the kind of place where beast, humanoid (goblinoid) creatures would be found, " +
+        "but leave them out of the picture.",
+    );
+    expect(prompt.toLowerCase()).toContain("no creatures");
+  });
+
+  it("deduplicates, sorts and bounds the creature types", () => {
+    const prompt = battleMapPromptFor(
+      {
+        ...GOBLINS,
+        creatureTypes: [
+          "undead",
+          "Undead ",
+          "beast",
+          "fiend",
+          "ooze",
+          "dragon",
+          " ",
+          "z".repeat(90),
+        ],
+      },
+      style,
+    );
+    expect(prompt).toContain("where beast, dragon, fiend, ooze creatures");
+    expect(prompt).not.toContain("undead");
+    expect(prompt).not.toContain("z".repeat(41));
+    expect(prompt.match(/undead/g)).toBeNull();
+    expect(
+      battleMapPromptFor({ ...GOBLINS, creatureTypes: ["undead", "UNDEAD"] }, style),
+    ).toContain("where undead creatures");
+  });
+
+  it("names no creature: only types reach it", () => {
+    const prompt = battleMapPromptFor(
+      { ...GOBLINS, creatureTypes: ["humanoid (goblinoid)"] },
+      style,
+    );
+    expect(prompt).not.toMatch(/goblin boss|hobgoblin|bugbear/i);
   });
 
   it("asks for a top-down picture with no grid, no creatures and no text", () => {
@@ -54,10 +130,11 @@ describe("battleMapPromptFor", () => {
 });
 
 describe("battleMapHasSubject", () => {
-  it("draws only from a setting line: a name and tags alone are a guess", () => {
+  it("draws from a setting line or, without one, from the name", () => {
     expect(battleMapHasSubject(REEDS)).toBe(true);
-    expect(battleMapHasSubject({ ...REEDS, setting: null })).toBe(false);
-    expect(battleMapHasSubject({ ...REEDS, setting: "  “”  " })).toBe(false);
+    expect(battleMapHasSubject({ ...REEDS, setting: null })).toBe(true);
+    expect(battleMapHasSubject({ ...REEDS, setting: "  “”  " })).toBe(true);
+    expect(battleMapHasSubject({ ...GOBLINS, name: " “” " })).toBe(false);
   });
 });
 

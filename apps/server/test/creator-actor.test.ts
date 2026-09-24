@@ -467,7 +467,9 @@ describe("the scope, counted", () => {
     // `update`: an encounter's map is the creator's alone, gated from the day
     // it was declared, before any player projection of a map exists.
     // Eighty-nine is `BattleMaps.forRun`, a fight's board, for the same reason.
-    expect(gated).toBe(89);
+    // Ninety is `BattleMaps.rosterTypes`, the creature types a map without a
+    // setting line is drawn from, read beside the map it draws.
+    expect(gated).toBe(90);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

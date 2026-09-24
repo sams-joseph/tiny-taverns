@@ -181,8 +181,9 @@ export class Encounters extends Context.Service<
                 `;
                 const encounter = toEncounter(rows[0]!);
                 // Every encounter has its one battle map, made with it: a blank
-                // board, and the setting line the picture is drawn from after
-                // this commits (`HobImages.drawBattleMap`). Every way an
+                // board, and the setting line the picture is drawn from (or,
+                // without one, the name, tags and roster types) after this
+                // commits (`HobImages.drawBattleMap`). Every way an
                 // encounter is made comes through here, so none can lack one.
                 yield* sql`
                   insert into battle_map ${sql.insert(
