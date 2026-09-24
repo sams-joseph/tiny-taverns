@@ -66,10 +66,11 @@ function ScreenBar({ title, subtitle, tabs, children }: TopBarProps) {
  * record). So every screen inside a campaign gets it without asking, and no
  * screen can ask for it twice.
  *
- * **Except the Overview**, whose *Tonight* card is the campaign's own card and
- * carries this same press already — `useCampaignAct` computes it once, so the
- * two cannot disagree about which of the three it is. Drawing both would put two
- * peach buttons on one screen, which is the budget the bar exists to keep.
+ * **Except the Overview**, whose *Next session* card (or, while a fight is on
+ * the table, its live banner) carries this same press already —
+ * `useCampaignAct` computes it once, so they cannot disagree about which of
+ * the three it is. Drawing both would put two peach buttons on one screen,
+ * which is the budget the bar exists to keep.
  */
 function CampaignAct() {
   const campaignId = useCampaignId();

@@ -146,9 +146,19 @@ export function HpTrack({
  * it, so the colour steps are decided once. Presentational: the number beside it
  * is the reader's, so the bar is hidden from assistive tech.
  */
-export function HpBar({ fraction }: { readonly fraction: number }) {
+export function HpBar({
+  fraction,
+  className,
+}: {
+  readonly fraction: number;
+  /** The track's size where a row draws it thinner — the Overview's party card. */
+  readonly className?: string;
+}) {
   return (
-    <div aria-hidden="true" className="h-2 overflow-hidden rounded-pill bg-surface-sunken">
+    <div
+      aria-hidden="true"
+      className={cn("h-2 overflow-hidden rounded-pill bg-surface-sunken", className)}
+    >
       <div
         data-slot="hp-fill"
         className={cn(

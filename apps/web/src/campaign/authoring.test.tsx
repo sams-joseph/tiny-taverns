@@ -746,7 +746,7 @@ describe("starting a session", () => {
     // for a session that is already running.
     await renderScreen(mintingSession());
 
-    // **Exactly one**, and it is the *Tonight* card's. The chrome used to draw a
+    // **Exactly one**, and it is the *Next session* card's. The chrome used to draw a
     // second — the campaign row's, and since 2026-09-22 the per-screen bar's —
     // but the bar leaves the press to the card on the Overview, which is the
     // one screen whose body already carries it. Two peach buttons on one screen
@@ -854,7 +854,7 @@ describe("finishing the night", () => {
   const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
   const sessionPath = `/campaigns/${campaignId}/sessions/${sessionId}`;
 
-  /** Opens the confirmation from the session card in the aside. */
+  /** Opens the confirmation from the *Next session* card. */
   const openFinish = async () => {
     await renderScreen(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Finish the night" }));
@@ -862,9 +862,10 @@ describe("finishing the night", () => {
 
   it("offers the night's own ending on the screen that shows which night it is", async () => {
     await renderScreen(mintingSession());
-    // In the aside, on a card that names the session and says where it stands —
-    // so the ending is attached to the thing it ends, rather than sitting a
-    // thumb's width from the two buttons a DM presses all evening.
+    // On the *Next session* card, which names the session and says where it
+    // stands — so the ending is attached to the thing it ends. The redesign
+    // dropped it from the Overview; a night that can be opened here and not
+    // finished here is a one-way door.
     const card = (await screen.findByRole("button", { name: "Finish the night" })).closest(
       "[data-slot='card']",
     );
@@ -872,8 +873,8 @@ describe("finishing the night", () => {
     expect(within(card as HTMLElement).getByText("Session 12")).toBeInTheDocument();
     // **It used to read "Not started yet", and that stopped being true.** A
     // night with no stamp is not a night nobody has played now that opening one
-    // is its own act — see `SessionCard`. What the card can still see is that
-    // the campaign points at this night and nothing is on its table.
+    // is its own act — see `stateOf` in `NextSession`. What the card can still
+    // see is that the campaign points at this night and nothing is on its table.
     expect(
       within(card as HTMLElement).getByText("Open. Nothing has been put on the table yet."),
     ).toBeInTheDocument();

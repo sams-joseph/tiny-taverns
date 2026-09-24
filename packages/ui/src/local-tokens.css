@@ -40,4 +40,14 @@
      sidebar, whose width reaches a gap element, a positioned container and an
      overlaid sheet through one custom property. */
   --panel-chat-w: 400px;
+
+  /* The campaign Overview redesign (`Campaign Overview.dc.html`) centres its page
+     at `max-width: 1240px` with the page padding inside that box, and splits it
+     into two wrapping columns, `flex: 2 1 560px` and `flex: 1 1 300px`, which
+     stand side by side down to 884px of content and stack below it. The shell's
+     `main` already carries the page padding, so the width here is the
+     prototype's box less that padding. No token answers any of the three. */
+  --overview-w: calc(1240px - 2 * var(--pad-page));
+  --overview-main-w: 560px;
+  --overview-aside-w: 300px;
 }

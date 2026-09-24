@@ -1,15 +1,5 @@
 import type { CampaignId, PrepItem, SessionId } from "@taverns/api";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Checkbox,
-  Icon,
-  Input,
-  Label,
-} from "@taverns/ui";
+import { Button, Checkbox, Icon, Input, Label, SectionHeading } from "@taverns/ui";
 import { Result } from "effect";
 import { useCallback, useState } from "react";
 import { reads } from "../api/keys";
@@ -20,6 +10,10 @@ import { SaveFailure } from "../ui/form";
 
 /**
  * "Before you sit down" — the checklist, and writing to it.
+ *
+ * A section of the Overview's *Next session* card rather than a card of its
+ * own: the checklist belongs to the night that card is about, and the redesign
+ * that dropped it had nowhere else to put it.
  *
  * The checklist hangs off the session, not the campaign (`PrepItem.ts`), so with
  * no session there is nothing to check off yet and the card says so rather than
@@ -154,132 +148,133 @@ export function PrepChecklist({
   const done = items.filter(isDone).length;
 
   return (
-    <Card tone="sunken">
-      <CardHeader>
-        <div className="flex items-baseline justify-between gap-2.5">
-          <CardTitle>Before you sit down</CardTitle>
-          {items.length > 0 && (
+    <section className="flex flex-col gap-3 px-card py-4">
+      <SectionHeading
+        as="h3"
+        size="subtitle"
+        action={
+          items.length > 0 ? (
             <span className="font-mono text-mono leading-snug font-medium text-muted-foreground">
               {done}/{items.length}
             </span>
-          )}
+          ) : undefined
+        }
+      >
+        Before you sit down
+      </SectionHeading>
+      {items.length === 0 ? (
+        <p className="mb-0 text-body-s leading-body text-muted-foreground">
+          {sessionId === undefined
+            ? "No session in the works. The checklist belongs to the night you are preparing."
+            : "Nothing on the list. Whatever you must not forget goes here."}
+        </p>
+      ) : (
+        items.map((item) =>
+          editing === item.id ? (
+            <div key={item.id} className="flex items-center gap-1.5">
+              <Input
+                autoFocus
+                aria-label={`Rename ${item.label}`}
+                value={editText}
+                disabled={busy}
+                className="h-control-sm"
+                onChange={(event) => setEditText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void rename(item);
+                  if (event.key === "Escape") setEditing(undefined);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Save the new name"
+                disabled={busy}
+                onClick={() => void rename(item)}
+              >
+                <Icon name="check" size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Keep the old name"
+                disabled={busy}
+                onClick={() => setEditing(undefined)}
+              >
+                <Icon name="x" size={14} />
+              </Button>
+            </div>
+          ) : (
+            <div key={item.id} className="group flex items-start gap-2.5">
+              <Checkbox
+                id={item.id}
+                checked={isDone(item)}
+                onCheckedChange={(checked) => void setDone(item, checked)}
+              />
+              <Label
+                htmlFor={item.id}
+                className="flex-1 cursor-pointer text-body-s leading-body font-normal"
+              >
+                {item.label}
+              </Label>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                aria-label={`Rename ${item.label}`}
+                disabled={busy}
+                onClick={() => {
+                  setEditing(item.id);
+                  setEditText(item.label);
+                }}
+              >
+                <Icon name="pencil" size={13} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0"
+                aria-label={`Remove ${item.label}`}
+                disabled={busy}
+                onClick={() => void remove(item)}
+              >
+                <Icon name="x" size={13} />
+              </Button>
+            </div>
+          ),
+        )
+      )}
+
+      {sessionId !== undefined && (
+        <div className="flex items-center gap-1.5 border-t border-hairline pt-3">
+          <Input
+            aria-label="Add to the checklist"
+            placeholder="Reread the reeds ambush"
+            value={draft}
+            disabled={busy}
+            className="h-control-sm"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void add();
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy || draft.trim() === ""}
+            onClick={() => void add()}
+          >
+            <Icon name="plus" size={14} />
+            Add
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {items.length === 0 ? (
-          <p className="text-body-s leading-body text-muted-foreground">
-            {sessionId === undefined
-              ? "No session in the works. The checklist belongs to the night you are preparing."
-              : "Nothing on the list. Whatever you must not forget goes here."}
-          </p>
-        ) : (
-          items.map((item) =>
-            editing === item.id ? (
-              <div key={item.id} className="flex items-center gap-1.5">
-                <Input
-                  autoFocus
-                  aria-label={`Rename ${item.label}`}
-                  value={editText}
-                  disabled={busy}
-                  className="h-control-sm"
-                  onChange={(event) => setEditText(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void rename(item);
-                    if (event.key === "Escape") setEditing(undefined);
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Save the new name"
-                  disabled={busy}
-                  onClick={() => void rename(item)}
-                >
-                  <Icon name="check" size={14} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Keep the old name"
-                  disabled={busy}
-                  onClick={() => setEditing(undefined)}
-                >
-                  <Icon name="x" size={14} />
-                </Button>
-              </div>
-            ) : (
-              <div key={item.id} className="group flex items-start gap-2.5">
-                <Checkbox
-                  id={item.id}
-                  checked={isDone(item)}
-                  onCheckedChange={(checked) => void setDone(item, checked)}
-                />
-                <Label
-                  htmlFor={item.id}
-                  className="flex-1 cursor-pointer text-body-s leading-body font-normal"
-                >
-                  {item.label}
-                </Label>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 shrink-0"
-                  aria-label={`Rename ${item.label}`}
-                  disabled={busy}
-                  onClick={() => {
-                    setEditing(item.id);
-                    setEditText(item.label);
-                  }}
-                >
-                  <Icon name="pencil" size={13} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 shrink-0"
-                  aria-label={`Remove ${item.label}`}
-                  disabled={busy}
-                  onClick={() => void remove(item)}
-                >
-                  <Icon name="x" size={13} />
-                </Button>
-              </div>
-            ),
-          )
-        )}
+      )}
 
-        {sessionId !== undefined && (
-          <div className="flex items-center gap-1.5 border-t border-hairline pt-3">
-            <Input
-              aria-label="Add to the checklist"
-              placeholder="Reread the reeds ambush"
-              value={draft}
-              disabled={busy}
-              className="h-control-sm"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void add();
-              }}
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy || draft.trim() === ""}
-              onClick={() => void add()}
-            >
-              <Icon name="plus" size={14} />
-              Add
-            </Button>
-          </div>
-        )}
-
-        {error !== undefined && (
-          <p role="alert" className="text-body-s leading-body text-danger">
-            {error}
-          </p>
-        )}
-        {failure !== undefined && <SaveFailure failure={failure} />}
-      </CardContent>
-    </Card>
+      {error !== undefined && (
+        <p role="alert" className="mb-0 text-body-s leading-body text-danger">
+          {error}
+        </p>
+      )}
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </section>
   );
 }

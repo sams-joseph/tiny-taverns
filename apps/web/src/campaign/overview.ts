@@ -1,0 +1,121 @@
+import type { CampaignId, Encounter, Note, PartySeat, Session, SessionRecap } from "@taverns/api";
+import { DateTime, Effect } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import { apiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
+
+/**
+ * The Overview's rules about its data, apart from its cards so each can be
+ * tested on its own and the card files export only components.
+ */
+
+/** The last night the table finished, read back. */
+export interface LastNight {
+  readonly session: Session;
+  readonly recap: SessionRecap;
+}
+
+/**
+ * The Overview's own read on top of the campaign view: the newest finished
+ * night and its recap, or `undefined` before the table has finished one.
+ *
+ * **One atom making two calls**, because the second call's argument is the
+ * first one's answer and there is no screen that wants the list without the
+ * recap here. It is the frame's `extra`, so the Overview is still one resource
+ * with three states, and a real atom rather than a derived one, so the frame's
+ * *Try again* can refresh it.
+ *
+ * It answers `reads.sessions`, which finishing a night names — so the card
+ * moves to the night just ended without a reload. `sessions.list` is newest
+ * first (`session.number desc`), and the open night, if any, is the one with no
+ * `endedAt`.
+ */
+export const lastNightAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) =>
+      Effect.gen(function* () {
+        const sessions = yield* client.sessions.list({ params: { campaignId } });
+        const session = sessions.find((row) => row.endedAt !== null);
+        if (session === undefined) return undefined;
+        const recap = yield* client.recap.read({
+          params: { campaignId, sessionId: session.id },
+        });
+        return { session, recap } satisfies LastNight;
+      }),
+    [reads.sessions(campaignId)],
+  ),
+);
+
+/**
+ * The party's level, as the header draws it: one level when everyone at the
+ * table is at it, the span when they are not.
+ *
+ * Never an average — *"Lvl 4.7"* is a level nobody at the table has. A seat
+ * whose character is gone, or a character with no level written, says nothing
+ * about it, and a party with no level at all draws no figure rather than a
+ * guessed one.
+ */
+export const partyLevel = (party: ReadonlyArray<PartySeat>): string | undefined => {
+  const levels = party.flatMap((row) =>
+    row.character?.level == null ? [] : [row.character.level],
+  );
+  if (levels.length === 0) return undefined;
+  const low = Math.min(...levels);
+  const high = Math.max(...levels);
+  return low === high ? `Lvl ${String(low)}` : `Lvl ${String(low)}–${String(high)}`;
+};
+
+/** How many the card shows: the redesign draws three. */
+const RECENT = 3;
+
+/**
+ * The notes touched last, newest first — by `updatedAt`, because a note
+ * rewritten this morning is more recent than the order it was first written in.
+ * Copied before sorting: `view.notes` is the frame's list and is shared.
+ */
+export const recentNotes = (notes: ReadonlyArray<Note>): ReadonlyArray<Note> =>
+  [...notes]
+    .sort((a, b) => DateTime.toEpochMillis(b.updatedAt) - DateTime.toEpochMillis(a.updatedAt))
+    .slice(0, RECENT);
+
+/**
+ * The prose the night opens on: the first read-aloud written for the first
+ * encounter on deck.
+ *
+ * The redesign draws an *Opening read-aloud* and nothing marks a note as the
+ * opening one, so this is the captain's rule for today's data — the first
+ * encounter is the one the night reaches first, and its first read-aloud is
+ * what gets read out when it does. Both lists are oldest first, so "first" is
+ * the order the DM wrote them in. With no such note there is no inset, rather
+ * than one stubbed with somebody else's prose.
+ */
+export const openingReadAloud = (
+  encounters: ReadonlyArray<Encounter>,
+  notes: ReadonlyArray<Note>,
+): Note | undefined => {
+  const first = encounters[0];
+  if (first === undefined) return undefined;
+  return notes.find(
+    (note) =>
+      note.kind === "read_aloud" &&
+      note.body.trim() !== "" &&
+      note.attachedTo?.kind === "encounter" &&
+      note.attachedTo.id === first.id,
+  );
+};
+
+/**
+ * `Medium · 6 creatures · Marsh, Night` — what the wire has to say about an
+ * encounter. The drawing's CR, DC and readiness (*Ready*, *Draft*) are not on
+ * `Encounter` and are left out; the difficulty band is the rating the DM gave.
+ */
+export const encounterDetail = (encounter: Encounter): string =>
+  [
+    encounter.difficulty ?? "Unrated",
+    encounter.creatureCount === 0
+      ? "No creatures yet"
+      : `${String(encounter.creatureCount)} ${encounter.creatureCount === 1 ? "creature" : "creatures"}`,
+    encounter.tags.join(", "),
+  ]
+    .filter((part) => part !== "")
+    .join(" · ");

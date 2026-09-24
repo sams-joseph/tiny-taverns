@@ -11,10 +11,11 @@ import { StartSessionDialog } from "./StartSessionDialog";
 /**
  * The one press the campaign offers, whichever of its three things it is.
  *
- * **It is drawn twice**, on the campaign row and in the Overview's *Tonight*
- * card, and both must say the same thing: two controls computing the same
- * three-way branch independently is two controls that can differ. So both call
- * `useCampaignAct`, and `actFor` is the branch.
+ * **It is drawn in more than one place** — the per-screen bar, the Overview's
+ * *Next session* card, and the Overview's live banner while a fight is on the
+ * table — and every one must say the same thing: controls computing the same
+ * three-way branch independently are controls that can differ. So all of them
+ * call `useCampaignAct`, and `actFor` is the branch.
  */
 export interface CampaignAct {
   readonly label: string;
