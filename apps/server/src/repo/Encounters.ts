@@ -21,6 +21,7 @@ import {
   defined,
   dieOnSqlError,
   type ProvenanceColumns,
+  proseColumn,
   provenanceOf,
   setClause,
 } from "./rows.js";
@@ -178,32 +179,62 @@ export class Encounters extends Context.Service<
                   )}
                   returning *, ${creatureCount(sql, campaignId, actor)}
                 `;
-                return toEncounter(rows[0]!);
+                const encounter = toEncounter(rows[0]!);
+                // Every encounter has its one battle map, made with it: a blank
+                // board, and the setting line the picture is drawn from after
+                // this commits (`HobImages.drawBattleMap`). Every way an
+                // encounter is made comes through here, so none can lack one.
+                yield* sql`
+                  insert into battle_map ${sql.insert(
+                    defined({
+                      encounter_id: encounter.id,
+                      campaign_id: campaignId,
+                      setting: proseColumn(payload.setting),
+                    }),
+                  )}
+                `;
+                return encounter;
               }),
             ),
           ),
 
         update: (campaignId, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const columns = defined({
-                name: patch.name,
-                difficulty: patch.difficulty,
-                tags: patch.tags,
-                visibility: patch.visibility,
-              });
-              const rows = yield* sql<EncounterRow>`
-                update encounter set ${setClause(sql, columns)}
-                where encounter.id = ${id}
-                  and ${rowWritable(sql, "encounter", campaignId, actor)}
-                returning *, ${creatureCount(sql, campaignId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
-              return toEncounter(rows[0]!);
-            }),
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const columns = defined({
+                  name: patch.name,
+                  difficulty: patch.difficulty,
+                  tags: patch.tags,
+                  visibility: patch.visibility,
+                });
+                const rows = yield* sql<EncounterRow>`
+                  update encounter set ${setClause(sql, columns)}
+                  where encounter.id = ${id}
+                    and ${rowWritable(sql, "encounter", campaignId, actor)}
+                  returning *, ${creatureCount(sql, campaignId, actor)}
+                `;
+                if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
+                // The setting line lives on the map, the creator's alone; the
+                // encounter row above is what a player may read. Editing it
+                // redraws nothing: a picture is drawn once.
+                if (patch.setting !== undefined) {
+                  yield* sql`
+                    update battle_map set ${setClause(sql, { setting: proseColumn(patch.setting) })}
+                    where battle_map.encounter_id = ${id}
+                      and ${rowWritable(sql, "battle_map", campaignId, actor)}
+                  `;
+                }
+                return toEncounter(rows[0]!);
+              }),
+            ),
           ),
 
+        // Its battle map goes with it (`on delete cascade`), and the map's
+        // picture with the map; that row's trigger queues the picture's files
+        // in `storage_deletion`, which the handler drains after this commits.
+        //
         // Notes attached to this encounter are detached, not deleted — the
         // `on delete set null (encounter_id)` on `note_encounter_fkey` does it.
         // The DM wrote that read-aloud; losing the encounter should not lose it.

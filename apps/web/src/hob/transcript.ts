@@ -90,6 +90,11 @@ export type HobArtifact =
   | (ArtifactBase & {
       readonly kind: "encounter";
       readonly roster: ReadonlyArray<HobRosterLine>;
+      /**
+       * The line the encounter's battle map will be drawn from, when Hob wrote
+       * one. Shown on the card because accepting draws the map from it.
+       */
+      readonly setting?: string;
       /** Absent from anything Hob proposes: no shipped column holds a creature's XP. */
       readonly adjustedXp?: string;
       /** The band, in the DM's words: `"Hard for 4 level-5s"`. */
@@ -140,6 +145,7 @@ export const artifactFrom = (
           cr: `CR ${line.cr}`,
           hp: `${line.hp} hp`,
         })),
+        ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
         // The DMG band, as the DM's own vocabulary — `Difficulty` is
         // capitalised and rendered verbatim everywhere else too.
         ...(proposal.difficulty === null ? {} : { verdict: proposal.difficulty }),

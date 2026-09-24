@@ -179,8 +179,8 @@ provider.
 
 ### Optional: Hob-drawn images
 
-Hob draws each new character's portrait, each new campaign's and Shared World's cover and
-each new cast NPC's portrait once, after it is made, through an OpenAI-shaped image
+Hob draws each new character's portrait, each new campaign's and Shared World's cover,
+each new cast NPC's portrait and each new encounter's battle map once, after it is made, through an OpenAI-shaped image
 endpoint. Images are opt-in: they need an endpoint, a model, a URL-signing secret and
 storage (above), and the server logs `Hob-drawn images are OFF` naming whichever is missing. Each draw costs money on a hosted provider; the daily
 caps, shared by every kind, bound it. The `PORTRAIT_` names govern every kind.

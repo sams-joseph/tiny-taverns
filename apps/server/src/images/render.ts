@@ -9,8 +9,9 @@ import { IMAGE_KINDS, type ImageKind, variantSize, variantsOf } from "./kinds.js
  *
  * The original is kept byte for byte so provider provenance (OpenAI's C2PA
  * credentials) survives and sizes can be re-derived later; a resize would
- * strip it. The variants are what browsers load, each cropped to its exact
- * size with a cover fit anchored where the kind keeps its subject.
+ * strip it. The variants are what browsers load: each cropped to its exact
+ * size with a cover fit anchored where the kind keeps its subject, or, for a
+ * kind whose picture is measured against (`fit: "inside"`), scaled whole.
  */
 
 /** Refuse a decompression bomb: a 1536 × 1024 image is about a million and a half pixels. */
@@ -60,7 +61,7 @@ export const renderImage = (
           bytes: new Uint8Array(
             await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS })
               .resize(variantSize(kind, variant).width, variantSize(kind, variant).height, {
-                fit: "cover",
+                fit: IMAGE_KINDS[kind].fit,
                 position: IMAGE_KINDS[kind].position,
               })
               .webp({ quality: 82 })

@@ -45,6 +45,7 @@ import { Creatures } from "./repo/Creatures.js";
 import { CampaignCreatorActors } from "./repo/CreatorActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
+import { BattleMaps } from "./repo/BattleMaps.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
@@ -361,7 +362,7 @@ export const hobImagesFromConfig: Layer.Layer<
       yield* Effect.logInfo(
         `Hob-drawn images are OFF: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset, ` +
           "so new characters keep their lettered plates, new campaigns and Shared Worlds their " +
-          "plain cards and new NPCs their initials. " +
+          "plain cards, new NPCs their initials and new encounters a blank battle map. " +
           "To turn them on, set them in apps/server/.env.local (see .env.example).",
       );
       return HobImages.layer({ generation: Option.none(), storageOn });
@@ -375,7 +376,8 @@ export const hobImagesFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      "Hob-drawn images are ON (character portraits, campaign and Shared World covers, NPC portraits): " +
+      "Hob-drawn images are ON (character portraits, campaign and Shared World covers, NPC portraits, " +
+        "battle maps): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );
@@ -449,6 +451,7 @@ export const servicesOver = <E>(
   | ClassProgression
   | Combatants
   | Creatures
+  | BattleMaps
   | CampaignCreatorActors
   | EncounterCreatures
   | EncounterRuns
@@ -537,6 +540,10 @@ export const servicesOver = <E>(
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
+    // Every encounter's battle map: creator-only, every method behind the
+    // `CampaignCreatorActor` proof. A read signs the picture's URLs, and only
+    // the handlers hold this repository — no toolkit has a map tool.
+    BattleMaps.layer.pipe(Layer.provide(imageUrls)),
     // The conversation with Hob, as rows. An ordinary campaign-scoped
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.
@@ -737,6 +744,7 @@ export const applicationOver = <E>(
     | ClassProgression
     | Combatants
     | Creatures
+    | BattleMaps
     | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns

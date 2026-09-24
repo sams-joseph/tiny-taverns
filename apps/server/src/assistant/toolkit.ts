@@ -20,6 +20,7 @@ import {
   CreatureId,
   CurrentActor,
   Difficulty,
+  ENCOUNTER_SETTING_MAX,
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
@@ -880,13 +881,20 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "Offer the DM an encounter to save, built from creatures this campaign " +
     "can use — see listCreatures. Find each creature with " +
     "searchCampaign (source 'creature') and use the id from the hit — do not " +
-    "invent one, and do not propose a creature you have not found. Only a " +
-    "suggestion; nothing is saved unless the DM accepts it.",
+    "invent one, and do not propose a creature you have not found. Give a " +
+    "setting when you can: one line on what the place looks like from above, " +
+    "with no creatures in it; the encounter's battle map is drawn from it. " +
+    "Only a suggestion; nothing is saved unless the DM accepts it.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
     /** The DMG band for the whole fight, not a creature's rating. */
     difficulty: optional(Difficulty),
     tags: optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
+    /**
+     * The battle map's setting line, bounded as the form bounds it. The one
+     * thing the map is drawn from, so the card shows it before the DM accepts.
+     */
+    setting: optionalText(ENCOUNTER_SETTING_MAX),
     creatures: Schema.Array(
       Schema.Struct({
         creatureId: CreatureId,
@@ -1743,22 +1751,24 @@ export const dmHandlersFor = (
           "it; say one short line about it and stop.",
       ),
 
-    proposeEncounter: ({ name, difficulty, tags, creatures }) =>
-      Effect.flatMap(roster(creatures), (lines) =>
-        offer(
+    proposeEncounter: ({ name, difficulty, tags, setting, creatures }) =>
+      Effect.flatMap(roster(creatures), (lines) => {
+        const settingLine = blank(setting);
+        return offer(
           {
             target: "encounter",
             name,
             difficulty: difficulty ?? null,
             tags: tags ?? [],
+            ...(settingLine === undefined ? {} : { setting: settingLine }),
             roster: lines,
           },
           `Offered the DM an encounter called "${name}", with ` +
             `${lines.reduce((total, line) => total + line.count, 0)} creatures. They can ` +
             "save it or discard it; say one short line about it and stop — the roster " +
             "is already on their screen.",
-        ),
-      ),
+        );
+      }),
   });
 };
 

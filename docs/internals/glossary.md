@@ -24,6 +24,8 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 ## Play
 
 - **session / night**: one evening of play (`session`). Opening a night is separate from putting a fight on the table. The campaign points at its current session; a finished session can never be current.
+- **encounter**: a reusable template for a fight (`encounter`): name, difficulty band, tags and a roster. Hard-deleted; running it never changes it.
+- **battle map**: an encounter's board (`battle_map`, one per encounter, made with it): a square grid or none, a size in squares, feet per square and where the grid sits on the picture, plus the one picture Hob drew from its **setting** line. The creator's alone. `apps/server/src/repo/BattleMaps.ts`.
 - **run / fight**: one encounter on the table during a session (`encounter_run`). Exactly one live run per session. A fight that outlives its night continues as a second run linked by `continued_from`.
 - **combatant**: a row in a run's initiative order, a snapshot of a character or creature at seed time. Hit points on a player character write through to the character.
 - **doorbell**: the contentless fan-out `{ sessionId }` in `apps/server/src/live/LiveEvents.ts`. Clients re-read through the ordinary API when it rings; they never apply an event payload.

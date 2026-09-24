@@ -28,6 +28,14 @@ const isSaveable = (artifact: HobArtifact) => artifact.kind !== "rules";
 function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "encounter" } }) {
   return (
     <div className="flex flex-col gap-1.5">
+      {/* The battle map is drawn from this line once the DM saves, so they
+          see it before they do. */}
+      {artifact.setting !== undefined && (
+        <p className="flex items-start gap-2 pb-1 text-body-s leading-body text-muted-foreground">
+          <Icon name="map" size={14} className="mt-0.5 shrink-0 text-faint" />
+          <span>{artifact.setting}</span>
+        </p>
+      )}
       {artifact.roster.map((line) => (
         <div
           key={line.name}

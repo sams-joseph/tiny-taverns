@@ -133,6 +133,27 @@ describe("authoring an encounter", () => {
     );
   });
 
+  it("asks what the place looks like, and sends it trimmed for the battle map", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Ambush in the reeds"));
+    await openCreate("New encounter");
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: "Name" }),
+      "Ambush in the reeds",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "What the place looks like" }),
+      "  A boardwalk over black water  ",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create encounter" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        setting: "A boardwalk over black water",
+      }),
+    );
+  });
+
   it("sends shared only when the DM says so", async () => {
     server.routes.set(`POST ${encountersPath}`, created("Open to the table"));
     await openCreate("New encounter");
@@ -190,6 +211,10 @@ describe("authoring an encounter", () => {
 
     expect(await screen.findByRole("textbox", { name: "Name" })).toHaveValue("Ambush in the reeds");
     expect(screen.getByRole("textbox", { name: "Tags" })).toHaveValue("Marsh, Night");
+    // The setting line is the map's, read back through the creator's map read.
+    expect(screen.getByRole("textbox", { name: "What the place looks like" })).toHaveValue(
+      "A boardwalk over black water",
+    );
     // The roster arrives from `encounter_creature`, with the name looked up in
     // the bestiary — a roster line carries an id, not a copy of the creature.
     expect(screen.getByRole("spinbutton", { name: "How many Goblin Boss" })).toHaveValue(6);
@@ -203,6 +228,25 @@ describe("authoring an encounter", () => {
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
         difficulty: null,
+      }),
+    );
+    // An untouched line is not sent.
+    expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("setting");
+  });
+
+  it("clears the setting line with a null when the DM empties it", async () => {
+    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
+    await userEvent.clear(
+      await screen.findByRole("textbox", { name: "What the place looks like" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
+        setting: null,
       }),
     );
   });

@@ -1,10 +1,15 @@
 import {
+  BattleMap,
+  battleMapHasSubject,
+  battleMapPromptFor,
   Campaign,
   campaignImageHasSubject,
   campaignImagePromptFor,
   Character,
   type CurrentActor,
+  type Encounter,
   HOUSE_COVER_STYLE,
+  HOUSE_MAP_STYLE,
   HOUSE_PORTRAIT_STYLE,
   NotFound,
   Npc,
@@ -44,8 +49,8 @@ import { renderImage } from "./render.js";
 /**
  * Hob draws a picture of a thing a person made, once, after it is made — a
  * character's portrait, a campaign's or a Shared World's cover, an NPC's
- * portrait — and this is the server's **one background worker**, the same for
- * every kind (`kinds.ts`).
+ * portrait, an encounter's battle map — and this is the server's **one
+ * background worker**, the same for every kind (`kinds.ts`).
  *
  * ### The trigger
  *
@@ -55,7 +60,8 @@ import { renderImage } from "./render.js";
  * Hob's accept, `drawCampaign` from `POST /campaigns` and
  * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
  * `POST /campaigns/:campaignId/shared-world` (promotion), `drawNpc` from the
- * cast's create and its copy from the Library. It records the one image row the subject
+ * cast's create and its copy from the Library, `drawBattleMap` from
+ * `POST /campaigns/:c/encounters` and Hob's encounter accept. It records the one image row the subject
  * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
  * caps, the nothing-to-draw-from skip and the kind's rule about who may start
  * one) and hands a drawing row to a fiber. The request does not wait: a closed
@@ -107,7 +113,7 @@ export interface ImageGeneration {
 export class HobImages extends Context.Service<
   HobImages,
   {
-    /** Whether a new character, campaign, Shared World or NPC will be drawn. */
+    /** Whether a new character, campaign, Shared World, NPC or battle map will be drawn. */
     readonly generating: boolean;
     /**
      * See the header. Answers the character again, `portraitPending` when a
@@ -125,6 +131,15 @@ export class HobImages extends Context.Service<
      * persona (`npcImagePromptFor`): `imagePending` when a draw started.
      */
     readonly drawNpc: (npc: Npc) => Effect.Effect<Npc, never, CurrentActor>;
+    /**
+     * The same for a new encounter's battle map, drawn from the map's setting
+     * line coloured by the encounter's name and tags (`battleMapPromptFor`),
+     * never its roster: `imagePending` when a draw started.
+     */
+    readonly drawBattleMap: (
+      map: BattleMap,
+      encounter: Pick<Encounter, "name" | "tags">,
+    ) => Effect.Effect<BattleMap, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
       kind: ImageKind,
@@ -355,6 +370,21 @@ export class HobImages extends Context.Service<
                   : undefined,
               ),
               (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
+            ),
+
+          drawBattleMap: (map, encounter) =>
+            Effect.map(
+              start("battleMap", map.id, () => {
+                const subject = {
+                  name: encounter.name,
+                  tags: encounter.tags,
+                  setting: map.setting,
+                };
+                return battleMapHasSubject(subject)
+                  ? battleMapPromptFor(subject, { style: HOUSE_MAP_STYLE })
+                  : undefined;
+              }),
+              (pending) => (pending ? new BattleMap({ ...map, imagePending: true }) : map),
             ),
 
           image: (kind, request) =>

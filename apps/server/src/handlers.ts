@@ -2,6 +2,7 @@ import {
   type Actor,
   type CampaignId,
   CurrentActor,
+  type Encounter,
   Heartbeat,
   type HobAccepted,
   type LiveEvent,
@@ -32,6 +33,7 @@ import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
 import { Options } from "./repo/Options.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "./repo/CreatorActor.js";
+import { BattleMaps } from "./repo/BattleMaps.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
 import { Encounters } from "./repo/Encounters.js";
@@ -96,6 +98,32 @@ const asDmOf = Effect.map(
       read: (dm: CampaignCreatorActor) => Effect.Effect<A, E, R>,
     ): Effect.Effect<A, E | NotFound, R | CurrentActor> =>
       Effect.flatMap(dmActors.of(campaignId), read),
+);
+
+/**
+ * Start a new encounter's battle map, after the encounter's create committed —
+ * what every way of making an encounter does (the form's create here, Hob's
+ * accept in `HobLive`), as a character's handlers call `drawCharacter`.
+ *
+ * The map was inserted with the encounter; the creator proof finds it, and
+ * `drawBattleMap` records the one picture it will ever have. Answers the
+ * encounter unchanged — `Encounter` carries no map, because a player may read
+ * a shared encounter — and never fails: a picture is not worth failing a
+ * create for.
+ */
+const drawEncounterMapOf = Effect.map(
+  Effect.all({ creators: CampaignCreatorActors, maps: BattleMaps, images: HobImages }),
+  ({ creators, maps, images }) =>
+    (encounter: Encounter): Effect.Effect<Encounter, never, CurrentActor> =>
+      // With images off there is nothing to start, so nothing to read.
+      images.generating
+        ? creators.of(encounter.campaignId).pipe(
+            Effect.flatMap((creator) => maps.forEncounter(creator, encounter.id)),
+            Effect.flatMap((map) => images.drawBattleMap(map, encounter)),
+            Effect.catchTag("NotFound", () => Effect.void),
+            Effect.as(encounter),
+          )
+        : Effect.succeed(encounter),
 );
 
 const HealthLive = HttpApiBuilder.group(
@@ -354,6 +382,9 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("npc", ({ params, query }) =>
         images.image("npc", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("battleMap", ({ params, query }) =>
+        images.image("battleMap", { ...params, e: query.e, s: query.s }),
       );
   }),
 );
@@ -463,16 +494,51 @@ const EncountersLive = HttpApiBuilder.group(
   "encounters",
   Effect.fnUntraced(function* (handlers) {
     const encounters = yield* Encounters;
+    const drawMap = yield* drawEncounterMapOf;
+    const images = yield* HobImages;
+    return (
+      handlers
+        .handle("list", ({ params, query }) => encounters.list(params.campaignId, query))
+        // The battle map is started after the create commits; Hob's accept is
+        // the other way an encounter is made, and does the same.
+        .handle("create", ({ params, payload }) =>
+          encounters.create(params.campaignId, payload).pipe(Effect.flatMap(drawMap)),
+        )
+        .handle("findById", ({ params }) =>
+          encounters.findById(params.campaignId, params.encounterId),
+        )
+        .handle("update", ({ params, payload }) =>
+          encounters.update(params.campaignId, params.encounterId, payload),
+        )
+        // The map's picture went with the encounter, and its row's trigger
+        // queued the files; this drains them now rather than at the next sweep.
+        .handle("remove", ({ params }) =>
+          encounters
+            .remove(params.campaignId, params.encounterId)
+            .pipe(Effect.tap(() => images.drainSoon)),
+        )
+    );
+  }),
+);
+
+/**
+ * An encounter's battle map: the creator's alone. The proof is minted from
+ * the path's campaign, so a player, a Shared World member or a stranger is the
+ * ordinary `NotFound` before any map row is read.
+ */
+const BattleMapsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "battleMaps",
+  Effect.fnUntraced(function* (handlers) {
+    const maps = yield* BattleMaps;
+    const asDm = yield* asDmOf;
     return handlers
-      .handle("list", ({ params, query }) => encounters.list(params.campaignId, query))
-      .handle("create", ({ params, payload }) => encounters.create(params.campaignId, payload))
-      .handle("findById", ({ params }) =>
-        encounters.findById(params.campaignId, params.encounterId),
+      .handle("find", ({ params }) =>
+        asDm(params.campaignId, (creator) => maps.forEncounter(creator, params.encounterId)),
       )
       .handle("update", ({ params, payload }) =>
-        encounters.update(params.campaignId, params.encounterId, payload),
-      )
-      .handle("remove", ({ params }) => encounters.remove(params.campaignId, params.encounterId));
+        asDm(params.campaignId, (creator) => maps.update(creator, params.encounterId, payload)),
+      );
   }),
 );
 
@@ -845,6 +911,7 @@ const HobLive = HttpApiBuilder.group(
     const proposals = yield* Proposals;
     const dmActors = yield* CampaignCreatorActors;
     const images = yield* HobImages;
+    const drawMap = yield* drawEncounterMapOf;
 
     /**
      * Whose conversations a *listing* reaches — **one read, and the same
@@ -891,19 +958,25 @@ const HobLive = HttpApiBuilder.group(
         )
         // A kept character draft is the second composer of a character, so it
         // starts the portrait exactly as the form's create does, after the
-        // accept's transaction has committed.
+        // accept's transaction has committed; an accepted encounter is the
+        // second composer of an encounter, and starts its battle map the same way.
         .handle("accept", ({ params }) =>
           Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
             proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
           ).pipe(
-            Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> =>
-              accepted.accepted === "character"
-                ? Effect.map(images.drawCharacter(accepted.character), (character) => ({
+            Effect.flatMap((accepted): Effect.Effect<HobAccepted, never, CurrentActor> => {
+              switch (accepted.accepted) {
+                case "character":
+                  return Effect.map(images.drawCharacter(accepted.character), (character) => ({
                     ...accepted,
                     character,
-                  }))
-                : Effect.succeed(accepted),
-            ),
+                  }));
+                case "encounter":
+                  return Effect.as(drawMap(accepted.encounter), accepted);
+                default:
+                  return Effect.succeed(accepted);
+              }
+            }),
           ),
         )
     );
@@ -1436,6 +1509,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     PartyLive,
     NotesLive,
     EncountersLive,
+    BattleMapsLive,
     CreaturesLive,
     CharacterOptionsLive,
     LibraryLive,

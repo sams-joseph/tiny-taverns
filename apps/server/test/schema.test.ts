@@ -34,6 +34,12 @@ afterAll(() => runtime.dispose());
 const NOT_CONTENT = [
   "ability_score",
   "account",
+  // An encounter's battle map: part of its encounter, the creator's alone
+  // through the creator proof, and its provenance is the encounter's. See
+  // 0057_battle_maps.ts.
+  "battle_map",
+  // A battle map's picture: who may see it is exactly who may read the map.
+  "battle_map_image",
   // A campaign's cover: who may see it is exactly who may read the campaign,
   // through the campaign's own reads — `character_portrait`'s reason, one
   // subject over. See 0049_campaign_images.ts.

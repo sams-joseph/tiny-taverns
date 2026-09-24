@@ -8,13 +8,14 @@ import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./vi
 
 /**
  * Every statement about Hob-drawn images' records — one table per kind
- * (`character_portrait`, `campaign_image`, `shared_world_image`, `npc_image`;
+ * (`character_portrait`, `campaign_image`, `shared_world_image`, `npc_image`,
+ * `battle_map_image`;
  * `images/kinds.ts`) — and the `storage_deletion` outbox they share. The
  * worker that draws and stores is `images/HobImages.ts`; this file is only rows.
  *
  * **Who may read an image is not decided here.** The wire carries an image only
  * as a field of its subject — a `Character` (and the rows that point at one), a
- * `Campaign`, a `SharedWorld` or an `Npc` — minted by that subject's own reads
+ * `Campaign`, a `SharedWorld`, an `Npc` or a `BattleMap` — minted by that subject's own reads
  * for an id a visibility predicate already returned. The one read below that takes no actor,
  * {@link ImageRecords} `readyPrefix`, runs only after the image route has
  * checked a signature that such a read minted.
@@ -24,8 +25,8 @@ import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./vi
  * the draw is billed to. A character is its owner's; a campaign is its
  * creator's, through `campaignWritable`, so a player's request draws nothing;
  * a Shared World is its owner's, through `groupWritable`, so a member's draws
- * nothing either; a campaign NPC is its campaign's creator's, the same way a
- * campaign is.
+ * nothing either; a campaign NPC and an encounter's battle map are their
+ * campaign's creator's, the same way a campaign is.
  */
 
 export type ImageFailure =
@@ -83,8 +84,8 @@ export const imageObjectKey = (prefix: StorageKey, file: string): StorageKey =>
  * billed to — or no row. **A kind with no entry here does not compile**, which
  * is the point: whose picture it is must be decided before it can be drawn.
  *
- * A kind whose row is also keyed by its subject's campaign (`npc_image`)
- * answers `campaign_id` as well, and the insert writes it.
+ * A kind whose row is also keyed by its subject's campaign (`npc_image`,
+ * `battle_map_image`) answers `campaign_id` as well, and the insert writes it.
  */
 const OWNED_SUBJECT: {
   readonly [K in ImageKind]: (
@@ -128,6 +129,16 @@ const OWNED_SUBJECT: {
       and npc.campaign_id is not null
       and ${campaignWritable(sql, actor, rowCampaign(sql, "npc"))}
     for update of npc
+  `,
+  // An encounter's battle map, through its campaign's `campaignWritable`: only
+  // the creator starts its picture, and it is billed to them.
+  battleMap: (sql, subjectId, actor) => sql`
+    select battle_map.id as subject_id, battle_map.campaign_id,
+      ${actor.accountId}::uuid as account_id
+    from battle_map
+    where battle_map.id = ${subjectId}
+      and ${campaignWritable(sql, actor, rowCampaign(sql, "battle_map"))}
+    for update of battle_map
   `,
 };
 

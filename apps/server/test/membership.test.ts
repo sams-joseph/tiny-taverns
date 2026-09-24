@@ -941,6 +941,11 @@ describe("a stranger reads nothing", () => {
             and table_name not in (
               'ability_score',
               'account',
+              -- An encounter's map and its picture are read only through the
+              -- creator's map reads, behind the creator proof; a stranger's
+              -- refusal there is covered in battle-maps.test.ts.
+              'battle_map',
+              'battle_map_image',
               -- A cover is read only as a field of the campaign, through the
               -- campaign's own shipped reads; it has no read of its own.
               'campaign_image',

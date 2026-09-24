@@ -139,6 +139,8 @@ describe("migrations", () => {
       "account",
       "assistant_thread",
       "assistant_turn",
+      "battle_map",
+      "battle_map_image",
       "beat",
       "campaign",
       "campaign_character",
@@ -286,6 +288,7 @@ describe("migrations", () => {
       { migration_id: 54, name: "account_threads" },
       { migration_id: 55, name: "image_spend" },
       { migration_id: 56, name: "character_draft_provenance" },
+      { migration_id: 57, name: "battle_maps" },
     ]);
   }, 60_000);
 
@@ -351,6 +354,7 @@ describe("migrations", () => {
       { migration_id: 54, name: "account_threads" },
       { migration_id: 55, name: "image_spend" },
       { migration_id: 56, name: "character_draft_provenance" },
+      { migration_id: 57, name: "battle_maps" },
     ]);
   }, 60_000);
 });

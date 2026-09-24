@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { EncounterSetting } from "./BattleMap.js";
 import { CampaignId, EncounterId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -66,11 +67,19 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
 
 const tags = Schema.Array(Tag).check(Schema.isLengthBetween(0, 16));
 
+/**
+ * `setting` is the one line the encounter's battle map is drawn from
+ * (`BattleMap.ts`). It is written here, on the encounter's form, because the
+ * map is made with the encounter and drawn once as it is made; but it is stored
+ * on the map and read back only through the creator's map read, never on
+ * `Encounter`, which a player may read when it is shared.
+ */
 export const EncounterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
   difficulty: Schema.optional(Difficulty),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
+  setting: Schema.optional(Schema.NullOr(EncounterSetting)),
 });
 export type EncounterCreate = typeof EncounterCreate.Type;
 
@@ -79,5 +88,7 @@ export const EncounterUpdate = Schema.Struct({
   difficulty: Schema.optional(Schema.NullOr(Difficulty)),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
+  /** The map's setting line; `null` or a blank clears it. Editing it redraws nothing. */
+  setting: Schema.optional(Schema.NullOr(EncounterSetting)),
 });
 export type EncounterUpdate = typeof EncounterUpdate.Type;

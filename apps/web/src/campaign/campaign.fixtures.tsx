@@ -166,6 +166,25 @@ export const encounter = {
   ...stamps,
 };
 
+/**
+ * The encounter's battle map, as its creator reads it: a blank board with the
+ * setting line the edit form opens on. The picture is the next PR's to show.
+ */
+export const battleMap = {
+  id: "2b1f2a1e-0000-4000-8000-000000000611",
+  encounterId,
+  campaignId,
+  setting: "A boardwalk over black water",
+  grid: "square",
+  columns: 24,
+  rows: 16,
+  feetPerCell: 5,
+  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
+  image: null,
+  imagePending: false,
+  ...stamps,
+};
+
 export const sketch = {
   ...encounter,
   id: sketchId,
@@ -1428,6 +1447,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/creatures`,
       { status: 200, body: [rosterRow] },
+    ],
+    [
+      `GET /campaigns/${campaignId}/encounters/${encounterId}/map`,
+      { status: 200, body: battleMap },
     ],
     // The nights this table has had — read by both doors into a session, and
     // only ever to work out the next number. Session 12 is the highest, so the

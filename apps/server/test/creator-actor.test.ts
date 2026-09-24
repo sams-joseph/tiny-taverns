@@ -463,7 +463,10 @@ describe("the scope, counted", () => {
     // connecting one to an owned Shared World adds the eighty-fourth, and
     // disconnecting it again is the eighty-fifth. Moving directly between two
     // Shared Worlds adds the eighty-sixth.
-    expect(gated).toBe(86);
+    // Eighty-seven and eighty-eight are `BattleMaps.forEncounter` and
+    // `update`: an encounter's map is the creator's alone, gated from the day
+    // it was declared, before any player projection of a map exists.
+    expect(gated).toBe(88);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
