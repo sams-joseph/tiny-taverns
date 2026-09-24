@@ -31,7 +31,16 @@ import { apiUrl } from "../api/client";
  * - **A picture that will not load** — an expired signature, a lost file —
  *   falls back to the grid alone, the same collapse `HobCover` makes.
  */
-export function BattleMapBoard({ map }: { readonly map: BattleMap }) {
+/**
+ * What the board draws from: a saved map, or one whose grid is being adjusted
+ * (`AdjustGrid.tsx`) and not yet saved.
+ */
+export type BattleMapView = Pick<
+  BattleMap,
+  "image" | "setting" | "grid" | "columns" | "rows" | "feetPerCell" | "alignment" | "imagePending"
+>;
+
+export function BattleMapBoard({ map }: { readonly map: BattleMapView }) {
   const image = map.image;
   const src = image === null ? undefined : apiUrl(image.fullUrl);
   const [brokenSrc, setBrokenSrc] = useState<string>();
@@ -112,7 +121,7 @@ export function BattleMapBoard({ map }: { readonly map: BattleMap }) {
 }
 
 /** "24 × 16 squares · 5 ft each · 120 × 80 ft" — the board's size in the DM's units. */
-export const describeBoard = (map: BattleMap): string =>
+export const describeBoard = (map: BattleMapView): string =>
   [
     `${String(map.columns)} × ${String(map.rows)} squares`,
     `${String(map.feetPerCell)} ft each`,

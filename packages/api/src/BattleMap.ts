@@ -225,7 +225,7 @@ export const battleMapPromptFor = (
  * ## The board's geometry — one implementation, pure
  *
  * Where the squares fall on the picture, for every reader of a map: the
- * encounter page's overlay today, the grid adjustment and the play feature's
+ * encounter page's overlay and its grid adjustment today, the play feature's
  * tokens after it. Everything here is in the **original picture's pixels**
  * (see `BattleMap` above); a screen maps them onto what it draws by one factor
  * ({@link pictureScale}), or lets an SVG `viewBox` of the {@link battleMapPlane}

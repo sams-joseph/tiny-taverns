@@ -6,6 +6,7 @@ import { useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { DetailFacts } from "../ui/detail";
+import { useGridAdjustment } from "./AdjustGrid";
 import { BattleMapBoard, describeBoard } from "./BattleMapBoard";
 import { CampaignChrome } from "./CampaignChrome";
 import { DifficultyBadge, describeRoster } from "./EncounterCard";
@@ -24,8 +25,8 @@ import { NoteDialog } from "./NoteDialog";
  * it (the name, the roster and the setting line the map was drawn from), the
  * campaign's `run` puts it on the table, `NoteCard` shows what is attached.
  * There is no redraw: a picture is drawn once, as the encounter is made. The
- * grid is shown where the map says it sits; lining it up is a control of its
- * own that this page does not have yet.
+ * grid is shown where the map says it sits, and *Adjust grid* lines it up in
+ * place under the board (`AdjustGrid.tsx`).
  *
  * **Run is the page's one primary**, and the campaign row's own press stands
  * down on this route (`CampaignRow` in `shell/AppShell.tsx`): both are
@@ -137,6 +138,7 @@ function EncounterBody({
   readonly onEditNote: (note: Note) => void;
 }) {
   const { map, roster } = page;
+  const grid = useGridAdjustment({ campaignId: encounter.campaignId, map });
   const invalidate = useInvalidate();
   // The page opens straight after the encounter is made, while Hob may still be
   // drawing its map. Re-read the map alone until the picture lands or fails.
@@ -153,14 +155,22 @@ function EncounterBody({
           id="encounter-map"
           size="subtitle"
           action={
-            <span className="text-body-s leading-body text-muted-foreground">
-              {describeBoard(map)}
+            <span className="flex flex-wrap items-center gap-3">
+              <span className="text-body-s leading-body text-muted-foreground">
+                {describeBoard(grid.shown)}
+              </span>
+              {!grid.adjusting && (
+                <Button variant="outline" size="sm" onClick={grid.open}>
+                  Adjust grid
+                </Button>
+              )}
             </span>
           }
         >
           Battle map
         </SectionHeading>
-        <BattleMapBoard map={map} />
+        <BattleMapBoard map={grid.shown} />
+        {grid.panel}
         {map.setting !== null && (
           <p className="max-w-measure text-body-s leading-body text-muted-foreground">
             <span className="text-heading">What the place looks like:</span> {map.setting}
