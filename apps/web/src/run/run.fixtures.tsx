@@ -98,6 +98,22 @@ export const directUpdate = {
   createdAt: "2026-08-04T19:05:00.000Z",
 };
 
+/**
+ * The fight's own board, as `runs.board` answers the DM: the encounter's map
+ * as it stood when the fight began, with no picture.
+ */
+export const runBoard = {
+  mapId: "2b1f2a1e-0000-4000-8000-000000000611",
+  setting: "A boardwalk over black water",
+  grid: "square",
+  columns: 24,
+  rows: 16,
+  feetPerCell: 5,
+  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
+  image: null,
+  imagePending: false,
+};
+
 /** Everything a fight on the table answers, before a test re-aims it. */
 export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -122,6 +138,7 @@ export const liveFight = (): Map<string, Answer> =>
       },
     ],
     [`GET ${runBase}/hob-direct-updates`, { status: 200, body: [] }],
+    [`GET ${runBase}/board`, { status: 200, body: runBoard }],
     // Damage is a delta, so the answer a test wants back depends on the test.
     // The default takes five off the goblin, matching the prototype's button.
     [

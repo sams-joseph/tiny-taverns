@@ -4,8 +4,8 @@ import { useState } from "react";
 import { apiUrl } from "../api/client";
 
 /**
- * An encounter's board: the picture Hob drew of the place with the grid laid
- * over it, or the grid alone.
+ * A board — an encounter's, or a fight's own: the picture Hob drew of the
+ * place with the grid laid over it, or the grid alone.
  *
  * ### One plane, in the original's pixels
  *
@@ -32,8 +32,9 @@ import { apiUrl } from "../api/client";
  *   falls back to the grid alone, the same collapse `HobCover` makes.
  */
 /**
- * What the board draws from: a saved map, or one whose grid is being adjusted
- * (`AdjustGrid.tsx`) and not yet saved.
+ * What the board draws from: a saved map, one whose grid is being adjusted
+ * (`AdjustGrid.tsx`) and not yet saved, or a fight's own board
+ * (`EncounterRunBoard`, the runner's map band).
  */
 export type BattleMapView = Pick<
   BattleMap,

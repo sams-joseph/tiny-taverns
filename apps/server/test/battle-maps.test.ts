@@ -7,10 +7,12 @@ import {
   type Encounter,
   type EncounterCreate,
   type EncounterId,
+  type EncounterRunId,
   type HobEvent,
+  type SessionId,
   TavernsApi,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime, Option, Redacted, Stream } from "effect";
+import { DateTime, Effect, Layer, ManagedRuntime, Option, Redacted, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
@@ -678,5 +680,270 @@ describe("the map is the creator's alone", () => {
     const text = JSON.stringify(read);
     expect(text).not.toContain("battle-map-images");
     expect(text).not.toContain("SETTING-A-SECRET-DOOR");
+  });
+});
+
+/**
+ * **A fight keeps its board** (`0058_encounter_run_boards.ts`): `start` copies
+ * the encounter's grid onto the run, `resume` copies the predecessor's, and the
+ * picture is read through the map. The runner reads it; no player path does.
+ */
+describe("a fight keeps its board", () => {
+  let kit: Person;
+  let own: CampaignId;
+  let pier: Encounter;
+  let map: BattleMap;
+  let sessionNumber = 0;
+
+  const night = async () => {
+    sessionNumber += 1;
+    return as(kit.token, (client) =>
+      client.sessions.create({
+        params: { campaignId: own },
+        payload: { number: sessionNumber, visibility: "shared" },
+      }),
+    );
+  };
+
+  const startOn = (sessionId: SessionId, encounterId: EncounterId) =>
+    as(kit.token, (client) =>
+      client.runs.start({
+        params: { campaignId: own, sessionId },
+        payload: { encounterId, visibility: "shared" },
+      }),
+    );
+
+  const boardOf = (sessionId: SessionId, runId: EncounterRunId) =>
+    as(kit.token, (client) => client.runs.board({ params: { campaignId: own, sessionId, runId } }));
+
+  const regrid = (encounterId: EncounterId) =>
+    as(kit.token, (client) =>
+      client.battleMaps.update({
+        params: { campaignId: own, encounterId },
+        payload: { columns: 12, rows: 8, alignment: { cellPx: 128, offsetXPx: 3, offsetYPx: 4 } },
+      }),
+    );
+
+  beforeAll(async () => {
+    kit = await person("Kit");
+    own = await campaignOf(kit, "Kit's Table");
+    await as(kit.token, (client) =>
+      client.campaigns.update({ params: { campaignId: own }, payload: { visibility: "shared" } }),
+    );
+    pier = await encounterAt(kit, own, {
+      name: "On the pier",
+      setting: "SETTING-A-ROTTEN-PIER over a grey harbour",
+      visibility: "shared",
+    });
+    await settled();
+    map = await mapOf(kit, own, pier.id);
+    expect(map.image).not.toBeNull();
+  }, 60_000);
+
+  it("copies the encounter's grid and names its map when the fight starts", async () => {
+    const session = await night();
+    const fight = await startOn(session.id, pier.id);
+    const board = await boardOf(session.id, fight.id);
+    expect(board).toMatchObject({
+      mapId: map.id,
+      setting: map.setting,
+      grid: map.grid,
+      columns: map.columns,
+      rows: map.rows,
+      feetPerCell: map.feetPerCell,
+      alignment: map.alignment,
+      imagePending: false,
+    });
+    expect(board?.image).toEqual(map.image);
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: session.id, runId: fight.id },
+        payload: {},
+      }),
+    );
+  });
+
+  it("keeps its grid when the encounter's grid changes mid-fight; the next fight takes the new one", async () => {
+    const encounter = await encounterAt(kit, own, { name: "The loft" });
+    await settled();
+    const before = await mapOf(kit, own, encounter.id);
+    const session = await night();
+    const fight = await startOn(session.id, encounter.id);
+
+    const edited = await regrid(encounter.id);
+    expect(edited.columns).toBe(12);
+
+    const board = await boardOf(session.id, fight.id);
+    expect([board?.columns, board?.rows, board?.alignment]).toEqual([
+      before.columns,
+      before.rows,
+      before.alignment,
+    ]);
+    expect(board?.mapId).toBe(before.id);
+
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: session.id, runId: fight.id },
+        payload: {},
+      }),
+    );
+    const next = await startOn(session.id, encounter.id);
+    const nextBoard = await boardOf(session.id, next.id);
+    expect([nextBoard?.columns, nextBoard?.rows, nextBoard?.alignment]).toEqual([
+      12,
+      8,
+      { cellPx: 128, offsetXPx: 3, offsetYPx: 4 },
+    ]);
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: session.id, runId: next.id },
+        payload: {},
+      }),
+    );
+  });
+
+  it("carries the predecessor's board to a resumed fight, not the map as it stands", async () => {
+    const encounter = await encounterAt(kit, own, { name: "The long night" });
+    await settled();
+    const first = await night();
+    const fight = await startOn(first.id, encounter.id);
+    const played = await boardOf(first.id, fight.id);
+    await as(kit.token, (client) =>
+      client.sessions.update({
+        params: { campaignId: own, sessionId: first.id },
+        payload: { endedAt: DateTime.nowUnsafe() },
+      }),
+    );
+    await regrid(encounter.id);
+
+    const second = await night();
+    const resumed = await as(kit.token, (client) =>
+      client.runs.resume({
+        params: { campaignId: own, sessionId: second.id },
+        payload: { continuedFrom: fight.id },
+      }),
+    );
+    expect(resumed.continuedFrom).toBe(fight.id);
+    expect(await boardOf(second.id, resumed.id)).toEqual(played);
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: second.id, runId: resumed.id },
+        payload: {},
+      }),
+    );
+  });
+
+  it("shows the picture Hob finishes after the fight began", async () => {
+    const encounter = await encounterAt(kit, own, {
+      name: "Quick start",
+      setting: "A lamplit alley between warehouses",
+    });
+    const session = await night();
+    // Started before the draw is waited for; whether it had landed by then is
+    // the worker's race, and either way the board ends with the picture.
+    const fight = await startOn(session.id, encounter.id);
+    await settled();
+    const board = await boardOf(session.id, fight.id);
+    const drawn = await mapOf(kit, own, encounter.id);
+    expect(drawn.image).not.toBeNull();
+    expect(board?.image).toEqual(drawn.image);
+    expect(board?.imagePending).toBe(false);
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: session.id, runId: fight.id },
+        payload: {},
+      }),
+    );
+  });
+
+  it("survives its encounter's delete: the grid stays, the map and picture go, the runner still runs", async () => {
+    const doomed = await encounterAt(kit, own, {
+      name: "Doomed",
+      setting: "A collapsing rope bridge",
+    });
+    await settled();
+    const session = await night();
+    const fight = await startOn(session.id, doomed.id);
+    const played = await boardOf(session.id, fight.id);
+    expect(played?.image).not.toBeNull();
+
+    await as(kit.token, (client) =>
+      client.encounters.remove({ params: { campaignId: own, encounterId: doomed.id } }),
+    );
+
+    const params = { campaignId: own, sessionId: session.id, runId: fight.id };
+    const board = await boardOf(session.id, fight.id);
+    expect(board).toMatchObject({
+      mapId: null,
+      setting: null,
+      image: null,
+      imagePending: false,
+      grid: played?.grid,
+      columns: played?.columns,
+      rows: played?.rows,
+      alignment: played?.alignment,
+    });
+    const stillOn = await as(kit.token, (client) => client.runs.findById({ params }));
+    expect(stillOn.encounterId).toBeNull();
+    expect(stillOn.endedAt).toBeNull();
+    await as(kit.token, (client) => client.combatants.list({ params }));
+    await as(kit.token, (client) =>
+      client.runs.nextTurn({ params, payload: { requestId: crypto.randomUUID() } }),
+    );
+    await as(kit.token, (client) => client.runs.end({ params, payload: {} }));
+  });
+
+  it("answers null for a fight with no board", async () => {
+    const encounter = await encounterAt(kit, own, { name: "Boardless" });
+    const session = await night();
+    const fight = await startOn(session.id, encounter.id);
+    await sql((sql) => sql`delete from encounter_run_board where run_id = ${fight.id}`);
+    expect(await boardOf(session.id, fight.id)).toBeNull();
+    await as(kit.token, (client) =>
+      client.runs.end({
+        params: { campaignId: own, sessionId: session.id, runId: fight.id },
+        payload: {},
+      }),
+    );
+  });
+
+  it("is the creator's alone: a player and a stranger get NotFound, and the player's table carries no board", async () => {
+    const player = await person("Pip");
+    await run(admittedTo(own, player.actor, "Pip"));
+    await run(aCharacterAt(own, player.actor, { name: "Pip's Rogue" }));
+    const session = await night();
+    await as(kit.token, (client) =>
+      client.campaigns.update({
+        params: { campaignId: own },
+        payload: { currentSessionId: session.id },
+      }),
+    );
+    const fight = await startOn(session.id, pier.id);
+    const params = { campaignId: own, sessionId: session.id, runId: fight.id };
+    for (const who of [player, stranger]) {
+      expect(await attempt(who.token, (client) => client.runs.board({ params }))).toEqual({
+        ok: false,
+        tag: "NotFound",
+      });
+    }
+    // Another creator's run id under this table's path is not this table's board.
+    expect(
+      await attempt(jo.token, (client) =>
+        client.runs.board({ params: { ...params, campaignId: table } }),
+      ),
+    ).toEqual({ ok: false, tag: "NotFound" });
+
+    const read = await as(player.token, (client) =>
+      client.table.read({ params: { campaignId: own } }),
+    );
+    expect(read?.fight?.id).toBe(fight.id);
+    // The player's table is exactly what it was before fights kept boards.
+    expect(Object.keys(read!.fight!).sort()).toEqual(
+      ["encounterId", "id", "order", "round", "seats", "upNext"].sort(),
+    );
+    const text = JSON.stringify(read);
+    expect(text).not.toContain("battle-map-images");
+    expect(text).not.toContain("SETTING-A-ROTTEN-PIER");
+    expect(text).not.toContain(map.id);
   });
 });

@@ -37,6 +37,7 @@ import {
   nestedRowReadable,
   nestedRowWritable,
   rowReadable,
+  rowWritable,
 } from "./visibility.js";
 
 export interface EncounterRunRow extends ProvenanceColumns {
@@ -326,7 +327,7 @@ export class EncounterRuns extends Context.Service<
          *
          * One transaction, because a half-seeded fight is worse than none: a
          * run with the party in it and no goblins looks like a fight that has
-         * begun, and the DM would have to notice. Six statements commit or none
+         * begun, and the DM would have to notice. Seven statements commit or none
          * do.
          */
         start: ({ actor, campaign: campaignId }, sessionId, payload) =>
@@ -368,6 +369,25 @@ export class EncounterRuns extends Context.Service<
                       returning *
                     `;
                     const run = runs[0]!;
+
+                    // The fight's board: a copy of the encounter's grid, so a
+                    // later edit to the encounter's map is the next fight's and
+                    // never this one's (`0058_encounter_run_boards.ts`). The map
+                    // is read through the creator's predicate, beneath the
+                    // proof, and every encounter has one — `insert … select`
+                    // simply copies none if it somehow does not.
+                    yield* sql`
+                      insert into encounter_run_board (
+                        run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
+                        cell_px, offset_x_px, offset_y_px
+                      )
+                      select ${run.id}, battle_map.id, battle_map.grid, battle_map.board_columns,
+                             battle_map.board_rows, battle_map.feet_per_cell, battle_map.cell_px,
+                             battle_map.offset_x_px, battle_map.offset_y_px
+                      from battle_map
+                      where battle_map.encounter_id = ${encounter.id}
+                        and ${rowWritable(sql, "battle_map", campaignId, actor)}
+                    `;
 
                     // Seed the party. `data.js:15,17,20` — the PCs are in
                     // initiative alongside the monsters, and a fight without
@@ -576,6 +596,21 @@ export class EncounterRuns extends Context.Service<
                       returning *
                     `;
                     const run = runs[0]!;
+
+                    // The same fight on the same board: the predecessor's own
+                    // copy, not the encounter's map as it stands tonight. The
+                    // predecessor was proved this campaign's above, and its
+                    // board is what it was played on.
+                    yield* sql`
+                      insert into encounter_run_board (
+                        run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
+                        cell_px, offset_x_px, offset_y_px
+                      )
+                      select ${run.id}, map_id, grid, board_columns, board_rows, feet_per_cell,
+                             cell_px, offset_x_px, offset_y_px
+                      from encounter_run_board
+                      where encounter_run_board.run_id = ${from.id}
+                    `;
 
                     // The writable predicate, not the readable one, for the
                     // reason `advance` uses it: what carries across must not

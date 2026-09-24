@@ -67,6 +67,10 @@ const NOT_CONTENT = [
   "creature_spell",
   "damage_type",
   "effect_sql_migrations",
+  // A fight's board: its run's copy of the grid and a pointer to its map, the
+  // creator's alone through the creator proof like the map it came from. See
+  // 0058_encounter_run_boards.ts.
+  "encounter_run_board",
   "equipment_category",
   "equipment_content",
   "equipment_property",

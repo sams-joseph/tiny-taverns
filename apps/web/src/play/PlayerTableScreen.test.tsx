@@ -177,6 +177,19 @@ describe("PlayerTableScreen", () => {
     expect(screen.queryByText(/AC 17|17 AC/i)).toBeNull();
   });
 
+  it("shows a player no map and asks for no board: the fight's board is the DM's", async () => {
+    server.routes.set(...playing(campaignId, {}));
+    await renderTable();
+    await screen.findByText("Initiative");
+    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Map/ })).toBeNull();
+    expect(
+      server.calls.some(
+        (call) => call.pathname.endsWith("/board") || call.pathname.endsWith("/map"),
+      ),
+    ).toBe(false);
+  });
+
   it("lays an ally's portrait on its row, and draws none where there is none", async () => {
     server.routes.set(
       ...playing(campaignId, {
@@ -222,7 +235,7 @@ describe("PlayerTableScreen", () => {
 
   it("persists a browser-submitted roll and shows only this character's log", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.5);
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     server.routes.set(`POST /campaigns/${campaignId}/rolls`, {
       status: 200,
       body: { ...roll, dice: [11], kept: [11], total: 18, requestId: "sent-from-browser" },
@@ -250,7 +263,7 @@ describe("PlayerTableScreen", () => {
   });
 
   it("re-reads the narrow table when a contentless stream tick arrives", async () => {
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     server.routes.set(tableEventsPath, {
       status: 200,
       sse: 'id: 9\nevent: tick\ndata: {"tick":"session"}\n\n',
@@ -267,7 +280,7 @@ describe("PlayerTableScreen", () => {
   });
 
   it("refreshes the shared NPC transcript when another participant speaks", async () => {
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
       status: 200,
       body: [sharedNpc],
@@ -308,7 +321,7 @@ describe("PlayerTableScreen", () => {
   });
 
   it("does not disclose session NPC proposal review controls to players", async () => {
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
       status: 200,
       body: [sharedNpc],
@@ -347,7 +360,7 @@ describe("PlayerTableScreen", () => {
   });
 
   it("renders session NPC rate-limit messages with retry timing", async () => {
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
       status: 200,
       body: [sharedNpc],
@@ -383,7 +396,7 @@ describe("PlayerTableScreen", () => {
   });
 
   it("sends the sheet action to the new table route", async () => {
-    server.routes.set(...playing(campaignId));
+    server.routes.set(...playing(campaignId, {}));
     await renderSheet(brannocId);
 
     const action = await screen.findByRole("button", { name: /Go to the table/ });

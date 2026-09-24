@@ -22,6 +22,7 @@ import beats from "../src/migrations/0008_beats.js";
 import searchIndex from "../src/migrations/0009_search_index.js";
 import assistantConversation from "../src/migrations/0010_assistant_conversation.js";
 import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
+import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -59,6 +60,10 @@ afterAll(() => sourceRuntime.dispose());
 /** A tenth, for the keys a campaign's move depends on, as they were before it could move. */
 const moveKeysRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_move_keys"));
 afterAll(() => moveKeysRuntime.dispose());
+
+/** An eleventh, for fights on file before a fight kept its board. */
+const boardsRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_boards"));
+afterAll(() => boardsRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -172,6 +177,7 @@ describe("migrations", () => {
       "encounter",
       "encounter_creature",
       "encounter_run",
+      "encounter_run_board",
       "equipment",
       "equipment_category",
       "equipment_content",
@@ -289,6 +295,7 @@ describe("migrations", () => {
       { migration_id: 55, name: "image_spend" },
       { migration_id: 56, name: "character_draft_provenance" },
       { migration_id: 57, name: "battle_maps" },
+      { migration_id: 58, name: "encounter_run_boards" },
     ]);
   }, 60_000);
 
@@ -355,6 +362,7 @@ describe("migrations", () => {
       { migration_id: 55, name: "image_spend" },
       { migration_id: 56, name: "character_draft_provenance" },
       { migration_id: 57, name: "battle_maps" },
+      { migration_id: 58, name: "encounter_run_boards" },
     ]);
   }, 60_000);
 });
@@ -1143,6 +1151,98 @@ describe("upgrading a database whose campaign keys predate moving a campaign", (
     );
     expect(measured.history).toEqual([
       { group_id: measured.source, campaign_id: measured.campaign },
+    ]);
+  }, 60_000);
+});
+
+describe("upgrading a database whose fights predate their boards", () => {
+  it("gives a fight its encounter's grid as it stands, and a fight whose encounter is gone none", async () => {
+    const boards = await boardsRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0057` left: no boards table at all.
+        yield* sql`drop table encounter_run_board`;
+
+        const accounts = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "board-hash" })}
+          returning id
+        `;
+        const campaign = yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road");
+        const encounters = yield* sql<{ readonly id: string }>`
+          insert into encounter ${sql.insert([
+            { campaign_id: campaign, name: "Kept" },
+            { campaign_id: campaign, name: "Deleted" },
+          ])}
+          returning id
+        `;
+        const [kept, deleted] = [encounters[0]!.id, encounters[1]!.id];
+        const maps = yield* sql<{ readonly id: string }>`
+          insert into battle_map ${sql.insert([
+            {
+              encounter_id: kept,
+              campaign_id: campaign,
+              board_columns: 30,
+              cell_px: 51.2,
+              offset_x_px: 7,
+            },
+            // `sql.insert` takes its columns from the first row, so both name them.
+            {
+              encounter_id: deleted,
+              campaign_id: campaign,
+              board_columns: 24,
+              cell_px: 64,
+              offset_x_px: 0,
+            },
+          ])}
+          returning id
+        `;
+        const sessions = yield* sql<{ readonly id: string }>`
+          insert into session ${sql.insert({ campaign_id: campaign, number: 1 })}
+          returning id
+        `;
+        const runs = yield* sql<{ readonly id: string }>`
+          insert into encounter_run ${sql.insert([
+            {
+              session_id: sessions[0]!.id,
+              encounter_id: kept,
+              encounter_name: "Kept",
+              started_at: new Date(Date.now() - 60_000),
+              ended_at: new Date(),
+            },
+            {
+              session_id: sessions[0]!.id,
+              encounter_id: deleted,
+              encounter_name: "Deleted",
+              started_at: new Date(),
+              ended_at: null,
+            },
+          ])}
+          returning id
+        `;
+        yield* sql`delete from encounter where id = ${deleted}`;
+
+        yield* encounterRunBoards;
+        const rows = yield* sql<{
+          readonly run_id: string;
+          readonly map_id: string | null;
+          readonly board_columns: number;
+          readonly cell_px: number;
+          readonly offset_x_px: number;
+        }>`
+          select run_id, map_id, board_columns, cell_px, offset_x_px from encounter_run_board
+        `;
+        return { rows, keptRun: runs[0]!.id, keptMap: maps[0]!.id };
+      }).pipe(Effect.orDie),
+    );
+    expect(boards.rows).toEqual([
+      {
+        run_id: boards.keptRun,
+        map_id: boards.keptMap,
+        board_columns: 30,
+        cell_px: 51.2,
+        offset_x_px: 7,
+      },
     ]);
   }, 60_000);
 });

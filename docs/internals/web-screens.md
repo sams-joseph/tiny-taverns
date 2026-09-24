@@ -119,6 +119,7 @@ Three more rules: the spine loads and the recaps do not (`RecapBody` mounts only
 The encounter page (`campaign/EncounterScreen.tsx`) is the object an encounter card opens, and the creator's alone: its `extra` atom reads the map, which only the creator may read, so a player at a table where the encounter is shared still gets the whole page as `NotFound` rather than an encounter with the map missing.
 
 - The grid is an SVG laid over the picture whose `viewBox` is the plane the map is measured in: the original picture's pixels, or the board itself when there is no picture (`battleMapPlane`). Both fill one box that takes the plane's aspect ratio, so which variant loaded never matters and no screen scales a coordinate by hand; the strokes are `non-scaling-stroke`. Where squares fall is `packages/api/src/BattleMap.ts` (`gridLines`, `cellRect`, `squareAt`, `cellPxForColumns`, `offsetWithinSquare`), which the grid adjustment and the play feature use rather than restating the arithmetic.
+- `BattleMapBoard` draws a `BattleMapView`, the fields a saved map, a grid being adjusted and a fight's board share, so the runner's map band (`run/RunBoardBand.tsx`) is the same component over the fight's own grid.
 - The wire says a picture is pending or present, never why one is absent (no setting line, images off, the budget, a refusal, a failed draw), so the page says only that there is none. While one is pending the page re-reads `reads.battleMap` alone through `useHobDrawingPolling`.
 
 ## The Hob panel surface

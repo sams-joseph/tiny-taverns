@@ -5,6 +5,7 @@ import type {
   Creature,
   CreatureId,
   EncounterRun,
+  EncounterRunBoard,
   EncounterRunId,
   HobDirectResourceUpdate,
   Roll,
@@ -183,6 +184,22 @@ export const runFrameAtom = Atom.family((path: RunPath) => apiAtom(loadRunFrame(
  */
 export const liveStateAtom = Atom.family((path: RunPath) =>
   writableApiAtom(loadLiveState(path), []),
+);
+
+/**
+ * The fight's board — its own copy of the grid and its map's picture.
+ *
+ * Names no reads: nothing the product writes changes it. A grid edit on the
+ * encounter's page is the next fight's, by design (`EncounterRunBoard`), and
+ * the one change a fight's board does see — Hob finishing the picture — is
+ * polled for by the band that shows it.
+ */
+export const runBoardAtom = Atom.family((path: RunPath) =>
+  apiAtom(
+    (client): Effect.Effect<EncounterRunBoard | null, unknown> =>
+      client.runs.board({ params: path }),
+    [],
+  ),
 );
 
 /** The dice tray is a session read. The doorbell refreshes it; payloads do not. */

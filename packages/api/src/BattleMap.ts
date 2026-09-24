@@ -127,6 +127,33 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
 }) {}
 
 /**
+ * A fight's board (`encounter_run_board`) — **the creator's alone**, read on the
+ * runner beside the fight it belongs to.
+ *
+ * The grid is the fight's own copy, taken from the encounter's map when the
+ * fight started and carried to a resumed fight: editing the encounter's grid
+ * changes the next fight on it, never this one. The picture is the map's, read
+ * through `mapId`, since a picture is drawn once and never redrawn.
+ *
+ * `mapId` is `null` once the encounter (and with it the map and its picture)
+ * has been deleted; the fight keeps its grid, with no picture. Everything the
+ * board draws has the same meaning as on `BattleMap`, so one component draws
+ * both.
+ */
+export class EncounterRunBoard extends Schema.Class<EncounterRunBoard>("EncounterRunBoard")({
+  mapId: Schema.NullOr(BattleMapId),
+  /** The map's setting line, or `null` when none was written or the map is gone. */
+  setting: Schema.NullOr(Schema.String),
+  grid: BattleMapGrid,
+  columns: Schema.Int,
+  rows: Schema.Int,
+  feetPerCell: Schema.Int,
+  alignment: BattleMapAlignment,
+  image: Schema.NullOr(BattleMapImages),
+  imagePending: Schema.Boolean,
+}) {}
+
+/**
  * The grid, changed in place. The setting line is not here: it is written on
  * the encounter's own form (`EncounterCreate` / `EncounterUpdate`), and editing
  * it redraws nothing.
