@@ -359,7 +359,7 @@ describe("NavigationMenu", () => {
                   <NavigationMenuHero
                     src="/hero-384.webp"
                     srcSet="/hero-384.webp 384w, /hero-768.webp 768w"
-                    sizes="12rem"
+                    sizes="28rem"
                     label="Library"
                   >
                     Your originals
@@ -379,7 +379,7 @@ describe("NavigationMenu", () => {
       );
     }
 
-    it("draws a decorative hero beside rows named by their titles and described by their lines", async () => {
+    it("draws a decorative hero above rows named by their titles and described by their lines", async () => {
       const user = userEvent.setup();
       render(<Featured />);
       await user.click(screen.getByRole("button", { name: "Library" }));
@@ -396,6 +396,10 @@ describe("NavigationMenu", () => {
       expect(image).toHaveAttribute("alt", "");
       expect(image).toHaveAttribute("srcset", "/hero-384.webp 384w, /hero-768.webp 768w");
       expect(hero).toHaveTextContent("LibraryYour originals");
+      // A banner across the top: the tile comes before the rows.
+      expect(
+        (hero as HTMLElement).compareDocumentPosition(creatures) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
       // Decoration: nothing in the tile takes focus, so the rows are the panel's
       // only stops.
       expect((hero as HTMLElement).querySelector("a, button, [tabindex]")).toBeNull();

@@ -137,6 +137,7 @@ const panelHero = async () => {
     alt: image?.getAttribute("alt"),
     src: image?.getAttribute("src"),
     srcSet: image?.getAttribute("srcset"),
+    sizes: image?.getAttribute("sizes"),
     label,
     tagline,
   };
@@ -272,8 +273,8 @@ describe("the shell's top bar", () => {
 
   describe("the panels' heroes and descriptions", () => {
     it.each([
-      ["Campaigns", /campaigns-384\.webp/, /campaigns-384\.webp 384w, .*campaigns-768\.webp 768w/],
-      ["Library", /library-384\.webp/, /library-384\.webp 384w, .*library-768\.webp 768w/],
+      ["Campaigns", /campaigns-448\.webp/, /campaigns-448\.webp 448w, .*campaigns-768\.webp 768w/],
+      ["Library", /library-448\.webp/, /library-448\.webp 448w, .*library-768\.webp 768w/],
     ] as const)(
       "draws the %s hero: a decorative picture at 1x and 2x, a label and a tagline",
       async (item, src, srcSet) => {
@@ -283,6 +284,7 @@ describe("the shell's top bar", () => {
         expect(hero.alt).toBe("");
         expect(hero.src).toMatch(src);
         expect(hero.srcSet).toMatch(srcSet);
+        expect(hero.sizes).toBe("(min-width: 30rem) 28rem, 100vw");
         expect(hero.label).toBe(item);
         expect(hero.tagline).toMatch(/\w/);
         // The tile is decoration, not a second way into the section: the only
