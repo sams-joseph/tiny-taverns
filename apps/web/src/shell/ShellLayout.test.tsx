@@ -144,8 +144,8 @@ describe("the persistent shell", () => {
 
   /**
    * jsdom computes no layout, so the pin is the class and the number is the
-   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 on all sixteen
-   * screens at every width, and the first campaign tab 8px (`ml-2`) after the
+   * browser audit's (`apps/web/audit/`): 44 / 46 / 76 / 40 on every audited
+   * screen at every width, and the first campaign tab 8px (`ml-2`) after the
    * lead group, which is capped at `max-w-96` so a long name truncates. A
    * `min-h-*` is what let sibling screens drift apart before.
    */

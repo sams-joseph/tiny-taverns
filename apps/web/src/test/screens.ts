@@ -1,6 +1,7 @@
 import {
   campaign,
   campaignId,
+  encounterId,
   fullCampaign,
   npcId,
   runId,
@@ -31,11 +32,15 @@ export const scenarios = {
   // `fullParty` and `fullRules` are each `fullCampaign` plus overrides, so the
   // Chronicle's sessions go after them or the campaign's own list wins back.
   // The membership is the campaign's, not the Chronicle's world-less one, so
-  // the campaign row carries its Shared World chip.
+  // the campaign row carries its Shared World chip; the encounters are the
+  // campaign's too, so the Encounters list and one encounter's page have one.
   creator: () => {
     const routes = new Map([...fullParty(), ...fullRules(), ...fullChronicle(), ...liveFight()]);
-    const memberships = fullCampaign().get("GET /me/campaigns");
-    if (memberships !== undefined) routes.set("GET /me/campaigns", memberships);
+    const campaignOwn = fullCampaign();
+    for (const route of ["GET /me/campaigns", `GET /campaigns/${campaignId}/encounters`]) {
+      const answer = campaignOwn.get(route);
+      if (answer !== undefined) routes.set(route, answer);
+    }
     return routes;
   },
   // The campaign's reads, with `twoTables`' memberships seating this account
@@ -56,13 +61,14 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The sixteen screens, in the order the audit walks them. */
+/** The seventeen screens, in the order the audit walks them. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
   { name: "world", scenario: "creator", path: `/worlds/${worldId}` },
   { name: "overview", scenario: "creator", path: c },
   { name: "encounters", scenario: "creator", path: `${c}/encounters` },
+  { name: "encounter", scenario: "creator", path: `${c}/encounters/${encounterId}` },
   { name: "notes", scenario: "creator", path: `${c}/notes` },
   { name: "cast", scenario: "creator", path: `${c}/cast` },
   { name: "npc", scenario: "creator", path: `${c}/cast/${npcId}` },

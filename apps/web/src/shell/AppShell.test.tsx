@@ -34,6 +34,7 @@ import { renderAt } from "../test/renderRoute";
 const worldId = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000000aaa1");
 const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
 const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
+const encounterId = "2b1f2a1e-0000-4000-8000-000000000e01";
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
 const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
@@ -69,6 +70,8 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/_shell/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/_shell/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,
+  "/_shell/campaigns/$campaignId/encounters/$encounterId": `/campaigns/${campaignId}/encounters/${encounterId}`,
+  "/_shell/campaigns/$campaignId/encounters/$": `/campaigns/${campaignId}/encounters/not-a-uuid`,
   "/_shell/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
   "/_shell/campaigns/$campaignId/cast": `/campaigns/${campaignId}/cast`,
   "/_shell/campaigns/$campaignId/cast/follow-up": `/campaigns/${campaignId}/cast/follow-up`,
