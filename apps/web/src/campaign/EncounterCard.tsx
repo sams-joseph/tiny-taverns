@@ -1,4 +1,5 @@
 import type { Difficulty, Encounter } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
 import {
   Badge,
   Button,
@@ -7,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  cardLinkClassName,
   Icon,
 } from "@taverns/ui";
 
@@ -43,7 +45,7 @@ import {
  * Unrated is its own thing rather than a missing badge: a sketched encounter the
  * DM has not weighed yet is information.
  */
-function DifficultyBadge({ difficulty }: { readonly difficulty: Difficulty | null }) {
+export function DifficultyBadge({ difficulty }: { readonly difficulty: Difficulty | null }) {
   if (difficulty === null) {
     return <Badge variant="outline">Unrated</Badge>;
   }
@@ -63,12 +65,15 @@ function DifficultyBadge({ difficulty }: { readonly difficulty: Difficulty | nul
   }
 }
 
+/** "6 creatures", or that there are none yet. */
+export const describeRoster = (encounter: Encounter): string =>
+  encounter.creatureCount === 0
+    ? "No creatures yet"
+    : `${encounter.creatureCount} ${encounter.creatureCount === 1 ? "creature" : "creatures"}`;
+
 /** "6 creatures · 1 note" — the roster first, because it is what the card is for. */
 const describe = (encounter: Encounter, noteCount: number): string => {
-  const creatures =
-    encounter.creatureCount === 0
-      ? "No creatures yet"
-      : `${encounter.creatureCount} ${encounter.creatureCount === 1 ? "creature" : "creatures"}`;
+  const creatures = describeRoster(encounter);
   return noteCount === 0
     ? creatures
     : `${creatures} · ${noteCount} ${noteCount === 1 ? "note" : "notes"}`;
@@ -89,19 +94,26 @@ export function EncounterCard({
   /**
    * Put it on the table, or go back to it.
    *
-   * The prototype makes the whole card clickable for this. It stays a button
-   * here: the card already carries a pencil, and a card that is itself a
-   * control with another control inside it is a keyboard trap and an
-   * accessibility problem — the prototype's inline `onClick` on a `<div>` is
-   * the visual specification, not the interaction.
+   * The prototype makes the whole card clickable for this. Here the card's face
+   * opens the encounter's own page instead — a card stands for its object —
+   * and *Run* stays a button above that link, as the pencil does.
    */
   readonly onRun: () => void;
 }) {
   return (
-    <Card className={running ? "h-full border-accent" : "h-full"}>
+    <Card linked className={running ? "h-full border-accent" : "h-full"}>
       <CardHeader>
         <div className="flex items-start gap-2.5">
-          <CardTitle className="flex-1">{encounter.name}</CardTitle>
+          <CardTitle className="flex-1">
+            <Link
+              to="/campaigns/$campaignId/encounters/$encounterId"
+              params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+              data-card-link
+              className={cardLinkClassName}
+            >
+              {encounter.name}
+            </Link>
+          </CardTitle>
           <DifficultyBadge difficulty={encounter.difficulty} />
           <Button
             variant="ghost"

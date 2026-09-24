@@ -2,6 +2,7 @@ import type {
   CampaignId,
   CharacterId,
   CharacterOptionId,
+  EncounterId,
   FeatId,
   NpcId,
   RuleArticleId,
@@ -100,6 +101,14 @@ export const reads = {
    * names this rather than a key of its own.
    */
   encounters: (campaignId: CampaignId): ReadKey => key`encounters:${campaignId}`,
+
+  /**
+   * One encounter's battle map, as its creator reads it — the encounter page's
+   * read, re-read while Hob is drawing the picture. The setting line on it is
+   * written through the encounter's own form, which names `encounters`, so
+   * the page's read answers that key too.
+   */
+  battleMap: (encounterId: EncounterId): ReadKey => key`battle-map:${encounterId}`,
 
   /**
    * This campaign's notes.

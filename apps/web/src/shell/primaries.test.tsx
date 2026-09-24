@@ -11,7 +11,7 @@ import { scenarios, screens } from "../test/screens";
  * thing to do"; two of them say nothing. Phase 3 of the shell cleanup demoted
  * every card's own primary to `outline` and moved the campaign's verb into the
  * bar, and this is the test that remembers the rule afterwards. It walks the
- * same sixteen screens as the browser audit (`apps/web/audit/`), over the same
+ * same screens as the browser audit (`apps/web/audit/`), over the same
  * fixture maps, and counts `Button`'s default variant, which is the only thing
  * that paints `bg-accent` on a `[data-slot=button]`.
  */

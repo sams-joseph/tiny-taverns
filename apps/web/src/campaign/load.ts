@@ -1,9 +1,12 @@
 import type {
+  BattleMap,
   Campaign,
   CampaignId,
   CreatedOrder,
   CampaignRelation,
   Encounter,
+  EncounterCreature,
+  EncounterId,
   EncounterRun,
   Note,
   PrepItem,
@@ -12,6 +15,7 @@ import type {
   SessionId,
   PageCursor,
 } from "@taverns/api";
+import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads, type Invalidation } from "../api/keys";
@@ -203,6 +207,37 @@ export const campaignNightAtom = Atom.family((campaignId: CampaignId) =>
 );
 
 /** The creator-governed invitation list for one campaign. */
+/** What one encounter's page reads on top of the campaign view. */
+export interface EncounterPage {
+  readonly map: BattleMap;
+  readonly roster: ReadonlyArray<EncounterCreature>;
+}
+
+/**
+ * One encounter's page: its battle map and its roster, in one round — the
+ * encounter row itself and its notes are the campaign view's already.
+ *
+ * The map read is the creator's alone, so this is also what refuses the page
+ * to anybody else: a player, even at a table where this encounter is shared,
+ * gets the same `NotFound` a stranger does. It answers `encounters` as well as
+ * its own key because the encounter's form writes the setting line and the
+ * roster and names only that.
+ */
+export const encounterPageAtom = Atom.family(
+  (at: { readonly campaignId: CampaignId; readonly encounterId: EncounterId }) =>
+    apiAtom(
+      (client) =>
+        Effect.all(
+          {
+            map: client.battleMaps.find({ params: at }),
+            roster: client.encounterCreatures.list({ params: at }),
+          },
+          { concurrency: "unbounded" },
+        ),
+      [reads.battleMap(at.encounterId), reads.encounters(at.campaignId)],
+    ),
+);
+
 export const campaignInvitesAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.campaignInvites.list({ params: { campaignId } }),

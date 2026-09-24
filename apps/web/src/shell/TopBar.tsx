@@ -1,6 +1,7 @@
 import type { CampaignId } from "@taverns/api";
 import { Button, Icon, PageHeader } from "@taverns/ui";
 import { useContext, type ReactNode } from "react";
+import { useParams } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
 import { useCampaignAct } from "../campaign/act";
 import { useCampaignId, useCampaignRelation, useSection } from "./location";
@@ -71,12 +72,20 @@ function ScreenBar({ title, subtitle, tabs, children }: TopBarProps) {
  * `useCampaignAct` computes it once, so they cannot disagree about which of
  * the three it is. Drawing both would put two peach buttons on one screen,
  * which is the budget the bar exists to keep.
+ *
+ * **And one encounter's page**, whose own *Run* is this press aimed at that
+ * encounter (`campaign/EncounterScreen.tsx`) — the same `run` from the same
+ * `useCampaignAct`, so it goes back to a live fight exactly as this would.
  */
 function CampaignAct() {
   const campaignId = useCampaignId();
   const section = useSection();
   const relation = useCampaignRelation(campaignId);
-  if (campaignId === undefined || relation !== "creator" || section === "overview") return null;
+  // Decoded only on the encounter's own route, never on the list's splat.
+  const onEncounter = useParams({ strict: false }).encounterId !== undefined;
+  if (campaignId === undefined || relation !== "creator" || section === "overview" || onEncounter) {
+    return null;
+  }
   return <CampaignActButton campaignId={campaignId} />;
 }
 

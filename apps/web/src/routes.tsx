@@ -1,6 +1,7 @@
 import {
   CampaignId,
   CharacterId,
+  EncounterId,
   EncounterRunId,
   SharedWorldId,
   NpcId,
@@ -11,6 +12,7 @@ import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { EncounterScreen } from "./campaign/EncounterScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
 import { CastScreen } from "./cast/CastScreen";
@@ -105,6 +107,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 const asCampaignId = decoder(CampaignId);
 const asWorldId = decoder(SharedWorldId);
 const asCharacterId = decoder(CharacterId);
+const asEncounterId = decoder(EncounterId);
 const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
@@ -242,6 +245,34 @@ const campaignIndexRoute = createRoute({
 const encountersRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "encounters",
+  component: EncountersScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/**
+ * One encounter: its details and its battle map, the object an encounter card
+ * opens. The creator's alone, like the list — a player's reads of this URL are
+ * refused by the server, which is the gate (`BattleMapsGroup`). A different
+ * encounter is a different board, so the leaf remounts on the id; a bad id
+ * falls back to the list rather than to the campaign.
+ */
+const encounterRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "encounters/$encounterId",
+  params: {
+    parse: ({ encounterId }) => {
+      const decoded = asEncounterId(encounterId);
+      return decoded === undefined ? false : { encounterId: decoded };
+    },
+  },
+  component: EncounterScreen,
+  remountDeps: ({ params }) => params.encounterId,
+});
+
+/** A half-typed encounter link still knows it meant the encounters. */
+const encountersSplatRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "encounters/$",
   component: EncountersScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
@@ -611,6 +642,8 @@ export const routeTree = rootRoute.addChildren([
     campaignRoute.addChildren([
       campaignIndexRoute,
       encountersRoute,
+      encounterRoute,
+      encountersSplatRoute,
       notesRoute,
       castRoute,
       npcFollowUpRoute,
@@ -673,6 +706,7 @@ export const routes = {
   libraryNpcs: libraryNpcsRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
+  encounter: encounterRoute,
   notes: notesRoute,
   cast: castRoute,
   npcFollowUp: npcFollowUpRoute,

@@ -3,7 +3,7 @@
 jsdom computes no layout, so the numbers that say the shell lines up (row heights, where the first campaign tab starts, whether anything spills past the right edge, what is on top after a scroll) come from a real browser. This tool measures them in headless Chromium, over the same fixture maps the Vitest suite uses. It needs no Postgres, no API server and no Clerk.
 
 ```bash
-pnpm -F web shell-audit                                   # 16 screens × 1440/1200/1024/900/760
+pnpm -F web shell-audit                                   # every screen × 1440/1200/1024/900/760
 pnpm -F web shell-audit --widths=1440,760 --only=party,hob
 pnpm -F web shell-audit --json=/tmp/shell-audit.json      # every measurement, as data
 ```

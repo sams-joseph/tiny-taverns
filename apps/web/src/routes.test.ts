@@ -1,4 +1,11 @@
-import { CampaignId, CharacterId, EncounterRunId, SharedWorldId, SessionId } from "@taverns/api";
+import {
+  CampaignId,
+  CharacterId,
+  EncounterId,
+  EncounterRunId,
+  SharedWorldId,
+  SessionId,
+} from "@taverns/api";
 import { createBrowserHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
@@ -26,6 +33,7 @@ const WORLD_ID = Schema.decodeSync(SharedWorldId)("2b1f2a1e-0000-4000-8000-00000
 const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-000000000501");
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
 const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
+const ENCOUNTER_ID = Schema.decodeSync(EncounterId)("2b1f2a1e-0000-4000-8000-000000000601");
 
 const routerAt = (path: string) =>
   createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
@@ -89,6 +97,11 @@ describe("the route table", () => {
         to: "/campaigns/$campaignId/party",
         params: { campaignId: CAMPAIGN_ID },
         at: "/campaigns/$campaignId/party",
+      },
+      {
+        to: "/campaigns/$campaignId/encounters/$encounterId",
+        params: { campaignId: CAMPAIGN_ID, encounterId: ENCOUNTER_ID },
+        at: "/campaigns/$campaignId/encounters/$encounterId",
       },
       {
         to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
@@ -328,6 +341,10 @@ describe("the route table", () => {
       {
         path: `/campaigns/${CAMPAIGN_ID}/sessions/${SESSION_ID}/runs/nope`,
         at: "/campaigns/$campaignId/$",
+      },
+      {
+        path: `/campaigns/${CAMPAIGN_ID}/encounters/nope`,
+        at: "/campaigns/$campaignId/encounters/$",
       },
       { path: "/groups/nope", at: "/$" },
       { path: "/worlds/nope", at: "/$" },
