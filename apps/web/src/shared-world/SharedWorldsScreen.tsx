@@ -1,10 +1,10 @@
-import type { SharedWorldMembership } from "@taverns/api";
+import type { SharedWorld, SharedWorldMembership } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
   Badge,
   Button,
   Card,
-  CardContent,
+  cardLinkClassName,
   CardHeader,
   CardTitle,
   Icon,
@@ -17,7 +17,10 @@ import { ArchivedDialog } from "../campaign/ArchivedDialog";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { TopBar } from "../shell/TopBar";
+import { ActionsMenu } from "../ui/ActionsMenu";
 import { ArchivedSharedWorldsDialog } from "./ArchivedSharedWorldsDialog";
+import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
+import { DeleteSharedWorldDialog } from "./DeleteSharedWorldDialog";
 import { NewSharedWorldDialog } from "./NewSharedWorldDialog";
 import { sharedWorldsAtom } from "./load";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
@@ -34,10 +37,25 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * contexts it belongs to, independently of its relation to any campaign.
  */
 
-function SharedWorldRow({ membership }: { readonly membership: SharedWorldMembership }) {
+/**
+ * One world on the list: it opens the world from anywhere on its face. Its
+ * owner also gets an overflow menu with *Archive* and *Delete permanently*,
+ * each behind its own confirmation; the trigger is a button, so the linked card
+ * lifts it above the link overlay and pressing it does not navigate. Anyone
+ * else sees no menu, matching `groupWritable`, which refuses them underneath.
+ */
+function SharedWorldRow({
+  membership,
+  onArchive,
+  onDelete,
+}: {
+  readonly membership: SharedWorldMembership;
+  readonly onArchive: () => void;
+  readonly onDelete: () => void;
+}) {
   const sharedWorld = membership.sharedWorld;
   return (
-    <Card className="overflow-hidden">
+    <Card linked className="overflow-hidden">
       <HobCover image={sharedWorld.image} pending={sharedWorld.imagePending} shape="card" />
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
@@ -45,28 +63,29 @@ function SharedWorldRow({ membership }: { readonly membership: SharedWorldMember
             <Link
               to="/worlds/$worldId"
               params={{ worldId: sharedWorld.id }}
-              className="text-heading no-underline hover:text-link-hover"
+              data-card-link
+              className={cardLinkClassName}
             >
               {sharedWorld.name}
             </Link>
           </CardTitle>
           {membership.isOwner && <Badge variant="secondary">Yours</Badge>}
+          {membership.isOwner && (
+            <ActionsMenu
+              label={`Actions for ${sharedWorld.name}`}
+              items={[
+                { label: "Archive", icon: "archive", onSelect: onArchive },
+                {
+                  label: "Delete permanently",
+                  icon: "trash-2",
+                  destructive: true,
+                  onSelect: onDelete,
+                },
+              ]}
+            />
+          )}
         </div>
       </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-4">
-        <div className="ml-auto flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-link"
-            nativeButton={false}
-            render={<Link to="/worlds/$worldId" params={{ worldId: sharedWorld.id }} />}
-          >
-            Open
-            <Icon name="chevron-right" size={15} />
-          </Button>
-        </div>
-      </CardContent>
     </Card>
   );
 }
@@ -76,6 +95,8 @@ export function SharedWorldsScreen() {
   const [worldShelfOpen, setWorldShelfOpen] = useState(false);
   const [campaignShelfOpen, setCampaignShelfOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [archiving, setArchiving] = useState<SharedWorld | undefined>();
+  const [deleting, setDeleting] = useState<SharedWorld | undefined>();
 
   const memberships = resource.state === "ready" ? resource.value : undefined;
   // A world founded here, or promoted from a campaign, lands on this list while
@@ -111,7 +132,12 @@ export function SharedWorldsScreen() {
             ) : (
               <div className="grid gap-4 @3xl:grid-cols-2">
                 {memberships.map((membership) => (
-                  <SharedWorldRow key={membership.sharedWorld.id} membership={membership} />
+                  <SharedWorldRow
+                    key={membership.sharedWorld.id}
+                    membership={membership}
+                    onArchive={() => setArchiving(membership.sharedWorld)}
+                    onDelete={() => setDeleting(membership.sharedWorld)}
+                  />
                 ))}
               </div>
             )}
@@ -144,6 +170,20 @@ export function SharedWorldsScreen() {
       {worldShelfOpen && <ArchivedSharedWorldsDialog onClose={() => setWorldShelfOpen(false)} />}
       {campaignShelfOpen && <ArchivedDialog onClose={() => setCampaignShelfOpen(false)} />}
       {creating && <NewSharedWorldDialog onClose={() => setCreating(false)} />}
+      {archiving !== undefined && (
+        <ArchiveSharedWorldDialog
+          sharedWorld={archiving}
+          onClose={() => setArchiving(undefined)}
+          onArchived={() => setArchiving(undefined)}
+        />
+      )}
+      {deleting !== undefined && (
+        <DeleteSharedWorldDialog
+          sharedWorld={deleting}
+          onClose={() => setDeleting(undefined)}
+          onDeleted={() => setDeleting(undefined)}
+        />
+      )}
     </>
   );
 }

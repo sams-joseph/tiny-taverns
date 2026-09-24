@@ -145,6 +145,7 @@ const CampaignsLive = HttpApiBuilder.group(
         .handle("update", ({ params, payload }) => campaigns.update(params.campaignId, payload))
         .handle("archive", ({ params }) => campaigns.archive(params.campaignId))
         .handle("restore", ({ params }) => campaigns.restore(params.campaignId))
+        .handle("deletePermanently", ({ params }) => campaigns.deletePermanently(params.campaignId))
     );
   }),
 );
@@ -283,6 +284,7 @@ const SharedWorldsLive = HttpApiBuilder.group(
         .handle("update", ({ params, payload }) => groups.update(params.worldId, payload))
         .handle("archive", ({ params }) => groups.archive(params.worldId))
         .handle("restore", ({ params }) => groups.restore(params.worldId))
+        .handle("deletePermanently", ({ params }) => groups.deletePermanently(params.worldId))
         .handle("campaigns", ({ params }) => groups.campaigns(params.worldId))
         // The second way a campaign is made, so it starts the cover exactly as
         // `campaigns.create` does, after its transaction commits.

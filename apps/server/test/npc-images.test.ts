@@ -748,7 +748,9 @@ describe("deleting an NPC", () => {
     const npc = await addNpc(ilse, doomed, { name: "Last", role: "the last guest" });
     await settled();
     const record = (await recordOf(npc.id))!;
-    await sql((sql) => sql`delete from campaign where id = ${doomed}`);
+    await as(ilse.token, (client) =>
+      client.campaigns.deletePermanently({ params: { campaignId: doomed } }),
+    );
     expect(await recordOf(npc.id)).toBeUndefined();
     await run(Effect.flatMap(HobImages, (worker) => worker.drainDeletions));
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);

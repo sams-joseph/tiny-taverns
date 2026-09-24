@@ -1,15 +1,27 @@
 import type { CampaignId, EncounterId } from "@taverns/api";
 import { Button, Icon, Loading } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { asResource, useInvalidate } from "../api/atoms";
+import { asResource, useApiAtom, useInvalidate } from "../api/atoms";
+import { reads } from "../api/keys";
+import { ActionsMenu } from "../ui/ActionsMenu";
 import { TopBar } from "../shell/TopBar";
 import { useCampaignAct } from "./act";
+import { ArchiveDialog } from "./ArchiveDialog";
 import { CampaignDialog } from "./CampaignDialog";
+import { DeleteCampaignDialog } from "./DeleteCampaignDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
-import { campaignAtom, campaignViewAtom, campaignViewKeys, type CampaignView } from "./load";
+import {
+  campaignAtom,
+  campaignViewAtom,
+  campaignViewKeys,
+  membershipsAtom,
+  type CampaignView,
+} from "./load";
+import { CampaignSharedWorldDialog } from "./SharedWorldTransitionDialog";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -133,11 +145,18 @@ export interface CampaignChromeSlots<Extra = undefined> {
    * The dialogs themselves stay in the frame with the rest of the campaign-wide
    * state; this is how the Overview asks for one. See `CampaignSettingsButtons`.
    */
-  readonly openSettings: (what: "campaign" | "invites") => void;
+  readonly openSettings: (what: CampaignEditing["what"]) => void;
 }
 
-/** The campaign-wide dialogs, which any of the three screens may raise. */
-type CampaignEditing = { readonly what: "campaign" } | { readonly what: "invites" };
+/**
+ * The campaign-wide dialogs, which any of the three screens may raise: its
+ * settings, its invitations, and the three acts that change what the campaign
+ * is (its Shared World, archiving, deleting), which live here rather than on
+ * the campaign list's cards.
+ */
+type CampaignEditing = {
+  readonly what: "campaign" | "invites" | "shared-world" | "archive" | "delete";
+};
 
 export function CampaignChrome<Extra = undefined>({
   campaignId,
@@ -230,10 +249,12 @@ export function CampaignChrome<Extra = undefined>({
 
   const close = useCallback(() => setEditing(undefined), []);
   const finishSession = useCallback(() => setFinishing(true), []);
-  const openSettings = useCallback(
-    (what: "campaign" | "invites") => setEditing({ what } as CampaignEditing),
-    [],
-  );
+  const openSettings = useCallback((what: CampaignEditing["what"]) => setEditing({ what }), []);
+  const navigate = useNavigate();
+  const toCampaignList = useCallback(() => {
+    setEditing(undefined);
+    void navigate({ to: "/campaigns" });
+  }, [navigate]);
 
   const slots: CampaignChromeSlots<Extra> | undefined =
     view === undefined
@@ -266,7 +287,34 @@ export function CampaignChrome<Extra = undefined>({
       {slots !== undefined && children(slots)}
 
       {editing?.what === "campaign" && view !== undefined && (
-        <CampaignDialog campaign={view.campaign} onClose={close} onSaved={close} />
+        <CampaignDialog
+          campaign={view.campaign}
+          onClose={close}
+          onSaved={close}
+          onOpen={openSettings}
+        />
+      )}
+      {editing?.what === "shared-world" && view !== undefined && (
+        <CampaignSharedWorldDialog campaignId={view.campaign.id} onClose={close} />
+      )}
+      {editing?.what === "archive" && view !== undefined && (
+        <ArchiveDialog
+          campaign={view.campaign}
+          alsoInvalidates={[reads.sharedWorld(view.campaign.contextId)]}
+          onClose={close}
+          // Off the list, so back to the list, where the shelf that brings it
+          // back is.
+          onArchived={toCampaignList}
+        />
+      )}
+      {editing?.what === "delete" && view !== undefined && (
+        <DeleteCampaignDialog
+          campaign={view.campaign}
+          alsoInvalidates={[reads.sharedWorld(view.campaign.contextId)]}
+          onArchiveInstead={() => openSettings("archive")}
+          onClose={close}
+          onDeleted={toCampaignList}
+        />
       )}
       {editing?.what === "invites" && view !== undefined && (
         // It stays open across several writes — minting a link, then
@@ -305,8 +353,16 @@ export function CampaignSettingsButtons({
   onOpen,
 }: {
   readonly view: CampaignView;
-  readonly onOpen: (what: "campaign" | "invites") => void;
+  readonly onOpen: (what: CampaignEditing["what"]) => void;
 }) {
+  // Whether the campaign is in a Shared World is on the membership row, which
+  // names the world only when it is an explicit one. Warm: the route read it.
+  const [memberships] = useApiAtom(membershipsAtom);
+  const connected =
+    memberships.state === "ready" &&
+    memberships.value.some(
+      (row) => row.campaign.id === view.campaign.id && row.sharedWorld !== null,
+    );
   return (
     <>
       {/* The sharing control, worn as its own answer. `lock` and `users` are
@@ -332,6 +388,33 @@ export function CampaignSettingsButtons({
         <Icon name="user-round" size={14} />
         Invite
       </Button>
+      {/* The campaign's acts that are not everyday settings, each behind its
+          own confirmation. The campaign list's cards carry none of them. */}
+      <ActionsMenu
+        label="Campaign actions"
+        items={[
+          {
+            label: connected ? "Change Shared World" : "Connect to Shared World",
+            icon: "map",
+            onSelect: () => onOpen("shared-world"),
+          },
+          ...(view.campaign.archivedAt === null
+            ? [
+                {
+                  label: "Archive campaign",
+                  icon: "archive" as const,
+                  onSelect: () => onOpen("archive"),
+                },
+              ]
+            : []),
+          {
+            label: "Delete permanently",
+            icon: "trash-2",
+            destructive: true,
+            onSelect: () => onOpen("delete"),
+          },
+        ]}
+      />
     </>
   );
 }

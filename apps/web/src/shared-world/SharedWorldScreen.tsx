@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  cardLinkClassName,
   CardHeader,
   CardTitle,
   Icon,
@@ -14,14 +15,15 @@ import {
 import { useCallback, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
-import { ArchiveDialog } from "../campaign/ArchiveDialog";
 import { NewCampaignDialog } from "../campaign/NewCampaignDialog";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { HobCover } from "../hob/HobCover";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { Description } from "../ui/description";
+import { ActionsMenu } from "../ui/ActionsMenu";
 import { ArchiveSharedWorldDialog } from "./ArchiveSharedWorldDialog";
+import { DeleteSharedWorldDialog } from "./DeleteSharedWorldDialog";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
 import { SharedWorldSettingsDialog } from "./SharedWorldSettingsDialog";
 import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
@@ -35,7 +37,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * campaign they do not participate in. That last card is the participation
  * decision on screen: a member sees that the campaign exists and who runs it,
  * and nothing of its content until its creator seats them. So a card without a
- * relation gets no *Open* — a link that lands on a 404 is worse than none.
+ * relation is not a link — one that lands on a 404 is worse than none.
  *
  * **Founding a campaign is any live member's act** (the governance decision),
  * and it makes the founder its creator and sole DM. The roster is context,
@@ -49,17 +51,18 @@ const relationBadge = (relation: SharedWorldCampaignCard["relation"]) => {
   return null;
 };
 
-function CampaignCard({
-  card,
-  onArchive,
-}: {
-  readonly card: SharedWorldCampaignCard;
-  /** The creator's shelf control, absent on every other card. */
-  readonly onArchive: (() => void) | undefined;
-}) {
+/**
+ * One campaign in the directory. A card this reader participates in opens the
+ * campaign from anywhere on its face; a card for a table they do not sit at is
+ * not linked, since a link that lands on a 404 is worse than none. It carries
+ * no campaign controls: archiving, deleting and moving a campaign are its
+ * creator's acts inside the campaign (`CampaignChrome.tsx`), as on the
+ * campaign list.
+ */
+function CampaignCard({ card }: { readonly card: SharedWorldCampaignCard }) {
   const open = card.relation !== "none";
   return (
-    <Card>
+    <Card linked={open}>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-2.5">
           <CardTitle className="flex-1">
@@ -67,7 +70,8 @@ function CampaignCard({
               <Link
                 to="/campaigns/$campaignId"
                 params={{ campaignId: card.id }}
-                className="text-heading no-underline hover:text-link-hover"
+                data-card-link
+                className={cardLinkClassName}
               >
                 {card.name}
               </Link>
@@ -84,30 +88,6 @@ function CampaignCard({
           <Icon name="crown" size={14} className="text-faint" />
           Run by {card.creatorName}
         </span>
-        {open && (
-          <div className="ml-auto flex items-center gap-1">
-            {onArchive !== undefined && card.archivedAt === null && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={onArchive}
-              >
-                Archive
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-link"
-              nativeButton={false}
-              render={<Link to="/campaigns/$campaignId" params={{ campaignId: card.id }} />}
-            >
-              Open
-              <Icon name="chevron-right" size={15} />
-            </Button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
@@ -127,9 +107,9 @@ function MemberRow({ member }: { readonly member: SharedWorldMember }) {
 export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId }) {
   const [resource, retry] = useApiAtom(sharedWorldViewAtom(worldId));
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
-  const [archiving, setArchiving] = useState<SharedWorldCampaignCard | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [worldArchiveOpen, setWorldArchiveOpen] = useState(false);
+  const [worldDeleteOpen, setWorldDeleteOpen] = useState(false);
   const [creatingCampaign, setCreatingCampaign] = useState(false);
   const navigate = useNavigate();
 
@@ -165,10 +145,28 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
         {/* The owner's screen action, so it is the bar's — never a button
             right-aligned above the body. */}
         {ownsWorld && view !== undefined && (
-          <Button size="sm" onClick={() => setSettingsOpen(true)}>
-            <Icon name="pencil" size={14} />
-            Shared World settings
-          </Button>
+          <>
+            <Button size="sm" onClick={() => setSettingsOpen(true)}>
+              <Icon name="pencil" size={14} />
+              Shared World settings
+            </Button>
+            <ActionsMenu
+              label="Shared World actions"
+              items={[
+                {
+                  label: "Archive Shared World",
+                  icon: "archive",
+                  onSelect: () => setWorldArchiveOpen(true),
+                },
+                {
+                  label: "Delete permanently",
+                  icon: "trash-2",
+                  destructive: true,
+                  onSelect: () => setWorldDeleteOpen(true),
+                },
+              ]}
+            />
+          </>
         )}
       </TopBar>
       <div className="flex flex-col gap-8">
@@ -204,13 +202,7 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
               ) : (
                 <div className="grid gap-4 @3xl:grid-cols-2">
                   {view.campaigns.map((card) => (
-                    <CampaignCard
-                      key={card.id}
-                      card={card}
-                      // The shelf is the creator's — `campaignWritable`
-                      // refuses anybody else underneath either way.
-                      onArchive={card.relation === "creator" ? () => setArchiving(card) : undefined}
-                    />
+                    <CampaignCard key={card.id} card={card} />
                   ))}
                 </div>
               )}
@@ -230,15 +222,6 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
         )}
       </div>
 
-      {archiving !== undefined && (
-        <ArchiveDialog
-          campaign={{ id: archiving.id, name: archiving.name }}
-          alsoInvalidates={[reads.sharedWorld(worldId)]}
-          onClose={() => setArchiving(undefined)}
-          onArchived={() => setArchiving(undefined)}
-        />
-      )}
-
       {creatingCampaign && view !== undefined && (
         <NewCampaignDialog
           context={{ kind: "world", world: view.sharedWorld }}
@@ -256,6 +239,10 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
             setSettingsOpen(false);
             setWorldArchiveOpen(true);
           }}
+          onDelete={() => {
+            setSettingsOpen(false);
+            setWorldDeleteOpen(true);
+          }}
         />
       )}
 
@@ -265,6 +252,20 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
           onClose={() => setWorldArchiveOpen(false)}
           onArchived={() => {
             setWorldArchiveOpen(false);
+            void navigate({ to: "/worlds" });
+          }}
+        />
+      )}
+
+      {worldDeleteOpen && view !== undefined && (
+        <DeleteSharedWorldDialog
+          sharedWorld={view.sharedWorld}
+          // Each campaign here moves to a context of its own, and its row
+          // carries that context.
+          alsoInvalidates={view.campaigns.map((card) => reads.campaign(card.id))}
+          onClose={() => setWorldDeleteOpen(false)}
+          onDeleted={() => {
+            setWorldDeleteOpen(false);
             void navigate({ to: "/worlds" });
           }}
         />

@@ -694,7 +694,13 @@ describe("the scope, counted", () => {
     // that character, in a thread of the actor's own account, for the same
     // reason. (Its spells are `Spells.forDraft` with no campaign, already
     // counted.)
-    expect(ungated).toBe(158);
+    // The two permanent deletes are the one hundred and fifty-ninth and
+    // sixtieth. `Campaigns.deletePermanently` sits beside `archive` and
+    // `restore`: `campaignWritable` is already the creator predicate, and the
+    // archived shelf reaches it without the campaign screen's proof.
+    // `Groups.deletePermanently` is the world owner's act on no campaign at
+    // all, gated by `groupWritable` like `Groups.archive`.
+    expect(ungated).toBe(160);
   });
 });
 

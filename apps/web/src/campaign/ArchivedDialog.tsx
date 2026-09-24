@@ -10,12 +10,14 @@ import {
   Icon,
   Loading,
 } from "@taverns/ui";
+import { useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { dayOf } from "../chronicle/format";
 import { SaveFailure } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { DeleteCampaignDialog } from "./DeleteCampaignDialog";
 
 /**
  * The shelf: campaigns this account has archived, and the one press that brings
@@ -45,14 +47,21 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * then 404s, which is worse than one that is absent. A player whose table has
  * been archived is looking at the DM's decision, and the way back is the DM's.
  *
- * ### There is no delete here, deliberately
+ * ### Restore, or delete for good
  *
- * Permanent deletion is not something this product does — `Campaign.archivedAt`
- * has said so since `0001` — so there is no *Delete forever* on these rows and
- * adding one would be a new decision rather than a missing affordance.
+ * An archived campaign cannot be entered from the list, so the shelf is where
+ * its creator decides its fate: *Restore* puts it back, and *Delete
+ * permanently* opens the same typed-name confirmation the campaign's own
+ * screen uses (`DeleteCampaignDialog`), above this one.
  */
 
-function ArchivedRow({ membership }: { readonly membership: CampaignMembership }) {
+function ArchivedRow({
+  membership,
+  onDelete,
+}: {
+  readonly membership: CampaignMembership;
+  readonly onDelete: () => void;
+}) {
   const campaign = membership.campaign;
   const { busy, failure, submit } = useMutation();
 
@@ -74,6 +83,17 @@ function ArchivedRow({ membership }: { readonly membership: CampaignMembership }
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => void restore()}>
           <Icon name="refresh-cw" size={14} />
           {busy ? "Bringing it back…" : "Restore"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-danger"
+          disabled={busy}
+          aria-label={`Delete permanently: ${campaign.name}`}
+          onClick={onDelete}
+        >
+          <Icon name="trash-2" size={14} />
+          Delete permanently
         </Button>
       </div>
       <span className="text-caption leading-body text-muted-foreground">
@@ -98,6 +118,7 @@ const archivedAtom = apiAtom((client) => client.me.archivedCampaigns(), [reads.m
 
 export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
   const [resource, retry] = useApiAtom(archivedAtom);
+  const [deleting, setDeleting] = useState<CampaignMembership["campaign"] | undefined>();
 
   // The list is the DM's own, for the reason in this file's doc block: the one
   // verb on a row is a write, and a write is `campaignWritable`'s question.
@@ -130,7 +151,11 @@ export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
               </span>
             ) : (
               mine.map((membership) => (
-                <ArchivedRow key={membership.campaign.id} membership={membership} />
+                <ArchivedRow
+                  key={membership.campaign.id}
+                  membership={membership}
+                  onDelete={() => setDeleting(membership.campaign)}
+                />
               ))
             ))}
         </div>
@@ -141,6 +166,14 @@ export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
           </Button>
         </DialogFooter>
       </DialogContent>
+      {deleting !== undefined && (
+        <DeleteCampaignDialog
+          campaign={deleting}
+          onClose={() => setDeleting(undefined)}
+          // The row leaves the shelf on its own: `reads.myCampaigns` is its key.
+          onDeleted={() => setDeleting(undefined)}
+        />
+      )}
     </Dialog>
   );
 }

@@ -285,6 +285,7 @@ describe("migrations", () => {
       { migration_id: 53, name: "campaign_move_keys" },
       { migration_id: 54, name: "account_threads" },
       { migration_id: 55, name: "image_spend" },
+      { migration_id: 56, name: "character_draft_provenance" },
     ]);
   }, 60_000);
 
@@ -349,6 +350,7 @@ describe("migrations", () => {
       { migration_id: 53, name: "campaign_move_keys" },
       { migration_id: 54, name: "account_threads" },
       { migration_id: 55, name: "image_spend" },
+      { migration_id: 56, name: "character_draft_provenance" },
     ]);
   }, 60_000);
 });

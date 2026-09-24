@@ -226,6 +226,20 @@ class SharedWorldsGroup extends HttpApiGroup.make("sharedWorlds")
       error: NotFound,
     }),
     /**
+     * The owner's permanent delete, live or archived. The world goes with its
+     * Chronicle, Story So Far, Hob conversation, memberships and Library
+     * shares; its campaigns do not. Each one is disconnected first, into a
+     * fresh hidden context of its creator's, with every live participant
+     * admitted, exactly as `campaigns.disconnectSharedWorld` does. So nobody's
+     * table goes with somebody else's world. `NotFound` for anyone but the
+     * owner. See `repo/Groups.ts`.
+     */
+    HttpApiEndpoint.delete("deletePermanently", "/:worldId/permanent", {
+      params: { worldId: SharedWorldId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
      * The Shared World's campaign directory — every campaign in the world, as a
      * narrow card, to every live member. Content still requires participation;
      * see `SharedWorldCampaignCard`.
@@ -303,7 +317,8 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       success: Campaign,
       error: [NotFound, Conflict],
     }),
-    // Soft delete: a campaign is someone's two years of Thursday nights.
+    // Soft delete, and the default: a campaign is someone's two years of
+    // Thursday nights. `deletePermanently` below is the named, one-way act.
     HttpApiEndpoint.delete("archive", "/:campaignId", {
       params: { campaignId: CampaignId },
       success: Campaign,
@@ -337,6 +352,23 @@ class CampaignsGroup extends HttpApiGroup.make("campaigns")
       payload: Schema.Struct({}),
       success: Campaign,
       error: NotFound,
+    }),
+    /**
+     * The creator's permanent delete, live or archived: the campaign and
+     * everything that belongs only to it, in one transaction. Characters are
+     * account-owned and survive with that seat gone; Chronicle entries a Shared
+     * World accepted from it stay in the world with their campaign pointer
+     * emptied; a standalone campaign's hidden context goes with it. Covers and
+     * NPC portraits leave through the storage deletion outbox.
+     *
+     * `Conflict` while a night is open (`currentSessionId` is set): ending the
+     * night is the table's act, so the delete refuses rather than ending it.
+     * `NotFound` for anyone but the creator. See `repo/Campaigns.ts`.
+     */
+    HttpApiEndpoint.delete("deletePermanently", "/:campaignId/permanent", {
+      params: { campaignId: CampaignId },
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
     }),
   )
   .prefix("/campaigns")

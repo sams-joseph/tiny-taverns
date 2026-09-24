@@ -16,8 +16,8 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { admitToGroup, foundGroup } from "./Groups.js";
-import { addCreator, liveMemberAccountIds } from "./Memberships.js";
+import { foundGroup, moveToOwnContext } from "./Groups.js";
+import { addCreator } from "./Memberships.js";
 import {
   defined,
   dieOnSqlError,
@@ -151,6 +151,10 @@ export class Campaigns extends Context.Service<
     ) => Effect.Effect<Campaign, NotFound | Conflict, CurrentActor>;
     readonly archive: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
     readonly restore: (id: CampaignId) => Effect.Effect<Campaign, NotFound, CurrentActor>;
+    /** The creator's permanent delete, refused while a night is open. */
+    readonly deletePermanently: (
+      id: CampaignId,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
   }
 >()("Campaigns") {
   static readonly layer = Layer.effect(this)(
@@ -322,24 +326,10 @@ export class Campaigns extends Context.Service<
                   });
                 }
 
-                const context = yield* foundGroup(
-                  sql,
-                  { name: sources[0]!.name },
-                  creator.actor.accountId,
-                );
-                const participants = yield* liveMemberAccountIds(sql, creator.campaign);
-                yield* Effect.forEach(
-                  participants,
-                  (accountId) => admitToGroup(sql, context.id, accountId),
-                  { discard: true },
-                );
-
+                yield* moveToOwnContext(sql, sources[0]!);
                 const rows = yield* sql<CampaignRow>`
-                  update campaign
-                  set group_id = ${context.id}, updated_at = now()
+                  select campaign.*, ${campaignImageColumns(sql)} from campaign
                   where campaign.id = ${creator.campaign}
-                    and campaign.group_id = ${creator.group}
-                  returning campaign.*, ${campaignImageColumns(sql)}
                 `;
                 return yield* one(rows, creator.campaign);
               }),
@@ -433,6 +423,69 @@ export class Campaigns extends Context.Service<
               `;
               return yield* one(rows, id);
             }),
+          ),
+
+        /**
+         * The campaign and everything that belongs only to it, in one
+         * transaction, live or archived.
+         *
+         * One `delete from campaign` does the work, because every row that
+         * belongs to a campaign is keyed to it `on delete cascade`: sessions,
+         * notes, encounters and runs, NPCs, Hob threads, seats, participation,
+         * invitations, campaign-scoped rules content, and the cover and NPC
+         * portraits, whose triggers queue their files on the storage outbox.
+         * What outlives it is deliberate. A character is account-owned and
+         * only loses its seat; a character Hob drafted here keeps
+         * `origin = 'assistant'` and loses the turn pointer
+         * (`0056_character_draft_provenance.ts`). A Chronicle entry a Shared
+         * World accepted from it stays in that world with `campaign_id` set to
+         * null (`0053`). A standalone campaign's hidden context contains this
+         * campaign alone, so it goes too, with its eligibility rows; a Shared
+         * World stays, and so does membership of it.
+         *
+         * **A night in progress refuses the delete.** `current_session_id` set
+         * means players may be at the table right now, and ending their night
+         * is the table's act (`FinishSessionDialog`), not a side effect of
+         * this one. The row lock is what makes the check the last word: a
+         * session starting concurrently waits on it, then finds nothing.
+         *
+         * `campaignWritable`, like `archive`: `NotFound` for a player or a
+         * stranger, and no test of `archived_at`, so the archived shelf can
+         * offer it too.
+         */
+        deletePermanently: (id) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const rows = yield* sql<{
+                  readonly group_id: SharedWorldId;
+                  readonly current_session_id: SessionId | null;
+                }>`
+                  select campaign.group_id, campaign.current_session_id from campaign
+                  where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
+                  for update
+                `;
+                if (rows.length === 0) {
+                  return yield* new NotFound({ resource: "campaign", id });
+                }
+                if (rows[0]!.current_session_id !== null) {
+                  return yield* new Conflict({
+                    message: "a night is still open at this table; finish it before deleting",
+                  });
+                }
+
+                yield* sql`delete from campaign where campaign.id = ${id}`;
+                yield* sql`
+                  delete from play_group
+                  where play_group.id = ${rows[0]!.group_id}
+                    and not play_group.is_shared_world
+                    and not exists (
+                      select 1 from campaign where campaign.group_id = play_group.id
+                    )
+                `;
+              }),
+            ),
           ),
       };
     }),

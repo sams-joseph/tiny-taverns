@@ -8,30 +8,14 @@ import {
   cardLinkClassName,
   CardHeader,
   CardTitle,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Icon,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   EmptyState,
   Loading,
 } from "@taverns/ui";
-import { Result } from "effect";
 import { useState } from "react";
-import { useApiAtom, useInvalidate } from "../api/atoms";
-import { runApiResult } from "../api/client";
-import { reads } from "../api/keys";
-import { useCredential } from "../auth/credential";
+import { useApiAtom } from "../api/atoms";
 import { TopBar } from "../shell/TopBar";
-import { describedBy } from "../ui/describedBy";
-import { NewSharedWorldDialog, SharedWorldFields } from "../shared-world/NewSharedWorldDialog";
+import { NewSharedWorldDialog } from "../shared-world/NewSharedWorldDialog";
 import { sharedWorldsAtom } from "../shared-world/load";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { ArchivedDialog } from "./ArchivedDialog";
@@ -49,16 +33,19 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * belongs in this screen or in the user's first decision.
  */
 
+/**
+ * One table on the list: it opens the campaign from anywhere on its face and
+ * carries nothing else to press. Everything a creator changes about a campaign
+ * (its Shared World, archiving, deleting, the rest of its settings) is inside
+ * the campaign, on its Overview (`CampaignChrome.tsx`); the list is for
+ * choosing a table. The world's name is a link to the world, not a control.
+ */
 function CampaignRow({
   membership,
   world,
-  onConnect,
-  onChangeWorld,
 }: {
   readonly membership: CampaignMembership;
   readonly world: CampaignSharedWorld | null;
-  readonly onConnect: (() => void) | undefined;
-  readonly onChangeWorld: (() => void) | undefined;
 }) {
   const campaign = membership.campaign;
   return (
@@ -80,15 +67,20 @@ function CampaignRow({
             {membership.relation === "creator" ? "Created by you" : "Playing"}
           </Badge>
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-4">
-        {campaign.partyName !== null && (
-          <span className="text-body-s leading-body text-muted-foreground">
-            {campaign.partyName}
-          </span>
+        {campaign.description !== null && (
+          <p className="line-clamp-3 text-body-s leading-body text-muted-foreground">
+            {campaign.description}
+          </p>
         )}
-        {world !== null ? (
-          <>
+      </CardHeader>
+      {(campaign.partyName !== null || world !== null) && (
+        <CardContent className="flex flex-wrap items-center gap-4">
+          {campaign.partyName !== null && (
+            <span className="text-body-s leading-body text-muted-foreground">
+              {campaign.partyName}
+            </span>
+          )}
+          {world !== null && (
             <Button
               variant="ghost"
               size="sm"
@@ -99,245 +91,10 @@ function CampaignRow({
               <Icon name="map" size={14} />
               {world.name}
             </Button>
-            {onChangeWorld !== undefined && (
-              <Button variant="ghost" size="sm" onClick={onChangeWorld}>
-                Change Shared World
-              </Button>
-            )}
-          </>
-        ) : (
-          onConnect !== undefined && (
-            <Button variant="ghost" size="sm" onClick={onConnect}>
-              <Icon name="map" size={14} />
-              Connect to Shared World
-            </Button>
-          )
-        )}
-      </CardContent>
+          )}
+        </CardContent>
+      )}
     </Card>
-  );
-}
-
-const STANDALONE = "standalone";
-
-type SharedWorldTransition = "connect" | "change";
-
-function SharedWorldTransitionDialog({
-  mode,
-  membership,
-  worlds,
-  onClose,
-}: {
-  readonly mode: SharedWorldTransition;
-  readonly membership: CampaignMembership;
-  readonly worlds: ReadonlyArray<SharedWorldMembership>;
-  readonly onClose: () => void;
-}) {
-  const fetchCredential = useCredential();
-  const invalidate = useInvalidate();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [target, setTarget] = useState(
-    mode === "change"
-      ? (worlds[0]?.sharedWorld.id ?? STANDALONE)
-      : (worlds[0]?.sharedWorld.id ?? ""),
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const campaign = membership.campaign;
-  const source = membership.sharedWorld;
-
-  const finish = async (world?: CampaignSharedWorld) => {
-    invalidate([
-      reads.myCampaigns,
-      reads.mySharedWorlds,
-      ...(source === null ? [] : [reads.sharedWorld(source.id)]),
-      ...(world === undefined ? [] : [reads.sharedWorld(world.id)]),
-    ]);
-    onClose();
-    if (world !== undefined) {
-      await navigate({ to: "/worlds/$worldId", params: { worldId: world.id } });
-    }
-  };
-
-  const submit = async () => {
-    const world = worlds.find((candidate) => candidate.sharedWorld.id === target)?.sharedWorld;
-    const disconnecting = mode === "change" && target === STANDALONE;
-    if (!disconnecting && world === undefined) return;
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    if (disconnecting) {
-      const result = await runApiResult(
-        (client) =>
-          client.campaigns.disconnectSharedWorld({
-            params: { campaignId: campaign.id },
-            payload: {},
-          }),
-        token,
-      );
-      setBusy(false);
-      if (Result.isFailure(result)) {
-        setError("That did not save. Try it again.");
-        return;
-      }
-      await finish();
-      return;
-    }
-    if (world === undefined) return;
-
-    const result =
-      mode === "change"
-        ? await runApiResult(
-            (client) =>
-              client.campaigns.moveSharedWorld({
-                params: { campaignId: campaign.id },
-                payload: { worldId: world.id },
-              }),
-            token,
-          )
-        : await runApiResult(
-            (client) =>
-              client.campaigns.connectSharedWorld({
-                params: { campaignId: campaign.id },
-                payload: { worldId: world.id },
-              }),
-            token,
-          );
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError("That did not save. Try it again.");
-      return;
-    }
-    await finish(world);
-  };
-
-  const promote = async () => {
-    setBusy(true);
-    setError(undefined);
-    const token = await fetchCredential();
-    const result = await runApiResult(
-      (client) =>
-        client.campaigns.promoteSharedWorld({
-          params: { campaignId: campaign.id },
-          payload: describedBy({ name: name.trim() }, description),
-        }),
-      token,
-    );
-    setBusy(false);
-    if (Result.isFailure(result)) {
-      setError("That did not save. Try it again.");
-      return;
-    }
-    await finish(result.success);
-  };
-
-  const changing = mode === "change";
-  const disconnecting = changing && target === STANDALONE;
-  const title = changing ? `Change ${campaign.name}'s Shared World` : "Connect to a Shared World";
-  const label = changing ? "Change campaign Shared World" : "Connect to Shared World";
-  const submitLabel = changing
-    ? disconnecting
-      ? "Make standalone"
-      : "Move campaign"
-    : "Connect campaign";
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label={label}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {changing ? (
-              <>
-                Choose another Shared World or make the campaign standalone. Participants join a new
-                destination, while everyone remains a member of {source?.name}. History already
-                accepted there stays there. The campaign keeps its content, invitations, Hob
-                conversations, and existing encounter instances.{" "}
-                {disconnecting ? (
-                  <>
-                    As a standalone campaign, it will stop contributing future activity and using
-                    Library sources shared through that world.
-                  </>
-                ) : (
-                  <>It will switch to the destination world's Library shares.</>
-                )}
-              </>
-            ) : (
-              <>
-                {campaign.name} keeps its table and becomes part of a shared history. Its current
-                participants join the Shared World, and other world members can see its name in the
-                campaign directory. Its campaign content remains visible only to its participants.
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4 px-gutter py-3">
-          {(changing || worlds.length > 0) && (
-            <div className="flex flex-col gap-2">
-              <span className="text-label leading-snug font-semibold text-heading">
-                {changing ? "New connection" : "Existing Shared World"}
-              </span>
-              <Select value={target} onValueChange={(value) => setTarget(String(value))}>
-                <SelectTrigger
-                  aria-label={changing ? "New Shared World connection" : "Existing Shared World"}
-                  className="min-w-56"
-                >
-                  <SelectValue>
-                    {(value) =>
-                      worlds.find((candidate) => candidate.sharedWorld.id === value)?.sharedWorld
-                        .name ?? "Choose a Shared World"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {changing && <SelectItem value={STANDALONE}>Standalone campaign</SelectItem>}
-                  {worlds.map(({ sharedWorld }) => (
-                    <SelectItem key={sharedWorld.id} value={sharedWorld.id}>
-                      {sharedWorld.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          {mode === "connect" && (
-            <div className="flex flex-col gap-2 border-t border-border pt-4">
-              <span className="text-label leading-snug font-semibold text-heading">
-                {worlds.length > 0 ? "Or create a new Shared World" : "Create a Shared World"}
-              </span>
-              <SharedWorldFields
-                name={name}
-                onName={setName}
-                description={description}
-                onDescription={setDescription}
-              />
-            </div>
-          )}
-          {error !== undefined && (
-            <p role="alert" className="pt-2 text-body-s leading-body text-danger">
-              {error}
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          {(changing || worlds.length > 0) && (
-            <Button size="sm" disabled={busy || target === ""} onClick={() => void submit()}>
-              {busy ? "Working…" : submitLabel}
-            </Button>
-          )}
-          {mode === "connect" && (
-            <Button size="sm" disabled={busy || name.trim() === ""} onClick={() => void promote()}>
-              {busy ? "Creating…" : "Create Shared World"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -398,9 +155,6 @@ export function CampaignsScreen() {
   const [shelfOpen, setShelfOpen] = useState(false);
   const [creating, setCreating] = useState<"campaign" | "world" | undefined>();
   const navigate = useNavigate();
-  const [transition, setTransition] = useState<
-    { readonly mode: SharedWorldTransition; readonly membership: CampaignMembership } | undefined
-  >();
   const memberships = resource.state === "ready" ? resource.value : undefined;
   const worlds = worldsResource.state === "ready" ? worldsResource.value : [];
   // While Hob draws a new campaign's cover, re-read until it lands.
@@ -436,18 +190,6 @@ export function CampaignsScreen() {
                     key={membership.campaign.id}
                     membership={membership}
                     world={membership.sharedWorld}
-                    onConnect={
-                      worldsResource.state === "ready" &&
-                      membership.relation === "creator" &&
-                      membership.sharedWorld === null
-                        ? () => setTransition({ mode: "connect", membership })
-                        : undefined
-                    }
-                    onChangeWorld={
-                      membership.relation === "creator" && membership.sharedWorld !== null
-                        ? () => setTransition({ mode: "change", membership })
-                        : undefined
-                    }
                   />
                 ))}
               </div>
@@ -477,19 +219,6 @@ export function CampaignsScreen() {
         />
       )}
       {creating === "world" && <NewSharedWorldDialog onClose={() => setCreating(undefined)} />}
-      {transition !== undefined && (
-        <SharedWorldTransitionDialog
-          mode={transition.mode}
-          membership={transition.membership}
-          worlds={worlds.filter(
-            (world) =>
-              world.isOwner &&
-              (transition.mode !== "change" ||
-                world.sharedWorld.id !== transition.membership.sharedWorld?.id),
-          )}
-          onClose={() => setTransition(undefined)}
-        />
-      )}
     </>
   );
 }

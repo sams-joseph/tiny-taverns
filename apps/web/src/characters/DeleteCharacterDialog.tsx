@@ -32,8 +32,9 @@ import { ownCharacterWrites } from "./write";
  *
  * ### Really deleted, and the dialog says so
  *
- * Unlike a campaign — which is *two years of Thursday nights* and is archived
- * rather than deleted (`campaign/ArchiveDialog.tsx`) — a character row goes.
+ * Unlike a campaign — which is *two years of Thursday nights*, is archived by
+ * default (`campaign/ArchiveDialog.tsx`) and deleted only behind a typed name —
+ * a character row goes.
  * There is no `archived_at` on `character` and no restore, so the confirmation
  * has to name the character and say the word: the check a control on a page
  * full of other controls cannot make.
