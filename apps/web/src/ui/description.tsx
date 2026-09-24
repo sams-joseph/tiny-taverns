@@ -1,4 +1,5 @@
 import { CAMPAIGN_DESCRIPTION_MAX, SHARED_WORLD_DESCRIPTION_MAX } from "@taverns/api";
+import { cn } from "@taverns/ui";
 import { Textarea } from "./form";
 
 /**
@@ -15,11 +16,26 @@ import { Textarea } from "./form";
  * every other box in them.
  */
 
-/** The paragraph under the cover. Nothing when none was written. */
-export function Description({ text }: { readonly text: string | null }) {
+/**
+ * The paragraph under the cover. Nothing when none was written. `className`
+ * is for the one page that sets it apart, the Overview's hero, which gives it
+ * a line of its own measure.
+ */
+export function Description({
+  text,
+  className,
+}: {
+  readonly text: string | null;
+  readonly className?: string;
+}) {
   if (text === null || text.trim() === "") return null;
   return (
-    <p className="max-w-measure text-body leading-body whitespace-pre-wrap text-foreground">
+    <p
+      className={cn(
+        "max-w-measure text-body leading-body whitespace-pre-wrap text-foreground",
+        className,
+      )}
+    >
       {text}
     </p>
   );

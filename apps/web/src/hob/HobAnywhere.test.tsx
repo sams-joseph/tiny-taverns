@@ -149,7 +149,7 @@ describe("Hob outside a campaign", () => {
 describe("Hob inside a campaign or a Shared World is unchanged", () => {
   it("is the campaign's, with the campaign's starters", async () => {
     await renderAt(`/campaigns/${campaignId}`);
-    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    await screen.findByRole("heading", { level: 1, name: "The Salt Road" });
     await userEvent.click(screen.getByRole("button", { name: /Ask Hob/ }));
 
     await waitFor(() =>

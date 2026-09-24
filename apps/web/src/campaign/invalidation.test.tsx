@@ -270,7 +270,7 @@ describe("what the split did not cost", () => {
 
   it("still answers the second destination from the registry, with no request", async () => {
     await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "Overview" });
+    await screen.findByRole("heading", { name: "The Salt Road" });
     const cold = server.calls.length;
     expect(cold).toBeGreaterThan(1);
 

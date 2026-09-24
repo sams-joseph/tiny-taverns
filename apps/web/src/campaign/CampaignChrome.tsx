@@ -97,8 +97,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * ### The sharing control is on the Overview and nowhere else
  *
- * *Private* / *Shared* and *Invite* are the campaign's own settings, so they sit
- * on the campaign's home screen rather than being repeated on every tab.
+ * *Settings*, which wears *Private* / *Shared*, and *Invite player* are the
+ * campaign's own settings, so they sit in the header of the campaign's home
+ * screen (`CampaignHero.tsx`) rather than being repeated on every tab.
  * The rule they were written for still holds — the current answer must be
  * legible as a **word** without opening anything, because an absent badge is not
  * a fail-closed default a DM can read — and the Overview is where a DM lands
@@ -169,8 +170,13 @@ export function CampaignChrome<Extra = undefined>({
   children,
 }: {
   readonly campaignId: CampaignId;
-  /** The per-screen top bar's title — *Overview*, *Party*, *Chronicle*, … */
-  readonly title: string;
+  /**
+   * The screen's header title — *Party*, *Chronicle*, … — drawn by `TopBar`.
+   * Omitted by the one screen that draws its own `h1`, the Overview, whose
+   * title is the campaign's name over its cover (`CampaignHero.tsx`); with no
+   * title there is no header, so `subtitle`, `actions` and `tabs` go with it.
+   */
+  readonly title?: string;
   readonly subtitle?: (slots: CampaignChromeSlots<Extra>) => string | undefined;
   /** This screen's own top-bar controls: its search box and its create button. */
   readonly actions?: (slots: CampaignChromeSlots<Extra>) => ReactNode;
@@ -272,13 +278,15 @@ export function CampaignChrome<Extra = undefined>({
 
   return (
     <>
-      <TopBar
-        title={title}
-        subtitle={slots === undefined ? undefined : subtitle?.(slots)}
-        tabs={slots === undefined ? undefined : tabs?.(slots)}
-      >
-        {slots !== undefined && actions?.(slots)}
-      </TopBar>
+      {title !== undefined && (
+        <TopBar
+          title={title}
+          subtitle={slots === undefined ? undefined : subtitle?.(slots)}
+          tabs={slots === undefined ? undefined : tabs?.(slots)}
+        >
+          {slots !== undefined && actions?.(slots)}
+        </TopBar>
+      )}
       {resource.state === "loading" && <Loading label="Reading the campaign…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
@@ -343,11 +351,13 @@ export function CampaignChrome<Extra = undefined>({
 }
 
 /**
- * The campaign's own settings, for the one screen that carries them.
+ * The campaign's own settings, for the one screen that carries them: the
+ * Overview's hero, where the redesign draws *Invite player* and *Settings* as
+ * outline buttons beside the campaign's name.
  *
- * Exported as a pair of buttons rather than inlined in the Overview so the
- * dialogs they open can stay in the frame with the rest of the campaign-wide
- * state: `CampaignChrome` renders them, the Overview asks for them.
+ * Exported rather than inlined in the Overview so the dialogs they open can
+ * stay in the frame with the rest of the campaign-wide state: `CampaignChrome`
+ * renders them, the Overview asks for them.
  */
 export function CampaignSettingsButtons({
   view,
@@ -366,28 +376,32 @@ export function CampaignSettingsButtons({
     );
   return (
     <>
-      {/* The sharing control, worn as its own answer. `lock` and `users` are
-          both already in the glyph table, and the word beside them is what keeps
-          the fail-closed default from being something the DM has to infer from
-          an absent badge. */}
+      <Button variant="outline" size="sm" onClick={() => onOpen("invites")}>
+        <Icon name="user-plus" size={14} />
+        Invite player
+      </Button>
+      {/* Settings, worn with its own answer. The drawing's button says only
+          *Settings*; the word after it is what keeps the fail-closed default
+          from being something the DM has to infer from an absent badge, so
+          it stays, with the glyph that says it. */}
       <Button
-        variant="secondary"
+        variant="outline"
         size="sm"
-        /* The visible word leads, verbatim, so the accessible name contains the
-           label a voice-control user would say. */
+        /* The visible words lead, verbatim, so the accessible name contains
+           the label a voice-control user would say. */
         aria-label={
           view.campaign.visibility === "shared"
-            ? "Shared with your players — campaign settings"
-            : "Private to you — campaign settings"
+            ? "Settings · Shared with your players"
+            : "Settings · Private to you"
         }
         onClick={() => onOpen("campaign")}
       >
-        <Icon name={view.campaign.visibility === "shared" ? "users" : "lock"} size={14} />
-        {view.campaign.visibility === "shared" ? "Shared" : "Private"}
-      </Button>
-      <Button variant="secondary" size="sm" onClick={() => onOpen("invites")}>
-        <Icon name="user-round" size={14} />
-        Invite
+        <Icon name="settings" size={14} />
+        Settings
+        <span className="flex items-center gap-1 border-l border-current/30 pl-2 text-muted-foreground">
+          <Icon name={view.campaign.visibility === "shared" ? "users" : "lock"} size={12} />
+          {view.campaign.visibility === "shared" ? "Shared" : "Private"}
+        </span>
       </Button>
       {/* The campaign's acts that are not everyday settings, each behind its
           own confirmation. The campaign list's cards carry none of them. */}

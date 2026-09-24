@@ -36,6 +36,12 @@ export const dayOf = (at: DateTime.Utc): string => {
   return `${String(date.getUTCDate())} ${MONTHS[date.getUTCMonth()] ?? ""} ${String(date.getUTCFullYear())}`;
 };
 
+/** `August 2026` — how long a campaign has been running, on its Overview. */
+export const monthOf = (at: DateTime.Utc): string => {
+  const date = DateTime.toDateUtc(at);
+  return `${MONTHS[date.getUTCMonth()] ?? ""} ${String(date.getUTCFullYear())}`;
+};
+
 /** `21:04` — the same clock `campaign/NextSession.tsx` writes. */
 export const clockOf = (at: DateTime.Utc): string => {
   const date = DateTime.toDateUtc(at);

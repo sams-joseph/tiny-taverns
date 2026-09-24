@@ -4,17 +4,11 @@ import { useCallback, useState } from "react";
 import { useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { HobCover } from "../hob/HobCover";
-import { Description } from "../ui/description";
-import {
-  CampaignChrome,
-  CampaignSettingsButtons,
-  type CampaignChromeSlots,
-} from "./CampaignChrome";
+import { CampaignChrome, type CampaignChromeSlots } from "./CampaignChrome";
+import { CampaignHero } from "./CampaignHero";
 import { EncounterDialog } from "./EncounterDialog";
 import { LastTime } from "./LastTime";
 import { LiveBanner } from "./LiveBanner";
-import type { CampaignView } from "./load";
 import { NextSession } from "./NextSession";
 import { lastNightAtom, type LastNight } from "./overview";
 import { PartyCard } from "./PartyCard";
@@ -22,7 +16,8 @@ import { RecentNotes } from "./RecentNotes";
 
 /**
  * The campaign's home: the creator's Overview, as the redesign
- * (`Campaign Overview.dc.html`) draws its body, against the real API.
+ * (`Campaign Overview.dc.html`) draws it, against the real API. The cover and
+ * the header over it are `CampaignHero.tsx`.
  *
  * Everything on it answers one question: *where were we and what happens when
  * we sit down*. The main column is the night — *Next session*, which carries
@@ -43,26 +38,11 @@ import { RecentNotes } from "./RecentNotes";
  * `extra` so the screen is still one resource (`LastTime.tsx`).
  */
 
-/**
- * The party count moved here when the rail did, and stayed when the bar split:
- * the campaign row carries the name and the session badge, so the one fact
- * neither of them holds joins the line that already says which night and whose
- * party.
- */
-const subtitleFor = (view: CampaignView): string | undefined => {
-  const parts = [
-    view.session === undefined ? undefined : `Session ${String(view.session.number)}`,
-    view.campaign.partyName ?? undefined,
-    `${String(view.campaign.playerCount)} ${view.campaign.playerCount === 1 ? "player" : "players"}`,
-  ].filter((part): part is string => part !== undefined && part !== "");
-  return parts.length === 0 ? undefined : parts.join(" · ");
-};
-
 /** The one dialog slot the Overview raises for itself. */
 type Editing = { readonly what: "encounter"; readonly encounter: Encounter | undefined };
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | undefined> }) {
-  const { view, extra: lastNight, run, finishSession } = slots;
+  const { view, extra: lastNight, run, finishSession, openSettings } = slots;
   const [editing, setEditing] = useState<Editing | undefined>();
   const invalidate = useInvalidate();
   const campaignId = view.campaign.id;
@@ -77,14 +57,14 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | u
   return (
     <>
       {/* The redesign's page: centred at its own width rather than the
-          window's, the live banner above everything, then the cover and the
-          pitch, then two columns. */}
+          window's, the live banner above everything, then the cover with the
+          campaign's header over it, then two columns — all one width, so the
+          header's left edge is the columns'. */}
       <div className="mx-auto flex w-full max-w-overview flex-col gap-6">
         {view.session !== undefined && view.run !== undefined && (
           <LiveBanner session={view.session} run={view.run} onFinish={finishSession} />
         )}
-        <HobCover image={view.campaign.image} pending={view.campaign.imagePending} shape="band" />
-        <Description text={view.campaign.description} />
+        <CampaignHero view={view} onOpen={openSettings} />
         {/* The drawing's own wrap rather than a breakpoint: `flex: 2 1 560px`
             beside `flex: 1 1 300px`, so the two stand side by side while
             560 + 24 + 300 fits and the aside drops under the whole main column
@@ -132,13 +112,8 @@ export function CampaignScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
 
   return (
-    <CampaignChrome
-      campaignId={campaignId}
-      title="Overview"
-      extra={lastNightAtom(campaignId)}
-      subtitle={({ view }) => subtitleFor(view)}
-      actions={(slots) => <CampaignSettingsButtons view={slots.view} onOpen={slots.openSettings} />}
-    >
+    // No `title`: the Overview's `h1` is the campaign's name, in its hero.
+    <CampaignChrome campaignId={campaignId} extra={lastNightAtom(campaignId)}>
       {(slots) => <Overview slots={slots} />}
     </CampaignChrome>
   );

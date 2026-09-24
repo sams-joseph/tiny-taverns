@@ -64,6 +64,7 @@ import {
   Scale,
   ScrollText,
   Search,
+  Settings,
   Shield,
   ShieldHalf,
   Skull,
@@ -137,6 +138,9 @@ import {
  * surface had ever drawn a sort glyph to copy. `ellipsis` and `archive` are the
  * same kind of request (2026-09-23): the overflow button that carries a card's
  * archive and delete, and the archive item in it.
+ *
+ * The Overview redesign (`Campaign Overview.dc.html`) adds `settings`, on the
+ * hero's *Settings* button beside *Invite player*.
  */
 export const icons = {
   archive: Archive,
@@ -205,6 +209,7 @@ export const icons = {
   scale: Scale,
   "scroll-text": ScrollText,
   search: Search,
+  settings: Settings,
   shield: Shield,
   "shield-half": ShieldHalf,
   skull: Skull,

@@ -351,8 +351,8 @@ describe("sharing a campaign", () => {
     // The sharing control is the campaign's own setting, so it stayed with the
     // campaign's home screen rather than being repeated on all three bars.
     await renderScreen(mintingSession());
-    await screen.findByRole("heading", { name: "Overview" });
-    await userEvent.click(await screen.findByRole("button", { name: /campaign settings/ }));
+    await screen.findByRole("heading", { name: "The Salt Road" });
+    await userEvent.click(await screen.findByRole("button", { name: /^Settings/ }));
   };
 
   it("says on the screen itself which answer the campaign currently gives", async () => {
@@ -360,8 +360,8 @@ describe("sharing a campaign", () => {
 
     // The fixture campaign is `dm`, and a DM should not have to open anything
     // — or infer it from an absent badge — to know that.
-    const button = await screen.findByRole("button", { name: /campaign settings/ });
-    expect(button).toHaveAccessibleName("Private to you — campaign settings");
+    const button = await screen.findByRole("button", { name: /^Settings/ });
+    expect(button).toHaveAccessibleName("Settings · Private to you");
     expect(button).toHaveTextContent("Private");
   });
 
@@ -421,7 +421,7 @@ describe("sharing a campaign", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /campaign settings/ })).toHaveTextContent("Shared"),
+      expect(screen.getByRole("button", { name: /^Settings/ })).toHaveTextContent("Shared"),
     );
     // And it got there by asking again, not by patching its own copy — which is
     // the rule every structural write on this screen follows, because a write
