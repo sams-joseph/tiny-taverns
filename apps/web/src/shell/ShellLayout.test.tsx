@@ -238,11 +238,8 @@ describe("one shell", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("has one Hob panel state, the layout's — the gallery's specimens aside", () => {
-    // The gallery sits outside the persistent layout (`StandaloneLayout`), and
-    // its specimens demonstrate the seam with a panel state of their own.
+  it("has one Hob panel state, the layout's", () => {
     const callers = sources()
-      .filter(({ file }) => !file.startsWith(`gallery${"/"}`))
       .filter(({ source }) => /(?<!function )\buseHobPanel\(/.test(code(source)))
       .map(({ file }) => file);
     expect(callers).toEqual([join("shell", "ShellLayout.tsx")]);

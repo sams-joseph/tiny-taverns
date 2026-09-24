@@ -73,7 +73,7 @@ const HobRegionContext = createContext<React.RefObject<HTMLDivElement | null> | 
 
 /**
  * The row the overlay covers: the content column, and — where there is no
- * `HobFrame`, as in the gallery — the dock after it.
+ * `HobFrame` — the dock after it.
  *
  * `relative` is load-bearing: it is what the overlay positions against. It
  * grows with its content *vertically*, because every screen is a document the

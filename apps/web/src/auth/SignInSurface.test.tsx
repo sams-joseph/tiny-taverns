@@ -9,7 +9,7 @@ import { SignInSurface } from "./SignInSurface";
  * That distinction is the whole test. Every component `SignInSurface` reaches
  * for (`Show`, `SignInButton`, `UserButton`) throws without `ClerkProvider`
  * above it, so "returns null before touching any of them" is what makes the
- * gallery mountable for a developer with no publishable key. If someone drops
+ * app mountable for a developer with no publishable key. If someone drops
  * the `configured` guard, this test fails with that throw rather than passing
  * quietly.
  */

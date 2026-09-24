@@ -22,8 +22,7 @@ export function ShellLayout() {
 /**
  * The same shell without the Hob panel, for the two routes outside the
  * persistent layout: the invitation page, which has nobody to ask on behalf of
- * yet, and the gallery, whose Hob specimens own ⌘K themselves (two listeners
- * toggling on one keystroke cancel out).
+ * yet, and the Server page, where a developer is still connecting.
  */
 export function StandaloneLayout() {
   return <Frame hob={undefined} />;

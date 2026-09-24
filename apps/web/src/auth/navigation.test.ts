@@ -5,7 +5,7 @@ import { hostedAuthNavigation } from "./navigation";
 
 describe("hosted authentication navigation", () => {
   beforeEach(() => {
-    globalThis.location.hash = "#/gallery";
+    globalThis.location.hash = "#/server";
   });
 
   it("replaces through the application's hash history after sign-in", async () => {

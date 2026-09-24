@@ -75,7 +75,7 @@ describe("the route table", () => {
       { to: "/campaigns", at: "/campaigns" },
       { to: "/worlds", at: "/worlds" },
       { to: "/library", at: "/library" },
-      { to: "/gallery", at: "/gallery" },
+      { to: "/server", at: "/server" },
       {
         to: "/campaigns/$campaignId",
         params: { campaignId: CAMPAIGN_ID },
@@ -278,6 +278,10 @@ describe("the route table", () => {
     expect(landsOn("/groups").at).toBe("/$");
     expect(landsOn("/worlds").at).toBe("/worlds");
     expect(landsOn("/").at).toBe("/");
+  });
+
+  it("has no component gallery: `#/gallery` is an unknown route like any other", () => {
+    expect(landsOn("/gallery").at).toBe("/$");
   });
 
   it("refuses a malformed id in every route that carries one", () => {

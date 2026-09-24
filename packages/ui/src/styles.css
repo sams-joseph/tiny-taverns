@@ -99,7 +99,7 @@
      The primary ramp, and the one warm family in the system. Reach for the
      semantic aliases below (`accent`, `accent-ink`, `accent-soft`) rather than
      a step here — a step is the right answer only where the swatch genuinely
-     is that colour, which in practice is the gallery. See §"Colour" in the
+     is that colour, which in practice is almost never. See §"Colour" in the
      root `AGENTS.md`. */
   --color-peach-700: var(--peach-700);
   --color-peach-600: var(--peach-600);

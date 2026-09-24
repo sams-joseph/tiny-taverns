@@ -55,8 +55,7 @@ import { StartCta, StartCtaNote } from "./StartCta";
  *  - **Every link that led nowhere is gone** rather than rendered as dead text:
  *    Bestiary, Changelog, Player view, Status, Contact, Privacy, Getting
  *    started, Keyboard shortcuts, Import a monster, Printable sheets. What is
- *    left is this page's own sections and `#/gallery`, which is a real screen
- *    reachable with no credential.
+ *    left is this page's own sections.
  *  - **The hero's *v2.4* badge and its "free while your party is under five"
  *    line are gone** for the same reason the pricing table is: there is no
  *    version 2.4 and there is no plan to be under.
@@ -67,8 +66,7 @@ import { StartCta, StartCtaNote } from "./StartCta";
  * fragment (`routes.tsx`). A bare fragment therefore *replaces the route* and
  * throws the reader onto the campaign list; `<Link to="/" hash="features">`
  * builds `#/#features`, which the hash history reads as the route `/` with the
- * fragment `features`, and `scrollRestoration` performs the scroll. The gallery
- * is the worked example this copies.
+ * fragment `features`, and `scrollRestoration` performs the scroll.
  */
 
 /** Where the page's own sections are, so a link and a heading cannot drift. */
@@ -83,17 +81,11 @@ const SECTIONS = {
  * Drawn as *Features · Bestiary · Pricing · Changelog*. Pricing went by
  * decision; the bestiary is campaign-scoped and unreachable without one
  * (`creatures.list` hangs off `/campaigns/:campaignId`), and there is no
- * changelog. What is left is this page and the one other screen a signed-out
- * reader may open.
+ * changelog. What is left is this page.
  */
-const NAV: ReadonlyArray<{
-  readonly label: string;
-  readonly hash?: string;
-  readonly to?: "/gallery";
-}> = [
+const NAV: ReadonlyArray<{ readonly label: string; readonly hash: string }> = [
   { label: "Features", hash: SECTIONS.features },
   { label: "Get started", hash: SECTIONS.start },
-  { label: "Components", to: "/gallery" },
 ];
 
 function Wordmark({ className }: { readonly className?: string }): ReactNode {
@@ -134,7 +126,7 @@ function SiteHeader(): ReactNode {
         {NAV.map((item) => (
           <Link
             key={item.label}
-            to={item.to ?? "/"}
+            to="/"
             hash={item.hash}
             className="text-body-s leading-none font-medium text-foreground hover:text-heading"
           >
@@ -405,7 +397,7 @@ function Start(): ReactNode {
 function SiteFooter(): ReactNode {
   return (
     <footer className="border-t border-hairline bg-surface-card px-page-sm pt-10 pb-6 @3xl:px-page">
-      <div className="mx-auto grid max-w-275 gap-8 @3xl:grid-cols-[1.3fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-275 gap-8 @3xl:grid-cols-[1.3fr_1fr]">
         <Wordmark />
         <div>
           <div className="mb-3 text-label leading-snug font-medium text-accent-ink">This page</div>
@@ -423,17 +415,6 @@ function SiteFooter(): ReactNode {
               className="text-body-s leading-snug text-slate-300 hover:text-heading"
             >
               Get started
-            </Link>
-          </div>
-        </div>
-        <div>
-          <div className="mb-3 text-label leading-snug font-medium text-accent-ink">The app</div>
-          <div className="flex flex-col gap-2">
-            <Link
-              to="/gallery"
-              className="text-body-s leading-snug text-slate-300 hover:text-heading"
-            >
-              Components
             </Link>
           </div>
         </div>

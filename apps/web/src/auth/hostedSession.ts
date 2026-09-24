@@ -58,7 +58,7 @@ export interface HostedSession {
  * The unconfigured session: no provider, nobody signed in, no token.
  *
  * This is the context default, which is what makes every consumer work when
- * it is rendered with no provider above it at all — the gallery in a test, or
+ * it is rendered with no provider above it at all — a screen in a test, or
  * the whole app for a developer with no publishable key.
  */
 export const NO_HOSTED_SESSION: HostedSession = {

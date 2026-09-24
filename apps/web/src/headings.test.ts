@@ -8,8 +8,7 @@ import { describe, expect, it } from "vitest";
  *
  * Every section heading goes through the component, and anything else that
  * wants heading type (a card's name that is not a heading element, an editable
- * title) takes `sectionHeadingVariants`. The gallery is exempt: it specimens
- * the type scale itself.
+ * title) takes `sectionHeadingVariants`.
  */
 
 const src = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +42,7 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
 function sources(dir: string): { path: string; source: string }[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "gallery" ? [] : sources(full);
+    if (entry.isDirectory()) return sources(full);
     if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
     return [{ path: relative(src, full), source: readFileSync(full, "utf8") }];
   });

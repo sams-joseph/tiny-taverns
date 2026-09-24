@@ -32,7 +32,7 @@ import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleRouteScreen } from "./chronicle/ChronicleRoute";
 import { CompendiumLibraryScreen } from "./compendium/CompendiumLibraryScreen";
 import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
-import { Gallery } from "./gallery/Gallery";
+import { ServerScreen } from "./server/ServerScreen";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
 import { SharedWorldRouteScreen } from "./shared-world/SharedWorldRouteScreen";
@@ -574,10 +574,11 @@ const joinRoute = createRoute({
   remountDeps: ({ params }) => params.token,
 });
 
-const galleryRoute = createRoute({
+/** Where a machine token is pasted; see `ServerScreen`. */
+const serverRoute = createRoute({
   getParentRoute: () => standaloneRoute,
-  path: "/gallery",
-  component: Gallery,
+  path: "/server",
+  component: ServerScreen,
 });
 
 /**
@@ -637,7 +638,7 @@ export const routeTree = rootRoute.addChildren([
     ]),
     catchAllRoute,
   ]),
-  standaloneRoute.addChildren([joinRoute, galleryRoute]),
+  standaloneRoute.addChildren([joinRoute, serverRoute]),
 ]);
 
 /**
@@ -645,13 +646,12 @@ export const routeTree = rootRoute.addChildren([
  *
  * `createHashHistory` is the decision recorded at the top of this file, not a
  * default. It is also what makes an in-page anchor safe: a hash history parses
- * `#/gallery#foundations` as the route `/gallery` with the fragment
- * `foundations`, so the gallery's specimen links scroll without throwing the
- * reader back to the campaign list — which is what a bare `href="#foundations"`
- * would do, and did before.
+ * `#/server#token` as the route `/server` with the fragment `token`, so an
+ * in-page link scrolls without throwing the reader back to the campaign list —
+ * which is what a bare `href="#token"` would do.
  *
  * `scrollRestoration` is what performs that scroll, since the browser's own
- * fragment is the whole of `/gallery#foundations` and matches no element.
+ * fragment is the whole of `/server#token` and matches no element.
  */
 export const router = createRouter({
   routeTree,
@@ -693,5 +693,5 @@ export const routes = {
   characters: charactersRoute,
   character: characterRoute,
   join: joinRoute,
-  gallery: galleryRoute,
+  server: serverRoute,
 } as const;

@@ -4,7 +4,7 @@ How campaigns relate to the container behind them: the hidden backing context ev
 
 ## Two vocabularies, one table
 
-`play_group` (`group` is a keyword) is the top-level container. Every campaign has one, as `campaign.group_id`; a Shared World is a `play_group` with `is_shared_world = true` (`0047_shared_worlds.ts`). A campaign created without naming a world (`campaigns.create`, including the gallery's live call) mints a hidden context that no screen navigates and no ordinary campaign work owns. `sharedWorlds.createCampaign` is only for a world the user explicitly picked.
+`play_group` (`group` is a keyword) is the top-level container. Every campaign has one, as `campaign.group_id`; a Shared World is a `play_group` with `is_shared_world = true` (`0047_shared_worlds.ts`). A campaign created without naming a world (`campaigns.create`) mints a hidden context that no screen navigates and no ordinary campaign work owns. `sharedWorlds.createCampaign` is only for a world the user explicitly picked.
 
 Public contracts say `SharedWorld*`, `worldId`, `worldSeq`, `lastWorldSeq`, and a campaign calls its backing container `contextId` (`packages/api/src/Campaign.ts`). Persistence and repositories keep `group_*`, `Groups`, `GroupHistory`, `group_seq`, `last_group_seq`. This is not a compatibility layer: there were no deployed users at the cutover, so `/groups` neither routes nor redirects, and the only URL family in the app and the API is `/worlds` (`apps/web/src/routes.tsx`, `packages/api/src/Api.ts`).
 

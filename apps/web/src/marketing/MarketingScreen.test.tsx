@@ -154,10 +154,7 @@ describe("the marketing homepage", () => {
       "href",
       `${hashHref("/")}#features`,
     );
-    expect(within(nav).getByRole("link", { name: "Components" })).toHaveAttribute(
-      "href",
-      hashHref("/gallery"),
-    );
+    expect(within(nav).queryByRole("link", { name: "Components" })).toBeNull();
   });
 
   it("renders no link that goes nowhere", async () => {
@@ -212,7 +209,7 @@ describe("the marketing homepage", () => {
     const cta = screen.getAllByRole("button", { name: /Set up a developer token/ });
     expect(cta).toHaveLength(3);
     for (const button of cta) {
-      expect(button).toHaveAttribute("href", `${hashHref("/gallery")}#server`);
+      expect(button).toHaveAttribute("href", hashHref("/server"));
     }
     expect(screen.getByText(/Hosted sign-in is not configured on this build/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start a campaign" })).toBeNull();

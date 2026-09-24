@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { FailureNotice, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { useHostedSession } from "../auth/hostedSession";
@@ -17,9 +18,12 @@ import type { ApiFailure } from "./failure";
 function ServerPanelPointer() {
   return (
     <>
-      Paste a machine token under <span className="text-heading">Components → Server</span>.{" "}
-      <code className="font-mono text-mono text-slate-300">pnpm -F server token:issue</code> prints
-      one.
+      Paste a machine token on the{" "}
+      <Link to="/server" className="text-link hover:text-link-hover">
+        Server page
+      </Link>
+      . <code className="font-mono text-mono text-slate-300">pnpm -F server token:issue</code>{" "}
+      prints one.
     </>
   );
 }
