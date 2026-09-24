@@ -220,3 +220,124 @@ export const battleMapPromptFor = (
     .filter((part) => part !== undefined && part !== "")
     .join(" ");
 };
+
+/**
+ * ## The board's geometry — one implementation, pure
+ *
+ * Where the squares fall on the picture, for every reader of a map: the
+ * encounter page's overlay today, the grid adjustment and the play feature's
+ * tokens after it. Everything here is in the **original picture's pixels**
+ * (see `BattleMap` above); a screen maps them onto what it draws by one factor
+ * ({@link pictureScale}), or lets an SVG `viewBox` of the {@link battleMapPlane}
+ * do it.
+ */
+
+/** The parts of a map its geometry reads. */
+export interface BattleMapBoard {
+  readonly columns: number;
+  readonly rows: number;
+  readonly alignment: BattleMapAlignment;
+}
+
+/** A rectangle in the original picture's pixels. */
+export interface PictureRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A width and a height in the original picture's pixels. */
+export interface PictureSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A square on the board: `column` across and `row` down, from zero. */
+export interface BoardSquare {
+  readonly column: number;
+  readonly row: number;
+}
+
+/** Square `(column, row)`: `offset + [c, c+1) · cellPx` across and down. */
+export const cellRect = (board: BattleMapBoard, square: BoardSquare): PictureRect => {
+  const { cellPx, offsetXPx, offsetYPx } = board.alignment;
+  return {
+    x: offsetXPx + square.column * cellPx,
+    y: offsetYPx + square.row * cellPx,
+    width: cellPx,
+    height: cellPx,
+  };
+};
+
+/** The whole board: every square, from the first square's corner. */
+export const boardRect = (board: BattleMapBoard): PictureRect => {
+  const { cellPx, offsetXPx, offsetYPx } = board.alignment;
+  return {
+    x: offsetXPx,
+    y: offsetYPx,
+    width: board.columns * cellPx,
+    height: board.rows * cellPx,
+  };
+};
+
+/**
+ * What the board is drawn on: the picture's own size when there is one, and
+ * otherwise exactly the board and its offset — a blank grid is the board and
+ * nothing else.
+ */
+export const battleMapPlane = (board: BattleMapBoard, picture: PictureSize | null): PictureSize => {
+  if (picture !== null) return { width: picture.width, height: picture.height };
+  const whole = boardRect(board);
+  return { width: whole.x + whole.width, height: whole.y + whole.height };
+};
+
+/**
+ * Where the grid's lines run: the left edge of every column and the right edge
+ * of the last (`columns + 1` of them), and the same down.
+ */
+export const gridLines = (
+  board: BattleMapBoard,
+): { readonly xs: ReadonlyArray<number>; readonly ys: ReadonlyArray<number> } => {
+  const { cellPx, offsetXPx, offsetYPx } = board.alignment;
+  return {
+    xs: Array.from({ length: board.columns + 1 }, (_, k) => offsetXPx + k * cellPx),
+    ys: Array.from({ length: board.rows + 1 }, (_, k) => offsetYPx + k * cellPx),
+  };
+};
+
+/** The square size that lays `columns` squares across a picture `width` wide, after the offset. */
+export const cellPxForColumns = (width: number, columns: number, offsetXPx = 0): number =>
+  (width - offsetXPx) / columns;
+
+/** How many whole squares fit down a picture `height` tall, at this alignment. */
+export const rowsThatFit = (height: number, alignment: BattleMapAlignment): number =>
+  Math.max(0, Math.floor((height - alignment.offsetYPx) / alignment.cellPx));
+
+/**
+ * An offset brought back within one square, which is what a nudge past a
+ * square's edge means: the same grid, moved by one column or row fewer.
+ * `BattleMapAlignment` refuses anything outside `[0, cellPx)`.
+ */
+export const offsetWithinSquare = (offset: number, cellPx: number): number => {
+  const within = ((offset % cellPx) + cellPx) % cellPx;
+  // A float a hair under a whole square is that square's edge again.
+  return cellPx - within < 1e-9 ? 0 : within;
+};
+
+/** The one factor between the original's pixels and a variant drawn `renderedWidth` wide. */
+export const pictureScale = (renderedWidth: number, picture: PictureSize): number =>
+  renderedWidth / picture.width;
+
+/** The square under a point in the original's pixels, or `undefined` off the board. */
+export const squareAt = (
+  board: BattleMapBoard,
+  point: { readonly x: number; readonly y: number },
+): BoardSquare | undefined => {
+  const { cellPx, offsetXPx, offsetYPx } = board.alignment;
+  const column = Math.floor((point.x - offsetXPx) / cellPx);
+  const row = Math.floor((point.y - offsetYPx) / cellPx);
+  return column < 0 || row < 0 || column >= board.columns || row >= board.rows
+    ? undefined
+    : { column, row };
+};
