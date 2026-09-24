@@ -1,6 +1,6 @@
 import * as React from "react";
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { BackLink } from "./back-link";
@@ -18,6 +18,14 @@ import {
 } from "./dropdown-menu";
 import { Icon } from "./icon";
 import { Input } from "./input";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "./navigation-menu";
 import { Kbd } from "./kbd";
 import { Label } from "./label";
 import { SectionHeading } from "./section-heading";
@@ -244,6 +252,98 @@ describe("DropdownMenu", () => {
     );
     await user.click(screen.getByRole("menuitemradio", { name: "Recent" }));
     expect(seen.current).toBe("recent");
+  });
+});
+
+describe("NavigationMenu", () => {
+  function Nav() {
+    return (
+      <NavigationMenu aria-label="Sections">
+        <NavigationMenuList>
+          <NavigationMenuItem>
+            <NavigationMenuTrigger active>Campaigns</NavigationMenuTrigger>
+            <NavigationMenuContent>
+              <NavigationMenuLink href="#campaigns" active>
+                Campaigns
+              </NavigationMenuLink>
+              <NavigationMenuLink href="#worlds">Shared Worlds</NavigationMenuLink>
+            </NavigationMenuContent>
+          </NavigationMenuItem>
+          <NavigationMenuItem>
+            <NavigationMenuTrigger>Library</NavigationMenuTrigger>
+            <NavigationMenuContent>
+              <NavigationMenuLink href="#creatures">Creatures</NavigationMenuLink>
+              <NavigationMenuLink href="#spells">Spells</NavigationMenuLink>
+            </NavigationMenuContent>
+          </NavigationMenuItem>
+          <NavigationMenuItem>
+            <NavigationMenuLink variant="pill" href="#characters">
+              Characters
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        </NavigationMenuList>
+      </NavigationMenu>
+    );
+  }
+
+  it("is a nav of disclosure buttons and links, not a menu", async () => {
+    const user = userEvent.setup();
+    render(<Nav />);
+
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    const campaigns = screen.getByRole("button", { name: "Campaigns" });
+    expect(nav).toContainElement(campaigns);
+    expect(campaigns).toHaveAttribute("aria-expanded", "false");
+    expect(campaigns).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: "Library" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Characters" })).toHaveClass("rounded-pill");
+    expect(screen.queryByRole("link", { name: "Shared Worlds" })).toBeNull();
+
+    await user.click(campaigns);
+    expect(campaigns).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByRole("link", { name: "Shared Worlds" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Campaigns" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Shared Worlds" })).not.toHaveAttribute("aria-current");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("opens on ArrowDown, walks the panel with the arrows, and Escape returns focus", async () => {
+    const user = userEvent.setup();
+    render(<Nav />);
+
+    const library = screen.getByRole("button", { name: "Library" });
+    act(() => library.focus());
+    await user.keyboard("{ArrowDown}");
+    expect(library).toHaveAttribute("aria-expanded", "true");
+    const creatures = await screen.findByRole("link", { name: "Creatures" });
+    await waitFor(() => expect(creatures).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("link", { name: "Spells" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(library).toHaveAttribute("aria-expanded", "false"));
+    expect(library).toHaveFocus();
+  });
+
+  it("moves between the row's items with the arrows", async () => {
+    const user = userEvent.setup();
+    render(<Nav />);
+
+    act(() => screen.getByRole("button", { name: "Campaigns" }).focus());
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("button", { name: "Library" })).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("link", { name: "Characters" })).toHaveFocus();
+  });
+
+  it("closes the panel when one of its links is followed", async () => {
+    const user = userEvent.setup();
+    render(<Nav />);
+
+    const campaigns = screen.getByRole("button", { name: "Campaigns" });
+    await user.click(campaigns);
+    await user.click(await screen.findByRole("link", { name: "Shared Worlds" }));
+    await waitFor(() => expect(campaigns).toHaveAttribute("aria-expanded", "false"));
   });
 });
 

@@ -72,10 +72,10 @@ describe("what your library holds", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(
-      within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", {
+      within(screen.getByRole("navigation", { name: "Sections" })).getByRole("button", {
         name: "Library",
       }),
-    ).toHaveAttribute("aria-current", "page");
+    ).toHaveAttribute("aria-current", "true");
     expect(
       within(screen.getByRole("navigation", { name: "Sections" })).queryByRole("link", {
         name: "Rules",

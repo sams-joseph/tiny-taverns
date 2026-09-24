@@ -52,6 +52,7 @@ describe("design-system adherence", () => {
       "input",
       "kbd",
       "label",
+      "navigation-menu",
       "page-header",
       "popover",
       "section-heading",

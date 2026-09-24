@@ -271,6 +271,8 @@ describe("a character sheet", () => {
         // The shell's closed Hob panel keeps its controls in the document,
         // off-canvas and `inert`; nothing there can be pressed.
         .filter((node) => node.closest("[inert]") === null)
+        // The global row's panel triggers open navigation, and write nothing.
+        .filter((node) => node.closest('nav[aria-label="Sections"]') === null)
         .map((node) => node.getAttribute("aria-label") ?? node.textContent ?? "")
         .filter(
           (text) =>

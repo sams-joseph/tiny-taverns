@@ -29,6 +29,16 @@ afterEach(cleanup);
 const sections = () => screen.getByRole("navigation", { name: "Sections" });
 const header = () => sections().closest("header");
 const campaignNav = () => screen.getByRole("navigation", { name: "This campaign" });
+/** Out through the global row's Campaigns panel, to the campaigns list. */
+const goToCampaigns = async () => {
+  await userEvent.click(within(sections()).getByRole("button", { name: "Campaigns" }));
+  const popup = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>('[data-slot="navigation-menu-popup"]');
+    expect(found).not.toBeNull();
+    return found as HTMLElement;
+  });
+  await userEvent.click(within(popup).getByRole("link", { name: "Campaigns" }));
+};
 /** The sidebar the Hob panel is; it slides off-canvas rather than unmounting. */
 const panel = () => document.querySelector("[data-slot=sidebar]");
 /**
@@ -66,7 +76,7 @@ describe("the persistent shell", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
 
     // …and out of the campaign the same slot carries the bar again.
-    await userEvent.click(within(sections()).getByRole("link", { name: "Campaigns" }));
+    await goToCampaigns();
     await screen.findByRole("heading", { level: 1, name: "Campaigns" });
     expect(slot()).toBe(before.slot);
     expect(slot()?.querySelector("h1")).toHaveTextContent("Campaigns");
@@ -245,7 +255,7 @@ describe("the persistent shell", () => {
     await waitFor(() => expect(panel()).toHaveAttribute("data-state", "expanded"));
     const before = panel();
 
-    await userEvent.click(within(sections()).getByRole("link", { name: "Campaigns" }));
+    await goToCampaigns();
     await screen.findByRole("heading", { level: 1, name: "Campaigns" });
     expect(panel()).toBe(before);
     expect(panel()).toHaveAttribute("data-state", "expanded");
