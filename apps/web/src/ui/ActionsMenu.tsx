@@ -39,7 +39,7 @@ export function ActionsMenu({
       <DropdownMenuTrigger
         aria-label={label}
         title={label}
-        render={<Button variant="ghost" size="icon" className="size-control-sm" />}
+        render={<Button variant="outline" size="icon" className="size-control-sm" />}
       >
         <Icon name="ellipsis" size={16} className="pointer-events-none" />
       </DropdownMenuTrigger>
