@@ -171,6 +171,16 @@ export class BattleMaps extends Context.Service<
       creator: CampaignCreatorActor,
       encounterId: EncounterId,
     ) => Effect.Effect<BattleMap, NotFound>;
+    /**
+     * The distinct creature types on the encounter's roster (`beast`,
+     * `undead`), lower-cased and sorted — what a map drawn without a setting
+     * line reads to choose a place, and never a creature's name. Empty for an
+     * encounter this creator does not hold.
+     */
+    readonly rosterTypes: (
+      creator: CampaignCreatorActor,
+      encounterId: EncounterId,
+    ) => Effect.Effect<ReadonlyArray<string>>;
     /** The grid, changed in place. */
     readonly update: (
       creator: CampaignCreatorActor,
@@ -207,6 +217,23 @@ export class BattleMaps extends Context.Service<
               if (rows.length === 0) return yield* missing(encounterId);
               return toBattleMap(rows[0]!, sign);
             }),
+          ),
+
+        rosterTypes: (creator, encounterId) =>
+          dieOnSqlError(
+            Effect.map(
+              sql<{ readonly type: string }>`
+                select distinct lower(btrim(creature.type)) as type
+                from battle_map
+                join encounter_creature on encounter_creature.encounter_id = battle_map.encounter_id
+                join creature on creature.id = encounter_creature.creature_id
+                where battle_map.encounter_id = ${encounterId}
+                  and ${rowWritable(sql, "battle_map", creator.campaign, creator.actor)}
+                  and btrim(creature.type) <> ''
+                order by 1
+              `,
+              (rows) => rows.map((row) => row.type),
+            ),
           ),
 
         update: (creator, encounterId, patch) =>

@@ -133,12 +133,14 @@ export class HobImages extends Context.Service<
     readonly drawNpc: (npc: Npc) => Effect.Effect<Npc, never, CurrentActor>;
     /**
      * The same for a new encounter's battle map, drawn from the map's setting
-     * line coloured by the encounter's name and tags (`battleMapPromptFor`),
-     * never its roster: `imagePending` when a draw started.
+     * line coloured by the encounter's name and tags, or without one from the
+     * name, tags and the roster's creature types (`battleMapPromptFor`) —
+     * never a creature's name: `imagePending` when a draw started.
      */
     readonly drawBattleMap: (
       map: BattleMap,
       encounter: Pick<Encounter, "name" | "tags">,
+      creatureTypes: ReadonlyArray<string>,
     ) => Effect.Effect<BattleMap, never, CurrentActor>;
     /** An image route: a checked signature, a ready row, the stored bytes. */
     readonly image: (
@@ -372,13 +374,14 @@ export class HobImages extends Context.Service<
               (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
             ),
 
-          drawBattleMap: (map, encounter) =>
+          drawBattleMap: (map, encounter, creatureTypes) =>
             Effect.map(
               start("battleMap", map.id, () => {
                 const subject = {
                   name: encounter.name,
                   tags: encounter.tags,
                   setting: map.setting,
+                  creatureTypes,
                 };
                 return battleMapHasSubject(subject)
                   ? battleMapPromptFor(subject, { style: HOUSE_MAP_STYLE })

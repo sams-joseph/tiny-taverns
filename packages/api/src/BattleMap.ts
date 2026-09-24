@@ -175,21 +175,25 @@ export type BattleMapUpdate = typeof BattleMapUpdate.Type;
  *
  * ### What goes in
  *
- * 1. **The setting line** — what the place looks like. It is the scene, and
- *    without it there is nothing to draw ({@link battleMapHasSubject}): an
- *    encounter's name says what happens, not where, and a map drawn from a name
- *    alone is a draw spent on a guess.
- * 2. **The encounter's name**, colouring the place, shown rather than written.
+ * 1. **The setting line** — what the place looks like. When the DM wrote one
+ *    it is the scene, and the rest only colours it.
+ * 2. **The encounter's name** — without a setting line, the place is inferred
+ *    from it. Every encounter has a name, so every encounter draws: a blank
+ *    board for a DM who skipped an optional line read as nothing happening.
  * 3. **Its tags** — the DM's own labels, often the terrain and the hour.
- * 4. **Style** — `HOUSE_MAP_STYLE` (`HouseStyle.ts`): top-down, no grid (the
+ * 4. **The roster's creature types** (`undead`, `humanoid (goblinoid)`), only
+ *    when there is no setting line, as a hint at where such things are found —
+ *    a crypt, a woodland camp. Types, never names: a stat block named in the
+ *    prompt is a creature drawn on the board, and the board is where the
+ *    tokens go. Deduplicated, sorted and capped, so one roster is one prompt.
+ * 5. **Style** — `HOUSE_MAP_STYLE` (`HouseStyle.ts`): top-down, no grid (the
  *    app draws its own over the picture), no creatures, no text.
  *
  * ### What never goes in
  *
- * The roster: a creature named in the prompt is a creature drawn on the board,
- * and the board is where the tokens go. The read-aloud and notes attached to
- * the encounter are the DM's prose, often private, and not a description of
- * the ground. The difficulty band is not visual.
+ * Creature names. The read-aloud and notes attached to the encounter are the
+ * DM's prose, often private, and not a description of the ground. The
+ * difficulty band is not visual.
  */
 
 /** The most the name contributes; it is open text. */
@@ -198,11 +202,17 @@ const NAME_MAX = 120;
 /** The most the tags contribute together. */
 const TAGS_MAX = 200;
 
+/** The most creature types read, and the most each contributes. */
+const TYPES_MAX = 4;
+const TYPE_MAX = 40;
+
 /** The parts of an encounter and its map a battle map reads. */
 export interface BattleMapImageSubject {
   readonly name: string;
   readonly tags: ReadonlyArray<string>;
   readonly setting: string | null;
+  /** The roster's creature types (`creature.type`), never their names. */
+  readonly creatureTypes: ReadonlyArray<string>;
 }
 
 export interface BattleMapImageOptions {
@@ -217,9 +227,10 @@ const clean = (text: string | null | undefined, max: number): string | undefined
 
 const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 
-/** Whether there is anything to draw: a setting line with any letters in it. */
+/** Whether there is anything to draw: a setting line or a name with any letters in it. */
 export const battleMapHasSubject = (subject: BattleMapImageSubject): boolean =>
-  clean(subject.setting, ENCOUNTER_SETTING_MAX) !== undefined;
+  clean(subject.setting, ENCOUNTER_SETTING_MAX) !== undefined ||
+  clean(subject.name, NAME_MAX) !== undefined;
 
 export const battleMapPromptFor = (
   subject: BattleMapImageSubject,
@@ -234,16 +245,34 @@ export const battleMapPromptFor = (
       .join(", "),
     TAGS_MAX,
   );
-  return [
-    setting === undefined
-      ? "Top-down battle map for a tabletop roleplaying game."
-      : `Top-down battle map for a tabletop roleplaying game: ${sentence(setting)}`,
-    name === undefined
-      ? undefined
-      : `A fight here is called ${name}; let that colour the place, shown rather than written.`,
-    tags === undefined ? undefined : `Its feel: ${sentence(tags)}`,
-    options.style.trim(),
+  const types = [
+    ...new Set(
+      subject.creatureTypes
+        .map((type) => clean(type, TYPE_MAX)?.toLowerCase())
+        .filter((type) => type !== undefined),
+    ),
   ]
+    .sort()
+    .slice(0, TYPES_MAX);
+  const parts =
+    setting === undefined
+      ? [
+          name === undefined
+            ? "Top-down battle map for a tabletop roleplaying game."
+            : `Top-down battle map for a tabletop roleplaying game, of a place that suits a fight called ${name}; let the name shape the place, shown rather than written.`,
+          tags === undefined ? undefined : `Its feel: ${sentence(tags)}`,
+          types.length === 0
+            ? undefined
+            : `Choose the kind of place where ${types.join(", ")} creatures would be found, but leave them out of the picture.`,
+        ]
+      : [
+          `Top-down battle map for a tabletop roleplaying game: ${sentence(setting)}`,
+          name === undefined
+            ? undefined
+            : `A fight here is called ${name}; let that colour the place, shown rather than written.`,
+          tags === undefined ? undefined : `Its feel: ${sentence(tags)}`,
+        ];
+  return [...parts, options.style.trim()]
     .filter((part) => part !== undefined && part !== "")
     .join(" ");
 };
