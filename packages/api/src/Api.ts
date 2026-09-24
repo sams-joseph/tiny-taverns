@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
-import { BattleMap, BattleMapUpdate } from "./BattleMap.js";
+import { BattleMap, BattleMapUpdate, EncounterRunBoard } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import {
@@ -2396,6 +2396,17 @@ class RunsGroup extends HttpApiGroup.make("runs")
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: Schema.Struct({}),
       success: EncounterRun,
+      error: NotFound,
+    }),
+    /**
+     * The fight's board: its own copy of the grid and its map's picture — the
+     * creator's alone, like every endpoint here. `null` for a fight with no
+     * board, which is only one whose encounter was deleted before fights kept
+     * boards. See `EncounterRunBoard`.
+     */
+    HttpApiEndpoint.get("board", "/:runId/board", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: Schema.NullOr(EncounterRunBoard),
       error: NotFound,
     }),
     /** Audit rows for Hob's direct resource spends in this fight, newest first. */

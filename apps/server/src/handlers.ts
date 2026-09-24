@@ -1294,6 +1294,7 @@ const RunsLive = HttpApiBuilder.group(
   Effect.fnUntraced(function* (handlers) {
     const runs = yield* EncounterRuns;
     const direct = yield* HobDirectWrites;
+    const maps = yield* BattleMaps;
     const dm = yield* asDmOf;
     return handlers
       .handle("list", ({ params }) =>
@@ -1316,6 +1317,9 @@ const RunsLive = HttpApiBuilder.group(
       )
       .handle("end", ({ params }) =>
         dm(params.campaignId, (as) => runs.end(as, params.sessionId, params.runId)),
+      )
+      .handle("board", ({ params }) =>
+        dm(params.campaignId, (as) => maps.forRun(as, params.sessionId, params.runId)),
       )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),

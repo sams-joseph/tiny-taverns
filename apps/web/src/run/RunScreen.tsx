@@ -36,6 +36,7 @@ import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
+import { RunBoardBand } from "./RunBoardBand";
 import { rollsAtom, runViewAtom, type RunPath } from "./load";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
@@ -898,19 +899,22 @@ export function RunScreen() {
               340px stat panel, and with the rail gone the column reaches that
               256px sooner than the `lg:` breakpoint it replaces did. */}
           <div className="grid items-start gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
-            <InitiativeList
-              run={state.run}
-              combatants={state.combatants}
-              hpOf={controller.hpOf}
-              selectedId={selected?.id}
-              disabled={frozen}
-              onSelect={(combatant) =>
-                setSelectedId((current) => (current === combatant.id ? undefined : combatant.id))
-              }
-              onDamage={(combatant, amount) => void damage(combatant, amount)}
-              onAdd={() => setAdding(true)}
-              onRoll={() => void rollInitiative()}
-            />
+            <div className="flex flex-col gap-4">
+              <InitiativeList
+                run={state.run}
+                combatants={state.combatants}
+                hpOf={controller.hpOf}
+                selectedId={selected?.id}
+                disabled={frozen}
+                onSelect={(combatant) =>
+                  setSelectedId((current) => (current === combatant.id ? undefined : combatant.id))
+                }
+                onDamage={(combatant, amount) => void damage(combatant, amount)}
+                onAdd={() => setAdding(true)}
+                onRoll={() => void rollInitiative()}
+              />
+              <RunBoardBand path={path} />
+            </div>
 
             {/* The sheet leads at its full height; the cards under it are
                 secondary and are reached by scrolling the window, like any

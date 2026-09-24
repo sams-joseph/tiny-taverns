@@ -13,6 +13,7 @@ import {
   npcId,
   playerCazril,
   renderRunner,
+  runBoard,
   session,
   sessionEvent,
 } from "./run.fixtures";
@@ -677,5 +678,67 @@ describe("the runner", () => {
     await screen.findByText(/may be a moment behind/);
     // The list is still there. A fight the DM can read beats an error card.
     expect(rows()).toHaveLength(2);
+  });
+});
+
+describe("the fight's map band", () => {
+  const band = () => screen.getByRole("button", { name: /^Map/ });
+
+  it("is closed until the DM opens it, then draws the fight's own board", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+
+    await waitFor(() => expect(band()).toHaveAttribute("aria-expanded", "false"));
+    // The size is on the closed band; the board itself is not drawn.
+    expect(band()).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft");
+    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
+
+    await userEvent.click(band());
+    expect(band()).toHaveAttribute("aria-expanded", "true");
+    const board = document.querySelector("[data-slot=battle-map]");
+    expect(board).not.toBeNull();
+    expect(board?.querySelectorAll("[data-line=column]")).toHaveLength(25);
+    expect(board?.querySelectorAll("[data-line=row]")).toHaveLength(17);
+    // Opening it is the DM's reference, not a fight write.
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+
+    await userEvent.click(band());
+    expect(band()).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
+  });
+
+  it("draws the grid the fight kept, not the encounter's map", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, columns: 10, rows: 6, feetPerCell: 10 },
+    });
+    await renderRunner();
+    await waitFor(() => expect(band()).toHaveTextContent("10 × 6 squares · 10 ft each"));
+    await userEvent.click(band());
+    expect(document.querySelectorAll("[data-line=column]")).toHaveLength(11);
+    // The runner never asks for the encounter's live map.
+    expect(server.calls.some((call) => call.pathname.endsWith("/map"))).toBe(false);
+  });
+
+  it("says so when the fight's encounter was deleted, and keeps the squares", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, mapId: null, setting: null },
+    });
+    await renderRunner();
+    await waitFor(() => expect(band()).toBeInTheDocument());
+    await userEvent.click(band());
+    expect(screen.getByText(/This fight's encounter was deleted/)).toBeInTheDocument();
+    expect(document.querySelector("[data-slot=battle-map]")).not.toBeNull();
+  });
+
+  it("is absent for a fight with no board", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: null });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await waitFor(() =>
+      expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(true),
+    );
+    expect(screen.queryByRole("button", { name: /^Map/ })).toBeNull();
   });
 });

@@ -22,6 +22,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
+import { BattleMaps } from "../src/repo/BattleMaps.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -297,6 +298,7 @@ const runtime = ManagedRuntime.make(
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),
     ClassProgression.layer,
+    BattleMaps.layer,
     Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
     Creatures.layer,
     CampaignCreatorActors.layer,
@@ -632,6 +634,7 @@ const READS: Record<
   ) => Effect.Effect<
     ReadonlyArray<unknown>,
     { readonly _tag: string },
+    | BattleMaps
     | Beats
     | Campaigns
     | Characters
@@ -736,6 +739,15 @@ const READS: Record<
   combatant: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
       Effect.flatMap(Combatants, (r) => r.list(dm, f.session.id, f.run.id)),
+    ),
+  // A fight's board, gated like the run it belongs to; one or none, as a list.
+  encounter_run_board: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(BattleMaps, (r) =>
+        Effect.map(r.forRun(dm, f.session.id, f.run.id), (board) =>
+          board === null ? [] : [board],
+        ),
+      ),
     ),
   session_event: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
