@@ -1,13 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  bodyOf,
-  installMemoryStorage,
-  installStubServer,
-  mintingSession,
-  page,
-} from "../campaign/campaign.fixtures";
+import { bodyOf, installStubServer, mintingSession, page } from "../campaign/campaign.fixtures";
 import {
   bandit,
   bothMemberships,
@@ -36,7 +30,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const LIST = "GET /library/creatures";
 const VOCABULARY = "GET /library/creatures/environments";
@@ -55,7 +48,6 @@ const wholeLibrary = () => {
 beforeEach(() => {
   server.reset();
   wholeLibrary();
-  window.localStorage.clear();
 });
 
 const libraryCalls = () => server.calls.filter((call) => call.pathname === "/library/creatures");
@@ -413,23 +405,19 @@ describe("LibraryScreen", () => {
     await waitFor(() => expect(lastQuery().get("q")).toBe(""));
   });
 
-  it("says where a credential comes from when the one it has is refused", async () => {
-    // **A token the server does not know, not the absence of one.** Since the
-    // signed-out gate landed, a visitor with *no* credential at all never
-    // reaches this route — `marketing/SignedOutGate.tsx` renders the homepage
-    // above every match — so the reachable 401 is a stale or revoked machine
-    // token, which is what this installs. Measured in Chromium: `/library`
-    // with an empty `localStorage` draws *"Run the fight, not the
-    // spreadsheet"*, not this notice.
-    window.localStorage.setItem("taverns.token", "a-token-the-server-forgot");
+  it("says to sign in again when the session it has is refused", async () => {
+    // **A session the server does not accept, not the absence of one.** A
+    // visitor who is not signed in never reaches this route —
+    // `marketing/SignedOutGate.tsx` renders the homepage above every match —
+    // so the reachable 401 is an ended or unverifiable session.
     server.routes.set(LIST, {
       status: 401,
       body: { _tag: "Unauthorized", message: "no token" },
     });
     await renderLibrary();
 
-    expect(await screen.findByText("No credential yet")).toBeInTheDocument();
-    expect(screen.getByText(/pnpm -F server token:issue/)).toBeInTheDocument();
+    expect(await screen.findByText("Not signed in")).toBeInTheDocument();
+    expect(screen.getByText(/Sign in again from the header/)).toBeInTheDocument();
   });
 
   it("says the server did not answer, and offers to try again", async () => {

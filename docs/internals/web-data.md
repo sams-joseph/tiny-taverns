@@ -22,13 +22,13 @@ How `apps/web` reads and writes: the atom read path, the invalidation vocabulary
 
 ## The credential seam
 
-A token is fetched immediately before each call and never held, because hosted session tokens live 60 seconds. `auth/credential.ts`'s `credentialFrom` is the single statement of which credential wins (hosted session, then the machine token in `localStorage`), used by both the `useCredential` hook and the module-level `fetchCredential`.
+A token is fetched immediately before each call and never held, because hosted session tokens live 60 seconds. `auth/credential.ts`'s `credentialFrom` is the single statement of the credential (the hosted session's token; the browser has no other kind), used by both the `useCredential` hook and the module-level `fetchCredential`.
 
 The atom client layer is built outside React, so `auth/credential.ts` publishes the **`HostedSession`**, never a token; a slot holding a token would be the held credential the rule forbids. `api/atoms.ts` resolves a credential per request in `HttpClient.mapRequestEffect`, so one load mints as many tokens as it makes calls; `campaign/CampaignScreen.test.tsx` counts mints against requests rather than a literal.
 
 - **`HostedSessionScope` (`auth/AuthProvider.tsx`) publishes during render.** An atom's first read happens while a component renders, so a publish in any effect is too late. The value is derived, so publishing every render is idempotent.
-- **The slot defaults to `NO_HOSTED_SESSION`, the same value `HostedSessionContext` defaults to**, so with no provider both readers resolve the machine token and agree.
-- **A fixture for a screen that reads through atoms wraps in `HostedSessionScope`, not the raw `HostedSessionContext`**, or React and the atom layer disagree about who is signed in. (`ServerPanel.test.tsx` and `SignedOutGate.test.tsx` use the raw context; neither reads through an atom.)
+- **The slot defaults to `NO_HOSTED_SESSION`, the same value `HostedSessionContext` defaults to**, so with no provider both readers agree that nobody is signed in.
+- **A fixture for a screen that reads through atoms wraps in `HostedSessionScope`, not the raw `HostedSessionContext`**, or React and the atom layer disagree about who is signed in. (`SignedOutGate.test.tsx` uses the raw context; it reads through no atom.)
 
 ## Keys: writes name what they changed
 

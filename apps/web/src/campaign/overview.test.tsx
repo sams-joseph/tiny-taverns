@@ -12,7 +12,6 @@ import {
   character,
   characterSeat,
   encounter,
-  installMemoryStorage,
   installStubServer,
   liveRun,
   mintingSession,
@@ -36,7 +35,6 @@ import { agoOf } from "./when";
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();

@@ -5,7 +5,7 @@ import { hostedAuthNavigation } from "./navigation";
 
 describe("hosted authentication navigation", () => {
   beforeEach(() => {
-    globalThis.history.replaceState(null, "", "/server");
+    globalThis.history.replaceState(null, "", "/library");
   });
 
   it("replaces through the application's history after sign-in", async () => {

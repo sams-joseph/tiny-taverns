@@ -788,8 +788,8 @@ function TopNav({
               <AskHobSlot campaignId={campaignId} open={hobOpen} onAskHob={onAskHob} />
             )}
             {/* Clerk's own components, unthemed on purpose — see SignInSurface.
-              Renders nothing at all when no publishable key is configured, which
-              is why the bar can carry it unconditionally. It moved here from the
+              Renders nothing at all where no Clerk provider is mounted (a test),
+              which is why the bar can carry it unconditionally. It moved here from the
               per-screen bar with the rail: it belongs to the app, not the page. */}
             <SignInSurface />
           </div>

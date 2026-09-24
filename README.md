@@ -93,13 +93,14 @@ same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI
 - **pnpm** (version is pinned via the root `package.json` `packageManager` field; run
   `corepack enable` to have the right version selected automatically)
 - **Docker**, for the development database
+- **A Clerk development instance.** The browser signs in through Clerk and has no other way
+  in; see [Clerk](#clerk) below. (An offline Clerk emulator may come later; there is none now.)
 
 ## Getting started
 
 ```bash
 pnpm install
 pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
-pnpm -F server token:issue Jo   # prints a DM bearer token, once
 pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
 pnpm -F server ruleset:import   # loads 2014 classes/races/backgrounds, feats, rules and rule sections (idempotent)
 pnpm -F server spell:import      # loads bundled 2014 SRD spells and class/subclass links (optional, idempotent)
@@ -122,13 +123,11 @@ Against a Postgres this repo's Docker does not own, the reset half is
 `pnpm -F server db:reset:fresh -- --force` (drop + recreate the database `DATABASE_URL` names, then
 migrate) — the product's one destructive command, run by a person, never by the server.
 
-That is the whole setup, and it needs no Clerk account. Paste the token into the Server
-panel's **Machine token** box to reach the authenticated endpoints.
+### Clerk
 
-### Optional: hosted sign-in
-
-Sign-in through Clerk is opt-in — with neither variable set the app and the whole test
-suite behave exactly as above, and a JWT-shaped credential is simply unknown.
+Clerk is a prerequisite for running the app. With no publishable key the web app shows a notice
+saying what to set instead of itself, and with no JWT key the server cannot verify anybody who
+signs in. Both come from the same Clerk instance:
 
 ```bash
 # apps/web/.env.local — gitignored; see apps/web/.env.example
@@ -152,9 +151,14 @@ Neither value is a secret: one identifies the frontend, the other only _verifies
 either. Its one reader is the authenticated Playwright suite, which runs in Node beside them
 and never hands it to either (`apps/web/e2e/README.md`).
 
+To check a change in a real browser, sign in as one of the instance's two `+clerk_test` users
+(`USERS` in `apps/web/e2e/auth/support/clerk.ts`) the way that suite does: `signIn` in
+`apps/web/e2e/auth/support/fixtures.ts`, after `clerkSetup()`. Such an address passes the
+email code `424242` and receives no mail. Never create, change or delete a Clerk user.
+
 ### Optional: object storage
 
-File storage is opt-in too. With `STORAGE_DRIVER` unset the server logs `Storage is OFF`
+File storage is opt-in. With `STORAGE_DRIVER` unset the server logs `Storage is OFF`
 and anything that stores files reports it unavailable. For local development, store files
 in a directory:
 
@@ -271,9 +275,6 @@ Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Even
 header, which a browser's `EventSource` sends by itself). `docs/internals/live-session.md` has the
 full contract the runner UI is written against.
 
-The web app's `/server` page calls the live API through the client derived from that same
-declaration — paste a token there to see it list your campaigns.
-
 **The bestiary is campaign copies plus two bundled corpora in one list.** A campaign's own
 creatures live under it; `system` creatures are global, immutable and shared by every campaign,
 and the only thing that writes them is `pnpm -F server bestiary:import` — a shell command rather
@@ -314,15 +315,16 @@ from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Drag
 keys on rows; attribution is carried in the web footer and README rather than in per-row provenance
 tables. See `THIRD_PARTY_NOTICES.md` for the bundled notice text.
 
-### Hosted sign-in (optional)
+### Sign-in and machine tokens
 
-The server accepts a second kind of bearer credential: a session token from a hosted
-identity provider, currently Clerk. **It is off unless you configure it**, and everything
-above — `pnpm -F server dev`, `token:issue`, the whole test suite — works with it off. You
-do not need a Clerk account to develop on this repository, and the tests never need one
-ever (they sign tokens with a keypair they generate in-process).
+The server accepts two kinds of bearer credential, and they converge on one actor. A browser
+always sends a session token from Clerk (see [Clerk](#clerk)). A **machine token** from
+`pnpm -F server token:issue <name>` is for scripts, `curl` and the server's tests; no browser
+path accepts one. With `CLERK_JWT_KEY` unset the server still boots and the whole server suite
+passes (the tests sign session tokens with a keypair they generate in-process), but nobody can
+sign in to the web app.
 
-To turn it on, set one variable in **`apps/server/.env.local`** — copy
+The server reads its half from **`apps/server/.env.local`** — copy
 `apps/server/.env.example`, which documents every variable the server reads:
 
 ```bash
@@ -351,7 +353,7 @@ are verified offline, so an attacker holding the whole environment still cannot 
 session for anybody. Keeping it that way is a deliberate security property, not an
 oversight.
 
-Two consequences worth knowing before you configure it:
+Two consequences worth knowing:
 
 - The key is validated at boot. A PEM Clerk cannot use fails the server loudly with an
   explanatory message, rather than rejecting every sign-in as a bad signature later.
@@ -362,8 +364,8 @@ Two consequences worth knowing before you configure it:
 
 Accounts are provisioned just-in-time: the first authenticated request from a person the
 server has not seen creates their account. Signing in this way always creates a _new_
-account — existing machine-token accounts are never linked to it, and their campaigns stay
-reachable only with their token.
+account — machine-token accounts are never linked to it, and their campaigns stay reachable
+only with their token.
 
 The server is structured idiomatically with **Effect v4** (currently in beta, pinned to
 exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
@@ -379,7 +381,7 @@ Vitest runs in every workspace project. Each has at least one real, passing test
 - `apps/server` — migrations from empty to current, the visibility seam, a schema-adherence
   guard, the whole API through the derived client against a real in-process server, and a
   production-start smoke test that runs the real build output under plain `node`. Both
-  credential kinds are covered, including hosted sign-in — offline, against a keypair the
+  credential kinds are covered, machine tokens and hosted sign-in — the latter offline, against a keypair the
   test generates, so the suite needs no vendor account and no network. The live session gets
   two files: the state underneath it (seeding, the turn marker, hit points at zero, one live
   fight per session) and the SSE stream itself, including a client that drops mid-fight and
@@ -400,7 +402,8 @@ Postgres's shared lock table even while its connection limit has ample room.
 `apps/web` also has a Playwright suite, `pnpm -F web e2e`, that measures the shell's layout
 in Chromium (overflow, fixed chrome heights, alignment across a campaign's tabs, the Hob
 panel, the global nav panels, the Overview heroes) over the same fixture maps, served by a
-stub API inside Vite, so it needs no database or API server. `apps/web/e2e/README.md` says
+stub API inside Vite and signed in by a stand-in session, so it needs no database, API
+server or Clerk keys. `apps/web/e2e/README.md` says
 how to run, debug and extend it; install its browser once with
 `pnpm -F web exec playwright install chromium`. A second suite, `pnpm -F web e2e:auth`,
 signs in through Clerk's development instance against the real server and a throwaway

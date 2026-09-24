@@ -10,7 +10,6 @@ import {
   encounter,
   encounterId,
   goblinId,
-  installMemoryStorage,
   installStubServer,
   liveRun,
   mintingSession,
@@ -38,7 +37,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const campaignPath = `/campaigns/${campaignId}`;
 const encountersPath = `/campaigns/${campaignId}/encounters`;
@@ -53,7 +51,6 @@ const created = (name: string) => ({
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 /**

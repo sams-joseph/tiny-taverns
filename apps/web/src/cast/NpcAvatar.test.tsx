@@ -7,15 +7,14 @@ import {
   campaignId,
   cazril,
   drawnNpcPortrait,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
-  noSession,
   npcId,
   playerCazril,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { NpcAvatar } from "./NpcAvatar";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * An NPC's plate: initials always, Hob's portrait over them when there is one,
@@ -26,11 +25,9 @@ import { NpcAvatar } from "./NpcAvatar";
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
   globalThis.history.replaceState(null, "", "/");
 });
 afterEach(() => cleanup());
@@ -86,7 +83,7 @@ describe("NpcAvatar", () => {
 
 const renderCreator = async (path: string): Promise<void> => {
   await renderAt(path, (route) => (
-    <HostedSessionScope session={noSession}>{route}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{route}</HostedSessionScope>
   ));
 };
 

@@ -95,13 +95,13 @@ const signedOut: HostedSession = {
 };
 
 /**
- * The join page, with **no machine token pasted** — unlike every other screen
- * fixture here.
+ * The join page, **without `renderAt`'s default test session** — unlike every
+ * other screen fixture here.
  *
  * That is the point of the page rather than a detail of the test: it renders
  * before there is anybody to render it for, and `JoinScreen` decides whether to
- * offer the seat on whether *any* credential exists. Handed the default token
- * `renderAt` pastes, the signed-out case below would be a signed-in one and the
+ * offer the seat on whether anybody is signed in. Handed the default session,
+ * the signed-out case below would be a signed-in one and the
  * assertion that there is nothing to press would silently stop meaning
  * anything. The route's exemption from the signed-out gate is asserted in
  * `marketing/SignedOutGate.test.tsx`.

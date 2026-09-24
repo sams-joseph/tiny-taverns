@@ -89,11 +89,11 @@ Paged: the corpus lists plus notes, encounters and beats (`createdPageOf`). List
 
 ## Authentication: two credential kinds, one seam
 
-A bearer token is either a machine token (`token:issue`, SHA-256 into `account.token_hash`) or a hosted session token (currently Clerk). They converge on one `Actor` in `Authorization.ts`, and nothing below that line knows there are two kinds. What an actor is belongs to [Visibility](visibility.md).
+A bearer token is either a machine token (`token:issue`, SHA-256 into `account.token_hash`) or a hosted session token (currently Clerk). The web app only ever sends the second; machine tokens are for the server's tests and for scripts. They converge on one `Actor` in `Authorization.ts`, and nothing below that line knows there are two kinds. What an actor is belongs to [Visibility](visibility.md).
 
 - **Classification is total.** A JWS compact serialization is exactly three dot-separated segments and a machine token is base64url, which contains no dot, so `credential.split(".").length === 3` cannot misfile one. Two `HttpApiSecurity.bearer` schemes would emit duplicate OpenAPI schemes and report the last one's error for every failure.
 - **The vendor is confined to `ClerkIdentityProvider.ts`**, and `IdentityProvider` names no vendor: it verifies a credential into a local `VerifiedIdentity`; `Accounts` provisions, `Authorization` authorizes. `apps/server/test/seam.test.ts` fails on a `@clerk/*` import anywhere else. It is also the only shape that compiles: `@clerk/shared` is transitive under pnpm's isolated layout, so a vendor type in an exported signature is TS2742.
-- **`CLERK_JWT_KEY` is optional and is a public key.** Unset means `IdentityProvider.disabled`: the server boots, the suite passes, a JWT-shaped credential is simply unknown (`identity-disabled.test.ts`). **`CLERK_SECRET_KEY` is deliberately absent**; tokens are verified offline with `verifyToken`, never `authenticateRequest`, which needs a publishable key and models a cookie handshake this API never has.
+- **`CLERK_JWT_KEY` is a public key, required to run the app and not to run the suite.** Unset means `IdentityProvider.disabled`: the server boots, the suite passes, a JWT-shaped credential is simply unknown (`identity-disabled.test.ts`), and nobody can sign in to the web app. The mode stays because the server suite and scripts run in it. **`CLERK_SECRET_KEY` is deliberately absent**; tokens are verified offline with `verifyToken`, never `authenticateRequest`, which needs a publishable key and models a cookie handshake this API never has.
 
 Four SDK traps:
 

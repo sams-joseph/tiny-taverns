@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaignId,
   worldId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderSharedWorldChronicle,
@@ -21,7 +20,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const historyPath = `/worlds/${worldId}/history`;
 
@@ -54,7 +52,6 @@ const manual = {
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 describe("the chronicle section", () => {

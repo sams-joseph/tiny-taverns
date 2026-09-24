@@ -1,22 +1,14 @@
 import { cleanup, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
 import { renderAt } from "../test/renderRoute";
-import { installMemoryStorage } from "../test/storage";
 
 /**
  * The gate, in every state it has — which is the part of this work a future
  * session will most need to be able to check.
  *
- * **The captain's wording is the specification**: *"it shows when there is
- * neither a hosted session nor a developer token"*. So the three states below
- * are not three ways of saying "signed in": a machine token and a hosted
- * session are different credentials resolved by different code, and the whole
- * reason the gate is written against `auth/credential.ts` rather than against
- * the hosted session is that in development there is usually no hosted session
- * to have.
- *
- * The fourth case is the one with no visible symptom until it is wrong: a
+ * It shows when nobody is signed in. The case with no visible symptom until it
+ * is wrong is a
  * configured provider that has not answered yet. Read as "not signed in" it
  * paints the homepage over the app on every load, so it is asserted here as
  * *neither page*.
@@ -47,12 +39,6 @@ const wrap = (hosted: HostedSession) => (tree: React.ReactNode) => (
   <HostedSessionContext value={hosted}>{tree}</HostedSessionContext>
 );
 
-installMemoryStorage();
-
-beforeEach(() => {
-  window.localStorage.clear();
-});
-
 afterEach(cleanup);
 
 /** The homepage's own headline — nothing else in the product says it. */
@@ -61,22 +47,14 @@ const marketing = () => screen.queryByRole("heading", { name: /Run the fight/ })
 const appNav = () => screen.queryByRole("navigation", { name: "Sections" });
 
 describe("the signed-out gate", () => {
-  it("shows the homepage when there is neither credential", async () => {
+  it("shows the homepage when nobody is signed in", async () => {
     await renderAt(CAMPAIGN_LIST, wrap(session({})), "none");
 
     expect(marketing()).toBeInTheDocument();
     expect(appNav()).toBeNull();
   });
 
-  it("shows the app to a pasted developer token, with no hosted sign-in at all", async () => {
-    window.localStorage.setItem("taverns.token", "a-machine-token");
-    await renderAt(CAMPAIGN_LIST, wrap(session({})), "none");
-
-    expect(appNav()).toBeInTheDocument();
-    expect(marketing()).toBeNull();
-  });
-
-  it("shows the app to a hosted session, with nothing in storage", async () => {
+  it("shows the app to a hosted session", async () => {
     await renderAt(CAMPAIGN_LIST, wrap(session({ configured: true, signedIn: true })), "none");
 
     expect(appNav()).toBeInTheDocument();
@@ -99,38 +77,21 @@ describe("the signed-out gate", () => {
     expect(marketing()).toBeNull();
     expect(appNav()).toBeNull();
   });
-
-  it("does not wait on a loading provider when a token is already pasted", async () => {
-    window.localStorage.setItem("taverns.token", "a-machine-token");
-    await renderAt(CAMPAIGN_LIST, wrap(session({ configured: true, loading: true })), "none");
-
-    expect(appNav()).toBeInTheDocument();
-  });
 });
 
 /**
- * The two routes the gate must not swallow, and the first is a security
- * property rather than a convenience: `/join/<token>` previews an invitation
+ * The route the gate must not swallow, and it is a security property rather
+ * than a convenience: `/join/<token>` previews an invitation
  * *before* the reader has an account, which is the whole point of it. A gate
  * that reached it would break the one flow designed to run with no credential,
  * and would do it silently — the homepage renders perfectly well over an
  * invitation.
  */
-describe("the routes that render signed out", () => {
+describe("the route that renders signed out", () => {
   it("still shows the invitation preview at /join/<token>", async () => {
     await renderAt(`/join/${TOKEN}`, wrap(session({})), "none");
 
     expect(marketing()).toBeNull();
     expect(await screen.findByRole("heading", { name: "An invitation" })).toBeInTheDocument();
-  });
-
-  it("still shows the Server page, which is where a developer token is pasted", async () => {
-    await renderAt("/server", wrap(session({})), "none");
-
-    expect(marketing()).toBeNull();
-    // `ServerPanel`'s own heading: the reason this route is exempt is that the
-    // homepage's call to action points at it, and a gate over it would be a
-    // circle nobody could get out of.
-    expect(screen.getByRole("heading", { name: "Server" })).toBeInTheDocument();
   });
 });

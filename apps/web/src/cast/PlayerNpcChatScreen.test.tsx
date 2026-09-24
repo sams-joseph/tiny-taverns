@@ -1,29 +1,21 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import {
-  campaignId,
-  installMemoryStorage,
-  installStubServer,
-  noSession,
-  npcId,
-  playerCazril,
-} from "../campaign/campaign.fixtures";
+import { campaignId, installStubServer, npcId, playerCazril } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { TEST_SESSION } from "../test/session";
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 afterEach(() => cleanup());
 
 const renderChat = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/cast/${npcId}/talk`, (route) => (
-    <HostedSessionScope session={noSession}>{route}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{route}</HostedSessionScope>
   ));
 };
 

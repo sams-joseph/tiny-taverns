@@ -6,7 +6,6 @@ import {
   campaign,
   campaignId,
   worldId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderScreen,
@@ -22,7 +21,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const invitesPath = `/campaigns/${campaignId}/invites`;
 
@@ -60,7 +58,6 @@ const TOKEN = "Nk9-b3JkZXJfb2ZfdGhlX2ZlcnJ5bWFu";
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 const openInvites = async () => {
@@ -196,8 +193,8 @@ describe("inviting a player", () => {
     await waitFor(() => expect(readsOf()).toHaveLength(2));
 
     // Two reads through the atom client, two distinct hosted tokens — and both
-    // of them the hosted session's rather than the pasted machine token, which
-    // is what says the publish out of React reached the layer at all.
+    // of them this session's rather than the default test session's, which is
+    // what says the publish out of React reached the layer at all.
     const second = readsOf()[1]!.authorization;
     expect(first).toMatch(/^Bearer session-token-\d+$/);
     expect(second).toMatch(/^Bearer session-token-\d+$/);

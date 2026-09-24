@@ -29,7 +29,6 @@ import { MyCharactersScreen } from "./characters/MyCharactersScreen";
 import { ChronicleRouteScreen } from "./chronicle/ChronicleRoute";
 import { CompendiumLibraryScreen } from "./compendium/CompendiumLibraryScreen";
 import { EquipmentLibraryScreen } from "./equipment/EquipmentLibraryScreen";
-import { ServerScreen } from "./server/ServerScreen";
 import { JoinScreen } from "./join/JoinScreen";
 import { MagicItemLibraryScreen } from "./magic-items/MagicItemLibraryScreen";
 import {
@@ -156,9 +155,9 @@ const shellRoute = createRoute({
 });
 
 /**
- * The two routes outside it, in the same shell without the Hob panel. See
- * `StandaloneLayout` for why each is outside; the signed-out gate's exemption of
- * both is path-based and does not care which layout they are in.
+ * The route outside it, in the same shell without the Hob panel. See
+ * `StandaloneLayout` for why it is outside; the signed-out gate's exemption of
+ * it is path-based and does not care which layout it is in.
  */
 const standaloneRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -614,13 +613,6 @@ const joinRoute = createRoute({
   remountDeps: ({ params }) => params.token,
 });
 
-/** Where a machine token is pasted; see `ServerScreen`. */
-const serverRoute = createRoute({
-  getParentRoute: () => standaloneRoute,
-  path: "/server",
-  component: ServerScreen,
-});
-
 /**
  * Anything else is the campaign home.
  *
@@ -681,7 +673,7 @@ export const routeTree = rootRoute.addChildren([
     ]),
     catchAllRoute,
   ]),
-  standaloneRoute.addChildren([joinRoute, serverRoute]),
+  standaloneRoute.addChildren([joinRoute]),
 ]);
 
 /**
@@ -735,5 +727,4 @@ export const routes = {
   characters: charactersRoute,
   character: characterRoute,
   join: joinRoute,
-  server: serverRoute,
 } as const;

@@ -300,17 +300,15 @@ describe("your characters", () => {
     expect(screen.queryByText("No characters yet")).toBeNull();
   });
 
-  it("asks for a credential when there is none, and says where to get one", async () => {
+  it("says to sign in again when the server refuses the session", async () => {
     server.routes.set("GET /me/characters", {
       status: 401,
       body: { _tag: "Unauthorized", message: "no token" },
     });
     await renderRoster();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("No credential yet");
-    // A normal way to run this app, so it points at the machine token rather
-    // than at a sign-in that may not exist here.
-    expect(screen.getByText(/pnpm -F server token:issue/)).toBeTruthy();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Not signed in");
+    expect(screen.getByText(/Sign in again from the header/)).toBeTruthy();
   });
 
   it("says Hob is drawing, re-reads, and lays the portrait over the monogram", async () => {

@@ -3,13 +3,8 @@ import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { renderAt } from "../test/renderRoute";
 import { type HostedSession } from "../auth/hostedSession";
-import {
-  campaign,
-  campaignId,
-  dmAccountId,
-  goblin,
-  noSession,
-} from "../campaign/campaign.fixtures";
+import { campaign, campaignId, dmAccountId, goblin } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The test wire for both lists over `creature`.
@@ -164,14 +159,14 @@ export const libraryFacets = {
   crMax: 5,
 };
 
-export const renderBestiary = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderBestiary = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/bestiary`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
 };
 
 /** The Library names no campaign — that is the whole shape of the read behind it. */
-export const renderLibrary = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderLibrary = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt("/library", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));

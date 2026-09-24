@@ -5,7 +5,6 @@ import {
   campaign,
   campaignId,
   drawnCover,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderScreen,
@@ -21,11 +20,9 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 afterEach(cleanup);
 

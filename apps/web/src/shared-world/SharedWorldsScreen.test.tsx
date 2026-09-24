@@ -10,7 +10,6 @@ import {
   sharedWorld,
   sharedWorldDetails,
   worldId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
@@ -28,7 +27,6 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 const frame = (event: string, data: unknown): string =>
   `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -52,7 +50,6 @@ const aimDirectory = (relation: "creator" | "player" | "none") =>
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 describe("the Shared Worlds list", () => {

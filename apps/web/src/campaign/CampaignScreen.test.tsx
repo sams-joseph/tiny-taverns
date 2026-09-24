@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaign,
   campaignId,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   prepItemId,
@@ -27,11 +26,9 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 describe("CampaignScreen", () => {
@@ -154,25 +151,15 @@ describe("CampaignScreen", () => {
     expect(patch?.authorization).toBe(`Bearer session-token-${reads + 1}`);
   });
 
-  it("falls back to the pasted machine token when nobody is signed in", async () => {
-    window.localStorage.setItem("taverns.token", "a-machine-token");
-    await renderScreen();
-
-    await screen.findByRole("heading", { name: "The Salt Road" });
-    expect(server.calls[0]?.authorization).toBe("Bearer a-machine-token");
-  });
-
-  it("says what to do when there is no credential at all", async () => {
+  it("says to sign in again when the server refuses the session", async () => {
     server.routes.set(`GET /campaigns/${campaignId}`, {
       status: 401,
       body: { _tag: "Unauthorized", message: "no token" },
     });
     await renderScreen();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("No credential yet");
-    // The unconfigured branch: this is a normal way to run the app, so it points
-    // at the machine token rather than a sign-in that does not exist here.
-    expect(screen.getByText(/pnpm -F server token:issue/)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Not signed in");
+    expect(screen.getByText(/Sign in again from the header/)).toBeInTheDocument();
   });
 
   it("tells a transport failure apart from a refusal", async () => {

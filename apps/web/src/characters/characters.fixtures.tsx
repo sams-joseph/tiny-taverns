@@ -38,6 +38,7 @@ export {
   longswordRow,
   sessionId,
 } from "../campaign/campaign.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 export { brannocId };
 export const sorrelId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000902");
@@ -694,15 +695,8 @@ export const bodyOf = (server: CharacterStubServer, method: string, fragment: st
  */
 export const savedAs = (character: unknown): Answer => ({ status: 200, body: character });
 
-export const noSession: HostedSession = {
-  configured: false,
-  signedIn: false,
-  loading: false,
-  fetchToken: () => Promise.resolve(undefined),
-};
-
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
-export const renderRoster = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderRoster = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt("/characters", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
@@ -717,7 +711,7 @@ export const renderRoster = async (hosted: HostedSession = noSession): Promise<v
  */
 export const renderCreate = async (
   at: string = campaignId,
-  hosted: HostedSession = noSession,
+  hosted: HostedSession = TEST_SESSION,
 ): Promise<void> => {
   await renderAt(`/campaigns/${at}/characters/new`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
@@ -725,7 +719,7 @@ export const renderCreate = async (
 };
 
 /** The create form with no campaign: the core rules, at `/characters/new`. */
-export const renderCoreCreate = async (hosted: HostedSession = noSession): Promise<void> => {
+export const renderCoreCreate = async (hosted: HostedSession = TEST_SESSION): Promise<void> => {
   await renderAt("/characters/new", (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>
   ));
@@ -733,7 +727,7 @@ export const renderCoreCreate = async (hosted: HostedSession = noSession): Promi
 
 export const renderSheet = async (
   characterId = brannocId,
-  hosted: HostedSession = noSession,
+  hosted: HostedSession = TEST_SESSION,
 ): Promise<void> => {
   await renderAt(`/characters/${characterId}`, (screen) => (
     <HostedSessionScope session={hosted}>{screen}</HostedSessionScope>

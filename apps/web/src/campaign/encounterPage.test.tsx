@@ -10,7 +10,6 @@ import {
   campaignId,
   encounter,
   encounterId,
-  installMemoryStorage,
   installStubServer,
   liveRun,
   renderEncounters,
@@ -24,11 +23,9 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
   globalThis.history.replaceState(null, "", "/");
 });
 afterEach(() => cleanup());

@@ -2,13 +2,7 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderAt } from "../test/renderRoute";
-import {
-  battleMap,
-  campaignId,
-  encounterId,
-  installMemoryStorage,
-  installStubServer,
-} from "./campaign.fixtures";
+import { battleMap, campaignId, encounterId, installStubServer } from "./campaign.fixtures";
 
 /**
  * *Adjust grid* on an encounter's page: the board previews the draft, the form
@@ -17,11 +11,9 @@ import {
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
   globalThis.history.replaceState(null, "", "/");
 });
 afterEach(() => cleanup());

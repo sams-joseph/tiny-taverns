@@ -2,22 +2,14 @@ import { cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import {
-  campaignId,
-  cazril,
-  installMemoryStorage,
-  installStubServer,
-  noSession,
-  npcId,
-} from "../campaign/campaign.fixtures";
+import { campaignId, cazril, installStubServer, npcId } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { TEST_SESSION } from "../test/session";
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 afterEach(() => cleanup());
@@ -119,7 +111,7 @@ const followUp = {
 
 const renderFollowUp = async (path = `/campaigns/${campaignId}/cast/follow-up`): Promise<void> => {
   await renderAt(path, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 

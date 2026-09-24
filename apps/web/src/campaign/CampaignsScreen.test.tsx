@@ -6,7 +6,6 @@ import {
   campaign,
   campaignId,
   sharedWorldDetails,
-  installMemoryStorage,
   installStubServer,
   mintingSession,
   renderCampaigns,
@@ -14,7 +13,6 @@ import {
 } from "./campaign.fixtures";
 
 const server = installStubServer();
-installMemoryStorage();
 
 /**
  * The campaign's own Shared World control: its Overview's actions menu, since
@@ -34,7 +32,6 @@ const openNewCampaign = async () => {
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
   globalThis.history.replaceState(null, "", "/");
 });
 

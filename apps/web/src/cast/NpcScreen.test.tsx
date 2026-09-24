@@ -6,14 +6,13 @@ import {
   bodyOf,
   campaignId,
   cazril,
-  installMemoryStorage,
   installStubServer,
-  noSession,
   npcId,
   npcRehearsalStatus,
   npcThreadId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * One NPC's screen: the persona with its private half marked, the inspector
@@ -23,18 +22,16 @@ import { renderAt } from "../test/renderRoute";
  */
 
 const server = installStubServer();
-installMemoryStorage();
 
 beforeEach(() => {
   server.reset();
-  window.localStorage.clear();
 });
 
 afterEach(() => cleanup());
 
 const renderNpc = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/cast/${npcId}`, (screen) => (
-    <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };
 
@@ -409,7 +406,7 @@ describe("NpcScreen", () => {
       body: [proposal],
     });
     await renderAt(`/campaigns/${campaignId}/cast/${npcId}#proposals`, (screen) => (
-      <HostedSessionScope session={noSession}>{screen}</HostedSessionScope>
+      <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
     ));
 
     expect(await screen.findByRole("heading", { name: "Pending proposals" })).toBeInTheDocument();

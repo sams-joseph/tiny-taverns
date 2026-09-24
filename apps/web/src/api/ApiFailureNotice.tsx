@@ -1,7 +1,5 @@
-import { Link } from "@tanstack/react-router";
 import { FailureNotice, type IconName } from "@taverns/ui";
 import type { ReactNode } from "react";
-import { useHostedSession } from "../auth/hostedSession";
 import type { ApiFailure } from "./failure";
 
 /**
@@ -10,30 +8,14 @@ import type { ApiFailure } from "./failure";
  *
  * The voice guide is explicit: *"Errors are matter-of-fact and bounded."* The
  * copy is the app's rather than the package's because it depends on why the
- * request failed and on whether hosted sign-in is configured, neither of which
- * a component library can know.
+ * request failed, which a component library cannot know.
  */
-
-/** Where a machine token is pasted, named the same way in every failure notice. */
-function ServerPanelPointer() {
-  return (
-    <>
-      Paste a machine token on the{" "}
-      <Link to="/server" className="text-link hover:text-link-hover">
-        Server page
-      </Link>
-      . <code className="font-mono text-mono text-slate-300">pnpm -F server token:issue</code>{" "}
-      prints one.
-    </>
-  );
-}
 
 /**
  * A failed load, said plainly, with the one thing that might fix it.
  *
- * The `unauthorized` branch is the state a developer who has never opened the
- * Clerk dashboard sees first, so it must not read as breakage: no credential is
- * a normal way to run this app, and the notice says where to get one.
+ * The `unauthorized` branch is a session that ended or a sign-in the server
+ * could not verify; the notice says to sign in again.
  */
 export function ApiFailureNotice({
   failure,
@@ -42,24 +24,13 @@ export function ApiFailureNotice({
   readonly failure: ApiFailure;
   readonly onRetry?: () => void;
 }) {
-  const { configured } = useHostedSession();
-
   const { icon, title, body }: { icon: IconName; title: string; body: ReactNode } = (() => {
     switch (failure.kind) {
       case "unauthorized":
         return {
           icon: "lock" as const,
-          title: "No credential yet",
-          body: configured ? (
-            <>
-              Sign in from the header, or work with a machine token instead. <ServerPanelPointer />
-            </>
-          ) : (
-            <>
-              Hosted sign-in is not configured, which is a fine way to run this.{" "}
-              <ServerPanelPointer />
-            </>
-          ),
+          title: "Not signed in",
+          body: "Your session has ended, or the server could not verify it. Sign in again from the header.",
         };
       case "missing":
         return {

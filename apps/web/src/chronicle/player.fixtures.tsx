@@ -1,7 +1,6 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
-import { NO_HOSTED_SESSION } from "../auth/hostedSession";
 import {
   beat,
   campaign,
@@ -15,6 +14,7 @@ import {
   type Answer,
   type Call,
 } from "./chronicle.fixtures";
+import { TEST_SESSION } from "../test/session";
 
 /**
  * The player Chronicle's wire — **the DM's fixtures, narrowed exactly where the
@@ -200,6 +200,6 @@ export const installPlayerChronicleServer = (): StubServer => {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
 export const renderPlayerChronicle = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
-    <HostedSessionScope session={NO_HOSTED_SESSION}>{screen}</HostedSessionScope>
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

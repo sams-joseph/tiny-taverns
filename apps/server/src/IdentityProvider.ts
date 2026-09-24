@@ -55,12 +55,12 @@ export class IdentityProvider extends Context.Service<
    * No hosted sign-in is configured: nothing verifies, so every credential
    * that reaches here is unknown.
    *
-   * This is load-bearing rather than a nicety. It is what lets someone who has
-   * never opened a provider's dashboard run `pnpm -F server dev` and the whole
-   * test suite — the machine-token path is untouched, and a session-token
-   * shaped credential is rejected exactly like any other unknown one. Making
-   * the verification key required would quietly turn an opt-in dependency into
-   * a mandatory one.
+   * This is load-bearing rather than a nicety, though the web app cannot sign
+   * anybody in without Clerk. It is what the server suite runs under, and what
+   * lets a script or a test drive the API with a machine token and no vendor:
+   * the machine-token path is untouched, and a session-token shaped credential
+   * is rejected exactly like any other unknown one. Making the verification key
+   * required would make every server test depend on a Clerk instance.
    */
   static readonly disabled: Layer.Layer<IdentityProvider> = Layer.succeed(this)({
     verify: () => Effect.succeedNone,

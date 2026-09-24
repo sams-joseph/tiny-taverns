@@ -658,11 +658,11 @@ describe("the runner", () => {
     expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#proposals`);
   });
 
-  it("says where to get a credential rather than looking broken", async () => {
+  it("says to sign in again rather than looking broken", async () => {
     reaim("GET", { status: 401, body: { _tag: "Unauthorized", message: "no token" } });
     await renderRunner();
 
-    await screen.findByText("No credential yet");
+    await screen.findByText("Not signed in");
   });
 
   it("keeps the fight on screen when a re-read fails, and says it may be behind", async () => {
