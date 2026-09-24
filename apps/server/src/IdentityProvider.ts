@@ -56,11 +56,11 @@ export class IdentityProvider extends Context.Service<
    * that reaches here is unknown.
    *
    * This is load-bearing rather than a nicety, though the web app cannot sign
-   * anybody in without Clerk. It is what the server suite runs under, and what
+   * anybody in without a provider. It is what the server suite runs under, and what
    * lets a script or a test drive the API with a machine token and no vendor:
    * the machine-token path is untouched, and a session-token shaped credential
    * is rejected exactly like any other unknown one. Making the verification key
-   * required would make every server test depend on a Clerk instance.
+   * required would make every server test depend on a vendor account.
    */
   static readonly disabled: Layer.Layer<IdentityProvider> = Layer.succeed(this)({
     verify: () => Effect.succeedNone,
