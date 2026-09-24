@@ -559,21 +559,41 @@ function globalTriggers() {
  * The open panel: whether its trigger says so, its box against the viewport,
  * its links, whether the first of them is what a pointer at its centre lands
  * on (the panel is on top of the chrome it opens from), and whether opening it
- * made the page any wider.
+ * made the page any wider. Then its hero and rows: the hero's picture decoded
+ * and which of its widths the browser chose, the tile and every row inside the
+ * panel's box, every row carrying a description, and nothing in the panel
+ * wider than the panel (its viewport clips sideways, so an overflow there is
+ * text cut off rather than a page that scrolls).
  */
-function globalPanel(name) {
+async function globalPanel(name) {
   const trigger = [...document.querySelectorAll('nav[aria-label="Sections"] button')].find(
     (button) => button.textContent.trim() === name,
   );
   const popup = document.querySelector('[data-slot="navigation-menu-popup"]');
   if (popup === null) return { expanded: trigger?.getAttribute("aria-expanded"), popup: null };
+  const image = popup.querySelector('[data-slot="navigation-menu-hero"] img');
+  if (image !== null && !image.complete)
+    await new Promise((resolve) => {
+      image.addEventListener("load", resolve, { once: true });
+      image.addEventListener("error", resolve, { once: true });
+      setTimeout(resolve, 3000);
+    });
   const box = popup.getBoundingClientRect();
+  const inside = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+  };
   const links = [...popup.querySelectorAll("a[href]")];
   const first = links[0]?.getBoundingClientRect();
   const hit =
     first === undefined
       ? null
       : document.elementFromPoint(first.x + first.width / 2, first.y + first.height / 2);
+  const hero = popup.querySelector('[data-slot="navigation-menu-hero"]');
+  const viewportEl = popup.querySelector('[data-slot="navigation-menu-viewport"]');
+  const nameOf = (link) =>
+    document.getElementById(link.getAttribute("aria-labelledby") ?? "")?.textContent.trim() ??
+    link.textContent.trim();
   return {
     expanded: trigger?.getAttribute("aria-expanded"),
     popup: {
@@ -581,7 +601,21 @@ function globalPanel(name) {
       right: Math.round(box.right),
       bottom: Math.round(box.bottom),
     },
-    links: links.map((link) => link.textContent.trim()),
+    links: links.map(nameOf),
+    undescribed: links.filter((link) => !link.hasAttribute("aria-describedby")).map(nameOf),
+    outside: links.filter((link) => !inside(link)).map(nameOf),
+    hero:
+      hero === null
+        ? null
+        : {
+            w: Math.round(hero.getBoundingClientRect().width),
+            h: Math.round(hero.getBoundingClientRect().height),
+            inside: inside(hero),
+            beside: hero.getBoundingClientRect().right <= (first?.left ?? 0) + 0.5,
+            decoded: image !== null && image.complete && image.naturalWidth > 0,
+            chose: image?.currentSrc.split("/").pop().split("?")[0] ?? null,
+          },
+    innerOverflow: viewportEl === null ? null : viewportEl.scrollWidth - viewportEl.clientWidth,
     onTop: hit !== null && links[0].contains(hit),
     scrollWidth: document.documentElement.scrollWidth,
     viewport: { w: document.documentElement.clientWidth, h: window.innerHeight },
@@ -1007,6 +1041,16 @@ for (const p of panels) {
   if (p.scrollWidth > p.viewport.w)
     findings.push(`${at}: scrollWidth ${p.scrollWidth} != ${p.viewport.w}`);
   if (!p.onTop) findings.push(`${at}: its first link is under something`);
+  if (p.hero === null) findings.push(`${at} has no hero`);
+  else {
+    if (!p.hero.decoded) findings.push(`${at}: its hero picture did not load`);
+    if (!p.hero.inside) findings.push(`${at}: its hero is drawn past the panel`);
+  }
+  if (p.undescribed.length > 0)
+    findings.push(`${at}: no description on ${p.undescribed.join(", ")}`);
+  if (p.outside.length > 0) findings.push(`${at}: rows past the panel: ${p.outside.join(", ")}`);
+  if (p.innerOverflow !== null && p.innerOverflow > 0)
+    findings.push(`${at}: its contents are ${p.innerOverflow}px wider than the panel`);
   if (p.closed.popup || p.closed.expanded.includes("true"))
     findings.push(`${at}: still open after Escape`);
   if (p.closed.focus !== p.trigger)
@@ -1022,6 +1066,9 @@ for (const p of panels)
       p.popup === null ? "closed" : `${p.popup.left}..${p.popup.right} to y ${p.popup.bottom}`,
       `links=${p.links?.join("|") ?? "-"}`,
       `onTop=${p.onTop}`,
+      p.hero === null || p.hero === undefined
+        ? "hero=-"
+        : `hero=${p.hero.w}x${p.hero.h} ${p.hero.beside ? "beside" : "stacked"} ${p.hero.chose}`,
       `scrollW=${p.scrollWidth}`,
       `after Esc: focus=${p.closed.focus}`,
     ].join("\t"),

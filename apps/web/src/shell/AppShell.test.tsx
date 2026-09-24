@@ -114,14 +114,33 @@ const panel = () =>
     expect(popup).not.toBeNull();
     return popup as HTMLElement;
   });
+/** An element's text by id reference, which is how a panel row names itself. */
+const textOf = (link: HTMLElement, attribute: "aria-labelledby" | "aria-describedby") =>
+  document.getElementById(link.getAttribute(attribute) ?? "")?.textContent ?? null;
 const panelLinks = async () =>
   within(await panel())
     .getAllByRole("link")
     .map((link) => ({
-      name: link.textContent,
+      name: textOf(link, "aria-labelledby"),
       href: link.getAttribute("href"),
       current: link.getAttribute("aria-current"),
     }));
+/** The open panel's hero: its picture, its label and its tagline. */
+const panelHero = async () => {
+  const hero = (await panel()).querySelector<HTMLElement>('[data-slot="navigation-menu-hero"]');
+  expect(hero).not.toBeNull();
+  const image = (hero as HTMLElement).querySelector("img");
+  const [label, tagline] = [...(hero as HTMLElement).querySelectorAll("p")].map(
+    (line) => line.textContent,
+  );
+  return {
+    alt: image?.getAttribute("alt"),
+    src: image?.getAttribute("src"),
+    srcSet: image?.getAttribute("srcset"),
+    label,
+    tagline,
+  };
+};
 /** The one panel entry marked as the page you are on. */
 const currentEntry = async (item: "Campaigns" | "Library") => {
   await userEvent.click(trigger(item));
@@ -248,6 +267,58 @@ describe("the shell's top bar", () => {
       expect(trigger("Library")).toHaveFocus();
       await userEvent.keyboard("{ArrowRight}");
       expect(within(nav()).getByRole("link", { name: "Characters" })).toHaveFocus();
+    });
+  });
+
+  describe("the panels' heroes and descriptions", () => {
+    it.each([
+      ["Campaigns", /campaigns-384\.webp/, /campaigns-384\.webp 384w, .*campaigns-768\.webp 768w/],
+      ["Library", /library-384\.webp/, /library-384\.webp 384w, .*library-768\.webp 768w/],
+    ] as const)(
+      "draws the %s hero: a decorative picture at 1x and 2x, a label and a tagline",
+      async (item, src, srcSet) => {
+        await renderAt("/characters");
+        await userEvent.click(trigger(item));
+        const hero = await panelHero();
+        expect(hero.alt).toBe("");
+        expect(hero.src).toMatch(src);
+        expect(hero.srcSet).toMatch(srcSet);
+        expect(hero.label).toBe(item);
+        expect(hero.tagline).toMatch(/\w/);
+        // The tile is decoration, not a second way into the section: the only
+        // links in the panel are its rows.
+        expect(within(await panel()).getAllByRole("link")).toHaveLength(
+          item === "Campaigns" ? 2 : SHELVES.length,
+        );
+      },
+    );
+
+    it("describes Campaigns and Shared Worlds under their names", async () => {
+      await renderAt("/characters");
+      await userEvent.click(trigger("Campaigns"));
+      const rows = within(await panel()).getAllByRole("link");
+      expect(
+        rows.map((row) => [textOf(row, "aria-labelledby"), textOf(row, "aria-describedby")]),
+      ).toEqual([
+        ["Campaigns", "Your tables: sessions, encounters, notes and the party"],
+        ["Shared Worlds", "Settings several campaigns share, with one chronicle"],
+      ]);
+    });
+
+    it("describes every shelf under its name, from the one list", async () => {
+      await renderAt("/characters");
+      await userEvent.click(trigger("Library"));
+      const rows = within(await panel()).getAllByRole("link");
+      expect(
+        rows.map((row) => [textOf(row, "aria-labelledby"), textOf(row, "aria-describedby")]),
+      ).toEqual(SHELVES.map((shelf) => [shelf.label, shelf.description]));
+      for (const shelf of SHELVES) expect(shelf.description.trim()).not.toBe("");
+      // The row's name is its title alone; the line under it is its description.
+      expect(
+        within(await panel()).getByRole("link", { name: "Spells" }),
+      ).toHaveAccessibleDescription(
+        SHELVES.find((shelf) => shelf.label === "Spells")?.description ?? "",
+      );
     });
   });
 

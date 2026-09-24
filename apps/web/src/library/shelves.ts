@@ -17,7 +17,8 @@ import type { Collapse } from "../shell/TabRow";
  * Seven shelves do not fit a phone, so the Library's narrow strip keeps the
  * three a table reaches for mid-game and puts the rest in its *More* menu, in
  * the order `collapse` says (`shell/TabRow.tsx`). The global row's panel lists
- * every shelf at every width.
+ * every shelf at every width, each with its `description`: one line on what the
+ * shelf holds, which only the panel draws — the tab row is on the shelf already.
  */
 export type Shelf =
   | "/library"
@@ -31,15 +32,48 @@ export type Shelf =
 export const SHELVES: ReadonlyArray<{
   readonly to: Shelf;
   readonly label: string;
+  readonly description: string;
   readonly collapse?: Collapse;
 }> = [
-  { to: "/library", label: "Creatures" },
-  { to: "/library/rules", label: "Rules" },
-  { to: "/library/compendium", label: "Compendium", collapse: "xl" },
-  { to: "/library/spells", label: "Spells" },
-  { to: "/library/equipment", label: "Equipment", collapse: "xl" },
-  { to: "/library/magic-items", label: "Magic items", collapse: "2xl" },
-  { to: "/library/npcs", label: "NPCs", collapse: "2xl" },
+  {
+    to: "/library",
+    label: "Creatures",
+    description: "Monster stat blocks to build encounters from",
+  },
+  {
+    to: "/library/rules",
+    label: "Rules",
+    description: "Classes, races, backgrounds and feats for building characters",
+  },
+  {
+    to: "/library/compendium",
+    label: "Compendium",
+    description: "The rules reference: combat, ability checks, adventuring, spellcasting",
+    collapse: "xl",
+  },
+  {
+    to: "/library/spells",
+    label: "Spells",
+    description: "Every spell, from cantrips to 9th level",
+  },
+  {
+    to: "/library/equipment",
+    label: "Equipment",
+    description: "Weapons, armour, tools and adventuring gear",
+    collapse: "xl",
+  },
+  {
+    to: "/library/magic-items",
+    label: "Magic items",
+    description: "Wondrous items, magic weapons and armour, potions",
+    collapse: "2xl",
+  },
+  {
+    to: "/library/npcs",
+    label: "NPCs",
+    description: "Reusable characters, with voice and motives, to cast in a campaign",
+    collapse: "2xl",
+  },
 ];
 
 /**

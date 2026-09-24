@@ -1,4 +1,5 @@
 import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";
+import { useId, type ComponentProps, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
@@ -134,13 +135,92 @@ function NavigationMenuTrigger({
   );
 }
 
-function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.Content.Props) {
+/**
+ * A trigger's panel. Given a `hero` — a `NavigationMenuHero` — it is shadcn's
+ * featured panel: the tile beside the column of links, and above it when the
+ * panel has no room for both. That turn is `flex-wrap` on a panel capped at
+ * the room the positioner leaves (`--available-width`), not a breakpoint, so
+ * it answers how wide the panel can be wherever the trigger sits.
+ */
+function NavigationMenuContent({
+  className,
+  children,
+  hero,
+  ...props
+}: NavigationMenuPrimitive.Content.Props & { readonly hero?: ReactNode }) {
   return (
     <NavigationMenuPrimitive.Content
       data-slot="navigation-menu-content"
-      className={cn("flex min-w-44 flex-col p-1", className)}
+      className={cn(
+        hero === undefined
+          ? "flex min-w-44 flex-col p-1"
+          : // Capped at the room less the popup's two hairline borders, which
+            // together are one `0.5` spacing step: the positioner holds the
+            // popup's outer box to `--available-width`, and a panel as wide as
+            // that is clipped by the borders.
+            "flex w-xl max-w-[calc(var(--available-width)-var(--spacing)*0.5)] flex-wrap gap-1.5 p-1.5",
+        className,
+      )}
       {...props}
-    />
+    >
+      {hero === undefined ? (
+        children
+      ) : (
+        <>
+          {hero}
+          {/* The rows take all the room the tile leaves, and the tile only
+              grows when it has a line to itself, stacked above them. */}
+          <div className="flex min-w-0 grow-999 basis-72 flex-col">{children}</div>
+        </>
+      )}
+    </NavigationMenuPrimitive.Content>
+  );
+}
+
+/**
+ * The featured tile of a panel: a picture, the part of the app the panel is,
+ * and one line about it. It is decoration, not a destination — the panel's
+ * first link is where the part of the app starts — so it is not focusable and
+ * the picture's `alt` is empty; the label and tagline are read as the panel's
+ * text. The picture is 2:1 and covers its band, which is the tile's 1x width
+ * tall beside the links and the same height across a stacked panel.
+ */
+function NavigationMenuHero({
+  className,
+  src,
+  srcSet,
+  sizes,
+  label,
+  children,
+  ...props
+}: ComponentProps<"div"> & {
+  readonly src: string;
+  readonly srcSet?: string;
+  readonly sizes?: string;
+  readonly label: ReactNode;
+}) {
+  return (
+    <div
+      data-slot="navigation-menu-hero"
+      className={cn(
+        "flex grow basis-48 flex-col self-start overflow-hidden rounded-sm border border-hairline bg-surface-sunken",
+        className,
+      )}
+      {...props}
+    >
+      <img
+        src={src}
+        srcSet={srcSet}
+        sizes={sizes}
+        alt=""
+        decoding="async"
+        className="h-24 w-full object-cover"
+      />
+      <div className="flex flex-col gap-0.5 px-3 py-2.5">
+        <p className="m-0 font-sans text-body-s font-semibold text-heading">{label}</p>
+        <p className="m-0 font-sans text-caption text-muted-foreground">{children}</p>
+      </div>
+    </div>
   );
 }
 
@@ -148,6 +228,14 @@ function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.
 const ROW =
   "relative flex h-8.5 w-full items-center gap-2 px-3 " +
   "rounded-xs font-sans text-body-s whitespace-nowrap text-foreground " +
+  "cursor-pointer transition-control outline-none select-none " +
+  "hover:bg-slate-700 focus-visible:bg-slate-700 " +
+  "data-active:bg-accent-soft data-active:text-accent-ink";
+
+/** A row with a description under its title: the same row, two lines tall. */
+const ENTRY =
+  "relative flex w-full flex-col items-start gap-0.5 px-3 py-2 " +
+  "rounded-xs font-sans text-foreground " +
   "cursor-pointer transition-control outline-none select-none " +
   "hover:bg-slate-700 focus-visible:bg-slate-700 " +
   "data-active:bg-accent-soft data-active:text-accent-ink";
@@ -160,6 +248,11 @@ const ROW =
  * page you are on — Base UI announces it as `aria-current="page"` and draws
  * `data-active` — and a pill lights `here` for it as a trigger does.
  *
+ * A row may carry a `description`: a line under its title saying what is
+ * there. The title alone is the link's name and the line is its description
+ * (`aria-labelledby`, `aria-describedby`), so a screen reader announces
+ * *Spells, link* and then what a spell shelf holds, not one run-on name.
+ *
  * It closes the panel when followed, because the page under it is about to be
  * a different one.
  */
@@ -168,30 +261,55 @@ function NavigationMenuLink({
   variant = "row",
   active = false,
   closeOnClick = true,
+  description,
+  children,
   ...props
-}: NavigationMenuPrimitive.Link.Props & { readonly variant?: "row" | "pill" }) {
+}: NavigationMenuPrimitive.Link.Props & {
+  readonly variant?: "row" | "pill";
+  readonly description?: ReactNode;
+}) {
+  const id = useId();
+  const described = variant === "row" && description !== undefined;
   return (
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       active={active}
       closeOnClick={closeOnClick}
+      aria-labelledby={described ? `${id}-title` : undefined}
+      aria-describedby={described ? `${id}-description` : undefined}
       className={cn(
-        variant === "row"
-          ? ROW
-          : cn(
+        variant === "pill"
+          ? cn(
               navPillVariants({ state: active ? "here" : "idle" }),
               "outline-none focus-visible:ring-focus",
-            ),
+            )
+          : described
+            ? ENTRY
+            : ROW,
         className,
       )}
       {...props}
-    />
+    >
+      {described ? (
+        <>
+          <span id={`${id}-title`} className="text-body-s font-medium">
+            {children}
+          </span>
+          <span id={`${id}-description`} className="text-caption text-muted-foreground">
+            {description}
+          </span>
+        </>
+      ) : (
+        children
+      )}
+    </NavigationMenuPrimitive.Link>
   );
 }
 
 export {
   NavigationMenu,
   NavigationMenuContent,
+  NavigationMenuHero,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
