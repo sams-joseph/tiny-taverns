@@ -31,8 +31,10 @@ export function OverviewCard({
 }) {
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-baseline gap-2.5 border-b border-hairline px-card py-4">
-        <SectionHeading size="title">{title}</SectionHeading>
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-hairline px-card py-4">
+        <SectionHeading size="title" className="whitespace-nowrap">
+          {title}
+        </SectionHeading>
         {meta}
         {action !== undefined && <span className="ml-auto">{action}</span>}
       </div>

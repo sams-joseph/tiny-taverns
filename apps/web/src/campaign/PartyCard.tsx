@@ -39,7 +39,9 @@ function PartyRow({ row }: { readonly row: PartySeat }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-body-s leading-snug font-semibold text-heading">{name}</div>
         {detail.length > 0 && (
-          <div className="truncate text-label-s leading-snug text-muted-foreground">
+          // Wraps rather than truncating: the player's name is the part a
+          // narrow aside would cut, and it is the half a DM reads the row for.
+          <div className="text-label-s leading-snug text-muted-foreground">
             {detail.join(" · ")}
           </div>
         )}
