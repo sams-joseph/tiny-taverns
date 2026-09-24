@@ -52,10 +52,12 @@
   --overview-aside-w: 300px;
 
   /* The same drawing's hero: the cover is `height: clamp(180px, 24vw, 280px)`,
-     and when there is one the header under it is pulled up over its bottom by
-     `margin-top: -72px`, inset by the 24px that is `--s-8`. The pitch under the
+     and when there is one the header under it is pulled up 48px over its bottom
+     (the drawing says 72px; the maintainer chose 48, which keeps the header
+     inside the faded bottom 45% even at the 180px floor), inset by the 24px
+     that is `--s-8`. The pitch under the
      title is `max-width: 62ch`, a little under the delivery's `--measure`. */
   --overview-cover-h: clamp(180px, 24vw, 280px);
-  --overview-cover-overlap: 72px;
+  --overview-cover-overlap: 48px;
   --overview-pitch-w: 62ch;
 }
