@@ -442,7 +442,14 @@ describe("the payload", () => {
       string,
       unknown
     >;
-    for (const key of ["hpCurrent", "tempHp", "conditions", "visibility", "accountId"]) {
+    for (const key of [
+      "hpCurrent",
+      "tempHp",
+      "conditions",
+      "inspiration",
+      "visibility",
+      "accountId",
+    ]) {
       expect(payload).not.toHaveProperty(key);
     }
   });

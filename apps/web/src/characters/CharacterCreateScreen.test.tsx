@@ -169,7 +169,14 @@ describe("writing down a character of your own", () => {
     // column defaults because nothing here can say otherwise. There is no
     // control for any of these and one would not compile — `CharacterOwnCreate`
     // has no field for them — and the encoder drops an excess key anyway.
-    for (const key of ["accountId", "hpCurrent", "tempHp", "conditions", "visibility"]) {
+    for (const key of [
+      "accountId",
+      "hpCurrent",
+      "tempHp",
+      "conditions",
+      "inspiration",
+      "visibility",
+    ]) {
       expect(body).not.toHaveProperty(key);
     }
   });

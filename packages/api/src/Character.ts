@@ -548,6 +548,15 @@ export class Character extends Schema.Class<Character>("Character")({
    */
   conditions: Schema.Array(Schema.String),
   /**
+   * The DM has awarded inspiration and it has not been spent.
+   *
+   * Live state the table sets, like the two above: the creator writes it
+   * through the seat (`PartySeatUpdate.inspiration`), and the owner reads it
+   * but has no field for it in `CharacterOwnUpdate`. There is no combatant
+   * copy, because nothing in a fight draws it.
+   */
+  inspiration: Schema.Boolean,
+  /**
    * Where the real sheet lives, for the table that keeps theirs somewhere else.
    *
    * One column, and it works for the player whose character is on graph paper
@@ -609,11 +618,11 @@ const sheetUrl = Schema.String.check(
  *
  * The rule `PlayerSessionRecap` set, met on the write side: **distinct schemas
  * on distinct paths, never a field filter over a wider type.** The live trio —
- * `hpCurrent`, `tempHp`, `conditions` — has no field here at all: a hit point
- * moves by delta through `CharacterDamage` (the campaign creator's act,
- * through the seat), so an owner writing one is not a check that failed — it
- * is not expressible, and the client's own encoder refuses it before a request
- * leaves the browser.
+ * `hpCurrent`, `tempHp`, `conditions` — has no field here at all, and nor has
+ * `inspiration`: a hit point moves by delta through `CharacterDamage` (the
+ * campaign creator's act, through the seat), and inspiration is the DM's award,
+ * so an owner writing one is not a check that failed — it is not expressible,
+ * and the client's own encoder refuses it before a request leaves the browser.
  *
  * `accountId` is not here either: the owner of a row is precisely the field
  * its owner must not be able to send. And there is no `visibility` — who at a

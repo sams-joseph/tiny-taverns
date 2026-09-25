@@ -541,6 +541,25 @@ describe("the doorbell, and where it stops", () => {
     await makeCurrent(null);
   }, 60_000);
 
+  it("rings and records when the creator awards inspiration during a session", async () => {
+    const night = await aNight();
+    await makeCurrent(night.id);
+    const { character, seatId } = await aCharacter(30);
+
+    const { result, rings } = await doorbellsWhile(
+      night.id,
+      party.update(fixture.campaign.id, seatId, { inspiration: true }),
+    );
+    expect(rings).toBe(1);
+    expect(result.character?.inspiration).toBe(true);
+
+    const log = await logOf(night.id);
+    const recorded = log.filter((event) => event.kind === "character-updated");
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.payload).toEqual({ characterId: character.id, inspiration: true });
+    await makeCurrent(null);
+  }, 60_000);
+
   it("names the fight when the write went through one", async () => {
     const night = await aNight();
     await makeCurrent(night.id);

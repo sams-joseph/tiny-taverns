@@ -265,6 +265,59 @@ describe("the seat PATCH", () => {
     const row = mine.find((owned) => owned.character.id === character.id);
     expect(row?.character.conditions).toEqual(["Poisoned"]);
   });
+
+  it("awards and spends inspiration, which the owner and a seat-mate both read", async () => {
+    const { character, seatId } = await run(
+      seated(fixture.saltRoad.id, fixture.pim, "Inspired", { seatVisibility: "shared" }),
+    );
+    expect(character.inspiration).toBe(false);
+    const setInspiration = (inspiration: boolean) =>
+      run(
+        withActor(fixture.jo)(
+          Effect.flatMap(Party, (party) =>
+            party.update(fixture.saltRoad.id, seatId, { inspiration }),
+          ),
+        ),
+      );
+    const ownersRead = () =>
+      run(withActor(fixture.pim)(Effect.flatMap(Characters, (characters) => characters.mine))).then(
+        (mine) => mine.find((owned) => owned.character.id === character.id)?.character,
+      );
+    const seatMatesRead = () =>
+      run(
+        withActor(fixture.marta)(Effect.flatMap(Party, (party) => party.list(fixture.saltRoad.id))),
+      ).then((seats) => seats.find((seat) => seat.seat.id === seatId)?.character);
+
+    const awarded = await setInspiration(true);
+    expect(awarded.character?.inspiration).toBe(true);
+    expect((await ownersRead())?.inspiration).toBe(true);
+    expect((await seatMatesRead())?.inspiration).toBe(true);
+    // Only the award moved: the rest of the live half is where it was.
+    expect((await ownersRead())?.conditions).toEqual([]);
+
+    // Spent: the reverse state is the same PATCH.
+    const spent = await setInspiration(false);
+    expect(spent.character?.inspiration).toBe(false);
+    expect((await ownersRead())?.inspiration).toBe(false);
+    expect((await seatMatesRead())?.inspiration).toBe(false);
+  });
+
+  it("refuses the seat's own player inspiration, and writes nothing", async () => {
+    const { character, seatId } = await run(seated(fixture.saltRoad.id, fixture.pim, "Hopeful"));
+    const refused = await run(
+      withActor(fixture.pim)(
+        Effect.flatMap(Party, (party) =>
+          party.update(fixture.saltRoad.id, seatId, { inspiration: true }),
+        ),
+      ).pipe(Effect.flip),
+    );
+    expectNotFound(refused, "campaign_character");
+    const mine = await run(
+      withActor(fixture.pim)(Effect.flatMap(Characters, (characters) => characters.mine)),
+    );
+    const row = mine.find((owned) => owned.character.id === character.id);
+    expect(row?.character.inspiration).toBe(false);
+  });
 });
 
 describe("retiring a seat", () => {

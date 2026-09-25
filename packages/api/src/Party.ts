@@ -95,6 +95,8 @@ export const PartySeatUpdate = Schema.Struct({
       Schema.isLengthBetween(0, 24),
     ),
   ),
+  /** Inspiration, awarded or spent — live on the shared character, with no combatant copy. */
+  inspiration: Schema.optional(Schema.Boolean),
 });
 export type PartySeatUpdate = typeof PartySeatUpdate.Type;
 

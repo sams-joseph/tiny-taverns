@@ -106,6 +106,7 @@ const characterColumns = (sql: SqlClient.SqlClient) => sql`
   character.descriptor as character_descriptor, character.ac as character_ac,
   character.hp_max as character_hp_max, character.hp_current as character_hp_current,
   character.temp_hp as character_temp_hp, character.conditions as character_conditions,
+  character.inspiration as character_inspiration,
   character.sheet_url as character_sheet_url, character.body as character_body,
   character.version as character_version, character.visibility as character_visibility,
   character.origin as character_origin,
@@ -132,6 +133,7 @@ const characterOf = (row: SeatWithCharacterRow, sign?: PortraitSigner): Characte
       hp_current: row.character_hp_current,
       temp_hp: row.character_temp_hp!,
       conditions: row.character_conditions!,
+      inspiration: row.character_inspiration!,
       sheet_url: row.character_sheet_url,
       body: row.character_body!,
       version: row.character_version!,
@@ -330,22 +332,20 @@ export class Party extends Context.Service<
                     // Conditions are the live write-through: the shared
                     // character and every live combatant of *this* campaign
                     // move in this transaction, or none of them do. Temporary
-                    // hit points are live on the shared character only — there
-                    // is deliberately no combatant copy — and ride the same
-                    // creator-owned seat PATCH. A seat whose character has
-                    // been deleted has nothing live to write, and the seat edit
-                    // stands alone.
+                    // hit points and inspiration are live on the shared
+                    // character only — there is deliberately no combatant copy
+                    // — and ride the same creator-owned seat PATCH. A seat
+                    // whose character has been deleted has nothing live to
+                    // write, and the seat edit stands alone.
                     let sessionId: SessionId | undefined = undefined;
-                    if (
-                      (patch.conditions !== undefined || patch.tempHp !== undefined) &&
-                      characterId !== null
-                    ) {
-                      const characterColumns = defined({
-                        conditions: patch.conditions,
-                        temp_hp: patch.tempHp,
-                      });
+                    const liveColumns = defined({
+                      conditions: patch.conditions,
+                      temp_hp: patch.tempHp,
+                      inspiration: patch.inspiration,
+                    });
+                    if (Object.keys(liveColumns).length > 0 && characterId !== null) {
                       yield* sql`
-                        update character set ${sql.update(characterColumns)}, updated_at = now()
+                        update character set ${sql.update(liveColumns)}, updated_at = now()
                         where character.id = ${characterId}
                       `;
                       if (patch.conditions !== undefined) {
@@ -370,6 +370,9 @@ export class Party extends Context.Service<
                               ? {}
                               : { conditions: patch.conditions }),
                             ...(patch.tempHp === undefined ? {} : { tempHp: patch.tempHp }),
+                            ...(patch.inspiration === undefined
+                              ? {}
+                              : { inspiration: patch.inspiration }),
                           },
                         });
                       }
