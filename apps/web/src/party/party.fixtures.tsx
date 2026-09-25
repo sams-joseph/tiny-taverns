@@ -142,8 +142,8 @@ export const brannocSheetSeat = {
 
 /**
  * Sorrel with a ranger's sheet: a speed, a passive from a written Perception
- * bonus, and all six saves — no spellcasting, so no Spell DC tile — and one
- * condition.
+ * bonus, and all six saves — no spellcasting, so no Spell DC tile — one
+ * condition, darkvision and languages.
  */
 export const sorrelSheetSeat = {
   ...sorrelSeat,
@@ -160,8 +160,10 @@ export const sorrelSheetSeat = {
         { label: "WIS", score: "14", modifier: "+2", save: "+2" },
         { label: "CHA", score: "8", modifier: "-1", save: "-1" },
       ],
-      traits: [],
+      traits: [{ name: "Darkvision", text: "You can see in dim light within 60 feet." }],
       identity: { speed: "35 ft.", proficiency: "+2" },
+      // Two languages in the rules vocabulary among a weapon and one it lacks.
+      proficiencies: ["Longbows", "Common", "dwarvish", "Elvish"],
       skills: [{ name: "Perception", ability: "WIS", bonus: "+4", proficient: true }],
     },
   },

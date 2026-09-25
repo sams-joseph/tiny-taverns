@@ -8,6 +8,8 @@ import { InviteDialog } from "../campaign/InviteDialog";
 import { savesOf } from "../characters/sheet";
 import {
   bestInParty,
+  betweenThem,
+  joinNames,
   partySummary,
   passivesOf,
   SAVE_ABILITIES,
@@ -43,7 +45,8 @@ import { SeatCard } from "./SeatCard";
  * (`PartyRestDialog`); it is offered only when there is a character to rest.
  *
  * What the drawing has that this leaves out, each a decision rather than an
- * omission: *Party stash*, which has no model; a dash for an unanswered tile,
+ * omission: *Party stash*, which has no model; *Between them*'s *Healing*,
+ * which no field answers; a dash for an unanswered tile,
  * which is a stub (the tile is not drawn); and an *Unconscious* badge at zero,
  * a condition nobody wrote (the bar is empty and the header says who is down).
  */
@@ -134,7 +137,7 @@ function Party({
         <>
           <PartyGrid party={view.party} members={extra.members} />
           <PassivesAndSaves party={view.party} />
-          {/* *Between them* stands here, under the passives. */}
+          <BetweenThem party={view.party} languages={extra.languages} />
         </>
       )}
 
@@ -331,6 +334,60 @@ function PassivesAndSaves({ party }: { readonly party: ReadonlyArray<PartySeat> 
           ))}
         </div>
       </div>
+    </Card>
+  );
+}
+
+/**
+ * *Between them*: the party's languages, who sees in the dark, and the slowest
+ * of them, under the passives — `betweenThem`, a row only for what the sheets
+ * answer, and no card when they answer none of it.
+ *
+ * The drawing sets this beside a *Party stash* that has no model here, so it
+ * stands alone at the page's width.
+ */
+function BetweenThem({
+  party,
+  languages,
+}: {
+  readonly party: ReadonlyArray<PartySeat>;
+  readonly languages: ReadonlyArray<string>;
+}) {
+  const between = betweenThem(party, languages);
+  const rows = [
+    ...(between.languages === undefined
+      ? []
+      : [{ term: "Languages", detail: between.languages.join(", ") }]),
+    ...(between.darkvision === undefined
+      ? []
+      : [{ term: "Darkvision", detail: joinNames(between.darkvision) }]),
+    ...(between.slowest === undefined
+      ? []
+      : [
+          {
+            term: "Slowest speed",
+            detail: `${String(between.slowest.feet)} ft., set by ${joinNames(between.slowest.names)}`,
+          },
+        ]),
+  ];
+  if (rows.length === 0) return null;
+
+  return (
+    <Card data-slot="party-between" className="px-card py-4">
+      <SectionHeading size="title" id="party-between-heading" className="mb-3.5">
+        Between them
+      </SectionHeading>
+      <dl
+        aria-labelledby="party-between-heading"
+        className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-body-s leading-body"
+      >
+        {rows.map((row) => (
+          <div key={row.term} className="contents">
+            <dt className="text-muted-foreground">{row.term}</dt>
+            <dd className="m-0 text-foreground">{row.detail}</dd>
+          </div>
+        ))}
+      </dl>
     </Card>
   );
 }

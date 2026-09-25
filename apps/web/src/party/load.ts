@@ -1,9 +1,10 @@
 import type { CampaignId, CampaignInvite, CampaignMember } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { campaignInvitesAtom, membersAtom } from "../campaign/load";
+import { libraryOptionVocabularyAtom } from "../rules/load";
 
 /**
- * What the party screen reads **beyond the campaign view**: two atoms, one round.
+ * What the party screen reads **beyond the campaign view**: three atoms, one round.
  *
  * These two reads only mean anything joined to the campaign view's characters: a
  * member with no `Character` whose `accountId` is theirs is the *"joined but has
@@ -31,11 +32,11 @@ import { campaignInvitesAtom, membersAtom } from "../campaign/load";
  * for one list would be a mint that updated the dialog and left the roster
  * behind it stale.
  *
- * Combined with plain `AsyncResult.all` rather than `combine`, because both
- * parts are keyed on the campaign and this screen's campaign never changes under
- * it — there is no moment where one of them becomes an atom nobody has read.
+ * Combined with plain `AsyncResult.all` rather than `combine`, because every
+ * part is keyed on the campaign or on nothing, and this screen's campaign never
+ * changes under it — there is no moment where one of them becomes an atom nobody has read.
  *
- * Both reads are campaign-creator surfaces, so a player who reaches this URL
+ * The roster's two reads are campaign-creator surfaces, so a player who reaches this URL
  * gets the ordinary `NotFound` and the screen says *"Not here"* — the correct
  * answer rather than a case to special-case.
  */
@@ -54,28 +55,40 @@ export interface PartyRoster {
    * this screen must not restate.
    */
   readonly invites: ReadonlyArray<CampaignInvite>;
+  /**
+   * The rules' language names, which *Between them* picks out of each sheet's
+   * proficiencies. The Library vocabulary rather than a campaign's because
+   * languages are one bundled table every vocabulary answers alike
+   * (`languageRows`, `apps/server/src/ruleset/vocabularies.ts`), and this read
+   * is keyed on nothing, so any screen that already asked has it cached.
+   */
+  readonly languages: ReadonlyArray<string>;
 }
 
 export const rosterAtom = Atom.family((campaignId: CampaignId) =>
   Atom.readable(
     (get): AsyncResult.AsyncResult<PartyRoster, unknown> =>
-      // Both resources are owned directly by the campaign, so no world read or
+      // The roster's two resources are owned directly by the campaign, so no world read or
       // client-side filtering stands between the roster and its invitations.
       AsyncResult.all({
         members: get(membersAtom(campaignId)),
         invites: get(campaignInvitesAtom(campaignId)),
+        languages: AsyncResult.map(get(libraryOptionVocabularyAtom), (vocabulary) =>
+          vocabulary.languages.map((language) => language.name),
+        ),
       }),
     // **A derived atom needs to be told how to refresh, and this is the second
     // argument `Atom.readable` takes for exactly that.** Re-running the read
-    // above hands back the two cached parts, so without this the frame's *Try
+    // above hands back the cached parts, so without this the frame's *Try
     // again* would redraw the same failure it was pressed on. Naming them here
-    // rather than by key is right because both are this screen's own and it
+    // rather than by key is right because all three are this screen's own reads and it
     // knows them by name; the campaign view cannot do the same, because three
     // of its eight are keyed on a session id it only has once the campaign has
     // loaded — see `campaignViewKeys`.
     (refresh) => {
       refresh(membersAtom(campaignId));
       refresh(campaignInvitesAtom(campaignId));
+      refresh(libraryOptionVocabularyAtom);
     },
   ),
 );

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { hpBand, hpFraction, passiveOf, passivePerceptionOf, savesOf } from "../characters/sheet";
 import {
   bestInParty,
+  betweenThem,
   feetOf,
   hpAfter,
   partySummary,
@@ -341,5 +342,72 @@ describe("passives and saves", () => {
     expect([...bestInParty([-1, -3])]).toEqual([0]);
     expect(bestInParty([undefined, undefined]).size).toBe(0);
     expect(bestInParty([]).size).toBe(0);
+  });
+});
+
+describe("betweenThem", () => {
+  const withSheet = (name: string, fields: Partial<CharacterSheet>) =>
+    brannocWith({ name, sheet: sheet(fields) });
+  const vocabulary = ["Common", "Dwarvish", "Elvish", "Halfling"];
+
+  it("picks the languages out of the proficiencies, once each, in the vocabulary's spelling", () => {
+    const between = betweenThem(
+      [
+        withSheet("Brannoc", { proficiencies: ["All armour", "Common", "Orcish"] }),
+        withSheet("Tamsin", { proficiencies: [" halfling ", "common", "Thieves' tools"] }),
+      ],
+      vocabulary,
+    );
+    expect(between.languages).toEqual(["Common", "Halfling"]);
+  });
+
+  it("names who has darkvision, in seat order", () => {
+    const darkvision = { name: "Darkvision", text: "60 feet." };
+    const between = betweenThem(
+      [
+        withSheet("Wren", { traits: [darkvision] }),
+        withSheet("Tamsin", { traits: [{ name: "Lucky", text: "" }] }),
+        withSheet("Brannoc", { traits: [{ ...darkvision, name: "darkvision" }] }),
+      ],
+      vocabulary,
+    );
+    expect(between.darkvision).toEqual(["Wren", "Brannoc"]);
+  });
+
+  it("says the slowest speed and everyone who sets it", () => {
+    const between = betweenThem(
+      [
+        withSheet("Brannoc", { identity: { speed: "30 ft." } }),
+        withSheet("Odo", { identity: { speed: "25 ft." } }),
+        withSheet("Tamsin", { identity: { speed: "25 feet" } }),
+      ],
+      vocabulary,
+    );
+    expect(between.slowest).toEqual({ feet: 25, names: ["Odo", "Tamsin"] });
+  });
+
+  it("does not guess the slowest when one speed is unwritten or not one figure", () => {
+    const fast = withSheet("Brannoc", { identity: { speed: "30 ft." } });
+    expect(betweenThem([fast, withSheet("Odo", {})], vocabulary).slowest).toBeUndefined();
+    expect(
+      betweenThem(
+        [fast, withSheet("Wren", { identity: { speed: "30 ft., fly 60 ft." } })],
+        vocabulary,
+      ).slowest,
+    ).toBeUndefined();
+  });
+
+  it("answers nothing for sheets that say none of it, and passes over a deleted character", () => {
+    const deleted = seat({ seat: { ...brannocSeat.seat, characterId: null }, character: null });
+    expect(betweenThem([withSheet("Brannoc", {}), deleted], vocabulary)).toEqual({
+      languages: undefined,
+      darkvision: undefined,
+      slowest: undefined,
+    });
+    // A deleted seat does not make the slowest unknown: it is not in the party.
+    expect(
+      betweenThem([withSheet("Odo", { identity: { speed: "25 ft." } }), deleted], vocabulary)
+        .slowest,
+    ).toEqual({ feet: 25, names: ["Odo"] });
   });
 });
