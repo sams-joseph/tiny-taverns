@@ -1,5 +1,6 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 
+import { POPUP_ROW_HIGHLIGHTED } from "../../lib/popup-row";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 
@@ -107,7 +108,7 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
         "relative flex h-8.5 w-full items-center gap-2 px-3",
         "rounded-xs font-sans text-body-s text-foreground",
         "cursor-pointer transition-control outline-none select-none",
-        "data-highlighted:bg-slate-700",
+        POPUP_ROW_HIGHLIGHTED,
         "data-[selected]:bg-accent-soft data-[selected]:text-accent-ink",
         "data-disabled:pointer-events-none data-disabled:opacity-50",
         className,

@@ -1,6 +1,7 @@
 import { NavigationMenu as NavigationMenuPrimitive } from "@base-ui/react/navigation-menu";
 import { useId, type ComponentProps, type ReactNode } from "react";
 
+import { POPUP_ROW_HOVERED } from "../../lib/popup-row";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 import { navPillVariants } from "./tabs";
@@ -226,7 +227,7 @@ const ROW =
   "relative flex h-8.5 w-full items-center gap-2 px-3 " +
   "rounded-xs font-sans text-body-s whitespace-nowrap text-foreground " +
   "cursor-pointer transition-control outline-none select-none " +
-  "hover:bg-slate-700 focus-visible:bg-slate-700 " +
+  `${POPUP_ROW_HOVERED} ` +
   "data-active:bg-accent-soft data-active:text-accent-ink";
 
 /** A row with a description under its title: the same row, two lines tall. */
@@ -234,7 +235,7 @@ const ENTRY =
   "relative flex w-full flex-col items-start gap-0.5 px-3 py-2 " +
   "rounded-xs font-sans text-foreground " +
   "cursor-pointer transition-control outline-none select-none " +
-  "hover:bg-slate-700 focus-visible:bg-slate-700 " +
+  `${POPUP_ROW_HOVERED} ` +
   "data-active:bg-accent-soft data-active:text-accent-ink";
 
 /**

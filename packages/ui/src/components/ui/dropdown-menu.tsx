@@ -1,5 +1,6 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 
+import { POPUP_ROW_HIGHLIGHTED } from "../../lib/popup-row";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 
@@ -63,7 +64,7 @@ const ITEM =
   "relative flex h-8.5 w-full items-center gap-2 px-3 " +
   "rounded-xs font-sans text-body-s text-foreground " +
   "cursor-pointer transition-control outline-none select-none " +
-  "data-highlighted:bg-slate-700 " +
+  `${POPUP_ROW_HIGHLIGHTED} ` +
   // The page you are on, when a menu stands in for a row of tabs.
   "aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink " +
   "data-disabled:pointer-events-none data-disabled:opacity-50";

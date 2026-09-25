@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { POPUP_ROW_HIGHLIGHTED } from "../../lib/popup-row";
 import { BackLink } from "./back-link";
 import { Badge } from "./badge";
 import { Button } from "./button";
@@ -12,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLinkItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -217,6 +219,32 @@ describe("DropdownMenu", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
     expect(ran).toBe(true);
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("highlights a link row, from the pointer and the arrow keys alike", async () => {
+    const user = userEvent.setup();
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>More shelves</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuLinkItem href="#creatures">Creatures</DropdownMenuLinkItem>
+          <DropdownMenuLinkItem href="#spells">Spells</DropdownMenuLinkItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "More shelves" }));
+    const creatures = await screen.findByRole("menuitem", { name: "Creatures" });
+    const spells = screen.getByRole("menuitem", { name: "Spells" });
+    // Whether the class draws anything is `lib/popup-row.test.ts`'s, and the
+    // pixel is the Playwright suite's `menu-highlight.spec.ts`.
+    expect(spells).toHaveClass(POPUP_ROW_HIGHLIGHTED);
+
+    await user.hover(spells);
+    await waitFor(() => expect(spells).toHaveAttribute("data-highlighted"));
+    await user.keyboard("{ArrowUp}");
+    await waitFor(() => expect(creatures).toHaveAttribute("data-highlighted"));
+    expect(spells).not.toHaveAttribute("data-highlighted");
   });
 
   it("marks the active radio row and a pick moves the group's value", async () => {
