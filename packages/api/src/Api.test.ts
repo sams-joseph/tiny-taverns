@@ -331,6 +331,8 @@ describe("the API declaration", () => {
       "rolls",
       "runs",
       "search",
+      // A seat's hook and secret: the creator's alone, like an encounter's prep.
+      "seatPrep",
       "sessions",
       // Shared Worlds are the explicit cross-campaign context. Their history,
       // Library grants, informational roster and Hob conversation each keep a

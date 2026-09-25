@@ -962,6 +962,10 @@ describe("a stranger reads nothing", () => {
               -- reads, behind the creator proof; a stranger's refusal there is
               -- covered in encounter-prep.test.ts.
               'encounter_prep',
+              -- A seat's prep is read only through the creator's prep reads,
+              -- behind the creator proof; a stranger's refusal there is
+              -- covered in seat-prep.test.ts.
+              'campaign_character_prep',
               -- A cover is read only as a field of the campaign, through the
               -- campaign's own shipped reads; it has no read of its own.
               'campaign_image',

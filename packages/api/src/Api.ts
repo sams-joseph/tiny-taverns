@@ -13,7 +13,15 @@ import {
   CharacterResourceSpend,
   CharacterRest,
 } from "./Character.js";
-import { OwnedCharacter, PartyJoin, PartyRest, PartySeat, PartySeatUpdate } from "./Party.js";
+import {
+  OwnedCharacter,
+  PartyJoin,
+  PartyRest,
+  PartySeat,
+  PartySeatUpdate,
+  SeatPrep,
+  SeatPrepUpdate,
+} from "./Party.js";
 import {
   CharacterOption,
   ClassProgression,
@@ -1060,6 +1068,29 @@ class PartyGroup extends HttpApiGroup.make("party")
     }),
   )
   .prefix("/campaigns/:campaignId/party")
+  .middleware(Authorization) {}
+
+/**
+ * A seat's DM prep — the creator's hook and secret for the character in it —
+ * and **the creator's alone**: a player, a Shared World member and a stranger
+ * get `NotFound` from both endpoints, whether or not the seat is shared, and
+ * nothing a player reads carries either note. The list is every live seat's,
+ * a retired seat's is absent, and the PATCH is the only writer.
+ */
+class SeatPrepGroup extends HttpApiGroup.make("seatPrep")
+  .add(
+    HttpApiEndpoint.get("list", "/campaigns/:campaignId/party-prep", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(SeatPrep),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.patch("update", "/campaigns/:campaignId/party/:campaignCharacterId/prep", {
+      params: { campaignId: CampaignId, campaignCharacterId: CampaignCharacterId },
+      payload: SeatPrepUpdate,
+      success: SeatPrep,
+      error: NotFound,
+    }),
+  )
   .middleware(Authorization) {}
 
 class NotesGroup extends HttpApiGroup.make("notes")
@@ -2615,6 +2646,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CampaignInvitesGroup)
   .add(SessionsGroup)
   .add(PartyGroup)
+  .add(SeatPrepGroup)
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(BattleMapsGroup)

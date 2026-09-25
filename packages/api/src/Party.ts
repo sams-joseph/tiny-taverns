@@ -131,3 +131,37 @@ export class OwnedCharacter extends Schema.Class<OwnedCharacter>("OwnedCharacter
   character: Character,
   seats: Schema.Array(CharacterSeatRef),
 }) {}
+
+/** The bound the schema and the table both state, for each of a seat's two notes. */
+export const SEAT_PREP_MAX = 300;
+
+/** One line of the DM's own prose about a seat: something besides whitespace, bounded. */
+const SeatPrepLine = Schema.String.check(Schema.isPattern(/\S/), Schema.isMaxLength(SEAT_PREP_MAX));
+
+/**
+ * A seat's DM prep: the creator's own hook and secret for the character in it
+ * — **the creator's alone**, never shown to a player.
+ *
+ * Not on `CampaignCharacter` or `Character`, both of which a player reads: it
+ * reaches the wire only through the creator's prep reads (`seatPrep`), on a
+ * table no player read touches (`0063_seat_prep.ts`), as an encounter's
+ * `EncounterPrep` does. Every live seat has one; a seat nothing was written
+ * for answers two `null`s.
+ */
+export class SeatPrep extends Schema.Class<SeatPrep>("SeatPrep")({
+  campaignCharacterId: CampaignCharacterId,
+  /** What pulls this character into the story — `"Owes the Guild 40 gp"`. `null` when unwritten. */
+  hook: Schema.NullOr(Schema.String),
+  /** What the DM knows and the table does not. `null` when unwritten. */
+  secret: Schema.NullOr(Schema.String),
+}) {}
+
+/**
+ * The creator's prep PATCH. An absent field is untouched and `null` clears it.
+ * There is no `origin`: only the creator writes a seat's prep, by hand.
+ */
+export const SeatPrepUpdate = Schema.Struct({
+  hook: Schema.optional(Schema.NullOr(SeatPrepLine)),
+  secret: Schema.optional(Schema.NullOr(SeatPrepLine)),
+});
+export type SeatPrepUpdate = typeof SeatPrepUpdate.Type;

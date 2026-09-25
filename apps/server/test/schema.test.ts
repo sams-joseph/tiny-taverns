@@ -40,6 +40,10 @@ const NOT_CONTENT = [
   "battle_map",
   // A battle map's picture: who may see it is exactly who may read the map.
   "battle_map_image",
+  // A seat's hook and secret: the DM's own notes about the character in it,
+  // the creator's alone through the creator proof, reached only by walking its
+  // seat, and written by nobody but the creator. See 0063_seat_prep.ts.
+  "campaign_character_prep",
   // A campaign's cover: who may see it is exactly who may read the campaign,
   // through the campaign's own reads — `character_portrait`'s reason, one
   // subject over. See 0049_campaign_images.ts.
