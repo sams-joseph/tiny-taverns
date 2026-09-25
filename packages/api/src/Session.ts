@@ -29,6 +29,9 @@ export class Session extends Schema.Class<Session>("Session")({
    * encounter is live and two rows must not be able to both claim the table.
    * Not settable directly: it is written only by starting and ending a run, so
    * there is no writer that could leave it naming a fight that is over.
+   *
+   * Null for a reader who cannot read that run: a player, while the fight's
+   * Share switch is off, reads the night as though nothing were on the table.
    */
   activeEncounterRunId: Schema.NullOr(EncounterRunId),
   visibility: Visibility,

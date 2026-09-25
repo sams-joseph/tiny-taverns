@@ -25,6 +25,7 @@ export class Roll extends Schema.Class<Roll>("Roll")({
   id: RollId,
   campaignId: CampaignId,
   sessionId: SessionId,
+  /** The fight it was rolled in; null for a reader who cannot read that fight. */
   encounterRunId: Schema.NullOr(EncounterRunId),
   accountId: AccountId,
   accountName: Schema.NonEmptyString,

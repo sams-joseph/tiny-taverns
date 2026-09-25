@@ -114,11 +114,15 @@ describe("rolls", () => {
         const encounter = yield* as(f.dm, encounters.create(f.campaign.id, { name: "Ambush" }));
         const run = yield* runs.start(dm, f.sessionId, { encounterId: encounter.id });
         const roll = yield* as(f.player, rolls.create(f.campaign.id, payload(f.character.id)));
-        return { run, roll };
+        const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, roll.id));
+        return { run, roll, asCreator };
       }),
     );
 
-    expect(seen.roll.encounterRunId).toBe(seen.run.id);
+    // Stamped with the fight on the table. That fight's Share switch is off,
+    // so only the creator is told which it was (`hidden-run-pointer.test.ts`).
+    expect(seen.asCreator.encounterRunId).toBe(seen.run.id);
+    expect(seen.roll.encounterRunId).toBeNull();
   });
 
   it("refuses a player's table roll when the night is not shared", async () => {

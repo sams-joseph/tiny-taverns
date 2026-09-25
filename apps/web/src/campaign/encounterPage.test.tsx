@@ -198,7 +198,7 @@ describe("an encounter's page", () => {
     });
     await renderAt(pagePath);
 
-    expect(await screen.findByText("Not here")).toBeInTheDocument();
+    expect(await screen.findByText("The DM's side of the screen")).toBeInTheDocument();
     expect(board()).toBeNull();
     expect(screen.queryByRole("heading", { name: "Battle map" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Run" })).toBeNull();

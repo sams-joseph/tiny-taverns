@@ -16,6 +16,8 @@ The actor carries no role, and cannot. One person is the creator of one campaign
 
 Reads and writes use different predicates. A player may read a `shared` note and must not edit it, so `rowWritable` is not `rowReadable`.
 
+A column that points at a row with its own `visibility` is selected through that row's predicate, not raw. A hidden fight is `NotFound` to a player on every run read, and a raw `session.active_encounter_run_id` or `character_roll.encounter_run_id` would still tell them it is on the table, when it started and ended, and its id. `sessionColumns` (`repo/Sessions.ts`) and the roll select (`repo/Rolls.ts`) return those pointers as null for a run the actor cannot read; `hidden-run-pointer.test.ts` pins both with real actors. A new pointer column into a narrowed table takes the same `case when exists (… predicate …)` shape.
+
 Visibility is two levels: `campaign.visibility` is the master toggle and a row's own `visibility` narrows within it, so a `shared` note inside an unshared campaign stays invisible. A table that hangs off another row adds a level through a `Containment` chain the `nested*` and `contained*` families walk; it gets no denormalised `campaign_id`, because a child whose copy disagreed with its parent's would be readable in a campaign it is not part of and no `WHERE` clause would notice.
 
 ### `campaignInScope` is the base case

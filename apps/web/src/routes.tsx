@@ -12,6 +12,7 @@ import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { creatorOnly } from "./campaign/CreatorOnly";
 import { EncounterBuilderScreen } from "./campaign/EncounterBuilderScreen";
 import { EncounterScreen } from "./campaign/EncounterScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
@@ -251,6 +252,15 @@ const campaignIndexRoute = createRoute({
 });
 
 /**
+ * The encounter screens are the creator's. The server refuses every read
+ * behind them to a player, and that is the gate; `creatorOnly` is what a
+ * player who types one of these URLs reads instead of the refusal.
+ */
+const EncountersRouteScreen = creatorOnly("Encounters", EncountersScreen);
+const EncounterRouteScreen = creatorOnly("Encounters", EncounterScreen);
+const EncounterBuilderRouteScreen = creatorOnly("Encounters", EncounterBuilderScreen);
+
+/**
  * The encounters built for this table, and the Notes beside them.
  *
  * Both are `remountDeps`-per-campaign for the reason every campaign-scoped
@@ -271,16 +281,17 @@ const encountersRoute = createRoute({
     );
     return encounter === undefined ? {} : { encounter };
   },
-  component: EncountersScreen,
+  component: EncountersRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
 /**
  * One encounter: its details and its battle map, which the Encounters
- * preview's heading opens. The creator's alone, like the list — a player's reads of this URL are
- * refused by the server, which is the gate (`BattleMapsGroup`). A different
- * encounter is a different board, so the leaf remounts on the id; a bad id
- * falls back to the list rather than to the campaign.
+ * preview's heading opens. The creator's alone, like the list — a player's
+ * reads of this URL are refused by the server, which is the gate
+ * (`BattleMapsGroup`), and `creatorOnly` tells the player so before any is
+ * made. A different encounter is a different board, so the leaf remounts on
+ * the id; a bad id falls back to the list rather than to the campaign.
  */
 const encounterRoute = createRoute({
   getParentRoute: () => campaignRoute,
@@ -291,21 +302,22 @@ const encounterRoute = createRoute({
       return decoded === undefined ? false : { encounterId: decoded };
     },
   },
-  component: EncounterScreen,
+  component: EncounterRouteScreen,
   remountDeps: ({ params }) => params.encounterId,
 });
 
 /**
  * Writing an encounter: a new one, and one already made. One page for both
  * (`EncounterBuilderScreen`), the creator's alone — its read is the creator's
- * prep, so a player who types the URL reads the same `NotFound` the encounter's
- * own page gives. The static `new` outranks `$encounterId` beside it, and a
- * different encounter is a different draft, so the edit remounts on its id.
+ * prep, which the server refuses a player, and a player who types the URL
+ * reads what the encounter's own page tells them. The static `new` outranks
+ * `$encounterId` beside it, and a different encounter is a different draft, so
+ * the edit remounts on its id.
  */
 const encounterNewRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "encounters/new",
-  component: EncounterBuilderScreen,
+  component: EncounterBuilderRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -318,7 +330,7 @@ const encounterEditRoute = createRoute({
       return decoded === undefined ? false : { encounterId: decoded };
     },
   },
-  component: EncounterBuilderScreen,
+  component: EncounterBuilderRouteScreen,
   remountDeps: ({ params }) => params.encounterId,
 });
 
@@ -326,7 +338,7 @@ const encounterEditRoute = createRoute({
 const encountersSplatRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "encounters/$",
-  component: EncountersScreen,
+  component: EncountersRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
