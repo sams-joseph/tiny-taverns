@@ -17,7 +17,6 @@ import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
-import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import {
   aGroupBy,
@@ -47,9 +46,8 @@ const runtime = ManagedRuntime.make(
     Accounts.layer,
     Campaigns.layer,
     Groups.layer,
-    GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    GroupHistory.layer,
     Invites.layer,
-    Recap.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     CampaignCreatorActors.layer,
@@ -93,7 +91,8 @@ const makeFixture = Effect.gen(function* () {
   const elsewhere = yield* withActor(fen)(createCampaign({ name: "Salt and Sixpence" }));
 
   // A played night on the Salt Road: created, stamped as started through the
-  // shipped PATCH (the same write `session/start.ts` makes), with one beat.
+  // shipped PATCH (the same write `session/start.ts` makes), with one shared
+  // beat and one the DM kept to themselves.
   const night = yield* withActor(jo)(
     sessions.create(saltRoad.id, { number: 12, title: "The crossing" }),
   ).pipe(Effect.orDie);
@@ -101,7 +100,13 @@ const makeFixture = Effect.gen(function* () {
     sessions.update(saltRoad.id, night.id, { startedAt: DateTime.nowUnsafe() }),
   ).pipe(Effect.orDie);
   yield* withActor(jo)(
-    beats.create(saltRoad.id, night.id, { body: "The ferryman is called Cazril." }),
+    beats.create(saltRoad.id, night.id, {
+      body: "The ferryman is called Cazril.",
+      visibility: "shared",
+    }),
+  ).pipe(Effect.orDie);
+  yield* withActor(jo)(
+    beats.create(saltRoad.id, night.id, { body: "DMBEAT Cazril works for the hag." }),
   ).pipe(Effect.orDie);
 
   // An unplayed night beside it, for the Conflict.
@@ -189,7 +194,7 @@ describe("writing it by hand", () => {
 });
 
 describe("sharing a played night", () => {
-  it("copies the recap into the chronicle, beats verbatim", async () => {
+  it("copies the night into the chronicle, shared beats verbatim and no DM-only one", async () => {
     const entry = await run(
       Effect.gen(function* () {
         const h = yield* GroupHistory;
@@ -200,6 +205,9 @@ describe("sharing a played night", () => {
     expect(entry.sourceKind).toBe("recap");
     expect(entry.title).toBe("Session 12 — The crossing");
     expect(entry.body).toContain("The ferryman is called Cazril.");
+    // Sharing the night is not sharing everything in it: the beat's own Share
+    // switch holds at world level too.
+    expect(entry.body).not.toContain("DMBEAT");
     expect(entry.campaignId).toBe(fixture.saltRoad.id);
     expect(entry.occurredAt).not.toBeNull();
   });
@@ -262,7 +270,7 @@ describe("the copy is a copy", () => {
           sessions.update(doomed.id, night.id, { startedAt: DateTime.nowUnsafe() }),
         );
         const beat = yield* withActor(fixture.wren)(
-          beats.create(doomed.id, night.id, { body: "It rained." }),
+          beats.create(doomed.id, night.id, { body: "It rained.", visibility: "shared" }),
         );
         const proof = yield* asDm(fixture.wren, doomed.id);
         const entry = yield* withActor(fixture.wren)(h.fromRecap(fixture.groupId, proof, night.id));

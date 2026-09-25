@@ -395,6 +395,29 @@ export const ensureGroupWritable = (
   );
 
 /**
+ * Rows of a played night that its Shared World may be told of: the row's own
+ * Share switch is on. The captain's decision of 2026-09-25, reversing the
+ * 2026-09-01 rule that beats and fights were canonical whatever their
+ * visibility.
+ *
+ * World reach crosses campaign boundaries on group membership alone, so it is
+ * never wider than what the table's own players can be told: a row its DM kept
+ * to themselves is not the world's either. It is a *narrowing*, composed after
+ * the group gate and the structural checks that bind the row to its night, and
+ * never a reach on its own.
+ */
+export const toldTheWorld = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
+  sql`${sql(table)}.visibility = 'shared'`;
+
+/**
+ * A fight its Shared World may be told of: shared, and over. A fight still on
+ * the table has no outcome yet, and telling the world it is running tells
+ * every member what is happening at a table they are not at.
+ */
+export const fightToldTheWorld = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql.and([toldTheWorld(sql, "encounter_run"), sql`encounter_run.ended_at is not null`]);
+
+/**
  * The half of a row read that is about the *campaign*: this row is in the
  * campaign the path names, and that campaign is one this actor may read at all
  * — which is where membership, credential scope and the master toggle are

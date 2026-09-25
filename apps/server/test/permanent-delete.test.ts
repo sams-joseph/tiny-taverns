@@ -31,7 +31,6 @@ import { Notes } from "../src/repo/Notes.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Party } from "../src/repo/Party.js";
 import { Proposals } from "../src/repo/Proposals.js";
-import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import {
   accountWide,
@@ -64,7 +63,7 @@ const runtime = ManagedRuntime.make(
     Creatures.layer,
     EncounterCreatures.layer,
     Encounters.layer,
-    GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    GroupHistory.layer,
     Groups.layer,
     HobThreads.layer,
     Invites.layer,
@@ -80,7 +79,7 @@ const runtime = ManagedRuntime.make(
         Characters.layer.pipe(Layer.provide(live)),
         EncounterCreatures.layer,
         Encounters.layer,
-        GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+        GroupHistory.layer,
         Notes.layer,
       ]),
     ),

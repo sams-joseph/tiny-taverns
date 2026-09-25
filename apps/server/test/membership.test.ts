@@ -18,7 +18,6 @@ import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
-import { Recap } from "../src/repo/Recap.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
@@ -293,7 +292,7 @@ const runtime = ManagedRuntime.make(
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Groups.layer,
-    GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    GroupHistory.layer,
     LibraryShares.layer,
     Characters.layer,
     Party.layer.pipe(Layer.provide(LiveEvents.layer)),

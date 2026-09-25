@@ -113,8 +113,9 @@ describe("Shared World lifecycle", () => {
           },
         });
 
-        // Played story, not prep, is canonical world context. Publish each
-        // night through the public Chronicle operation that snapshots a recap.
+        // Played story, not prep, is canonical world context — as far as the
+        // DM shared it. Publish each night through the public Chronicle
+        // operation that snapshots it.
         const firstNight = yield* owner.sessions.create({
           params: { campaignId: first.id },
           payload: { number: 1, title: "The Eastern Crossing" },
@@ -125,7 +126,10 @@ describe("Shared World lifecycle", () => {
         });
         yield* owner.beats.create({
           params: { campaignId: first.id, sessionId: firstNight.id },
-          payload: { body: "FIRST_CANONICAL the party repaired the eastern bridge." },
+          payload: {
+            body: "FIRST_CANONICAL the party repaired the eastern bridge.",
+            visibility: "shared",
+          },
         });
         yield* owner.sharedWorldHistory.fromRecap({
           params: { worldId: world.id },
@@ -142,7 +146,10 @@ describe("Shared World lifecycle", () => {
         });
         yield* owner.beats.create({
           params: { campaignId: second.id, sessionId: secondNight.id },
-          payload: { body: "SECOND_CANONICAL the guild crossed the western bridge." },
+          payload: {
+            body: "SECOND_CANONICAL the guild crossed the western bridge.",
+            visibility: "shared",
+          },
         });
         yield* owner.sharedWorldHistory.fromRecap({
           params: { worldId: world.id },

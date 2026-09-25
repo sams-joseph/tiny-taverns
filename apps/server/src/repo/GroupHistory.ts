@@ -13,12 +13,10 @@ import {
   NotFound,
   type Origin,
   type SessionId,
-  type SessionRecap,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
-import { Recap } from "./Recap.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -26,10 +24,11 @@ import {
   dieOnSqlError,
   likeContains,
 } from "./rows.js";
-import { ensureGroupReadable } from "./visibility.js";
+import { ensureGroupReadable, fightToldTheWorld, toldTheWorld } from "./visibility.js";
 
 /**
- * The group's chronicle — report §3.5, under the decisions of 2026-09-01.
+ * The group's chronicle — report §3.5, under the decisions of 2026-09-01 and
+ * the captain's narrowing of 2026-09-25.
  *
  * **Entries are copies, admitted on purpose; the group never reads through a
  * campaign.** That is the whole privacy design: what has happened is the
@@ -38,6 +37,11 @@ import { ensureGroupReadable } from "./visibility.js";
  * enters this table at all — so a group-level read can be as wide as it
  * likes without a `WHERE` clause ever having to tell one creator's private
  * notes from another's. The boundary is which rows exist, not a predicate.
+ *
+ * What a played night *contributes* is narrower than the night: only what its
+ * DM shared (`toldNight`). A hidden fight, a fight still on the table and a
+ * beat, prep line or combatant kept to the DM are the table's, not the
+ * world's — the same answer the table's own players get.
  *
  * Every read and write here is gated on **live group membership**
  * (`ensureGroupReadable`), because the chronicle is the group's: there is no
@@ -114,6 +118,29 @@ const toSummary = (row: SummaryRow): SharedWorldHistorySummary =>
 const ENTRY_LIMIT = 500;
 
 /**
+ * One played night as its Shared World is told it — the output of the one read
+ * both `nightStory` and `fromRecap` take it from (`toldNight` in the layer).
+ */
+export interface ToldNight {
+  readonly campaignName: string;
+  readonly number: number;
+  readonly title: string | null;
+  readonly startedAt: DateTime.Utc;
+  /** Shared beats, verbatim, oldest first. */
+  readonly beats: ReadonlyArray<string>;
+  /** Shared fights that have ended, in the order they started. */
+  readonly fights: ReadonlyArray<{
+    readonly name: string;
+    readonly round: number;
+    readonly outcome: "resolved" | "carried";
+    /** Shared combatants who ended it at zero hit points. */
+    readonly fell: ReadonlyArray<string>;
+  }>;
+  /** Shared prep lines the DM ticked. */
+  readonly settled: ReadonlyArray<string>;
+}
+
+/**
  * A played night, rendered to the prose the group keeps — **at share time,
  * once**. Pure, so the copy rule is testable without a database: whatever this
  * returns is what the group remembers, however the campaign changes later.
@@ -122,60 +149,52 @@ const ENTRY_LIMIT = 500;
  * by name and outcome, the ticked prep as what the night settled. Exact
  * monster numbers are deliberately not written into the body — an outcome is
  * *what happened*, and a stat block is precisely what the product keeps to the
- * DM everywhere else.
+ * DM everywhere else. What the night holds that its DM did not share never
+ * reaches this function: `toldNight` does not select it.
  */
-export const renderRecapEntry = (
-  recap: SessionRecap,
+export const renderNightEntry = (
+  night: ToldNight,
 ): {
   readonly title: string;
   readonly body: string;
   readonly facts: unknown;
-  readonly occurredAt: DateTime.Utc | null;
+  readonly occurredAt: DateTime.Utc;
 } => {
-  const session = recap.session;
   const title =
-    session.title === null || session.title === ""
-      ? `Session ${String(session.number)}`
-      : `Session ${String(session.number)} — ${session.title}`;
+    night.title === null || night.title === ""
+      ? `Session ${String(night.number)}`
+      : `Session ${String(night.number)} — ${night.title}`;
 
-  const fightLines = recap.fights.map((fight) => {
-    const run = fight.run;
-    const down = fight.combatants.filter(
-      (combatant) => combatant.hpCurrent !== null && combatant.hpCurrent <= 0,
-    );
+  const fightLines = night.fights.map((fight) => {
     const outcome =
-      run.endedAt === null
-        ? `still on the table at round ${String(run.round)}`
-        : run.endedReason === "carried"
-          ? `paused at round ${String(run.round)}`
-          : `fought to a finish at round ${String(run.round)}`;
-    const fell =
-      down.length === 0 ? "" : ` ${down.map((c) => c.displayName).join(", ")} went down.`;
-    return `${run.encounterName}: ${outcome}.${fell}`;
+      fight.outcome === "carried"
+        ? `paused at round ${String(fight.round)}`
+        : `fought to a finish at round ${String(fight.round)}`;
+    const fell = fight.fell.length === 0 ? "" : ` ${fight.fell.join(", ")} went down.`;
+    return `${fight.name}: ${outcome}.${fell}`;
   });
 
-  const beatLines = recap.beats.map((beat) => beat.body);
-  const settled = recap.prepDone.map((item) => item.label);
-
   const body = [
-    ...beatLines,
+    ...night.beats,
     ...fightLines,
-    ...(settled.length === 0 ? [] : [`Settled before sitting down: ${settled.join("; ")}.`]),
+    ...(night.settled.length === 0
+      ? []
+      : [`Settled before sitting down: ${night.settled.join("; ")}.`]),
   ].join("\n");
 
   return {
     title,
     body: body === "" ? "The night was played, and nobody wrote anything down." : body,
     facts: {
-      sessionNumber: session.number,
-      fights: recap.fights.map((fight) => ({
-        name: fight.run.encounterName,
-        round: fight.run.round,
-        endedReason: fight.run.endedReason,
+      sessionNumber: night.number,
+      fights: night.fights.map((fight) => ({
+        name: fight.name,
+        round: fight.round,
+        endedReason: fight.outcome,
       })),
-      beats: recap.beats.length,
+      beats: night.beats.length,
     },
-    occurredAt: session.startedAt,
+    occurredAt: night.startedAt,
   };
 };
 
@@ -190,19 +209,19 @@ export interface PlayedNight {
   readonly endedAt: DateTime.Utc | null;
 }
 
-/** One played night's canonical story — see `nightStory` on the service. */
+/** One played night's story as the world is told it — see `nightStory` on the service. */
 export interface NightStory {
   readonly campaignName: string;
   readonly number: number;
   readonly title: string | null;
   readonly startedAt: DateTime.Utc;
-  /** The DM's own words, oldest first, verbatim. */
+  /** The DM's shared words, oldest first, verbatim. */
   readonly beats: ReadonlyArray<string>;
-  /** Name and outcome only — no roster, no numbers, no stat blocks. */
+  /** Shared, ended fights: name and outcome only — no roster, no numbers, no stat blocks. */
   readonly fights: ReadonlyArray<{
     readonly name: string;
     readonly round: number;
-    readonly outcome: "on the table" | "resolved" | "carried";
+    readonly outcome: "resolved" | "carried";
   }>;
 }
 
@@ -224,11 +243,13 @@ export class GroupHistory extends Context.Service<
     ) => Effect.Effect<SharedWorldHistoryEntry, NotFound, CurrentActor>;
     /**
      * The campaign creator sharing a played night. Takes the **proof** rather
-     * than a campaign id — it is the one write that turns campaign-private
-     * material into group history, so the authority is the same
-     * `CampaignCreatorActor` the recap itself requires, and the group in the
-     * path has to be the proof's own (a campaign of another group is the
-     * ordinary `NotFound`).
+     * than a campaign id — it is the one write that turns campaign material
+     * into group history, so the authority is the same `CampaignCreatorActor`
+     * the recap itself requires, and the group in the path has to be the
+     * proof's own (a campaign of another group is the ordinary `NotFound`).
+     * What it copies is the night as the world is told it (`toldNight`), not
+     * the creator's recap: sharing the night does not flip the Share switch
+     * of anything in it.
      *
      * An unplayed night is a `Conflict`, not an entry: the boundary decision
      * admits what has *happened*, and a session with no `startedAt` has not.
@@ -283,14 +304,16 @@ export class GroupHistory extends Context.Service<
       groupId: SharedWorldId,
     ) => Effect.Effect<ReadonlyArray<PlayedNight>, NotFound, CurrentActor>;
     /**
-     * One played night's canonical story: the beats verbatim and the fights
-     * by name and outcome. **This is the one read in the product that crosses
-     * a campaign boundary on group membership alone**, and the decision of
-     * 2026-09-01 is its whole warrant — played sessions, story beats and
-     * combat outcomes are canonical and group-visible. What it deliberately
-     * does not read: notes (prep until shared), prep items, encounters that
-     * never ran, combatant numbers, stat blocks. An unplayed session is the
-     * ordinary `NotFound`, because unplayed prep does not exist at this level.
+     * One played night's story: the shared beats verbatim and the shared,
+     * ended fights by name and outcome. **This is the one read in the product
+     * that crosses a campaign boundary on group membership alone.** The
+     * decision of 2026-09-01 is its warrant — played nights are the world's —
+     * and the captain's of 2026-09-25 its limit: the world is told only what
+     * the DM shared, so a hidden fight, a fight still on the table and a
+     * DM-only beat are not in it. What it never tells: notes (prep until
+     * shared), prep items, encounters that never ran, combatant numbers, stat
+     * blocks. An unplayed session is the ordinary `NotFound`, because
+     * unplayed prep does not exist at this level.
      */
     readonly nightStory: (
       groupId: SharedWorldId,
@@ -302,7 +325,72 @@ export class GroupHistory extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const recaps = yield* Recap;
+
+      /**
+       * One played night as its Shared World is told it — the one read behind
+       * both `nightStory` and `fromRecap`, so what world Hob is told and what
+       * the Chronicle keeps cannot disagree. Every part composes the Share
+       * switch in SQL (`toldTheWorld`, `fightToldTheWorld`), so a hidden fight,
+       * a fight still on the table, and a beat, prep line or combatant kept to
+       * the DM are never selected. The caller has already bound the session to
+       * its campaign and group and checked that it was played.
+       */
+      const toldNight = (night: {
+        readonly sessionId: SessionId;
+        readonly number: number;
+        readonly title: string | null;
+        readonly startedAt: Date;
+        readonly campaignName: string;
+      }) =>
+        Effect.gen(function* () {
+          const beats = yield* sql<{ readonly body: string }>`
+            select beat.body from beat
+            where beat.session_id = ${night.sessionId}
+              and ${toldTheWorld(sql, "beat")}
+            order by beat.created_at asc, beat.id asc
+          `;
+          const fights = yield* sql<{
+            readonly encounter_name: string;
+            readonly round: number;
+            readonly ended_reason: "resolved" | "carried";
+            readonly fell: ReadonlyArray<string>;
+          }>`
+            select encounter_run.encounter_name, encounter_run.round,
+                   encounter_run.ended_reason,
+                   array(
+                     select combatant.display_name from combatant
+                     where combatant.encounter_run_id = encounter_run.id
+                       and combatant.hp_current <= 0
+                       and ${toldTheWorld(sql, "combatant")}
+                     order by combatant.initiative desc, combatant.created_at asc, combatant.id asc
+                   ) as fell
+            from encounter_run
+            where encounter_run.session_id = ${night.sessionId}
+              and ${fightToldTheWorld(sql)}
+            order by encounter_run.started_at asc, encounter_run.id asc
+          `;
+          const settled = yield* sql<{ readonly label: string }>`
+            select prep_item.label from prep_item
+            where prep_item.session_id = ${night.sessionId}
+              and prep_item.done
+              and ${toldTheWorld(sql, "prep_item")}
+            order by prep_item.created_at asc, prep_item.id asc
+          `;
+          return {
+            campaignName: night.campaignName,
+            number: night.number,
+            title: night.title,
+            startedAt: DateTime.fromDateUnsafe(night.startedAt),
+            beats: beats.map((row) => row.body),
+            fights: fights.map((row) => ({
+              name: row.encounter_name,
+              round: row.round,
+              outcome: row.ended_reason,
+              fell: row.fell,
+            })),
+            settled: settled.map((row) => row.label),
+          } satisfies ToldNight;
+        });
 
       return {
         list: (groupId) =>
@@ -384,20 +472,44 @@ export class GroupHistory extends Context.Service<
               if (creator.group !== groupId) {
                 return yield* new NotFound({ resource: "campaign", id: creator.campaign });
               }
-              const recap = yield* recaps.read(creator, sessionId);
-              if (recap.session.startedAt === null) {
+              const nights = yield* sql<{
+                readonly number: number;
+                readonly title: string | null;
+                readonly started_at: Date | null;
+                readonly campaign_name: string;
+              }>`
+                select session.number, session.title, session.started_at,
+                       campaign.name as campaign_name
+                from session
+                join campaign on campaign.id = session.campaign_id
+                where session.id = ${sessionId}
+                  and campaign.id = ${creator.campaign}
+              `;
+              if (nights.length === 0) {
+                return yield* new NotFound({ resource: "session", id: sessionId });
+              }
+              const night = nights[0]!;
+              if (night.started_at === null) {
                 return yield* new Conflict({
                   message:
                     "this night has not been played yet — the chronicle records what happened, and nothing has",
                 });
               }
-              const rendered = renderRecapEntry(recap);
+              const rendered = renderNightEntry(
+                yield* toldNight({
+                  sessionId,
+                  number: night.number,
+                  title: night.title,
+                  startedAt: night.started_at,
+                  campaignName: night.campaign_name,
+                }),
+              );
               const rows = yield* sql<EntryRow>`
                 insert into group_history_entry
                   (group_id, campaign_id, session_id, source_kind, source_id, occurred_at,
                    title, body, facts, created_by_account_id)
                 values (${groupId}, ${creator.campaign}, ${sessionId}, 'recap', ${sessionId},
-                        ${rendered.occurredAt === null ? null : DateTime.toDate(rendered.occurredAt)},
+                        ${DateTime.toDate(rendered.occurredAt)},
                         ${rendered.title}, ${rendered.body}, ${JSON.stringify(rendered.facts)},
                         ${actor.accountId})
                 returning *
@@ -566,41 +678,23 @@ export class GroupHistory extends Context.Service<
               if (nights.length === 0) {
                 return yield* new NotFound({ resource: "session", id: sessionId });
               }
-              // Beats verbatim — canonical by the decision, whatever their
-              // row-level visibility: a beat records what happened at the
-              // table, and what happened is the group's.
-              const beats = yield* sql<{ readonly body: string }>`
-                select beat.body from beat
-                where beat.session_id = ${sessionId}
-                order by beat.created_at asc, beat.id asc
-              `;
-              const fights = yield* sql<{
-                readonly encounter_name: string;
-                readonly round: number;
-                readonly ended_at: Date | null;
-                readonly ended_reason: string | null;
-              }>`
-                select encounter_run.encounter_name, encounter_run.round,
-                       encounter_run.ended_at, encounter_run.ended_reason
-                from encounter_run
-                where encounter_run.session_id = ${sessionId}
-                order by encounter_run.created_at asc, encounter_run.id asc
-              `;
-              return {
-                campaignName: nights[0]!.campaign_name,
+              const night = yield* toldNight({
+                sessionId,
                 number: nights[0]!.number,
                 title: nights[0]!.title,
-                startedAt: DateTime.fromDateUnsafe(nights[0]!.started_at),
-                beats: beats.map((row) => row.body),
-                fights: fights.map((row) => ({
-                  name: row.encounter_name,
-                  round: row.round,
-                  outcome:
-                    row.ended_at === null
-                      ? ("on the table" as const)
-                      : row.ended_reason === "carried"
-                        ? ("carried" as const)
-                        : ("resolved" as const),
+                startedAt: nights[0]!.started_at,
+                campaignName: nights[0]!.campaign_name,
+              });
+              return {
+                campaignName: night.campaignName,
+                number: night.number,
+                title: night.title,
+                startedAt: night.startedAt,
+                beats: night.beats,
+                fights: night.fights.map((fight) => ({
+                  name: fight.name,
+                  round: fight.round,
+                  outcome: fight.outcome,
                 })),
               };
             }),
