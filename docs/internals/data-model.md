@@ -35,6 +35,8 @@ The same trick applied to a predicate. `session.is_open` is `generated always as
 
 One cost: `on delete set null` is refused on a key containing a generated column, so `Sessions.remove` clears the campaign pointer itself.
 
+A key can also carry a column a check needs. `encounter_prep_encounter_fkey` is `(encounter_id, campaign_id, kind) -> encounter (id, campaign_id, kind)` `on update cascade` (`0060_encounter_prep.ts`), so the prep row's `kind` is always its encounter's, and `encounter_prep_challenge_kind` refuses a challenge tagged with another kind. Check constraints are never deferred, so changing the kind fails while the old kind's challenge is still there: `Encounters.update` clears it, moves the kind, then writes the new challenge, in one transaction.
+
 ## Deferred keys, and a failed commit is a defect
 
 `deferrable initially deferred` is the default for any key whose two ends are written in either order or deleted by one cascade: the keys above, `encounter_creature.creature_id` (`0004_bestiary.ts`), and every content table's `assistant_turn_id` (`0010_assistant_conversation.ts`; `character`'s is the exception below). `delete from campaign` cascades into `creature` and `encounter_creature` in one statement; an immediate `no action` fires before the referencing rows are gone and rejects a legal delete. Deferring moves the check to the end of the transaction, which under autocommit is still the end of that one statement, so a lone `delete from creature` on a roster is still refused.

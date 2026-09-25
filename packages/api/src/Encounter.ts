@@ -4,6 +4,7 @@ import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
 import { CampaignId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
+import { AbilityKey } from "./Ruleset.js";
 
 /**
  * A tag on an encounter — `"Marsh"`, `"Night"`, `"Boss"` (`data.js:10-12`).
@@ -26,6 +27,81 @@ export const EncounterPlayed = Schema.Struct({
 export type EncounterPlayed = typeof EncounterPlayed.Type;
 
 /**
+ * What sort of scene the encounter is: a fight, a conversation, a skill
+ * challenge or a hazard. Every encounter has one; an encounter made before
+ * there was a choice is a fight, which is all an encounter could hold then.
+ *
+ * On `Encounter` itself, so a player reading a shared encounter sees it: it
+ * says what kind of scene is coming, which the encounter's name already does.
+ */
+export const EncounterKind = Schema.Literals(["combat", "social", "challenge", "hazard"]);
+export type EncounterKind = typeof EncounterKind.Type;
+
+/** The kinds in the order a picker lists them, and the word each is said as. */
+export const ENCOUNTER_KINDS: ReadonlyArray<readonly [EncounterKind, string]> = [
+  ["combat", "Combat"],
+  ["social", "Social"],
+  ["challenge", "Challenge"],
+  ["hazard", "Hazard"],
+];
+
+export const encounterKindLabel = (kind: EncounterKind): string =>
+  ENCOUNTER_KINDS.find(([value]) => value === kind)?.[1] ?? kind;
+
+/** The bounds the form, the schema, the tool and the table all state. */
+export const ENCOUNTER_TACTICS_MAX = 12;
+export const ENCOUNTER_TACTIC_MAX = 300;
+export const ENCOUNTER_TREASURE_MAX = 500;
+export const ENCOUNTER_SKILLS_MAX = 8;
+export const ENCOUNTER_SKILL_MAX = 40;
+export const ENCOUNTER_HAZARD_TEXT_MAX = 120;
+
+/** A check's DC or a save's, as the SRD sets them. */
+const Dc = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 }));
+const Tally = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }));
+const prose = (max: number) => Schema.String.check(Schema.isPattern(/\S/), Schema.isMaxLength(max));
+
+/**
+ * The skills a challenge is met with — `"Athletics"`, `"Survival"`. An open
+ * vocabulary, like `Skill.name` on a sheet: a DM may call for thieves' tools.
+ */
+const ChallengeSkills = Schema.Array(prose(ENCOUNTER_SKILL_MAX)).check(
+  Schema.isMaxLength(ENCOUNTER_SKILLS_MAX),
+);
+
+/** A skill challenge: so many successes at this DC before so many failures. */
+export const EncounterSkillChallenge = Schema.Struct({
+  kind: Schema.Literal("challenge"),
+  dc: Dc,
+  successes: Tally,
+  failures: Tally,
+  skills: ChallengeSkills,
+});
+export type EncounterSkillChallenge = typeof EncounterSkillChallenge.Type;
+
+/** A hazard: the save it forces, what failing costs, and how long it lasts. */
+export const EncounterHazard = Schema.Struct({
+  kind: Schema.Literal("hazard"),
+  save: Schema.Struct({ ability: AbilityKey, dc: Dc }),
+  /** `"1 level of exhaustion"` */
+  onFail: Schema.optionalKey(prose(ENCOUNTER_HAZARD_TEXT_MAX)),
+  /** `"1d4 hours"` */
+  duration: Schema.optionalKey(prose(ENCOUNTER_HAZARD_TEXT_MAX)),
+  /** What gets the party through it — `"Survival"`, `"Animal Handling"`. */
+  skills: ChallengeSkills,
+});
+export type EncounterHazard = typeof EncounterHazard.Type;
+
+/**
+ * The numbers a skill challenge or a hazard is run by, tagged with the kind
+ * they belong to. A fight and a conversation have none. The tag must be the
+ * encounter's kind — the payloads below refuse anything else, and so does the
+ * table — so a challenge can never outlive the kind it was written for.
+ */
+export const EncounterChallenge = Schema.Union([EncounterSkillChallenge, EncounterHazard]);
+export type EncounterChallenge = typeof EncounterChallenge.Type;
+
+/**
  * The authored encounter — a reusable template, never mutated by running it.
  *
  * One field the fixture's encounter card shows is still deliberately absent:
@@ -46,6 +122,7 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
    * says nothing about a creature or a seat hidden from them.
    */
   difficulty: EncounterDifficulty,
+  kind: EncounterKind,
   tags: Schema.Array(Schema.String),
   /**
    * The card's "6 creatures" (`data.js:10`, `CampaignHome.jsx:15`).
@@ -80,25 +157,93 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
 const tags = Schema.Array(Tag).check(Schema.isLengthBetween(0, 16));
 
 /**
+ * How the DM means to run it — `"Archers open from the reeds with full
+ * cover"` — one short line each, in order.
+ */
+export const EncounterTactics = Schema.Array(prose(ENCOUNTER_TACTIC_MAX)).check(
+  Schema.isMaxLength(ENCOUNTER_TACTICS_MAX),
+);
+
+/** What the party can come away with — `"28 sp and a bone whistle"`. */
+export const EncounterTreasure = prose(ENCOUNTER_TREASURE_MAX);
+
+/**
+ * The encounter's DM prep: its tactics, its treasure and, for a skill
+ * challenge or a hazard, the numbers it is run by — **the creator's alone.**
+ *
+ * Not on `Encounter`, which a player reads when it is shared: this is the
+ * DM's plan for the scene, and it reaches the wire only through the creator's
+ * prep reads (`encounterPrep`), on a table no player read touches
+ * (`0060_encounter_prep.ts`). It is written through the encounter's own create
+ * and update, as the map's setting line is.
+ *
+ * The drawing's "where" line is not here: it is the battle map's setting line
+ * (`BattleMap.setting`), already the creator's alone and already written on
+ * the encounter's form.
+ */
+export class EncounterPrep extends Schema.Class<EncounterPrep>("EncounterPrep")({
+  encounterId: EncounterId,
+  tactics: Schema.Array(Schema.String),
+  /** `null` when none was written. */
+  treasure: Schema.NullOr(Schema.String),
+  /** `null` for a fight or a conversation, and for a challenge not yet set out. */
+  challenge: Schema.NullOr(EncounterChallenge),
+}) {}
+
+/**
+ * A challenge is written with the kind it belongs to, in the same payload: the
+ * kind is what a reader checks the tag against, and a payload naming one
+ * without the other would leave the server to guess which the DM meant.
+ */
+const challengeMatchesKind = Schema.makeFilter(
+  (payload: {
+    readonly kind?: EncounterKind | undefined;
+    readonly challenge?: EncounterChallenge | null | undefined;
+  }) =>
+    payload.challenge === undefined ||
+    payload.challenge === null ||
+    payload.challenge.kind === payload.kind
+      ? undefined
+      : { path: ["challenge"], issue: "a challenge is sent with the kind it belongs to" },
+);
+
+/**
  * `setting` is the one line the encounter's battle map is drawn from
  * (`BattleMap.ts`). It is written here, on the encounter's form, because the
  * map is made with the encounter and drawn once as it is made; but it is stored
  * on the map and read back only through the creator's map read, never on
- * `Encounter`, which a player may read when it is shared.
+ * `Encounter`, which a player may read when it is shared. `tactics`,
+ * `treasure` and `challenge` are the same arrangement over `EncounterPrep`.
  */
 export const EncounterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
+  /** Absent is a fight. */
+  kind: Schema.optional(EncounterKind),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
-});
+  tactics: Schema.optional(EncounterTactics),
+  treasure: Schema.optional(EncounterTreasure),
+  challenge: Schema.optional(EncounterChallenge),
+}).check(challengeMatchesKind);
 export type EncounterCreate = typeof EncounterCreate.Type;
 
 export const EncounterUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
+  /**
+   * A new kind clears a challenge written for the old one, unless this payload
+   * carries the new kind's challenge.
+   */
+  kind: Schema.optional(EncounterKind),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
   /** The map's setting line; `null` or a blank clears it. Editing it redraws nothing. */
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
-});
+  /** The whole list, replacing the last; `[]` clears it. */
+  tactics: Schema.optional(EncounterTactics),
+  /** `null` clears it. */
+  treasure: Schema.optional(Schema.NullOr(EncounterTreasure)),
+  /** `null` clears it; a challenge is sent with its kind. */
+  challenge: Schema.optional(Schema.NullOr(EncounterChallenge)),
+}).check(challengeMatchesKind);
 export type EncounterUpdate = typeof EncounterUpdate.Type;

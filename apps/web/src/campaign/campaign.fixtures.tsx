@@ -162,6 +162,7 @@ export const encounter = {
     party: { size: 4, minLevel: 5, maxLevel: 5, unlevelled: 0 },
     thresholds: { easy: 1000, medium: 2000, hard: 3000, deadly: 4400 },
   },
+  kind: "combat",
   tags: ["Marsh", "Night"],
   // `sum(encounter_creature.count)`, computed by the server per read — the
   // prototype's "6 creatures" (`data.js:10`). Required on the wire, so a
@@ -191,6 +192,20 @@ export const battleMap = {
   image: null,
   imagePending: false,
   ...stamps,
+};
+
+/**
+ * The encounter's DM prep, as its creator reads it: the tactics and treasure
+ * the edit form opens on. A fight, so no challenge.
+ */
+export const encounterPrep = {
+  encounterId,
+  tactics: [
+    "Archers open from the reeds with full cover.",
+    "At half strength they grab a crate and run for the water.",
+  ],
+  treasure: "28 sp and a bone whistle",
+  challenge: null,
 };
 
 export const sketch = {
@@ -1463,6 +1478,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     [
       `GET /campaigns/${campaignId}/encounters/${encounterId}/map`,
       { status: 200, body: battleMap },
+    ],
+    [
+      `GET /campaigns/${campaignId}/encounters/${encounterId}/prep`,
+      { status: 200, body: encounterPrep },
     ],
     // The nights this table has had — read by both doors into a session, and
     // only ever to work out the next number. Session 12 is the highest, so the

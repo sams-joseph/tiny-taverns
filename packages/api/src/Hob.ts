@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { Character, CharacterSheet } from "./Character.js";
-import { Encounter } from "./Encounter.js";
+import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
 import {
   AssistantThreadId,
@@ -194,6 +194,15 @@ export const HobProposal = Schema.Union([
      * The card shows it, because accepting draws the map from it.
      */
     setting: Schema.optional(Schema.String),
+    /**
+     * The encounter's kind and its DM prep, as the accept writes them. Absent
+     * on every proposal made before Hob could offer them: those were fights
+     * with no prep, so an absent `kind` is a fight.
+     */
+    kind: Schema.optional(EncounterKind),
+    tactics: Schema.optional(Schema.Array(Schema.String)),
+    treasure: Schema.optional(Schema.String),
+    challenge: Schema.optional(EncounterChallenge),
     roster: Schema.Array(HobRosterLine),
   }),
   /**

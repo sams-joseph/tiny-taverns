@@ -618,6 +618,46 @@ describe("the conversation is still there", () => {
     expect(screen.getByText("A flooded causeway between two stone huts")).toBeInTheDocument();
   });
 
+  it("shows the kind, the challenge, the tactics and the treasure the accept will write", async () => {
+    server.threads = [aThread("A hazard for the flats")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "A sandstorm.",
+        proposal: {
+          ...anEncounter,
+          name: "Salt-flat sandstorm",
+          kind: "hazard",
+          roster: [],
+          challenge: {
+            kind: "hazard",
+            save: { ability: "CON", dc: 13 },
+            duration: "1d4 hours",
+            skills: ["Survival"],
+          },
+          tactics: ["Visibility drops to 10 ft.", "The caravan can split."],
+          treasure: "A lost strongbox",
+        },
+        acceptedAt: null,
+        createdAt: stamp,
+      },
+    ];
+
+    renderHob();
+
+    await waitFor(() => expect(screen.getByText("Salt-flat sandstorm")).toBeInTheDocument());
+    expect(screen.getByText("Hazard")).toBeInTheDocument();
+    expect(screen.getByText("CON 13")).toBeInTheDocument();
+    expect(screen.getByText("1d4 hours")).toBeInTheDocument();
+    // Only what was written: this hazard said nothing about a failed save.
+    expect(screen.queryByText("On fail")).toBeNull();
+    expect(screen.getByText("Survival")).toBeInTheDocument();
+    expect(screen.getByText("The caravan can split.")).toBeInTheDocument();
+    expect(screen.getByText("A lost strongbox")).toBeInTheDocument();
+  });
+
   /**
    * The one property the whole feature rests on, pinned from the read-back path
    * as well as from the live one.

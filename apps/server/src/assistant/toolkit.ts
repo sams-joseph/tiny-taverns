@@ -20,7 +20,16 @@ import {
   Creature,
   CreatureId,
   CurrentActor,
+  type EncounterChallenge,
+  ENCOUNTER_HAZARD_TEXT_MAX,
   ENCOUNTER_SETTING_MAX,
+  ENCOUNTER_SKILL_MAX,
+  ENCOUNTER_SKILLS_MAX,
+  ENCOUNTER_TACTIC_MAX,
+  ENCOUNTER_TACTICS_MAX,
+  ENCOUNTER_TREASURE_MAX,
+  EncounterKind,
+  encounterKindLabel,
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
@@ -880,32 +889,157 @@ export const ProposeBeat = Tool.make("proposeBeat", {
 
 export const ProposeEncounter = Tool.make("proposeEncounter", {
   description:
-    "Offer the DM an encounter to save, built from creatures this campaign " +
-    "can use — see listCreatures. Find each creature with " +
-    "searchCampaign (source 'creature') and use the id from the hit — do not " +
-    "invent one, and do not propose a creature you have not found. Give a " +
-    "setting when you can: one line on what the place looks like from above, " +
-    "with no creatures in it; the encounter's battle map is drawn from it. " +
-    "Only a suggestion; nothing is saved unless the DM accepts it.",
+    "Offer the DM an encounter to save. Its kind is combat (the default), " +
+    "social, challenge or hazard. A fight is built from creatures this " +
+    "campaign can use — see listCreatures; the other kinds may have creatures " +
+    "too. Find each creature with searchCampaign (source 'creature') and use " +
+    "the id from the hit — do not invent one, and do not propose a creature you " +
+    "have not found. Give a setting when you can: one line on what the place " +
+    "looks like from above, with no creatures in it; the encounter's battle map " +
+    "is drawn from it. Give tactics — a few short lines on how to run it — and " +
+    "treasure when there is any. A challenge needs dc, successes and " +
+    "failures; a hazard needs saveAbility and dc, and may give onFail and " +
+    "duration; either may name skills. Only a suggestion; nothing is saved " +
+    "unless the DM accepts it.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    kind: optional(EncounterKind),
     tags: optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
     /**
      * The battle map's setting line, bounded as the form bounds it. The one
      * thing the map is drawn from, so the card shows it before the DM accepts.
      */
     setting: optionalText(ENCOUNTER_SETTING_MAX),
-    creatures: Schema.Array(
-      Schema.Struct({
-        creatureId: CreatureId,
-        count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
-      }),
-    ).check(Schema.isLengthBetween(1, 12)),
+    /** Absent or empty for a scene with nobody in it; a fight is refused one. */
+    creatures: optional(
+      Schema.Array(
+        Schema.Struct({
+          creatureId: CreatureId,
+          count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 99 })),
+        }),
+      ).check(Schema.isMaxLength(12)),
+    ),
+    tactics: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, ENCOUNTER_TACTIC_MAX))).check(
+        Schema.isMaxLength(ENCOUNTER_TACTICS_MAX),
+      ),
+    ),
+    treasure: optionalText(ENCOUNTER_TREASURE_MAX),
+    /**
+     * The challenge's numbers, flat rather than one nested object, for the
+     * reason every parameter here is flat. `dc` is a skill challenge's check DC
+     * and a hazard's save DC; which the rest must be is the kind's.
+     */
+    dc: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 }))),
+    successes: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }))),
+    failures: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }))),
+    saveAbility: optional(AbilityKey),
+    onFail: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
+    duration: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
+    skills: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, ENCOUNTER_SKILL_MAX))).check(
+        Schema.isMaxLength(ENCOUNTER_SKILLS_MAX),
+      ),
+    ),
   }),
   success: Schema.String,
   failure: proposalFailure,
   failureMode: "return",
 });
+
+/** What `proposeEncounter` says a challenge with, before the kind has sorted it. */
+interface ChallengeParameters {
+  readonly dc?: number | null | undefined;
+  readonly successes?: number | null | undefined;
+  readonly failures?: number | null | undefined;
+  readonly saveAbility?: AbilityKey | null | undefined;
+  readonly onFail?: string | null | undefined;
+  readonly duration?: string | null | undefined;
+  readonly skills?: ReadonlyArray<string> | null | undefined;
+}
+
+/** Lines a model wrote, trimmed, with the blanks and the repeats taken out. */
+const linesOf = (lines: ReadonlyArray<string> | null | undefined): ReadonlyArray<string> => {
+  const kept: Array<string> = [];
+  for (const raw of lines ?? []) {
+    const line = blank(raw);
+    if (line !== undefined && !kept.includes(line)) kept.push(line);
+  }
+  return kept;
+};
+
+/**
+ * The challenge a `proposeEncounter` call describes, or the sentence that
+ * tells the model what is missing.
+ *
+ * A refusal rather than a guess: a skill challenge with no DC is one the DM
+ * would have to finish before running, and numbers sent with a fight belong to
+ * no field the fight has — dropping them would lose what the model said.
+ * Nothing sent at all is a challenge not yet set out, which the DM can write.
+ */
+const challengeFrom = (
+  kind: EncounterKind,
+  given: ChallengeParameters,
+): { readonly challenge: EncounterChallenge | undefined } | { readonly refused: string } => {
+  const skills = linesOf(given.skills);
+  const dc = absent(given.dc);
+  const successes = absent(given.successes);
+  const failures = absent(given.failures);
+  const saveAbility = absent(given.saveAbility);
+  const onFail = blank(given.onFail);
+  const duration = blank(given.duration);
+  const said = [dc, successes, failures, saveAbility, onFail, duration].some(
+    (value) => value !== undefined,
+  );
+  if (!said && skills.length === 0) return { challenge: undefined };
+  switch (kind) {
+    case "challenge":
+      if (
+        saveAbility !== undefined ||
+        onFail !== undefined ||
+        duration !== undefined ||
+        dc === undefined ||
+        successes === undefined ||
+        failures === undefined
+      ) {
+        return {
+          refused:
+            "a challenge takes dc, successes and failures, and may name skills; " +
+            "saveAbility, onFail and duration are a hazard's",
+        };
+      }
+      return { challenge: { kind, dc, successes, failures, skills } };
+    case "hazard":
+      if (
+        successes !== undefined ||
+        failures !== undefined ||
+        saveAbility === undefined ||
+        dc === undefined
+      ) {
+        return {
+          refused:
+            "a hazard takes saveAbility and dc, and may give onFail, duration and skills; " +
+            "successes and failures are a challenge's",
+        };
+      }
+      return {
+        challenge: {
+          kind,
+          save: { ability: saveAbility, dc },
+          ...(onFail === undefined ? {} : { onFail }),
+          ...(duration === undefined ? {} : { duration }),
+          skills,
+        },
+      };
+    default:
+      return {
+        refused:
+          `a ${encounterKindLabel(kind).toLowerCase()} encounter has no challenge; dc, ` +
+          "successes, failures, saveAbility, onFail, duration and skills are for a " +
+          "challenge or a hazard",
+      };
+  }
+};
 
 /**
  * The six abilities and the campaign's classes, races and backgrounds are all
@@ -1833,21 +1967,48 @@ export const dmHandlersFor = (
           "it; say one short line about it and stop.",
       ),
 
-    proposeEncounter: ({ name, tags, setting, creatures }) =>
-      Effect.flatMap(roster(creatures), (lines) => {
+    proposeEncounter: ({
+      name,
+      kind: given,
+      tags,
+      setting,
+      creatures,
+      tactics,
+      treasure,
+      ...challengeParameters
+    }) =>
+      Effect.gen(function* () {
+        const kind = given ?? "combat";
+        if (kind === "combat" && (creatures ?? []).length === 0) {
+          return yield* new Conflict({
+            message: "a fight needs at least one creature — find them with searchCampaign",
+          });
+        }
+        const sorted = challengeFrom(kind, challengeParameters);
+        if ("refused" in sorted) return yield* new Conflict({ message: sorted.refused });
+        const lines = yield* roster(creatures ?? []);
         const settingLine = blank(setting);
-        return offer(
+        const tacticLines = linesOf(tactics);
+        const treasureLine = blank(treasure);
+        const count = lines.reduce((total, line) => total + line.count, 0);
+        const what =
+          kind === "combat" ? "an encounter" : `a ${encounterKindLabel(kind).toLowerCase()}`;
+        return yield* offer(
           {
             target: "encounter",
             name,
             tags: tags ?? [],
             ...(settingLine === undefined ? {} : { setting: settingLine }),
+            kind,
+            ...(tacticLines.length === 0 ? {} : { tactics: tacticLines }),
+            ...(treasureLine === undefined ? {} : { treasure: treasureLine }),
+            ...(sorted.challenge === undefined ? {} : { challenge: sorted.challenge }),
             roster: lines,
           },
-          `Offered the DM an encounter called "${name}", with ` +
-            `${lines.reduce((total, line) => total + line.count, 0)} creatures. They can ` +
-            "save it or discard it; say one short line about it and stop — the roster " +
-            "is already on their screen.",
+          `Offered the DM ${what} called "${name}"` +
+            (count === 0 ? "" : `, with ${count} ${count === 1 ? "creature" : "creatures"}`) +
+            ". They can save it or discard it; say one short line about it and stop — " +
+            "the card is already on their screen.",
         );
       }),
   });

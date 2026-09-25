@@ -550,6 +550,27 @@ const BattleMapsLive = HttpApiBuilder.group(
 );
 
 /**
+ * An encounter's DM prep: the creator's alone, behind the proof exactly as the
+ * battle map is, so anybody else is the ordinary `NotFound` before a prep row
+ * is read.
+ */
+const EncounterPrepLive = HttpApiBuilder.group(
+  TavernsApi,
+  "encounterPrep",
+  Effect.fnUntraced(function* (handlers) {
+    const encounters = yield* Encounters;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => encounters.prepList(creator)),
+      )
+      .handle("find", ({ params }) =>
+        asDm(params.campaignId, (creator) => encounters.prep(creator, params.encounterId)),
+      );
+  }),
+);
+
+/**
  * What a campaign can use of the creature corpus — the encounter picker's
  * list, and the by-id read that resolves internal instances a roster or a
  * fight already names. The campaign-copy management endpoints are gone with
@@ -1532,6 +1553,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     BattleMapsLive,
+    EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,
     LibraryLive,

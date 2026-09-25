@@ -469,7 +469,10 @@ describe("the scope, counted", () => {
     // Eighty-nine is `BattleMaps.forRun`, a fight's board, for the same reason.
     // Ninety is `BattleMaps.rosterTypes`, the creature types a map without a
     // setting line is drawn from, read beside the map it draws.
-    expect(gated).toBe(90);
+    // Ninety-one and ninety-two are `Encounters.prep` and `prepList`: an
+    // encounter's tactics, treasure and challenge numbers are the creator's
+    // alone, gated from the day they were declared.
+    expect(gated).toBe(92);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

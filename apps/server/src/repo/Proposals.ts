@@ -217,6 +217,13 @@ export class Proposals extends Context.Service<
                   // The line the battle map is drawn from, which the card
                   // showed; the accept handler starts the draw after commit.
                   setting: proposal.setting,
+                  // The kind and the prep the card showed, through the same
+                  // create the form uses. A proposal from before Hob could
+                  // offer them has none, and was a fight.
+                  kind: proposal.kind,
+                  tactics: proposal.tactics,
+                  treasure: proposal.treasure,
+                  challenge: proposal.challenge,
                 },
                 from,
               );

@@ -291,6 +291,9 @@ describe("the API declaration", () => {
       // point of use (captain's decision, 2026-09-02).
       "creatures",
       "encounterCreatures",
+      // An encounter's tactics, treasure and challenge numbers: the creator's
+      // alone, like its map.
+      "encounterPrep",
       "encounters",
       "health",
       "hob",

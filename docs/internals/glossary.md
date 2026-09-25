@@ -24,7 +24,8 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 ## Play
 
 - **session / night**: one evening of play (`session`). Opening a night is separate from putting a fight on the table. The campaign points at its current session; a finished session can never be current.
-- **encounter**: a reusable template for a fight (`encounter`): name, tags and a roster. Its difficulty is computed from the roster and the seated party on every read, never stored. Hard-deleted; running it never changes it.
+- **encounter**: a reusable template for a scene (`encounter`): name, **kind** (combat, social, challenge or hazard), tags and a roster. Its difficulty is computed from the roster and the seated party on every read, never stored. Hard-deleted; running it never changes it.
+- **encounter prep**: an encounter's tactics, treasure and, for a challenge or a hazard, the numbers it is run by (`encounter_prep`, one per encounter, made with it; `EncounterPrep` on the wire). The creator's alone, read through `encounterPrep.*`. Not `prep_item`, which is a night's checklist.
 - **battle map**: an encounter's board (`battle_map`, one per encounter, made with it): a square grid or none, a size in squares, feet per square and where the grid sits on the picture, plus the one picture Hob drew from its **setting** line. The creator's alone. `apps/server/src/repo/BattleMaps.ts`. A fight keeps its own copy of the grid, its **board** (`encounter_run_board`).
 - **run / fight**: one encounter on the table during a session (`encounter_run`). Exactly one live run per session. A fight that outlives its night continues as a second run linked by `continued_from`.
 - **combatant**: a row in a run's initiative order, a snapshot of a character or creature at seed time. Hit points on a player character write through to the character.
