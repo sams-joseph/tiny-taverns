@@ -188,9 +188,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * ### What is still deliberately absent
  *
- * - **The live half of the row.** Current hit points, temporary hit points and
- *   conditions are drawn and are not editable — they are `0014`'s live trio and
- *   the DM's to move, which is why the payload has no field for any of them.
+ * - **The live half of the row.** Current hit points, temporary hit points,
+ *   conditions and inspiration are drawn and are not editable — they are the
+ *   DM's to move, which is why the payload has no field for any of them.
  * - **Rolling is browser-local.** A check rolled "to your DM's dice tray" has
  *   no endpoint at all, so dice buttons write only the ephemeral *Your rolls*
  *   panel and its feedback says that truth. Preparing a spell is a picker over
@@ -1381,8 +1381,9 @@ function IdentityCard({
             </div>
           )}
 
-          {character.conditions.length > 0 && (
+          {(character.inspiration || character.conditions.length > 0) && (
             <div className="flex flex-wrap gap-1.5">
+              {character.inspiration && <Badge variant="outline">Inspired</Badge>}
               {character.conditions.map((condition) => (
                 <Badge key={condition} variant="secondary">
                   {condition}

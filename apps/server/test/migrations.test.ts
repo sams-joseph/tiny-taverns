@@ -25,6 +25,7 @@ import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
 import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
 import encounterPrep from "../src/migrations/0060_encounter_prep.js";
 import encounterReady from "../src/migrations/0061_encounter_ready.js";
+import characterInspiration from "../src/migrations/0062_character_inspiration.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -74,6 +75,12 @@ afterAll(() => prepRuntime.dispose());
 /** A thirteenth, for encounters written before one could be marked ready. */
 const readyRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_ready"));
 afterAll(() => readyRuntime.dispose());
+
+/** A fourteenth, for characters written before a DM could award inspiration. */
+const inspirationRuntime = ManagedRuntime.make(
+  freshDatabase("taverns_test_migrations_inspiration"),
+);
+afterAll(() => inspirationRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -310,6 +317,7 @@ describe("migrations", () => {
       { migration_id: 59, name: "computed_encounter_difficulty" },
       { migration_id: 60, name: "encounter_prep" },
       { migration_id: 61, name: "encounter_ready" },
+      { migration_id: 62, name: "character_inspiration" },
     ]);
   }, 60_000);
 
@@ -380,6 +388,7 @@ describe("migrations", () => {
       { migration_id: 59, name: "computed_encounter_difficulty" },
       { migration_id: 60, name: "encounter_prep" },
       { migration_id: 61, name: "encounter_ready" },
+      { migration_id: 62, name: "character_inspiration" },
     ]);
   }, 60_000);
 });
@@ -1394,6 +1403,43 @@ describe("upgrading a database whose encounters predate Ready", () => {
     );
 
     expect(measured.preps).toEqual([{ treasure: "28 sp and a bone whistle", ready: false }]);
+    expect(measured.cleared).toContain("not-null");
+  }, 60_000);
+});
+
+describe("upgrading a database whose characters predate inspiration", () => {
+  it("leaves every character already written uninspired, and refuses no answer at all", async () => {
+    const measured = await inspirationRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0061` left: a character with no word on inspiration.
+        yield* sql`alter table character drop column inspiration`;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "inspiration-hash" })}
+          returning id
+        `)[0]!.id;
+        const brannoc = (yield* sql<{ readonly id: string }>`
+          insert into character ${sql.insert({ account_id: account, name: "Brannoc" })}
+          returning id
+        `)[0]!.id;
+
+        yield* characterInspiration;
+        const characters = yield* sql<{ readonly name: string; readonly inspiration: boolean }>`
+          select name, inspiration from character where id = ${brannoc}
+        `;
+        const cleared = yield* sql`
+          update character set inspiration = null where id = ${brannoc}
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { characters, cleared };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.characters).toEqual([{ name: "Brannoc", inspiration: false }]);
     expect(measured.cleared).toContain("not-null");
   }, 60_000);
 });

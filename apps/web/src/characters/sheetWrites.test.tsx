@@ -64,14 +64,21 @@ const lit = () =>
 const sent = () => bodyOf(server, "PATCH", patchPath) as Record<string, unknown> | undefined;
 
 /**
- * The five the payload has no field for.
+ * The six the payload has no field for.
  *
  * `CharacterOwnUpdate` cannot express any of them, so this is a backstop rather
  * than the boundary — but it is the backstop that would catch a hand-built
  * payload, and the boundary itself is asserted at compile time at the foot of
  * this file.
  */
-const REFUSED = ["hpCurrent", "tempHp", "conditions", "visibility", "accountId"] as const;
+const REFUSED = [
+  "hpCurrent",
+  "tempHp",
+  "conditions",
+  "inspiration",
+  "visibility",
+  "accountId",
+] as const;
 
 const carriesNothingRefused = () => {
   const body = sent();
@@ -860,14 +867,14 @@ describe("marking a death save", () => {
 describe("what a player still cannot reach", () => {
   /**
    * **The boundary, asserted where it actually lives.** `CharacterOwnUpdate`
-   * has no field for the live trio, the visibility toggle or the owner, so a
+   * has no field for the live half, the visibility toggle or the owner, so a
    * control for one of them does not compile — this fails the *build* if any of
-   * the five is ever added to the payload, which is a stronger guarantee than
+   * the six is ever added to the payload, which is a stronger guarantee than
    * any assertion about a rendered screen.
    */
   it("cannot express the live half of the row, the visibility or the owner", () => {
     // One literal each, because an excess-property check reports the *first*
-    // offending key and stops — five in one object would leave four of these
+    // offending key and stops — six in one object would leave five of these
     // directives unused and the assertion three-quarters asleep.
     // @ts-expect-error `hpCurrent` moves by delta through the DM's own endpoint.
     const current: CharacterOwnUpdate = { hpCurrent: 12 };
@@ -875,12 +882,14 @@ describe("what a player still cannot reach", () => {
     const temp: CharacterOwnUpdate = { tempHp: 5 };
     // @ts-expect-error `conditions` writes through to every live combatant.
     const conditions: CharacterOwnUpdate = { conditions: ["Blessed"] };
+    // @ts-expect-error inspiration is the DM's award, set through the seat.
+    const inspiration: CharacterOwnUpdate = { inspiration: true };
     // @ts-expect-error the row's own half of the disclosure seam is the DM's.
     const visibility: CharacterOwnUpdate = { visibility: "shared" };
     // @ts-expect-error the owner of a row is the field a player must not send.
     const owner: CharacterOwnUpdate = { accountId: null };
 
-    expect([current, temp, conditions, visibility, owner]).toHaveLength(5);
+    expect([current, temp, conditions, inspiration, visibility, owner]).toHaveLength(6);
   });
 
   /**

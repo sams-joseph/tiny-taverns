@@ -10,6 +10,7 @@ import {
   installCharacterServer,
   legacySheet,
   otherCampaignId,
+  ownedBrannoc,
   ownedSorrel,
   partySeatAnswer,
   playing,
@@ -77,12 +78,26 @@ describe("a character sheet", () => {
     expect(screen.getByText("/ 52 hp")).toBeTruthy();
     expect(screen.getByText("+3 temp")).toBeTruthy();
     expect(screen.getByText("Blessed")).toBeTruthy();
+    // Nobody has awarded inspiration, so nothing says it.
+    expect(screen.queryByText("Inspired")).toBeNull();
     expect(screen.getByText("Hit dice 3/5 d10")).toBeTruthy();
     expect(screen.getByText("6,500 / 14,000 xp")).toBeTruthy();
     // The one column that names somewhere else, rendered as a real link.
     expect(
       screen.getByRole("link", { name: "The sheet they keep elsewhere" }).getAttribute("href"),
     ).toBe("https://example.invalid/brannoc");
+  });
+
+  it("says inspiration the DM awarded, beside the conditions and with no control", async () => {
+    server.routes.set("GET /me/characters", {
+      status: 200,
+      body: [{ ...ownedBrannoc, character: { ...brannoc, inspiration: true } }, ownedSorrel],
+    });
+    await renderSheet();
+    await screen.findByRole("heading", { name: "Brannoc Duskharrow" });
+
+    expect(screen.getByText("Inspired")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /inspir/i })).toBeNull();
   });
 
   /**

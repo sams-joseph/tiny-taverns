@@ -436,9 +436,9 @@ describe("the columns: the live half is not expressible", () => {
     // The structural half of the boundary, `PlayerSessionRecap`'s rule met on
     // the write side: a payload that *can* carry `hpCurrent` is one that
     // eventually will, so the refusal is the schema's shape rather than a
-    // check. The live trio's writers are the seat's now — `party.damage` for
-    // the delta and the seat PATCH for `conditions` — and `tempHp` currently
-    // has no writer anywhere, which is a product gap and not this schema's.
+    // check. The live half's writers are the seat's now — `party.damage` for
+    // the delta and the seat PATCH for `conditions`, `tempHp` and
+    // `inspiration`.
     expect(Object.keys(CharacterOwnUpdate.fields).sort()).toEqual([
       "ac",
       "className",
@@ -458,7 +458,13 @@ describe("the columns: the live half is not expressible", () => {
     // The derived client encodes through this schema, so a payload naming
     // `hpCurrent` does not reach the server at all — and if one did, the
     // server decodes through the same schema. Both directions, both silent.
-    const sent = { name: "Brannoc", hpCurrent: 1, tempHp: 9, conditions: ["Poisoned"] };
+    const sent = {
+      name: "Brannoc",
+      hpCurrent: 1,
+      tempHp: 9,
+      conditions: ["Poisoned"],
+      inspiration: true,
+    };
     expect(Schema.encodeUnknownSync(CharacterOwnUpdate)(sent as never)).toEqual({
       name: "Brannoc",
     });
@@ -474,19 +480,24 @@ describe("the columns: the live half is not expressible", () => {
       withActor(fixture.jo)(
         Effect.gen(function* () {
           yield* party.damage(fixture.table.id, seatId, { amount: 20 });
-          yield* party.update(fixture.table.id, seatId, { conditions: ["Concentrating"] });
+          yield* party.update(fixture.table.id, seatId, {
+            conditions: ["Concentrating"],
+            inspiration: true,
+          });
         }),
       ).pipe(Effect.orDie),
     );
     const before = await asOwned(fixture.pim, made.id);
     expect(before.hpCurrent).toBe(10);
     expect(before.conditions).toEqual(["Concentrating"]);
+    expect(before.inspiration).toBe(true);
 
     await editOwn(fixture.pim, made.id, { name: "Marked and renamed", level: 5 });
 
     const after = await asOwned(fixture.pim, made.id);
     expect(after.hpCurrent).toBe(10);
     expect(after.conditions).toEqual(["Concentrating"]);
+    expect(after.inspiration).toBe(true);
   }, 60_000);
 
   it("touches nothing in a fight that is on the table", async () => {

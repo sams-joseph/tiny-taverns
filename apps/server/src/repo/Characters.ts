@@ -94,6 +94,7 @@ interface CharacterRow extends ProvenanceColumns {
   readonly hp_current: number | null;
   readonly temp_hp: number;
   readonly conditions: ReadonlyArray<string>;
+  readonly inspiration: boolean;
   readonly sheet_url: string | null;
   readonly body: CharacterSheet;
   readonly version: number;
@@ -210,6 +211,7 @@ export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character
     hpCurrent: row.hp_current,
     tempHp: row.temp_hp,
     conditions: row.conditions,
+    inspiration: row.inspiration,
     sheetUrl: row.sheet_url,
     sheet: row.body,
     version: row.version,

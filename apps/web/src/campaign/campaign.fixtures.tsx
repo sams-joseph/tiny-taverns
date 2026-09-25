@@ -332,6 +332,7 @@ export const character = {
   hpCurrent: 44,
   tempHp: 0,
   conditions: [],
+  inspiration: false,
   sheetUrl: null,
   sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
   // The optimistic-concurrency counter every write bumps.
