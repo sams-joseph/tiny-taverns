@@ -114,18 +114,6 @@ describe("deleting a campaign from inside it", () => {
     expect(paths("DELETE")).toEqual([]);
   });
 
-  it("is also reached from the campaign's settings", async () => {
-    noNight();
-    await renderScreen(mintingSession());
-    await userEvent.click(await screen.findByRole("button", { name: /^Settings/ }));
-    const settings = await screen.findByRole("dialog", { name: "Campaign settings" });
-    await userEvent.click(within(settings).getByRole("button", { name: "Delete permanently" }));
-
-    expect(
-      await screen.findByRole("dialog", { name: /Delete The Salt Road permanently/ }),
-    ).toBeTruthy();
-  });
-
   it("stays open and says so when the server refuses", async () => {
     noNight();
     server.routes.set(`DELETE ${campaignDelete}`, {
@@ -247,15 +235,13 @@ describe("deleting a Shared World", () => {
     await waitFor(() => expect(globalThis.location.pathname).toBe("/worlds"));
   });
 
-  it("is also reached from the world's settings", async () => {
+  it("is not in the world's settings, whose home is the actions menu", async () => {
     await renderSharedWorld(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
     const settings = await screen.findByRole("dialog", { name: "Shared World settings" });
-    await userEvent.click(within(settings).getByRole("button", { name: "Delete permanently" }));
 
-    expect(
-      await screen.findByRole("dialog", { name: /Delete The Salt Company permanently/ }),
-    ).toBeTruthy();
+    expect(within(settings).queryByRole("button", { name: "Delete permanently" })).toBeNull();
+    expect(within(settings).queryByRole("button", { name: "Archive Shared World" })).toBeNull();
   });
 
   it("deletes a shelved world from the archived shelf", async () => {
