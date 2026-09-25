@@ -407,7 +407,7 @@ export const ensureGroupWritable = (
  * never a reach on its own.
  */
 export const toldTheWorld = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
-  sql`${sql(table)}.visibility = 'shared'`;
+  sharedWithPlayers(sql, table);
 
 /**
  * A fight its Shared World may be told of: shared, and over. A fight still on
@@ -416,6 +416,18 @@ export const toldTheWorld = (sql: SqlClient.SqlClient, table: string): Statement
  */
 export const fightToldTheWorld = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql.and([toldTheWorld(sql, "encounter_run"), sql`encounter_run.ended_at is not null`]);
+
+/**
+ * Whether its Shared World may be told which encounter the correlated
+ * `encounter_run` was started from: the encounter is shared with its table's
+ * players (Shared and Ready, `sharedWithPlayers`). `runEncounterReadable`'s
+ * question asked at world level, so a world member is never told a fight's name
+ * that the table's own players are not.
+ */
+export const runEncounterToldTheWorld = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`exists (select 1 from encounter
+              where encounter.id = encounter_run.encounter_id
+                and ${toldTheWorld(sql, "encounter")})`;
 
 /**
  * The half of a row read that is about the *campaign*: this row is in the

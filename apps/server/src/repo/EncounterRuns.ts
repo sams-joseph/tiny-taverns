@@ -79,6 +79,18 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
 export const NEUTRAL_FIGHT_NAME = "A fight";
 
 /**
+ * The correlated run's name to a reader for whom `named` says whether its
+ * encounter may be named: the snapshot, or `NEUTRAL_FIGHT_NAME`. The one
+ * spelling of the fallback, for the table's reads (`runColumns`) and the Shared
+ * World's (`GroupHistory`).
+ */
+export const fightName = (
+  sql: SqlClient.SqlClient,
+  named: Statement.Fragment,
+): Statement.Fragment =>
+  sql`case when ${named} then encounter_run.encounter_name else ${NEUTRAL_FIGHT_NAME} end`;
+
+/**
  * An `encounter_run` row as this actor may read it, for every read that is not
  * the creator's alone — the recap and the player's table.
  *
@@ -97,8 +109,7 @@ export const runColumns = (
   const known = runEncounterReadable(sql, campaignId, actor);
   return sql`encounter_run.id, encounter_run.session_id,
     case when ${known} then encounter_run.encounter_id end as encounter_id,
-    case when ${known} or ${campaignWritableById(sql, campaignId, actor)}
-         then encounter_run.encounter_name else ${NEUTRAL_FIGHT_NAME} end as encounter_name,
+    ${fightName(sql, sql.or([known, campaignWritableById(sql, campaignId, actor)]))} as encounter_name,
     encounter_run.round, encounter_run.active_combatant_id, encounter_run.started_at,
     encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
     encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,

@@ -18,6 +18,7 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { NEUTRAL_FIGHT_NAME } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
+import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Recap } from "../src/repo/Recap.js";
 import { aCharacterAt, admittedTo, aGroupMemberAt } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
@@ -32,7 +33,8 @@ import { migratedDatabase } from "./support/database.js";
  * Overview and Chronicle. Over the real application and Postgres, through the
  * client derived from the contract, with actors minted the shipped way: the
  * creator, a player admitted through a real invitation with a shared seat, and
- * a Shared World member who is not at the table.
+ * a Shared World member who is not at the table, who is told a night's fights
+ * by no name the table's players are not.
  *
  * Every encounter's name is a planted sentinel, so "the player never sees it"
  * is a search of the bytes on the wire rather than of a decoded field.
@@ -370,6 +372,36 @@ describe("a shared fight, to a player", () => {
     expect(page.items.map((encounter) => encounter.lastPlayed?.runId ?? null)).toEqual([
       runs["SHARED-READY"],
     ]);
+  });
+
+  it("tells a Shared World no name the table's own players are not told", async () => {
+    const world = await as(dm.token, (client) =>
+      client.campaigns.promoteSharedWorld({
+        params: { campaignId: table },
+        payload: { name: "The Drowned Coast" },
+      }),
+    );
+    const wren = await run(aGroupMemberAt(table, "Wren"));
+    const story = await run(
+      Effect.flatMap(GroupHistory, (history) =>
+        Effect.provideService(history.nightStory(world.id, table, night), CurrentActor, wren),
+      ),
+    );
+    const told = COMBINATIONS.map(([label]) =>
+      label === "SHARED-READY" ? nameOf(label) : NEUTRAL_FIGHT_NAME,
+    );
+    expect(story.fights.map((fight) => fight.name)).toEqual(told);
+    expect(leaked(JSON.stringify(story), ["SHARED-READY"])).toEqual([]);
+
+    // The Chronicle's copy is the same read, whoever makes it.
+    const entry = await as(dm.token, (client) =>
+      client.sharedWorldHistory.fromRecap({
+        params: { worldId: world.id },
+        payload: { campaignId: table, sessionId: night },
+      }),
+    );
+    expect(leaked(JSON.stringify(entry), ["SHARED-READY"])).toEqual([]);
+    expect(entry.body).toContain(nameOf("SHARED-READY"));
   });
 
   it("stops naming a fight once its encounter is back to a draft or deleted", async () => {
