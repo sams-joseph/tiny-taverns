@@ -54,13 +54,11 @@ import { membershipsAtom } from "./load";
  * `session/finish.ts`, and a text field pointing at a session is a second
  * answer to a question the server settles with a constraint.
  *
- * Its foot names the campaign's three bigger acts (its Shared World,
- * archiving, deleting) and hands each to its own dialog in `CampaignChrome`
- * rather than doing any of them here. A campaign is someone's two years of
- * Thursday nights, and putting a delete behind the same *Save changes* as
- * "rename it" is how it gets pressed by accident; a separate confirmation that
- * names the campaign is what makes the press deliberate. These live inside the
- * campaign and nowhere on the campaign list.
+ * Its foot names the campaign's Shared World and hands a change to its own
+ * dialog in `CampaignChrome`. Archiving and deleting are not here at all: they
+ * live in the Overview's *Campaign actions* menu, each behind a confirmation
+ * that names the campaign, so a delete is never one press away from
+ * *Save changes*.
  */
 
 /** Matches `CampaignUpdate.playerCount`, so the sentence beats the schema to it. */
@@ -76,8 +74,8 @@ export function CampaignDialog({
   readonly onClose: () => void;
   /** Re-reads the view: the name, the subtitle and the badge all move. */
   readonly onSaved: () => void;
-  /** Swap this dialog for one of the campaign's bigger acts. */
-  readonly onOpen: (what: "shared-world" | "archive" | "delete") => void;
+  /** Swap this dialog for the Shared World one. */
+  readonly onOpen: (what: "shared-world") => void;
 }) {
   // Which Shared World, if any: the membership row names an explicit world and
   // is null for a standalone campaign, whose hidden context is not a world.
@@ -242,39 +240,6 @@ export function CampaignDialog({
               </Button>
             </div>
           )}
-
-          <div className="flex flex-col gap-1.5 border-t border-hairline pt-4">
-            <span className="text-body-s leading-body font-semibold text-heading">
-              Archive or delete
-            </span>
-            <span className="text-caption leading-body text-muted-foreground">
-              Archiving takes it off your list and keeps everything, and you can restore it.
-              Deleting removes it for good; its players keep their characters.
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {campaign.archivedAt === null && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => onOpen("archive")}
-                >
-                  <Icon name="archive" size={14} />
-                  Archive campaign
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-danger"
-                disabled={busy}
-                onClick={() => onOpen("delete")}
-              >
-                <Icon name="trash-2" size={14} />
-                Delete permanently
-              </Button>
-            </div>
-          </div>
         </div>
 
         {/* In the footer, beside the button that failed: the body scrolls, and a

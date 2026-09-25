@@ -431,8 +431,8 @@ describe("one Shared World's screen", () => {
     });
     await renderSharedWorld(mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive Shared World" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Archive Shared World" }));
 
     expect(screen.getByText(/no campaigns remain here, including archived campaigns/)).toBeTruthy();
     expect(
@@ -457,8 +457,8 @@ describe("one Shared World's screen", () => {
     });
     await renderSharedWorld(mintingSession());
 
-    await userEvent.click(await screen.findByRole("button", { name: "Shared World settings" }));
-    await userEvent.click(screen.getByRole("button", { name: "Archive Shared World" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Shared World actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Archive Shared World" }));
     await userEvent.click(screen.getByRole("button", { name: "Archive it" }));
 
     await waitFor(() => expect(globalThis.location.pathname).toBe("/worlds"));

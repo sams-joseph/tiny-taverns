@@ -7,7 +7,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Icon,
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
@@ -19,20 +18,16 @@ import { Field, SaveFailure, Textarea } from "../ui/form";
 /**
  * Owner-only edits: the name and the description every member reads. Changing
  * the description does not redraw the cover, which is drawn once. Archiving and
- * deleting each stay behind their own named confirmation.
+ * deleting live in the screen's *Shared World actions* menu, not here.
  */
 export function SharedWorldSettingsDialog({
   sharedWorld,
   onClose,
   onSaved,
-  onArchive,
-  onDelete,
 }: {
   readonly sharedWorld: SharedWorld;
   readonly onClose: () => void;
   readonly onSaved: () => void;
-  readonly onArchive: () => void;
-  readonly onDelete: () => void;
 }) {
   const [name, setName] = useState(sharedWorld.name);
   const [description, setDescription] = useState(sharedWorld.description ?? "");
@@ -64,10 +59,7 @@ export function SharedWorldSettingsDialog({
       <DialogContent aria-label="Shared World settings">
         <DialogHeader>
           <DialogTitle>Shared World settings</DialogTitle>
-          <DialogDescription>
-            Rename or describe {sharedWorld.name}, archive it when its campaigns have left, or
-            delete it.
-          </DialogDescription>
+          <DialogDescription>Rename or describe {sharedWorld.name}.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-5 px-gutter py-3">
@@ -99,33 +91,6 @@ export function SharedWorldSettingsDialog({
               onChange={(event) => setDescription(event.target.value)}
             />
           </Field>
-
-          <div className="flex flex-col gap-1.5 border-t border-hairline pt-4">
-            <span className="text-body-s leading-body font-semibold text-heading">
-              Archive or delete
-            </span>
-            <span className="text-caption leading-body text-muted-foreground">
-              A Shared World can be archived only after every campaign has moved elsewhere or become
-              standalone. Deleting it removes its Chronicle and memory for good and makes each of
-              its campaigns standalone.
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" disabled={busy} onClick={onArchive}>
-                <Icon name="archive" size={14} />
-                Archive Shared World
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-danger"
-                disabled={busy}
-                onClick={onDelete}
-              >
-                <Icon name="trash-2" size={14} />
-                Delete permanently
-              </Button>
-            </div>
-          </div>
         </div>
 
         <DialogFooter>

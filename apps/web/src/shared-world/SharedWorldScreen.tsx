@@ -263,14 +263,6 @@ export function SharedWorldScreen({ worldId }: { readonly worldId: SharedWorldId
           sharedWorld={view.sharedWorld}
           onClose={() => setSettingsOpen(false)}
           onSaved={() => setSettingsOpen(false)}
-          onArchive={() => {
-            setSettingsOpen(false);
-            setWorldArchiveOpen(true);
-          }}
-          onDelete={() => {
-            setSettingsOpen(false);
-            setWorldDeleteOpen(true);
-          }}
         />
       )}
 

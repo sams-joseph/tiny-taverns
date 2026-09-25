@@ -88,14 +88,13 @@ describe("archiving a campaign", () => {
     expect(paths("DELETE")).toEqual([]);
   });
 
-  it("is also reached from the campaign's settings", async () => {
+  it("is not in the campaign's settings, whose home is the actions menu", async () => {
     await renderScreen(mintingSession());
     await userEvent.click(await screen.findByRole("button", { name: /^Settings/ }));
     const settings = await screen.findByRole("dialog", { name: "Campaign settings" });
-    await userEvent.click(within(settings).getByRole("button", { name: "Archive campaign" }));
 
-    expect(await screen.findByText("Archive The Salt Road?")).toBeTruthy();
-    expect(screen.queryByRole("dialog", { name: "Campaign settings" })).toBeNull();
+    expect(within(settings).queryByRole("button", { name: "Archive campaign" })).toBeNull();
+    expect(within(settings).queryByRole("button", { name: "Delete permanently" })).toBeNull();
   });
 
   it("says the campaign is kept and can be brought back, because that is the trade", async () => {
