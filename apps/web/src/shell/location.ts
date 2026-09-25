@@ -73,7 +73,8 @@ export function useSection(): Section {
   if (matchRoute({ to: "/characters", fuzzy: true })) return "characters";
   if (matchRoute({ to: "/campaigns/$campaignId/chronicle" })) return "chronicle";
   if (matchRoute({ to: "/campaigns/$campaignId/table" })) return "table";
-  if (matchRoute({ to: "/campaigns/$campaignId/party" })) return "party";
+  // One seat's page is *within* the party, as an encounter's is within the list.
+  if (matchRoute({ to: "/campaigns/$campaignId/party", fuzzy: true })) return "party";
   // One encounter's page is *within* the list, as an NPC's is within the cast.
   if (matchRoute({ to: "/campaigns/$campaignId/encounters", fuzzy: true })) return "encounters";
   if (matchRoute({ to: "/campaigns/$campaignId/notes" })) return "notes";

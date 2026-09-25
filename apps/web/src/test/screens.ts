@@ -1,4 +1,13 @@
-import { brannocId, campaignId, encounterId, npcId, runId, sessionId, worldId } from "./ids";
+import {
+  brannocId,
+  campaignId,
+  encounterId,
+  npcId,
+  runId,
+  seatId,
+  sessionId,
+  worldId,
+} from "./ids";
 
 /**
  * The screens the shell is measured on.
@@ -21,7 +30,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The twenty screens. */
+/** The twenty-one screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -37,6 +46,7 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "npc", scenario: "creator", path: `${c}/cast/${npcId}` },
   { name: "chronicle", scenario: "creator", path: `${c}/chronicle` },
   { name: "party", scenario: "creator", path: `${c}/party` },
+  { name: "party-seat", scenario: "creator", path: `${c}/party/${seatId}` },
   { name: "run", scenario: "creator", path: `${c}/sessions/${sessionId}/runs/${runId}` },
   { name: "spells", scenario: "creator", path: "/library/spells" },
   { name: "characters", scenario: "player", path: "/characters" },

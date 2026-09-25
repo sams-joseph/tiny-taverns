@@ -647,16 +647,19 @@ function SheetLayout({
         />
         <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
         <SheetDocument
-          owned={owned}
+          character={owned.character}
           gearRows={gearRows}
           sections={sections}
           register={register}
-          onEditAbilities={() => onEdit("abilities")}
-          onEditBackstory={() => onEdit("backstory")}
-          onEditGear={() => onEdit("gear")}
-          onEditSkills={() => onEdit("skills")}
-          onEditSpells={() => onEdit("spells")}
-          rollCampaignId={rollCampaignId}
+          writes={{
+            owned,
+            onEditAbilities: () => onEdit("abilities"),
+            onEditBackstory: () => onEdit("backstory"),
+            onEditGear: () => onEdit("gear"),
+            onEditSkills: () => onEdit("skills"),
+            onEditSpells: () => onEdit("spells"),
+            rollCampaignId,
+          }}
         />
       </div>
     </div>

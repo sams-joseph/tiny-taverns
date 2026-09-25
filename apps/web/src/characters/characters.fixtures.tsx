@@ -58,7 +58,7 @@ export const otherCampaign = {
 };
 
 /** The whole document, every key the drawn sheet reads. */
-const fullSheet = {
+export const fullSheet = {
   notes:
     "The temple on the salt road takes in what the road leaves behind.\n\nHe is not looking for the people who left him.",
   abilities: [

@@ -39,6 +39,7 @@ const encounterId = "2b1f2a1e-0000-4000-8000-000000000e01";
 const sessionId = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-00000000cafe");
 const runId = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-00000000beef");
 const characterId = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-00000000fade");
+const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
 
 /**
  * Every route there is, and the URL that reaches it. Exhaustive by type, so a
@@ -84,6 +85,8 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns/$campaignId/cast/$": `/campaigns/${campaignId}/cast/not-a-uuid`,
   "/_shell/campaigns/$campaignId/chronicle": `/campaigns/${campaignId}/chronicle`,
   "/_shell/campaigns/$campaignId/party": `/campaigns/${campaignId}/party`,
+  "/_shell/campaigns/$campaignId/party/$seatId": `/campaigns/${campaignId}/party/${seatId}`,
+  "/_shell/campaigns/$campaignId/party/$": `/campaigns/${campaignId}/party/not-a-uuid`,
   "/_shell/campaigns/$campaignId/table": `/campaigns/${campaignId}/table`,
   "/_shell/campaigns/$campaignId/characters/new": `/campaigns/${campaignId}/characters/new`,
   "/_shell/campaigns/$campaignId/sessions/$sessionId/runs/$runId": `/campaigns/${campaignId}/sessions/${sessionId}/runs/${runId}`,

@@ -1,6 +1,7 @@
 import type {
   Ability,
   CampaignId,
+  Character,
   Equipment,
   InventoryItem,
   OwnedCharacter,
@@ -90,7 +91,8 @@ function ActionLine({
   onRoll,
 }: {
   readonly action: SheetAction;
-  readonly onRoll: (label: string, notation: string, mode?: RollMode) => void;
+  /** Absent on a read-only sheet, where the numbers are drawn and nothing rolls. */
+  readonly onRoll: ((label: string, notation: string, mode?: RollMode) => void) | undefined;
 }) {
   const cost = costLabel(action.cost);
   const kind = [action.text, action.damageType, action.range].filter(
@@ -98,9 +100,10 @@ function ActionLine({
   );
   const hit =
     action.hit === undefined || action.hit === "" || action.hit === "—" ? undefined : action.hit;
-  const hitNotation = hit === undefined ? undefined : notationForD20(hit);
+  const hitNotation = hit === undefined || onRoll === undefined ? undefined : notationForD20(hit);
   const dice = action.dice === undefined || action.dice === "" ? undefined : action.dice;
-  const diceRollable = dice !== undefined && parseDiceExpression(dice) !== undefined;
+  const diceRollable =
+    dice !== undefined && onRoll !== undefined && parseDiceExpression(dice) !== undefined;
   return (
     <div className="flex min-h-10 flex-wrap items-center gap-2.5 border border-hairline bg-surface-sunken px-2.5 py-2">
       <div className="min-w-0 flex-1">
@@ -110,7 +113,7 @@ function ActionLine({
         )}
       </div>
       {cost !== undefined && <Badge variant="outline">{cost}</Badge>}
-      {hitNotation !== undefined && hit !== undefined && (
+      {hitNotation !== undefined && hit !== undefined && onRoll !== undefined && (
         <RollButton
           label={`Roll ${action.name} attack ${hit}`}
           face={hit}
@@ -122,7 +125,7 @@ function ActionLine({
           {hit}
         </span>
       )}
-      {diceRollable && dice !== undefined && (
+      {diceRollable && dice !== undefined && onRoll !== undefined && (
         <RollButton
           label={`Roll ${action.name} dice ${dice}`}
           face={dice}
@@ -172,7 +175,8 @@ function ResourceControls({
 }: {
   readonly resource: SheetResource;
   readonly busy: boolean;
-  readonly onSpend: (resource: SheetResource, amount: number) => void;
+  /** Absent on a read-only sheet: the count is drawn and nothing spends. */
+  readonly onSpend: ((resource: SheetResource, amount: number) => void) | undefined;
 }) {
   const left = resourceLeft(resource);
   const recharge =
@@ -188,7 +192,7 @@ function ResourceControls({
       <span className="text-micro leading-none text-accent-ink">
         {count} · {recharge}
       </span>
-      {pipCount > 0 && resource.unit !== "hp" ? (
+      {onSpend === undefined ? null : pipCount > 0 && resource.unit !== "hp" ? (
         <span className="flex gap-1">
           {Array.from({ length: pipCount }, (_, index) => {
             const spent = index < resource.used;
@@ -238,7 +242,7 @@ function Feature({
   readonly note?: string | undefined;
   readonly resource?: SheetResource | undefined;
   readonly busy: boolean;
-  readonly onSpend: (resource: SheetResource, amount: number) => void;
+  readonly onSpend: ((resource: SheetResource, amount: number) => void) | undefined;
 }) {
   return (
     <div>
@@ -497,31 +501,42 @@ const EditButton = ({
   </Button>
 );
 
-export function SheetDocument({
-  owned,
-  gearRows,
-  sections,
-  register,
-  onEditAbilities,
-  onEditBackstory,
-  onEditGear,
-  onEditSkills,
-  onEditSpells,
-  rollCampaignId,
-}: {
+/**
+ * What the owner's sheet can do on top of drawing the document: the section
+ * edits, the dice and the spends. The creator's seat page passes none of it
+ * (`party/SeatScreen.tsx`), and the same document draws read-only — every
+ * number, no control — because nobody writes another account's sheet.
+ */
+export interface SheetWrites {
   readonly owned: OwnedCharacter;
-  /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
-  readonly gearRows: ReadonlyArray<Equipment>;
-  readonly sections: ReadonlyArray<SheetSectionSpec>;
-  readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly onEditAbilities: () => void;
   readonly onEditBackstory: () => void;
   readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
   readonly onEditSpells: () => void;
   readonly rollCampaignId: CampaignId | undefined;
+}
+
+/**
+ * The sheet's continuous document: its sections in order, each drawn by
+ * `drawnSections`. Read-only when `writes` is undefined — pass
+ * `drawnSections(sheet, false)` then, so no section is drawn only to hold the
+ * affordance that would fill it.
+ */
+export function SheetDocument({
+  character,
+  gearRows,
+  sections,
+  register,
+  writes,
+}: {
+  readonly character: Character;
+  /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
+  readonly gearRows: ReadonlyArray<Equipment>;
+  readonly sections: ReadonlyArray<SheetSectionSpec>;
+  readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
+  readonly writes: SheetWrites | undefined;
 }) {
-  const character = owned.character;
   const sheet = character.sheet;
   const spellcasting = sheet.spellcasting;
   const slots = slotRows(sheet);
@@ -548,7 +563,7 @@ export function SheetDocument({
     setPending((current) => ({ ...current, [resource.id]: (current[resource.id] ?? 0) + amount }));
     void submit(
       (client) => spendResource(client, character, resource.id, amount),
-      ownCharacterWrites(owned),
+      writes === undefined ? [] : ownCharacterWrites(writes.owned),
     ).finally(() => {
       setPending((current) => ({
         ...current,
@@ -567,7 +582,7 @@ export function SheetDocument({
   const recordRoll = (roll: LocalRoll | undefined) => {
     if (roll === undefined) return;
     const requestId = newRollRequestId();
-    const target = rollCampaignId;
+    const target = writes?.rollCampaignId;
     const logged: LoggedRoll = {
       ...roll,
       localId: requestId,
@@ -654,7 +669,7 @@ export function SheetDocument({
        beside an open Hob panel is 400 less — rather than on the shell's. The
        `@md`/`@lg` steps below are the column's, never `main`'s. */
     <div className="@container order-3 flex min-w-0 flex-1 flex-col gap-gutter @3xl:order-2">
-      <RollLog rolls={rolls} mode={rollMode} onMode={setRollMode} />
+      {writes !== undefined && <RollLog rolls={rolls} mode={rollMode} onMode={setRollMode} />}
       {failure !== undefined && (
         <Card className="border-danger">
           <CardContent className="pt-card">
@@ -670,63 +685,75 @@ export function SheetDocument({
           section={abilities}
           register={register}
           action={
-            <>
-              <EditButton what="abilities" onClick={onEditAbilities} />
-              <EditButton what="skills" onClick={onEditSkills} />
-            </>
+            writes !== undefined && (
+              <>
+                <EditButton what="abilities" onClick={writes.onEditAbilities} />
+                <EditButton what="skills" onClick={writes.onEditSkills} />
+              </>
+            )
           }
         >
           {sheet.abilities.length === 0 ? (
-            <p className="text-caption leading-body text-muted-foreground">
-              Six scores. Take the standard array, or roll for them.
-            </p>
+            writes !== undefined && (
+              <p className="text-caption leading-body text-muted-foreground">
+                Six scores. Take the standard array, or roll for them.
+              </p>
+            )
           ) : (
             /* Six in a row where the column allows it, three otherwise — the
                drawing's `repeat(6,1fr)` / `repeat(3,1fr)`, decided by the
                document's width rather than the window's. */
             <div className="grid grid-cols-3 gap-1.5 @sm:grid-cols-6">
               {sheet.abilities.map((ability) => (
-                <AbilityCell key={ability.label} ability={ability} onRoll={rollAbility} />
+                <AbilityCell
+                  key={ability.label}
+                  ability={ability}
+                  onRoll={writes === undefined ? undefined : rollAbility}
+                />
               ))}
             </div>
           )}
 
-          <Ruled>
-            {sheet.skills === undefined || sheet.skills.length === 0 ? (
-              <p className="text-caption leading-body text-muted-foreground">
-                What you are proficient in, and what you add.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-x-gutter @sm:grid-cols-2 @2xl:grid-cols-3">
-                {sheet.skills.map((skill) => (
-                  <div key={skill.name} className="flex min-h-7 items-center gap-2">
-                    <Mark on={skill.proficient === true} />
-                    <span
-                      className={cn(
-                        "min-w-0 flex-1 text-body-s leading-none",
-                        skill.proficient === true ? "text-foreground" : "text-muted-foreground",
-                      )}
-                    >
-                      {skill.name}
-                    </span>
-                    {skill.ability !== undefined && (
-                      <span className="text-micro leading-none text-faint">{skill.ability}</span>
-                    )}
-                    {skill.bonus !== undefined && (
+          {/* A read-only sheet with no skills draws no rule and no prompt: the
+              prompt is the owner's, addressed to whoever can fill it. */}
+          {(writes !== undefined || (sheet.skills ?? []).length > 0) && (
+            <Ruled>
+              {sheet.skills === undefined || sheet.skills.length === 0 ? (
+                <p className="text-caption leading-body text-muted-foreground">
+                  What you are proficient in, and what you add.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-x-gutter @sm:grid-cols-2 @2xl:grid-cols-3">
+                  {sheet.skills.map((skill) => (
+                    <div key={skill.name} className="flex min-h-7 items-center gap-2">
+                      <Mark on={skill.proficient === true} />
                       <span
                         className={cn(
-                          "min-w-7 text-right font-mono text-mono leading-none font-medium",
-                          skill.proficient === true ? "text-accent-ink" : "text-muted-foreground",
+                          "min-w-0 flex-1 text-body-s leading-none",
+                          skill.proficient === true ? "text-foreground" : "text-muted-foreground",
                         )}
                       >
-                        {skill.bonus}
+                        {skill.name}
                       </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Ruled>
+                      {skill.ability !== undefined && (
+                        <span className="text-micro leading-none text-faint">{skill.ability}</span>
+                      )}
+                      {skill.bonus !== undefined && (
+                        <span
+                          className={cn(
+                            "min-w-7 text-right font-mono text-mono leading-none font-medium",
+                            skill.proficient === true ? "text-accent-ink" : "text-muted-foreground",
+                          )}
+                        >
+                          {skill.bonus}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Ruled>
+          )}
 
           {sheet.proficiencies !== undefined && sheet.proficiencies.length > 0 && (
             <Ruled className="flex flex-wrap gap-1.5">
@@ -744,7 +771,11 @@ export function SheetDocument({
         <DocumentSection section={actions} register={register}>
           <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2">
             {actionRows(sheet).map((action) => (
-              <ActionLine key={action.id} action={action} onRoll={rollNotation} />
+              <ActionLine
+                key={action.id}
+                action={action}
+                onRoll={writes === undefined ? undefined : rollNotation}
+              />
             ))}
           </div>
         </DocumentSection>
@@ -754,7 +785,9 @@ export function SheetDocument({
         <DocumentSection
           section={magic}
           register={register}
-          action={<EditButton what="spells" onClick={onEditSpells} />}
+          action={
+            writes !== undefined && <EditButton what="spells" onClick={writes.onEditSpells} />
+          }
           aside={
             <span className="text-micro leading-none text-faint">
               {[
@@ -793,7 +826,7 @@ export function SheetDocument({
                     <span className="flex gap-1">
                       {Array.from({ length: Math.max(0, shown.total) }, (_, index) => {
                         const spent = index < used;
-                        return resource === undefined ? (
+                        return resource === undefined || writes === undefined ? (
                           <span
                             key={index}
                             aria-hidden="true"
@@ -855,7 +888,7 @@ export function SheetDocument({
                   trait={trait}
                   resource={resource}
                   busy={busy}
-                  onSpend={spend}
+                  onSpend={writes === undefined ? undefined : spend}
                   note={trait.note ?? usesNote(trait, sheet.resources)}
                 />
               );
@@ -869,32 +902,34 @@ export function SheetDocument({
           section={gear}
           register={register}
           action={
-            <Button variant="outline" size="sm" onClick={onEditGear}>
-              <Icon name="plus" size={13} />
-              Add
-            </Button>
+            writes !== undefined && (
+              <Button variant="outline" size="sm" onClick={writes.onEditGear}>
+                <Icon name="plus" size={13} />
+                Add
+              </Button>
+            )
           }
         >
           <div className="flex flex-col gap-gutter @md:flex-row @md:items-start">
             <div className="min-w-0 flex-1">
-              {sheet.inventory === undefined || sheet.inventory.length === 0 ? (
-                <p className="text-caption leading-body text-muted-foreground">
-                  A rope, a lantern, the thing you were given last session.
-                </p>
-              ) : (
-                sheet.inventory.map((item, index) => (
-                  <InventoryLine
-                    key={`${item.name}-${String(index)}`}
-                    item={item}
-                    row={
-                      item.equipmentId === undefined || item.equipmentId === null
-                        ? undefined
-                        : gearById.get(item.equipmentId)
-                    }
-                    first={index === 0}
-                  />
-                ))
-              )}
+              {sheet.inventory === undefined || sheet.inventory.length === 0
+                ? writes !== undefined && (
+                    <p className="text-caption leading-body text-muted-foreground">
+                      A rope, a lantern, the thing you were given last session.
+                    </p>
+                  )
+                : sheet.inventory.map((item, index) => (
+                    <InventoryLine
+                      key={`${item.name}-${String(index)}`}
+                      item={item}
+                      row={
+                        item.equipmentId === undefined || item.equipmentId === null
+                          ? undefined
+                          : gearById.get(item.equipmentId)
+                      }
+                      first={index === 0}
+                    />
+                  ))}
             </div>
             {purse.length > 0 && (
               /* The drawing's 168px coin box: a column beside the list where
@@ -921,27 +956,31 @@ export function SheetDocument({
         <DocumentSection
           section={storySection}
           register={register}
-          action={<EditButton what="backstory" onClick={onEditBackstory} bare />}
+          action={
+            writes !== undefined && (
+              <EditButton what="backstory" onClick={writes.onEditBackstory} bare />
+            )
+          }
         >
           <div className="flex flex-col gap-gutter @lg:flex-row @lg:items-start">
             <div className="min-w-0 flex-1">
-              {sheet.notes.trim() === "" ? (
-                <p className="text-caption leading-body text-muted-foreground">
-                  Where they came from, and what they are still carrying about it.
-                </p>
-              ) : (
-                sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
-                  <p
-                    key={paragraph.slice(0, 32) + String(index)}
-                    className={cn(
-                      "max-w-measure font-serif text-body-l leading-loose text-slate-300 italic",
-                      index === 0 ? "" : "mt-3",
-                    )}
-                  >
-                    {paragraph}
-                  </p>
-                ))
-              )}
+              {sheet.notes.trim() === ""
+                ? writes !== undefined && (
+                    <p className="text-caption leading-body text-muted-foreground">
+                      Where they came from, and what they are still carrying about it.
+                    </p>
+                  )
+                : sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
+                    <p
+                      key={paragraph.slice(0, 32) + String(index)}
+                      className={cn(
+                        "max-w-measure font-serif text-body-l leading-loose text-slate-300 italic",
+                        index === 0 ? "" : "mt-3",
+                      )}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
               {sheet.journal !== undefined && sheet.journal.length > 0 && (
                 <Ruled className="flex flex-col gap-4">
                   {sheet.journal.map((entry, index) => (
