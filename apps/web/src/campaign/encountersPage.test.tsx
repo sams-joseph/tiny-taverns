@@ -1,11 +1,16 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
+import { apiUrl } from "../api/client";
+import { DRAWING_POLL_MS } from "../hob/drawingPolling";
 import { renderAt } from "../test/renderRoute";
 import {
   bargainId,
+  battleMap,
   bridgeId,
   campaignId,
+  drawnMapPicture,
+  encounterId,
   encounterShelf,
   installStubServer,
   liveRun,
@@ -181,6 +186,73 @@ describe("the preview", () => {
     );
     expect(within(pane).getByRole("button", { name: "Run encounter" })).toBeInTheDocument();
   });
+
+  it("draws the battle map Hob drew across the pane, opening the encounter's page", async () => {
+    await renderEncounters(mintingSession());
+    const pane = await screen.findByRole("article");
+    const link = await within(pane).findByRole("link", {
+      name: "Battle map of Ambush in the reeds",
+    });
+    expect(link).toHaveAttribute("href", `${encountersPath}/${encounterId}`);
+
+    const band = link.closest("[data-slot=hob-cover]");
+    expect(band).toHaveClass("aspect-24/9");
+    // Under the header, above everything the header does not hold.
+    expect(band?.previousElementSibling?.tagName).toBe("HEADER");
+    const img = band?.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
+    expect(img?.getAttribute("srcset")).toContain(`${apiUrl(drawnMapPicture.cardUrl)} 768w`);
+    expect(within(pane).queryByText("Hob is drawing…")).toBeNull();
+
+    await userEvent.click(link);
+    await waitFor(() =>
+      expect(globalThis.location.pathname).toBe(`${encountersPath}/${encounterId}`),
+    );
+  });
+
+  it("draws no band, and no empty slot, for a map with no picture", async () => {
+    await renderAt(`${encountersPath}?encounter=${wellId}`);
+    await waitFor(() => expect(preview()).toHaveAccessibleName("The dry well"));
+    const pane = preview();
+    await within(pane).findByRole("region", { name: "Challenge" });
+    await waitFor(() => expect(within(pane).queryByRole("status")).toBeNull());
+
+    expect(pane.querySelector("[data-slot=hob-cover]")).toBeNull();
+    expect(within(pane).queryByRole("link", { name: /^Battle map/ })).toBeNull();
+    expect(within(pane).queryByText(/Drop a battle map/)).toBeNull();
+  });
+
+  it("says Hob is drawing, re-reads the map until the picture lands, then stops", async () => {
+    const mapPath = `${base}/encounters/${wellId}/map`;
+    const wellMap = { ...battleMap, id: wellId, encounterId: wellId, setting: "A dry well" };
+    server.routes.set(`GET ${mapPath}`, {
+      status: 200,
+      body: { ...wellMap, imagePending: true },
+    });
+    await renderAt(`${encountersPath}?encounter=${wellId}`);
+    await waitFor(() => expect(preview()).toHaveAccessibleName("The dry well"));
+    const pane = preview();
+    expect(await within(pane).findByText("Hob is drawing…")).toHaveAttribute("role", "status");
+    const plate = pane.querySelector("[data-slot=hob-cover]");
+    expect(plate).toHaveClass("bg-surface-sunken");
+    expect(plate?.querySelector("img")).toBeNull();
+
+    server.routes.set(`GET ${mapPath}`, {
+      status: 200,
+      body: { ...wellMap, image: drawnMapPicture },
+    });
+    await waitFor(() => expect(pane.querySelector("[data-slot=hob-cover] img")).toBeTruthy(), {
+      timeout: 15_000,
+    });
+    expect(within(pane).queryByText("Hob is drawing…")).toBeNull();
+
+    const mapReads = () => server.calls.filter((call) => call.pathname === mapPath).length;
+    const settled = mapReads();
+    expect(settled).toBeGreaterThanOrEqual(2);
+    // More than a whole period with nothing pending: no further read.
+    await new Promise((resolve) => setTimeout(resolve, DRAWING_POLL_MS * 1.5));
+    expect(mapReads()).toBe(settled);
+  }, 30_000);
 
   it("says why an encounter is unrated, and dashes the XP nobody wrote", async () => {
     await renderAt(`${encountersPath}?encounter=${sketchId}`);

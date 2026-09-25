@@ -1,11 +1,15 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { apiUrl } from "../api/client";
 import { renderAt } from "../test/renderRoute";
 import {
+  battleMap,
   bodyOf,
   campaign,
   campaignId,
+  drawnBattleMap,
+  drawnMapPicture,
   encounter,
   encounterId,
   encounterPrep,
@@ -446,6 +450,69 @@ describe("editing an encounter", () => {
     expect(await screen.findByText("No such encounter")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save encounter" })).toBeNull();
   });
+});
+
+describe("the battle map card", () => {
+  const mapPath = `${encountersPath}/${encounterId}/map`;
+  const card = () => screen.getByRole("region", { name: "Battle map" });
+
+  it("holds the setting line alone for a new encounter, with nowhere to drop a picture", async () => {
+    await openNew();
+    expect(within(card()).getByRole("textbox", { name: "Location" })).toBeInTheDocument();
+    expect(card().querySelector("[data-slot=hob-cover]")).toBeNull();
+    expect(document.querySelector("input[type=file]")).toBeNull();
+    expect(screen.queryByText(/Drop a battle map/)).toBeNull();
+  });
+
+  it("shows the picture Hob drew, whole, above the setting line it was drawn from", async () => {
+    server.routes.set(`GET ${mapPath}`, { status: 200, body: drawnBattleMap });
+    await openEdit();
+    const img = await waitFor(() => {
+      const found = card().querySelector<HTMLImageElement>("[data-slot=hob-cover] img");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(img.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
+    expect(img.closest("[data-slot=hob-cover]")).toHaveClass("aspect-3/2");
+    const location = within(card()).getByRole("textbox", { name: "Location" });
+    expect(img.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // No upload and no redraw: the picture is Hob's, drawn once.
+    expect(document.querySelector("input[type=file]")).toBeNull();
+    expect(within(card()).queryByRole("button")).toBeNull();
+  });
+
+  it("draws no empty slot when there is no picture", async () => {
+    await openEdit();
+    await waitFor(() =>
+      expect(
+        server.calls.some((call) => call.pathname === `${encountersPath}/${encounterId}/creatures`),
+      ).toBe(true),
+    );
+    expect(within(card()).getByRole("textbox", { name: "Location" })).toBeInTheDocument();
+    expect(card().querySelector("[data-slot=hob-cover]")).toBeNull();
+    expect(within(card()).queryByText("Hob is drawing…")).toBeNull();
+  });
+
+  it("says Hob is drawing, and the picture landing keeps what the DM has typed", async () => {
+    server.routes.set(`GET ${mapPath}`, {
+      status: 200,
+      body: { ...battleMap, imagePending: true },
+    });
+    const name = await openEdit();
+    expect(await within(card()).findByText("Hob is drawing…")).toHaveAttribute("role", "status");
+    await userEvent.clear(name);
+    await userEvent.type(name, "Ambush at the ford");
+
+    server.routes.set(`GET ${mapPath}`, { status: 200, body: drawnBattleMap });
+    await waitFor(() => expect(card().querySelector("[data-slot=hob-cover] img")).toBeTruthy(), {
+      timeout: 15_000,
+    });
+    expect(within(card()).queryByText("Hob is drawing…")).toBeNull();
+    expect(name).toHaveValue("Ambush at the ford");
+    expect(screen.getByRole("textbox", { name: "Location" })).toHaveValue(
+      "A boardwalk over black water",
+    );
+  }, 30_000);
 });
 
 describe("the read-aloud box", () => {

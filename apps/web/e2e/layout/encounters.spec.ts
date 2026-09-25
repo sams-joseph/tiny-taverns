@@ -145,6 +145,41 @@ for (const width of WIDTHS) {
         const { scrollWidth, clientWidth } = await app.widths();
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
       });
+
+      await test.step("the battle map is a 24:9 band the pane's width, under its header", async () => {
+        // The ambush is the shelf's one encounter with a picture.
+        await page.getByRole("button", { name: /^Ambush in the reeds/ }).click();
+        await expect(pane).toHaveAccessibleName("Ambush in the reeds");
+        const band = pane.locator('[data-slot="hob-cover"]');
+        await expect(band.locator("img[data-loaded]")).toHaveCount(1);
+        // Clear of the sticky chrome, and still: a press is measured where it lands.
+        await band.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+        const fit = await band.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const img = el.querySelector("img")!.getBoundingClientRect();
+          const header = el.parentElement!.querySelector("header")!.getBoundingClientRect();
+          const link = el.querySelector("a")!;
+          const middle = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return {
+            width: r.width,
+            height: r.height,
+            room: el.parentElement!.clientWidth,
+            top: r.top,
+            headerBottom: header.bottom,
+            img: { width: img.width, height: img.height },
+            // A press anywhere on the picture lands on its link.
+            linked: middle === link,
+          };
+        });
+        expect.soft(fit.width, "band width").toBeCloseTo(fit.room, 0);
+        expect.soft(fit.width / fit.height, "band aspect").toBeCloseTo(24 / 9, 1);
+        expect.soft(fit.top, "band top").toBeCloseTo(fit.headerBottom, 0);
+        expect.soft(fit.img.width, "picture width").toBeCloseTo(fit.width, 0);
+        expect.soft(fit.img.height, "picture height").toBeCloseTo(fit.height - 1, 0);
+        expect.soft(fit.linked, "the band's middle is its link").toBe(true);
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
     });
 
     test("an Overview encounter row opens it on the Encounters tab", async ({ app, page }) => {

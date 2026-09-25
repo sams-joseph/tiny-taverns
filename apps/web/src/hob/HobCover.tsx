@@ -1,10 +1,11 @@
 import { Badge, cn } from "@taverns/ui";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { apiUrl } from "../api/client";
 
 /**
- * The two signed sizes of a cover Hob drew — a campaign's (`CampaignImages`) or
- * a Shared World's (`SharedWorldImages`), which are the same shape because both
+ * The two signed sizes of a landscape Hob drew — a campaign's cover
+ * (`CampaignImages`), a Shared World's (`SharedWorldImages`) or an encounter's
+ * battle map (`BattleMapImages`), which are the same shape because all three
  * kinds keep the same variants (`apps/server/src/images/kinds.ts`).
  */
 export interface HobCoverImages {
@@ -31,8 +32,10 @@ export interface HobCoverImages {
  * surface, so a slow load is a quiet band rather than a flash. It is
  * decorative (`alt=""`): the name is always beside it.
  *
- * **Two shapes, both crops of one 3:2 image**, and `object-cover` keeps its
- * middle, which the cover framing (`HouseStyle.ts`) keeps clear:
+ * **Four shapes of one 3:2 image.** Three crop it, and `object-cover` keeps
+ * its middle, which the cover framing (`HouseStyle.ts`) keeps clear; a map's
+ * ground runs to its edges, so its strip is a glimpse and the encounter's
+ * page draws it whole:
  *
  * - `card` — the head of a card on the campaign or Shared World list, bled to
  *   the card's edges (the card clips it to its radius); its `src` is the
@@ -43,20 +46,34 @@ export interface HobCoverImages {
  *   fading into the page so the header can sit over it
  *   (`campaign/OverviewParts.tsx`'s `OverviewHero`); its `src` is the
  *   1536 × 1024 size. It sits in the page, never in the sticky chrome rows.
+ * - `strip` — a battle map across the Encounters preview, under its header, at
+ *   the drawing's 24:9 (`campaign/EncounterPreview.tsx`).
+ * - `whole` — a battle map uncropped, at the drawn size's 3:2, in the
+ *   encounter builder's *Battle map* card. The fight's board is not this: it
+ *   lays a grid over the picture and draws the grid alone without one
+ *   (`campaign/BattleMapBoard.tsx`).
+ *
+ * Both battle-map shapes, like `card`, bleed to the edges of what holds them
+ * and close with a hairline under the picture.
  *
  * `data-picture` is set while there is a picture to show and Hob is not
  * drawing a new one: it is the one thing a caller may lay content over, and
  * it is on the element rather than handed back because a URL that fails to
- * load is only discovered in here.
+ * load is only discovered in here. `children` are laid over the frame — the
+ * preview's link across its strip — so they go with it when it collapses and
+ * never stand in an empty box.
  */
 export function HobCover({
   image,
   pending,
   shape,
+  children,
 }: {
   readonly image: HobCoverImages | null;
   readonly pending: boolean;
-  readonly shape: "card" | "hero";
+  readonly shape: "card" | "hero" | "strip" | "whole";
+  /** Laid over the frame, and gone with it. */
+  readonly children?: ReactNode;
 }) {
   const src = image === null ? undefined : apiUrl(shape === "card" ? image.cardUrl : image.fullUrl);
   // Both sizes, so a browser picks by the width it actually draws: a wide list
@@ -83,6 +100,8 @@ export function HobCover({
         "relative overflow-hidden bg-surface-sunken",
         shape === "card" && "aspect-5/2 border-b border-hairline",
         shape === "hero" && "h-overview-cover rounded-card border border-hairline shadow-1",
+        shape === "strip" && "aspect-24/9 border-b border-hairline",
+        shape === "whole" && "aspect-3/2 border-b border-hairline",
       )}
     >
       {showable && (
@@ -116,6 +135,7 @@ export function HobCover({
           Hob is drawing…
         </Badge>
       )}
+      {children}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { apiUrl } from "../api/client";
-import { drawnCover } from "../campaign/campaign.fixtures";
+import { drawnCover, drawnMapPicture } from "../campaign/campaign.fixtures";
 import { HobCover } from "./HobCover";
 
 /**
- * A cover — a campaign's or a Shared World's: nothing when there is none, a
+ * A cover — a campaign's, a Shared World's or a battle map's: nothing when there is none, a
  * quiet band while Hob draws it, and the picture once it is drawn. jsdom loads
  * no image, so `load` and `error` are fired by hand; what a browser draws is not
  * measurable here and is not asserted. The screens that show one are tested
@@ -62,5 +62,35 @@ describe("HobCover", () => {
       />,
     );
     expect(container.querySelector("img")).not.toBeNull();
+  });
+
+  it("draws a battle map full size, and takes what is laid over it away with it", () => {
+    const link = <a href="/encounter">Battle map</a>;
+    const { container, rerender } = render(
+      <HobCover image={drawnMapPicture} pending={false} shape="strip">
+        {link}
+      </HobCover>,
+    );
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
+    expect(container.firstElementChild).toHaveClass("aspect-24/9");
+    expect(screen.getByRole("link", { name: "Battle map" })).toBeInTheDocument();
+
+    fireEvent.error(img);
+    expect(container.innerHTML).toBe("");
+
+    rerender(
+      <HobCover image={null} pending={false} shape="whole">
+        {link}
+      </HobCover>,
+    );
+    expect(screen.queryByRole("link")).toBeNull();
+    rerender(
+      <HobCover image={null} pending shape="whole">
+        {link}
+      </HobCover>,
+    );
+    expect(container.firstElementChild).toHaveClass("aspect-3/2");
+    expect(screen.getByRole("status")).toHaveTextContent("Hob is drawing…");
   });
 });

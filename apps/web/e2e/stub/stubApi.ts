@@ -95,7 +95,9 @@ export function stubApi(): Plugin {
           // `null` is a body: `GET …/history/summary` answers it on purpose.
           res.end(type === "application/json" ? JSON.stringify(body ?? null) : String(body));
         };
-        if (url.pathname === COVER_PATH) {
+        // The cover, and any battle map's picture a fixture signs
+        // (`drawnMapPicture`): a 3:2 plate, as every drawn landscape is.
+        if (url.pathname === COVER_PATH || url.pathname.startsWith("/battle-map-images/")) {
           return send(
             200,
             '<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024"><rect width="1536" height="1024" fill="slategray"/></svg>',
