@@ -248,7 +248,7 @@ describe("authoring an encounter", () => {
     );
   });
 
-  it("sets out a skill challenge, and writes its tactics in the order the DM left them", async () => {
+  it("sets out a skill challenge, and writes its tactics one beat per line", async () => {
     server.routes.set(`POST ${encountersPath}`, created("The dry well"));
     await openCreate("New encounter");
 
@@ -258,24 +258,24 @@ describe("authoring an encounter", () => {
     await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
     await userEvent.click(await screen.findByRole("option", { name: "Challenge" }));
 
+    // Blank, not a guess at the DM's numbers.
+    expect(screen.getByRole("spinbutton", { name: "DC" })).toHaveValue(null);
     await userEvent.type(screen.getByRole("spinbutton", { name: "DC" }), "14");
     await userEvent.type(screen.getByRole("spinbutton", { name: "Successes" }), "3");
     await userEvent.type(screen.getByRole("spinbutton", { name: "Failures" }), "2");
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "Skills" }),
-      "Athletics, Survival, Athletics",
+    await userEvent.click(screen.getByRole("button", { name: "Athletics" }));
+    await userEvent.click(screen.getByRole("button", { name: "Survival" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stealth" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stealth" }));
+    expect(screen.getByRole("button", { name: "Athletics" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
 
-    for (const line of ["Each failure costs a day's water.", "Success: the buried cache."]) {
-      await userEvent.click(screen.getByRole("button", { name: "Add a line" }));
-      const boxes = screen.getAllByRole("textbox", { name: /^Tactic \d+$/ });
-      await userEvent.type(boxes[boxes.length - 1]!, line);
-    }
-    // A third line left blank is a line not written.
-    await userEvent.click(screen.getByRole("button", { name: "Add a line" }));
-    await userEvent.click(screen.getByRole("button", { name: "Move tactic 2 up" }));
-    expect(screen.getByRole("textbox", { name: "Tactic 1" })).toHaveValue(
-      "Success: the buried cache.",
+    // A blank line is a line not written.
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Tactics" }),
+      "Success: the buried cache.{Enter}{Enter}  Each failure costs a day's water. ",
     );
 
     await userEvent.type(
@@ -373,16 +373,17 @@ describe("authoring an encounter", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
 
     // The prep is the creator's, read back through the creator's prep read.
-    expect(await screen.findByRole("textbox", { name: "Tactic 1" })).toHaveValue(
-      "Archers open from the reeds with full cover.",
+    expect(await screen.findByRole("textbox", { name: "Tactics" })).toHaveValue(
+      "Archers open from the reeds with full cover.\nAt half strength they grab a crate and run for the water.",
     );
     expect(screen.getByRole("textbox", { name: "Treasure" })).toHaveValue(
       "28 sp and a bone whistle",
     );
     expect(screen.getByRole("combobox", { name: "Type" })).toHaveTextContent("Combat");
 
-    await userEvent.click(screen.getByRole("button", { name: "Move tactic 1 down" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove tactic 1" }));
+    const tactics = screen.getByRole("textbox", { name: "Tactics" });
+    await userEvent.clear(tactics);
+    await userEvent.type(tactics, "Archers open from the reeds with full cover.");
     await userEvent.clear(screen.getByRole("textbox", { name: "Treasure" }));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 

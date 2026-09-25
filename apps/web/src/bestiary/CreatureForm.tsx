@@ -76,7 +76,7 @@ const MAX_HP = 10_000;
 const parseWhole = (raw: string): number | undefined =>
   raw.trim() === "" || !Number.isInteger(Number(raw)) ? undefined : Number(raw);
 
-/** `"Marsh, River"` ⇄ `["Marsh", "River"]`, the same shape `EncounterDialog` gives tags. */
+/** `"Marsh, River"` ⇄ `["Marsh", "River"]`, the same shape `encounterDraft.ts` gives tags. */
 const parseList = (raw: string): ReadonlyArray<string> =>
   raw
     .split(",")

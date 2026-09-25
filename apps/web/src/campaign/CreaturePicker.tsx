@@ -1,4 +1,4 @@
-import type { CampaignId, CreatureId } from "@taverns/api";
+import type { CampaignId, Creature, CreatureId } from "@taverns/api";
 import { Badge, Button, FilterInput, Icon, Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { useEffect, useState } from "react";
@@ -69,7 +69,8 @@ export function CreaturePicker({
   readonly campaignId: CampaignId;
   /** Already on the roster: offered, but not addable twice — a repeat is a 409. */
   readonly chosen: ReadonlySet<CreatureId>;
-  readonly onPick: (creature: { readonly id: CreatureId; readonly name: string }) => void;
+  /** The whole row: the roster line carries its CR, AC, hp and XP. */
+  readonly onPick: (creature: Creature) => void;
 }) {
   const [term, setTerm] = useState("");
   const [query, setQuery] = useState("");
@@ -132,7 +133,7 @@ export function CreaturePicker({
                     size="sm"
                     disabled={already}
                     aria-label={`Add ${creature.name}`}
-                    onClick={() => onPick({ id: creature.id, name: creature.name })}
+                    onClick={() => onPick(creature)}
                   >
                     {already ? "On the roster" : <Icon name="plus" size={15} />}
                   </Button>
