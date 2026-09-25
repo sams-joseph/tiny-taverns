@@ -11,6 +11,9 @@ import {
   encounterPrep,
   goblinId,
   installStubServer,
+  noteId,
+  page,
+  readAloud,
   rosterRowId,
 } from "./campaign.fixtures";
 
@@ -435,6 +438,160 @@ describe("editing an encounter", () => {
     await renderAt(`${encountersPath}/${gone}/edit`);
     expect(await screen.findByText("No such encounter")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save encounter" })).toBeNull();
+  });
+});
+
+describe("the read-aloud box", () => {
+  const notesPath = `/campaigns/${campaignId}/notes`;
+  const box = () => screen.getByRole("textbox", { name: "Read aloud" });
+  const noteWrites = () => writes().filter((call) => call.pathname.startsWith(notesPath));
+  const orderOf = () => writes().map((call) => `${call.method} ${call.pathname}`);
+
+  beforeEach(() => {
+    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
+    server.routes.set(`PATCH ${notesPath}/${noteId}`, { status: 200, body: readAloud });
+  });
+
+  it("writes no note for a new encounter when it is left empty", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Quiet one"));
+    await userEvent.type(await openNew(), "Quiet one");
+    expect(box()).toHaveValue("");
+    await save();
+
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+    expect(noteWrites()).toEqual([]);
+  });
+
+  it("makes a read-aloud note on a new encounter once the encounter exists", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("The dry well"));
+    server.routes.set(`POST ${notesPath}`, { status: 200, body: readAloud });
+    await userEvent.type(await openNew(), "The dry well");
+    await userEvent.type(box(), "  The well is dry, and something below it is breathing. ");
+    await save();
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/notes")).toEqual({
+        // A note's title is required: the encounter's name is what Notes calls it.
+        title: "The dry well",
+        body: "The well is dry, and something below it is breathing.",
+        kind: "read_aloud",
+        attachedTo: { kind: "encounter", id: encounterId },
+      }),
+    );
+    // The encounter first: the note is attached to it by the id its create returned.
+    expect(orderOf()).toEqual([`POST ${encountersPath}`, `POST ${notesPath}`]);
+    // Nothing about the read-aloud rides on the encounter's own create.
+    expect(bodyOf(server, "POST", "/encounters")).not.toHaveProperty("readAloud");
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+  });
+
+  it("writes only the note on a second Save, when the note was refused after the encounter was made", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("The dry well"));
+    // No route for the note's POST yet: the stub refuses it.
+    await userEvent.type(await openNew(), "The dry well");
+    await userEvent.type(box(), "The well is dry.");
+    await save();
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(globalThis.location.pathname).toBe(newPath);
+
+    server.routes.set(`POST ${notesPath}`, { status: 200, body: readAloud });
+    await save();
+
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+    // One encounter, not two.
+    expect(orderOf()).toEqual([`POST ${encountersPath}`, `POST ${notesPath}`, `POST ${notesPath}`]);
+  });
+
+  it("opens on the encounter's read-aloud and writes nothing to it untouched", async () => {
+    await openEdit();
+    expect(box()).toHaveValue(readAloud.body);
+    await save();
+
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+    expect(noteWrites()).toEqual([]);
+  });
+
+  it("updates the note's body when the DM changes it", async () => {
+    await openEdit();
+    await userEvent.clear(box());
+    await userEvent.type(box(), "The reeds part.");
+    await save();
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/notes/${noteId}`)).toEqual({ body: "The reeds part." }),
+    );
+    expect(noteWrites()).toHaveLength(1);
+  });
+
+  it("detaches the note when the box is emptied, and deletes nothing", async () => {
+    await openEdit();
+    await userEvent.clear(box());
+    await save();
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/notes/${noteId}`)).toEqual({ attachedTo: null }),
+    );
+    expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
+  });
+
+  it("edits the oldest of several, and lists the others read-only with a way to Notes", async () => {
+    const later = {
+      ...readAloud,
+      id: "2b1f2a1e-0000-4000-8000-000000000802",
+      title: "When the boss falls",
+      body: "The goblins scatter into the water.",
+      createdAt: "2026-08-05T10:00:00.000Z",
+      updatedAt: "2026-08-05T10:00:00.000Z",
+    };
+    // Newest first on the wire: which one the box edits is decided by age, not order.
+    server.routes.set(`GET ${notesPath}`, { status: 200, body: page([later, readAloud]) });
+    await openEdit();
+
+    expect(box()).toHaveValue(readAloud.body);
+    const others = screen.getByRole("region", { name: "Also read aloud" });
+    expect(within(others).getByText(later.title)).toBeInTheDocument();
+    expect(within(others).getByText(later.body)).toBeInTheDocument();
+    expect(within(others).queryByRole("textbox")).toBeNull();
+    expect(within(others).getByRole("link", { name: "Edit in Notes" })).toHaveAttribute(
+      "href",
+      notesPath,
+    );
+
+    await userEvent.clear(box());
+    await userEvent.type(box(), "The reeds part.");
+    await save();
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+    // Only the one the box edits was written.
+    expect(noteWrites().map((call) => call.pathname)).toEqual([`${notesPath}/${noteId}`]);
+  });
+
+  it("re-reads the notes, so the preview and the Overview read the new words", async () => {
+    await openEdit();
+    await userEvent.clear(box());
+    await userEvent.type(box(), "The reeds part.");
+    const mark = server.calls.length;
+    server.routes.set(`GET ${notesPath}`, {
+      status: 200,
+      body: page([{ ...readAloud, body: "The reeds part." }]),
+    });
+    await save();
+
+    await waitFor(() => expect(globalThis.location.pathname).toBe(encountersPath));
+    const preview = await screen.findByRole("region", { name: "Read aloud" });
+    expect(preview).toHaveTextContent("The reeds part.");
+    expect(
+      server.calls.slice(mark).some((call) => call.method === "GET" && call.pathname === notesPath),
+    ).toBe(true);
+
+    await userEvent.click(
+      within(screen.getByRole("navigation", { name: "This campaign" })).getByRole("link", {
+        name: "Overview",
+      }),
+    );
+    expect(await screen.findByText("Opening read-aloud")).toBeInTheDocument();
+    expect(screen.getByText("The reeds part.")).toBeInTheDocument();
+    expect(screen.queryByText(readAloud.body)).toBeNull();
   });
 });
 

@@ -10,6 +10,7 @@ import {
   ENCOUNTER_KINDS,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_TREASURE_MAX,
+  type Note,
 } from "@taverns/api";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -34,11 +35,12 @@ import {
   Switch,
   Toggle,
 } from "@taverns/ui";
-import { Effect, Result } from "effect";
+import { DateTime, Effect, Result } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
+import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
@@ -51,6 +53,9 @@ import {
   type EncounterDraft,
   lineFor,
   NEW_ENCOUNTER,
+  readAloudOf,
+  type ReadAloudWrite,
+  readAloudWrite,
   removeLine,
   rosterDiff,
   type RosterLine,
@@ -117,9 +122,15 @@ import { encounterPrepListAtom } from "./load";
  *
  * The drawing's live difficulty card and its bestiary with CR pills take the
  * rail's place in a later change; until then the rail is the shipped creature
- * picker. The *Read aloud* box and the *When* toggles are not drawn: the first
- * is a note of its own with its own change coming, the second has nothing on
- * the wire to store it.
+ * picker. The *When* toggles are not drawn: nothing on the wire stores them.
+ *
+ * ### Read aloud is a note
+ *
+ * The *Read aloud* box edits the encounter's oldest attached `read_aloud`
+ * note, which is where the preview and the Overview's opening read-aloud find
+ * it. Any others attached to it are listed under the box, read-only, for Notes
+ * to edit. What a save sends to the note is `readAloudWrite`'s; emptying the
+ * box detaches the note rather than deleting it.
  *
  * A roster line carries a `visibility` of its own and this form does not offer
  * it: the column default is `dm`, so every line starts closed exactly as the
@@ -142,7 +153,8 @@ export function EncounterBuilderScreen() {
             <EncounterBuilder
               campaignId={campaignId}
               encounter={undefined}
-              saved={{ ...extra, encounter: undefined }}
+              saved={{ ...extra, encounter: undefined, readAloud: undefined }}
+              otherReadAloud={[]}
             />
           );
         }
@@ -164,11 +176,15 @@ export function EncounterBuilderScreen() {
             </>
           );
         }
+        // The notes are the campaign view's, already read and answering
+        // `reads.notes`, so the builder needs no read of its own for them.
+        const readAloud = readAloudOf(view.notes, encounter.id);
         return (
           <EncounterBuilder
             campaignId={campaignId}
             encounter={encounter}
-            saved={{ ...extra, encounter }}
+            saved={{ ...extra, encounter, readAloud }}
+            otherReadAloud={otherReadAloud(view.notes, encounter.id, readAloud)}
           />
         );
       }}
@@ -176,7 +192,40 @@ export function EncounterBuilderScreen() {
   );
 }
 
-type Stored = Omit<SavedEncounter, "encounter">;
+type Stored = Omit<SavedEncounter, "encounter" | "readAloud">;
+
+/** The encounter's read-aloud notes besides the one the box edits, oldest first. */
+const otherReadAloud = (
+  notes: ReadonlyArray<Note>,
+  encounterId: EncounterId,
+  edited: { readonly id: Note["id"] } | undefined,
+): ReadonlyArray<Note> =>
+  notes
+    .filter(
+      (note) =>
+        note.kind === "read_aloud" && note.attachedTo?.id === encounterId && note.id !== edited?.id,
+    )
+    .sort((a, b) => DateTime.toEpochMillis(a.createdAt) - DateTime.toEpochMillis(b.createdAt));
+
+/** The read-aloud half of a save, as a request or none. */
+const writeReadAloud = (client: TavernsClient, campaignId: CampaignId, write: ReadAloudWrite) => {
+  switch (write._tag) {
+    case "none":
+      return Effect.void;
+    case "create":
+      return client.notes.create({ params: { campaignId }, payload: write.payload });
+    case "update":
+      return client.notes.update({
+        params: { campaignId, noteId: write.noteId },
+        payload: { body: write.body },
+      });
+    case "detach":
+      return client.notes.update({
+        params: { campaignId, noteId: write.noteId },
+        payload: { attachedTo: null },
+      });
+  }
+};
 
 /**
  * What the builder opens on beyond the `Encounter` row, which is the campaign
@@ -221,7 +270,6 @@ const builderAtom = Atom.family(
                 roster,
                 setting: map.setting ?? "",
                 prep,
-                readAloud: undefined,
               }),
             ),
           // What the save names, so a builder opened again reads what was saved.
@@ -241,11 +289,14 @@ function EncounterBuilder({
   campaignId,
   encounter,
   saved,
+  otherReadAloud,
 }: {
   readonly campaignId: CampaignId;
   readonly encounter: Encounter | undefined;
   /** What the form opens on, and what its save is measured against. */
   readonly saved: SavedEncounter;
+  /** Read-aloud notes on it beyond the one the box edits, shown and not edited. */
+  readonly otherReadAloud: ReadonlyArray<Note>;
 }) {
   const [initial] = useState(() => draftFrom(saved));
   const [draft, setDraft] = useState(initial);
@@ -275,6 +326,13 @@ function EncounterBuilder({
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   /** Set once a save has landed, so the way to the list is not asked about. */
   const leaving = useRef(false);
+  /**
+   * The encounter a new builder's save made, once it has. The read-aloud note
+   * can only be written after it, so a note refused after the encounter was
+   * made leaves this set, and *Save* again writes the note rather than a
+   * second encounter.
+   */
+  const made = useRef<Encounter | undefined>(undefined);
   const shouldBlock = useCallback(() => !leaving.current, []);
   const blocker = useBlocker({
     shouldBlockFn: shouldBlock,
@@ -301,10 +359,31 @@ function EncounterBuilder({
     setShowProblems(true);
     if (refused) return;
 
+    // Whether the save touches a note, so the notes are re-read only when one moved.
+    const touchesNote =
+      encounter === undefined
+        ? draft.readAloud.trim() !== ""
+        : readAloudWrite(draft, saved.readAloud, encounter.id)._tag !== "none";
+
     const result = await submit(
       (client) =>
         encounter === undefined
-          ? client.encounters.create({ params: { campaignId }, payload: createPayload(draft) })
+          ? Effect.gen(function* () {
+              const written =
+                made.current ??
+                (yield* client.encounters.create({
+                  params: { campaignId },
+                  payload: createPayload(draft),
+                }));
+              made.current = written;
+              // After the encounter: the note is attached to it by id.
+              yield* writeReadAloud(
+                client,
+                campaignId,
+                readAloudWrite(draft, undefined, written.id),
+              );
+              return written;
+            })
           : Effect.gen(function* () {
               const encounterId = encounter.id;
               const written = yield* client.encounters.update({
@@ -339,13 +418,22 @@ function EncounterBuilder({
                 ],
                 { concurrency: "unbounded" },
               );
+              yield* writeReadAloud(
+                client,
+                campaignId,
+                readAloudWrite(draft, saved.readAloud, encounterId),
+              );
               return written;
             }),
       // **`Encounter.creatureCount` and its difficulty are computed per read
       // from the roster**, so the roster half of a save moves numbers on the list
       // the encounter row was never sent for — and the prep, the map's setting
-      // line and the roster all answer this one key.
-      [reads.encounters(campaignId)],
+      // line and the roster all answer this one key. A read-aloud is a note,
+      // found over the notes by the preview and the Overview, so a save that
+      // wrote one names the notes too.
+      touchesNote
+        ? [reads.encounters(campaignId), reads.notes(campaignId)]
+        : [reads.encounters(campaignId)],
     );
 
     if (Result.isSuccess(result)) {
@@ -474,6 +562,25 @@ function EncounterBuilder({
                 onChange={(event) => patch({ setting: event.target.value })}
               />
             </Field>
+
+            <Field
+              label="Read aloud"
+              htmlFor="encounter-read-aloud"
+              hint="What you say to the table when it starts."
+            >
+              <Textarea
+                id="encounter-read-aloud"
+                rows={3}
+                placeholder="The reeds are taller than you are and they are not moving."
+                value={draft.readAloud}
+                className="font-serif text-body-l leading-loose italic"
+                onChange={(event) => patch({ readAloud: event.target.value })}
+              />
+            </Field>
+
+            {otherReadAloud.length > 0 && (
+              <OtherReadAloud campaignId={campaignId} notes={otherReadAloud} />
+            )}
 
             <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
               <div className="min-w-0 flex-1 basis-60">
@@ -757,6 +864,50 @@ function EncounterBuilder({
         </Dialog>
       )}
     </>
+  );
+}
+
+/**
+ * The encounter's other read-aloud notes, as they read: the box above edits
+ * only the oldest, and these are edited where they live, in Notes.
+ */
+function OtherReadAloud({
+  campaignId,
+  notes,
+}: {
+  readonly campaignId: CampaignId;
+  readonly notes: ReadonlyArray<Note>;
+}) {
+  return (
+    <section aria-labelledby="other-read-aloud" className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span id="other-read-aloud" className="text-label leading-snug font-medium text-heading">
+          {notes.length === 1 ? "Also read aloud" : `Also read aloud (${String(notes.length)})`}
+        </span>
+        <Link
+          to="/campaigns/$campaignId/notes"
+          params={{ campaignId }}
+          className="text-caption leading-snug text-link hover:text-link-hover"
+        >
+          Edit in Notes
+        </Link>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {notes.map((note) => (
+          <li
+            key={note.id}
+            className="rounded-md border border-hairline bg-surface-sunken px-4 py-3"
+          >
+            <div className="text-label-s leading-snug font-medium text-muted-foreground">
+              {note.title}
+            </div>
+            <p className="mt-1.5 mb-0 font-serif text-body-s leading-body whitespace-pre-line text-foreground italic">
+              {note.body}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
