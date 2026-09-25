@@ -540,16 +540,6 @@
       :focus-visible; this only adds what a bundled app needs on top.
    -------------------------------------------------------------------------- */
 @layer base {
-  /* The window is the page's only scroller, and a classic scrollbar (Linux,
-     Windows) takes its width from the viewport: without a reserved gutter every
-     centred or right-aligned thing moves sideways when a page grows past the
-     fold. Base UI's scroll lock keeps the same gutter while a dialog is open,
-     so the two agree. Overlay scrollbars (macOS) take no width and reserve
-     nothing. */
-  html {
-    scrollbar-gutter: stable;
-  }
-
   body {
     min-height: 100vh;
   }
