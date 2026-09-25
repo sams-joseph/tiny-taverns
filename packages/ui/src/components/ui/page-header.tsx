@@ -74,12 +74,29 @@ import { cn } from "../../lib/utils";
  * The gutters answer the app shell's `app` container, which is the column this
  * header is drawn in.
  */
-function PageHeader({ title, subtitle, actions, tabs, placement = "bar" }: PageHeaderProps) {
+function PageHeader({
+  title,
+  subtitle,
+  badge,
+  actions,
+  tabs,
+  placement = "bar",
+  framed = false,
+}: PageHeaderProps) {
   const bar = placement === "bar";
+  const heading = (
+    <h1 className="min-w-0 truncate font-display text-display-s leading-tight font-semibold tracking-display text-heading">
+      {title}
+    </h1>
+  );
   return (
     <header
       data-slot={bar ? "page-header" : "page-heading"}
-      className={bar ? "border-b border-hairline bg-surface-card" : "mb-gutter"}
+      className={cn(
+        bar ? "border-b border-hairline bg-surface-card" : "mb-gutter",
+        framed &&
+          "rounded-card border border-t-3 border-hairline border-t-accent bg-surface-card px-5 py-3.5 shadow-1",
+      )}
     >
       <div
         className={cn(
@@ -91,9 +108,14 @@ function PageHeader({ title, subtitle, actions, tabs, placement = "bar" }: PageH
             top-aligned inside it so the `h1` sits at the same y whether a
             subtitle follows it or not. */}
         <div className="h-12 min-w-32 flex-1 basis-full @4xl/app:basis-0">
-          <h1 className="truncate font-display text-display-s leading-tight font-semibold tracking-display text-heading">
-            {title}
-          </h1>
+          {badge === undefined ? (
+            heading
+          ) : (
+            <div className="flex min-w-0 items-center gap-2.5">
+              {heading}
+              <span className="shrink-0">{badge}</span>
+            </div>
+          )}
           {subtitle !== undefined && (
             <p className="mt-1 mb-0 truncate text-body-s leading-body text-muted-foreground">
               {subtitle}
@@ -135,6 +157,12 @@ function PageHeader({ title, subtitle, actions, tabs, placement = "bar" }: PageH
 interface PageHeaderProps {
   readonly title: string;
   readonly subtitle?: string;
+  /**
+   * A word about the state of the thing, beside the title and never instead of
+   * it: the runner's "Round 3". A `Badge`, which the one-peach budget does not
+   * count, so the accent stays with the next action.
+   */
+  readonly badge?: ReactNode;
   /** The screen's verbs, and a `BackLink` when the screen has a parent. */
   readonly actions?: ReactNode;
   /** A tab strip, on its own row below the title — never beside it. */
@@ -145,6 +173,13 @@ interface PageHeaderProps {
    * draw theirs. See above.
    */
   readonly placement?: "bar" | "content";
+  /**
+   * Draw the in-content header on a card with an accent top edge: the live
+   * runner's header, which the redesign sets apart from every tab's because it
+   * is the one screen a DM keeps open while the table waits. Meaningless on
+   * the bar, which is already a band.
+   */
+  readonly framed?: boolean;
 }
 
 export { PageHeader };

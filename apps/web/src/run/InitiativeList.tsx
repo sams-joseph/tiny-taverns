@@ -4,22 +4,23 @@ import {
   Button,
   Card,
   Icon,
-  Input,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   SectionHeading,
 } from "@taverns/ui";
-import { useState } from "react";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
-import { subtitleOf } from "./load";
 
 /**
  * The initiative list — the thing the DM's finger is on all night.
  *
- * `ui_kits/dm-screen/EncounterRunner.jsx:21-48` is the specification, built here
- * out of the shipped components and the theme's names. Three things it draws
- * that the prototype could not, because it had no server:
+ * The runner redesign's initiative card (`Campaign Overview.dc.html`, the fight's
+ * first column) is the specification, built here out of the shipped components
+ * and the theme's names: a narrow list whose row is the number, the name, its AC
+ * and conditions, and its hit points. Damage and healing are the selected card's
+ * now (`CombatantPanel.tsx`) — the column is too narrow for a control on every
+ * row, and the drawing moved them. Three things it draws that the prototype
+ * could not, because it had no server:
  *
  *  - **Zero hit points is a state, not a removal.** A downed combatant is
  *    greyed and struck through and stays exactly where it was in the order —
@@ -33,37 +34,40 @@ import { subtitleOf } from "./load";
  *    those are the ones worth a glyph.
  */
 
-/** The prototype's five known conditions, and what an unknown word gets. */
+/**
+ * The badge a condition word wears. The drawing's own mapping — Concentrating
+ * is magic, Poisoned is a harm, anything else is information — plus the two
+ * words the prototype seeded that read as danger.
+ */
 const CONDITION_VARIANT: Record<string, "destructive" | "magic" | "info"> = {
   Hostile: "destructive",
-  Concentrating: "magic",
-  Prone: "info",
   Downed: "destructive",
-  Legendary: "info",
+  Poisoned: "destructive",
+  Concentrating: "magic",
 };
 
 /**
- * Hit points, as a bar and a number.
+ * Hit points, as a number over a bar.
  *
- * The colour steps the way the prototype's does — crimson at nothing, danger
- * under a third, the accent under two thirds, success above — because that is
- * the one thing on the row a DM reads without looking at it. Named for the
- * semantic slots the code actually fills, so a palette change does not date it.
+ * The colour steps the way the drawing's does — success above half, the accent
+ * above a quarter, danger below — because that is the one thing on the row a
+ * DM reads without looking at it. Named for the semantic slots, so a palette
+ * change does not date it.
  */
 function HpBar({ hp, max }: { readonly hp: number; readonly max: number }) {
   const percent = max <= 0 ? 0 : Math.max(0, Math.min(100, (hp / max) * 100));
-  const fill =
-    hp === 0
-      ? "bg-crimson-400"
-      : percent <= 34
-        ? "bg-danger"
-        : percent <= 67
-          ? "bg-accent"
-          : "bg-success";
+  const fill = percent > 50 ? "bg-success" : percent > 25 ? "bg-accent" : "bg-danger";
 
   return (
-    <div className="flex w-26 shrink-0 items-center gap-1.5">
-      <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-sunken">
+    <div className="flex w-16 shrink-0 flex-col items-end gap-1.5">
+      <span
+        className={`font-mono text-mono leading-none font-medium ${
+          hp === 0 ? "text-danger" : "text-foreground"
+        }`}
+      >
+        {hp}/{max}
+      </span>
+      <div className="h-1 w-full overflow-hidden rounded-pill bg-surface-sunken">
         <div
           className={`h-full transition-[width] duration-(--dur-base) ease-out ${fill}`}
           // A percentage of the track, which is the one measurement that cannot
@@ -71,88 +75,6 @@ function HpBar({ hp, max }: { readonly hp: number; readonly max: number }) {
           style={{ width: `${String(percent)}%` }}
         />
       </div>
-      <span
-        className={`min-w-11 text-right font-mono text-mono leading-none font-medium ${
-          hp === 0 ? "text-crimson-200" : "text-on-dark"
-        }`}
-      >
-        {hp}/{max}
-      </span>
-    </div>
-  );
-}
-
-/**
- * Damage and healing, on the row, without opening anything.
- *
- * A DM at a table says "the ogre hits Brannoc for twelve" and then has to make
- * that true before the next player speaks. So: find the row, type the number,
- * press Enter. Nothing to open, nothing to select first, and the same three
- * keystrokes every time.
- *
- * It is revealed by hover *and* by focus-within rather than mounted on hover,
- * so nothing on the row moves when the pointer crosses it and the whole control
- * is still reachable by keyboard.
- */
-function DamageControl({
-  combatant,
-  disabled,
-  onApply,
-}: {
-  readonly combatant: Combatant;
-  readonly disabled: boolean;
-  readonly onApply: (amount: number) => void;
-}) {
-  const [text, setText] = useState("");
-  const amount = Number(text);
-  const ready = text.trim() !== "" && Number.isInteger(amount) && amount > 0;
-
-  const apply = (sign: 1 | -1) => {
-    if (!ready || disabled) return;
-    onApply(sign * amount);
-    setText("");
-  };
-
-  return (
-    <div
-      className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-(--dur-fast) ease-out group-hover/row:opacity-100 focus-within:opacity-100"
-      // The row's click selects; the controls inside it must not.
-      onClick={(event) => event.stopPropagation()}
-    >
-      <Input
-        mono
-        inputMode="numeric"
-        aria-label={`Hit points to apply to ${combatant.displayName}`}
-        placeholder="0"
-        value={text}
-        disabled={disabled}
-        className="h-8 w-14 px-2 text-center"
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") apply(1);
-          if (event.key === "Escape") setText("");
-        }}
-      />
-      <Button
-        variant="destructive"
-        size="icon"
-        className="size-8"
-        aria-label={`Damage ${combatant.displayName}`}
-        disabled={!ready || disabled}
-        onClick={() => apply(1)}
-      >
-        <Icon name="minus" size={14} />
-      </Button>
-      <Button
-        variant="secondary"
-        size="icon"
-        className="size-8"
-        aria-label={`Heal ${combatant.displayName}`}
-        disabled={!ready || disabled}
-        onClick={() => apply(-1)}
-      >
-        <Icon name="heart-pulse" size={14} />
-      </Button>
     </div>
   );
 }
@@ -163,9 +85,7 @@ function CombatantRow({
   active,
   selected,
   shared,
-  disabled,
   onSelect,
-  onDamage,
 }: {
   readonly combatant: Combatant;
   readonly hp: number;
@@ -173,12 +93,9 @@ function CombatantRow({
   readonly selected: boolean;
   /** Whether the fight itself is shared, which is what makes hiding mean anything. */
   readonly shared: boolean;
-  readonly disabled: boolean;
   readonly onSelect: () => void;
-  readonly onDamage: (amount: number) => void;
 }) {
   const down = hp === 0;
-  const subtitle = subtitleOf(combatant);
 
   return (
     <div
@@ -193,23 +110,23 @@ function CombatantRow({
         }
       }}
       className={[
-        "group/row flex h-row cursor-pointer items-center gap-2.5 border-b border-l-3 border-b-hairline px-2.5",
+        "flex min-h-row cursor-pointer items-center gap-2.5 border-b border-l-3 border-b-hairline py-1 pr-3.5 pl-2.5",
         "outline-none focus-visible:ring-focus",
-        active ? "border-l-accent bg-accent-soft" : "border-l-transparent hover:bg-slate-300/6",
-        selected && !active ? "bg-slate-300/6" : "",
+        active ? "border-l-accent bg-accent-soft" : "border-l-transparent hover:bg-surface-raised",
+        selected && !active ? "bg-surface-raised" : "",
         down ? "opacity-45" : "",
       ].join(" ")}
     >
       <span
-        className={`w-6 shrink-0 text-right font-mono text-mono-l leading-none font-bold ${
-          active ? "text-accent-ink" : "text-on-dark-muted"
+        className={`w-6 shrink-0 text-right font-mono text-mono-l leading-none font-medium ${
+          active ? "text-accent-ink" : "text-muted-foreground"
         }`}
       >
         {combatant.initiative}
       </span>
 
       {/* A PC's portrait when its seat lets this reader see one; otherwise the
-          prototype's icon, in the same slot so the names stay in a column. */}
+          drawing's icon, in the same slot so the names stay in a column. */}
       <CharacterPortrait
         name={combatant.displayName}
         portrait={combatant.kind === "pc" ? combatant.portrait : null}
@@ -224,46 +141,40 @@ function CombatantRow({
       />
 
       <div className="min-w-0 flex-1">
-        <div
-          className={`truncate text-body-s leading-snug font-bold text-on-dark ${
-            down ? "line-through" : ""
-          }`}
-        >
-          {combatant.displayName}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`min-w-0 truncate text-body-s leading-snug font-semibold text-heading ${
+              down ? "line-through" : ""
+            }`}
+          >
+            {combatant.displayName}
+          </span>
+          {shared && combatant.visibility === "dm" && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="shrink-0 text-faint" aria-label="Hidden from players">
+                    <Icon name="eye-off" size={13} />
+                  </span>
+                }
+              />
+              <TooltipContent>Hidden from players</TooltipContent>
+            </Tooltip>
+          )}
         </div>
-        {subtitle !== undefined && (
-          <div className="truncate text-micro leading-snug text-on-dark-muted">{subtitle}</div>
-        )}
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          <span className="font-mono text-mono leading-snug text-muted-foreground">
+            {combatant.ac === null ? "AC —" : `AC ${String(combatant.ac)}`}
+          </span>
+          {combatant.conditions.map((condition) => (
+            <Badge key={condition} variant={CONDITION_VARIANT[condition] ?? "info"}>
+              {condition}
+            </Badge>
+          ))}
+        </div>
       </div>
-
-      {shared && combatant.visibility === "dm" && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span className="shrink-0 text-faint" aria-label="Hidden from players">
-                <Icon name="eye-off" size={14} />
-              </span>
-            }
-          />
-          <TooltipContent>Hidden from players</TooltipContent>
-        </Tooltip>
-      )}
-
-      <div className="flex shrink-0 gap-1">
-        {combatant.conditions.map((condition) => (
-          <Badge key={condition} variant={CONDITION_VARIANT[condition] ?? "secondary"}>
-            {condition}
-          </Badge>
-        ))}
-      </div>
-
-      <span className="shrink-0 font-mono text-mono leading-none font-medium whitespace-nowrap text-on-dark-muted">
-        {combatant.ac === null ? "AC —" : `AC ${String(combatant.ac)}`}
-      </span>
 
       <HpBar hp={hp} max={combatant.hpMax} />
-
-      <DamageControl combatant={combatant} disabled={disabled} onApply={onDamage} />
     </div>
   );
 }
@@ -291,7 +202,6 @@ export function InitiativeList({
   selectedId,
   disabled,
   onSelect,
-  onDamage,
   onAdd,
   onRoll,
 }: {
@@ -301,58 +211,25 @@ export function InitiativeList({
   readonly selectedId: CombatantId | undefined;
   readonly disabled: boolean;
   readonly onSelect: (combatant: Combatant) => void;
-  readonly onDamage: (combatant: Combatant, amount: number) => void;
   readonly onAdd: () => void;
   readonly onRoll: () => void;
 }) {
   const shared = run.visibility === "shared";
   const held = combatants.filter((combatant) => combatant.visibility === "dm").length;
-  const monsters = combatants.filter((combatant) => combatant.kind === "npc").length;
+  const monsters = combatants.filter((combatant) => combatant.kind === "npc");
+  const standing = monsters.filter((combatant) => hpOf(combatant) > 0).length;
 
   return (
     // `clip` keeps the rows inside the card's corners without making the card
     // a scroll container: the list takes its whole height and the window
     // scrolls it.
-    <Card tone="panel" className="overflow-clip">
-      <div className="flex items-center gap-2.5 border-b border-strong px-panel py-2.5">
-        <SectionHeading size="subtitle">Initiative</SectionHeading>
-        <Badge>Round {run.round}</Badge>
-        <span className="min-w-0 truncate text-caption leading-body text-muted-foreground">
-          {visibilitySentence(shared, held, combatants.length)}
-        </span>
-        <span className="ml-auto flex shrink-0 gap-1.5">
-          {/* `EncounterRunner.jsx:138`'s reroll, narrowed to what a DM can
-              honestly do: the app cannot roll for the people at the table, and
-              a button that overwrote the numbers they just called out would be
-              worse than no button. Everything seeds at initiative 0, so this is
-              the first thing pressed in a fight. */}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-8 text-on-dark-muted"
-                  aria-label="Roll initiative for the monsters"
-                  disabled={disabled || monsters === 0}
-                  onClick={onRoll}
-                >
-                  <Icon name="dices" size={14} />
-                </Button>
-              }
-            />
-            <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
-          </Tooltip>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8 text-on-dark-muted"
-            aria-label="Add a combatant"
-            disabled={disabled}
-            onClick={onAdd}
-          >
-            <Icon name="plus" size={14} />
-          </Button>
+    <Card className="overflow-clip">
+      <div className="flex items-center gap-2.5 border-b border-hairline px-panel py-2.5">
+        <SectionHeading as="h2" size="title">
+          Initiative
+        </SectionHeading>
+        <span className="ml-auto min-w-0 truncate font-mono text-mono leading-none text-muted-foreground">
+          {standing} {standing === 1 ? "hostile" : "hostiles"} standing
         </span>
       </div>
 
@@ -371,12 +248,45 @@ export function InitiativeList({
               active={combatant.id === run.activeCombatantId}
               selected={combatant.id === selectedId}
               shared={shared}
-              disabled={disabled}
               onSelect={() => onSelect(combatant)}
-              onDamage={(amount) => onDamage(combatant, amount)}
             />
           ))
         )}
+      </div>
+      {/* The list's own verbs sit under it, where the drawing puts its
+          *Reroll initiative*: the header is the list's width, and a 340px
+          column has room for its title and the count, not for buttons too. */}
+      <div className="flex flex-col gap-2 px-panel py-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {/* `EncounterRunner.jsx:138`'s reroll, narrowed to what a DM can
+              honestly do: the app cannot roll for the people at the table, and
+              a button that overwrote the numbers they just called out would be
+              worse than no button. Everything seeds at initiative 0, so this is
+              the first thing pressed in a fight. */}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || monsters.length === 0}
+                  onClick={onRoll}
+                >
+                  <Icon name="dices" size={13} />
+                  Roll for monsters
+                </Button>
+              }
+            />
+            <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
+          </Tooltip>
+          <Button variant="ghost" size="sm" disabled={disabled} onClick={onAdd}>
+            <Icon name="plus" size={13} />
+            Add combatant
+          </Button>
+        </div>
+        <p className="mb-0 text-caption leading-body text-muted-foreground">
+          {visibilitySentence(shared, held, combatants.length)}
+        </p>
       </div>
     </Card>
   );

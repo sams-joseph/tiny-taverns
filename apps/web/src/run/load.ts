@@ -2,6 +2,7 @@ import type {
   Campaign,
   CampaignId,
   Combatant,
+  CombatantId,
   Creature,
   CreatureId,
   EncounterRun,
@@ -16,6 +17,7 @@ import { Effect, Option } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, writableApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
+import type { Resource } from "../api/failure";
 import { reads, type Invalidation } from "../api/keys";
 
 /**
@@ -276,3 +278,25 @@ export const subtitleOf = (combatant: Combatant): string | undefined => {
  * the same reason.
  */
 export const combatantWrites = (campaignId: CampaignId): Invalidation => [reads.party(campaignId)];
+
+/**
+ * "Brannoc is up · Goblin Boss next": the marker, and the row after it in the
+ * server's order, which is the row `nextTurn` walks to — the order is the
+ * server's and is never re-sorted here (`load.ts`).
+ */
+export const upLine = (
+  combatants: ReadonlyArray<Combatant>,
+  activeId: CombatantId | null,
+): string => {
+  const at = combatants.findIndex((row) => row.id === activeId);
+  const active = combatants[at];
+  if (active === undefined) return "Nobody is up";
+  const next = combatants.length > 1 ? combatants[(at + 1) % combatants.length] : undefined;
+  return next === undefined
+    ? `${active.displayName} is up`
+    : `${active.displayName} is up · ${next.displayName} next`;
+};
+
+/** Whether the fight has a board to draw, so the layout can close the gap when it has none. */
+export const hasBoard = (resource: Resource<EncounterRunBoard | null>): boolean =>
+  !(resource.state === "ready" && resource.value === null);

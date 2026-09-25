@@ -141,6 +141,11 @@ export interface RunController {
    * to stay usable in.
    */
   readonly applyRun: (run: EncounterRun) => void;
+  /**
+   * Take a combatant row a write just answered with — a condition toggled on
+   * the selected card — for the same reason as `applyRun`.
+   */
+  readonly applyCombatant: (row: Combatant) => void;
   /** Positive damages, negative heals. Clamped into `[0, hpMax]` both ends. */
   readonly applyDamage: (
     combatant: Combatant,
@@ -339,5 +344,14 @@ export function useRunState(path: RunPath): RunController {
 
   const isPending = useCallback((id: CombatantId) => pending.has(id), [pending]);
 
-  return { state, hpOf, isPending, refresh, applyRun, applyDamage, staleness };
+  return {
+    state,
+    hpOf,
+    isPending,
+    refresh,
+    applyRun,
+    applyCombatant: merge,
+    applyDamage,
+    staleness,
+  };
 }

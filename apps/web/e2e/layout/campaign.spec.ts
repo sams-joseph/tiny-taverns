@@ -10,9 +10,14 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * they have no tab header, and the `h1` is the campaign's name in the hero,
  * over the cover when there is one (`campaign/CampaignHero.tsx`), so it lands
  * where the cover puts it.
+ *
+ * The runner is exempt from the `h1`'s y alone. It is no tab, and the redesign
+ * draws its header on a card (`PageHeader`'s `framed`), so the title sits inside
+ * the card's border and padding; the header's row is still the one height.
  */
 
 const HEROED = new Set(["overview", "player-overview"]);
+const FRAMED = new Set(["run"]);
 const campaignScreens = screens.filter((screen) => screen.path.startsWith("/campaigns/"));
 
 for (const width of WIDTHS) {
@@ -42,7 +47,8 @@ for (const width of WIDTHS) {
       for (const row of measured)
         expect.soft(row.mainTop, `${row.name}: main's top`).toBeCloseTo(reference!.mainTop, 1);
       for (const row of headed) {
-        expect.soft(row.h1, `${row.name}: the h1's y`).toBeCloseTo(headed[0]!.h1, 1);
+        if (!FRAMED.has(row.name))
+          expect.soft(row.h1, `${row.name}: the h1's y`).toBeCloseTo(headed[0]!.h1, 1);
         if (width >= 896) expect.soft(row.header, `${row.name}: header height`).toBeCloseTo(48, 0);
       }
     });
