@@ -1,7 +1,13 @@
 import type { Ability } from "@taverns/api";
 import { Badge, Button, Card, cn, Icon, SectionHeading } from "@taverns/ui";
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
-import { hpFraction, type SheetSectionId, type SheetSectionSpec } from "./sheet";
+import {
+  hpBand,
+  hpFraction,
+  type HpBand,
+  type SheetSectionId,
+  type SheetSectionSpec,
+} from "./sheet";
 
 /**
  * `ui_kits/dm-screen/PlayerParts.jsx` in shipped components and theme names.
@@ -141,6 +147,14 @@ export function HpTrack({
   );
 }
 
+/** The bar's fill per band. The band is `sheet.ts`'s; only the colour is here. */
+const BAND_FILL: Readonly<Record<HpBand, string>> = {
+  down: "bg-crimson-400",
+  low: "bg-danger",
+  hurt: "bg-accent",
+  well: "bg-success",
+};
+
 /**
  * The hit-point bar on its own — the sheet's track and the roster card both draw
  * it, so the colour steps are decided once. Presentational: the number beside it
@@ -161,16 +175,7 @@ export function HpBar({
     >
       <div
         data-slot="hp-fill"
-        className={cn(
-          "h-full",
-          fraction === 0
-            ? "bg-crimson-400"
-            : fraction <= 0.34
-              ? "bg-danger"
-              : fraction <= 0.67
-                ? "bg-accent"
-                : "bg-success",
-        )}
+        className={cn("h-full", BAND_FILL[hpBand(fraction)])}
         style={{ width: `${String(Math.round(fraction * 100))}%` }}
       />
     </div>
