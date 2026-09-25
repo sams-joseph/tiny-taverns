@@ -176,6 +176,7 @@ describe("the compiler carries it", () => {
       create: true,
       update: true,
       damage: true,
+      move: true,
       remove: true,
     };
     const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
@@ -239,7 +240,7 @@ describe("the compiler carries it", () => {
       Object.keys(recap).length,
       Object.keys(memberships).length,
       Object.keys(direct).length,
-    ]).toEqual([5, 7, 3, 2, 2, 4]);
+    ]).toEqual([6, 7, 3, 2, 2, 4]);
   });
 });
 
@@ -480,7 +481,9 @@ describe("the scope, counted", () => {
     // and a roster line its creature's numbers, which a player is not told
     // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
     // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
-    expect(gated).toBe(98);
+    // Ninety-nine is `Combatants.move`: a token's square is the DM's alone
+    // until the map is shared.
+    expect(gated).toBe(99);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

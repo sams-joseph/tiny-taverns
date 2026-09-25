@@ -146,6 +146,8 @@ interface CarriedCombatantRow {
   readonly ac: number | null;
   readonly kind: CombatantKind;
   readonly conditions: ReadonlyArray<string>;
+  readonly board_column: number | null;
+  readonly board_row: number | null;
   readonly visibility: Visibility;
   readonly origin: Origin;
   readonly assistant_turn_id: AssistantTurnId | null;
@@ -667,6 +669,7 @@ export class EncounterRuns extends Context.Service<
                              combatant.display_name, combatant.subtitle, combatant.player_name,
                              combatant.initiative, combatant.hp_current, combatant.hp_max,
                              combatant.ac, combatant.kind, combatant.conditions,
+                             combatant.board_column, combatant.board_row,
                              combatant.visibility, combatant.origin, combatant.assistant_turn_id
                       from combatant
                       where ${containedChildWritable(sql, COMBATANT, from.id, campaignId, actor)}
@@ -692,6 +695,8 @@ export class EncounterRuns extends Context.Service<
                         ac: row.ac,
                         kind: row.kind,
                         conditions: row.conditions,
+                        board_column: row.board_column,
+                        board_row: row.board_row,
                         visibility: row.visibility,
                         origin: row.origin,
                         assistant_turn_id: row.assistant_turn_id,

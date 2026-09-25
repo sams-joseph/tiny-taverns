@@ -7,11 +7,15 @@ import {
   type CombatantDamage,
   type CombatantId,
   type CombatantKind,
+  type CombatantMove,
+  type CombatantPosition,
   type CombatantUpdate,
+  Conflict,
   type CreatureId,
   type EncounterRunId,
   NotFound,
   type SessionId,
+  type Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
@@ -51,6 +55,9 @@ export interface CombatantRow extends ProvenanceColumns {
   readonly kind: CombatantKind;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly conditions: ReadonlyArray<string>;
+  /** Null together: the token is not on the board. See `0064_combatant_positions.ts`. */
+  readonly board_column: number | null;
+  readonly board_row: number | null;
   /** From {@link combatantColumns}; `null` unless the character is seated where the reader sees it. */
   readonly portrait_id: string | null;
 }
@@ -68,6 +75,11 @@ export const combatantColumns = (
 ): Statement.Fragment => sql`
   combatant.*, ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
 `;
+
+const positionOf = (row: CombatantRow): CombatantPosition | null =>
+  row.board_column === null || row.board_row === null
+    ? null
+    : { column: row.board_column, row: row.board_row };
 
 export const toCombatant = (row: CombatantRow, sign: PortraitSigner | undefined): Combatant => {
   if (row.portrait_id === undefined) {
@@ -87,6 +99,7 @@ export const toCombatant = (row: CombatantRow, sign: PortraitSigner | undefined)
     ac: row.ac,
     kind: row.kind,
     conditions: row.conditions,
+    position: positionOf(row),
     portrait: portraitImages(row.portrait_id, sign),
     ...provenanceOf(row),
   });
@@ -136,6 +149,13 @@ export class Combatants extends Context.Service<
       id: CombatantId,
       payload: CombatantDamage,
     ) => Effect.Effect<Combatant, NotFound>;
+    readonly move: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      id: CombatantId,
+      payload: CombatantMove,
+    ) => Effect.Effect<Combatant, NotFound | Conflict>;
     readonly remove: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -397,6 +417,115 @@ export class Combatants extends Context.Service<
                 // Two taps that raced past the idempotency check together. The
                 // unique index refuses the second, and the honest answer is the
                 // state the first one produced.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readCombatant(campaignId, runId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
+         * Put a token on a square, move it, or take it off the board.
+         *
+         * The square is checked against **the fight's own board**
+         * (`encounter_run_board`), the grid the fight was started on, which
+         * nothing resizes afterwards — so a position once accepted stays on
+         * the board. A fight with no board has nowhere to put a token, and a
+         * square past its edge is not a square; both are a `Conflict`. Taking
+         * a token off needs no board.
+         *
+         * No rule about distance or turns: the DM moves whoever they like,
+         * wherever they like, whenever they like, as they would a miniature.
+         * Two tokens may share a square for the same reason.
+         *
+         * The log line is shared only while both the combatant and the fight
+         * are, the narrower of the two, so a hidden creature's move rings no
+         * player's doorbell. It carries `from` and `to` for the DM's own log.
+         */
+        move: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                    return yield* readCombatant(campaignId, runId, id, actor);
+                  }
+
+                  const to = payload.position;
+                  if (to !== null) {
+                    const boards = yield* sql<{
+                      readonly board_columns: number;
+                      readonly board_rows: number;
+                    }>`
+                      select encounter_run_board.board_columns, encounter_run_board.board_rows
+                      from encounter_run_board
+                      where encounter_run_board.run_id = ${runId}
+                    `;
+                    const board = boards[0];
+                    if (board === undefined) {
+                      return yield* new Conflict({ message: "this fight has no board" });
+                    }
+                    if (to.column >= board.board_columns || to.row >= board.board_rows) {
+                      return yield* new Conflict({ message: "that square is off the board" });
+                    }
+                  }
+
+                  // Where it stood, locked for the rest of this transaction, so
+                  // the log's `from` is the square this move actually left.
+                  const before = yield* sql<{
+                    readonly board_column: number | null;
+                    readonly board_row: number | null;
+                  }>`
+                    select combatant.board_column, combatant.board_row from combatant
+                    where combatant.id = ${id}
+                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+                    for update
+                  `;
+                  const from = before[0];
+                  if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
+
+                  const rows = yield* sql<CombatantRow & { readonly run_visibility: Visibility }>`
+                    update combatant
+                    set board_column = ${to?.column ?? null},
+                        board_row = ${to?.row ?? null},
+                        updated_at = now()
+                    where combatant.id = ${id}
+                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+                    returning ${combatantColumns(sql, campaignId, actor)},
+                      (select encounter_run.visibility from encounter_run
+                        where encounter_run.id = combatant.encounter_run_id) as run_visibility
+                  `;
+                  const row = rows[0];
+                  if (row === undefined) return yield* new NotFound({ resource: "combatant", id });
+                  const combatant = toCombatant(row, sign);
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "combatant-moved",
+                    encounterRunId: runId,
+                    combatantId: id,
+                    payload: {
+                      from:
+                        from.board_column === null || from.board_row === null
+                          ? null
+                          : { column: from.board_column, row: from.board_row },
+                      to,
+                    },
+                    requestId: payload.requestId,
+                    visibility:
+                      combatant.visibility === "shared" && row.run_visibility === "shared"
+                        ? "shared"
+                        : "dm",
+                  });
+                  return combatant;
+                }),
+              )
+              .pipe(
+                // Two sends of one move that raced past the idempotency check;
+                // the unique index refuses the second, as for `damage`.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
                     ? readCombatant(campaignId, runId, id, actor)

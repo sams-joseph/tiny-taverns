@@ -24,6 +24,17 @@ const Condition = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
 const conditions = Schema.Array(Condition).check(Schema.isLengthBetween(0, 24));
 
 /**
+ * A token's square on its fight's board (`EncounterRunBoard`): zero-based,
+ * counted from the board's top-left, so `{ column: 0, row: 0 }` is the corner
+ * square and the largest is one less than the board's `columns` and `rows`.
+ */
+export const CombatantPosition = Schema.Struct({
+  column: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 199 })),
+  row: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 199 })),
+});
+export type CombatantPosition = typeof CombatantPosition.Type;
+
+/**
  * One creature *instance* in one fight.
  *
  * The fixtures settle this outright: `data.js:18-19` are two `Goblin Archer`
@@ -87,6 +98,12 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   conditions: Schema.Array(Schema.String),
   /** The per-row "Hide from players" override (`EncounterRunner.jsx:139`). */
   visibility: Visibility,
+  /**
+   * Where its token stands on the fight's board, or `null` while it is not on
+   * the board — where every token starts, because nobody has put it anywhere
+   * yet. The creator's alone: no player read carries a position.
+   */
+  position: Schema.NullOr(CombatantPosition),
   /**
    * The portrait of the character this row was seeded from — **live, not a
    * snapshot**, and present only while that character sits in a seat of this
@@ -160,3 +177,20 @@ export const CombatantDamage = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
 });
 export type CombatantDamage = typeof CombatantDamage.Type;
+
+/**
+ * Put a token on a square, move it, or take it off the board (`position:
+ * null`) — the board's one write.
+ *
+ * Its own endpoint rather than a field on `CombatantUpdate`, for the reason
+ * `CombatantDamage` is: it is the write that happens over and over while the
+ * fight runs, so it is the one that carries a `requestId`, and the square is
+ * checked against the fight's own board, which a general patch has no reason
+ * to read. A square off that board, or any square on a fight with no board, is
+ * a `Conflict`.
+ */
+export const CombatantMove = Schema.Struct({
+  position: Schema.NullOr(CombatantPosition),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type CombatantMove = typeof CombatantMove.Type;
