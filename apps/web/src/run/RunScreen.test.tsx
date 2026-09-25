@@ -58,10 +58,11 @@ const reaim = (fragment: string, answer: { status: number; body: unknown }) => {
 const serverRunBase = () =>
   `/campaigns/${campaignId}/sessions/${liveRun.sessionId}/runs/${liveRun.id}`;
 
+/** Select the row, then type the hit into the selected card — the redesign's one place for it. */
 const damage = async (name: string, amount: string) => {
-  const row = rowFor(name);
+  await userEvent.click(rowFor(name));
   await userEvent.type(
-    within(row).getByLabelText(`Hit points to apply to ${name}`),
+    panel().getByLabelText(`Hit points to apply to ${name}`),
     `${amount}{Enter}`,
   );
 };
@@ -83,9 +84,13 @@ describe("the runner", () => {
         .getAllByText(/Brannoc|Goblin Boss/)
         .map((el) => el.textContent),
     ).toEqual(["Brannoc", "Goblin Boss"]);
-    expect(screen.getByText(/Round 1 · Brannoc is up/)).toBeInTheDocument();
-    // The two halves of the fixtures' `sub` line, assembled for rendering.
-    expect(initiative().getByText("Half-orc paladin · Ilse")).toBeInTheDocument();
+    // The header: the round beside the title, and who is up and who is next in
+    // the server's order, which is what `nextTurn` walks.
+    const header = within(document.querySelector("[data-slot=page-heading]") as HTMLElement);
+    expect(header.getByText("Round 1")).toBeInTheDocument();
+    expect(header.getByText("Brannoc is up · Goblin Boss next")).toBeInTheDocument();
+    // The two halves of the fixtures' `sub` line, assembled for the card.
+    expect(panel().getByText("Half-orc paladin · Ilse")).toBeInTheDocument();
   });
 
   it("marks every row with its icon when nobody has a portrait", async () => {
@@ -154,9 +159,9 @@ describe("the runner", () => {
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
-    const row = rowFor("Goblin Boss");
-    await userEvent.type(within(row).getByLabelText("Hit points to apply to Goblin Boss"), "6");
-    await userEvent.click(within(row).getByRole("button", { name: "Heal Goblin Boss" }));
+    await userEvent.click(rowFor("Goblin Boss"));
+    await userEvent.type(panel().getByLabelText("Hit points to apply to Goblin Boss"), "6");
+    await userEvent.click(panel().getByRole("button", { name: "Heal Goblin Boss" }));
 
     await waitFor(() =>
       expect((bodyOf(server, "POST", "/damage") as { amount: number }).amount).toBe(-6),
@@ -181,11 +186,11 @@ describe("the runner", () => {
 
   it("advances the turn through the run's own endpoint", async () => {
     await renderRunner();
-    await screen.findByText(/Round 1 · Brannoc is up/);
+    await screen.findByText("Brannoc is up · Goblin Boss next");
 
     await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
 
-    await screen.findByText(/Round 1 · Goblin Boss is up/);
+    await screen.findByText("Goblin Boss is up · Brannoc next");
     // Bound to a button and to the space bar, so a repeat must be safe.
     expect((bodyOf(server, "POST", "/next-turn") as { requestId: string }).requestId).toMatch(/.+/);
   });
@@ -521,16 +526,25 @@ describe("the runner", () => {
   // what jsdom can pin is who scrolls. The window does, and only the window:
   // the runner is a document screen (no `fill`), so nothing between these
   // cards and the page may bound a height or scroll on its own.
-  it("leads the right column with the sheet, and leaves the scrolling to the window", async () => {
+  it("leads the aside with the sheet, and leaves the scrolling to the window", async () => {
     await renderRunner();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
 
     const sheet = screen.getByRole("region", { name: "Selected combatant" });
     const log = screen.getByRole("log", { name: "What just happened" });
-    const column = sheet.parentElement as HTMLElement;
-    expect(column.firstElementChild).toBe(sheet);
-    // The cards under it follow it down the page, in the same column.
-    expect(column).toContainElement(log);
+    // The sheet is the aside's first area; the drawn dice follow it, and every
+    // card the drawing leaves out follows those, in the aside's second area
+    // (`RunLayout.tsx`, which a phone splits around the map).
+    const area = sheet.parentElement as HTMLElement;
+    expect(area.firstElementChild).toBe(sheet);
+    const rest = area.nextElementSibling as HTMLElement;
+    expect(rest.firstElementChild).toBe(screen.getByRole("region", { name: "Dice" }));
+    for (const kept of [
+      screen.getByRole("region", { name: "Hob's direct spends" }),
+      screen.getByRole("region", { name: "Dice tray" }),
+      log,
+    ])
+      expect(rest).toContainElement(kept);
 
     const classOf = (element: Element): string => element.getAttribute("class") ?? "";
     // Nothing inside the cards scrolls on its own…
@@ -596,6 +610,102 @@ describe("the runner", () => {
     // list this write hands the seam. `api/invalidation.test.tsx` is what says
     // the seam then does something with it.
     expect(combatantWrites(campaignId)).toEqual([reads.party(campaignId)]);
+  });
+
+  it("toggles a condition from the selected card, written through to the party", async () => {
+    server.routes.set(`PATCH ${serverRunBase()}/combatants/${goblinBoss.id}`, {
+      status: 200,
+      body: { ...goblinBoss, conditions: [...goblinBoss.conditions, "Prone"] },
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    const chips = within(panel().getByRole("group", { name: "Conditions on Goblin Boss" }));
+    // The drawing's five, and the word the row already carries, pressed so it
+    // can be cleared: the vocabulary is open.
+    for (const word of ["Prone", "Poisoned", "Restrained", "Frightened", "Concentrating"])
+      expect(chips.getByRole("button", { name: word })).toHaveAttribute("aria-pressed", "false");
+    expect(chips.getByRole("button", { name: "Hostile" })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(chips.getByRole("button", { name: "Prone" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/combatants/${goblinBoss.id}`)).toEqual({
+        conditions: ["Hostile", "Prone"],
+      }),
+    );
+    // The answer is merged into the fight: the row wears it without a re-read.
+    await within(rowFor("Goblin Boss")).findByText("Prone");
+    expect(chips.getByRole("button", { name: "Prone" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("clears a word the row carries, and adds any other word", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    const chips = within(panel().getByRole("group", { name: "Conditions on Goblin Boss" }));
+    await userEvent.click(chips.getByRole("button", { name: "Hostile" }));
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/combatants/${goblinBoss.id}`)).toEqual({ conditions: [] }),
+    );
+
+    server.calls.length = 0;
+    await userEvent.type(
+      panel().getByLabelText("Another condition for Goblin Boss"),
+      "  Exhaustion 1 {Enter}",
+    );
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/combatants/${goblinBoss.id}`)).toEqual({
+        conditions: ["Hostile", "Exhaustion 1"],
+      }),
+    );
+  });
+
+  it("rolls the selected monster's abilities and attacks into the DM's own dice, and sends nothing", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+    const before = server.calls.filter((call) => call.method !== "GET").length;
+
+    const dice = () => within(screen.getByRole("region", { name: "Dice" }));
+    expect(dice().getByText(/Rolls show up here/)).toBeInTheDocument();
+
+    await userEvent.click(panel().getByRole("button", { name: "Roll DEX check, 1d20+2" }));
+    await userEvent.click(panel().getByRole("button", { name: "Roll Scimitar, 1d6+2" }));
+    await userEvent.click(dice().getByRole("button", { name: "Roll a d20" }));
+
+    const rolled = within(dice().getByRole("list", { name: "Your rolls" }))
+      .getAllByRole("listitem")
+      .map((item) => item.firstElementChild?.textContent);
+    // Newest first, each named for what rolled it.
+    expect(rolled).toEqual(["d20", "Goblin Boss · Scimitar", "Goblin Boss · DEX"]);
+    expect(dice().getByText(/^1d6\+2 \[\d\]$/)).toBeInTheDocument();
+    // A roll is not durable state: nothing left this browser.
+    expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(before);
+  });
+
+  it("keeps the DM's dice to the newest six", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const dice = within(screen.getByRole("region", { name: "Dice" }));
+    for (let i = 0; i < 8; i += 1)
+      await userEvent.click(dice.getByRole("button", { name: "Roll a d4" }));
+    expect(
+      within(dice.getByRole("list", { name: "Your rolls" })).getAllByRole("listitem"),
+    ).toHaveLength(6);
+  });
+
+  it("says a party member's sheet stays with their player", async () => {
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    expect(
+      panel().getByText(
+        "Played by Ilse. Their sheet stays with them; track HP and conditions here.",
+      ),
+    ).toBeInTheDocument();
+    // The drawing's Speed is not on a combatant; the third tile is what is.
+    expect(panel().queryByText("Speed")).toBeNull();
   });
 
   it("surfaces live NPC proposal cues only as DM review links", async () => {
@@ -681,30 +791,24 @@ describe("the runner", () => {
   });
 });
 
-describe("the fight's map band", () => {
-  const band = () => screen.getByRole("button", { name: /^Map/ });
+describe("the fight's battle map", () => {
+  const card = () => screen.getByRole("region", { name: "Battle map" });
 
-  it("is closed until the DM opens it, then draws the fight's own board", async () => {
+  it("is open, drawing the fight's own board beside the list", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
 
-    await waitFor(() => expect(band()).toHaveAttribute("aria-expanded", "false"));
-    // The size is on the closed band; the board itself is not drawn.
-    expect(band()).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft");
-    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
-
-    await userEvent.click(band());
-    expect(band()).toHaveAttribute("aria-expanded", "true");
-    const board = document.querySelector("[data-slot=battle-map]");
+    await waitFor(() =>
+      expect(card()).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft"),
+    );
+    const board = card().querySelector("[data-slot=battle-map]");
     expect(board).not.toBeNull();
     expect(board?.querySelectorAll("[data-line=column]")).toHaveLength(25);
     expect(board?.querySelectorAll("[data-line=row]")).toHaveLength(17);
-    // Opening it is the DM's reference, not a fight write.
+    // The layout has a map area for it.
+    expect(document.querySelector("[data-slot=run-layout]")?.className).toContain("'map_map'");
+    // Drawing it is the DM's reference, not a fight write.
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
-
-    await userEvent.click(band());
-    expect(band()).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector("[data-slot=battle-map]")).toBeNull();
   });
 
   it("draws the grid the fight kept, not the encounter's map", async () => {
@@ -713,8 +817,7 @@ describe("the fight's map band", () => {
       body: { ...runBoard, columns: 10, rows: 6, feetPerCell: 10 },
     });
     await renderRunner();
-    await waitFor(() => expect(band()).toHaveTextContent("10 × 6 squares · 10 ft each"));
-    await userEvent.click(band());
+    await waitFor(() => expect(card()).toHaveTextContent("10 × 6 squares · 10 ft each"));
     expect(document.querySelectorAll("[data-line=column]")).toHaveLength(11);
     // The runner never asks for the encounter's live map.
     expect(server.calls.some((call) => call.pathname.endsWith("/map"))).toBe(false);
@@ -726,19 +829,21 @@ describe("the fight's map band", () => {
       body: { ...runBoard, mapId: null, setting: null },
     });
     await renderRunner();
-    await waitFor(() => expect(band()).toBeInTheDocument());
-    await userEvent.click(band());
+    await waitFor(() => expect(card()).toBeInTheDocument());
     expect(screen.getByText(/This fight's encounter was deleted/)).toBeInTheDocument();
     expect(document.querySelector("[data-slot=battle-map]")).not.toBeNull();
   });
 
-  it("is absent for a fight with no board", async () => {
+  it("is absent for a fight with no board, and the layout closes the gap", async () => {
     server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: null });
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
     await waitFor(() =>
       expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(true),
     );
-    expect(screen.queryByRole("button", { name: /^Map/ })).toBeNull();
+    await waitFor(() =>
+      expect(document.querySelector("[data-slot=run-layout]")?.className).not.toContain("map"),
+    );
+    expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
   });
 });

@@ -34,18 +34,35 @@ import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
+import { useDmDice } from "./dice";
+import { DmDiceCard } from "./DmDice";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
-import { RunBoardBand } from "./RunBoardBand";
-import { rollsAtom, runViewAtom, type RunPath } from "./load";
+import { RunBoardCard } from "./RunBoardCard";
+import { RunLayout } from "./RunLayout";
+import {
+  combatantWrites,
+  hasBoard,
+  rollsAtom,
+  runBoardAtom,
+  runViewAtom,
+  upLine,
+  type RunPath,
+} from "./load";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
- * The encounter runner — `ui_kits/dm-screen/EncounterRunner.jsx`, against the
- * real API and a real stream.
+ * The encounter runner — the runner redesign's fight (`Campaign Overview.dc.html`),
+ * against the real API and a real stream: a framed header with the round and
+ * who is up, then initiative, the battle map and the selected creature's card
+ * with the DM's own dice, laid out by `RunLayout.tsx`. Everything the drawing
+ * leaves out that the runner already did — adding and editing combatants,
+ * *Make it their turn*, Hob's spends and their undo, NPCs at the table, the
+ * players' dice tray and the session log — stays, in the aside under the drawn
+ * cards (the captain's call of 2026-09-25).
  *
  * This is the screen a DM keeps open while people wait, so three things are
  * arranged differently to every other screen in the app:
@@ -522,61 +539,92 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
     null;
 
-function HobDirectUpdates({
+/**
+ * Whether Hob may spend a character's resources in this fight without asking,
+ * and every spend it made, each with its undo.
+ */
+function HobSpendsCard({
+  allowed,
+  over,
   updates,
+  switchBusy,
   busy,
+  onAllow,
   onUndo,
 }: {
+  readonly allowed: boolean;
+  readonly over: boolean;
   readonly updates: ReadonlyArray<HobDirectResourceUpdate>;
+  readonly switchBusy: boolean;
   readonly busy: boolean;
+  readonly onAllow: (allowed: boolean) => void;
   readonly onUndo: (update: HobDirectResourceUpdate) => void;
 }) {
-  if (updates.length === 0) return null;
+  if (over && updates.length === 0) return null;
   return (
     <section
       aria-label="Hob's direct spends"
       className="rounded-card border border-hairline bg-surface-card shadow-1"
     >
-      <div className="border-b border-hairline px-card py-3">
-        <p className="flex items-center gap-2 text-label font-semibold uppercase tracking-label text-muted-foreground">
-          <Icon name="sparkles" size={13} />
-          Hob's direct spends
+      <div className="flex items-center gap-2 px-panel py-3">
+        <Icon name="sparkles" size={13} className="text-magic-ink" />
+        <SectionHeading as="h3" size="title" className="flex-1">
+          Hob's spends
+        </SectionHeading>
+        {!over && (
+          <span className="flex items-center gap-2">
+            <Switch
+              id="run-hob-direct-writes"
+              checked={allowed}
+              disabled={switchBusy}
+              onCheckedChange={(next) => onAllow(next)}
+            />
+            <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
+          </span>
+        )}
+      </div>
+      {updates.length === 0 ? (
+        <p className="mb-0 border-t border-hairline px-panel py-3 text-caption leading-body text-muted-foreground">
+          {allowed
+            ? "Hob may spend a character's resources in this fight without asking. Each spend is listed here, with its undo."
+            : "Off: Hob asks before it spends anything in this fight."}
         </p>
-      </div>
-      <div className="divide-y divide-hairline">
-        {updates.map((update) => {
-          const spent = update.afterUsed - update.beforeUsed;
-          const left = update.resourceMax - update.afterUsed;
-          return (
-            <article
-              key={update.id}
-              className="flex items-start justify-between gap-3 px-card py-3"
-            >
-              <div className="min-w-0 space-y-1">
-                <p className="text-body-s font-semibold leading-body text-foreground">
-                  {update.characterName} spent {spent} {update.resourceName}
-                </p>
-                <p className="text-body-xs leading-body text-muted-foreground">
-                  {left} of {update.resourceMax} left
-                  {update.undoneAt === null ? "" : " · undone"}
-                </p>
-              </div>
-              {update.undoneAt === null && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => onUndo(update)}
-                  aria-label={`Undo ${update.resourceName} for ${update.characterName}`}
-                >
-                  <Icon name="refresh-cw" size={13} />
-                  Undo
-                </Button>
-              )}
-            </article>
-          );
-        })}
-      </div>
+      ) : (
+        <div className="divide-y divide-hairline border-t border-hairline">
+          {updates.map((update) => {
+            const spent = update.afterUsed - update.beforeUsed;
+            const left = update.resourceMax - update.afterUsed;
+            return (
+              <article
+                key={update.id}
+                className="flex items-start justify-between gap-3 px-panel py-3"
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="text-body-s font-semibold leading-body text-foreground">
+                    {update.characterName} spent {spent} {update.resourceName}
+                  </p>
+                  <p className="text-body-xs leading-body text-muted-foreground">
+                    {left} of {update.resourceMax} left
+                    {update.undoneAt === null ? "" : " · undone"}
+                  </p>
+                </div>
+                {update.undoneAt === null && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onUndo(update)}
+                    aria-label={`Undo ${update.resourceName} for ${update.characterName}`}
+                  >
+                    <Icon name="refresh-cw" size={13} />
+                    Undo
+                  </Button>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -592,6 +640,8 @@ export function RunScreen() {
 
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
+  const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
+  const dice = useDmDice();
   const view = resource.state === "ready" ? resource.value : undefined;
   const trayRolls = rollsResource.state === "ready" ? rollsResource.value : [];
 
@@ -611,6 +661,7 @@ export function RunScreen() {
   const turn = useMutation();
   const share = useMutation();
   const direct = useMutation();
+  const conditions = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -790,6 +841,31 @@ export function RunScreen() {
     }
   };
 
+  /**
+   * The selected card's chips. Written through to the character by the server
+   * (`repo/vitals.ts`), so this names the party; the fight itself takes the
+   * row the write answers with.
+   */
+  const setConditions = async (combatant: Combatant, next: ReadonlyArray<string>) => {
+    const written = await conditions.submit(
+      (client) =>
+        client.combatants.update({
+          params: { ...path, combatantId: combatant.id },
+          payload: { conditions: [...next] },
+        }),
+      combatantWrites(campaignId),
+    );
+    if (Result.isSuccess(written)) {
+      controller.applyCombatant(written.success);
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: `${combatant.displayName}'s conditions are unchanged`,
+      description: "That did not reach the server. The chips show what it holds.",
+    });
+  };
+
   const saved = useCallback(() => {
     setAdding(false);
     setEditing(undefined);
@@ -801,28 +877,19 @@ export function RunScreen() {
   return (
     <TooltipProvider>
       <TopBar
+        framed
         title={state?.run.encounterName ?? "The fight"}
-        subtitle={
-          state === undefined
-            ? undefined
-            : `Round ${String(state.run.round)} · ${
-                over
-                  ? "this fight is over"
-                  : active === undefined
-                    ? "nobody is up"
-                    : `${active.displayName} is up`
-              }`
-        }
+        {...(state !== undefined && {
+          badge: <Badge variant="secondary">Round {state.run.round}</Badge>,
+          subtitle: over
+            ? "This fight is over"
+            : upLine(state.combatants, state.run.activeCombatantId),
+        })}
       >
         {state !== undefined && !over && (
           <>
             {connection.status !== "live" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-on-dark-muted"
-                onClick={connection.reconnect}
-              >
+              <Button variant="outline" size="sm" onClick={connection.reconnect}>
                 <Icon name="octagon-x" size={13} />
                 {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
               </Button>
@@ -836,20 +903,12 @@ export function RunScreen() {
               />
               <Label htmlFor="run-share">Share</Label>
             </span>
-            <span className="flex items-center gap-2">
-              <Switch
-                id="run-hob-direct-writes"
-                checked={state.run.allowHobDirectWrites}
-                disabled={direct.busy}
-                onCheckedChange={(next) => void setHobDirectWrites(next)}
-              />
-              <Label htmlFor="run-hob-direct-writes">Hob spends</Label>
-            </span>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
                     {turn.busy ? "Advancing…" : "Next turn"}
+                    <Icon name="chevron-right" size={14} />
                   </Button>
                 }
               />
@@ -894,32 +953,25 @@ export function RunScreen() {
             </p>
           )}
 
-          {/* The column's width, not the viewport's — `main` is the container.
-              `@3xl` (48rem = 768px) leaves the initiative list 412px beside a
-              340px stat panel, and with the rail gone the column reaches that
-              256px sooner than the `lg:` breakpoint it replaces did. */}
-          <div className="grid items-start gap-4 @3xl:grid-cols-[1fr_var(--spacing-aside)]">
-            <div className="flex flex-col gap-4">
+          <RunLayout
+            initiative={
               <InitiativeList
                 run={state.run}
                 combatants={state.combatants}
                 hpOf={controller.hpOf}
                 selectedId={selected?.id}
                 disabled={frozen}
-                onSelect={(combatant) =>
-                  setSelectedId((current) => (current === combatant.id ? undefined : combatant.id))
-                }
-                onDamage={(combatant, amount) => void damage(combatant, amount)}
+                onSelect={(combatant) => setSelectedId(combatant.id)}
                 onAdd={() => setAdding(true)}
                 onRoll={() => void rollInitiative()}
               />
-              <RunBoardBand path={path} />
-            </div>
-
-            {/* The sheet leads at its full height; the cards under it are
-                secondary and are reached by scrolling the window, like any
-                other page. Nothing here is a scroller of its own. */}
-            <div className="flex flex-col gap-4">
+            }
+            map={
+              hasBoard(boardResource) ? (
+                <RunBoardCard resource={boardResource} reload={reloadBoard} />
+              ) : null
+            }
+            card={
               <CombatantPanel
                 combatant={selected}
                 hp={selected === undefined ? 0 : controller.hpOf(selected)}
@@ -927,30 +979,45 @@ export function RunScreen() {
                 active={selected !== undefined && selected.id === state.run.activeCombatantId}
                 following={selectedId === undefined}
                 disabled={frozen || share.busy}
+                conditionsBusy={conditions.busy}
                 onTheirTurn={() => selected !== undefined && void setActive(selected)}
                 onEdit={() => setEditing(selected)}
                 onFollow={() => setSelectedId(undefined)}
+                onDamage={(amount) => selected !== undefined && void damage(selected, amount)}
+                onConditions={(next) =>
+                  selected !== undefined && void setConditions(selected, next)
+                }
+                onRoll={dice.roll}
               />
-              <HobDirectUpdates
-                updates={state.directUpdates}
-                busy={direct.busy}
-                onUndo={(update) => void undoDirectUpdate(update)}
-              />
-              {!over && <ShareNpcCard path={path} />}
-              {!over && (
-                <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />
-              )}
-              {!over && (
-                <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
-              )}
-              <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
-              <SessionLog
-                events={log}
-                combatants={state.combatants}
-                status={over ? "stopped" : connection.status}
-              />
-            </div>
-          </div>
+            }
+            rest={
+              <>
+                <DmDiceCard dice={dice} />
+                <HobSpendsCard
+                  allowed={state.run.allowHobDirectWrites}
+                  over={over}
+                  updates={state.directUpdates}
+                  switchBusy={direct.busy}
+                  busy={direct.busy}
+                  onAllow={(allowed) => void setHobDirectWrites(allowed)}
+                  onUndo={(update) => void undoDirectUpdate(update)}
+                />
+                {!over && <ShareNpcCard path={path} />}
+                {!over && (
+                  <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />
+                )}
+                {!over && (
+                  <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />
+                )}
+                <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
+                <SessionLog
+                  events={log}
+                  combatants={state.combatants}
+                  status={over ? "stopped" : connection.status}
+                />
+              </>
+            }
+          />
         </div>
       )}
 

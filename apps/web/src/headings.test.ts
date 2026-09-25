@@ -23,6 +23,7 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   "characters/AbilityFields.tsx": 1,
   "characters/SheetDocument.tsx": 2,
   "characters/SheetParts.tsx": 3,
+  "run/DmDice.tsx": 1,
   "run/RunScreen.tsx": 1,
   // A verdict: the encounter builder's difficulty band, the drawing's big word
   // over the meter, a reading of the roster rather than a section's name.

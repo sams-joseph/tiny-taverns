@@ -37,6 +37,10 @@ export function TopBar(props: TopBarProps) {
 interface TopBarProps {
   readonly title: string;
   readonly subtitle?: string;
+  /** A state word beside the title (`PageHeader`'s `badge`). */
+  readonly badge?: ReactNode;
+  /** The runner's card-framed header (`PageHeader`'s `framed`); content placement only. */
+  readonly framed?: boolean;
   /** A tab strip, on its own row below the title — never beside it. */
   readonly tabs?: ReactNode;
   /** The screen's verbs; a `BackLink` first when the screen has a parent. */
@@ -46,6 +50,8 @@ interface TopBarProps {
 function ScreenHeader({
   title,
   subtitle,
+  badge,
+  framed,
   tabs,
   children,
   placement,
@@ -55,6 +61,8 @@ function ScreenHeader({
       placement={placement}
       title={title}
       {...(subtitle !== undefined && { subtitle })}
+      {...(badge !== undefined && { badge })}
+      framed={framed === true && placement === "content"}
       {...(tabs !== undefined && { tabs })}
       actions={
         <div className="flex min-w-0 flex-wrap items-center gap-2.5 empty:hidden @4xl/app:shrink-0 @4xl/app:flex-nowrap">

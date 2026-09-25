@@ -63,12 +63,11 @@ const serverRows = (combatants: ReadonlyArray<unknown>) => {
 const countOf = (method: string, suffix: string) =>
   server.calls.filter((call) => call.method === method && call.pathname.endsWith(suffix)).length;
 
+/** Select the row, then type the hit into the selected card — the redesign's one place for it. */
 const damage = async (name: string, amount: string) => {
-  const row = rowFor(name);
-  await userEvent.type(
-    within(row).getByLabelText(`Hit points to apply to ${name}`),
-    `${amount}{Enter}`,
-  );
+  await userEvent.click(rowFor(name));
+  const card = within(screen.getByRole("region", { name: "Selected combatant" }));
+  await userEvent.type(card.getByLabelText(`Hit points to apply to ${name}`), `${amount}{Enter}`);
 };
 
 /** The fight, loaded and listening. */
@@ -109,7 +108,7 @@ describe("what is optimistic, and what is not", () => {
   it("does not move the turn marker until the server has moved it", async () => {
     const release = server.hold("/next-turn");
     await openFight();
-    await screen.findByText(/Round 1 · Brannoc is up/);
+    await screen.findByText("Brannoc is up · Goblin Boss next");
 
     await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
     await screen.findByRole("button", { name: "Advancing…" });
@@ -117,10 +116,10 @@ describe("what is optimistic, and what is not", () => {
     // Whose turn it is gets read aloud. Guessing the order here would be a
     // second implementation of what `nextTurn` walks, and being wrong means
     // saying the wrong name at the table.
-    expect(screen.getByText(/Round 1 · Brannoc is up/)).toBeInTheDocument();
+    expect(screen.getByText("Brannoc is up · Goblin Boss next")).toBeInTheDocument();
 
     release();
-    await screen.findByText(/Round 1 · Goblin Boss is up/);
+    await screen.findByText("Goblin Boss is up · Brannoc next");
   });
 
   it("takes the run the write answered with, without re-reading the fight", async () => {
@@ -128,7 +127,7 @@ describe("what is optimistic, and what is not", () => {
     const before = countOf("GET", `/runs/${goblinBoss.encounterRunId}`);
 
     await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
-    await screen.findByText(/Round 1 · Goblin Boss is up/);
+    await screen.findByText("Goblin Boss is up · Brannoc next");
 
     // With the stream down this is the only thing that keeps the screen right,
     // which is why the answer is used rather than left to the doorbell.
