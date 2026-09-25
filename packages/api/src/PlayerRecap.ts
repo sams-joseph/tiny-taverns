@@ -96,13 +96,13 @@ export type PlayerCombatant = typeof PlayerCombatant.Type;
 /**
  * One fight of the night, to a player.
  *
- * `run` is the whole `EncounterRun`, unchanged, and that is a scope decision
- * rather than an oversight: the settled projection covers the combatant, and
- * nothing on a run is a number the DM was keeping — it is the fight's name, the
- * round it reached and how it ended, all of which a player who was there
- * already lived through. A run they may not see is refused by the predicate, as
- * it always was. If the player fight view later wants a narrower run, that is
- * that screen's decision to take deliberately.
+ * `run` is an `EncounterRun`, and nothing on it is a number the DM was keeping:
+ * the round it reached and how it ended are things a player who was there
+ * already lived through. One thing on it is the encounter's rather than the
+ * fight's — which encounter it was — so `encounterId` is `null` and
+ * `encounterName` is "A fight" unless this player may read that encounter
+ * (Shared and Ready). The server selects it that way (`runColumns`); a run they
+ * may not see at all is refused by the predicate, as it always was.
  */
 export const PlayerRecapFight = Schema.Struct({
   run: EncounterRun,

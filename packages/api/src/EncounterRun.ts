@@ -35,6 +35,9 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    * `on delete set null`, not cascade: the run is a record of a night that
    * happened, and deleting a reusable template a month later should not erase
    * it. `encounterName` below is what keeps the run legible afterwards.
+   *
+   * Also `null` to a player who may not read that encounter (Shared and Ready),
+   * who is told the fight and not which encounter it was.
    */
   encounterId: Schema.NullOr(EncounterId),
   /**
@@ -44,6 +47,10 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    * it answers a different question. `encounter.name` is what the template is
    * called *now*; this is what the fight was called *that night*. Renaming a
    * template must not rewrite history, and deleting one must not blank it.
+   *
+   * A player who may not read the encounter — not Shared, not Ready, or since
+   * deleted — is told "A fight" instead: sharing a fight shares the fight, not
+   * the name of an encounter the DM kept to themselves.
    */
   encounterName: Schema.String,
   round: Schema.Int,

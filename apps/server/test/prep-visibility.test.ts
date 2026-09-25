@@ -71,7 +71,11 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const sharedEncounter = yield* as(
-    encounters.create(campaign.id, { name: "The ferryman's price", visibility: "shared" }),
+    encounters.create(campaign.id, {
+      name: "The ferryman's price",
+      visibility: "shared",
+      ready: true,
+    }),
   );
 
   const session = yield* as(sessions.create(campaign.id, { number: 12, title: "The ford" }));
@@ -101,7 +105,11 @@ const makeFixture = Effect.gen(function* () {
 
   const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
   const encounterElsewhere = yield* as(
-    encounters.create(otherTable.id, { name: "Whatever is in the crate", visibility: "shared" }),
+    encounters.create(otherTable.id, {
+      name: "Whatever is in the crate",
+      visibility: "shared",
+      ready: true,
+    }),
   );
   const sessionElsewhere = yield* as(
     sessions.create(otherTable.id, { number: 1, visibility: "shared" }),

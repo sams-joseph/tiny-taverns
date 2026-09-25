@@ -649,6 +649,7 @@ describe("an encounter's roster", () => {
           encounters.create(fixture.campaign.id, {
             name: "Half of it is hidden",
             visibility: "shared",
+            ready: true,
           }),
           CurrentActor,
           fixture.dm,

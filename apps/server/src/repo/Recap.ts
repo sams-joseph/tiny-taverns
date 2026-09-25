@@ -18,7 +18,7 @@ import { BEATS, type BeatRow, toBeat } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
 import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { type EncounterRunRow, toEncounterRun } from "./EncounterRuns.js";
+import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { type NoteRow, toNote } from "./Notes.js";
 import {
@@ -107,11 +107,12 @@ interface Night {
  * `hpMax` and `ac` — measured, in shipped code. `repo/CampaignCreatorActor.ts` predicted it
  * would be the next candidate and left it alone; this is that change.
  *
- * **What is deliberately not narrowed**: `run`, and the four non-combat
- * sources. A run's name, round and ending are things a player who was there
- * lived through, and no decision governs narrowing them — inventing one here
- * would settle the player fight view's shape by accident, which is the trap the
- * gate was left open for in the first place.
+ * **A run is narrowed in one place only: which encounter it was.** Its round
+ * and ending are things a player who was there lived through. Its encounter's
+ * id and name are not — they are the encounter's, and a player who may not read
+ * the encounter (Shared and Ready) is told "A fight" (`runColumns`, the
+ * captain's decision of 2026-09-25). The four non-combat sources are not
+ * narrowed past their rows.
  *
  * ### Why it is a repository and not a client composition
  *
@@ -224,9 +225,11 @@ export class Recap extends Context.Service<
             return yield* new NotFound({ resource: "session", id: sessionId });
           }
 
-          // Oldest first: a recap is read forwards through the evening.
+          // Oldest first: a recap is read forwards through the evening. The
+          // columns are `runColumns`, so a fight whose encounter this reader
+          // may not read is not named after it.
           const runRows = yield* sql<EncounterRunRow>`
-            select encounter_run.* from encounter_run
+            select ${runColumns(sql, campaignId, actor)} from encounter_run
             where ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
             order by encounter_run.started_at asc, encounter_run.id asc
           `;

@@ -665,6 +665,7 @@ describe("the map is the creator's alone", () => {
       name: "Shown to the table",
       setting: "SETTING-A-SECRET-DOOR in the east wall",
       visibility: "shared",
+      ready: true,
     });
     await settled();
     player = await run(admittedTo(table, ilse.actor, "Ilse"));

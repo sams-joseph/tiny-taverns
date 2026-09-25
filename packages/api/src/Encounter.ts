@@ -153,6 +153,10 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
    * a `carried` one is, with its reason, because it was played that night.
    */
   lastPlayed: Schema.NullOr(EncounterPlayed),
+  /**
+   * The DM's Share switch. A player reads the encounter only when it is
+   * `shared` **and** its prep is Ready: a shared draft is still the DM's.
+   */
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
@@ -191,7 +195,8 @@ export class EncounterPrep extends Schema.Class<EncounterPrep>("EncounterPrep")(
   /**
    * The DM's own word that the encounter is ready to run — the list's
    * Ready/Draft. Only a person sets it: a new encounter is a draft, and so is
-   * one Hob proposed and the DM accepted, until the DM says otherwise.
+   * one Hob proposed and the DM accepted, until the DM says otherwise. A draft
+   * reaches no player, whatever its `visibility`.
    */
   ready: Schema.Boolean,
   tactics: Schema.Array(Schema.String),

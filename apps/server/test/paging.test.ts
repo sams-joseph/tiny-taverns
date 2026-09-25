@@ -128,7 +128,15 @@ const makeFixture = Effect.gen(function* () {
       }),
     );
     yield* as(notes.create(campaign.id, { title: `Note ${String(index)}`, visibility }));
-    yield* as(encounters.create(campaign.id, { name: `Encounter ${String(index)}`, visibility }));
+    // Ready, so the encounter's own Share switch is the whole of the player's
+    // answer here — a shared draft is still the DM's.
+    yield* as(
+      encounters.create(campaign.id, {
+        name: `Encounter ${String(index)}`,
+        visibility,
+        ready: true,
+      }),
+    );
     yield* as(beats.create(campaign.id, night.id, { body: `Beat ${String(index)}`, visibility }));
   }
 

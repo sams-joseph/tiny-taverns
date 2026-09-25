@@ -126,12 +126,19 @@ describe("writing a new encounter", () => {
     await userEvent.type(await openNew(), "Open to the table");
     expect(screen.getByText("Only you can see this encounter.")).toBeInTheDocument();
 
+    // A shared draft is still the DM's: the server shows players only an
+    // encounter that is shared and Ready, and the switch says so.
     await userEvent.click(screen.getByRole("switch", { name: "Players can see this" }));
+    expect(screen.getByText(/once you mark it Ready to run/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Ready to run" }));
     expect(screen.getByText(/Your players can see this encounter/)).toBeInTheDocument();
     await save();
 
     await waitFor(() =>
-      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({ visibility: "shared" }),
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        visibility: "shared",
+        ready: true,
+      }),
     );
   });
 
