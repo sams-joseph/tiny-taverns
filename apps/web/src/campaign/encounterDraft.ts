@@ -8,6 +8,8 @@ import {
   type EncounterCreate,
   type EncounterCreature,
   type EncounterCreatureId,
+  type DifficultyParty,
+  type DifficultyThresholds,
   type EncounterDifficulty,
   encounterDifficulty,
   type EncounterId,
@@ -24,6 +26,8 @@ import {
   type Note,
   type NoteCreate,
   type NoteId,
+  partyThresholds,
+  type UnratedReason,
   type Visibility,
 } from "@taverns/api";
 import { DateTime } from "effect";
@@ -676,15 +680,36 @@ export const crRange = (pill: CrPill): { readonly crMin?: number; readonly crMax
 export interface DraftDifficulty {
   readonly difficulty: EncounterDifficulty;
   /**
-   * `"450 more adjusted XP tips this into medium."`, or what past Deadly
-   * means; nothing when the draft is unrated.
+   * The party the band is placed against and its summed thresholds, whenever
+   * somebody seated has a level — so the tiers are there before the first
+   * creature is, and absent only when there is no party to draw them for.
    */
-  readonly hint?: string;
-  /** `"600 base XP · ×2.5 for group size · 150 xp each"`; nothing when unrated. */
-  readonly breakdown?: string;
+  readonly party?: {
+    readonly counted: DifficultyParty;
+    readonly thresholds: DifficultyThresholds;
+  };
+  /**
+   * One sentence on what the DM can do next: `"450 more adjusted XP tips this
+   * into medium."`, what past Deadly means, or why there is no band.
+   */
+  readonly hint: string;
+  /**
+   * `["600 base XP", "×2.5 for group size", "150 xp each"]`; nothing when
+   * unrated.
+   */
+  readonly breakdown?: ReadonlyArray<string>;
 }
 
 const xpWords = (xp: number): string => xp.toLocaleString("en");
+
+/** Why there is no band, and what would give it one. */
+const UNRATED_HINT: Readonly<Record<UnratedReason, string>> = {
+  "no-creatures": "No creatures to rate yet. Add them from the bestiary and the band follows.",
+  "missing-xp":
+    "A creature on the roster has no XP, so this is not rated. Its stat block gives none and the XP table does not know its CR.",
+  "no-party":
+    "Nobody seated has a level, so there is nothing to rate this against. The band appears once a player sets one.",
+};
 
 /**
  * The draft's band, by the rule the server rates a saved encounter with
@@ -700,7 +725,26 @@ export const draftDifficulty = (
     roster.map((line) => ({ count: line.count, xp: line.xp })),
     partyLevels,
   );
-  if (difficulty._tag === "unrated") return { difficulty };
+  if (difficulty._tag === "unrated") {
+    const levels = partyLevels.filter((level): level is number => level !== null);
+    return {
+      difficulty,
+      ...(levels.length === 0
+        ? {}
+        : {
+            party: {
+              counted: {
+                size: levels.length,
+                minLevel: Math.min(...levels),
+                maxLevel: Math.max(...levels),
+                unlevelled: partyLevels.length - levels.length,
+              },
+              thresholds: partyThresholds(levels),
+            },
+          }),
+      hint: UNRATED_HINT[difficulty.reason],
+    };
+  }
 
   const { adjustedXp, thresholds } = difficulty;
   const next = (
@@ -713,10 +757,15 @@ export const draftDifficulty = (
   ).find(([, threshold]) => threshold > adjustedXp);
   return {
     difficulty,
+    party: { counted: difficulty.party, thresholds },
     hint:
       next === undefined
         ? "Past deadly. Someone likely drops. Give them a way out, or cut a creature."
         : `${xpWords(next[1] - adjustedXp)} more adjusted XP tips this into ${next[0]}.`,
-    breakdown: `${xpWords(difficulty.xp)} base XP · ×${String(difficulty.multiplier)} for group size · ${xpWords(Math.floor(difficulty.xp / difficulty.party.size))} xp each`,
+    breakdown: [
+      `${xpWords(difficulty.xp)} base XP`,
+      `×${String(difficulty.multiplier)} for group size`,
+      `${xpWords(Math.floor(difficulty.xp / difficulty.party.size))} xp each`,
+    ],
   };
 };

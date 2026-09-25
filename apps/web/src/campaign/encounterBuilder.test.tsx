@@ -662,3 +662,112 @@ describe("who may write one", () => {
     expect(screen.queryByRole("button", { name: "Save encounter" })).toBeNull();
   });
 });
+
+describe("the rail", () => {
+  const creatureReads = () =>
+    server.calls.filter(
+      (call) => call.method === "GET" && call.pathname === `/campaigns/${campaignId}/creatures`,
+    );
+
+  it("narrows the bestiary by CR band on the server, weakest first", async () => {
+    await openNew();
+    await screen.findByRole("button", { name: "Add Goblin Boss" });
+    const first = new URLSearchParams(creatureReads().at(-1)!.search);
+    expect(first.get("sort")).toBe("cr");
+    expect(first.has("crMin")).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "CR 2–4" }));
+    await waitFor(() => {
+      const query = new URLSearchParams(creatureReads().at(-1)!.search);
+      expect([query.get("crMin"), query.get("crMax"), query.get("sort")]).toEqual(["2", "4", "cr"]);
+    });
+    expect(screen.getByRole("button", { name: "CR 2–4" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Any CR" })).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(screen.getByRole("button", { name: "CR 1 and under" }));
+    await waitFor(() => {
+      const query = new URLSearchParams(creatureReads().at(-1)!.search);
+      expect([query.get("crMin"), query.get("crMax")]).toEqual([null, "1"]);
+    });
+  });
+
+  it("adds a creature already on the roster as one more, and sends one line", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Two bosses"));
+    await userEvent.type(await openNew(), "Two bosses");
+    const add = await screen.findByRole("button", { name: "Add Goblin Boss" });
+    expect(screen.getByText("Humanoid · 200 xp")).toBeInTheDocument();
+
+    await userEvent.click(add);
+    await userEvent.click(add);
+    expect(
+      screen.getAllByRole("listitem").filter((row) => row.dataset.slot === "roster-line"),
+    ).toHaveLength(1);
+    expect(screen.getByLabelText("How many Goblin Boss")).toHaveTextContent("2");
+    // The bestiary row says how many are on it.
+    expect(screen.getByLabelText("2 on the roster")).toHaveTextContent("×2");
+
+    await save();
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        creatures: [{ creatureId: goblinId, count: 2 }],
+      }),
+    );
+  });
+
+  it("rates the draft as it is written, against the seated party", async () => {
+    await openNew();
+    const card = screen.getByRole("region", { name: "Difficulty" });
+    // Brannoc alone, at level 3: the party's own thresholds, before any creature.
+    expect(within(card).getByText("Unrated")).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        "No creatures to rate yet. Add them from the bestiary and the band follows.",
+      ),
+    ).toBeInTheDocument();
+    const tiers = within(card).getByRole("list", { name: "Thresholds" });
+    expect(
+      within(tiers)
+        .getAllByRole("listitem")
+        .map((tier) => tier.textContent),
+    ).toEqual(["Easy75", "Medium150", "Hard225", "Deadly400"]);
+    expect(within(card).getByText("party of 1, lvl 3")).toBeInTheDocument();
+
+    // One Goblin Boss: 200 XP, ×1.5 against a party of one.
+    await userEvent.click(await screen.findByRole("button", { name: "Add Goblin Boss" }));
+    const band = () => card.querySelector("[data-slot=difficulty-band]");
+    expect(band()).toHaveTextContent("Hard");
+    expect(within(card).getByText("300 adj. XP")).toBeInTheDocument();
+    expect(
+      within(card).getByText("100 more adjusted XP tips this into deadly."),
+    ).toBeInTheDocument();
+    expect(within(card).getByText("×1.5 for group size")).toBeInTheDocument();
+    expect(within(tiers).getByText("Hard").closest("li")).toHaveAttribute("aria-current", "true");
+
+    // The stepper moves it: two is 400 XP at ×2.
+    await userEvent.click(screen.getByRole("button", { name: "One more Goblin Boss" }));
+    expect(band()).toHaveTextContent("Deadly");
+    expect(within(card).getByText("800 adj. XP")).toBeInTheDocument();
+  });
+
+  it("says why there is no band when nobody seated has a level", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: [] });
+    await openNew();
+    await userEvent.click(await screen.findByRole("button", { name: "Add Goblin Boss" }));
+    const card = screen.getByRole("region", { name: "Difficulty" });
+    expect(within(card).getByText("Unrated")).toBeInTheDocument();
+    expect(within(card).getByText(/^Nobody seated has a level/)).toBeInTheDocument();
+    // No party, so no tiers to draw and no numbers claimed for one.
+    expect(within(card).queryByRole("list", { name: "Thresholds" })).toBeNull();
+    expect(within(card).queryByText(/adj\. XP/)).toBeNull();
+  });
+
+  it("shows a challenge the SRD's typical DCs instead of a bestiary", async () => {
+    await openNew();
+    await kind("Challenge");
+    const guide = screen.getByRole("region", { name: "Setting the DC" });
+    expect(within(guide).getByText("Nearly impossible")).toBeInTheDocument();
+    expect(within(guide).getByText("15")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Difficulty" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Bestiary" })).toBeNull();
+  });
+});

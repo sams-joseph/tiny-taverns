@@ -4,8 +4,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The encounter builder (`campaign/EncounterBuilderScreen.tsx`), at every
  * width: where the rail stands against the form, the order everything stacks
  * in when it does not fit beside it, that a roster line keeps its name
- * readable on a phone, and that the stepper's buttons are what a press lands
- * on. All of it is layout, which jsdom does not compute. The rules every
+ * readable on a phone, that the difficulty card pins under the chrome beside
+ * the form, and that the stepper's buttons are what a press lands on. All of it is layout, which jsdom does not compute. The rules every
  * screen keeps (no sideways scroll, no inner scroller, one peach) are
  * `screens.spec.ts`'s, which walks both builder routes too.
  *
@@ -83,16 +83,55 @@ for (const width of WIDTHS) {
       });
 
       await test.step("every bestiary row keeps its name readable", async () => {
-        const names = await page
-          .locator('[data-slot="picker-name"]')
-          .evaluateAll((spans) => spans.map((span) => span.getBoundingClientRect().width));
+        // The name's column, which the ×N badge shares: the name itself is as
+        // wide as its text, so what is measured is the room it has and that
+        // it is not cut short in it.
+        const names = await page.locator('[data-slot="picker-name"]').evaluateAll((spans) =>
+          spans.map((span) => ({
+            room: span.parentElement!.parentElement!.getBoundingClientRect().width,
+            clipped: span.scrollWidth > span.clientWidth + 0.5,
+          })),
+        );
         expect.soft(names.length, "bestiary rows").toBeGreaterThan(0);
-        for (const name of names)
-          expect.soft(name, "a bestiary name's width").toBeGreaterThanOrEqual(96);
+        for (const name of names) {
+          expect.soft(name.room, "a bestiary name's room").toBeGreaterThanOrEqual(96);
+          expect.soft(name.clipped, "a bestiary name is clipped").toBe(false);
+        }
         const rows = await page
           .locator('[data-slot="picker-row"]')
           .evaluateAll((items) => items.map((item) => item.scrollWidth <= item.clientWidth + 0.5));
         for (const fits of rows) expect.soft(fits, "a bestiary row fits its box").toBe(true);
+      });
+
+      await test.step("the difficulty card pins under the chrome, above the bestiary", async () => {
+        // Sticky beside the form only: stacked on a phone it would cover the
+        // roster and the bestiary it rates. Stacking and pinning are layout,
+        // which jsdom does not compute.
+        const pinned = await page.evaluate(() => {
+          const card = document.querySelector<HTMLElement>('[data-slot="builder-difficulty"]')!;
+          const chrome = document.querySelector(".sticky.top-0")!;
+          const scroller = document.scrollingElement!;
+          window.scrollTo(0, Math.min(400, scroller.scrollHeight - scroller.clientHeight));
+          const r = card.getBoundingClientRect();
+          const probe = document.elementFromPoint(r.left + r.width / 2, r.bottom - 4);
+          const result = {
+            position: getComputedStyle(card).position,
+            scrolled: window.scrollY,
+            top: r.top,
+            chromeBottom: chrome.getBoundingClientRect().bottom,
+            onTop: probe !== null && card.contains(probe),
+          };
+          window.scrollTo(0, 0);
+          return result;
+        });
+        if (width >= TWO_COLUMNS_FROM) {
+          expect.soft(pinned.position, "difficulty card position").toBe("sticky");
+          expect.soft(pinned.scrolled, "window scrolled").toBeGreaterThanOrEqual(200);
+          expect.soft(pinned.top, "card top after the scroll").toBeCloseTo(pinned.chromeBottom, 0);
+          expect.soft(pinned.onTop, "elementFromPoint on the card lands in it").toBe(true);
+        } else {
+          expect.soft(pinned.position, "difficulty card position").not.toBe("sticky");
+        }
       });
 
       await test.step("a press on the stepper lands on it, and counts", async () => {
