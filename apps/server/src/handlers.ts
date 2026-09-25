@@ -41,6 +41,7 @@ import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
 import { Feats } from "./repo/Feats.js";
 import { HobDirectWrites } from "./repo/HobDirectWrites.js";
+import { RunScenes } from "./repo/RunScenes.js";
 import { HobThreads } from "./repo/HobThreads.js";
 import { Invites } from "./repo/Invites.js";
 import { MagicItems } from "./repo/MagicItems.js";
@@ -1368,6 +1369,7 @@ const RunsLive = HttpApiBuilder.group(
     const runs = yield* EncounterRuns;
     const direct = yield* HobDirectWrites;
     const maps = yield* BattleMaps;
+    const scenes = yield* RunScenes;
     const dm = yield* asDmOf;
     return handlers
       .handle("list", ({ params }) =>
@@ -1388,8 +1390,25 @@ const RunsLive = HttpApiBuilder.group(
       .handle("nextTurn", ({ params, payload }) =>
         dm(params.campaignId, (as) => runs.nextTurn(as, params.sessionId, params.runId, payload)),
       )
+      .handle("escalate", ({ params }) =>
+        dm(params.campaignId, (as) => runs.escalate(as, params.sessionId, params.runId)),
+      )
       .handle("end", ({ params }) =>
         dm(params.campaignId, (as) => runs.end(as, params.sessionId, params.runId)),
+      )
+      .handle("scene", ({ params }) =>
+        dm(params.campaignId, (as) => scenes.read(as, params.sessionId, params.runId)),
+      )
+      .handle("updateScene", ({ params, payload }) =>
+        dm(params.campaignId, (as) => scenes.update(as, params.sessionId, params.runId, payload)),
+      )
+      .handle("logCheck", ({ params, payload }) =>
+        dm(params.campaignId, (as) => scenes.logCheck(as, params.sessionId, params.runId, payload)),
+      )
+      .handle("removeCheck", ({ params }) =>
+        dm(params.campaignId, (as) =>
+          scenes.removeCheck(as, params.sessionId, params.runId, params.checkId),
+        ),
       )
       .handle("board", ({ params }) =>
         dm(params.campaignId, (as) => maps.forRun(as, params.sessionId, params.runId)),

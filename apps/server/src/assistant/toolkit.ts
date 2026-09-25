@@ -22,6 +22,7 @@ import {
   CurrentActor,
   type EncounterChallenge,
   ENCOUNTER_HAZARD_TEXT_MAX,
+  ENCOUNTER_OUTCOME_MAX,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_SKILL_MAX,
   ENCOUNTER_SKILLS_MAX,
@@ -899,8 +900,9 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "looks like from above, with no creatures in it; the encounter's battle map " +
     "is drawn from it. Give tactics — a few short lines on how to run it — and " +
     "treasure when there is any. A challenge needs dc, successes and " +
-    "failures; a hazard needs saveAbility and dc, and may give onFail and " +
-    "duration; either may name skills. Only a suggestion; nothing is saved " +
+    "failures, and may say onSuccess and onFailure (what happens when the party " +
+    "makes it, and when it goes wrong); a hazard needs saveAbility and dc, and " +
+    "may give onFail and duration; either may name skills. Only a suggestion; nothing is saved " +
     "unless the DM accepts it.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
@@ -934,6 +936,8 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     dc: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 }))),
     successes: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }))),
     failures: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }))),
+    onSuccess: optionalText(ENCOUNTER_OUTCOME_MAX),
+    onFailure: optionalText(ENCOUNTER_OUTCOME_MAX),
     saveAbility: optional(AbilityKey),
     onFail: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
     duration: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
@@ -953,6 +957,8 @@ interface ChallengeParameters {
   readonly dc?: number | null | undefined;
   readonly successes?: number | null | undefined;
   readonly failures?: number | null | undefined;
+  readonly onSuccess?: string | null | undefined;
+  readonly onFailure?: string | null | undefined;
   readonly saveAbility?: AbilityKey | null | undefined;
   readonly onFail?: string | null | undefined;
   readonly duration?: string | null | undefined;
@@ -986,10 +992,12 @@ const challengeFrom = (
   const dc = absent(given.dc);
   const successes = absent(given.successes);
   const failures = absent(given.failures);
+  const onSuccess = blank(given.onSuccess);
+  const onFailure = blank(given.onFailure);
   const saveAbility = absent(given.saveAbility);
   const onFail = blank(given.onFail);
   const duration = blank(given.duration);
-  const said = [dc, successes, failures, saveAbility, onFail, duration].some(
+  const said = [dc, successes, failures, onSuccess, onFailure, saveAbility, onFail, duration].some(
     (value) => value !== undefined,
   );
   if (!said && skills.length === 0) return { challenge: undefined };
@@ -1005,22 +1013,34 @@ const challengeFrom = (
       ) {
         return {
           refused:
-            "a challenge takes dc, successes and failures, and may name skills; " +
-            "saveAbility, onFail and duration are a hazard's",
+            "a challenge takes dc, successes and failures, and may give onSuccess, " +
+            "onFailure and skills; saveAbility, onFail and duration are a hazard's",
         };
       }
-      return { challenge: { kind, dc, successes, failures, skills } };
+      return {
+        challenge: {
+          kind,
+          dc,
+          successes,
+          failures,
+          skills,
+          ...(onSuccess === undefined ? {} : { onSuccess }),
+          ...(onFailure === undefined ? {} : { onFailure }),
+        },
+      };
     case "hazard":
       if (
         successes !== undefined ||
         failures !== undefined ||
+        onSuccess !== undefined ||
+        onFailure !== undefined ||
         saveAbility === undefined ||
         dc === undefined
       ) {
         return {
           refused:
             "a hazard takes saveAbility and dc, and may give onFail, duration and skills; " +
-            "successes and failures are a challenge's",
+            "successes, failures, onSuccess and onFailure are a challenge's",
         };
       }
       return {
@@ -1036,7 +1056,8 @@ const challengeFrom = (
       return {
         refused:
           `a ${encounterKindLabel(kind).toLowerCase()} encounter has no challenge; dc, ` +
-          "successes, failures, saveAbility, onFail, duration and skills are for a " +
+          "successes, failures, onSuccess, onFailure, saveAbility, onFail, duration and " +
+          "skills are for a " +
           "challenge or a hazard",
       };
   }

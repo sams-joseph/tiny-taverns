@@ -202,6 +202,53 @@ describe("the challenge", () => {
     });
   });
 
+  it("sends what the runner says at the end, trimmed, and leaves a blank one out", () => {
+    const typed = blank({
+      kind: "challenge",
+      skillChallenge: {
+        ...blank().skillChallenge,
+        dc: "14",
+        successes: "3",
+        failures: "2",
+        onSuccess: "  They find the buried cache  ",
+        onFailure: "   ",
+      },
+    });
+    const challenge = challengeOf(typed).challenge;
+    expect(challenge).toMatchObject({ onSuccess: "They find the buried cache" });
+    expect(challenge).not.toHaveProperty("onFailure");
+
+    // An outcome line with no numbers is a challenge being set out.
+    const unnumbered = blank({
+      kind: "challenge",
+      skillChallenge: { ...blank().skillChallenge, onFailure: "The well is lost" },
+    });
+    expect(challengeOf(unnumbered).problem).toBe(
+      "Give the DC, the successes and the failures too.",
+    );
+  });
+
+  it("opens a stored challenge's outcome lines for editing", () => {
+    const draft = draftFrom({
+      ...savedAmbush,
+      prep: {
+        ...savedAmbush.prep,
+        challenge: {
+          kind: "challenge",
+          dc: 14,
+          successes: 3,
+          failures: 2,
+          skills: [],
+          onSuccess: "They find the buried cache",
+        },
+      },
+    });
+    expect(draft.skillChallenge).toMatchObject({
+      onSuccess: "They find the buried cache",
+      onFailure: "",
+    });
+  });
+
   it("keeps a hazard's save out of a skill challenge", () => {
     const hazard = blank({
       kind: "hazard",

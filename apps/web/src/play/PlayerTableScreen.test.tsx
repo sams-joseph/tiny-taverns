@@ -262,6 +262,28 @@ describe("PlayerTableScreen", () => {
     });
   });
 
+  it("keeps a seated player's rolls through a scene that has no initiative order", async () => {
+    // A conversation, a skill challenge or a hazard answers no order and
+    // nobody up; the seat is what says this player is in it.
+    server.routes.set(...playing(campaignId, { order: [], upNext: null }));
+    server.routes.set(`POST /campaigns/${campaignId}/rolls`, {
+      status: 200,
+      body: { ...roll, requestId: "sent-in-a-scene" },
+    });
+
+    await renderTable();
+
+    await screen.findByText("Your rolls");
+    expect(screen.queryByText("Your turn")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Halberd/ }));
+    await waitFor(() => {
+      const call = server.calls.find(
+        (entry) => entry.method === "POST" && entry.pathname === `/campaigns/${campaignId}/rolls`,
+      );
+      expect(JSON.parse(call!.body)).toMatchObject({ characterId: brannocId });
+    });
+  });
+
   it("re-reads the narrow table when a contentless stream tick arrives", async () => {
     server.routes.set(...playing(campaignId, {}));
     server.routes.set(tableEventsPath, {

@@ -19,6 +19,7 @@ import { portraitSigner } from "./Characters.js";
 import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
+import { type CheckRow, toCheck } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { type NoteRow, toNote } from "./Notes.js";
 import {
@@ -344,13 +345,36 @@ export class Recap extends Context.Service<
                       ${initiativeOrder(sql)}
                     `;
 
+              // The checks and saves logged in tonight's scenes — the
+              // creator's alone, so only this projection reads them. The run
+              // is joined back through the containment predicate rather than
+              // trusting the ids, as the combatants' query does.
+              const checks =
+                state.runIds.length === 0
+                  ? []
+                  : yield* sql<CheckRow>`
+                      select encounter_run_check.* from encounter_run_check
+                      join encounter_run on encounter_run.id = encounter_run_check.encounter_run_id
+                      where ${sql.in("encounter_run_check.encounter_run_id", state.runIds)}
+                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
+                      order by encounter_run_check.created_at asc, encounter_run_check.id asc
+                    `;
+
               return new SessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId) =>
                   rows
                     .filter((combatant) => combatant.encounter_run_id === runId)
                     .map((row) => toCombatant(row, sign)),
-                ).map((fight) => new RecapFight(fight)),
+                ).map(
+                  (fight) =>
+                    new RecapFight({
+                      ...fight,
+                      checks: checks
+                        .filter((check) => check.encounter_run_id === fight.run.id)
+                        .map(toCheck),
+                    }),
+                ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
                 notes: state.notes.map(toNote),

@@ -124,6 +124,10 @@ export interface SkillChallengeDraft {
   readonly skills: ReadonlyArray<string>;
   /** The chips offered: the standard list, then any stored skill it lacks. */
   readonly offered: ReadonlyArray<string>;
+  /** What the runner says when the party makes it; blank says nothing. */
+  readonly onSuccess: string;
+  /** …and when it goes wrong. */
+  readonly onFailure: string;
 }
 
 export interface HazardDraft {
@@ -239,8 +243,18 @@ const skillChallengeDraft = (challenge: EncounterChallenge | null): SkillChallen
         failures: String(challenge.failures),
         skills: challenge.skills,
         offered: skillOptions(challenge.skills),
+        onSuccess: challenge.onSuccess ?? "",
+        onFailure: challenge.onFailure ?? "",
       }
-    : { dc: "", successes: "", failures: "", skills: [], offered: skillOptions([]) };
+    : {
+        dc: "",
+        successes: "",
+        failures: "",
+        skills: [],
+        offered: skillOptions([]),
+        onSuccess: "",
+        onFailure: "",
+      };
 
 const hazardDraft = (challenge: EncounterChallenge | null): HazardDraft =>
   challenge?.kind === "hazard"
@@ -425,8 +439,10 @@ export const challengeOf = (draft: EncounterDraft): ChallengeOf => {
   switch (draft.kind) {
     case "challenge": {
       const skill = draft.skillChallenge;
+      const onSuccess = skill.onSuccess.trim();
+      const onFailure = skill.onFailure.trim();
       if ([skill.dc, skill.successes, skill.failures].every((box) => box.trim() === "")) {
-        return skill.skills.length === 0
+        return skill.skills.length === 0 && onSuccess === "" && onFailure === ""
           ? { challenge: null }
           : { challenge: null, problem: "Give the DC, the successes and the failures too." };
       }
@@ -441,7 +457,15 @@ export const challengeOf = (draft: EncounterDraft): ChallengeOf => {
       }
       const problem = skillsProblem(skill.skills);
       return {
-        challenge: { kind: "challenge", dc, successes, failures, skills: skill.skills },
+        challenge: {
+          kind: "challenge",
+          dc,
+          successes,
+          failures,
+          skills: skill.skills,
+          ...(onSuccess === "" ? {} : { onSuccess }),
+          ...(onFailure === "" ? {} : { onFailure }),
+        },
         ...(problem === undefined ? {} : { problem }),
       };
     }

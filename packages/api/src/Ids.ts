@@ -132,6 +132,10 @@ export type EncounterCreatureId = typeof EncounterCreatureId.Type;
 export const EncounterRunId = id("EncounterRunId");
 export type EncounterRunId = typeof EncounterRunId.Type;
 
+/** One check or saving throw the DM logged in a running scene. */
+export const EncounterRunCheckId = id("EncounterRunCheckId");
+export type EncounterRunCheckId = typeof EncounterRunCheckId.Type;
+
 /**
  * One creature *instance* in one fight. `data.js:18-19` has two `Goblin Archer`
  * rows with different ids and different hit points — this is what tells them

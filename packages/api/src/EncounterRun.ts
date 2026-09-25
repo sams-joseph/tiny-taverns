@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { EncounterKind } from "./EncounterKind.js";
 import { CombatantId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -53,6 +54,17 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    * the name of an encounter the DM kept to themselves.
    */
   encounterName: Schema.String,
+  /**
+   * How this run is played: its encounter's kind, snapshotted when it started,
+   * so changing the template's kind never changes a scene already on the table.
+   * A fight takes turns in initiative; a conversation, a skill challenge and a
+   * hazard log checks and saves instead (`EncounterRunScene`). A conversation
+   * that turns ugly becomes a fight (`escalate`), and only that way.
+   *
+   * Not the DM's secret: a player who may read the encounter already reads its
+   * kind, and one who may not is told the kind of scene in its neutral name.
+   */
+  mode: EncounterKind,
   round: Schema.Int,
   /**
    * Whose turn it is, as a pointer rather than an index into initiative order.

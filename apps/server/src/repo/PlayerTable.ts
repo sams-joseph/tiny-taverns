@@ -230,18 +230,23 @@ export class PlayerTable extends Context.Service<
                 where combatant.encounter_run_id = ${run.id}
                   and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
                   and (combatant.kind = 'npc' or seated.id is not null)
+                  -- A conversation, a skill challenge or a hazard has no
+                  -- initiative order to show: only the asker's own rows are
+                  -- read, for their seats, and nobody else's at all.
+                  and (${run.mode} = 'combat' or own_seated.id is not null)
                 ${initiativeOrder(sql)}
               `;
-              const order = rows.flatMap((row) => {
+              const present = rows.flatMap((row) => {
                 const combatant = toOrder(row);
                 return combatant === undefined ? [] : [combatant];
               });
+              const order = run.mode === "combat" ? present : [];
               const upNextRow = order.find((row) => row.combatantId === run.active_combatant_id);
               const upNext: PlayerLiveTurn | null =
                 upNextRow === undefined
                   ? null
                   : { combatantId: upNextRow.combatantId, displayName: upNextRow.displayName };
-              const seats: ReadonlyArray<PlayerLiveSeat> = order.flatMap((row) =>
+              const seats: ReadonlyArray<PlayerLiveSeat> = present.flatMap((row) =>
                 row.kind === "you"
                   ? [
                       {

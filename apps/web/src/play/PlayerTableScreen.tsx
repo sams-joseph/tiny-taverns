@@ -266,19 +266,20 @@ function SessionNpcCard({
 }
 
 function RollControls({
-  character,
+  seated,
   actions,
   rollMode,
   onMode,
   onRoll,
 }: {
-  readonly character: PlayerLiveCombatantYou | undefined;
+  /** Whether this account holds a seat in what is on the table. */
+  readonly seated: boolean;
   readonly actions: ReadonlyArray<SheetAction>;
   readonly rollMode: RollMode;
   readonly onMode: (mode: RollMode) => void;
   readonly onRoll: (roll: LocalRoll | undefined) => void;
 }) {
-  if (character === undefined) {
+  if (!seated) {
     return (
       <Card>
         <CardHeader>
@@ -346,7 +347,10 @@ export function PlayerTableScreen() {
   const table = view?.table;
   const fight = table?.fight ?? null;
   const you = fight?.order.find((row): row is PlayerLiveCombatantYou => row.kind === "you");
-  const owned = view?.characters.find((row) => row.character.id === you?.characterId);
+  // The seat, not the order's "you" row: a conversation, a skill challenge or
+  // a hazard has no initiative order, and a player still rolls in one.
+  const seat = fight?.seats[0];
+  const owned = view?.characters.find((row) => row.character.id === seat?.characterId);
   const actions = owned === undefined ? [] : actionRows(owned.character.sheet);
   const yourTurn = you !== undefined && fight?.upNext?.combatantId === you.combatantId;
   const { failure, submit } = useMutation();
@@ -371,7 +375,7 @@ export function PlayerTableScreen() {
   });
 
   const recordRoll = (roll: LocalRoll | undefined) => {
-    if (roll === undefined || table === null || table === undefined || you === undefined) return;
+    if (roll === undefined || table === null || table === undefined || seat === undefined) return;
     const requestId = newRollRequestId();
     const pending: PendingRoll = {
       ...roll,
@@ -385,7 +389,7 @@ export function PlayerTableScreen() {
         client.rolls.create({
           params: { campaignId },
           payload: {
-            characterId: you.characterId,
+            characterId: seat.characterId,
             label: roll.label,
             notation: roll.notation,
             dice: roll.dice,
@@ -502,7 +506,7 @@ export function PlayerTableScreen() {
                   refreshToken={tableTicks}
                 />
                 <RollControls
-                  character={you}
+                  seated={seat !== undefined}
                   actions={actions}
                   rollMode={rollMode}
                   onMode={setRollMode}

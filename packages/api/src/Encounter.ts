@@ -2,10 +2,13 @@ import { Schema } from "effect";
 import { EncounterSetting } from "./BattleMap.js";
 import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
+import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
 import { CampaignId, CreatureId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { AbilityKey } from "./Ruleset.js";
+
+export * from "./EncounterKind.js";
 
 /**
  * A tag on an encounter — `"Marsh"`, `"Night"`, `"Boss"` (`data.js:10-12`).
@@ -27,29 +30,6 @@ export const EncounterPlayed = Schema.Struct({
 });
 export type EncounterPlayed = typeof EncounterPlayed.Type;
 
-/**
- * What sort of scene the encounter is: a fight, a conversation, a skill
- * challenge or a hazard. Every encounter has one; an encounter made before
- * there was a choice is a fight, which is all an encounter could hold then.
- *
- * On the `encounter` row itself, so a player reading a shared encounter
- * (`PlayerEncounter`) sees it: it says what kind of scene is coming, which the
- * encounter's name already does.
- */
-export const EncounterKind = Schema.Literals(["combat", "social", "challenge", "hazard"]);
-export type EncounterKind = typeof EncounterKind.Type;
-
-/** The kinds in the order a picker lists them, and the word each is said as. */
-export const ENCOUNTER_KINDS: ReadonlyArray<readonly [EncounterKind, string]> = [
-  ["combat", "Combat"],
-  ["social", "Social"],
-  ["challenge", "Challenge"],
-  ["hazard", "Hazard"],
-];
-
-export const encounterKindLabel = (kind: EncounterKind): string =>
-  ENCOUNTER_KINDS.find(([value]) => value === kind)?.[1] ?? kind;
-
 /** The bounds the form, the schema, the tool and the table all state. */
 export const ENCOUNTER_TACTICS_MAX = 12;
 export const ENCOUNTER_TACTIC_MAX = 300;
@@ -57,6 +37,7 @@ export const ENCOUNTER_TREASURE_MAX = 500;
 export const ENCOUNTER_SKILLS_MAX = 8;
 export const ENCOUNTER_SKILL_MAX = 40;
 export const ENCOUNTER_HAZARD_TEXT_MAX = 120;
+export const ENCOUNTER_OUTCOME_MAX = 300;
 export const ENCOUNTER_ROSTER_MAX = 50;
 
 /** A check's DC or a save's, as the SRD sets them. */
@@ -79,6 +60,13 @@ export const EncounterSkillChallenge = Schema.Struct({
   successes: Tally,
   failures: Tally,
   skills: ChallengeSkills,
+  /**
+   * What the runner says when the party makes it — `"They find the buried
+   * cache"` — and when it goes wrong. Optional, and absent says nothing: the
+   * runner shows only "They made it" rather than borrowing a tactic line.
+   */
+  onSuccess: Schema.optionalKey(prose(ENCOUNTER_OUTCOME_MAX)),
+  onFailure: Schema.optionalKey(prose(ENCOUNTER_OUTCOME_MAX)),
 });
 export type EncounterSkillChallenge = typeof EncounterSkillChallenge.Type;
 

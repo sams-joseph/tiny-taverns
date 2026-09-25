@@ -1968,7 +1968,13 @@ const offered = (turn: HobTurn): string | undefined => {
         challenge === undefined
           ? undefined
           : challenge.kind === "challenge"
-            ? `dc ${challenge.dc}, successes ${challenge.successes}, failures ${challenge.failures}`
+            ? [
+                `dc ${challenge.dc}, successes ${challenge.successes}, failures ${challenge.failures}`,
+                challenge.onSuccess === undefined ? undefined : `onSuccess ${challenge.onSuccess}`,
+                challenge.onFailure === undefined ? undefined : `onFailure ${challenge.onFailure}`,
+              ]
+                .filter((part) => part !== undefined)
+                .join(", ")
             : [
                 `saveAbility ${challenge.save.ability}, dc ${challenge.save.dc}`,
                 challenge.onFail === undefined ? undefined : `onFail ${challenge.onFail}`,

@@ -1157,6 +1157,7 @@ export const liveRun = {
   sessionId,
   encounterId,
   encounterName: "Ambush in the reeds",
+  mode: "combat",
   round: 1,
   activeCombatantId: combatantId,
   startedAt: "2026-08-04T19:00:00.000Z",
