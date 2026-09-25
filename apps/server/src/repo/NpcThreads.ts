@@ -22,6 +22,7 @@ import { Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { initiativeOrder } from "./liveTables.js";
 import {
   npcImageColumns,
   npcImageSigner,
@@ -968,7 +969,7 @@ export class NpcThreads extends Context.Service<
                   from combatant
                   where combatant.encounter_run_id = ${runRows[0].id}
                     and combatant.visibility = 'shared'
-                  order by combatant.initiative desc nulls last, combatant.created_at asc, combatant.id asc
+                  ${initiativeOrder(sql)}
                 `).map((row) => row.display_name),
                     };
               return {

@@ -48,3 +48,14 @@ describe("the identity provider seam", () => {
     expect(declaration.toLowerCase()).not.toContain("clerk");
   });
 });
+
+describe("the initiative order", () => {
+  it("is spelled once, in liveTables.ts", () => {
+    const spellers = sourceFiles(`${sourceDirectory}/repo`)
+      .filter((path) => /initiative\s+desc/.test(readFileSync(path, "utf8")))
+      .map(relative)
+      .sort();
+
+    expect(spellers).toEqual(["repo/liveTables.ts"]);
+  });
+});

@@ -17,7 +17,7 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
 import { type EncounterRunRow, runColumns } from "./EncounterRuns.js";
-import { COMBATANT, RUNS } from "./liveTables.js";
+import { COMBATANT, initiativeOrder, RUNS } from "./liveTables.js";
 import { dieOnSqlError } from "./rows.js";
 import {
   containedRowReadable,
@@ -230,7 +230,7 @@ export class PlayerTable extends Context.Service<
                 where combatant.encounter_run_id = ${run.id}
                   and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
                   and (combatant.kind = 'npc' or seated.id is not null)
-                order by combatant.initiative desc, combatant.created_at asc, combatant.id asc
+                ${initiativeOrder(sql)}
               `;
               const order = rows.flatMap((row) => {
                 const combatant = toOrder(row);

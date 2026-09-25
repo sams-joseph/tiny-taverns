@@ -18,6 +18,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
 import { fightName } from "./EncounterRuns.js";
+import { initiativeOrder } from "./liveTables.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -372,7 +373,7 @@ export class GroupHistory extends Context.Service<
                      where combatant.encounter_run_id = encounter_run.id
                        and combatant.hp_current <= 0
                        and ${toldTheWorld(sql, "combatant")}
-                     order by combatant.initiative desc, combatant.created_at asc, combatant.id asc
+                     ${initiativeOrder(sql)}
                    ) as fell
             from encounter_run
             where encounter_run.session_id = ${night.sessionId}
