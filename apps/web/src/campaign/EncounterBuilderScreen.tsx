@@ -3,7 +3,6 @@ import {
   type AbilityKey,
   type CampaignId,
   type Creature,
-  type CreatureId,
   type Encounter,
   type EncounterId,
   ENCOUNTER_HAZARD_TEXT_MAX,
@@ -11,6 +10,7 @@ import {
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_TREASURE_MAX,
   type Note,
+  type PartySeat,
 } from "@taverns/api";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -45,7 +45,7 @@ import { useMutation } from "../api/mutation";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
-import { CreaturePicker } from "./CreaturePicker";
+import { BuilderRail } from "./BuilderRail";
 import {
   addCreature,
   createPayload,
@@ -120,9 +120,7 @@ import { encounterPrepListAtom } from "./load";
  *
  * ### What is deliberately not here yet
  *
- * The drawing's live difficulty card and its bestiary with CR pills take the
- * rail's place in a later change; until then the rail is the shipped creature
- * picker. The *When* toggles are not drawn: nothing on the wire stores them.
+ * The *When* toggles are not drawn: nothing on the wire stores them.
  *
  * ### Read aloud is a note
  *
@@ -155,6 +153,7 @@ export function EncounterBuilderScreen() {
               encounter={undefined}
               saved={{ ...extra, encounter: undefined, readAloud: undefined }}
               otherReadAloud={[]}
+              partyLevels={partyLevelsOf(view.party)}
             />
           );
         }
@@ -185,6 +184,7 @@ export function EncounterBuilderScreen() {
             encounter={encounter}
             saved={{ ...extra, encounter, readAloud }}
             otherReadAloud={otherReadAloud(view.notes, encounter.id, readAloud)}
+            partyLevels={partyLevelsOf(view.party)}
           />
         );
       }}
@@ -226,6 +226,15 @@ const writeReadAloud = (client: TavernsClient, campaignId: CampaignId, write: Re
       });
   }
 };
+
+/**
+ * The levels the rail's difficulty is rated against: every live seat's
+ * character, from the campaign view's `party.list` — the seats the server
+ * rates a saved encounter against, so the two cannot disagree. A seat whose
+ * character was deleted holds nobody.
+ */
+const partyLevelsOf = (party: ReadonlyArray<PartySeat>): ReadonlyArray<number | null> =>
+  party.flatMap((seat) => (seat.character === null ? [] : [seat.character.level]));
 
 /**
  * What the builder opens on beyond the `Encounter` row, which is the campaign
@@ -290,6 +299,7 @@ function EncounterBuilder({
   encounter,
   saved,
   otherReadAloud,
+  partyLevels,
 }: {
   readonly campaignId: CampaignId;
   readonly encounter: Encounter | undefined;
@@ -297,6 +307,7 @@ function EncounterBuilder({
   readonly saved: SavedEncounter;
   /** Read-aloud notes on it beyond the one the box edits, shown and not edited. */
   readonly otherReadAloud: ReadonlyArray<Note>;
+  readonly partyLevels: ReadonlyArray<number | null>;
 }) {
   const [initial] = useState(() => draftFrom(saved));
   const [draft, setDraft] = useState(initial);
@@ -448,7 +459,6 @@ function EncounterBuilder({
     (sum, line) => sum + (Number.isFinite(line.count) ? line.count : 0),
     0,
   );
-  const chosen = new Set<CreatureId>(draft.roster.map((line) => line.creatureId));
   const takesChallenge = draft.kind === "challenge" || draft.kind === "hazard";
   const showCreatures = !takesChallenge || draft.roster.length > 0;
   const { skillChallenge: skill, hazard } = draft;
@@ -780,16 +790,22 @@ function EncounterBuilder({
             )}
           </div>
 
-          {/* The rail. The live difficulty card goes first in it, pinned under the
-              chrome, when it comes; the bestiary under it scrolls with the page. */}
+          {/* The rail, as tall as the form so its difficulty card stays pinned
+              while the DM writes further down. `isolate`: the pinned card is
+              above the bestiary scrolling under it, and the whole rail below the
+              chrome it pins under. */}
           <aside
-            aria-label="Add creatures"
+            aria-label={takesChallenge ? "Setting the DC" : "Difficulty and bestiary"}
             data-slot="encounter-builder-rail"
-            className="flex min-w-0 flex-col gap-5 self-stretch @4xl:col-start-2 @4xl:row-span-3 @4xl:row-start-1"
+            className="isolate flex min-w-0 flex-col gap-5 self-stretch @4xl:col-start-2 @4xl:row-span-3 @4xl:row-start-1"
           >
-            <BuilderCard title="Bestiary">
-              <CreaturePicker campaignId={campaignId} chosen={chosen} onPick={pick} />
-            </BuilderCard>
+            <BuilderRail
+              campaignId={campaignId}
+              takesChallenge={takesChallenge}
+              roster={draft.roster}
+              partyLevels={partyLevels}
+              onPick={pick}
+            />
           </aside>
 
           <BuilderCard className="@4xl:col-start-1 @4xl:row-start-3">

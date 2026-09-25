@@ -26,7 +26,7 @@ pnpm -F web e2e -g "760px party"               # one title: "<width>px <screen>"
   - `screens.spec.ts`: every screen at every width — no failure notice, no sideways scroll, nothing drawn past the chrome's or a header's edge, no two header controls overlapping, the fixed row heights, at most one peach primary, the chrome on top after a scroll, no inner page scroller, and inside a campaign the two-row chrome and the campaign row's collapse and press.
   - `campaign.spec.ts`: every campaign screen's content starts at one y.
   - `encounters.spec.ts`: the Encounters list beside its preview, and the preview brought into view when the two are stacked.
-  - `encounter-builder.spec.ts`: the encounter builder's rail beside the form or stacked under the roster, roster lines readable on a phone, and the stepper's press landing on it.
+  - `encounter-builder.spec.ts`: the encounter builder's rail beside the form or stacked under the roster, its difficulty card pinned under the chrome beside the form, roster lines readable on a phone, and the stepper's press landing on it.
   - `hob.spec.ts`: the Hob panel walked across navigation, inline and as the overlay.
   - `global-nav.spec.ts`: the global row's panels, opened with a pointer and shut with Escape.
   - `hero.spec.ts`: the Overview heroes with a cover picture, while Hob draws one, and when the picture fails to load.

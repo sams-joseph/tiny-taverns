@@ -24,6 +24,9 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   "characters/CharacterSheetScreen.tsx": 2,
   "characters/SheetParts.tsx": 3,
   "run/RunScreen.tsx": 1,
+  // A verdict: the encounter builder's difficulty band, the drawing's big word
+  // over the meter, a reading of the roster rather than a section's name.
+  "campaign/BuilderRail.tsx": 1,
   // Monograms: initials on an NPC's plate, and on a character's plate and
   // roster card, under the portrait when there is one.
   "cast/NpcAvatar.tsx": 1,

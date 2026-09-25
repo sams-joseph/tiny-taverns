@@ -502,7 +502,7 @@ describe("the difficulty", () => {
   it("says how much more tips it into the next band", () => {
     const rated = draftDifficulty([line(bossId, 6, 200)], fourAtFive);
     expect(rated.hint).toBe("600 more adjusted XP tips this into hard.");
-    expect(rated.breakdown).toBe("1,200 base XP · ×2 for group size · 300 xp each");
+    expect(rated.breakdown).toEqual(["1,200 base XP", "×2 for group size", "300 xp each"]);
   });
 
   it("says what past deadly means", () => {
@@ -519,16 +519,37 @@ describe("the difficulty", () => {
     );
   });
 
-  it("is unrated with nobody levelled, and says nothing more", () => {
+  it("is unrated with nobody levelled, with no tiers to draw and the reason in words", () => {
+    const hint =
+      "Nobody seated has a level, so there is nothing to rate this against. The band appears once a player sets one.";
     expect(draftDifficulty([line(goblinId, 2)], [null, null])).toEqual({
       difficulty: { _tag: "unrated", reason: "no-party" },
+      hint,
     });
     expect(draftDifficulty([line(goblinId, 2)], [])).toEqual({
       difficulty: { _tag: "unrated", reason: "no-party" },
+      hint,
     });
-    expect(draftDifficulty([], fourAtFive).difficulty).toEqual({
-      _tag: "unrated",
-      reason: "no-creatures",
+  });
+
+  it("draws the party's tiers before there is a creature to rate", () => {
+    const empty = draftDifficulty([], [5, 5, 5, null]);
+    expect(empty.difficulty).toEqual({ _tag: "unrated", reason: "no-creatures" });
+    // The same party the rated band would name, the unlevelled one counted.
+    expect(empty.party).toEqual({
+      counted: { size: 3, minLevel: 5, maxLevel: 5, unlevelled: 1 },
+      thresholds: { easy: 750, medium: 1500, hard: 2250, deadly: 3300 },
+    });
+    expect(empty.breakdown).toBeUndefined();
+    expect(empty.hint).toBe(
+      "No creatures to rate yet. Add them from the bestiary and the band follows.",
+    );
+  });
+
+  it("says a creature with no XP is why there is no band", () => {
+    expect(draftDifficulty([line(goblinId, 1, null)], fourAtFive)).toMatchObject({
+      difficulty: { _tag: "unrated", reason: "missing-xp" },
+      hint: expect.stringMatching(/^A creature on the roster has no XP/),
     });
   });
 });
