@@ -320,6 +320,7 @@ describe("migrations", () => {
       { migration_id: 61, name: "encounter_ready" },
       { migration_id: 62, name: "character_inspiration" },
       { migration_id: 63, name: "seat_prep" },
+      { migration_id: 64, name: "combatant_positions" },
     ]);
   }, 60_000);
 
@@ -392,6 +393,7 @@ describe("migrations", () => {
       { migration_id: 61, name: "encounter_ready" },
       { migration_id: 62, name: "character_inspiration" },
       { migration_id: 63, name: "seat_prep" },
+      { migration_id: 64, name: "combatant_positions" },
     ]);
   }, 60_000);
 });
