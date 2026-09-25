@@ -1,4 +1,10 @@
-import type { CampaignMember, Character, PartySeat } from "@taverns/api";
+import {
+  SEAT_PREP_MAX,
+  type Character,
+  type PartySeat,
+  type SeatPrep,
+  type SeatPrepUpdate,
+} from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   BackLink,
@@ -17,16 +23,16 @@ import { useState, type FormEvent } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
-import { membersAtom } from "../campaign/load";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
 import { drawnSections } from "../characters/sheet";
 import { SheetDocument } from "../characters/SheetDocument";
 import { HpTrack, StatPill } from "../characters/SheetParts";
 import { newRequestId } from "../run/state";
 import { ActionsMenu } from "../ui/ActionsMenu";
-import { SaveFailure, VisibilityField } from "../ui/form";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { seatCard, type SeatCard } from "./cards";
 import { InspirationToggle } from "./InspirationToggle";
+import { seatExtraAtom, type SeatExtra } from "./load";
 import { RetireSeatDialog } from "./RetireSeatDialog";
 
 /**
@@ -43,17 +49,19 @@ import { RetireSeatDialog } from "./RetireSeatDialog";
  *
  * A player can read `party.list` — their own seat and every shared one — so a
  * page built on the frame alone would draw a player cards whose writes the
- * server refuses. `extra` is `members.list`, behind the `DmActor` gate, so a
- * player at this URL gets the ordinary `NotFound` and the frame says *Not
- * here*, as on the Party tab and the encounter builder. The members read also
- * answers the player's name when neither the seat nor the character carries
- * one (`seatCard`).
+ * server refuses. `extra` is `members.list` and `seatPrep.list`, both the
+ * creator's alone, so a player at this URL gets the ordinary `NotFound` and
+ * the frame says *Not here*, as on the Party tab and the encounter builder.
+ * The members read also answers the player's name when neither the seat nor
+ * the character carries one (`seatCard`).
  *
  * ### What lives here and what does not
  *
  * The seat's settings: its hit points (a delta through `party.damage`),
- * inspiration, its temporary hit points and conditions (`PartySeatUpdate`, written through to
- * the shared character), whether the table may see it, and retiring it. The
+ * inspiration, its temporary hit points and conditions (`PartySeatUpdate`,
+ * written through to the shared character), whether the table may see it, the
+ * DM's own hook and secret for it (`SeatPrep`, never a player's to read), and
+ * retiring it. The
  * sheet under them is the owner's document drawn read-only — the same
  * `SheetDocument` the owner writes, with no `writes`, so nothing on it presses:
  * nobody writes another account's sheet. Gear lines draw by name alone, since
@@ -69,10 +77,10 @@ export function SeatScreen() {
   const find = (party: ReadonlyArray<PartySeat>) => party.find((row) => row.seat.id === seatId);
 
   return (
-    <CampaignChrome<ReadonlyArray<CampaignMember>>
+    <CampaignChrome<SeatExtra>
       campaignId={campaignId}
       title="Party"
-      extra={membersAtom(campaignId)}
+      extra={seatExtraAtom(campaignId)}
       subtitle={({ view }) => {
         const row = find(view.party);
         return row === undefined ? undefined : (row.character?.name ?? row.seat.displayName);
@@ -118,10 +126,13 @@ export function SeatScreen() {
             </EmptyState>
           );
         }
-        const member = extra.find((candidate) => candidate.accountId === row.seat.accountId);
+        const member = extra.members.find(
+          (candidate) => candidate.accountId === row.seat.accountId,
+        );
+        const prep = extra.prep.find((notes) => notes.campaignCharacterId === row.seat.id);
         return (
           <>
-            <SeatBody row={row} card={seatCard(row, member)} />
+            <SeatBody row={row} card={seatCard(row, member)} prep={prep} />
             {retiring && (
               <RetireSeatDialog
                 row={row}
@@ -141,7 +152,15 @@ export function SeatScreen() {
 /** The seat's sheet has no spine to scroll to its sections, so nothing registers. */
 const ignoreSection = () => undefined;
 
-function SeatBody({ row, card }: { readonly row: PartySeat; readonly card: SeatCard }) {
+function SeatBody({
+  row,
+  card,
+  prep,
+}: {
+  readonly row: PartySeat;
+  readonly card: SeatCard;
+  readonly prep: SeatPrep | undefined;
+}) {
   const character = row.character;
   return (
     /* The settings beside the sheet where the column is wide enough, above it
@@ -153,7 +172,7 @@ function SeatBody({ row, card }: { readonly row: PartySeat; readonly card: SeatC
         ) : (
           <Vitals row={row} character={character} card={card} />
         )}
-        <SeatSettings row={row} name={card.name} />
+        <SeatSettings row={row} name={card.name} prep={prep} />
       </div>
       {character !== null && (
         <section aria-label={`${character.name}'s sheet`} className="min-w-0 flex-1">
@@ -476,11 +495,18 @@ function TempHp({
 }
 
 /**
- * The seat's own facts: whether the table may see it. The creator's prep
- * notes for this seat (its hook and its secret) join this card once they are
- * on the wire.
+ * The seat's own facts: whether the table may see it, and the creator's prep
+ * notes for it — its hook and its secret.
  */
-function SeatSettings({ row, name }: { readonly row: PartySeat; readonly name: string }) {
+function SeatSettings({
+  row,
+  name,
+  prep,
+}: {
+  readonly row: PartySeat;
+  readonly name: string;
+  readonly prep: SeatPrep | undefined;
+}) {
   const { busy, failure, submit } = useMutation();
   const campaignId = row.seat.campaignId;
   return (
@@ -505,7 +531,98 @@ function SeatSettings({ row, name }: { readonly row: PartySeat; readonly name: s
           hidden={`Only you and ${name}'s player can see them at this table.`}
         />
         {failure !== undefined && <SaveFailure failure={failure} />}
+        {/* Keyed on what the server holds, so a saved note re-seeds the
+            drafts from the re-read rather than from what was typed. */}
+        <SeatNotes
+          key={JSON.stringify([prep?.hook ?? null, prep?.secret ?? null])}
+          row={row}
+          prep={prep}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+/** A draft as the wire has it: blank is no note at all, so it clears to `null`. */
+const noteOf = (draft: string): string | null => (draft.trim() === "" ? null : draft.trim());
+
+/**
+ * The hook and the secret, the creator's own lines about this seat, drawn at
+ * the foot of its card on the Party tab. One *Save* sends only the lines that
+ * changed; emptying one sends `null`, which clears it. Neither reaches a player
+ * — the read and the write are both the creator's alone.
+ */
+function SeatNotes({
+  row,
+  prep,
+}: {
+  readonly row: PartySeat;
+  readonly prep: SeatPrep | undefined;
+}) {
+  const { busy, failure, submit } = useMutation();
+  const campaignId = row.seat.campaignId;
+  const [hook, setHook] = useState(prep?.hook ?? "");
+  const [secret, setSecret] = useState(prep?.secret ?? "");
+
+  const payload: SeatPrepUpdate = {
+    ...(noteOf(hook) === (prep?.hook ?? null) ? {} : { hook: noteOf(hook) }),
+    ...(noteOf(secret) === (prep?.secret ?? null) ? {} : { secret: noteOf(secret) }),
+  };
+  const changed = Object.keys(payload).length > 0;
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (!changed) return;
+    void submit(
+      (client) =>
+        client.seatPrep.update({
+          params: { campaignId, campaignCharacterId: row.seat.id },
+          payload,
+        }),
+      [reads.partyPrep(campaignId)],
+    );
+  };
+
+  return (
+    <form
+      aria-label="Your notes"
+      className="flex flex-col gap-3 border-t border-hairline pt-4"
+      onSubmit={save}
+    >
+      <div className="flex flex-col gap-1">
+        <SectionHeading size="label">Your notes</SectionHeading>
+        <p className="mb-0 text-caption leading-body text-muted-foreground">
+          Only you see these, here and on the seat&rsquo;s card. Empty one to clear it.
+        </p>
+      </div>
+      <Field label="Hook" htmlFor="seat-hook">
+        <Textarea
+          id="seat-hook"
+          rows={2}
+          maxLength={SEAT_PREP_MAX}
+          placeholder="What pulls them into the story"
+          className="min-h-0"
+          value={hook}
+          onChange={(event) => setHook(event.target.value)}
+        />
+      </Field>
+      <Field label="Secret" htmlFor="seat-secret">
+        <Textarea
+          id="seat-secret"
+          rows={2}
+          maxLength={SEAT_PREP_MAX}
+          placeholder="What you know and the table does not"
+          className="min-h-0"
+          value={secret}
+          onChange={(event) => setSecret(event.target.value)}
+        />
+      </Field>
+      <div>
+        <Button type="submit" variant="outline" size="sm" disabled={busy || !changed}>
+          Save notes
+        </Button>
+      </div>
+      {failure !== undefined && <SaveFailure failure={failure} />}
+    </form>
   );
 }

@@ -219,6 +219,27 @@ export const goneSeat = {
  */
 export const fullPartySeats = [brannocSheetSeat, sorrelSheetSeat, pellSheetSeat, goneSeat];
 
+/**
+ * The creator's prep for the full table, as `seatPrep.list` answers it: a hook
+ * and a secret for Brannoc, a hook alone for Sorrel, two `null`s for Pell (a
+ * live seat nothing was written for), and none for a seat the list omits.
+ */
+export const brannocPrep = {
+  campaignCharacterId: brannocSeat.seat.id,
+  hook: "Owes the ferryman a toll he cannot pay",
+  secret: "His sister runs the ferry, and the toll is hers",
+};
+
+export const fullPartyPrep = [
+  brannocPrep,
+  {
+    campaignCharacterId: sorrelSeatId,
+    hook: "Hunting the thing that took her hound",
+    secret: null,
+  },
+  { campaignCharacterId: pellSeatId, hook: null, secret: null },
+];
+
 /** A seat whose character its owner deleted: the snapshot stands, with no sheet. */
 export const deletedSeatId = "2b1f2a1e-0000-4000-8000-000000000954";
 
@@ -278,6 +299,7 @@ export const fullParty = (): Map<string, Answer> => {
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
   routes.set(`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] });
   routes.set(`GET ${base}/party`, { status: 200, body: fullPartySeats });
+  routes.set(`GET ${base}/party-prep`, { status: 200, body: fullPartyPrep });
   // Brannoc's writes: the seat PATCH, the hit-point delta (the card's − and +
   // and the seat page's), and retiring him. Each answer is what the server
   // would say; what a test asserts is the request and the re-read that follows.
@@ -290,6 +312,7 @@ export const fullParty = (): Map<string, Answer> => {
     body: brannocSeat.character,
   });
   routes.set(`DELETE ${base}/party/${brannocSeat.seat.id}`, { status: 204, body: undefined });
+  routes.set(`PATCH ${base}/party/${brannocSeat.seat.id}/prep`, { status: 200, body: brannocPrep });
   // The party's long rest, answered with the party as it then stands.
   routes.set(`POST ${base}/party/rest`, { status: 200, body: fullPartySeats });
   routes.set(`POST ${base}/invites`, {
@@ -309,6 +332,7 @@ export const emptyParty = (): Map<string, Answer> => {
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember] });
   routes.set(`GET ${base}/invites`, { status: 200, body: [] });
   routes.set(`GET ${base}/party`, { status: 200, body: [] });
+  routes.set(`GET ${base}/party-prep`, { status: 200, body: [] });
   return routes;
 };
 

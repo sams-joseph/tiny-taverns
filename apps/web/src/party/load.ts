@@ -1,25 +1,40 @@
-import type { CampaignId, CampaignInvite, CampaignMember } from "@taverns/api";
+import type { CampaignId, CampaignInvite, CampaignMember, SeatPrep } from "@taverns/api";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { apiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import { campaignInvitesAtom, membersAtom } from "../campaign/load";
 import { libraryOptionVocabularyAtom } from "../rules/load";
 
 /**
- * What the party screen reads **beyond the campaign view**: three atoms, one round.
+/**
+ * The creator's hook and secret for every live seat — `seatPrep.list`, the
+ * creator's alone. Both the Party tab and a seat's page read it, the one list
+ * for both, so a note written on the page is on its card when the DM goes back.
+ */
+export const seatPrepAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.seatPrep.list({ params: { campaignId } }),
+    [reads.partyPrep(campaignId)],
+  ),
+);
+
+/**
+ * What the party screen reads **beyond the campaign view**: four atoms, one round.
  *
- * These two reads only mean anything joined to the campaign view's characters: a
+ * The members and invitations only mean anything joined to the campaign view's characters: a
  * member with no `Character` whose `accountId` is theirs is the *"joined but has
  * no character"* state, and a member is distinguished from an invitation only by
  * which list they came out of. So they arrive as one `extra` — one value, three
  * states — rather than as two hooks giving the screen sixteen combinations of
  * loading and failed to say one sentence about a roster.
  *
- * **It used to read four things and now reads two**, because the screen sits on
+ * **It no longer reads the campaign or its characters**, because the screen sits on
  * `CampaignChrome` — which is what carries the session badge and the campaign
  * action this screen was missing. The frame already asks for the campaign and
  * for `characters.list` (as `CampaignView.party`), so asking again here would be
  * two answers to one question in one round.
  *
- * ### Two atoms rather than one Effect, and the sharing is the reason
+ * ### Atoms rather than one Effect, and the sharing is the reason
  *
  * They were one composed `Effect` until writes learned what they invalidate.
  * Split, each names its own resource — so **withdrawing an invitation refreshes
@@ -36,9 +51,12 @@ import { libraryOptionVocabularyAtom } from "../rules/load";
  * part is keyed on the campaign or on nothing, and this screen's campaign never
  * changes under it — there is no moment where one of them becomes an atom nobody has read.
  *
- * The roster's two reads are campaign-creator surfaces, so a player who reaches this URL
- * gets the ordinary `NotFound` and the screen says *"Not here"* — the correct
- * answer rather than a case to special-case.
+ * The seats' prep rides along because the cards draw each seat's hook and
+ * secret; it is in no way part of the roster's derivation.
+ *
+ * The roster's two reads and the prep are campaign-creator surfaces, so a
+ * player who reaches this URL gets the ordinary `NotFound` and the screen says
+ * *"Not here"* — the correct answer rather than a case to special-case.
  */
 export interface PartyRoster {
   /**
@@ -63,12 +81,14 @@ export interface PartyRoster {
    * is keyed on nothing, so any screen that already asked has it cached.
    */
   readonly languages: ReadonlyArray<string>;
+  /** Every live seat's hook and secret, the creator's own notes. */
+  readonly prep: ReadonlyArray<SeatPrep>;
 }
 
 export const rosterAtom = Atom.family((campaignId: CampaignId) =>
   Atom.readable(
     (get): AsyncResult.AsyncResult<PartyRoster, unknown> =>
-      // The roster's two resources are owned directly by the campaign, so no world read or
+      // The roster's resources are owned directly by the campaign, so no world read or
       // client-side filtering stands between the roster and its invitations.
       AsyncResult.all({
         members: get(membersAtom(campaignId)),
@@ -76,12 +96,13 @@ export const rosterAtom = Atom.family((campaignId: CampaignId) =>
         languages: AsyncResult.map(get(libraryOptionVocabularyAtom), (vocabulary) =>
           vocabulary.languages.map((language) => language.name),
         ),
+        prep: get(seatPrepAtom(campaignId)),
       }),
     // **A derived atom needs to be told how to refresh, and this is the second
     // argument `Atom.readable` takes for exactly that.** Re-running the read
     // above hands back the cached parts, so without this the frame's *Try
     // again* would redraw the same failure it was pressed on. Naming them here
-    // rather than by key is right because all three are this screen's own reads and it
+    // rather than by key is right because each is this screen's own read and it
     // knows them by name; the campaign view cannot do the same, because three
     // of its eight are keyed on a session id it only has once the campaign has
     // loaded — see `campaignViewKeys`.
@@ -89,6 +110,32 @@ export const rosterAtom = Atom.family((campaignId: CampaignId) =>
       refresh(membersAtom(campaignId));
       refresh(campaignInvitesAtom(campaignId));
       refresh(libraryOptionVocabularyAtom);
+      refresh(seatPrepAtom(campaignId));
+    },
+  ),
+);
+
+/**
+ * What a seat's page reads beyond the campaign view: the members, for the
+ * player's name and as the page's creator-only gate, and the seats' prep, for
+ * the hook and secret the page edits.
+ */
+export interface SeatExtra {
+  readonly members: ReadonlyArray<CampaignMember>;
+  readonly prep: ReadonlyArray<SeatPrep>;
+}
+
+export const seatExtraAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable(
+    (get): AsyncResult.AsyncResult<SeatExtra, unknown> =>
+      AsyncResult.all({
+        members: get(membersAtom(campaignId)),
+        prep: get(seatPrepAtom(campaignId)),
+      }),
+    // Told how to refresh, for the reason `rosterAtom` gives.
+    (refresh) => {
+      refresh(membersAtom(campaignId));
+      refresh(seatPrepAtom(campaignId));
     },
   ),
 );

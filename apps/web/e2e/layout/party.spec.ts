@@ -3,14 +3,15 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 /**
  * The Party tab (`party/PartyScreen.tsx`) at every width: the card grid's
  * columns, the rows of a card lining up with its neighbours', − and + and
- * inspiration pressing rather than opening the card, *Passives and saves*
- * fitting without a scroller of its own, and *Between them* under it with each
- * answer beside its term. All of it is layout, stacking or hit-testing, which
+ * inspiration pressing rather than opening the card, the DM's notes wrapping
+ * inside the card's foot, *Passives and saves* fitting without a scroller of
+ * its own, and *Between them* under it with each answer beside its term. All
+ * of it is layout, stacking or hit-testing, which
  * jsdom does not compute.
  *
  * Read over the creator scenario's party (`fullPartySeats`): four seats, one
  * character deleted, one lineage long enough to wrap on a card, a portrait,
- * conditions and temporary hit points.
+ * conditions, temporary hit points, and a hook and a secret on Brannoc's.
  */
 
 const party = screens.find((screen) => screen.name === "party")!;
@@ -178,6 +179,20 @@ for (const width of WIDTHS) {
           at,
         );
         expect.soft(target, "the portrait band is the name link's overlay").toBe("Pell");
+      });
+
+      await test.step("the DM's notes wrap inside their card, at its foot", async () => {
+        const brannoc = cards.filter({ has: page.getByRole("link", { name: "Brannoc" }) });
+        const card = await box(brannoc);
+        const notes = await box(brannoc.locator(":scope > div").last().locator("p").last());
+        expect.soft(notes.x, "notes left").toBeGreaterThanOrEqual(card.x);
+        expect.soft(notes.x + notes.width, "notes right").toBeLessThanOrEqual(card.x + card.width);
+        expect
+          .soft(notes.y + notes.height, "notes bottom")
+          .toBeLessThanOrEqual(card.y + card.height);
+        // Pell has no notes: his foot is empty and draws no hairline.
+        const pell = cards.filter({ has: page.getByRole("link", { name: "Pell" }) });
+        await expect(pell.locator(":scope > div").last().locator("p")).toHaveCount(0);
       });
 
       await test.step("passives and saves fit, with no scroller of their own", async () => {
