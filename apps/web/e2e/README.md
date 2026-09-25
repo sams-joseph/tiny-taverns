@@ -30,7 +30,6 @@ pnpm -F web e2e -g "760px party"               # one title: "<width>px <screen>"
   - `hob.spec.ts`: the Hob panel walked across navigation, inline and as the overlay.
   - `global-nav.spec.ts`: the global row's panels, opened with a pointer and shut with Escape.
   - `hero.spec.ts`: the Overview heroes with a cover picture, while Hob draws one, and when the picture fails to load.
-  - `scrollbar.spec.ts`: the page does not move sideways when it grows past the fold or opens a dialog, in a browser that draws classic scrollbars.
 
 The widths are 1440, 1024, 760 and 390: wide; just above Hob's inline breakpoint (1020); below the header's wrap breakpoint (896) and the campaign row's `@3xl`; and a phone. The old shell audit also walked 1200 and 900; they were dropped because each sits in bands the four already cover: 1200 in 1440's for every rule, 900 in 1024's for the campaign row and 760's for the header's wrap and Hob's overlay.
 
