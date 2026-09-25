@@ -1169,6 +1169,8 @@ export const liveRun = {
   // database refuses the second without the first.
   endedReason: "resolved",
   allowHobDirectWrites: false,
+  mapShown: false,
+  hostileTokensHidden: false,
   continuedFrom: null,
   visibility: "dm",
   ...provenance,

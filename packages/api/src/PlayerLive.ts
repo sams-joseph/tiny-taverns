@@ -1,6 +1,7 @@
 import { Schema } from "effect";
+import { BattleMapAlignment, BattleMapGrid, BattleMapImages } from "./BattleMap.js";
 import { CharacterPortraitImages } from "./Character.js";
-import { InitiativeSetBy } from "./Combatant.js";
+import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
 import {
   CampaignCharacterId,
@@ -100,6 +101,38 @@ export const PlayerLiveCombatant = Schema.Union([
 ]);
 export type PlayerLiveCombatant = typeof PlayerLiveCombatant.Type;
 
+/** A token on the player's board: a row of their order, standing on a square. */
+export const PlayerLiveToken = Schema.Struct({
+  /** The row in `PlayerLiveFight.order` this token stands for. */
+  combatantId: CombatantId,
+  position: CombatantPosition,
+});
+export type PlayerLiveToken = typeof PlayerLiveToken.Type;
+
+/**
+ * The fight's board as a player sees it, once the DM has turned on *Share map*.
+ *
+ * A distinct schema, not the creator's `EncounterRunBoard` with fields taken
+ * off: it has no field for the map's setting line (the DM's prose), the map's
+ * id or whether a picture is still being drawn. The grid and the picture mean
+ * what they mean on `EncounterRunBoard`, so one component draws both.
+ */
+export const PlayerLiveBoard = Schema.Struct({
+  grid: BattleMapGrid,
+  columns: Schema.Int,
+  rows: Schema.Int,
+  feetPerCell: Schema.Int,
+  alignment: BattleMapAlignment,
+  /** The map's picture, or `null` when there is none to show. */
+  image: Schema.NullOr(BattleMapImages),
+  /**
+   * The tokens on the board: only rows in this player's `order`, only those the
+   * DM has put down, and no NPC's while the DM hides hostile tokens.
+   */
+  tokens: Schema.Array(PlayerLiveToken),
+});
+export type PlayerLiveBoard = typeof PlayerLiveBoard.Type;
+
 export const PlayerLiveFight = Schema.Struct({
   id: EncounterRunId,
   /** `null` unless this player may read the encounter (Shared and Ready). */
@@ -116,6 +149,8 @@ export const PlayerLiveFight = Schema.Struct({
   seats: Schema.Array(PlayerLiveSeat),
   /** The initiative order, already projected to what a player may know. */
   order: Schema.Array(PlayerLiveCombatant),
+  /** The board, or `null` unless the DM has turned on *Share map* and the fight has one. */
+  board: Schema.NullOr(PlayerLiveBoard),
 });
 export type PlayerLiveFight = typeof PlayerLiveFight.Type;
 

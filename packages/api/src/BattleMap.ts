@@ -4,9 +4,9 @@ import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
 /**
  * An encounter's battle map: the board a fight on it is played on, and the
  * picture Hob drew of the place. **The creator's alone** — no player path
- * carries a map, its setting line or its picture's URL; showing a map to the
- * table is a later play feature the DM will trigger, with a player schema of
- * its own.
+ * carries a map or its setting line. The one way a player sees the board is a
+ * fight's, on their live table, while the DM has turned on *Share map*
+ * (`PlayerLiveBoard`, a schema of its own).
  *
  * ### One map per encounter, and a board before a picture
  *
@@ -84,7 +84,8 @@ export type BattleMapAlignment = typeof BattleMapAlignment.Type;
 /**
  * Where a map's picture loads from: two sizes of one WebP, each a short-lived
  * signed path on this API (`/battle-map-images/:imageId/:variant?e=…&s=…`),
- * minted only inside the creator's own map reads. `width` and `height` are the
+ * minted only inside the creator's own map reads and a seated player's live
+ * table while the map is shown. `width` and `height` are the
  * original's, the pixels `alignment` is measured in.
  */
 export class BattleMapImages extends Schema.Class<BattleMapImages>("BattleMapImages")({

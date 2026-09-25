@@ -1,5 +1,6 @@
 import {
   type Actor,
+  type BattleMapGrid,
   type CampaignCharacterId,
   type CampaignId,
   type CharacterId,
@@ -10,18 +11,26 @@ import {
   type InitiativeSetBy,
   NotFound,
   PlayerLiveTable,
+  type PlayerLiveBoard,
   type PlayerLiveCombatant,
   type PlayerLiveHpBand,
   type PlayerLiveSeat,
+  type PlayerLiveToken,
   type PlayerLiveTurn,
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
+import {
+  type BattleMapImageColumns,
+  battleMapImageColumns,
+  battleMapImages,
+} from "./BattleMaps.js";
 import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
 import { type EncounterRunRow, runColumns } from "./EncounterRuns.js";
-import { COMBATANT, initiativeOrder, RUNS } from "./liveTables.js";
+import { boardShown, COMBATANT, initiativeOrder, RUNS, tokenShown } from "./liveTables.js";
 import { dieOnSqlError } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
@@ -58,6 +67,20 @@ interface LiveCombatantRow {
   readonly hp_band: PlayerLiveHpBand;
   /** `seatedPortraitColumn`: the asker's own seat or a shared one, else `null`. */
   readonly portrait_id: string | null;
+  /** Null together, and null unless this row's token is on the player's board. */
+  readonly token_column: number | null;
+  readonly token_row: number | null;
+}
+
+/** The fight's board as a player may see it: the grid and the picture, no setting. */
+interface PlayerBoardRow extends BattleMapImageColumns {
+  readonly grid: BattleMapGrid;
+  readonly board_columns: number;
+  readonly board_rows: number;
+  readonly feet_per_cell: number;
+  readonly cell_px: number;
+  readonly offset_x_px: number;
+  readonly offset_y_px: number;
 }
 
 /**
@@ -68,6 +91,12 @@ interface LiveCombatantRow {
  * with no seat instead of treating `combatant.character_id` as enough. Every
  * combatant in the player order is either an NPC row the DM shared or a PC row
  * that still has an active seat in this campaign.
+ *
+ * **The board** is selected only while the fight is shared and the DM has
+ * turned on *Share map* (`0067_run_map_sharing.ts`), and never its setting
+ * line. A token is a position selected beside a row of the order under the
+ * same condition, and not at all for an NPC while hostile tokens are hidden,
+ * so a row the order drops takes its token with it.
  */
 export class PlayerTable extends Context.Service<
   PlayerTable,
@@ -114,6 +143,7 @@ export class PlayerTable extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
       const sign = yield* portraitSigner;
+      const signMap = yield* imageSigner;
 
       const activeSeats = (campaignId: CampaignId, actor: Actor) =>
         sql<ActiveSeatRow>`
@@ -225,6 +255,23 @@ export class PlayerTable extends Context.Service<
                 });
               }
 
+              // The picture is joined through the board's pointer only to a
+              // map in this campaign, so the pointer grants nothing outside it.
+              const boards = yield* sql<PlayerBoardRow>`
+                select encounter_run_board.grid, encounter_run_board.board_columns,
+                       encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
+                       encounter_run_board.cell_px, encounter_run_board.offset_x_px,
+                       encounter_run_board.offset_y_px,
+                       ${battleMapImageColumns(sql)}
+                from encounter_run_board
+                join encounter_run on encounter_run.id = encounter_run_board.run_id
+                left join battle_map on battle_map.id = encounter_run_board.map_id
+                  and battle_map.campaign_id = ${campaignId}
+                where encounter_run_board.run_id = ${run.id}
+                  and ${boardShown(sql)}
+              `;
+              const board = boards[0];
+
               const rows = yield* sql<LiveCombatantRow>`
                 select combatant.id,
                        combatant.character_id,
@@ -251,8 +298,11 @@ export class PlayerTable extends Context.Service<
                          when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
                          else 'hurt'
                        end as hp_band,
-                       ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
+                       ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
+                       case when ${tokenShown(sql)} then combatant.board_column end as token_column,
+                       case when ${tokenShown(sql)} then combatant.board_row end as token_row
                 from combatant
+                join encounter_run on encounter_run.id = combatant.encounter_run_id
                 left join character on character.id = combatant.character_id
                 left join campaign_character seated
                   on seated.campaign_id = ${campaignId}
@@ -273,9 +323,17 @@ export class PlayerTable extends Context.Service<
                   and (${run.mode} = 'combat' or own_seated.id is not null)
                 ${initiativeOrder(sql)}
               `;
+              const tokens: Array<PlayerLiveToken> = [];
               const present = rows.flatMap((row) => {
                 const combatant = toOrder(row);
-                return combatant === undefined ? [] : [combatant];
+                if (combatant === undefined) return [];
+                if (row.token_column !== null && row.token_row !== null) {
+                  tokens.push({
+                    combatantId: row.id,
+                    position: { column: row.token_column, row: row.token_row },
+                  });
+                }
+                return [combatant];
               });
               const order = run.mode === "combat" ? present : [];
               const upNextRow = order.find((row) => row.combatantId === run.active_combatant_id);
@@ -307,6 +365,22 @@ export class PlayerTable extends Context.Service<
                   upNext,
                   seats,
                   order,
+                  board:
+                    board === undefined
+                      ? null
+                      : ({
+                          grid: board.grid,
+                          columns: board.board_columns,
+                          rows: board.board_rows,
+                          feetPerCell: board.feet_per_cell,
+                          alignment: {
+                            cellPx: board.cell_px,
+                            offsetXPx: board.offset_x_px,
+                            offsetYPx: board.offset_y_px,
+                          },
+                          image: battleMapImages(board, signMap),
+                          tokens,
+                        } satisfies PlayerLiveBoard),
                 },
               });
             }),

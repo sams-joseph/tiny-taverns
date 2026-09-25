@@ -23,8 +23,9 @@ import { nestedRowWritable, rowWritable } from "./visibility.js";
  * Reads and writes over `battle_map`, every encounter's board
  * (`0057_battle_maps.ts`) — **the creator's alone**, so every method takes a
  * `CampaignCreatorActor` and still composes `rowWritable` beneath it. There is
- * no player read here, and no player path anywhere reads this table: gate
- * first, project later, for the day the table sees a map.
+ * no player read here. The one player path to a map's picture is a fight's
+ * board on the live table, while the DM shows it (`repo/PlayerTable.ts`),
+ * which signs through {@link battleMapImages} and never selects the setting.
  *
  * There is no create and no delete. `Encounters.create` inserts an encounter's
  * map in its own transaction and the encounter's delete cascades it; the
@@ -38,7 +39,18 @@ import { nestedRowWritable, rowWritable } from "./visibility.js";
  * map's URL is minted.
  */
 
-interface BattleMapRow {
+/**
+ * The picture's facts beside a map row, from {@link battleMapImageColumns};
+ * `null` when the map has no picture record.
+ */
+export interface BattleMapImageColumns {
+  readonly image_id: string | null;
+  readonly image_state: "generating" | "ready" | "failed" | null;
+  readonly image_width: number | null;
+  readonly image_height: number | null;
+}
+
+interface BattleMapRow extends BattleMapImageColumns {
   readonly id: BattleMapId;
   readonly encounter_id: EncounterId;
   readonly campaign_id: CampaignId;
@@ -52,15 +64,10 @@ interface BattleMapRow {
   readonly offset_y_px: number;
   readonly created_at: Date;
   readonly updated_at: Date;
-  /** From {@link battleMapImageColumns}; `null` when the map has no picture record. */
-  readonly image_id: string | null;
-  readonly image_state: "generating" | "ready" | "failed" | null;
-  readonly image_width: number | null;
-  readonly image_height: number | null;
 }
 
 /** `encounter_run_board`, with its map's setting line and picture beside it. */
-interface RunBoardRow {
+interface RunBoardRow extends BattleMapImageColumns {
   /** The map as joined — `null` when the board's map is gone. */
   readonly map_id: BattleMapId | null;
   readonly setting: string | null;
@@ -71,17 +78,14 @@ interface RunBoardRow {
   readonly cell_px: number;
   readonly offset_x_px: number;
   readonly offset_y_px: number;
-  readonly image_id: string | null;
-  readonly image_state: "generating" | "ready" | "failed" | null;
-  readonly image_width: number | null;
-  readonly image_height: number | null;
 }
 
 /**
- * The picture's facts beside a map row. **Every read that becomes a
- * `BattleMap` names this fragment** — `toBattleMap` dies on a row without it.
+ * The picture's facts beside a map row, over `battle_map` in scope. **Every
+ * read that becomes a `BattleMap` names this fragment** — `toBattleMap` dies
+ * on a row without it — and so does the player's board.
  */
-const battleMapImageColumns = (sql: SqlClient.SqlClient) => sql`
+export const battleMapImageColumns = (sql: SqlClient.SqlClient) => sql`
   (select battle_map_image.id from battle_map_image
    where battle_map_image.map_id = battle_map.id) as image_id,
   (select battle_map_image.state from battle_map_image
@@ -93,12 +97,13 @@ const battleMapImageColumns = (sql: SqlClient.SqlClient) => sql`
 `;
 
 /**
- * **The only place a battle map's URL is minted**, for a row a creator-gated
- * read below already returned. `undefined` signs nothing, the same answer a
- * server with no URL secret gives.
+ * **The only place a battle map's URL is minted**, for a row a gated read
+ * already returned: a creator-gated read below, or a seated player's table
+ * while the DM shows the map (`repo/PlayerTable.ts`). `undefined` signs
+ * nothing, the same answer a server with no URL secret gives.
  */
-const imagesOf = (
-  row: BattleMapRow | RunBoardRow,
+export const battleMapImages = (
+  row: BattleMapImageColumns,
   sign: ImageSigner | undefined,
 ): BattleMap["image"] => {
   if (
@@ -139,7 +144,7 @@ const toBattleMap = (row: BattleMapRow, sign: ImageSigner | undefined): BattleMa
       offsetXPx: row.offset_x_px,
       offsetYPx: row.offset_y_px,
     },
-    image: imagesOf(row, sign),
+    image: battleMapImages(row, sign),
     imagePending: row.image_state === "generating",
     createdAt: DateTime.fromDateUnsafe(row.created_at),
     updatedAt: DateTime.fromDateUnsafe(row.updated_at),
@@ -159,7 +164,7 @@ const toRunBoard = (row: RunBoardRow, sign: ImageSigner | undefined): EncounterR
       offsetXPx: row.offset_x_px,
       offsetYPx: row.offset_y_px,
     },
-    image: imagesOf(row, sign),
+    image: battleMapImages(row, sign),
     imagePending: row.image_state === "generating",
   });
 

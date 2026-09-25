@@ -129,7 +129,8 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   /**
    * Where its token stands on the fight's board, or `null` while it is not on
    * the board — where every token starts, because nobody has put it anywhere
-   * yet. The creator's alone: no player read carries a position.
+   * yet. A player reads it only as a token on their board
+   * (`PlayerLiveBoard`), while the DM shows the map.
    */
   position: Schema.NullOr(CombatantPosition),
   /**
