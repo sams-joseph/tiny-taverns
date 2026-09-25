@@ -34,6 +34,7 @@ export * from "./Npc.js";
 export * from "./NpcImage.js";
 export * from "./Page.js";
 export * from "./Party.js";
+export * from "./PlayerEncounter.js";
 export * from "./PlayerLive.js";
 export * from "./PlayerRecap.js";
 export * from "./Portrait.js";

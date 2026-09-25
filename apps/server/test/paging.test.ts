@@ -27,7 +27,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, createCampaign } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -291,11 +291,12 @@ describe("visibility on a paged read", () => {
     expect(seen.walked.rows).toEqual([]);
   }, 60_000);
 
-  it("holds for notes, encounters and beats too", async () => {
+  // Not encounters: their paged read is the creator's alone, and a player's
+  // (`Encounters.listAsPlayer`) is unpaged.
+  it("holds for notes and beats too", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const notes = yield* Notes;
-        const encounters = yield* Encounters;
         const beats = yield* Beats;
         const campaignId: CampaignId = fixture.campaign.id;
         const nightId: SessionId = fixture.night.id;
@@ -303,9 +304,6 @@ describe("visibility on a paged read", () => {
         return {
           notes: yield* walk<Note, CreatedOrder>((cursor) =>
             player(notes.list(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
-          ),
-          encounters: yield* walk<Encounter, CreatedOrder>((cursor) =>
-            player(encounters.list(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
           ),
           beats: yield* walk<Beat, CreatedOrder>((cursor) =>
             player(beats.list(campaignId, nightId, { limit: 2, cursor })).pipe(Effect.orDie),
@@ -322,6 +320,23 @@ describe("visibility on a paged read", () => {
         name,
       ).toBe(true);
     }
+  }, 60_000);
+
+  it("pages the creator's encounters, every one of them, oldest first", async () => {
+    const seen = await runtime.runPromise(
+      Effect.gen(function* () {
+        const encounters = yield* Encounters;
+        const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
+        return yield* walk<Encounter, CreatedOrder>((cursor) =>
+          encounters.list(dm, { limit: 4, cursor }),
+        );
+      }),
+    );
+
+    expect(seen.sizes).toEqual([4, 4, 3]);
+    expect(seen.rows.map((encounter) => encounter.name)).toEqual(
+      Array.from({ length: COUNT }, (_, index) => `Encounter ${String(index)}`),
+    );
   }, 60_000);
 
   it("walks the three chronologies in the order they happened", async () => {

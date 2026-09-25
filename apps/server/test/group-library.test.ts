@@ -17,7 +17,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
-import { aGroupMemberAt, anAccount, createCampaign } from "./support/actors.js";
+import { aGroupMemberAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 
 /**
@@ -317,9 +317,10 @@ describe("withdrawing the grant", () => {
         Effect.gen(function* () {
           const encounters = yield* Encounters;
           const roster = yield* EncounterCreatures;
-          const all = yield* encounters.list(fixture.hagsBargain.id, {});
+          const dm = yield* asDm(fixture.wren, fixture.hagsBargain.id);
+          const all = yield* encounters.list(dm, {});
           const encounter = all.items.find((row) => row.name === "The owlbear at the bargain")!;
-          return yield* roster.list(fixture.hagsBargain.id, encounter.id);
+          return yield* roster.list(dm, encounter.id);
         }),
       ),
     );

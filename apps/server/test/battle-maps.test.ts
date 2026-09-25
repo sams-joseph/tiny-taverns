@@ -694,12 +694,12 @@ describe("the map is the creator's alone", () => {
 
   it("puts no map, setting or picture on a player's reads of a shared encounter", async () => {
     const found = await as(ilse.token, (client) =>
-      client.encounters.findById({ params: { campaignId: table, encounterId: shown.id } }),
+      client.playerEncounters.find({ params: { campaignId: table, encounterId: shown.id } }),
     );
     const listed = await as(ilse.token, (client) =>
-      client.encounters.list({ params: { campaignId: table }, query: {} }),
+      client.playerEncounters.list({ params: { campaignId: table } }),
     );
-    expect(listed.items.map((entry) => entry.id)).toContain(shown.id);
+    expect(listed.map((entry) => entry.id)).toContain(shown.id);
     for (const read of [found, listed]) {
       const text = JSON.stringify(read);
       expect(text).not.toContain("battle-map-images");

@@ -32,8 +32,9 @@ export type EncounterPlayed = typeof EncounterPlayed.Type;
  * challenge or a hazard. Every encounter has one; an encounter made before
  * there was a choice is a fight, which is all an encounter could hold then.
  *
- * On `Encounter` itself, so a player reading a shared encounter sees it: it
- * says what kind of scene is coming, which the encounter's name already does.
+ * On the `encounter` row itself, so a player reading a shared encounter
+ * (`PlayerEncounter`) sees it: it says what kind of scene is coming, which the
+ * encounter's name already does.
  */
 export const EncounterKind = Schema.Literals(["combat", "social", "challenge", "hazard"]);
 export type EncounterKind = typeof EncounterKind.Type;
@@ -120,8 +121,10 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
    * How hard it is for this table's party, computed on read by the DMG method
    * (`EncounterDifficulty.ts`) from the roster's XP and the seated characters'
    * levels — **never stored and never typed**. Both halves are what *this
-   * reader* can see, the rule `creatureCount` follows, so a player's answer
-   * says nothing about a creature or a seat hidden from them.
+   * reader* can see, the rule `creatureCount` follows.
+   *
+   * The creator's alone, as the whole of `Encounter` is: a player's
+   * `PlayerEncounter` carries no difficulty (see there for why).
    */
   difficulty: EncounterDifficulty,
   kind: EncounterKind,
@@ -173,7 +176,7 @@ export const EncounterTreasure = prose(ENCOUNTER_TREASURE_MAX);
  * The encounter's DM prep: its tactics, its treasure and, for a skill
  * challenge or a hazard, the numbers it is run by — **the creator's alone.**
  *
- * Not on `Encounter`, which a player reads when it is shared: this is the
+ * Not on the `encounter` row, whose shared ones a player reads: this is the
  * DM's plan for the scene, and it reaches the wire only through the creator's
  * prep reads (`encounterPrep`), on a table no player read touches
  * (`0060_encounter_prep.ts`). It is written through the encounter's own create
@@ -245,7 +248,7 @@ const roster = Schema.Array(EncounterRosterLine).check(
  * (`BattleMap.ts`). It is written here, on the encounter's form, because the
  * map is made with the encounter and drawn once as it is made; but it is stored
  * on the map and read back only through the creator's map read, never on
- * `Encounter`, which a player may read when it is shared. `tactics`,
+ * the `encounter` row, whose shared ones a player may read. `tactics`,
  * `treasure` and `challenge` are the same arrangement over `EncounterPrep`.
  */
 export const EncounterCreate = Schema.Struct({

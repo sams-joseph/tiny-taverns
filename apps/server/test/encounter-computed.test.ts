@@ -1,4 +1,4 @@
-import { type Actor, CurrentActor, emptyStatBlock, NotFound } from "@taverns/api";
+import { type Actor, type CampaignId, CurrentActor, emptyStatBlock, NotFound } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
@@ -6,7 +6,7 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Creatures } from "../src/repo/Creatures.js";
-import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
+import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
@@ -14,14 +14,22 @@ import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Party } from "../src/repo/Party.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aCharacterAt, aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
+import {
+  aCharacterAt,
+  aGroupMemberAt,
+  aPlayerAt,
+  anAccount,
+  asDm,
+  createCampaign,
+} from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
 /**
  * What an encounter read computes rather than stores: each roster line's
  * numbers, the difficulty against the seated party, and the last time it came
- * off the table — each over what *the reader* can see.
+ * off the table — each over what *the reader* can see. The numbers are the
+ * creator's alone: a player's `PlayerEncounter` is names and counts.
  */
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(
@@ -59,6 +67,7 @@ const makeFixture = Effect.gen(function* () {
   const roster = yield* EncounterCreatures;
   const sessions = yield* Sessions;
   const runs = yield* EncounterRuns;
+  const campaigns = yield* Campaigns;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -134,9 +143,17 @@ const makeFixture = Effect.gen(function* () {
   const lonely = yield* as(encounters.create(emptyTable.id, { name: "Toll bridge" }));
   yield* as(roster.create(emptyTable.id, lonely.id, { creatureId: archer.id, count: 2 }));
 
+  // A member of this table's Shared World who plays at another table in it,
+  // not this one.
+  const worldMember = yield* aGroupMemberAt(campaign.id, "Rook");
+  yield* withActor(worldMember)(
+    campaigns.create(campaign.contextId, { name: "Rook's table", visibility: "shared" }),
+  );
+
   return {
     dm,
     player,
+    worldMember,
     stranger: yield* anAccount("Nobody"),
     campaign,
     ambush,
@@ -164,12 +181,18 @@ beforeAll(async () => {
 const read = <A, E>(actor: Actor, effect: Effect.Effect<A, E, CurrentActor>) =>
   runtime.runPromise(withActor(actor)(effect));
 
+/** A creator-only read, through the proof the handlers mint. */
+const asCreator = <A, E>(
+  campaignId: CampaignId,
+  effect: (creator: CampaignCreatorActor) => Effect.Effect<A, E>,
+) => runtime.runPromise(Effect.flatMap(asDm(fixture.dm, campaignId), effect));
+
 const refused = <A, E>(actor: Actor, effect: Effect.Effect<A, E, CurrentActor>) =>
   runtime.runPromise(Effect.flip(withActor(actor)(effect)));
 
 describe("the roster's numbers", () => {
   it("carries each creature's CR, AC, HP and XP, from the stat block or the XP table", async () => {
-    const lines = await read(fixture.dm, roster.list(fixture.campaign.id, fixture.ambush.id));
+    const lines = await asCreator(fixture.campaign.id, (dm) => roster.list(dm, fixture.ambush.id));
     expect(
       lines.map(({ name, count, cr, ac, hp, xp }) => ({ name, count, cr, ac, hp, xp })),
     ).toEqual([
@@ -179,16 +202,15 @@ describe("the roster's numbers", () => {
   }, 60_000);
 
   it("leaves XP null for a rating the table does not know, rather than guessing", async () => {
-    const lines = await read(fixture.dm, roster.list(fixture.campaign.id, fixture.bog.id));
+    const lines = await asCreator(fixture.campaign.id, (dm) => roster.list(dm, fixture.bog.id));
     expect(lines[0]).toMatchObject({ name: "Bog Thing", cr: "—", xp: null });
   }, 60_000);
 });
 
 describe("computed difficulty", () => {
   it("rates the whole roster against the whole visible party for the creator", async () => {
-    const ambush = await read(
-      fixture.dm,
-      encounters.findById(fixture.campaign.id, fixture.ambush.id),
+    const ambush = await asCreator(fixture.campaign.id, (dm) =>
+      encounters.findById(dm, fixture.ambush.id),
     );
     // 4 × 50 + 2,000 = 2,200 XP; five creatures ×2 against a party of three.
     // Thresholds: 2 × level 5 + level 3; Odo has no level and is counted out.
@@ -203,27 +225,8 @@ describe("computed difficulty", () => {
     });
   }, 60_000);
 
-  it("rates only what the player can see: no hidden creature, no hidden seat", async () => {
-    const ambush = await read(
-      fixture.player,
-      encounters.findById(fixture.campaign.id, fixture.ambush.id),
-    );
-    // The hag is the DM's, and so are Wren's and Odo's seats. Four archers,
-    // 200 XP, ×2 for four and one step up for a party of two.
-    expect(ambush.creatureCount).toBe(4);
-    expect(ambush.difficulty).toEqual({
-      _tag: "rated",
-      band: "Easy",
-      xp: 200,
-      adjustedXp: 500,
-      multiplier: 2.5,
-      party: { size: 2, minLevel: 5, maxLevel: 5, unlevelled: 0 },
-      thresholds: { easy: 500, medium: 1000, hard: 1500, deadly: 2200 },
-    });
-  }, 60_000);
-
   it("says why it cannot rate: no creatures, a creature with no XP, nobody seated", async () => {
-    const list = await read(fixture.dm, items(encounters.list(fixture.campaign.id, {})));
+    const list = await asCreator(fixture.campaign.id, (dm) => items(encounters.list(dm, {})));
     const byName = new Map(list.map((encounter) => [encounter.name, encounter]));
     expect(byName.get("The ferryman's price")?.difficulty).toEqual({
       _tag: "unrated",
@@ -233,9 +236,8 @@ describe("computed difficulty", () => {
       _tag: "unrated",
       reason: "missing-xp",
     });
-    const lonely = await read(
-      fixture.dm,
-      encounters.findById(fixture.emptyTable.id, fixture.lonely.id),
+    const lonely = await asCreator(fixture.emptyTable.id, (dm) =>
+      encounters.findById(dm, fixture.lonely.id),
     );
     expect(lonely.difficulty).toEqual({ _tag: "unrated", reason: "no-party" });
   }, 60_000);
@@ -243,7 +245,7 @@ describe("computed difficulty", () => {
   it("moves with the roster, on the write's own answer", async () => {
     const as = withActor(fixture.dm);
     const archer = (
-      await read(fixture.dm, roster.list(fixture.emptyTable.id, fixture.lonely.id))
+      await asCreator(fixture.emptyTable.id, (dm) => roster.list(dm, fixture.lonely.id))
     )[0]!;
     await runtime.runPromise(
       as(roster.update(fixture.emptyTable.id, fixture.lonely.id, archer.id, { count: 3 })),
@@ -261,9 +263,8 @@ describe("computed difficulty", () => {
 
 describe("last played", () => {
   it("is the latest ended run the creator can see, with the night and the run to link to", async () => {
-    const ambush = await read(
-      fixture.dm,
-      encounters.findById(fixture.campaign.id, fixture.ambush.id),
+    const ambush = await asCreator(fixture.campaign.id, (dm) =>
+      encounters.findById(dm, fixture.ambush.id),
     );
     expect(ambush.lastPlayed).toMatchObject({
       runId: fixture.hidden.id,
@@ -276,7 +277,7 @@ describe("last played", () => {
   it("skips a fight the DM kept hidden when a player reads it", async () => {
     const ambush = await read(
       fixture.player,
-      encounters.findById(fixture.campaign.id, fixture.ambush.id),
+      encounters.findAsPlayer(fixture.campaign.id, fixture.ambush.id),
     );
     expect(ambush.lastPlayed).toMatchObject({
       runId: fixture.played.id,
@@ -286,27 +287,71 @@ describe("last played", () => {
   }, 60_000);
 
   it("is null for an encounter never off the table", async () => {
-    const empty = await read(
-      fixture.dm,
-      encounters.findById(fixture.campaign.id, fixture.empty.id),
+    const empty = await asCreator(fixture.campaign.id, (dm) =>
+      encounters.findById(dm, fixture.empty.id),
     );
     expect(empty.lastPlayed).toBeNull();
   }, 60_000);
 });
 
+describe("a player's encounter", () => {
+  it("is the shared roster lines as names and counts, and no number of any creature", async () => {
+    const ambush = await read(
+      fixture.player,
+      encounters.findAsPlayer(fixture.campaign.id, fixture.ambush.id),
+    );
+    // The hag is the DM's line: not named, not counted.
+    expect(ambush.creatures).toEqual([{ name: "Goblin Archer", count: 4 }]);
+    // The whole answer, by its keys: no difficulty, no count to disagree with
+    // the lines, nothing of the DM's.
+    expect(Object.keys(ambush).sort()).toEqual(
+      ["campaignId", "creatures", "id", "kind", "lastPlayed", "name", "tags"].sort(),
+    );
+    expect(ambush.creatures.flatMap((line) => Object.keys(line))).toEqual(["name", "count"]);
+    expect(JSON.stringify(ambush)).not.toContain("Marsh Hag");
+  }, 60_000);
+
+  it("lists only the shared encounters, the same shape", async () => {
+    const listed = await read(fixture.player, encounters.listAsPlayer(fixture.campaign.id));
+    expect(listed.map((encounter) => encounter.name)).toEqual(["Ambush in the reeds"]);
+    expect(listed[0]!.creatures).toEqual([{ name: "Goblin Archer", count: 4 }]);
+  }, 60_000);
+
+  it("is the same narrow shape for the creator, over every row they hold", async () => {
+    const ambush = await read(
+      fixture.dm,
+      encounters.findAsPlayer(fixture.campaign.id, fixture.ambush.id),
+    );
+    expect(ambush.creatures).toEqual([
+      { name: "Goblin Archer", count: 4 },
+      { name: "Marsh Hag", count: 1 },
+    ]);
+    expect(Object.keys(ambush)).not.toContain("difficulty");
+  }, 60_000);
+});
+
 describe("refusals", () => {
-  it("is NotFound for a stranger, and for a player reaching an encounter kept dm", async () => {
+  it("gives a player, a Shared World member and a stranger no creator proof", async () => {
+    // The wide reads — `Encounter` with its difficulty, the roster with each
+    // creature's numbers — take the proof, so this is the whole refusal.
+    for (const who of [fixture.player, fixture.worldMember, fixture.stranger]) {
+      expect(await runtime.runPromise(Effect.flip(asDm(who, fixture.campaign.id)))).toBeInstanceOf(
+        NotFound,
+      );
+    }
+  }, 60_000);
+
+  it("is NotFound on the player read for a stranger, a Shared World member, and a dm encounter", async () => {
+    for (const who of [fixture.stranger, fixture.worldMember]) {
+      expect(
+        await refused(who, encounters.findAsPlayer(fixture.campaign.id, fixture.ambush.id)),
+      ).toBeInstanceOf(NotFound);
+      expect(await refused(who, encounters.listAsPlayer(fixture.campaign.id))).toBeInstanceOf(
+        NotFound,
+      );
+    }
     expect(
-      await refused(fixture.stranger, encounters.findById(fixture.campaign.id, fixture.ambush.id)),
-    ).toBeInstanceOf(NotFound);
-    expect(
-      await refused(fixture.stranger, encounters.list(fixture.campaign.id, {})),
-    ).toBeInstanceOf(NotFound);
-    expect(
-      await refused(fixture.player, encounters.findById(fixture.campaign.id, fixture.bog.id)),
-    ).toBeInstanceOf(NotFound);
-    expect(
-      await refused(fixture.player, roster.list(fixture.campaign.id, fixture.bog.id)),
+      await refused(fixture.player, encounters.findAsPlayer(fixture.campaign.id, fixture.bog.id)),
     ).toBeInstanceOf(NotFound);
   }, 60_000);
 });

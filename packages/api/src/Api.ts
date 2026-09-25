@@ -172,6 +172,7 @@ import {
   PlayerNpc,
 } from "./Npc.js";
 import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
+import { PlayerEncounter } from "./PlayerEncounter.js";
 import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
@@ -1140,6 +1141,12 @@ class NotesGroup extends HttpApiGroup.make("notes")
  * Campaign-scoped, not session-scoped: an encounter is reusable and outlives
  * any one night, and running it produces a separate `encounter_run` rather than
  * mutating the template.
+ *
+ * **The creator's alone**, reads as well as writes: `Encounter` carries the
+ * computed difficulty, which a player is not told. A player, a Shared World
+ * member and a stranger get `NotFound` from every endpoint here, whether or not
+ * the encounter is shared; a player reads a shared one through
+ * `playerEncounters`.
  */
 class EncountersGroup extends HttpApiGroup.make("encounters")
   .add(
@@ -1175,6 +1182,34 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
     }),
   )
   .prefix("/campaigns/:campaignId/encounters")
+  .middleware(Authorization) {}
+
+/**
+ * The shared encounters, told to somebody sitting at the table: a distinct
+ * `PlayerEncounter` on a distinct path, the `/recap/player` decision. It has no
+ * difficulty and its roster is names and counts, so nothing here is a number
+ * the DM was keeping.
+ *
+ * Not behind the creator proof, for `table`'s reason: there is no creator
+ * projection of this to diverge from — the creator has `encounters` — and a DM
+ * calling it gets the same narrow shape over their own rows. The rows a reader
+ * gets are `repo/visibility.ts`'s answer: a player's are the shared encounters
+ * and, on each, the shared roster lines. Unpaged, as `encounterPrep.list` is.
+ */
+class PlayerEncountersGroup extends HttpApiGroup.make("playerEncounters")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerEncounter),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("find", "/:encounterId", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      success: PlayerEncounter,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/player-encounters")
   .middleware(Authorization) {}
 
 /**
@@ -1660,6 +1695,10 @@ class LibraryGroup extends HttpApiGroup.make("library")
 
 /**
  * What an encounter contains. The roster, not the running fight.
+ *
+ * Its read is **the creator's alone**: a line carries its creature's CR, AC,
+ * HP and XP. A player reads a shared encounter's shared lines as names and
+ * counts, on `PlayerEncounter`.
  *
  * Nested under the encounter for the same reason the checklist is nested under
  * the session: the encounter id arriving from a client is a claim, so the
@@ -2649,6 +2688,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(SeatPrepGroup)
   .add(NotesGroup)
   .add(EncountersGroup)
+  .add(PlayerEncountersGroup)
   .add(BattleMapsGroup)
   .add(EncounterPrepGroup)
   .add(CreaturesGroup)

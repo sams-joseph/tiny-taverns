@@ -12,7 +12,7 @@ import { EncounterCreatures } from "../src/repo/EncounterCreatures.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -589,11 +589,8 @@ describe("another account", () => {
         ),
       ),
     );
-    const line = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.outsider)(roster.list(fixture.campaign.id, fixture.encounter.id)),
-      ),
-    );
+    // The roster read takes the creator's proof, which nobody else can mint.
+    const line = await runtime.runPromise(Effect.flip(asDm(fixture.outsider, fixture.campaign.id)));
 
     expect(creature._tag).toBe("NotFound");
     expect(line._tag).toBe("NotFound");
@@ -604,10 +601,11 @@ describe("an encounter's roster", () => {
   it("accepts a Library creature and a global one, and makes the card's count true", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
+        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
         const encounter = yield* encounters.create(fixture.campaign.id, {
           name: "Six in the reeds",
         });
-        const empty = yield* encounters.findById(fixture.campaign.id, encounter.id);
+        const empty = yield* encounters.findById(dm, encounter.id);
 
         const own = yield* roster.create(fixture.campaign.id, encounter.id, {
           creatureId: fixture.authored.id,
@@ -618,14 +616,14 @@ describe("an encounter's roster", () => {
           count: 4,
         });
 
-        const listed = yield* roster.list(fixture.campaign.id, encounter.id);
-        const counted = yield* encounters.findById(fixture.campaign.id, encounter.id);
+        const listed = yield* roster.list(dm, encounter.id);
+        const counted = yield* encounters.findById(dm, encounter.id);
         const raised = yield* roster.update(fixture.campaign.id, encounter.id, own.id, {
           count: 3,
         });
-        const afterRaise = yield* encounters.findById(fixture.campaign.id, encounter.id);
+        const afterRaise = yield* encounters.findById(dm, encounter.id);
         yield* roster.remove(fixture.campaign.id, encounter.id, global.id);
-        const afterRemove = yield* encounters.findById(fixture.campaign.id, encounter.id);
+        const afterRemove = yield* encounters.findById(dm, encounter.id);
 
         return { encounter, empty, own, global, listed, counted, raised, afterRaise, afterRemove };
       }).pipe(withActor(fixture.dm), Effect.orDie),
@@ -673,29 +671,22 @@ describe("an encounter's roster", () => {
           fixture.dm,
         );
 
-        const asDm = yield* Effect.provideService(
-          encounters.findById(fixture.campaign.id, encounter.id),
-          CurrentActor,
-          fixture.dm,
-        );
+        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
+        const asCreator = yield* encounters.findById(dm, encounter.id);
+        const creatorList = yield* roster.list(dm, encounter.id);
         const asPlayer = yield* Effect.provideService(
-          encounters.findById(fixture.campaign.id, encounter.id),
-          CurrentActor,
-          fixture.player,
-        );
-        const playerList = yield* Effect.provideService(
-          roster.list(fixture.campaign.id, encounter.id),
+          encounters.findAsPlayer(fixture.campaign.id, encounter.id),
           CurrentActor,
           fixture.player,
         );
 
-        return { asDm, asPlayer, playerList };
+        return { asCreator, creatorList, asPlayer };
       }).pipe(Effect.orDie),
     );
 
-    expect(seen.asDm.creatureCount).toBe(7);
-    expect(seen.asPlayer.creatureCount).toBe(2);
-    expect(seen.playerList).toHaveLength(1);
+    expect(seen.asCreator.creatureCount).toBe(7);
+    expect(seen.creatorList).toHaveLength(2);
+    expect(seen.asPlayer.creatures.map(({ count }) => count)).toEqual([2]);
   });
 
   it("refuses a creature from another campaign, and an encounter from another campaign", async () => {
@@ -768,7 +759,10 @@ describe("an encounter's roster", () => {
         // it — there is no path that removes the plumbing.
         const instanceUntouchable = yield* Effect.flip(creatures.libraryRemove(line.creatureId));
         yield* creatures.libraryRemove(creature.id);
-        const survives = yield* roster.list(fixture.campaign.id, encounter.id);
+        const survives = yield* roster.list(
+          yield* asDm(fixture.dm, fixture.campaign.id),
+          encounter.id,
+        );
         const instance = yield* creatures.findById(fixture.campaign.id, line.creatureId);
 
         return { instanceUntouchable, survives, instance };

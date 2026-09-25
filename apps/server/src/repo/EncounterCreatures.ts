@@ -13,6 +13,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -134,10 +135,15 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
 export class EncounterCreatures extends Context.Service<
   EncounterCreatures,
   {
+    /**
+     * The creator's alone, so it takes the proof: a line carries its
+     * creature's numbers. A player is told a shared encounter's shared lines
+     * as names and counts, on `PlayerEncounter` (`Encounters.listAsPlayer`).
+     */
     readonly list: (
-      campaignId: CampaignId,
+      creator: CampaignCreatorActor,
       encounterId: EncounterId,
-    ) => Effect.Effect<ReadonlyArray<EncounterCreature>, NotFound, CurrentActor>;
+    ) => Effect.Effect<ReadonlyArray<EncounterCreature>, NotFound>;
     /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
@@ -249,13 +255,12 @@ export class EncounterCreatures extends Context.Service<
       `;
 
       return {
-        list: (campaignId, encounterId) =>
+        list: ({ campaign, actor }, encounterId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureNestedParentReadable(sql, ROSTER, encounterId, campaignId, actor);
+              yield* ensureNestedParentReadable(sql, ROSTER, encounterId, campaign, actor);
               const rows = yield* rosterRows(
-                sql.and([nestedRowReadable(sql, ROSTER, encounterId, campaignId, actor)]),
+                sql.and([nestedRowReadable(sql, ROSTER, encounterId, campaign, actor)]),
               );
               return rows.map(toEncounterCreature);
             }),
