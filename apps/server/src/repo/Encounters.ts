@@ -269,10 +269,18 @@ export class Encounters extends Context.Service<
           return { rows, toEncounter: toEncounter(levels) };
         });
 
-      /** One row just written, read back the way every read reads it. */
+      /**
+       * One row just written, read back the way every read reads it — through
+       * `rowReadable` too, which the roster subqueries rely on the enclosing
+       * query to have applied.
+       */
       const readBack = (campaignId: CampaignId, actor: Actor, id: EncounterId) =>
         Effect.map(
-          selectEncounters(campaignId, actor, sql`encounter.id = ${id}`),
+          selectEncounters(
+            campaignId,
+            actor,
+            sql.and([sql`encounter.id = ${id}`, rowReadable(sql, "encounter", campaignId, actor)]),
+          ),
           ({ rows, toEncounter }) => toEncounter(rows[0]!),
         );
 
