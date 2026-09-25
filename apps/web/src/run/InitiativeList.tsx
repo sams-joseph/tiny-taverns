@@ -231,40 +231,6 @@ export function InitiativeList({
         <span className="ml-auto min-w-0 truncate font-mono text-mono leading-none text-muted-foreground">
           {standing} {standing === 1 ? "hostile" : "hostiles"} standing
         </span>
-        <span className="flex shrink-0 gap-1.5">
-          {/* `EncounterRunner.jsx:138`'s reroll, narrowed to what a DM can
-              honestly do: the app cannot roll for the people at the table, and
-              a button that overwrote the numbers they just called out would be
-              worse than no button. Everything seeds at initiative 0, so this is
-              the first thing pressed in a fight. */}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="size-8 text-on-dark-muted"
-                  aria-label="Roll initiative for the monsters"
-                  disabled={disabled || monsters.length === 0}
-                  onClick={onRoll}
-                >
-                  <Icon name="dices" size={14} />
-                </Button>
-              }
-            />
-            <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
-          </Tooltip>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8 text-on-dark-muted"
-            aria-label="Add a combatant"
-            disabled={disabled}
-            onClick={onAdd}
-          >
-            <Icon name="plus" size={14} />
-          </Button>
-        </span>
       </div>
 
       <div role="table" aria-label="Initiative order">
@@ -287,9 +253,41 @@ export function InitiativeList({
           ))
         )}
       </div>
-      <p className="mb-0 px-panel py-2.5 text-caption leading-body text-muted-foreground">
-        {visibilitySentence(shared, held, combatants.length)}
-      </p>
+      {/* The list's own verbs sit under it, where the drawing puts its
+          *Reroll initiative*: the header is the list's width, and a 340px
+          column has room for its title and the count, not for buttons too. */}
+      <div className="flex flex-col gap-2 px-panel py-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {/* `EncounterRunner.jsx:138`'s reroll, narrowed to what a DM can
+              honestly do: the app cannot roll for the people at the table, and
+              a button that overwrote the numbers they just called out would be
+              worse than no button. Everything seeds at initiative 0, so this is
+              the first thing pressed in a fight. */}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || monsters.length === 0}
+                  onClick={onRoll}
+                >
+                  <Icon name="dices" size={13} />
+                  Roll for monsters
+                </Button>
+              }
+            />
+            <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
+          </Tooltip>
+          <Button variant="ghost" size="sm" disabled={disabled} onClick={onAdd}>
+            <Icon name="plus" size={13} />
+            Add combatant
+          </Button>
+        </div>
+        <p className="mb-0 text-caption leading-body text-muted-foreground">
+          {visibilitySentence(shared, held, combatants.length)}
+        </p>
+      </div>
     </Card>
   );
 }
