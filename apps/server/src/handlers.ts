@@ -470,6 +470,7 @@ const PartyLive = HttpApiBuilder.group(
     return handlers
       .handle("list", ({ params }) => party.list(params.campaignId))
       .handle("join", ({ params, payload }) => party.join(params.campaignId, payload))
+      .handle("rest", ({ params, payload }) => party.rest(params.campaignId, payload))
       .handle("update", ({ params, payload }) =>
         party.update(params.campaignId, params.campaignCharacterId, payload),
       )

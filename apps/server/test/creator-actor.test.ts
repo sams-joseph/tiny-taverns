@@ -709,7 +709,10 @@ describe("the scope, counted", () => {
     // archived shelf reaches it without the campaign screen's proof.
     // `Groups.deletePermanently` is the world owner's act on no campaign at
     // all, gated by `groupWritable` like `Groups.archive`.
-    expect(ungated).toBe(160);
+    // `Party.rest` is the one hundred and sixty-first, for `Party`'s reason
+    // above: it is a write whose reach is `characterVitalsWritable`, and
+    // `campaignWritableById` underneath is already the creator predicate.
+    expect(ungated).toBe(161);
   });
 });
 

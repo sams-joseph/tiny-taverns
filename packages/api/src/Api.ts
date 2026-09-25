@@ -13,7 +13,7 @@ import {
   CharacterResourceSpend,
   CharacterRest,
 } from "./Character.js";
-import { OwnedCharacter, PartyJoin, PartySeat, PartySeatUpdate } from "./Party.js";
+import { OwnedCharacter, PartyJoin, PartyRest, PartySeat, PartySeatUpdate } from "./Party.js";
 import {
   CharacterOption,
   ClassProgression,
@@ -1016,6 +1016,18 @@ class PartyGroup extends HttpApiGroup.make("party")
       payload: PartyJoin,
       success: PartySeat,
       error: NotFound,
+    }),
+    /**
+     * The creator's long rest for every seated character, answered with the
+     * party as it now stands. It reaches resources the seat PATCH never does,
+     * through the owner's own rest rule, so the two cannot disagree. `Conflict`
+     * while a seated character is in a live fight.
+     */
+    HttpApiEndpoint.post("rest", "/rest", {
+      params: { campaignId: CampaignId },
+      payload: PartyRest,
+      success: Schema.Array(PartySeat),
+      error: [NotFound, Conflict],
     }),
     /** The creator's seat PATCH: visibility, display, live conditions. */
     HttpApiEndpoint.patch("update", "/:campaignCharacterId", {

@@ -6,10 +6,12 @@ import {
   Character,
   type CharacterDamage,
   type CharacterId,
+  Conflict,
   CurrentActor,
   NotFound,
   PartySeat,
   type PartyJoin,
+  type PartyRest,
   type PartySeatUpdate,
   type SessionId,
 } from "@taverns/api";
@@ -18,9 +20,12 @@ import { SqlClient, SqlError } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
   type CharacterRow,
+  claimCharacterRequest,
+  liveFightOf,
   type PortraitSigner,
   portraitColumns,
   portraitSigner,
+  restCharacterRow,
   toCharacter,
 } from "./Characters.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
@@ -33,6 +38,8 @@ import {
   writeThroughToLiveCombatants,
 } from "./vitals.js";
 import {
+  campaignWritableById,
+  characterVitalsWritable,
   ensureCampaignReadable,
   ownCharacter,
   ownedRowReadable,
@@ -49,12 +56,14 @@ import {
  *
  * What the seat owns is the campaign's facts — when it joined and left, the
  * display snapshots, and the campaign-scoped `visibility`. What it reaches is
- * the shared character, and it reaches the character's **live trio only**: the
+ * the shared character, and it reaches the character's **live trio**: the
  * seat PATCH writes conditions through and the delta moves hit points, both
  * exactly the writes the old campaign-scoped DM PATCH made, now confined to a
- * row the campaign actually holds. The durable half of the sheet is the
- * owner's and is not writable from here at all — there is no payload field
- * for it, which is the boundary's stronger form.
+ * row the campaign actually holds. The one wider reach is the party's long
+ * rest, which also resets the sheet's counted resources — through the owner's
+ * own rest rule (`restCharacterRow`), never a second one. The rest of the
+ * durable sheet is the owner's and is not writable from here at all — there is
+ * no payload field for it, which is the boundary's stronger form.
  *
  * **Retiring is the only removal.** A seat is never deleted while its
  * campaign stands: `left_at` stamps it, the roster line survives as campaign
@@ -185,6 +194,18 @@ export class Party extends Context.Service<
       id: CampaignCharacterId,
       patch: PartySeatUpdate,
     ) => Effect.Effect<PartySeat, NotFound, CurrentActor>;
+    /**
+     * The creator's long rest for the table: every live seat's character, by
+     * the owner's own rest rule (`restCharacterRow`), in one transaction, and
+     * the roster as it then stands. Refused with `Conflict` while any of them
+     * is in a live fight, at this table or another; a retired seat or a
+     * deleted character is not rested. `requestId` is claimed per character,
+     * so a retry rests nobody twice.
+     */
+    readonly rest: (
+      campaignId: CampaignId,
+      payload: PartyRest,
+    ) => Effect.Effect<ReadonlyArray<PartySeat>, NotFound | Conflict, CurrentActor>;
     /** Retire a seat — the owner's own, or any seat for the creator. */
     readonly leave: (
       campaignId: CampaignId,
@@ -236,21 +257,24 @@ export class Party extends Context.Service<
           ),
         );
 
+      /** Every live seat this actor may see, with its character. */
+      const readSeats = (campaignId: CampaignId, actor: Actor) =>
+        sql<SeatWithCharacterRow>`
+          select campaign_character.*, ${characterColumns(sql)}
+          from campaign_character
+          left join character on character.id = campaign_character.character_id
+          where campaign_character.left_at is null
+            and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+          order by campaign_character.joined_at asc, campaign_character.id asc
+        `.pipe(Effect.map((rows) => rows.map((row) => toPartySeat(row, sign))));
+
       return {
         list: (campaignId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<SeatWithCharacterRow>`
-                select campaign_character.*, ${characterColumns(sql)}
-                from campaign_character
-                left join character on character.id = campaign_character.character_id
-                where campaign_character.left_at is null
-                  and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
-                order by campaign_character.joined_at asc, campaign_character.id asc
-              `;
-              return rows.map((row) => toPartySeat(row, sign));
+              return yield* readSeats(campaignId, actor);
             }),
           ),
 
@@ -383,6 +407,76 @@ export class Party extends Context.Service<
                 .pipe(
                   Effect.tap(ring),
                   Effect.map(({ seat }) => seat),
+                );
+            }),
+          ),
+
+        rest: (campaignId, payload) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              return yield* sql
+                .withTransaction(
+                  Effect.gen(function* () {
+                    // The creator's act: anybody else is refused as if the
+                    // table were not there, the ordinary `NotFound`.
+                    const creator = yield* sql`
+                      select 1 where ${campaignWritableById(sql, campaignId, actor)}
+                    `;
+                    if (creator.length === 0) {
+                      return yield* new NotFound({ resource: "campaign", id: campaignId });
+                    }
+
+                    // Every character at a live seat here, locked in id order
+                    // so two rests (or a rest and a seat write) queue rather
+                    // than interleave. The reach is the seat-side vitals
+                    // predicate, the same one the delta and conditions use.
+                    const reach = characterVitalsWritable(sql, campaignId, actor);
+                    const before = yield* sql<CharacterRow>`
+                      select character.*, ${portraitColumns(sql)} from character
+                      where ${reach}
+                      order by character.id
+                      for update
+                    `;
+
+                    // The owner's rule refuses a rest mid-fight anywhere; so
+                    // does this, before anything is written. Another table's
+                    // fight is not named — its campaign is not this creator's.
+                    for (const row of before) {
+                      const fight = yield* liveFightOf(sql, row.id);
+                      if (fight === undefined) continue;
+                      return yield* new Conflict({
+                        message:
+                          fight.campaign_id === campaignId
+                            ? "Rest after the fight; the party is on the table."
+                            : `Rest after the fight; ${row.name} is on another table right now.`,
+                      });
+                    }
+
+                    const sessionId = yield* currentSessionOf(sql, campaignId, actor);
+                    let rested = 0;
+                    for (const row of before) {
+                      if (!(yield* claimCharacterRequest(sql, row.id, payload.requestId))) continue;
+                      const { detail } = yield* restCharacterRow(sql, row, payload.kind, 0, reach);
+                      rested += 1;
+                      if (sessionId !== undefined) {
+                        yield* appendCharacterUpdated(sql, {
+                          sessionId,
+                          characterId: row.id,
+                          live: undefined,
+                          detail,
+                        });
+                      }
+                    }
+                    return {
+                      seats: yield* readSeats(campaignId, actor),
+                      sessionId: rested === 0 ? undefined : sessionId,
+                    };
+                  }),
+                )
+                .pipe(
+                  Effect.tap(ring),
+                  Effect.map(({ seats }) => seats),
                 );
             }),
           ),
