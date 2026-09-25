@@ -15,6 +15,7 @@ import {
   summaryLine,
 } from "./cards";
 import { rosterAtom, type PartyRoster } from "./load";
+import { PartyRestDialog } from "./PartyRestDialog";
 import { notPlayingYet, rosterOf, type NotPlaying } from "./roster";
 import { SeatCard } from "./SeatCard";
 
@@ -37,7 +38,9 @@ import { SeatCard } from "./SeatCard";
  *
  * **In-play verbs on the card, management on the seat's page.** A card's − and
  * + move hit points; the card itself opens the seat (`SeatScreen.tsx`), where
- * sharing, temporary hit points, conditions and retiring live.
+ * sharing, temporary hit points, conditions and retiring live. The header's
+ * *Long rest* is the one verb over the whole party, and asks first
+ * (`PartyRestDialog`); it is offered only when there is a character to rest.
  *
  * What the drawing has that this leaves out, each a decision rather than an
  * omission: *Party stash*, which has no model; a dash for an unanswered tile,
@@ -47,6 +50,7 @@ import { SeatCard } from "./SeatCard";
 export function PartyScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const [inviting, setInviting] = useState(false);
+  const [resting, setResting] = useState(false);
 
   return (
     <CampaignChrome<PartyRoster>
@@ -55,16 +59,34 @@ export function PartyScreen() {
       centred
       extra={rosterAtom(campaignId)}
       subtitle={({ view }) => summaryLine(partySummary(view.party))}
-      actions={() => (
+      actions={({ view }) => (
         // Outline, not peach: the campaign row's press is this screen's one
-        // primary. The party's long rest stands before it.
-        <Button size="sm" variant="outline" onClick={() => setInviting(true)}>
-          <Icon name="user-plus" size={14} />
-          Invite player
-        </Button>
+        // primary.
+        <>
+          {view.party.some((row) => row.character !== null) && (
+            <Button size="sm" variant="outline" onClick={() => setResting(true)}>
+              <Icon name="moon" size={14} />
+              Long rest
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setInviting(true)}>
+            <Icon name="user-plus" size={14} />
+            Invite player
+          </Button>
+        </>
       )}
     >
-      {(slots) => <Party slots={slots} inviting={inviting} onInvite={setInviting} />}
+      {(slots) => (
+        <>
+          <Party slots={slots} inviting={inviting} onInvite={setInviting} />
+          {resting && (
+            <PartyRestDialog
+              campaignId={slots.view.campaign.id}
+              onClose={() => setResting(false)}
+            />
+          )}
+        </>
+      )}
     </CampaignChrome>
   );
 }

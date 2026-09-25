@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { apiUrl } from "../api/client";
+import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
 import {
   brannocSeat,
@@ -15,6 +16,7 @@ import {
   renderParty,
   sorrelSeatId,
 } from "./party.fixtures";
+import { partyRestWrites } from "./write";
 
 /**
  * The Party tab against a stub server: the cards and their − and +, the
@@ -281,6 +283,74 @@ describe("the header", () => {
   });
 });
 
+describe("the party's long rest", () => {
+  const DIALOG = "Long rest for the whole party?";
+  const openRest = async () => {
+    await renderParty();
+    await card("Brannoc");
+    await userEvent.click(screen.getByRole("button", { name: "Long rest" }));
+    return screen.findByRole("dialog", { name: DIALOG });
+  };
+
+  it("asks first, saying what changes and what it keeps", async () => {
+    const dialog = await openRest();
+    const changes = within(dialog).getByRole("region", { name: "What changes" });
+    expect(within(changes).getByText(/Hit points back to full/)).toBeVisible();
+    expect(within(changes).getByText(/temporary hit points gone/)).toBeVisible();
+    expect(within(changes).getByText("Spell slots and feature uses back")).toBeVisible();
+    expect(within(changes).getByText("Half their hit dice back")).toBeVisible();
+    expect(within(changes).getByText("Concentration ends")).toBeVisible();
+    const keeps = within(dialog).getByRole("region", { name: "What it keeps" });
+    expect(within(keeps).getByText(/Every other condition/)).toBeVisible();
+    // Opening it wrote nothing.
+    expect(called("POST", "/party/rest")).toBe(false);
+  });
+
+  it("rests the party as one long rest, then re-reads the party and My characters", async () => {
+    const dialog = await openRest();
+    const mark = server.calls.length;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Long rest" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: DIALOG })).not.toBeInTheDocument(),
+    );
+    const posts = server.calls.filter((call) => call.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.pathname).toBe(`${base}/party/rest`);
+    expect(JSON.parse(posts[0]!.body)).toEqual({ kind: "long", requestId: expect.any(String) });
+    await waitFor(() => expect(readsOf(`${base}/party`, mark)).toBe(1));
+  });
+
+  it("names My characters beside the party as what it changed", () => {
+    // The creator's own seated character rests too, and their My characters is
+    // not on screen here, so what is asserted is that the resource is named.
+    expect(partyRestWrites(campaignId)).toEqual([reads.party(campaignId), reads.myCharacters]);
+  });
+
+  it("says why it is refused while a fight is on the table, and stays open", async () => {
+    server.routes.set(`POST ${base}/party/rest`, {
+      status: 409,
+      body: { _tag: "Conflict", message: "Rest after the fight; the party is on the table." },
+    });
+    const dialog = await openRest();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Long rest" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Rest after the fight; the party is on the table.",
+    );
+    expect(screen.getByRole("dialog", { name: DIALOG })).toBeVisible();
+  });
+
+  it("rests nobody when it is put away", async () => {
+    const dialog = await openRest();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Not yet" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: DIALOG })).not.toBeInTheDocument(),
+    );
+    expect(called("POST", "/party/rest")).toBe(false);
+  });
+});
+
 describe("passives and saves", () => {
   const table = () => screen.getByRole("table", { name: "Passives and saves" });
   const row = (name: string) =>
@@ -463,6 +533,8 @@ describe("the states a real screen has", () => {
     expect(screen.queryByRole("region", { name: "Characters" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Not playing yet" })).not.toBeInTheDocument();
+    // Nobody to rest.
+    expect(screen.queryByRole("button", { name: "Long rest" })).not.toBeInTheDocument();
   });
 
   it("still lists who is waiting on a table with no characters yet", async () => {

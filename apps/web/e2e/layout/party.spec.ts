@@ -89,6 +89,17 @@ for (const width of WIDTHS) {
         expect.soft(h1.x, "h1 left").toBeCloseTo(grid.x, 0);
       });
 
+      await test.step("Long rest stands before Invite player, both inside the page", async () => {
+        const heading = page.locator('main [data-slot="page-heading"]');
+        const rest = await box(heading.getByRole("button", { name: "Long rest" }));
+        const invite = await box(heading.getByRole("button", { name: "Invite player" }));
+        expect
+          .soft(rest.x + rest.width, "Long rest ends before Invite")
+          .toBeLessThanOrEqual(invite.x + 0.5);
+        expect.soft(rest.y, "the two share a line").toBeCloseTo(invite.y, 0);
+        expect.soft(invite.x + invite.width, "Invite inside the page").toBeLessThanOrEqual(width);
+      });
+
       await test.step("− and + are on top of the card's link, and press without opening it", async () => {
         const brannoc = cards.filter({ has: page.getByRole("link", { name: "Brannoc" }) });
         const damage = brannoc.getByRole("button", { name: "Damage Brannoc" });
