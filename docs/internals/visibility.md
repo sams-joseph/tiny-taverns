@@ -43,6 +43,8 @@ A widening relaxes the row-level toggle and nothing above it. `withinReadableCam
 
 `ownedRowReadable` (your own row whatever its visibility) and `ownRowWritable` (ownership conjoined with the campaign gate, no visibility disjunct) apply today to `campaign_character`, the seat. The write is strictly narrower than the read by shape: `account_id = me` implies the disjunct it would have had to satisfy in the read, so a player can never write a row they could not read however either predicate changes.
 
+`ownSeatedCombatant` is the one live row a player may write: a `pc` combatant readable through its containment chain whose character sits in an active seat this account holds, the same seat test the player's table uses to call a row "you". It is conjoined with the read predicate, so it too can never reach a row the player could not read. Today its only writer is a player's own initiative (`PlayerTable.setInitiative`, [Live session](live-session.md)).
+
 `character` has no `campaign_id` (`schema.test.ts` asserts it), so its top-level reach is `ownCharacter`, `character.account_id = me` with no membership and no scope, on the Library's argument that there is no campaign for either to be about. A predicate bounds rows; which columns a player may move is a second payload schema (`CharacterOwnUpdate`), never a field filter over the creator's type.
 
 ## Denial, claims and defects

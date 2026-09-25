@@ -1,5 +1,6 @@
 import type {
   CampaignId,
+  EncounterRunId,
   NpcId,
   PlayerNpc,
   PlayerLiveCombatant,
@@ -20,6 +21,8 @@ import {
   CardTitle,
   Icon,
   EmptyState,
+  Input,
+  Label,
   Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
@@ -37,6 +40,7 @@ import {
   rollAbilityCheck,
   rollDetail,
   rollDiceExpression,
+  signed,
 } from "../characters/rolls";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
@@ -103,7 +107,7 @@ function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
             {row.displayName}
           </span>
           <span className="text-caption leading-snug text-muted-foreground">
-            Initiative {String(row.initiative)}
+            Initiative {row.initiative === null ? "—" : String(row.initiative)}
           </span>
         </div>
         <div className="text-caption leading-snug text-muted-foreground">
@@ -118,6 +122,110 @@ function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
         </Badge>
       ))}
     </div>
+  );
+}
+
+/** The bounds `combatant.initiative` holds (`Combatant.ts`). */
+const MIN_INITIATIVE = -50;
+const MAX_INITIATIVE = 100;
+
+const initiativeFrom = (text: string): number | undefined => {
+  const trimmed = text.trim();
+  if (!/^-?\d{1,3}$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return value < MIN_INITIATIVE || value > MAX_INITIATIVE ? undefined : value;
+};
+
+/**
+ * Your own initiative, while the fight is rolling it: roll it here or type the
+ * total you rolled with real dice, and it lands in your DM's list straight
+ * away. Your DM can change it; once they have, their number stands and this
+ * card only says what it is.
+ */
+function YourInitiative({
+  campaignId,
+  runId,
+  you,
+  rollMode,
+  onRolled,
+}: {
+  readonly campaignId: CampaignId;
+  readonly runId: EncounterRunId;
+  readonly you: PlayerLiveCombatantYou;
+  readonly rollMode: RollMode;
+  readonly onRolled: (roll: LocalRoll) => void;
+}) {
+  const { busy, failure, submit } = useMutation();
+  const [draft, setDraft] = useState("");
+  const typed = initiativeFrom(draft);
+
+  const send = async (initiative: number) => {
+    const sent = await submit(
+      (client) =>
+        client.table.setInitiative({
+          params: { campaignId, runId, combatantId: you.combatantId },
+          payload: { initiative },
+        }),
+      [reads.playerTable(campaignId)],
+    );
+    if (Result.isSuccess(sent)) setDraft("");
+  };
+
+  const roll = () => {
+    if (you.initiativeBonus === null) return;
+    const rolled = rollAbilityCheck("Initiative", signed(you.initiativeBonus), rollMode);
+    if (rolled === undefined) return;
+    onRolled(rolled);
+    void send(rolled.total);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Your initiative</CardTitle>
+        <p className="text-body-s leading-body text-muted-foreground">
+          {you.initiativeSetBy === "dm"
+            ? `Your DM has you at ${String(you.initiative)}.`
+            : you.initiative === null
+              ? "Roll here, or type what you rolled at the table. Your DM sees it straight away and can change it."
+              : `You sent ${String(you.initiative)}. You can change it until your DM starts the round.`}
+        </p>
+      </CardHeader>
+      {you.initiativeSetBy !== "dm" && (
+        <CardContent className="flex flex-col gap-3">
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (typed !== undefined) void send(typed);
+            }}
+          >
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="your-initiative">Total</Label>
+              <Input
+                id="your-initiative"
+                mono
+                inputMode="numeric"
+                value={draft}
+                aria-invalid={draft.trim() !== "" && typed === undefined ? true : undefined}
+                onChange={(event) => setDraft(event.target.value)}
+                className="w-24"
+              />
+            </div>
+            <Button type="submit" size="sm" disabled={busy || typed === undefined}>
+              {busy ? "Sending…" : "Send"}
+            </Button>
+            {you.initiativeBonus !== null && (
+              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={roll}>
+                <Icon name="dices" size={14} />
+                Roll d20 {signed(you.initiativeBonus)}
+              </Button>
+            )}
+          </form>
+          {failure !== undefined && <SaveFailure failure={failure} />}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -424,7 +532,13 @@ export function PlayerTableScreen() {
             ? undefined
             : table === null
               ? "No shared live table for one of your seats."
-              : `Session ${String(table.sessionNumber)}${fight === null ? " · nothing on the table" : ` · round ${String(fight.round)}`}`
+              : `Session ${String(table.sessionNumber)}${
+                  fight === null
+                    ? " · nothing on the table"
+                    : fight.phase === "initiative"
+                      ? " · rolling initiative"
+                      : ` · round ${String(fight.round)}`
+                }`
         }
       >
         <BackLink render={<Link to="/campaigns/$campaignId" params={{ campaignId }} />}>
@@ -469,9 +583,23 @@ export function PlayerTableScreen() {
           ) : (
             <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
               <div className="flex min-w-0 flex-col gap-5">
+                {fight.phase === "initiative" && you !== undefined && (
+                  <YourInitiative
+                    campaignId={campaignId}
+                    runId={fight.id}
+                    you={you}
+                    rollMode={rollMode}
+                    onRolled={recordRoll}
+                  />
+                )}
                 <Card>
                   <CardHeader>
                     <CardTitle>Initiative</CardTitle>
+                    {fight.phase === "initiative" && (
+                      <p className="text-body-s leading-body text-muted-foreground">
+                        Rolling initiative. The first round starts once everyone has a number.
+                      </p>
+                    )}
                   </CardHeader>
                   {fight.order.map((row) => (
                     <CombatantRow key={row.combatantId} row={row} />

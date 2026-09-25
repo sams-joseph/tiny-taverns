@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bodyOf,
   brannoc,
@@ -845,5 +845,93 @@ describe("the fight's battle map", () => {
       expect(document.querySelector("[data-slot=run-layout]")?.className).not.toContain("map"),
     );
     expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
+  });
+});
+
+describe("rolling initiative", () => {
+  const rollingRun = { ...liveRun, phase: "initiative", activeCombatantId: null };
+  const unrolled = [
+    { ...brannoc, initiative: null, initiativeSetBy: null },
+    { ...goblinBoss, initiative: null, initiativeSetBy: null, initiativeBonus: 2 },
+  ];
+  const rollingWith = (combatants: ReadonlyArray<unknown>) => {
+    server.routes.set(`GET ${serverRunBase()}`, { status: 200, body: rollingRun });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, { status: 200, body: combatants });
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("waits for every number before round 1, and Space does not advance", async () => {
+    rollingWith(unrolled);
+    await renderRunner();
+
+    await screen.findByText("Rolling initiative · 2 still to roll");
+    expect(screen.getByRole("button", { name: "Start round 1" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reroll initiative" })).toBeNull();
+    expect(within(rowFor("Brannoc")).getByText("—")).toBeInTheDocument();
+    // Nobody is up, so nobody can be made up.
+    await userEvent.click(rowFor("Brannoc"));
+    expect(panel().queryByRole("button", { name: /Make it/ })).toBeNull();
+
+    await userEvent.keyboard(" ");
+    expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
+  });
+
+  it("rolls d20 plus each monster's bonus, in one write, and leaves the party alone", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    rollingWith(unrolled);
+    server.routes.set(`POST ${serverRunBase()}/initiative`, {
+      status: 200,
+      body: [{ ...unrolled[1], initiative: 13, initiativeSetBy: "dm" }, unrolled[0]],
+    });
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 2 still to roll");
+
+    await userEvent.click(screen.getByRole("button", { name: "Roll for monsters" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/initiative")).toMatchObject({
+        entries: [{ combatantId: goblinBoss.id, initiative: 13 }],
+      }),
+    );
+    expect(
+      server.calls.filter(
+        (call) => call.method === "POST" && call.pathname.endsWith("/initiative"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("starts the round once everyone has a number", async () => {
+    rollingWith([
+      { ...brannoc, initiativeSetBy: "player" },
+      { ...goblinBoss, initiativeSetBy: "dm" },
+    ]);
+    server.routes.set(`POST ${serverRunBase()}/begin`, { status: 200, body: liveRun });
+    await renderRunner();
+
+    await screen.findByText("Rolling initiative · everyone has a number");
+    await userEvent.click(screen.getByRole("button", { name: "Start round 1" }));
+
+    await screen.findByText("Brannoc is up · Goblin Boss next");
+    expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
+    expect((bodyOf(server, "POST", "/begin") as { requestId: string }).requestId).toMatch(/.+/);
+  });
+
+  it("goes back to rolling, keeping the numbers, and offers the round again", async () => {
+    server.routes.set(`POST ${serverRunBase()}/reroll`, {
+      status: 200,
+      body: { ...rollingRun, round: 3 },
+    });
+    await renderRunner();
+    await screen.findByText("Brannoc is up · Goblin Boss next");
+
+    await userEvent.click(screen.getByRole("button", { name: "Reroll initiative" }));
+
+    await screen.findByText("Rolling initiative · everyone has a number");
+    expect(screen.getByRole("button", { name: "Start round 3" })).toBeEnabled();
+    expect(within(rowFor("Brannoc")).getByText("21")).toBeInTheDocument();
   });
 });

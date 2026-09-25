@@ -82,7 +82,7 @@ export const liveBanner = (
         // "yet" would promise one is coming.
         ["nothing on the table"]
       : [
-          `round ${String(fight.round)}`,
+          fight.phase === "initiative" ? "rolling initiative" : `round ${String(fight.round)}`,
           ...(yourTurn
             ? ["it's your turn"]
             : fight.upNext === null

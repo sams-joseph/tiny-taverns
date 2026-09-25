@@ -346,6 +346,7 @@ export const playing = (
     }>;
     readonly order?: ReadonlyArray<Record<string, unknown>>;
     readonly round?: number;
+    readonly phase?: "initiative" | "turns";
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -361,6 +362,7 @@ export const playing = (
           : {
               id: liveRunId,
               round: fight.round ?? 3,
+              phase: fight.phase ?? "turns",
               upNext:
                 fight.upNext === undefined
                   ? { combatantId: yourCombatantId, displayName: "Brannoc Duskharrow" }
@@ -382,6 +384,8 @@ export const playing = (
                   displayName: "Brannoc Duskharrow",
                   subtitle: "Level 5 Half-orc Paladin",
                   initiative: 16,
+                  initiativeBonus: 1,
+                  initiativeSetBy: "dm",
                   hpCurrent: 44,
                   hpMax: 52,
                   tempHp: 3,

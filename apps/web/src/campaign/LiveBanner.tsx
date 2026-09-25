@@ -28,7 +28,9 @@ export function LiveBanner({
 }) {
   const now = useNow();
   const detail = [
-    `Round ${String(run.round)} of ${run.encounterName}`,
+    run.phase === "initiative"
+      ? `Rolling initiative for ${run.encounterName}`
+      : `Round ${String(run.round)} of ${run.encounterName}`,
     session.startedAt === null ? null : `started ${agoOf(session.startedAt, now).toLowerCase()}`,
   ]
     .filter((part): part is string => part !== null)

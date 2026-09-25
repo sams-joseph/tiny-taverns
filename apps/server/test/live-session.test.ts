@@ -26,6 +26,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { aFightUnderWay } from "./support/fights.js";
 
 /**
  * The live session, at the repository level: seeding, the turn marker, the
@@ -219,6 +220,14 @@ const startOn = (sessionId: SessionId) =>
     ).pipe(Effect.orDie),
   );
 
+/** Started, every number in, round 1 begun — see `aFightUnderWay`. */
+const underWayOn = (sessionId: SessionId) =>
+  runtime.runPromise(
+    withActor(fixture.dm)(
+      aFightUnderWay(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
+    ).pipe(Effect.orDie),
+  );
+
 describe("starting a fight", () => {
   it("seeds one combatant per party member and per creature-instance", async () => {
     const session = await freshSession(100);
@@ -294,7 +303,7 @@ describe("starting a fight", () => {
     expect(run.encounterName).toBe("to be deleted");
   });
 
-  it("puts the turn marker on the first combatant and points the session at the run", async () => {
+  it("opens on rolling initiative, with no numbers and nobody up, and points the session at the run", async () => {
     const session = await freshSession(103);
     const run = await startOn(session.id);
     const list = await runtime.runPromise(
@@ -304,8 +313,10 @@ describe("starting a fight", () => {
       withActor(fixture.dm)(sessions.findById(fixture.campaign.id, session.id)),
     );
 
-    expect(run.activeCombatantId).toBe(list[0]!.id);
+    expect(run.phase).toBe("initiative");
+    expect(run.activeCombatantId).toBeNull();
     expect(run.round).toBe(1);
+    expect(list.every((row) => row.initiative === null && row.initiativeSetBy === null)).toBe(true);
     expect(reread.activeEncounterRunId).toBe(run.id);
   });
 
@@ -522,7 +533,7 @@ describe("hit points", () => {
 describe("the turn marker", () => {
   it("advances down initiative order and rolls the round over at the bottom", async () => {
     const session = await freshSession(130);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     const order = await runtime.runPromise(
       withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
@@ -549,7 +560,7 @@ describe("the turn marker", () => {
     // The reason this is not `turn_index`. A combatant added above the current
     // one in initiative shifts every index below it; the marker must not follow.
     const session = await freshSession(131);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     const advanced = await runtime.runPromise(
       withActor(fixture.dm)(runs.nextTurn(fixture.asDm, session.id, run.id, {})).pipe(Effect.orDie),
     );
@@ -578,7 +589,7 @@ describe("the turn marker", () => {
 
   it("moves on before removing whoever is up", async () => {
     const session = await freshSession(132);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     const order = await runtime.runPromise(
       withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
@@ -600,7 +611,7 @@ describe("the turn marker", () => {
 
   it("applies a repeated next-turn requestId exactly once", async () => {
     const session = await freshSession(133);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     const first = await runtime.runPromise(
       withActor(fixture.dm)(
         runs.nextTurn(fixture.asDm, session.id, run.id, { requestId: "space-1" }),
@@ -868,11 +879,16 @@ describe("a campaign-scoped actor", () => {
       runs.findById(fixture.asDm, wrong.id, run.id),
       runs.update(fixture.asDm, wrong.id, run.id, { round: 9 }),
       runs.nextTurn(fixture.asDm, wrong.id, run.id, {}),
+      runs.begin(fixture.asDm, wrong.id, run.id, {}),
+      runs.reroll(fixture.asDm, wrong.id, run.id, {}),
       runs.end(fixture.asDm, wrong.id, run.id),
       combatants.list(fixture.asDm, wrong.id, run.id),
       combatants.create(fixture.asDm, wrong.id, run.id, { displayName: "smuggled" }),
       combatants.update(fixture.asDm, wrong.id, run.id, list[0]!.id, { initiative: 30 }),
       combatants.damage(fixture.asDm, wrong.id, run.id, list[0]!.id, { amount: 5 }),
+      combatants.setInitiative(fixture.asDm, wrong.id, run.id, {
+        entries: [{ combatantId: list[0]!.id, initiative: 12 }],
+      }),
       combatants.remove(fixture.asDm, wrong.id, run.id, list[0]!.id),
       events.listForRun(fixture.asDm, wrong.id, run.id, 0, 100),
     ];
@@ -900,7 +916,7 @@ describe("a campaign-scoped actor", () => {
 describe("the log", () => {
   it("records every mutation once, in one increasing sequence", async () => {
     const session = await freshSession(160);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     const list = await runtime.runPromise(
       withActor(fixture.dm)(combatants.list(fixture.asDm, session.id, run.id)),
     );
@@ -919,8 +935,12 @@ describe("the log", () => {
       withActor(fixture.dm)(events.list(fixture.asDm, session.id, {})),
     );
 
+    // The two `run-updated` lines are the initiative phase: the numbers going
+    // in, and round 1 starting.
     expect(log.map((e) => e.kind)).toEqual([
       "run-started",
+      "run-updated",
+      "run-updated",
       "combatant-damaged",
       "turn-advanced",
       "run-ended",
@@ -934,7 +954,7 @@ describe("the log", () => {
 
   it("resumes from a cursor, exclusive", async () => {
     const session = await freshSession(161);
-    const run = await startOn(session.id);
+    const run = await underWayOn(session.id);
     await runtime.runPromise(
       withActor(fixture.dm)(runs.nextTurn(fixture.asDm, session.id, run.id, {})).pipe(Effect.orDie),
     );
@@ -946,8 +966,9 @@ describe("the log", () => {
       withActor(fixture.dm)(events.list(fixture.asDm, session.id, { since: all[0]!.seq })),
     );
 
-    expect(all).toHaveLength(2);
-    expect(after.map((e) => e.id)).toEqual([all[1]!.id]);
+    // Started, numbers in, round 1, a turn.
+    expect(all).toHaveLength(4);
+    expect(after.map((e) => e.id)).toEqual(all.slice(1).map((e) => e.id));
   });
 
   it("keeps the removed combatant's name, once the row it pointed at is gone", async () => {
@@ -1021,8 +1042,8 @@ describe("the turn marker cannot point outside its own fight", () => {
   it("refuses a combatant from another run", async () => {
     const sessionA = await freshSession(180);
     const sessionB = await freshSession(181);
-    const runA = await startOn(sessionA.id);
-    const runB = await startOn(sessionB.id);
+    const runA = await underWayOn(sessionA.id);
+    const runB = await underWayOn(sessionB.id);
     const inB = await runtime.runPromise(
       withActor(fixture.dm)(combatants.list(fixture.asDm, sessionB.id, runB.id)),
     );

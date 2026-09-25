@@ -13,6 +13,8 @@ import {
   Conflict,
   type CreatureId,
   type EncounterRunId,
+  type InitiativeSet,
+  type InitiativeSetBy,
   NotFound,
   type SessionId,
   type Visibility,
@@ -48,7 +50,9 @@ export interface CombatantRow extends ProvenanceColumns {
   readonly display_name: string;
   readonly subtitle: string | null;
   readonly player_name: string | null;
-  readonly initiative: number;
+  readonly initiative: number | null;
+  readonly initiative_bonus: number | null;
+  readonly initiative_set_by: InitiativeSetBy | null;
   readonly hp_current: number;
   readonly hp_max: number;
   readonly ac: number | null;
@@ -94,6 +98,8 @@ export const toCombatant = (row: CombatantRow, sign: PortraitSigner | undefined)
     subtitle: row.subtitle,
     playerName: row.player_name,
     initiative: row.initiative,
+    initiativeBonus: row.initiative_bonus,
+    initiativeSetBy: row.initiative_set_by,
     hpCurrent: row.hp_current,
     hpMax: row.hp_max,
     ac: row.ac,
@@ -156,6 +162,12 @@ export class Combatants extends Context.Service<
       id: CombatantId,
       payload: CombatantMove,
     ) => Effect.Effect<Combatant, NotFound | Conflict>;
+    readonly setInitiative: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      payload: InitiativeSet,
+    ) => Effect.Effect<ReadonlyArray<Combatant>, NotFound>;
     readonly remove: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -241,6 +253,17 @@ export class Combatants extends Context.Service<
           ),
         );
 
+      /** The whole list as the DM has it, in order. */
+      const readOrder = (campaignId: CampaignId, runId: EncounterRunId, actor: Actor) =>
+        sql<CombatantRow>`
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
+          where ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+          ${initiativeOrder(sql)}
+        `.pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.map((row) => toCombatant(row, sign))),
+        );
+
       return {
         list: ({ actor, campaign: campaignId }, sessionId, runId) =>
           dieOnSqlError(
@@ -254,6 +277,75 @@ export class Combatants extends Context.Service<
               `;
               return rows.map((row) => toCombatant(row, sign));
             }),
+          ),
+
+        /**
+         * Several numbers in one write — *Roll for monsters*, or the totals the
+         * table called out.
+         *
+         * All or nothing: a combatant id that is not in this fight is a 404 and
+         * rolls every other line back, so a roll never lands half. The number
+         * is the DM's (`initiative_set_by = 'dm'`) whoever entered it before,
+         * which is what lets the DM overwrite what a player typed.
+         *
+         * One log line for the lot, shared only when the fight is and at least
+         * one row it names is — a roll for hidden monsters alone rings no
+         * player's doorbell.
+         */
+        setInitiative: ({ actor, campaign: campaignId }, sessionId, runId, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                    return yield* readOrder(campaignId, runId, actor);
+                  }
+
+                  let shared = false;
+                  for (const entry of payload.entries) {
+                    const rows = yield* sql<{ readonly visibility: "dm" | "shared" }>`
+                      update combatant
+                      set initiative = ${entry.initiative},
+                          initiative_set_by = ${entry.initiative === null ? null : "dm"},
+                          updated_at = now()
+                      where combatant.id = ${entry.combatantId}
+                        and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+                      returning combatant.visibility
+                    `;
+                    const row = rows[0];
+                    if (row === undefined) {
+                      return yield* new NotFound({ resource: "combatant", id: entry.combatantId });
+                    }
+                    shared = shared || row.visibility === "shared";
+                  }
+
+                  const runs = yield* sql<{ readonly visibility: "dm" | "shared" }>`
+                    select encounter_run.visibility from encounter_run
+                    where encounter_run.id = ${runId}
+                  `;
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "run-updated",
+                    encounterRunId: runId,
+                    payload: { initiative: payload.entries },
+                    requestId: payload.requestId,
+                    visibility: shared && runs[0]?.visibility === "shared" ? "shared" : "dm",
+                  });
+                  return yield* readOrder(campaignId, runId, actor);
+                }),
+              )
+              .pipe(
+                // Two submits that raced past the idempotency check: the
+                // unique index refuses the second, and the answer is the list
+                // the first one produced.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readOrder(campaignId, runId, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
           ),
 
         /**
@@ -280,6 +372,8 @@ export class Combatants extends Context.Service<
                         player_name: payload.playerName,
                         kind: payload.kind,
                         initiative: payload.initiative,
+                        initiative_set_by: payload.initiative === undefined ? undefined : "dm",
+                        initiative_bonus: payload.initiativeBonus,
                         hp_max: payload.hpMax,
                         hp_current: payload.hpCurrent ?? hpMax,
                         ac: payload.ac,
@@ -316,6 +410,8 @@ export class Combatants extends Context.Service<
                     subtitle: patch.subtitle,
                     player_name: patch.playerName,
                     initiative: patch.initiative,
+                    initiative_set_by: patch.initiative === undefined ? undefined : "dm",
+                    initiative_bonus: patch.initiativeBonus,
                     hp_current: patch.hpCurrent,
                     hp_max: patch.hpMax,
                     ac: patch.ac,

@@ -918,6 +918,14 @@ const PlayerTableLive = HttpApiBuilder.group(
       .handle("rolls", ({ params, query }) =>
         rolls.listForCharacter(params.campaignId, params.sessionId, params.characterId, query),
       )
+      .handle("setInitiative", ({ params, payload }) =>
+        table.setInitiative(
+          params.campaignId,
+          params.runId,
+          params.combatantId,
+          payload.initiative,
+        ),
+      )
       .handle("events", ({ params, query, request }) =>
         Effect.gen(function* () {
           const actor = yield* CurrentActor;
@@ -1367,6 +1375,7 @@ const RunsLive = HttpApiBuilder.group(
   "runs",
   Effect.fnUntraced(function* (handlers) {
     const runs = yield* EncounterRuns;
+    const combatants = yield* Combatants;
     const direct = yield* HobDirectWrites;
     const maps = yield* BattleMaps;
     const scenes = yield* RunScenes;
@@ -1392,6 +1401,17 @@ const RunsLive = HttpApiBuilder.group(
       )
       .handle("escalate", ({ params }) =>
         dm(params.campaignId, (as) => runs.escalate(as, params.sessionId, params.runId)),
+      )
+      .handle("setInitiative", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          combatants.setInitiative(as, params.sessionId, params.runId, payload),
+        ),
+      )
+      .handle("begin", ({ params, payload }) =>
+        dm(params.campaignId, (as) => runs.begin(as, params.sessionId, params.runId, payload)),
+      )
+      .handle("reroll", ({ params, payload }) =>
+        dm(params.campaignId, (as) => runs.reroll(as, params.sessionId, params.runId, payload)),
       )
       .handle("end", ({ params }) =>
         dm(params.campaignId, (as) => runs.end(as, params.sessionId, params.runId)),

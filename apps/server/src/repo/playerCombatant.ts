@@ -44,7 +44,7 @@ export interface PlayerCombatantRow {
   readonly display_name: string;
   readonly subtitle: string | null;
   readonly player_name: string | null;
-  readonly initiative: number;
+  readonly initiative: number | null;
   readonly kind: CombatantKind;
   readonly conditions: ReadonlyArray<string>;
   readonly hp_current: number | null;

@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 import { CharacterPortraitImages } from "./Character.js";
+import { InitiativeSetBy } from "./Combatant.js";
+import { EncounterRunPhase } from "./EncounterRun.js";
 import {
   CampaignCharacterId,
   CampaignId,
@@ -41,7 +43,19 @@ export const PlayerLiveCombatantYou = Schema.Struct({
   campaignCharacterId: CampaignCharacterId,
   displayName: Schema.NonEmptyString,
   subtitle: Schema.NullOr(Schema.String),
-  initiative: Schema.Int,
+  /** `null` until somebody has said — see `Combatant.initiative`. */
+  initiative: Schema.NullOr(Schema.Int),
+  /**
+   * Your own character's initiative bonus, so *Roll* on your Table is d20 plus
+   * the number your sheet gives. Yours alone: no other arm carries one.
+   */
+  initiativeBonus: Schema.NullOr(Schema.Int),
+  /**
+   * Who entered your number. While it is `null` or `player`, and the fight is
+   * rolling initiative, you may enter or correct it; once it is `dm`, the DM's
+   * number stands.
+   */
+  initiativeSetBy: Schema.NullOr(InitiativeSetBy),
   hpCurrent: Schema.Int,
   hpMax: Schema.Int,
   tempHp: Schema.Int,
@@ -58,7 +72,7 @@ export const PlayerLiveCombatantAlly = Schema.Struct({
   displayName: Schema.NonEmptyString,
   subtitle: Schema.NullOr(Schema.String),
   playerName: Schema.NullOr(Schema.String),
-  initiative: Schema.Int,
+  initiative: Schema.NullOr(Schema.Int),
   conditions: Schema.Array(Schema.String),
   /**
    * The ally's portrait, computed in SQL through the seat that makes the row
@@ -73,7 +87,7 @@ export const PlayerLiveCombatantNpc = Schema.Struct({
   combatantId: CombatantId,
   displayName: Schema.NonEmptyString,
   subtitle: Schema.NullOr(Schema.String),
-  initiative: Schema.Int,
+  initiative: Schema.NullOr(Schema.Int),
   hpBand: PlayerLiveHpBand,
   conditions: Schema.Array(Schema.String),
 });
@@ -91,6 +105,11 @@ export const PlayerLiveFight = Schema.Struct({
   /** `null` unless this player may read the encounter (Shared and Ready). */
   encounterId: Schema.NullOr(EncounterId),
   round: Schema.Int,
+  /**
+   * `initiative` while the numbers are still arriving — nobody is up, and a
+   * seated player may enter their own (`table.setInitiative`) — else `turns`.
+   */
+  phase: EncounterRunPhase,
   /** `null` when the DM has set no marker, or has hidden the row it names. */
   upNext: Schema.NullOr(PlayerLiveTurn),
   /** This account's active campaign-character seats in this fight. */

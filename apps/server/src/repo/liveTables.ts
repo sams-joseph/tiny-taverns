@@ -39,26 +39,31 @@ export const ROSTER: NestedTable = {
 /**
  * The initiative list, in the order it is read and advanced through.
  *
- * Highest first, then oldest, then by id. The last term is not decoration:
- * `data.js:18-19` are two combatants who both rolled 14, and without a total
- * order the turn marker would advance to whichever row Postgres happened to
- * return first — which need not be the same row twice. Turn order is state the
- * DM reads aloud from; it has to be the same every time anyone asks.
+ * Highest first; a row with no number yet after every row with one (Postgres
+ * sorts nulls *first* in a descending order, so `nulls last` is load-bearing).
+ * Ties go to the higher initiative bonus, then to the players, which is the
+ * table's rule (the captain's call; the SRD leaves ties to the GM). Then
+ * oldest, then by id.
+ *
+ * The last terms are not decoration: `data.js:18-19` are two combatants who
+ * both rolled 14, and without a total order the turn marker would advance to
+ * whichever row Postgres happened to return first — which need not be the
+ * same row twice. Turn order is state the DM reads aloud from; it has to be
+ * the same every time anyone asks.
  *
  * **`created_at` does not separate the rows a single seed inserted.** Postgres
  * `now()` is transaction *start* time, so every combatant created by starting a
  * run carries the same timestamp to the microsecond and the tiebreak falls
- * straight through to `id`. Verified against a running server: a seeded list
- * comes back with the party interleaved among the monsters, in a fixed but
- * arbitrary order. That is harmless — every seeded combatant has initiative 0
- * until the DM rolls, so there is no correct order yet to get wrong, and the
- * order is *stable*, which is the property that matters. It is written down
- * because the alternative is someone later reading `created_at asc` as "the
- * order they were added" and building on a guarantee that is not there.
+ * straight through to `id`: two goblins with the same roll and the same bonus
+ * are in a fixed but arbitrary order. That is harmless — the order is
+ * *stable*, which is the property that matters. It is written down because the
+ * alternative is someone later reading `created_at asc` as "the order they
+ * were added" and building on a guarantee that is not there.
  */
 export const initiativeOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`order by ${initiativeOrderKeys(sql)}`;
 
 /** The keys of `initiativeOrder`, for a query that orders by more after them. */
 export const initiativeOrderKeys = (sql: SqlClient.SqlClient): Statement.Fragment =>
-  sql`combatant.initiative desc, combatant.created_at asc, combatant.id asc`;
+  sql`combatant.initiative desc nulls last, combatant.initiative_bonus desc nulls last,
+      (combatant.kind = 'pc') desc, combatant.created_at asc, combatant.id asc`;

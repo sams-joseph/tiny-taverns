@@ -210,6 +210,7 @@ export function CombatantPanel({
   following,
   disabled,
   conditionsBusy,
+  rolling,
   onTheirTurn,
   onEdit,
   onFollow,
@@ -227,6 +228,8 @@ export function CombatantPanel({
   readonly disabled: boolean;
   /** A condition write is in flight; the chips wait for its answer. */
   readonly conditionsBusy: boolean;
+  /** Rolling initiative: nobody is up yet, so nobody can be made up. */
+  readonly rolling: boolean;
   readonly onTheirTurn: () => void;
   readonly onEdit: () => void;
   readonly onFollow: () => void;
@@ -273,7 +276,7 @@ export function CombatantPanel({
 
       <CardContent className="flex flex-col gap-3.5 p-panel">
         <div className="flex flex-wrap items-center gap-2">
-          {active ? (
+          {rolling ? null : active ? (
             <Badge>
               <Icon name="swords" size={11} />
               Their turn
@@ -306,7 +309,10 @@ export function CombatantPanel({
           {cr !== undefined ? (
             <Tile label="CR" value={cr} />
           ) : (
-            <Tile label="Init" value={String(combatant.initiative)} />
+            <Tile
+              label="Init"
+              value={combatant.initiative === null ? "—" : String(combatant.initiative)}
+            />
           )}
         </div>
 
