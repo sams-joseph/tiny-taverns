@@ -4,6 +4,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { CarriedFight } from "../chronicle/fight";
+import { difficultyWord } from "./difficulty";
 
 /**
  * The Overview's rules about its data, apart from its cards so each can be
@@ -114,12 +115,13 @@ export const openingReadAloud = (
 
 /**
  * `Medium · 6 creatures · Marsh, Night` — what the wire has to say about an
- * encounter. The drawing's CR, DC and readiness (*Ready*, *Draft*) are not on
- * `Encounter` and are left out; the difficulty band is the rating the DM gave.
+ * encounter. The drawing's DC and readiness (*Ready*, *Draft*) are not on
+ * `Encounter` and are left out; the band is the one the server computed from
+ * the roster and the party.
  */
 export const encounterDetail = (encounter: Encounter): string =>
   [
-    encounter.difficulty ?? "Unrated",
+    difficultyWord(encounter.difficulty),
     encounter.creatureCount === 0
       ? "No creatures yet"
       : `${String(encounter.creatureCount)} ${encounter.creatureCount === 1 ? "creature" : "creatures"}`,

@@ -1,24 +1,9 @@
 import { Schema } from "effect";
 import { EncounterSetting } from "./BattleMap.js";
-import { CampaignId, EncounterId } from "./Ids.js";
+import { EncounterDifficulty } from "./EncounterDifficulty.js";
+import { EncounterRunEndedReason } from "./EncounterRun.js";
+import { CampaignId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
-
-/**
- * The encounter's difficulty band, which is **not** a creature's challenge
- * rating.
- *
- * The fixtures call the field `cr` (`data.js:10-12`) and then fill it with
- * `"Easy" | "Medium" | "Deadly"` and branch on those strings
- * (`CampaignHome.jsx:13`). Those are the DMG encounter-difficulty bands, so the
- * field is named for what it holds. `"Hard"` completes the band and is the one
- * value the three fixture rows happen not to use.
- *
- * Capitalised, unlike `visibility` or `kind`, because this vocabulary is the
- * DM's own and is rendered verbatim on the encounter card's badge. Lower-casing
- * it would mean a display map existing only to undo the change.
- */
-export const Difficulty = Schema.Literals(["Easy", "Medium", "Hard", "Deadly"]);
-export type Difficulty = typeof Difficulty.Type;
 
 /**
  * A tag on an encounter — `"Marsh"`, `"Night"`, `"Boss"` (`data.js:10-12`).
@@ -29,6 +14,16 @@ export type Difficulty = typeof Difficulty.Type;
  * `CampaignHome` renders first.
  */
 const Tag = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+
+/** One playing of an encounter, as its list row and its log link need it. */
+export const EncounterPlayed = Schema.Struct({
+  runId: EncounterRunId,
+  sessionId: SessionId,
+  sessionNumber: Schema.Int,
+  endedAt: Schema.DateTimeUtcFromString,
+  endedReason: EncounterRunEndedReason,
+});
+export type EncounterPlayed = typeof EncounterPlayed.Type;
 
 /**
  * The authored encounter — a reusable template, never mutated by running it.
@@ -43,8 +38,14 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   id: EncounterId,
   campaignId: CampaignId,
   name: Schema.String,
-  /** Null until the DM has rated it; a sketched encounter has no band yet. */
-  difficulty: Schema.NullOr(Difficulty),
+  /**
+   * How hard it is for this table's party, computed on read by the DMG method
+   * (`EncounterDifficulty.ts`) from the roster's XP and the seated characters'
+   * levels — **never stored and never typed**. Both halves are what *this
+   * reader* can see, the rule `creatureCount` follows, so a player's answer
+   * says nothing about a creature or a seat hidden from them.
+   */
+  difficulty: EncounterDifficulty,
   tags: Schema.Array(Schema.String),
   /**
    * The card's "6 creatures" (`data.js:10`, `CampaignHome.jsx:15`).
@@ -59,6 +60,17 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
    * have got.
    */
   creatureCount: Schema.Int,
+  /**
+   * The last time this encounter came off the table, or `null` if it never
+   * has — the Encounters page's "Played · Session 12", and the link to that
+   * fight's log.
+   *
+   * Computed on read from `encounter_run`, over the runs **this reader** can
+   * see: a fight the DM kept hidden is not played as far as a player knows. A
+   * fight still on the table is not in it (the campaign's live run says that);
+   * a `carried` one is, with its reason, because it was played that night.
+   */
+  lastPlayed: Schema.NullOr(EncounterPlayed),
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
@@ -76,7 +88,6 @@ const tags = Schema.Array(Tag).check(Schema.isLengthBetween(0, 16));
  */
 export const EncounterCreate = Schema.Struct({
   name: Schema.NonEmptyString,
-  difficulty: Schema.optional(Difficulty),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
   setting: Schema.optional(Schema.NullOr(EncounterSetting)),
@@ -85,7 +96,6 @@ export type EncounterCreate = typeof EncounterCreate.Type;
 
 export const EncounterUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
-  difficulty: Schema.optional(Schema.NullOr(Difficulty)),
   tags: Schema.optional(tags),
   visibility: Schema.optional(Visibility),
   /** The map's setting line; `null` or a blank clears it. Editing it redraws nothing. */

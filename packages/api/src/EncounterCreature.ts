@@ -49,6 +49,21 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
    */
   name: Schema.String,
   count: Schema.Int,
+  /**
+   * The creature's own numbers, read through the same join as `name`, so the
+   * roster table draws *Creature / Qty / CR / AC / HP / XP* without a read per
+   * creature. `cr`, `ac` and `hp` are columns every creature has.
+   */
+  cr: Schema.String,
+  ac: Schema.Int,
+  hp: Schema.Int,
+  /**
+   * XP for **one** of it: the stat block's own figure, else the XP table's for
+   * its `cr` (`creatureXp`), else `null` — a homebrew rating the table does not
+   * know has no XP, and the encounter's difficulty says `missing-xp` rather
+   * than guess one.
+   */
+  xp: Schema.NullOr(Schema.Int),
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,

@@ -213,7 +213,6 @@ export class Proposals extends Context.Service<
                 campaignId,
                 {
                   name: proposal.name,
-                  difficulty: proposal.difficulty ?? undefined,
                   tags: proposal.tags,
                   // The line the battle map is drawn from, which the card
                   // showed; the accept handler starts the draw after commit.

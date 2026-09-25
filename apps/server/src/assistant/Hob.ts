@@ -1951,12 +1951,11 @@ const offered = (turn: HobTurn): string | undefined => {
     case "beat":
       return `[You offered the DM a beat — ${kept}: ${proposal.body}]`;
     case "encounter": {
-      const band = proposal.difficulty === null ? "" : `, ${proposal.difficulty}`;
       const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;
       const roster = proposal.roster
         .map((line) => `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId})`)
         .join("; ");
-      return `[You offered the DM an encounter called "${proposal.name}"${band}${tags} — ${kept}: ${roster}]`;
+      return `[You offered the DM an encounter called "${proposal.name}"${tags} — ${kept}: ${roster}]`;
     }
     /**
      * **The redraft loop is this case**, and without it *"make her a ranger

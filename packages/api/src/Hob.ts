@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { Character, CharacterSheet } from "./Character.js";
-import { Difficulty, Encounter } from "./Encounter.js";
+import { Encounter } from "./Encounter.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
 import {
   AssistantThreadId,
@@ -182,7 +182,11 @@ export const HobProposal = Schema.Union([
   Schema.Struct({
     target: Schema.Literal("encounter"),
     name: Schema.String,
-    difficulty: Schema.NullOr(Difficulty),
+    /*
+     * No difficulty: it is computed from the roster and the party once the
+     * encounter exists (`EncounterDifficulty.ts`). A proposal stored before
+     * that may still carry the band it once had; decoding ignores the key.
+     */
     tags: Schema.Array(Schema.String),
     /**
      * The line the encounter's battle map is drawn from, when Hob wrote one;

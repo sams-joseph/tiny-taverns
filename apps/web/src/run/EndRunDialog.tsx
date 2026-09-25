@@ -71,15 +71,17 @@ export function EndRunDialog({
           return run;
         }),
       // The night's fights, so the campaign screen stops saying *"on the table
-      // now"*; and when the switch is on, the campaign row and the spine too —
-      // finishing a night clears `campaign.current_session_id` server-side.
+      // now"*, and the encounters, whose `lastPlayed` this fight now is; and
+      // when the switch is on, the campaign row and the spine too — finishing
+      // a night clears `campaign.current_session_id` server-side.
       finishNight
         ? [
             reads.runs(path.sessionId),
+            reads.encounters(path.campaignId),
             reads.campaign(path.campaignId),
             reads.sessions(path.campaignId),
           ]
-        : [reads.runs(path.sessionId)],
+        : [reads.runs(path.sessionId), reads.encounters(path.campaignId)],
     );
 
     if (Result.isSuccess(ended)) onEnded();

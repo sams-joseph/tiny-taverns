@@ -93,9 +93,7 @@ const makeFixture = Effect.gen(function* () {
   );
   yield* as(shares.share(campaign.contextId, { kind: "creature", resourceId: sharedCreature.id }));
 
-  const encounter = yield* as(
-    encounters.create(campaign.id, { name: "Ambush in the reeds", difficulty: "Medium" }),
-  );
+  const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   const encounterElsewhere = yield* as(
     encounters.create(otherTable.id, { name: "Whatever is in the crate" }),
   );

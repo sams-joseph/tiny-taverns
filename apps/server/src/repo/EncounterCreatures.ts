@@ -2,6 +2,7 @@ import {
   type CampaignId,
   Conflict,
   type CreatureId,
+  creatureXp,
   CurrentActor,
   EncounterCreature,
   type EncounterCreatureCreate,
@@ -30,13 +31,18 @@ import {
   nestedRowWritable,
 } from "./visibility.js";
 
-/** The row, joined with the creature's display name — see `list`. */
+/** The row, joined with the creature's name and numbers — see `list`. */
 interface EncounterCreatureRow extends ProvenanceColumns {
   readonly id: EncounterCreatureId;
   readonly encounter_id: EncounterId;
   readonly creature_id: CreatureId;
   readonly name: string;
   readonly count: number;
+  readonly cr: string;
+  readonly ac: number;
+  readonly hp: number;
+  /** `body->'xp'`: a jsonb number when the stat block says, else null. */
+  readonly stat_block_xp: number | null;
 }
 
 const toEncounterCreature = (row: EncounterCreatureRow): EncounterCreature =>
@@ -46,8 +52,23 @@ const toEncounterCreature = (row: EncounterCreatureRow): EncounterCreature =>
     creatureId: row.creature_id,
     name: row.name,
     count: row.count,
+    cr: row.cr,
+    ac: row.ac,
+    hp: row.hp,
+    xp: creatureXp({ cr: row.cr, statBlockXp: row.stat_block_xp }),
     ...provenanceOf(row),
   });
+
+/**
+ * The XP a creature's stat block states, or null when it states none — the
+ * input `creatureXp` takes beside `cr`. One statement of it, because
+ * `repo/Encounters.ts` reads it again for the difficulty and the roster table
+ * and the band must be reading one creature the same way. `double precision`
+ * because the pg driver hands `numeric` back as a string.
+ */
+export const statBlockXp = (sql: SqlClient.SqlClient) =>
+  sql`case when jsonb_typeof(creature.body->'xp') = 'number'
+        then (creature.body->>'xp')::double precision end`;
 
 /** `encounter_creature` hangs off `encounter`, which hangs off `campaign`. */
 const ROSTER: NestedTable = {
@@ -217,9 +238,11 @@ export class EncounterCreatures extends Context.Service<
           (rows) => rows[0]!.id,
         );
 
-      /** The read half of a roster row: joined with its creature's name. */
+      /** The read half of a roster row: joined with its creature's name and numbers. */
       const rosterRows = (clause: ReturnType<typeof sql.and>) => sql<EncounterCreatureRow>`
-        select encounter_creature.*, creature.name from encounter_creature
+        select encounter_creature.*, creature.name, creature.cr, creature.ac, creature.hp,
+               ${statBlockXp(sql)} as stat_block_xp
+        from encounter_creature
         join creature on creature.id = encounter_creature.creature_id
         where ${clause}
         order by encounter_creature.created_at asc

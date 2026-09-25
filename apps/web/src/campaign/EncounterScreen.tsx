@@ -11,6 +11,7 @@ import { useGridAdjustment } from "./AdjustGrid";
 import { BattleMapBoard, describeBoard } from "./BattleMapBoard";
 import { CampaignChrome } from "./CampaignChrome";
 import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
+import { describeDifficulty } from "./difficulty";
 import { DifficultyBadge, describeRoster } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import { encounterPageAtom, type EncounterPage } from "./load";
@@ -223,7 +224,17 @@ function EncounterBody({
           </div>
           <DetailFacts
             facts={[
-              { label: "Difficulty", value: <DifficultyBadge difficulty={encounter.difficulty} /> },
+              {
+                label: "Difficulty",
+                value: (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <DifficultyBadge difficulty={encounter.difficulty} />
+                    <span className="text-body-s text-muted-foreground">
+                      {describeDifficulty(encounter.difficulty)}
+                    </span>
+                  </span>
+                ),
+              },
               { label: "Creatures", value: describeRoster(encounter) },
               {
                 label: "Tags",

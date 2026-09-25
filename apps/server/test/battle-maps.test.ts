@@ -355,7 +355,6 @@ describe("Hob's accepted encounter", () => {
     rounds.push(
       toolCallChunks("proposeEncounter", {
         name: "Song in the reeds",
-        difficulty: "Hard",
         tags: ["Marsh"],
         setting: "A flooded causeway between two stone huts",
         creatures: [{ creatureId: croaker.id, count: 3 }],

@@ -586,7 +586,6 @@ describe("the prep surface", () => {
           params: { campaignId },
           payload: {
             name: "Ambush in the reeds",
-            difficulty: "Medium",
             tags: ["Marsh", "Night"],
           },
         });
@@ -626,7 +625,9 @@ describe("the prep surface", () => {
     );
 
     expect(seen.encounter.name).toBe("Ambush in the reeds");
-    expect(seen.encounter.difficulty).toBe("Medium");
+    // An empty roster has nothing to rate: computed, never a default band.
+    expect(seen.encounter.difficulty).toEqual({ _tag: "unrated", reason: "no-creatures" });
+    expect(seen.encounter.lastPlayed).toBeNull();
     // `text[]` survives the round trip as a real array, not a Postgres literal.
     expect(seen.encounter.tags).toEqual(["Marsh", "Night"]);
     // Nothing asked for a visibility, so the column default decided.
@@ -645,7 +646,7 @@ describe("the prep surface", () => {
     expect(seen.checklist.map((i) => i.id)).toEqual([seen.item.id]);
   }, 60_000);
 
-  it("leaves an encounter with no difficulty as null rather than inventing a band", async () => {
+  it("rates an encounter with no creatures as unrated rather than inventing a band", async () => {
     const encounter = await runtime.runPromise(
       Effect.gen(function* () {
         const client = yield* clientFor(token);
@@ -657,7 +658,7 @@ describe("the prep surface", () => {
       }).pipe(Effect.orDie),
     );
 
-    expect(encounter.difficulty).toBeNull();
+    expect(encounter.difficulty).toEqual({ _tag: "unrated", reason: "no-creatures" });
     expect(encounter.tags).toEqual([]);
   }, 60_000);
 
@@ -955,7 +956,7 @@ describe("the bestiary", () => {
 
         const encounter = yield* client.encounters.create({
           params: { campaignId },
-          payload: { name: "Ambush in the reeds", difficulty: "Medium", tags: ["Marsh", "Night"] },
+          payload: { name: "Ambush in the reeds", tags: ["Marsh", "Night"] },
         });
         const encounterId = encounter.id;
 

@@ -132,7 +132,7 @@ beforeAll(async () => {
     });
     const encounter = yield* api.encounters.create({
       params: { campaignId: campaign.id },
-      payload: { name: "Ambush in the reeds", difficulty: "Medium" },
+      payload: { name: "Ambush in the reeds" },
     });
     yield* api.encounterCreatures.create({
       params: { campaignId: campaign.id, encounterId: encounter.id },

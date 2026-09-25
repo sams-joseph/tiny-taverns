@@ -138,7 +138,6 @@ const makeFixture = Effect.gen(function* () {
   const encounter = yield* as(
     encounters.create(campaign.id, {
       name: "Ambush in the reeds",
-      difficulty: "Medium",
       tags: ["Marsh", "Night"],
     }),
   );
