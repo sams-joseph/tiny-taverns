@@ -1669,11 +1669,15 @@ export const fullCampaign = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/npcs/${npcId}/threads`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/party`, { status: 200, body: [partySeat] }],
-    // The Party screen's own two reads. A campaign with only its DM in it and
-    // nothing outstanding — `party/party.fixtures.tsx` is where a populated
-    // roster lives, and it re-aims both.
+    // The Party screen's own three reads. A campaign with only its DM in it,
+    // nothing outstanding and no seat prep written — `party/party.fixtures.tsx`
+    // is where a populated roster lives, and it re-aims all three.
     [`GET /campaigns/${campaignId}/members`, { status: 200, body: [dmMember] }],
     [`GET /campaigns/${campaignId}/invites`, { status: 200, body: [] }],
+    [
+      `GET /campaigns/${campaignId}/party-prep`,
+      { status: 200, body: [{ campaignCharacterId: partySeat.seat.id, hook: null, secret: null }] },
+    ],
     // The Shared World's chronicle — empty is the ordinary state of a young world.
     [`GET /worlds/${worldId}/history`, { status: 200, body: [] }],
     [`GET /worlds/${worldId}/history/summary`, { status: 200, body: null }],

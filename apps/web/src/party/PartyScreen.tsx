@@ -1,4 +1,4 @@
-import type { CampaignMember, PartySeat } from "@taverns/api";
+import type { CampaignMember, PartySeat, SeatPrep } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
 import { Badge, Button, Card, EmptyState, Icon, SectionHeading, cn } from "@taverns/ui";
 import { DateTime } from "effect";
@@ -33,7 +33,8 @@ import { SeatCard } from "./SeatCard";
  *
  * **Creator-only through its read, not through the tab.** The cards come from
  * the frame's `party.list`, which a player can read too; `extra` is the roster
- * (`members.list` and `invites.list`), behind the `DmActor` gate, so a player
+ * (`members.list` and `invites.list`) and the seats' prep (`seatPrep.list`,
+ * each card's hook and secret), all behind the creator's gate, so a player
  * at this URL gets the ordinary `NotFound` and the frame says *Not here*. The
  * members also name a card's player when neither the seat nor the character
  * does.
@@ -135,7 +136,7 @@ function Party({
         </EmptyState>
       ) : (
         <>
-          <PartyGrid party={view.party} members={extra.members} />
+          <PartyGrid party={view.party} members={extra.members} prep={extra.prep} />
           <PassivesAndSaves party={view.party} />
           <BetweenThem party={view.party} languages={extra.languages} />
         </>
@@ -165,9 +166,11 @@ function Party({
 function PartyGrid({
   party,
   members,
+  prep,
 }: {
   readonly party: ReadonlyArray<PartySeat>;
   readonly members: ReadonlyArray<CampaignMember>;
+  readonly prep: ReadonlyArray<SeatPrep>;
 }) {
   return (
     <section
@@ -183,6 +186,7 @@ function PartyGrid({
             row,
             members.find((member) => member.accountId === row.seat.accountId),
           )}
+          prep={prep.find((notes) => notes.campaignCharacterId === row.seat.id)}
         />
       ))}
     </section>

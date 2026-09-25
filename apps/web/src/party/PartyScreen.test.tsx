@@ -5,6 +5,7 @@ import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
 import {
+  brannocPrep,
   brannocSeat,
   campaignId,
   dmMember,
@@ -118,6 +119,28 @@ describe("the cards", () => {
     expect(within(odo).getByText("Played by Wren Alderby")).toBeVisible();
     expect(within(odo).queryByRole("button")).not.toBeInTheDocument();
     expect(within(odo).queryByRole("definition")).not.toBeInTheDocument();
+  });
+
+  it("draws the DM's hook and secret at the foot of the card, each only when written", async () => {
+    await renderParty();
+    const brannoc = await card("Brannoc");
+    expect(within(brannoc).getByText(brannocPrep.hook)).toBeVisible();
+    expect(within(brannoc).getByText(brannocPrep.secret)).toBeVisible();
+    // The secret is the DM's alone, marked as such in magic ink.
+    expect(within(brannoc).getByText(brannocPrep.secret).parentElement).toHaveClass(
+      "text-magic-ink",
+    );
+
+    // A hook with no secret draws the hook alone.
+    const sorrel = await card("Sorrel Ash");
+    expect(within(sorrel).getByText("Hunting the thing that took her hound")).toBeVisible();
+    expect(within(sorrel).queryByText(/Secret:/)).not.toBeInTheDocument();
+
+    // Two `null`s, and a seat the list omits, draw no footer at all.
+    for (const name of ["Pell", "Odo"]) {
+      const bare = await card(name);
+      expect(within(bare).queryByText(/Hook:|Secret:/)).not.toBeInTheDocument();
+    }
   });
 
   it("opens the seat's page from the card, where the seat is managed", async () => {
@@ -612,7 +635,7 @@ describe("the states a real screen has", () => {
     expect(screen.queryByRole("region", { name: "Characters" })).not.toBeInTheDocument();
   });
 
-  it("reads the roster, the invitations and the characters once each", async () => {
+  it("reads the roster, the invitations, the prep and the characters once each", async () => {
     await renderParty();
     await card("Brannoc");
 
@@ -620,11 +643,11 @@ describe("the states a real screen has", () => {
     // screen and `CampaignChrome` want, is asked once.
     expect(readsOf(`${base}/members`)).toBe(1);
     expect(readsOf(`${base}/invites`)).toBe(1);
+    expect(readsOf(`${base}/party-prep`)).toBe(1);
     expect(readsOf(`${base}/party`)).toBe(1);
     expect(readsOf(base)).toBe(1);
     // *Between them*'s languages: the rules vocabulary, once, keyed on nothing.
     expect(readsOf("/library/options/vocabulary")).toBe(1);
-    expect(called("GET", "/party-prep")).toBe(false);
     expect(called("GET", "/hob")).toBe(false);
   });
 });

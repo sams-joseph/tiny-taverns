@@ -131,6 +131,13 @@ export const reads = {
   party: (campaignId: CampaignId): ReadKey => key`party:${campaignId}`,
 
   /**
+   * The creator's own hook and secret for every seat at this table — a key of
+   * its own, not `party`'s, because no player read answers it and a note
+   * written is no reason to re-read the characters.
+   */
+  partyPrep: (campaignId: CampaignId): ReadKey => key`party-prep:${campaignId}`,
+
+  /**
    * The nights of this campaign — **the spine the Chronicle draws and the one
    * row the campaign view reads**, deliberately one key.
    *

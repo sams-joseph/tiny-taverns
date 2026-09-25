@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  brannocPrep,
   brannocSheetSeat,
   campaignId,
   deletedSeat,
@@ -319,5 +320,74 @@ describe("the character's sheet, read through the seat", () => {
     for (const empty of ["Abilities & skills", "Gear & coin", "Story", "Spellcasting"]) {
       expect(within(sheet()).queryByText(empty)).not.toBeInTheDocument();
     }
+  });
+});
+
+describe("the DM's notes", () => {
+  /** How many times the prep was read at or after `from`. */
+  const prepReads = (from: number): number =>
+    server.calls.filter(
+      (call, index) =>
+        index >= from &&
+        call.method === "GET" &&
+        call.pathname === `/campaigns/${campaignId}/party-prep`,
+    ).length;
+
+  it("opens on the hook and secret the creator wrote", async () => {
+    await renderSeat();
+    expect(await screen.findByRole("textbox", { name: "Hook" })).toHaveValue(brannocPrep.hook);
+    expect(screen.getByRole("textbox", { name: "Secret" })).toHaveValue(brannocPrep.secret);
+    expect(screen.getByRole("button", { name: "Save notes" })).toBeDisabled();
+  });
+
+  it("sends only the line that changed, and re-reads the prep but not the party", async () => {
+    await renderSeat();
+    const hook = await screen.findByRole("textbox", { name: "Hook" });
+    await userEvent.clear(hook);
+    await userEvent.type(hook, "  Swore an oath at the old shrine ");
+
+    const mark = server.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: "Save notes" }));
+    await waitFor(() =>
+      expect(sent("PATCH", `${base}/prep`)).toEqual({ hook: "Swore an oath at the old shrine" }),
+    );
+    await waitFor(() => expect(prepReads(mark)).toBe(1));
+    expect(partyReads(mark)).toBe(0);
+  });
+
+  it("clears a line emptied to nothing by sending null", async () => {
+    await renderSeat();
+    const secret = await screen.findByRole("textbox", { name: "Secret" });
+    await userEvent.clear(secret);
+    await userEvent.type(secret, "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Save notes" }));
+
+    await waitFor(() => expect(sent("PATCH", `${base}/prep`)).toEqual({ secret: null }));
+  });
+
+  it("starts empty for a seat nothing was written for, and writes a first note", async () => {
+    await renderSeat(deletedSeatId);
+    const hook = await screen.findByRole("textbox", { name: "Hook" });
+    expect(hook).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Secret" })).toHaveValue("");
+    await userEvent.type(hook, "Came back from the dead once already");
+    await userEvent.click(screen.getByRole("button", { name: "Save notes" }));
+
+    await waitFor(() =>
+      expect(sent("PATCH", `/campaigns/${campaignId}/party/${deletedSeatId}/prep`)).toEqual({
+        hook: "Came back from the dead once already",
+      }),
+    );
+  });
+
+  it("is not drawn for a player, whose read of the prep is refused", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party-prep`, {
+      status: 404,
+      body: { _tag: "NotFound", resource: "campaign", id: campaignId },
+    });
+    await renderSeat();
+
+    expect(await screen.findByText("Not here")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Hook" })).not.toBeInTheDocument();
   });
 });

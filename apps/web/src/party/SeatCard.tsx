@@ -1,4 +1,4 @@
-import type { Character, PartySeat } from "@taverns/api";
+import type { Character, PartySeat, SeatPrep } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime, Result } from "effect";
@@ -16,7 +16,9 @@ import { InspirationToggle } from "./InspirationToggle";
 /**
  * One seat on the Party tab, as the redesign draws the card: the portrait band,
  * who the character is and who plays them, their hit points with − and +, the
- * tiles a DM asks for across the table, and their conditions.
+ * tiles a DM asks for across the table, their conditions, and under a hairline
+ * the DM's own hook and secret for the seat (`SeatPrep`, which only the
+ * creator's read carries), each drawn only when written.
  *
  * **The whole card opens the seat's page** (`SeatScreen.tsx`), where the seat
  * is managed and the sheet is read. The name is the one link, its `::after`
@@ -36,11 +38,20 @@ import { InspirationToggle } from "./InspirationToggle";
 
 /**
  * How many of the grid's rows a card spans: the portrait, who they are, hit
- * points, the tiles, and the badges — one per child of the card below.
+ * points, the tiles, the badges and the prep — one per child of the card below.
  */
-const CARD_ROWS = "row-span-5";
+const CARD_ROWS = "row-span-6";
 
-export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card: SeatCardModel }) {
+export function SeatCard({
+  row,
+  card,
+  prep,
+}: {
+  readonly row: PartySeat;
+  readonly card: SeatCardModel;
+  /** The creator's notes for this seat; absent or both `null` draws no footer. */
+  readonly prep: SeatPrep | undefined;
+}) {
   const character = row.character;
   return (
     <Card
@@ -118,7 +129,7 @@ export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card
         )}
       </div>
 
-      <div className="px-card pt-3.5 pb-card">
+      <div className="px-card pt-3.5">
         {card.kind === "character" &&
           (card.conditions.length > 0 || card.tempHp > 0 || card.inspiration) && (
             // One variant for every condition: the words are the DM's own and
@@ -147,7 +158,46 @@ export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card
             </ul>
           )}
       </div>
+
+      <div className="pb-card">
+        {prep !== undefined && (prep.hook !== null || prep.secret !== null) && (
+          <SeatNotes hook={prep.hook} secret={prep.secret} />
+        )}
+      </div>
     </Card>
+  );
+}
+
+/**
+ * The foot of the card: what pulls the character into the story, and what the
+ * DM knows that the table does not. The secret is in magic ink behind an
+ * eye-off, the product's mark for *only you see this* — the whole page is the
+ * creator's, but the card is what a DM might turn towards the table.
+ */
+function SeatNotes({
+  hook,
+  secret,
+}: {
+  readonly hook: string | null;
+  readonly secret: string | null;
+}) {
+  return (
+    <div className="mt-3.5 flex flex-col gap-2.5 border-t border-hairline px-card pt-3.5">
+      {hook !== null && (
+        <p className="m-0 flex gap-2 text-body-s leading-body text-foreground">
+          <Icon name="map" size={14} className="mt-0.5 shrink-0 text-faint" />
+          <span className="sr-only">Hook: </span>
+          <span className="min-w-0 text-pretty break-words">{hook}</span>
+        </p>
+      )}
+      {secret !== null && (
+        <p className="m-0 flex gap-2 text-body-s leading-body text-magic-ink">
+          <Icon name="eye-off" size={14} className="mt-0.5 shrink-0" />
+          <span className="sr-only">Secret: </span>
+          <span className="min-w-0 text-pretty break-words">{secret}</span>
+        </p>
+      )}
+    </div>
   );
 }
 
