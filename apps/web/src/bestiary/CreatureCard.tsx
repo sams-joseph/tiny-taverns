@@ -20,9 +20,9 @@ import { provenanceOf } from "./provenance";
  * lives. Reading the parenthetical onto a card that has to line up in a grid
  * would make the two halves compete for the same space and win nothing.
  *
- * The prototype makes the whole card clickable. It carries a button instead, for
- * the reason `EncounterCard` records: the inline `onClick` on a `<div>` is the
- * visual specification, not the interaction, and a card is not a control.
+ * The prototype makes the whole card clickable. It carries a button instead:
+ * the inline `onClick` on a `<div>` is the visual specification, not the
+ * interaction, and a card is not a control.
  */
 
 /**

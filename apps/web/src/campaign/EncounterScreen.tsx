@@ -12,7 +12,8 @@ import { BattleMapBoard, describeBoard } from "./BattleMapBoard";
 import { CampaignChrome } from "./CampaignChrome";
 import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
 import { describeDifficulty } from "./difficulty";
-import { DifficultyBadge, describeRoster } from "./EncounterCard";
+import { DifficultyBadge } from "./DifficultyBadge";
+import { describeRoster } from "./encounterList";
 import { EncounterDialog } from "./EncounterDialog";
 import { encounterPageAtom, type EncounterPage } from "./load";
 import { NoteCard } from "./NotesList";
@@ -20,7 +21,7 @@ import { NoteDialog } from "./NoteDialog";
 
 /**
  * One encounter: its battle map, its roster and the notes attached to it — the
- * page an encounter card opens. **The creator's alone**: the map read behind
+ * page the Encounters preview's heading opens. **The creator's alone**: the map read behind
  * it is refused to everybody else (`campaign/load.ts`, `encounterPageAtom`),
  * so a player who pastes the URL reads the same failure a stranger does.
  *

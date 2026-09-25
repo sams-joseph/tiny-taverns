@@ -196,25 +196,6 @@ describe("CampaignScreen", () => {
     expect(await screen.findByText("No notes yet")).toBeInTheDocument();
   });
 
-  it("filters what is on screen without moving a card's own note count", async () => {
-    // The one search box became one per screen — an encounter list and a note
-    // list are different questions, and the delivery gives each its own box.
-    await renderEncounters(mintingSession());
-
-    const search = await screen.findByRole("combobox", { name: "Search encounters" });
-    await userEvent.type(search, "crate");
-
-    expect(screen.queryByText("Ambush in the reeds")).not.toBeInTheDocument();
-    expect(screen.getByText("Whatever is in the crate")).toBeInTheDocument();
-
-    await userEvent.clear(search);
-    await userEvent.type(search, "nothing by that name");
-
-    // Searching to nothing is not the same state as having nothing, and says so.
-    expect(await screen.findByText("Nothing matches")).toBeInTheDocument();
-    expect(screen.getByText(/Loosen the search or a filter/)).toBeInTheDocument();
-  });
-
   it("hands a player the screen that works, rather than drawing the DM's over their data", async () => {
     // Nothing in the product links a player here any more, but a bookmark or a
     // pasted link still can — and it would not fail loudly: every read this

@@ -10,10 +10,13 @@ import { Description } from "../ui/description";
  *
  * The redesign draws its summary cards one way: a title on a hairline-ruled
  * header, sometimes a quiet figure beside it, the way to the tab that holds the
- * whole list at the far end, and rows under it. **The rows open nothing.** The
- * captain's answer on the drawing is that the Overview is a summary and the
- * header's link (*Manage*, *All notes*, *Read the chronicle*) is the way in, so
- * a row is not a link and the card is not `linked`.
+ * whole list at the far end, and rows under it. **The Party and Recent notes
+ * rows open nothing.** The captain's answer on the drawing is that the Overview
+ * is a summary and the header's link (*Manage*, *All notes*, *Read the
+ * chronicle*) is the way in, so a row there is not a link and the card is not
+ * `linked`. *Next session*'s encounter rows are the exception the Encounters
+ * redesign made: each opens its encounter on the Encounters tab
+ * (`NextSession.tsx`).
  */
 
 /**

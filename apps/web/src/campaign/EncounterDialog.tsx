@@ -561,7 +561,7 @@ function EncounterForm({
         }),
       // **`Encounter.creatureCount` is `sum(encounter_creature.count)`,
       // computed per read.** So the roster half of this save moves a number on
-      // the encounter card without the encounter row ever being sent — which is
+      // the Encounters list without the encounter row ever being sent — which is
       // exactly the shape of write this design has to be careful about, and why
       // the roster and the encounter are one key rather than two.
       [reads.encounters(campaignId)],

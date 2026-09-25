@@ -1,6 +1,6 @@
 import type { Encounter, Session } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Button, Card, CardFooter, Icon, SectionHeading } from "@taverns/ui";
+import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
 import type { CampaignView } from "./load";
 import { encounterDetail, openingReadAloud } from "./overview";
@@ -44,7 +44,7 @@ function EncounterRow({
   readonly onRun: () => void;
 }) {
   return (
-    <li className="flex min-h-row items-center gap-3 border-b border-hairline px-card py-2">
+    <li className="relative flex min-h-row items-center gap-3 border-b border-hairline px-card py-2 transition-control hover:bg-surface-raised has-[a[data-card-link]:focus-visible]:ring-focus [&_button]:relative">
       <span
         aria-hidden="true"
         className="w-4.5 shrink-0 font-mono text-mono leading-none font-medium text-faint"
@@ -52,7 +52,17 @@ function EncounterRow({
         {index}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-body-s leading-snug font-semibold text-heading">{encounter.name}</div>
+        <div className="text-body-s leading-snug font-semibold text-heading">
+          <Link
+            to="/campaigns/$campaignId/encounters"
+            params={{ campaignId: encounter.campaignId }}
+            search={{ encounter: encounter.id }}
+            data-card-link
+            className={cardLinkClassName}
+          >
+            {encounter.name}
+          </Link>
+        </div>
         <div className="text-caption leading-snug text-muted-foreground">
           {encounterDetail(encounter)}
         </div>
@@ -95,12 +105,15 @@ function EncounterRow({
  * **What the drawing has that the wire does not** is left out rather than
  * stubbed: a scheduled date (a session has when it *ran*, not when it is
  * planned for), encounters assigned to a night (encounters are the campaign's),
- * and an encounter's CR, DC and readiness. *Open prep* is gone because the prep
- * is here: the checklist the drawing dropped is this card's own section, and so
- * is ending the night when no fight is running.
+ * and an encounter's readiness. *Open prep* is gone because the prep is here:
+ * the checklist the drawing dropped is this card's own section, and so is
+ * ending the night when no fight is running. *All encounters* is the way to the
+ * tab.
  *
- * The rows open nothing — each carries its own *Edit* and *Run*, which is where
- * the Overview has always put them.
+ * **A row opens its encounter on the Encounters tab**, selected in the preview
+ * (`?encounter=`), from anywhere on its face — the captain's call on the
+ * Encounters redesign, which draws these rows as the way in. Its own *Edit* and
+ * *Run* stay above that link and do not navigate.
  */
 export function NextSession({
   view,

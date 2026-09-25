@@ -315,8 +315,7 @@ export function MyCharactersScreen() {
         (view.characters.length === 0 ? (
           <NothingYet view={view} />
         ) : (
-          // The encounter grid's rule: `auto-fill minmax(…)` inside a container
-          // query, because the question is how wide *this column* is and the
+          // `auto-fill minmax(…)` as container queries, because the question is how wide *this column* is and the
           // Hob panel can take 400px of it without the window moving.
           <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4">
             {view.characters.map((owned) => (

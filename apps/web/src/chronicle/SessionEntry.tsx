@@ -9,8 +9,7 @@ import { dayOf, spanOf } from "./format";
  * `Chronicle.jsx:29-141` in shipped components. The dot-and-rule is the
  * delivery's own — a bigger accent dot with a soft ring for the newest night, a
  * hairline running on down the column — built from the spacing scale rather than
- * its literal 13/9/21px, which is the same substitution the encounter grid made
- * for `minmax(250px,1fr)`.
+ * its literal 13/9/21px.
  *
  * **The collapsed card carries no summary**, and that is the one visible
  * difference from the prototype. `s.summary` there is authored prose on a

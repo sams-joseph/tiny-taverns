@@ -117,9 +117,9 @@ export const membershipsAtom = apiAtom((client) => client.me.campaigns(), [reads
 export const encountersAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) =>
-      // Whole lists, followed to the end: this screen's search box filters what
-      // the frame loaded, and a filter applied to one page is not a filter on
-      // the list. See `api/page.ts`.
+      // Whole lists, followed to the end: the Encounters page groups and counts
+      // what the frame loaded, and a count over one page is not a count of the
+      // list. See `api/page.ts`.
       collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
         client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
       ),
@@ -239,6 +239,21 @@ export const encounterPageAtom = Atom.family(
         ),
       [reads.battleMap(at.encounterId), reads.encounters(at.campaignId)],
     ),
+);
+
+/**
+ * Every encounter's DM prep in the campaign — tactics, treasure and a
+ * challenge's numbers — in one read: the Encounters page's `extra`, for the
+ * rows' *DC 14* and the preview's sections. The creator's alone, as the map is.
+ *
+ * Prep is written through the encounter's own form, which names `encounters`,
+ * so this answers that key rather than one of its own.
+ */
+export const encounterPrepListAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.encounterPrep.list({ params: { campaignId } }),
+    [reads.encounters(campaignId)],
+  ),
 );
 
 export const campaignInvitesAtom = Atom.family((campaignId: CampaignId) =>

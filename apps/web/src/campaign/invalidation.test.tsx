@@ -111,7 +111,7 @@ describe("adding a line to the checklist", () => {
 
 /**
  * **`Encounter.creatureCount` is `sum(encounter_creature.count)`, computed per
- * read.** So saving a roster line moves a number on the encounter card without
+ * read.** So saving a roster line moves a number on the Encounters list without
  * the encounter row ever being sent — the first of the two cases
  * `CampaignChrome.tsx` named when it argued for re-reading everything.
  */
@@ -125,7 +125,7 @@ describe("a roster line, which moves a number the write never sent", () => {
     });
   };
 
-  it("redraws the card's creature count, and re-reads only the encounters", async () => {
+  it("redraws the row's creature count, and re-reads only the encounters", async () => {
     withRoster(6);
     server.routes.set(`GET ${rosterPath}`, { status: 200, body: [] });
     server.routes.set(`PATCH ${encountersPath}/${encounterId}`, {
@@ -152,11 +152,10 @@ describe("a roster line, which moves a number the write never sent", () => {
       },
     });
     await renderEncounters(mintingSession());
-    // The card carries the note count too — the fixture attaches one — which is
-    // the other half of this describe block and is why the whole line is matched.
-    expect(await screen.findByText("6 creatures · 1 note")).toBeInTheDocument();
+    expect(await screen.findByText("6 creatures")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Edit Ambush in the reeds" }));
+    // The preview's *Edit*, on the encounter the page opened on.
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "Add Goblin Boss" });
 
     // The server will answer the *next* read of the list with the new total —
@@ -166,8 +165,8 @@ describe("a roster line, which moves a number the write never sent", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add Goblin Boss" }));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-    // The card behind the dialog says the new number.
-    expect(await screen.findByText("7 creatures · 1 note")).toBeInTheDocument();
+    // The row behind the dialog says the new number.
+    expect(await screen.findByText("7 creatures")).toBeInTheDocument();
     expect(reads(mark, encountersPath)).toBe(1);
     // And the notes are not touched: nothing about a roster is a note.
     expect(reads(mark, notesPath)).toBe(0);
@@ -175,15 +174,15 @@ describe("a roster line, which moves a number the write never sent", () => {
 });
 
 /**
- * **A note's attachment moves the note count on an encounter card**, which is
- * counted in the browser over the notes list — the second case the frame's own
+ * **A note's attachment moves the read-aloud in an encounter's preview**, which
+ * is found in the browser over the notes list — the second case the frame's own
  * doc block named, and the one that crosses a screen.
  *
  * It is answered by naming the *resource* rather than the screen: the note write
- * refreshes `reads.notes`, and the encounters screen counts its notes over the
+ * refreshes `reads.notes`, and the Encounters page finds its read-aloud over the
  * same atom. Nobody has to know that screen exists.
  */
-describe("a note's attachment, which moves a count on a screen it never saw", () => {
+describe("a note's attachment, which moves a preview on a screen it never saw", () => {
   it("re-reads the notes and not the encounters", async () => {
     server.routes.set(`PATCH ${notesPath}/${readAloud.id}`, { status: 200, body: readAloud });
     await renderNotes(mintingSession());
@@ -198,10 +197,10 @@ describe("a note's attachment, which moves a count on a screen it never saw", ()
     expect(reads(mark, `/campaigns/${campaignId}`)).toBe(0);
   });
 
-  it("and the encounter card counts the note the moment it is drawn", async () => {
+  it("and the encounter's preview reads it aloud the moment it is drawn", async () => {
     // The wire either side of the write: nothing attached, then attached. What
     // is asserted is that the *encounters* screen, which the note dialog has
-    // never seen, draws the new count from the refreshed notes rather than from
+    // never seen, draws the read-aloud from the refreshed notes rather than from
     // a read of its own.
     server.routes.set(`GET ${notesPath}`, {
       status: 200,
@@ -223,10 +222,12 @@ describe("a note's attachment, which moves a count on a screen it never saw", ()
       }),
     );
 
-    expect(await screen.findByText("6 creatures · 1 note")).toBeInTheDocument();
-    // Nothing was read on the way: the count is drawn from the notes the write
-    // refreshed, and the encounters are the same atom the frame already held.
-    expect(since(mark).filter((call) => call.startsWith("GET"))).toEqual([]);
+    expect(await screen.findByText(readAloud.body)).toBeInTheDocument();
+    // Neither was read on the way: the read-aloud is drawn from the notes the
+    // write refreshed, and the encounters are the same atom the frame already
+    // held. What the page reads of its own is its prep and the preview's.
+    expect(since(mark)).not.toContain(`GET ${notesPath}`);
+    expect(since(mark)).not.toContain(`GET ${encountersPath}`);
   });
 });
 
@@ -269,7 +270,7 @@ describe("what the split did not cost", () => {
     await path();
   };
 
-  it("still answers the second destination from the registry, with no request", async () => {
+  it("still answers the second destination from the registry, reading only its own", async () => {
     await renderScreen(mintingSession());
     await screen.findByRole("heading", { name: "The Salt Road" });
     const cold = server.calls.length;
@@ -287,8 +288,17 @@ describe("what the split did not cost", () => {
       }),
     );
     await screen.findByRole("heading", { name: "Encounters" });
+    await screen.findByRole("table");
 
-    expect(server.calls.length).toBe(cold);
+    // The campaign view came from the registry. What the Encounters page reads
+    // is its own: every encounter's prep, and the preview's map and roster.
+    expect(new Set(since(cold))).toEqual(
+      new Set([
+        `GET /campaigns/${campaignId}/encounter-prep`,
+        `GET ${encountersPath}/${encounterId}/map`,
+        `GET ${encountersPath}/${encounterId}/creatures`,
+      ]),
+    );
     void clean;
   });
 });

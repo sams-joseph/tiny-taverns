@@ -1,192 +1,339 @@
-import type { Encounter } from "@taverns/api";
-import { useParams } from "@tanstack/react-router";
 import {
-  Button,
-  EMPTY_FILTER_VALUE,
-  FilterInput,
-  Icon,
-  searchTextOf,
-  type FilterCondition,
-  type FilterInputFacet,
-  EmptyState,
-} from "@taverns/ui";
-import { useState } from "react";
+  encounterKindLabel,
+  type CampaignId,
+  type Encounter,
+  type EncounterId,
+  type EncounterPrep,
+} from "@taverns/api";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Badge, Button, EmptyState, Icon, SectionHeading, Toggle } from "@taverns/ui";
+import { useRef, useState } from "react";
 import { CampaignChrome } from "./CampaignChrome";
-import { difficultyWord } from "./difficulty";
-import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
-import { matches } from "./load";
+import {
+  BAND_TEXT,
+  creatureWords,
+  encountersSummary,
+  groupLabel,
+  KIND_FILTERS,
+  KIND_ICON,
+  matchesKind,
+  playedLabel,
+  ratingOf,
+  sectionsOf,
+  type KindFilter,
+} from "./encounterList";
+import { EncounterPreview } from "./EncounterPreview";
+import { encounterPrepListAtom, type CampaignView } from "./load";
 
 /**
- * Every encounter built for this table — `CampaignScreens.jsx`'s
- * `CampEncounters`.
+ * Every encounter built for this table, as the redesign draws the tab
+ * (`Campaign Overview.dc.html`): a list grouped by where each encounter stands,
+ * and beside it a preview of the one selected.
  *
- * It was the campaign screen's first tab; the sixth delivery gives it a row of
- * its own and therefore a URL of its own. What that buys is not layout: an
- * encounter list is a thing a DM leaves open, links somebody to, and reloads
- * into mid-prep, and a `useState` tab was none of those.
+ * **The page is centred at the Overview's width** (`CampaignChrome`'s
+ * `centred`), header included so its left edge is the list's, and scrolls with
+ * the window — neither column scrolls on its own and nothing is sticky.
  *
- * **The search term and the open dialog live here, above `CampaignChrome`**,
- * because the box that sets one is in the top bar and the grid that reads it is
- * the body — two slots of one screen. Held in either slot they would be two
- * copies of one answer; held here they are one, and the frame stays a frame.
+ * **A row selects; it does not open.** The captain chose the drawing's preview
+ * over rows that open the encounter, so a row is a button that puts its
+ * encounter in the pane, and the pane's heading is the way to the whole page.
+ * The selection is the URL's (`?encounter=`), so a reload, a shared link and
+ * the Overview's rows land on it. Choosing a row *replaces* the address rather
+ * than pushing one: picking through ten rows is one visit to the page, and
+ * *Back* leaves it as it would any other tab. With no choice, or one the pill
+ * hides, the first row shown is the one previewed.
  *
- * The filter is client-side over what the frame already loaded: `encounters.list`
- * takes no query, so a round trip per keystroke would buy a filter the browser
- * can do on a list this size. Its counterpart on the Chronicle is the server's
- * because full text over a stat block is not something a browser has.
+ * **The filter is the drawing's pills and nothing else** — the captain's call:
+ * no search box and no other facets. They are the kinds, counted over every
+ * encounter.
+ *
+ * The two columns are the drawing's own wrap rather than a breakpoint, like the
+ * Overview's: the list `basis-encounters-list-min` up to `max-w-encounters-list`
+ * beside the preview's `basis-encounters-pane`, stacking below 704px of content
+ * whatever narrows it. Stacked, the preview is under the whole list, so
+ * choosing a row scrolls it into view — the drawing's own narrow layout left
+ * the change a screen below with nothing to say it happened.
  */
-/**
- * The facets this list can offer, from what the frame already loaded — the
- * filter is client-side over the campaign's own encounters, so its vocabulary
- * is what those rows carry.
- */
-const encounterFacets = (encounters: ReadonlyArray<Encounter>): ReadonlyArray<FilterInputFacet> => {
-  const tags = [...new Set(encounters.flatMap((encounter) => encounter.tags))].sort();
-  const difficulties = [
-    ...new Set(encounters.map((encounter) => difficultyWord(encounter.difficulty))),
-  ].sort();
-  const out: Array<FilterInputFacet> = [];
-  // Exclusion and Match any are offered here because the filter is the
-  // browser's own, over rows already in hand — the paged Library corpora
-  // cannot honour either without narrowing a page and calling it the list.
-  if (tags.length > 0)
-    out.push({
-      kind: "enum",
-      key: "tag",
-      label: "Tag",
-      not: true,
-      options: tags.map((tag) => ({ value: tag, label: tag })),
-    });
-  if (difficulties.length > 0)
-    out.push({
-      kind: "enum",
-      key: "difficulty",
-      label: "Difficulty",
-      not: true,
-      options: difficulties.map((band) => ({ value: band, label: band })),
-    });
-  return out;
-};
-
-/** Whether one encounter satisfies one pill — operator included. */
-const satisfies = (encounter: Encounter, condition: FilterCondition): boolean => {
-  const has =
-    condition.facet === "tag"
-      ? encounter.tags.some((tag) => condition.values.includes(tag))
-      : condition.facet === "difficulty"
-        ? condition.values.includes(difficultyWord(encounter.difficulty))
-        : true;
-  return condition.operator === "not" ? !has : has;
-};
-
 export function EncountersScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
-  const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
   const [editing, setEditing] = useState<{ readonly encounter: Encounter | undefined }>();
 
   return (
     <CampaignChrome
       campaignId={campaignId}
       title="Encounters"
+      centred
+      extra={encounterPrepListAtom(campaignId)}
       subtitle={({ view }) =>
-        `${String(view.encounters.length)} ${
-          view.encounters.length === 1 ? "encounter" : "encounters"
-        } built for ${view.campaign.name}`
+        encountersSummary(view.encounters, view.run?.encounterId ?? undefined)
       }
-      actions={({ view }) => (
-        <>
-          <FilterInput
-            label="Search encounters"
-            value={filter}
-            onChange={setFilter}
-            facets={encounterFacets(view.encounters)}
-            matchToggle
-            // Wide enough that the overflow chip, the match toggle and the
-            // typing room share the single line without clipping.
-            className="min-h-control-sm max-w-96 py-0.5"
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setEditing({ encounter: undefined })}
-          >
-            <Icon name="plus" size={14} />
-            New encounter
-          </Button>
-        </>
+      actions={() => (
+        // Outline, not peach: the campaign row's press is this screen's one
+        // primary.
+        <Button variant="outline" size="sm" onClick={() => setEditing({ encounter: undefined })}>
+          <Icon name="plus" size={14} />
+          New encounter
+        </Button>
       )}
     >
-      {({ view, run }) => {
-        const facets = encounterFacets(view.encounters);
-        const search = searchTextOf(filter.text, facets);
-        // The search always narrows; the pills combine per the match toggle.
-        const shown = view.encounters.filter(
-          (encounter) =>
-            matches(search, encounter.name, ...encounter.tags) &&
-            (filter.filters.length === 0 ||
-              (filter.match === "all"
-                ? filter.filters.every((condition) => satisfies(encounter, condition))
-                : filter.filters.some((condition) => satisfies(encounter, condition)))),
-        );
-
-        // Counted over every note, not the filtered encounters: a card's own
-        // count should not move because the DM typed in the search box.
-        const noteCounts = new Map<string, number>();
-        for (const note of view.notes) {
-          if (note.attachedTo !== null) {
-            noteCounts.set(note.attachedTo.id, (noteCounts.get(note.attachedTo.id) ?? 0) + 1);
-          }
-        }
-
-        return (
-          <>
-            {/* The container is the content column, so the grid turns over on
-                the width it actually has — which changes when the Hob panel
-                takes 400px out of it without the window moving. `@lg` and
-                `@3xl` are where `auto-fill minmax(250px, 1fr)` turns over: two
-                cards need 516px, three need 782px. */}
-            <div className="@container">
-              {view.encounters.length === 0 ? (
-                <EmptyState icon="swords" title="No encounters yet">
-                  Nothing is waiting for the party. Write one with{" "}
-                  <span className="text-heading">New encounter</span> above and it lands here, ready
-                  to run.
-                </EmptyState>
-              ) : shown.length === 0 ? (
-                <EmptyState icon="search" title="Nothing matches">
-                  Nothing here answers to that. Loosen the search or a filter, or clear them.
-                </EmptyState>
-              ) : (
-                <div className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3">
-                  {shown.map((encounter) => (
-                    <EncounterCard
-                      key={encounter.id}
-                      encounter={encounter}
-                      noteCount={noteCounts.get(encounter.id) ?? 0}
-                      running={view.run?.encounterId === encounter.id}
-                      onEdit={() => setEditing({ encounter })}
-                      onRun={() => run(encounter.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Keyed on what is being edited, so opening the dialog on a second
-                row builds a fresh form rather than showing the first's fields. */}
-            {editing !== undefined && (
-              <EncounterDialog
-                key={editing.encounter?.id ?? "new-encounter"}
-                campaignId={view.campaign.id}
-                encounter={editing.encounter}
-                onClose={() => setEditing(undefined)}
-                onSaved={() => setEditing(undefined)}
-              />
-            )}
-          </>
-        );
-      }}
+      {({ view, extra, run }) => (
+        <>
+          <EncounterBrowser
+            campaignId={campaignId}
+            view={view}
+            prep={extra}
+            onEdit={(encounter) => setEditing({ encounter })}
+            onRun={(encounter) => run(encounter.id)}
+          />
+          {/* Keyed on what is being edited, so opening the dialog on a second
+              encounter builds a fresh form rather than showing the first's. */}
+          {editing !== undefined && (
+            <EncounterDialog
+              key={editing.encounter?.id ?? "new-encounter"}
+              campaignId={view.campaign.id}
+              encounter={editing.encounter}
+              onClose={() => setEditing(undefined)}
+              onSaved={() => setEditing(undefined)}
+            />
+          )}
+        </>
+      )}
     </CampaignChrome>
+  );
+}
+
+/**
+ * Whether the preview sits under the list rather than beside it. A list with no
+ * height has not been laid out (or is jsdom's), and nothing is scrolled then.
+ */
+const stacked = (list: HTMLElement, pane: HTMLElement): boolean => {
+  const above = list.getBoundingClientRect();
+  return above.height > 0 && pane.getBoundingClientRect().top >= above.bottom - 1;
+};
+
+const reducedMotion = (): boolean =>
+  globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+function EncounterBrowser({
+  campaignId,
+  view,
+  prep,
+  onEdit,
+  onRun,
+}: {
+  readonly campaignId: CampaignId;
+  readonly view: CampaignView;
+  readonly prep: ReadonlyArray<EncounterPrep>;
+  readonly onEdit: (encounter: Encounter) => void;
+  readonly onRun: (encounter: Encounter) => void;
+}) {
+  const chosen = useSearch({ strict: false }).encounter;
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<KindFilter>("all");
+  const listRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLElement>(null);
+  /**
+   * Whether the next preview to settle should be scrolled to: set by a row's
+   * click and by opening on a choice, and nothing else. It waits for the
+   * preview's reads because, scrolled while they are loading, the page is too
+   * short to bring it up and it lands half way down when the roster arrives.
+   */
+  const reveal = useRef(chosen !== undefined);
+
+  const liveId = view.run?.encounterId ?? undefined;
+  const shown = view.encounters.filter((encounter) => matchesKind(encounter, filter));
+  const sections = sectionsOf(shown, liveId);
+  const ordered = sections.flatMap((section) => section.encounters);
+  const selected = ordered.find((encounter) => encounter.id === chosen) ?? ordered[0];
+  const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
+
+  const choose = (encounterId: EncounterId | undefined) =>
+    void navigate({
+      to: "/campaigns/$campaignId/encounters",
+      params: { campaignId },
+      search: encounterId === undefined ? {} : { encounter: encounterId },
+      replace: true,
+      resetScroll: false,
+    });
+
+  // Stacked, the preview is under the whole list: bring it into view when a
+  // row is chosen, or when the page opens on a choice (the Overview's rows).
+  const bringPaneIntoView = () => {
+    const list = listRef.current;
+    const pane = paneRef.current;
+    if (list === null || pane === null || !stacked(list, pane)) return;
+    pane.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+  };
+  const revealIfChosen = () => {
+    if (!reveal.current) return;
+    reveal.current = false;
+    bringPaneIntoView();
+  };
+
+  if (view.encounters.length === 0) {
+    return (
+      <EmptyState icon="swords" title="No encounters yet">
+        Nothing is waiting for the party. Write one with{" "}
+        <span className="text-heading">New encounter</span> above and it lands here, ready to run.
+      </EmptyState>
+    );
+  }
+
+  const pickFilter = (next: KindFilter) => {
+    setFilter(next);
+    // Keep the address honest: a choice the new pill hides gives way to the
+    // first encounter the pill shows.
+    const still = view.encounters.find((encounter) => encounter.id === chosen);
+    if (still !== undefined && !matchesKind(still, next)) choose(undefined);
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div role="group" aria-label="Filter by kind" className="flex flex-wrap items-center gap-1.5">
+        {KIND_FILTERS.map(([value, label]) => (
+          <Toggle
+            key={value}
+            size="sm"
+            className="rounded-pill"
+            pressed={filter === value}
+            onPressedChange={() => pickFilter(value)}
+          >
+            {label}
+            <span className="font-mono text-mono leading-none font-medium text-faint">
+              {view.encounters.filter((encounter) => matchesKind(encounter, value)).length}
+            </span>
+          </Toggle>
+        ))}
+      </div>
+
+      {selected === undefined ? (
+        <EmptyState icon="search" title="Nothing matches">
+          None of this table&rsquo;s encounters is one of these yet. Choose{" "}
+          <span className="text-heading">All</span> to see every one.
+        </EmptyState>
+      ) : (
+        <div className="flex flex-wrap items-start gap-6">
+          <div
+            ref={listRef}
+            data-slot="encounter-list"
+            className="flex min-w-0 shrink grow basis-encounters-list-min flex-col gap-5 max-w-encounters-list"
+          >
+            {sections.map((section) => (
+              <section
+                key={section.group}
+                aria-labelledby={`encounters-${section.group}`}
+                className="flex flex-col gap-1.5"
+              >
+                <SectionHeading id={`encounters-${section.group}`} className="px-1 pb-1">
+                  {section.title}
+                </SectionHeading>
+                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                  {section.encounters.map((encounter) => (
+                    <li key={encounter.id}>
+                      <EncounterRow
+                        encounter={encounter}
+                        prep={prepOf.get(encounter.id)}
+                        selected={encounter.id === selected.id}
+                        onSelect={() => {
+                          if (encounter.id === selected.id) {
+                            bringPaneIntoView();
+                            return;
+                          }
+                          reveal.current = true;
+                          choose(encounter.id);
+                        }}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          <EncounterPreview
+            key={selected.id}
+            paneRef={paneRef}
+            onSettled={revealIfChosen}
+            encounter={selected}
+            prep={prepOf.get(selected.id)}
+            readAloud={view.notes.filter(
+              (note) =>
+                note.kind === "read_aloud" &&
+                note.body.trim() !== "" &&
+                note.attachedTo?.kind === "encounter" &&
+                note.attachedTo.id === selected.id,
+            )}
+            group={groupLabel(selected, liveId)}
+            live={selected.id === liveId}
+            fightOn={view.run !== undefined}
+            onEdit={() => onEdit(selected)}
+            onRun={() => onRun(selected)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One encounter in the list, as the drawing draws it: its kind's glyph, the
+ * name, and "Combat · Medium" under it — plus what the captain kept from the
+ * old card, the creature count and *Shared*, since an absent badge is not a
+ * fail-closed default a DM can read. A played one says when.
+ */
+function EncounterRow({
+  encounter,
+  prep,
+  selected,
+  onSelect,
+}: {
+  readonly encounter: Encounter;
+  readonly prep: EncounterPrep | undefined;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}) {
+  const rating = ratingOf(encounter, prep);
+  const creatures = creatureWords(encounter);
+  const played = playedLabel(encounter);
+  return (
+    <button
+      type="button"
+      aria-current={selected ? "true" : undefined}
+      onClick={onSelect}
+      className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-md border border-transparent bg-transparent px-3.5 py-2.5 text-left font-sans transition-control outline-none hover:bg-surface-card focus-visible:ring-focus aria-current:border-accent aria-current:bg-surface-card"
+    >
+      <Icon name={KIND_ICON[encounter.kind]} size={16} className="shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        {/* *Shared* rides beside the name rather than in a column of its own,
+            so the line under it keeps the row's whole width. */}
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 truncate text-body-s leading-snug font-semibold text-heading">
+            {encounter.name}
+          </span>
+          {encounter.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-caption leading-snug text-muted-foreground">
+          <span>{encounterKindLabel(encounter.kind)}</span>
+          <span aria-hidden="true" className="text-faint">
+            ·
+          </span>
+          <span className={rating.band === undefined ? undefined : BAND_TEXT[rating.band]}>
+            {rating.text}
+          </span>
+          {creatures !== undefined && (
+            <>
+              <span aria-hidden="true" className="text-faint">
+                ·
+              </span>
+              <span>{creatures}</span>
+            </>
+          )}
+        </span>
+        {played !== "" && (
+          <span className="mt-0.5 block text-caption leading-snug text-faint">{played}</span>
+        )}
+      </span>
+    </button>
   );
 }
