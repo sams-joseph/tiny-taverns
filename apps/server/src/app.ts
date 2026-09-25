@@ -653,7 +653,6 @@ export const servicesOver = <E>(
         // accept path holds `Characters` as well now — the same statement a
         // typed one takes, with `assistant_turn_id` on it.
         Characters.layer.pipe(Layer.provide(imageUrls)),
-        EncounterCreatures.layer,
         Encounters.layer,
         // Group Hob's accepted chronicle line goes through the same
         // `GroupHistory.create` a member's own hand does.

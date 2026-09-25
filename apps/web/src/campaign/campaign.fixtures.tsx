@@ -200,6 +200,7 @@ export const battleMap = {
  */
 export const encounterPrep = {
   encounterId,
+  ready: false,
   tactics: [
     "Archers open from the reeds with full cover.",
     "At half strength they grab a crate and run for the water.",
