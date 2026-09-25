@@ -39,6 +39,7 @@ import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
+import { SeatPreps } from "./repo/SeatPrep.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -490,6 +491,7 @@ export const servicesOver = <E>(
   | Proposals
   | Recap
   | Search
+  | SeatPreps
   | SessionEvents
   | Sessions
   | Spells,
@@ -522,6 +524,10 @@ export const servicesOver = <E>(
     // delta are live writes, so this is a live repository the way the old
     // campaign-scoped `Characters` was.
     Party.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
+    // Each seat's hook and secret: creator-only, every method behind the
+    // `CampaignCreatorActor` proof, and only the handlers hold it — no toolkit
+    // has a prep tool, so a secret never reaches a model.
+    SeatPreps.layer,
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -778,6 +784,7 @@ export const applicationOver = <E>(
     | Proposals
     | Recap
     | Search
+    | SeatPreps
     | SessionEvents
     | Sessions
     | Spells,

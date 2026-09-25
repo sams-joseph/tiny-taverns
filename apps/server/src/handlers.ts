@@ -28,6 +28,7 @@ import { LibraryShares } from "./repo/LibraryShares.js";
 import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
+import { SeatPreps } from "./repo/SeatPrep.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -477,6 +478,27 @@ const PartyLive = HttpApiBuilder.group(
       .handle("leave", ({ params }) => party.leave(params.campaignId, params.campaignCharacterId))
       .handle("damage", ({ params, payload }) =>
         party.damage(params.campaignId, params.campaignCharacterId, payload),
+      );
+  }),
+);
+
+/**
+ * A seat's hook and secret: the creator's alone, behind the proof exactly as
+ * an encounter's prep is, so anybody else is the ordinary `NotFound` before a
+ * prep row is read or written.
+ */
+const SeatPrepLive = HttpApiBuilder.group(
+  TavernsApi,
+  "seatPrep",
+  Effect.fnUntraced(function* (handlers) {
+    const preps = yield* SeatPreps;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => asDm(params.campaignId, (creator) => preps.list(creator)))
+      .handle("update", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) =>
+          preps.update(creator, params.campaignCharacterId, payload),
+        ),
       );
   }),
 );
@@ -1551,6 +1573,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CampaignInvitesLive,
     SessionsLive,
     PartyLive,
+    SeatPrepLive,
     NotesLive,
     EncountersLive,
     BattleMapsLive,

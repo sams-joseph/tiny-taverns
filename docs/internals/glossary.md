@@ -38,6 +38,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 
 - **character**: account-owned, top-level, one copy of playable state (`character`). It has no `campaign_id`; campaign-scoped visibility lives on the seat. See [characters.md](characters.md).
 - **seat**: a character's membership of a campaign's party (`campaign_character`): the join, display snapshots and campaign-scoped visibility. Never a state fork. There is no seat that exists before a character.
+- **seat prep**: the DM's own **hook** and **secret** about the character in a seat (`campaign_character_prep`, written on first edit; `SeatPrep` on the wire). The creator's alone, read through `seatPrep.*`; never on `CampaignCharacter` or `Character`, which players read.
 - **sheet**: the `jsonb` document on the character row (`body`, `sheet` on the wire). Everything that nothing filters, sorts or seeds on lives there.
 - **bundle**: the imported 2014 SRD and starter corpora: rows owned by nobody, `origin = 'system'`, written only by import commands.
 - **core rules**: the bundle's shared rows alone (`coreRulesUsable`), the vocabulary of a character made with no campaign, and of any sheet whose character sits at no table (`characterVocabulary`).

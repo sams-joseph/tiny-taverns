@@ -472,7 +472,10 @@ describe("the scope, counted", () => {
     // Ninety-one and ninety-two are `Encounters.prep` and `prepList`: an
     // encounter's tactics, treasure and challenge numbers are the creator's
     // alone, gated from the day they were declared.
-    expect(gated).toBe(92);
+    // Ninety-three to ninety-five are `SeatPreps.list`, `update` and the inner
+    // read both restate: a seat's hook and secret are the DM's own notes about
+    // a player's character, gated from the day they were declared.
+    expect(gated).toBe(95);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

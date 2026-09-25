@@ -59,6 +59,8 @@ The standing rule, the one thing here remembered rather than compiled: when a ta
 
 Player projections are distinct schemas on distinct paths (`PlayerSessionRecap`, `PlayerLiveTable`), never a nullable field or a strip-fields helper over the creator's type. A leak then has to be written rather than caused by a forgotten flag.
 
+Creator-only material about a row a player can read lives on a table of its own, never as columns on that row: `encounter_prep` and `battle_map` beside `encounter`, `campaign_character_prep` beside the seat. A column on the shared row is one forgotten select list away from the wire; on its own table no player read touches it, and its repository takes the proof from the day it is declared. Such a table has no provenance tail and sits in `NOT_CONTENT` (`schema.test.ts`), because who may read it is the creator and where it came from is its parent's.
+
 ## The provenance tail
 
 Every content table carries `visibility` (not null, default `'dm'`), `origin` (default `'authored'`) and a nullable `assistant_turn_id` that is a real, deferrable foreign key into `assistant_turn`, with a check tying `origin = 'assistant'` to a present turn id. `schema.test.ts` enumerates the content tables and fails if one lacks any of the three; skipping the tail takes a visible edit to its `NOT_CONTENT` list. Fail-closed is the column default, not a payload's (`apps/server/test/visibility.test.ts`). No create payload carries `origin`; assistant provenance is written only by the accept paths (`repo/Proposals.ts` and the NPC counterparts, through the ordinary `create` methods with an `AssistantOrigin` from `repo/rows.ts`) and by the assistant's own turn and audit rows. `group_invite` has no tail, which is why Hob can never mint an invitation.
