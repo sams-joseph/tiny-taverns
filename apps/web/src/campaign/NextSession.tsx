@@ -1,11 +1,13 @@
-import type { Encounter, Session } from "@taverns/api";
+import type { Encounter, EncounterPrep, Session } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
 import type { CampaignView } from "./load";
+import { playedLabel } from "./encounterList";
 import { encounterDetail, openingReadAloud } from "./overview";
 import { sectionLink } from "./OverviewParts";
 import { PrepChecklist } from "./PrepChecklist";
+import { ReadyBadge } from "./ReadyBadge";
 
 /** How many encounters the card lists before the tab takes over. */
 const ON_DECK = 6;
@@ -33,18 +35,19 @@ const stateOf = (session: Session): string =>
 function EncounterRow({
   index,
   encounter,
+  prep,
   running,
-  onEdit,
   onRun,
 }: {
   readonly index: number;
   readonly encounter: Encounter;
+  readonly prep: EncounterPrep | undefined;
   readonly running: boolean;
-  readonly onEdit: () => void;
   readonly onRun: () => void;
 }) {
+  const played = playedLabel(encounter);
   return (
-    <li className="relative flex min-h-row items-center gap-3 border-b border-hairline px-card py-2 transition-control hover:bg-surface-raised has-[a[data-card-link]:focus-visible]:ring-focus [&_button]:relative">
+    <li className="relative flex min-h-row items-center gap-3 border-b border-hairline px-card py-2 transition-control hover:bg-surface-raised has-[a[data-card-link]:focus-visible]:ring-focus [&_:is(a,button):not([data-card-link])]:relative">
       <span
         aria-hidden="true"
         className="w-4.5 shrink-0 font-mono text-mono leading-none font-medium text-faint"
@@ -64,15 +67,24 @@ function EncounterRow({
           </Link>
         </div>
         <div className="text-caption leading-snug text-muted-foreground">
-          {encounterDetail(encounter)}
+          {played === "" ? encounterDetail(encounter) : `${encounterDetail(encounter)} · ${played}`}
         </div>
       </div>
+      {/* A played one says when instead, under its name as the Encounters list
+          says it, so the name keeps its room. */}
+      {played === "" && <ReadyBadge prep={prep} />}
       <Button
         variant="ghost"
         size="icon"
         className="size-7 shrink-0"
         aria-label={`Edit ${encounter.name}`}
-        onClick={onEdit}
+        nativeButton={false}
+        render={
+          <Link
+            to="/campaigns/$campaignId/encounters/$encounterId/edit"
+            params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+          />
+        }
       >
         <Icon name="pencil" size={14} />
       </Button>
@@ -104,30 +116,31 @@ function EncounterRow({
  *
  * **What the drawing has that the wire does not** is left out rather than
  * stubbed: a scheduled date (a session has when it *ran*, not when it is
- * planned for), encounters assigned to a night (encounters are the campaign's),
- * and an encounter's readiness. *Open prep* is gone because the prep is here:
+ * planned for) and encounters assigned to a night (encounters are the
+ * campaign's). Each row's *Ready* or *Draft* is the encounter's prep, and a
+ * played one says when it was played instead. *Open prep* is gone because the prep is here:
  * the checklist the drawing dropped is this card's own section, and so is
  * ending the night when no fight is running. *All encounters* is the way to the
  * tab.
  *
  * **A row opens its encounter on the Encounters tab**, selected in the preview
  * (`?encounter=`), from anywhere on its face — the captain's call on the
- * Encounters redesign, which draws these rows as the way in. Its own *Edit* and
- * *Run* stay above that link and do not navigate.
+ * Encounters redesign, which draws these rows as the way in. Its own *Edit*,
+ * which opens the encounter builder, and *Run* stay above that link.
  */
 export function NextSession({
   view,
+  prep,
   onRun,
   onFinish,
-  onAddEncounter,
-  onEditEncounter,
 }: {
   readonly view: CampaignView;
+  /** Every encounter's prep, for each row's *Ready* or *Draft*. */
+  readonly prep: ReadonlyArray<EncounterPrep>;
   readonly onRun: (encounter: Encounter) => void;
   readonly onFinish: () => void;
-  readonly onAddEncounter: () => void;
-  readonly onEditEncounter: (encounter: Encounter) => void;
 }) {
+  const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
   const { session, run: live } = view;
   const count = view.encounters.length;
   const onDeck = view.encounters.slice(0, ON_DECK);
@@ -180,8 +193,8 @@ export function NextSession({
                 key={encounter.id}
                 index={index + 1}
                 encounter={encounter}
+                prep={prepOf.get(encounter.id)}
                 running={live?.encounterId === encounter.id}
-                onEdit={() => onEditEncounter(encounter)}
                 onRun={() => onRun(encounter)}
               />
             ))}
@@ -189,8 +202,19 @@ export function NextSession({
         )}
         <div className="flex flex-wrap items-center gap-3 px-card py-2.5">
           {/* A create that belongs to one section is `outline` or quieter, and
-              opens the same dialog the Encounters tab's does. */}
-          <Button variant="ghost" size="sm" className="-ml-2.5" onClick={onAddEncounter}>
+              opens the same encounter builder the Encounters tab's does. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2.5"
+            nativeButton={false}
+            render={
+              <Link
+                to="/campaigns/$campaignId/encounters/new"
+                params={{ campaignId: view.campaign.id }}
+              />
+            }
+          >
             <Icon name="plus" size={13} />
             Add encounter
           </Button>

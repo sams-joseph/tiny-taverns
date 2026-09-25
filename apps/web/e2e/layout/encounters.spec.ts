@@ -150,12 +150,16 @@ for (const width of WIDTHS) {
     test("an Overview encounter row opens it on the Encounters tab", async ({ app, page }) => {
       await app.open(overview);
       const row = page.getByRole("listitem").filter({ hasText: "Whatever is in the crate" });
-      // Its own Edit sits above the overlay: it opens the form and goes nowhere.
-      await row.getByRole("button", { name: "Edit Whatever is in the crate" }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-      expect(new URL(page.url()).pathname).toBe(overview.path);
+      // Its own Edit sits above the overlay: what a press on it lands on is the
+      // Edit, which opens the encounter builder rather than the Encounters tab.
+      const editButton = row.getByRole("button", { name: "Edit Whatever is in the crate" });
+      await expect(editButton).toHaveAttribute("href", /\/encounters\/[^/]+\/edit$/);
+      const editBox = await box(editButton);
+      const hit = await page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.closest("a")?.getAttribute("aria-label"),
+        { x: editBox.x + editBox.width / 2, y: editBox.y + editBox.height / 2 },
+      );
+      expect.soft(hit, "what a press on Edit lands on").toBe("Edit Whatever is in the crate");
 
       // Anywhere on the row's face, not only its name: the detail line under
       // it, where what the pointer hits is the name's overlay.

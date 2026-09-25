@@ -154,7 +154,7 @@ describe("a roster line, which moves a number the write never sent", () => {
     await renderEncounters(mintingSession());
     expect(await screen.findByText("6 creatures")).toBeInTheDocument();
 
-    // The preview's *Edit*, on the encounter the page opened on.
+    // The preview's *Edit*, on the encounter the page opened on: the builder.
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "Add Goblin Boss" });
 
@@ -163,9 +163,9 @@ describe("a roster line, which moves a number the write never sent", () => {
     withRoster(7);
     const mark = server.calls.length;
     await userEvent.click(screen.getByRole("button", { name: "Add Goblin Boss" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save encounter" }));
 
-    // The row behind the dialog says the new number.
+    // The list the save lands on says the new number.
     expect(await screen.findByText("7 creatures")).toBeInTheDocument();
     expect(reads(mark, encountersPath)).toBe(1);
     // And the notes are not touched: nothing about a roster is a note.

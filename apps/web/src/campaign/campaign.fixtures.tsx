@@ -1468,6 +1468,8 @@ export const shelfPrep = [
   encounterPrep,
   prepFor(sketchId),
   prepFor(wellId, {
+    // The DM's word that it is ready: the shelf's one *Ready*.
+    ready: true,
     tactics: [
       "Success: they find the buried cache and a safe route across the flats.",
       "Each failure costs one day's water for the caravan.",

@@ -587,11 +587,13 @@ function SessionBadge({ campaignId }: { readonly campaignId: CampaignId }) {
  * Below the row's `@2xl` it is its icon: the label stays the accessible name
  * and the tooltip, and the three states have three glyphs.
  *
- * Two campaign screens go without it, because their own peach is their next
+ * Three campaign screens go without it, because their own peach is their next
  * step: one encounter's page, whose *Run* is this press aimed at that encounter
  * (`campaign/EncounterScreen.tsx`, the same `run` from the same
  * `useCampaignAct`, so it goes back to a live fight exactly as this would), and
- * the character create form, a flow whose way out is *Cancel*, not a fight.
+ * two flows whose way out is *Cancel*, not a fight — the encounter builder,
+ * new and editing (`campaign/EncounterBuilderScreen.tsx`), and the character
+ * create form.
  */
 function CampaignAct({ campaignId }: { readonly campaignId: CampaignId }) {
   const { act, dialogs } = useCampaignAct(campaignId);
@@ -669,10 +671,13 @@ function CampaignRow({
 }) {
   const relation = useCampaignRelation(campaignId);
   const matchRoute = useMatchRoute();
-  // Decoded only on the encounter's own route, never on the list's splat.
+  // Decoded only on the encounter's own routes — its page and its builder —
+  // never on the list's splat.
   const onEncounter = useParams({ strict: false }).encounterId !== undefined;
   const ownPeach =
-    onEncounter || matchRoute({ to: "/campaigns/$campaignId/characters/new" }) !== false;
+    onEncounter ||
+    matchRoute({ to: "/campaigns/$campaignId/encounters/new" }) !== false ||
+    matchRoute({ to: "/campaigns/$campaignId/characters/new" }) !== false;
 
   return (
     // The `@container` is the bare row and the padding is on the box inside it,

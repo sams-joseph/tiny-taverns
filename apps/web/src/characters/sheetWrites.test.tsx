@@ -156,8 +156,8 @@ describe("editing the durable columns", () => {
   /**
    * A failed save keeps the dialog and keeps the typing — the thing a form must
    * never do is close over an edit that never landed. `SaveFailure` is in the
-   * footer rather than the end of the body for the reason `EncounterDialog`
-   * records: the body scrolls.
+   * footer rather than the end of the body because the body scrolls, and a line
+   * below the fold is one nobody sees.
    */
   it("says a refusal and keeps what was typed", async () => {
     server.routes.set(`PATCH ${patchPath}`, {

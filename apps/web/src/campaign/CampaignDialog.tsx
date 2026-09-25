@@ -277,7 +277,8 @@ export function CampaignDialog({
           </div>
         </div>
 
-        {/* In the footer, beside the button that failed — see `EncounterDialog`. */}
+        {/* In the footer, beside the button that failed: the body scrolls, and a
+            line below the fold is one nobody sees. */}
         <DialogFooter>
           {failure !== undefined && (
             <div className="mr-auto min-w-0 flex-1 text-left">

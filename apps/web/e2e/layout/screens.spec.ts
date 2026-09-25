@@ -13,9 +13,10 @@ const WRAP = 896;
 
 /**
  * Screens with no campaign press: the fight the press would send you back to,
- * and an encounter's page, whose own *Run* is the press aimed at that encounter.
+ * an encounter's page, whose own *Run* is the press aimed at that encounter,
+ * and the encounter builder, a flow whose own peach is *Save encounter*.
  */
-const NO_PRESS = new Set(["run", "encounter"]);
+const NO_PRESS = new Set(["run", "encounter", "encounter-new", "encounter-edit"]);
 
 for (const width of WIDTHS) {
   test.describe(`${width}px`, () => {

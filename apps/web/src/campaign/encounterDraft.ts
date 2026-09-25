@@ -14,6 +14,7 @@ import {
   type EncounterKind,
   type EncounterPrep,
   type EncounterUpdate,
+  ENCOUNTER_ROSTER_MAX,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_SKILL_MAX,
   ENCOUNTER_SKILLS_MAX,
@@ -30,8 +31,9 @@ import { STANDARD_SKILLS } from "../characters/skills";
 
 /**
  * An encounter as it is being written — **the pure half of the encounter
- * form**, tested on its own (`encounterDraft.test.ts`) so the form and the
- * builder page that replaces it read and write an encounter the same way.
+ * builder** (`EncounterBuilderScreen.tsx`), tested on its own
+ * (`encounterDraft.test.ts`) so what an encounter reads and sends is decided
+ * apart from how the page draws it.
  *
  * ### One draft, four tables
  *
@@ -58,9 +60,9 @@ import { STANDARD_SKILLS } from "../characters/skills";
  */
 
 /** The prep the draft edits: `EncounterPrep` without its key. */
-export type Prep = Pick<EncounterPrep, "tactics" | "treasure" | "challenge">;
+export type Prep = Pick<EncounterPrep, "ready" | "tactics" | "treasure" | "challenge">;
 
-export const NO_PREP: Prep = { tactics: [], treasure: null, challenge: null };
+export const NO_PREP: Prep = { ready: false, tactics: [], treasure: null, challenge: null };
 
 /** A saved roster row, as far as the draft reads it. */
 export type SavedLine = Pick<
@@ -134,10 +136,9 @@ export interface EncounterDraft {
   readonly name: string;
   readonly kind: EncounterKind;
   /**
-   * *Ready to run*. Held here so the switch has somewhere to live, but not yet
-   * sent or read: the wire carries no ready flag until `EncounterPrep` gains
-   * `ready`, and then {@link draftFrom} reads it from the prep and the two
-   * payloads send it beside the rest of the prep.
+   * *Ready to run*: the DM's own word that it is ready, the list's Ready/Draft.
+   * Prep, so read from and sent with the rest of the prep; a new encounter is
+   * a draft until the DM says otherwise.
    */
   readonly ready: boolean;
   /** The map's setting line — the builder's *Location*. */
@@ -262,7 +263,7 @@ const lineFromRow = (row: SavedLine): RosterLine => ({
 export const draftFrom = (saved: SavedEncounter): EncounterDraft => ({
   name: saved.encounter?.name ?? "",
   kind: saved.encounter?.kind ?? "combat",
-  ready: false,
+  ready: saved.prep.ready,
   setting: saved.setting,
   readAloud: saved.readAloud?.body ?? "",
   tags: saved.encounter?.tags.join(", ") ?? "",
@@ -532,7 +533,9 @@ export const validate = (draft: EncounterDraft): Problems => {
     problems.treasure = `Keep it to ${ENCOUNTER_TREASURE_MAX} characters.`;
   }
 
-  if (draft.roster.some((line) => !Number.isInteger(line.count))) {
+  if (draft.roster.length > ENCOUNTER_ROSTER_MAX) {
+    problems.roster = `Fifty creatures is the most a roster names. That is ${draft.roster.length}.`;
+  } else if (draft.roster.some((line) => !Number.isInteger(line.count))) {
     problems.roster = "A count is a whole number of creatures.";
   } else if (draft.roster.some((line) => line.count < MIN_COUNT || line.count > MAX_COUNT)) {
     problems.roster = `A count runs from ${MIN_COUNT} to ${MAX_COUNT}.`;
@@ -546,7 +549,9 @@ export const validate = (draft: EncounterDraft): Problems => {
 // ---------------------------------------------------------------------------
 
 /**
- * The encounter's create. Assumes {@link validate} passed: a challenge with a
+ * The encounter's create, roster included: the server makes the encounter and
+ * its lines in one transaction, so a creature it refuses leaves no half of an
+ * encounter behind. Assumes {@link validate} passed: a challenge with a
  * problem is not sent.
  */
 export const createPayload = (draft: EncounterDraft): EncounterCreate => {
@@ -559,10 +564,19 @@ export const createPayload = (draft: EncounterDraft): EncounterCreate => {
     kind: draft.kind,
     tags: parseTags(draft.tags),
     visibility: draft.visibility,
+    ready: draft.ready,
     ...(setting === "" ? {} : { setting }),
     ...(tactics.length === 0 ? {} : { tactics }),
     ...(treasure === "" ? {} : { treasure }),
     ...(challenge === null ? {} : { challenge }),
+    ...(draft.roster.length === 0
+      ? {}
+      : {
+          creatures: draft.roster.map((line) => ({
+            creatureId: line.creatureId,
+            count: line.count,
+          })),
+        }),
   };
 };
 
@@ -583,6 +597,7 @@ export const updatePayload = (draft: EncounterDraft, saved: SavedEncounter): Enc
     visibility: draft.visibility,
     ...(setting === saved.setting.trim() ? {} : { setting: setting === "" ? null : setting }),
     kind: draft.kind,
+    ready: draft.ready,
     tactics: tacticsOf(draft.tactics),
     treasure: treasure === "" ? null : treasure,
     challenge: challengeOf(draft).challenge,

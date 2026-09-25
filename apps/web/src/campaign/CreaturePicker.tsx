@@ -28,11 +28,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * than to scroll — and following the cursor here would spend round trips
  * building a list nobody reads to the end. The line under it is what keeps that
  * honest: the alternative is a DM concluding a creature is not in the bestiary
- * because it sorted past the fiftieth.
+ * because it sorted past the twelfth.
+ *
+ * **It is part of the page, not a box that scrolls.** It sits in the encounter
+ * builder's rail, and a page scrolls with the window: a list with a scroller of
+ * its own is where the wheel gets stuck. So it shows few enough rows to read
+ * down in place.
  */
 
 /** As many as are worth looking down before typing another letter. */
-const SHOWN = 25;
+const SHOWN = 12;
 
 /**
  * Long enough that typing a name is one request rather than eight, short enough
@@ -105,38 +110,49 @@ export function CreaturePicker({
             Nothing in the bestiary answers to that. Try a shorter word, or a trait.
           </p>
         ) : (
-          <ul className="flex max-h-56 flex-col overflow-y-auto rounded-md border border-hairline">
+          <ul className="m-0 flex list-none flex-col rounded-md border border-hairline p-0">
             {resource.value.items.map((creature, index) => {
               const already = chosen.has(creature.id);
               return (
+                // The name keeps a readable width and what follows it wraps
+                // under it: on a phone the CR, the badge and *On the roster*
+                // would otherwise take the whole row and leave the name none.
                 <li
                   key={creature.id}
+                  data-slot="picker-row"
                   className={
                     index === 0
-                      ? "flex items-center gap-2.5 px-3 py-2"
-                      : "flex items-center gap-2.5 border-t border-hairline px-3 py-2"
+                      ? "flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3 py-2"
+                      : "flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-hairline px-3 py-2"
                   }
                 >
-                  <Icon name="skull" size={15} className="shrink-0 text-faint" />
-                  <span className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground">
-                    {creature.name}
+                  <span className="flex min-w-0 flex-1 basis-32 items-center gap-2.5">
+                    <Icon name="skull" size={15} className="shrink-0 text-faint" />
+                    <span
+                      data-slot="picker-name"
+                      className="min-w-0 flex-1 truncate text-body-s leading-body text-foreground"
+                    >
+                      {creature.name}
+                    </span>
                   </span>
-                  <span className="shrink-0 font-mono text-mono leading-none font-medium text-muted-foreground">
-                    CR {creature.cr}
+                  <span className="ml-auto flex shrink-0 items-center gap-2.5">
+                    <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
+                      CR {creature.cr}
+                    </span>
+                    {/* The bundled corpus, against rows from the DM's own
+                        Library or the group's shares — worth marking because it
+                        is the one kind of row nobody wrote. */}
+                    {creature.origin === "system" && <Badge variant="outline">Shared corpus</Badge>}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={already}
+                      aria-label={`Add ${creature.name}`}
+                      onClick={() => onPick(creature)}
+                    >
+                      {already ? "On the roster" : <Icon name="plus" size={15} />}
+                    </Button>
                   </span>
-                  {/* The bundled corpus, against rows from the DM's own
-                      Library or the group's shares — worth marking because it
-                      is the one kind of row nobody wrote. */}
-                  {creature.origin === "system" && <Badge variant="outline">Shared corpus</Badge>}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={already}
-                    aria-label={`Add ${creature.name}`}
-                    onClick={() => onPick(creature)}
-                  >
-                    {already ? "On the roster" : <Icon name="plus" size={15} />}
-                  </Button>
                 </li>
               );
             })}

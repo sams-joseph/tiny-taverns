@@ -5,11 +5,11 @@ import {
   type EncounterId,
   type EncounterPrep,
 } from "@taverns/api";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { Badge, Button, EmptyState, Icon, SectionHeading, Toggle } from "@taverns/ui";
 import { useRef, useState } from "react";
 import { CampaignChrome } from "./CampaignChrome";
-import { EncounterDialog } from "./EncounterDialog";
+import { ReadyBadge } from "./ReadyBadge";
 import {
   BAND_TEXT,
   creatureWords,
@@ -57,7 +57,6 @@ import { encounterPrepListAtom, type CampaignView } from "./load";
  */
 export function EncountersScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
-  const [editing, setEditing] = useState<{ readonly encounter: Encounter | undefined }>();
 
   return (
     <CampaignChrome
@@ -70,34 +69,25 @@ export function EncountersScreen() {
       }
       actions={() => (
         // Outline, not peach: the campaign row's press is this screen's one
-        // primary.
-        <Button variant="outline" size="sm" onClick={() => setEditing({ encounter: undefined })}>
+        // primary. It opens the encounter builder, a page of its own.
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/campaigns/$campaignId/encounters/new" params={{ campaignId }} />}
+        >
           <Icon name="plus" size={14} />
           New encounter
         </Button>
       )}
     >
       {({ view, extra, run }) => (
-        <>
-          <EncounterBrowser
-            campaignId={campaignId}
-            view={view}
-            prep={extra}
-            onEdit={(encounter) => setEditing({ encounter })}
-            onRun={(encounter) => run(encounter.id)}
-          />
-          {/* Keyed on what is being edited, so opening the dialog on a second
-              encounter builds a fresh form rather than showing the first's. */}
-          {editing !== undefined && (
-            <EncounterDialog
-              key={editing.encounter?.id ?? "new-encounter"}
-              campaignId={view.campaign.id}
-              encounter={editing.encounter}
-              onClose={() => setEditing(undefined)}
-              onSaved={() => setEditing(undefined)}
-            />
-          )}
-        </>
+        <EncounterBrowser
+          campaignId={campaignId}
+          view={view}
+          prep={extra}
+          onRun={(encounter) => run(encounter.id)}
+        />
       )}
     </CampaignChrome>
   );
@@ -119,13 +109,11 @@ function EncounterBrowser({
   campaignId,
   view,
   prep,
-  onEdit,
   onRun,
 }: {
   readonly campaignId: CampaignId;
   readonly view: CampaignView;
   readonly prep: ReadonlyArray<EncounterPrep>;
-  readonly onEdit: (encounter: Encounter) => void;
   readonly onRun: (encounter: Encounter) => void;
 }) {
   const chosen = useSearch({ strict: false }).encounter;
@@ -267,7 +255,6 @@ function EncounterBrowser({
             group={groupLabel(selected, liveId)}
             live={selected.id === liveId}
             fightOn={view.run !== undefined}
-            onEdit={() => onEdit(selected)}
             onRun={() => onRun(selected)}
           />
         </div>
@@ -278,9 +265,10 @@ function EncounterBrowser({
 
 /**
  * One encounter in the list, as the drawing draws it: its kind's glyph, the
- * name, and "Combat · Medium" under it — plus what the captain kept from the
- * old card, the creature count and *Shared*, since an absent badge is not a
- * fail-closed default a DM can read. A played one says when.
+ * name, "Combat · Medium" under it and *Ready* or *Draft* at its end — plus
+ * what the captain kept from the old card, the creature count and *Shared*,
+ * since an absent badge is not a fail-closed default a DM can read. A played
+ * one says when instead of Ready or Draft.
  */
 function EncounterRow({
   encounter,
@@ -334,6 +322,7 @@ function EncounterRow({
           <span className="mt-0.5 block text-caption leading-snug text-faint">{played}</span>
         )}
       </span>
+      {played === "" && <ReadyBadge prep={prep} />}
     </button>
   );
 }

@@ -53,7 +53,7 @@ Four facts the library does not advertise:
 
 - `submit` resolves a `Result`, not `A | undefined`: a `delete` succeeds with `void`, and a dialog must not close on a failure it never noticed.
 - **Invalidation fires only on success.**
-- A form that writes two tables composes one `Effect` into one `submit` (`campaign/EncounterDialog.tsx`). There is no transaction across requests; a mid-way failure leaves the first write standing, which is the honest outcome.
+- A form that writes two tables composes one `Effect` into one `submit` (an edit in `campaign/EncounterBuilderScreen.tsx`). There is no transaction across requests; a mid-way failure leaves the first write standing, which is the honest outcome. Where the contract carries both in one call, use it: a new encounter's roster rides on its create (`EncounterCreate.creatures`), one transaction on the server.
 - **Only a single boolean is optimistic.** The prep tick (`campaign/PrepChecklist.tsx`) moves before the round trip, reverts on failure, bypasses `submit` and names no reads, because a refresh would fight the answer it already rendered. Everything that changes a list's shape waits, then names the resource.
 - Busy, failure and the awaited promise stay React state: form state is not shared, and two writes through one atom would resolve to each other's answer.
 

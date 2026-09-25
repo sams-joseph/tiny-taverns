@@ -208,7 +208,8 @@ export function NoteDialog({
           />
         </div>
 
-        {/* In the footer, not at the end of the body — see `EncounterDialog`. */}
+        {/* In the footer, not at the end of the body, which scrolls: a line below the
+            fold is one nobody sees. */}
         <DialogFooter>
           {failure !== undefined && (
             <div className="mr-auto min-w-0 flex-1 text-left">
