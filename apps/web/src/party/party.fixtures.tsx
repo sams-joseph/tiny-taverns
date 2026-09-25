@@ -288,6 +288,8 @@ export const fullParty = (): Map<string, Answer> => {
     body: brannocSeat.character,
   });
   routes.set(`DELETE ${base}/party/${brannocSeat.seat.id}`, { status: 204, body: undefined });
+  // The party's long rest, answered with the party as it then stands.
+  routes.set(`POST ${base}/party/rest`, { status: 200, body: fullPartySeats });
   routes.set(`POST ${base}/invites`, {
     status: 200,
     body: { invite: liveInvite, token: "a-token" },
