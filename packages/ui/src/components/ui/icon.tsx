@@ -32,6 +32,7 @@ import {
   Flame,
   Footprints,
   Gem,
+  Grid3x3,
   GitBranch,
   HandHelping,
   Hash,
@@ -140,7 +141,8 @@ import {
  * archive and delete, and the archive item in it.
  *
  * The Overview redesign (`Campaign Overview.dc.html`) adds `settings`, on the
- * hero's *Settings* button beside *Invite player*.
+ * hero's *Settings* button beside *Invite player*, and its runner adds `grid-3x3`,
+ * on the battle map's *Grid* toggle.
  */
 export const icons = {
   archive: Archive,
@@ -174,6 +176,7 @@ export const icons = {
   flame: Flame,
   footprints: Footprints,
   gem: Gem,
+  "grid-3x3": Grid3x3,
   "git-branch": GitBranch,
   "hand-helping": HandHelping,
   hash: Hash,

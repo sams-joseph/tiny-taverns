@@ -9,7 +9,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * layout and hit-testing, which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`'s
- * `liveFight`): Brannoc and a Goblin Boss, and a 24 × 16 board with no picture.
+ * `liveFight`): Brannoc standing on a 24 × 16 board with no picture, and a
+ * Goblin Boss nobody has put down yet.
  */
 
 const run = screens.find((screen) => screen.name === "run")!;
@@ -18,6 +19,10 @@ const run = screens.find((screen) => screen.name === "run")!;
 const ASIDE = 340;
 /** The layout's gap, `gap-4`. */
 const GAP = 16;
+/** The smallest thing a pointer is asked to hit (WCAG 2.5.8). */
+const TARGET = 24;
+/** `main` from `@3xl` (48rem) is where the board takes clicks (`run/RunTokens.tsx`). */
+const MOVABLE = new Set<number>([1440, 1024]);
 
 for (const width of WIDTHS) {
   test.describe(`${width}px`, () => {
@@ -148,6 +153,56 @@ for (const width of WIDTHS) {
           "Goblin Boss · DEX",
         );
       });
+
+      if (MOVABLE.has(width)) {
+        await test.step("a token is a target a pointer can hit, and a square moves it", async () => {
+          const token = map.getByRole("button", { name: /^Brannoc, column/ });
+          await token.scrollIntoViewIfNeeded();
+          const at = await box(token);
+          expect.soft(at.width, "token width").toBeGreaterThanOrEqual(TARGET);
+          expect.soft(at.height, "token height").toBeGreaterThanOrEqual(TARGET);
+          const hit = await page.evaluate(
+            ([x, y]) =>
+              document.elementFromPoint(x!, y!)?.closest("button")?.getAttribute("aria-label"),
+            [at.x + at.width / 2, at.y + at.height / 2],
+          );
+          expect.soft(hit, "the token is what a click on it lands on").toMatch(/^Brannoc, column/);
+          await token.click();
+          await expect(card).toContainText("Brannoc");
+          // His sheet says a speed, so the reach is drawn round him.
+          await expect
+            .soft(map.locator('[data-slot="run-tokens"] [data-slot="token-reach"]'))
+            .toBeVisible();
+
+          // Three squares to his right, which nobody stands on.
+          const moved = page.waitForRequest(
+            (request) => request.method() === "POST" && request.url().endsWith("/move"),
+          );
+          await page.mouse.click(at.x + at.width * 3.5, at.y + at.height / 2);
+          const body = (await moved).postDataJSON() as { position: unknown };
+          expect.soft(body.position, "the square clicked").toEqual({ column: 8, row: 4 });
+        });
+      } else {
+        await test.step("the board is to look at: nothing on it takes a pointer", async () => {
+          await expect.soft(map.locator('[data-slot="run-tokens"]')).toBeHidden();
+          await expect.soft(map.getByRole("button", { name: /column/ })).toHaveCount(0);
+          await expect.soft(map.getByRole("group", { name: "Not on the board" })).toBeHidden();
+          const view = map.locator('[data-slot="run-tokens-view"] > span').first();
+          await view.scrollIntoViewIfNeeded();
+          await expect(view).toBeVisible();
+          const at = await box(view);
+          const hit = await page.evaluate(
+            ([x, y]) => {
+              const found = document.elementFromPoint(x!, y!);
+              return found?.closest("button, a, input, [role=button]") === null
+                ? "nothing"
+                : found?.tagName;
+            },
+            [at.x + at.width / 2, at.y + at.height / 2],
+          );
+          expect.soft(hit, "a tap on a token presses nothing").toBe("nothing");
+        });
+      }
     });
   });
 }

@@ -1,6 +1,6 @@
 import { type BattleMap, battleMapPlane, boardRect, gridLines } from "@taverns/api";
 import { Badge, cn } from "@taverns/ui";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { apiUrl } from "../api/client";
 
 /**
@@ -41,7 +41,18 @@ export type BattleMapView = Pick<
   "image" | "setting" | "grid" | "columns" | "rows" | "feetPerCell" | "alignment" | "imagePending"
 >;
 
-export function BattleMapBoard({ map }: { readonly map: BattleMapView }) {
+export function BattleMapBoard({
+  map,
+  children,
+}: {
+  readonly map: BattleMapView;
+  /**
+   * What stands on the board — the runner's tokens (`run/RunTokens.tsx`) —
+   * drawn over the picture and the grid in the same box, so a percentage of
+   * the box is a percentage of the plane.
+   */
+  readonly children?: ReactNode;
+}) {
   const image = map.image;
   const src = image === null ? undefined : apiUrl(image.fullUrl);
   const [brokenSrc, setBrokenSrc] = useState<string>();
@@ -112,6 +123,7 @@ export function BattleMapBoard({ map }: { readonly map: BattleMapView }) {
           ))}
         </svg>
       )}
+      {children}
       {map.imagePending && (
         <Badge variant="outline" role="status" className="absolute bottom-3 left-3">
           Hob is drawing…
