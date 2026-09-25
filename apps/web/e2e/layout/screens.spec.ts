@@ -78,17 +78,20 @@ for (const width of WIDTHS) {
                     .filter(visible)
                     .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
                     .map(label);
+            // The root's box, not its `clientWidth`, which counts the
+            // reserved scrollbar gutter as page while no scrollbar is drawn.
+            const pageRight = document.documentElement.getBoundingClientRect().right;
             const main = document.querySelector("main");
             const contentRight =
               main === null
-                ? document.documentElement.clientWidth
+                ? pageRight
                 : main.getBoundingClientRect().right -
                   parseFloat(getComputedStyle(main).paddingRight);
             return {
               chrome: beyond(
                 document.querySelector(".sticky.top-0"),
                 "a, button, h1, [data-slot=badge]",
-                document.documentElement.clientWidth,
+                pageRight,
               ),
               heading: beyond(
                 document.querySelector('main [data-slot="page-heading"]'),

@@ -81,11 +81,16 @@ export class App {
     });
   }
 
-  /** The document's `scrollWidth` and `clientWidth`: equal means nothing scrolls sideways. */
+  /**
+   * The document's `scrollWidth` and the page's width: equal means nothing
+   * scrolls sideways. The page's width is the root's box rather than its
+   * `clientWidth`, which Chromium reports less a scrollbar only while one is
+   * drawn, so the gutter the page always reserves would otherwise count as page.
+   */
   widths(): Promise<{ scrollWidth: number; clientWidth: number }> {
     return this.page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
+      clientWidth: document.documentElement.getBoundingClientRect().width,
     }));
   }
 }
