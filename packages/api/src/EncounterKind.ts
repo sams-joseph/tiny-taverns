@@ -25,3 +25,16 @@ export const ENCOUNTER_KINDS: ReadonlyArray<readonly [EncounterKind, string]> = 
 
 export const encounterKindLabel = (kind: EncounterKind): string =>
   ENCOUNTER_KINDS.find(([value]) => value === kind)?.[1] ?? kind;
+
+/**
+ * What a run is called to somebody who may see it and not the encounter it
+ * was started from: the kind of scene and nothing of which one. The server
+ * spells its SQL fallback from this table (`fightName`), so a screen that
+ * names a run by its kind says what the recap and the Shared World say.
+ */
+export const NEUTRAL_RUN_NAMES: Readonly<Record<EncounterKind, string>> = {
+  combat: "A fight",
+  social: "A conversation",
+  challenge: "A skill challenge",
+  hazard: "A hazard",
+};

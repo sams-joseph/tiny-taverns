@@ -360,6 +360,7 @@ export class PlayerTable extends Context.Service<
                 fight: {
                   id: run.id,
                   encounterId: run.encounter_id,
+                  mode: run.mode,
                   round: run.round,
                   phase: run.phase,
                   upNext,

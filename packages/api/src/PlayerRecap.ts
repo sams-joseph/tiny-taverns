@@ -101,9 +101,17 @@ export type PlayerCombatant = typeof PlayerCombatant.Type;
  * the round it reached and how it ended are things a player who was there
  * already lived through. One thing on it is the encounter's rather than the
  * fight's — which encounter it was — so `encounterId` is `null` and
- * `encounterName` is "A fight" unless this player may read that encounter
- * (Shared and Ready). The server selects it that way (`runColumns`); a run they
- * may not see at all is refused by the predicate, as it always was.
+ * `encounterName` is the kind of scene, "A fight", "A conversation", "A skill
+ * challenge" or "A hazard" (`NEUTRAL_RUN_NAMES`), unless this player may read
+ * that encounter (Shared and Ready). The server selects it that way
+ * (`runColumns`); a run they may not see at all is refused by the predicate, as
+ * it always was.
+ *
+ * Only a fight (`run.mode` of `combat`) has `combatants`. A conversation, a
+ * skill challenge or a hazard showed the table no order, so its story to a
+ * player is its kind, its name and how it ended: the checks and saves logged in
+ * it, and the DCs, targets, attitude and beats behind them, are the creator's
+ * (`RecapFight.checks`) and have no field here.
  */
 export const PlayerRecapFight = Schema.Struct({
   run: EncounterRun,

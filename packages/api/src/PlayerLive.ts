@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { BattleMapAlignment, BattleMapGrid, BattleMapImages } from "./BattleMap.js";
 import { CharacterPortraitImages } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
+import { EncounterKind } from "./EncounterKind.js";
 import { EncounterRunPhase } from "./EncounterRun.js";
 import {
   CampaignCharacterId,
@@ -137,6 +138,14 @@ export const PlayerLiveFight = Schema.Struct({
   id: EncounterRunId,
   /** `null` unless this player may read the encounter (Shared and Ready). */
   encounterId: Schema.NullOr(EncounterId),
+  /**
+   * What kind of scene is on the table. Only a fight has an order; for a
+   * conversation, a skill challenge or a hazard this, the read-aloud through
+   * `encounterId`, and the player's own rolls are all a player is told — the
+   * scene's DCs, targets, tally, attitude and beats are the creator's
+   * (`EncounterRunScene`) and have no field here.
+   */
+  mode: EncounterKind,
   round: Schema.Int,
   /**
    * `initiative` while the numbers are still arriving — nobody is up, and a

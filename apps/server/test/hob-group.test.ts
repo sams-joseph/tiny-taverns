@@ -366,7 +366,7 @@ describe("what the model is shown", () => {
     );
     expect(story.beats).toEqual(["CANONBEAT the hag took the lantern."]);
     expect(story.fights).toEqual([
-      { name: "CANONFIGHT ambush in the reeds", round: 1, outcome: "resolved" },
+      { name: "CANONFIGHT ambush in the reeds", mode: "combat", round: 1, outcome: "resolved" },
     ]);
   }, 60_000);
 

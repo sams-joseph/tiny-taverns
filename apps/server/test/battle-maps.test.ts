@@ -1004,7 +1004,7 @@ describe("a fight keeps its board", () => {
     expect(read?.fight?.id).toBe(fight.id);
     // The player's table as it was before fights kept boards, and no board.
     expect(Object.keys(read!.fight!).sort()).toEqual(
-      ["board", "encounterId", "id", "order", "phase", "round", "seats", "upNext"].sort(),
+      ["board", "encounterId", "id", "mode", "order", "phase", "round", "seats", "upNext"].sort(),
     );
     expect(read?.fight?.board).toBeNull();
     const text = JSON.stringify(read);
