@@ -71,6 +71,7 @@ describe("ratingOf", () => {
   it("says a challenge's DC once it has one, and Unrated until it does", () => {
     const set = prep({
       encounterId: well.id,
+      ready: false,
       tactics: [],
       treasure: null,
       challenge: { kind: "challenge", dc: 14, successes: 3, failures: 2, skills: [] },

@@ -1457,6 +1457,7 @@ export const wolves = {
 
 const prepFor = (encounterId: string, over: object = {}) => ({
   encounterId,
+  ready: false,
   tactics: [],
   treasure: null,
   challenge: null,
