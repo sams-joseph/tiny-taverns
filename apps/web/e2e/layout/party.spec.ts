@@ -3,8 +3,9 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 /**
  * The Party tab (`party/PartyScreen.tsx`) at every width: the card grid's
  * columns, the rows of a card lining up with its neighbours', − and + and
- * inspiration pressing rather than opening the card, and *Passives and saves* fitting without a
- * scroller of its own. All of it is layout, stacking or hit-testing, which
+ * inspiration pressing rather than opening the card, *Passives and saves*
+ * fitting without a scroller of its own, and *Between them* under it with each
+ * answer beside its term. All of it is layout, stacking or hit-testing, which
  * jsdom does not compute.
  *
  * Read over the creator scenario's party (`fullPartySeats`): four seats, one
@@ -213,6 +214,38 @@ for (const width of WIDTHS) {
         // Wide, the drawn table with its header row; narrow, a block per
         // character with its own labels and no header row.
         expect.soft(fit.headerShown, "the header row is shown").toBe(width >= 1024);
+      });
+
+      await test.step("between them sits under the passives, its terms beside their answers", async () => {
+        const section = page.locator('[data-slot="party-between"]');
+        await section.scrollIntoViewIfNeeded();
+        const passives = await box(page.locator('[data-slot="party-passives"]'));
+        const between = await box(section);
+        expect.soft(between.y, "under the passives").toBeGreaterThan(passives.y + passives.height);
+        expect
+          .soft(between.width, "the page's width, as the passives are")
+          .toBeCloseTo(passives.width, 0);
+        const rows = await section.evaluate((el) => {
+          const edge = el.getBoundingClientRect();
+          return [...el.querySelectorAll("dt")].map((term) => {
+            const detail = term.nextElementSibling!.getBoundingClientRect();
+            const label = term.getBoundingClientRect();
+            return {
+              term: term.textContent,
+              besideIt: Math.abs(label.top - detail.top) < 1 && detail.left >= label.right,
+              inside: detail.right <= edge.right + 0.5 && label.left >= edge.left - 0.5,
+              overflows: el.scrollWidth > el.clientWidth + 1,
+            };
+          });
+        });
+        expect
+          .soft(rows.map((row) => row.term))
+          .toEqual(["Languages", "Darkvision", "Slowest speed"]);
+        for (const row of rows) {
+          expect.soft(row.besideIt, `${row.term ?? ""}'s answer beside it`).toBe(true);
+          expect.soft(row.inside, `${row.term ?? ""} inside the card`).toBe(true);
+          expect.soft(row.overflows, "the card overflows").toBe(false);
+        }
       });
     });
   });

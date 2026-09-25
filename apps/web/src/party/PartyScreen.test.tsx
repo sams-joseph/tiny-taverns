@@ -15,6 +15,7 @@ import {
   liveInvite,
   renderParty,
   sorrelSeatId,
+  sorrelSheetSeat,
 } from "./party.fixtures";
 import { partyRestWrites } from "./write";
 
@@ -404,6 +405,45 @@ describe("passives and saves", () => {
   });
 });
 
+describe("between them", () => {
+  const rows = async (): Promise<ReadonlyArray<readonly [string, string]>> => {
+    const heading = await screen.findByRole("heading", { name: "Between them" });
+    const list = heading.parentElement!.querySelector("dl")!;
+    return [...list.querySelectorAll("dt")].map(
+      (term) => [term.textContent ?? "", term.nextElementSibling?.textContent ?? ""] as const,
+    );
+  };
+
+  it("says the party's languages, who sees in the dark and the slowest, from the sheets", async () => {
+    await renderParty();
+    // Sorrel's proficiencies hold Longbows and Elvish too: a weapon, and a
+    // language the rules vocabulary does not have. Brannoc's Orcish likewise.
+    expect(await rows()).toEqual([
+      ["Languages", "Common, Dwarvish"],
+      ["Darkvision", "Sorrel Ash"],
+      ["Slowest speed", "25 ft., set by Pell"],
+    ]);
+  });
+
+  it("leaves out a row the sheets cannot answer", async () => {
+    // Brannoc's bare sheet writes no speed, so the party's slowest is not known.
+    server.routes.set(`GET ${base}/party`, { status: 200, body: [brannocSeat, sorrelSheetSeat] });
+    await renderParty();
+    expect(await rows()).toEqual([
+      ["Languages", "Common, Dwarvish"],
+      ["Darkvision", "Sorrel Ash"],
+    ]);
+  });
+
+  it("is not drawn when no sheet answers any of it", async () => {
+    // Brannoc's bare sheet: no proficiencies, no traits, no speed.
+    server.routes.set(`GET ${base}/party`, { status: 200, body: [brannocSeat] });
+    await renderParty();
+    await card("Brannoc");
+    expect(screen.queryByRole("heading", { name: "Between them" })).not.toBeInTheDocument();
+  });
+});
+
 describe("not playing yet", () => {
   it("lists the member with no character and the invitation nobody has taken", async () => {
     await renderParty();
@@ -582,6 +622,8 @@ describe("the states a real screen has", () => {
     expect(readsOf(`${base}/invites`)).toBe(1);
     expect(readsOf(`${base}/party`)).toBe(1);
     expect(readsOf(base)).toBe(1);
+    // *Between them*'s languages: the rules vocabulary, once, keyed on nothing.
+    expect(readsOf("/library/options/vocabulary")).toBe(1);
     expect(called("GET", "/party-prep")).toBe(false);
     expect(called("GET", "/hob")).toBe(false);
   });

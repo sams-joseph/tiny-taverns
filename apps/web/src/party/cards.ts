@@ -214,8 +214,10 @@ export const partySummary = (party: ReadonlyArray<PartySeat>): PartySummary => {
 export const summaryLine = (summary: PartySummary): string | undefined => {
   if (summary.characters === 0) return undefined;
   const hurting = [
-    ...(summary.down.length === 0 ? [] : [`${names(summary.down)} ${isAre(summary.down)} down`]),
-    ...(summary.low.length === 0 ? [] : [`${names(summary.low)} ${isAre(summary.low)} low`]),
+    ...(summary.down.length === 0
+      ? []
+      : [`${joinNames(summary.down)} ${isAre(summary.down)} down`]),
+    ...(summary.low.length === 0 ? [] : [`${joinNames(summary.low)} ${isAre(summary.low)} low`]),
   ];
   return [
     `${String(summary.characters)} character${summary.characters === 1 ? "" : "s"}`,
@@ -231,7 +233,7 @@ export const summaryLine = (summary: PartySummary): string | undefined => {
 };
 
 /** `"Tamsin"`, `"Tamsin and Odo"`, `"Tamsin, Odo and Wren"`. */
-const names = (list: ReadonlyArray<string>): string =>
+export const joinNames = (list: ReadonlyArray<string>): string =>
   list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list.at(-1)!}`;
 
 const isAre = (list: ReadonlyArray<string>): string => (list.length === 1 ? "is" : "are");
@@ -301,4 +303,71 @@ export const bestInParty = (values: ReadonlyArray<number | undefined>): Readonly
   if (answered.length === 0) return new Set();
   const best = Math.max(...answered);
   return new Set(values.flatMap((value, index) => (value === best ? [index] : [])));
+};
+
+/**
+ * *Between them*: what the party can do as one, from what the sheets say.
+ * Each part is absent when the sheets cannot answer it, and the card draws a
+ * row only for a part that is present.
+ *
+ * The drawing's *Healing* row is not here and never will be from this: who
+ * heals, and for how much, is prose across spells and features that no field
+ * answers.
+ */
+export interface BetweenThem {
+  /**
+   * Every language any character speaks, in the vocabulary's spelling, sorted.
+   * `sheet.proficiencies` mixes languages with armour, weapons and tools
+   * (`SheetGrants`), so a proficiency counts only when it names a language in
+   * the rules vocabulary; *Thieves' cant*, a rogue feature, is not one.
+   */
+  readonly languages: ReadonlyArray<string> | undefined;
+  /** Who has a trait named Darkvision, in seat order. */
+  readonly darkvision: ReadonlyArray<string> | undefined;
+  /**
+   * The slowest walking speed in feet, and whose it is. Only when every
+   * character's speed is one figure (`feetOf`): with a speed unwritten, the
+   * party's slowest is not known.
+   */
+  readonly slowest: { readonly feet: number; readonly names: ReadonlyArray<string> } | undefined;
+}
+
+export const betweenThem = (
+  party: ReadonlyArray<PartySeat>,
+  vocabulary: ReadonlyArray<string>,
+): BetweenThem => {
+  const characters = party.flatMap((row) => (row.character === null ? [] : [row.character]));
+  const known = new Map(vocabulary.map((name) => [name.trim().toLowerCase(), name]));
+  const languages = [
+    ...new Set(
+      characters.flatMap((character) =>
+        (character.sheet.proficiencies ?? []).flatMap((proficiency) => {
+          const language = known.get(proficiency.trim().toLowerCase());
+          return language === undefined ? [] : [language];
+        }),
+      ),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const darkvision = characters.flatMap((character) =>
+    character.sheet.traits.some((trait) => trait.name.trim().toLowerCase() === "darkvision")
+      ? [character.name]
+      : [],
+  );
+  const speeds = characters.map((character) => ({
+    name: character.name,
+    feet: feetOf(character.sheet.identity?.speed),
+  }));
+  const answered = speeds.flatMap(({ name, feet }) => (feet === undefined ? [] : [{ name, feet }]));
+  const feet =
+    answered.length === 0 || answered.length < speeds.length
+      ? undefined
+      : Math.min(...answered.map((speed) => speed.feet));
+  return {
+    languages: languages.length === 0 ? undefined : languages,
+    darkvision: darkvision.length === 0 ? undefined : darkvision,
+    slowest:
+      feet === undefined
+        ? undefined
+        : { feet, names: answered.flatMap((speed) => (speed.feet === feet ? [speed.name] : [])) },
+  };
 };
