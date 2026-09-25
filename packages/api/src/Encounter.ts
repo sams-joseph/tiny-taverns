@@ -1,8 +1,9 @@
 import { Schema } from "effect";
 import { EncounterSetting } from "./BattleMap.js";
+import { EncounterCreatureCount } from "./EncounterCreature.js";
 import { EncounterDifficulty } from "./EncounterDifficulty.js";
 import { EncounterRunEndedReason } from "./EncounterRun.js";
-import { CampaignId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
+import { CampaignId, CreatureId, EncounterId, EncounterRunId, SessionId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 import { AbilityKey } from "./Ruleset.js";
 
@@ -55,6 +56,7 @@ export const ENCOUNTER_TREASURE_MAX = 500;
 export const ENCOUNTER_SKILLS_MAX = 8;
 export const ENCOUNTER_SKILL_MAX = 40;
 export const ENCOUNTER_HAZARD_TEXT_MAX = 120;
+export const ENCOUNTER_ROSTER_MAX = 50;
 
 /** A check's DC or a save's, as the SRD sets them. */
 const Dc = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 }));
@@ -183,6 +185,12 @@ export const EncounterTreasure = prose(ENCOUNTER_TREASURE_MAX);
  */
 export class EncounterPrep extends Schema.Class<EncounterPrep>("EncounterPrep")({
   encounterId: EncounterId,
+  /**
+   * The DM's own word that the encounter is ready to run — the list's
+   * Ready/Draft. Only a person sets it: a new encounter is a draft, and so is
+   * one Hob proposed and the DM accepted, until the DM says otherwise.
+   */
+  ready: Schema.Boolean,
   tactics: Schema.Array(Schema.String),
   /** `null` when none was written. */
   treasure: Schema.NullOr(Schema.String),
@@ -208,6 +216,31 @@ const challengeMatchesKind = Schema.makeFilter(
 );
 
 /**
+ * One line of the roster an encounter is made with: this creature, this many.
+ * Any creature the campaign can use, as a roster line added on its own takes.
+ */
+export const EncounterRosterLine = Schema.Struct({
+  creatureId: CreatureId,
+  count: EncounterCreatureCount,
+});
+export type EncounterRosterLine = typeof EncounterRosterLine.Type;
+
+/**
+ * One line per creature. A repeat is refused rather than merged, for the
+ * reason a second add of the same creature is a `Conflict`
+ * (`EncounterCreature`): merging would turn a mis-click into a doubled roster
+ * with nothing said.
+ */
+const roster = Schema.Array(EncounterRosterLine).check(
+  Schema.isMaxLength(ENCOUNTER_ROSTER_MAX),
+  Schema.makeFilter((lines: ReadonlyArray<EncounterRosterLine>) =>
+    new Set(lines.map((line) => line.creatureId)).size === lines.length
+      ? undefined
+      : "a creature is named once on a roster, with its count",
+  ),
+);
+
+/**
  * `setting` is the one line the encounter's battle map is drawn from
  * (`BattleMap.ts`). It is written here, on the encounter's form, because the
  * map is made with the encounter and drawn once as it is made; but it is stored
@@ -225,6 +258,15 @@ export const EncounterCreate = Schema.Struct({
   tactics: Schema.optional(EncounterTactics),
   treasure: Schema.optional(EncounterTreasure),
   challenge: Schema.optional(EncounterChallenge),
+  /** Absent is a draft. */
+  ready: Schema.optional(Schema.Boolean),
+  /**
+   * The roster, made in the same transaction as the encounter through the
+   * roster's own create — so a creature the campaign cannot use refuses the
+   * whole encounter rather than leaving half of one. Editing it afterwards is
+   * per line (`encounterCreatures`).
+   */
+  creatures: Schema.optional(roster),
 }).check(challengeMatchesKind);
 export type EncounterCreate = typeof EncounterCreate.Type;
 
@@ -245,5 +287,6 @@ export const EncounterUpdate = Schema.Struct({
   treasure: Schema.optional(Schema.NullOr(EncounterTreasure)),
   /** `null` clears it; a challenge is sent with its kind. */
   challenge: Schema.optional(Schema.NullOr(EncounterChallenge)),
+  ready: Schema.optional(Schema.Boolean),
 }).check(challengeMatchesKind);
 export type EncounterUpdate = typeof EncounterUpdate.Type;

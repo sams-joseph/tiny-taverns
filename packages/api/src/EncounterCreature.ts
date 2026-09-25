@@ -2,7 +2,10 @@ import { Schema } from "effect";
 import { CreatureId, EncounterCreatureId, EncounterId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
-const count = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 999 }));
+/** How many of one creature a roster line holds. */
+export const EncounterCreatureCount = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: 999 }),
+);
 
 /**
  * A line on an encounter's roster: this creature, this many times.
@@ -73,7 +76,7 @@ export class EncounterCreature extends Schema.Class<EncounterCreature>("Encounte
 export const EncounterCreatureCreate = Schema.Struct({
   creatureId: CreatureId,
   /** Omit and the column default — one — decides. */
-  count: Schema.optional(count),
+  count: Schema.optional(EncounterCreatureCount),
   visibility: Schema.optional(Visibility),
 });
 export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
@@ -85,7 +88,7 @@ export type EncounterCreatureCreate = typeof EncounterCreatureCreate.Type;
  * a client is holding.
  */
 export const EncounterCreatureUpdate = Schema.Struct({
-  count: Schema.optional(count),
+  count: Schema.optional(EncounterCreatureCount),
   visibility: Schema.optional(Visibility),
 });
 export type EncounterCreatureUpdate = typeof EncounterCreatureUpdate.Type;

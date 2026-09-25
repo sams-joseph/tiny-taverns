@@ -24,6 +24,7 @@ import assistantConversation from "../src/migrations/0010_assistant_conversation
 import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
 import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
 import encounterPrep from "../src/migrations/0060_encounter_prep.js";
+import encounterReady from "../src/migrations/0061_encounter_ready.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -69,6 +70,10 @@ afterAll(() => boardsRuntime.dispose());
 /** A twelfth, for encounters written before they had a kind or any prep. */
 const prepRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_prep"));
 afterAll(() => prepRuntime.dispose());
+
+/** A thirteenth, for encounters written before one could be marked ready. */
+const readyRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_ready"));
+afterAll(() => readyRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -304,6 +309,7 @@ describe("migrations", () => {
       { migration_id: 58, name: "encounter_run_boards" },
       { migration_id: 59, name: "computed_encounter_difficulty" },
       { migration_id: 60, name: "encounter_prep" },
+      { migration_id: 61, name: "encounter_ready" },
     ]);
   }, 60_000);
 
@@ -373,6 +379,7 @@ describe("migrations", () => {
       { migration_id: 58, name: "encounter_run_boards" },
       { migration_id: 59, name: "computed_encounter_difficulty" },
       { migration_id: 60, name: "encounter_prep" },
+      { migration_id: 61, name: "encounter_ready" },
     ]);
   }, 60_000);
 });
@@ -1341,5 +1348,52 @@ describe("upgrading a database whose encounters predate their kind and prep", ()
     expect(measured.onAFight).toContain("encounter_prep_challenge_kind");
     expect(measured.movedAway).toContain("encounter_prep_challenge_kind");
     expect(measured.unknownKind).toContain("encounter_kind_known");
+  }, 60_000);
+});
+
+describe("upgrading a database whose encounters predate Ready", () => {
+  it("leaves every encounter already written a draft, and refuses no answer at all", async () => {
+    const measured = await readyRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0060` left: prep with no word on whether it is ready.
+        yield* sql`alter table encounter_prep drop column ready`;
+
+        const accounts = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "ready-hash" })}
+          returning id
+        `;
+        const campaign = yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road");
+        const encounters = yield* sql<{ readonly id: string }>`
+          insert into encounter ${sql.insert({ campaign_id: campaign, name: "Ambush in the reeds" })}
+          returning id
+        `;
+        const ambush = encounters[0]!.id;
+        yield* sql`
+          insert into encounter_prep ${sql.insert({
+            encounter_id: ambush,
+            campaign_id: campaign,
+            kind: "combat",
+            treasure: "28 sp and a bone whistle",
+          })}
+        `;
+
+        yield* encounterReady;
+        const preps = yield* sql<{ readonly treasure: string | null; readonly ready: boolean }>`
+          select treasure, ready from encounter_prep where encounter_id = ${ambush}
+        `;
+        const cleared = yield* sql`
+          update encounter_prep set ready = null where encounter_id = ${ambush}
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { preps, cleared };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.preps).toEqual([{ treasure: "28 sp and a bone whistle", ready: false }]);
+    expect(measured.cleared).toContain("not-null");
   }, 60_000);
 });

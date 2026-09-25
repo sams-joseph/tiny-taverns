@@ -235,8 +235,7 @@ describe("a player actor, on encounters", () => {
       ),
     );
 
-    expect(error._tag).toBe("NotFound");
-    expect(error.resource).toBe("campaign");
+    expect(error).toMatchObject({ _tag: "NotFound", resource: "campaign" });
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   type Actor,
   type CampaignId,
+  type Conflict,
   type CreatedOrder,
   type CreatedPageFilterValues,
   creatureXp,
@@ -21,7 +22,7 @@ import {
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
-import { statBlockXp } from "./EncounterCreatures.js";
+import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { RUN } from "./liveTables.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
@@ -111,11 +112,13 @@ interface EncounterPrepRow {
   readonly tactics: ReadonlyArray<string>;
   readonly treasure: string | null;
   readonly challenge: EncounterChallenge | null;
+  readonly ready: boolean;
 }
 
 const toEncounterPrep = (row: EncounterPrepRow): EncounterPrep =>
   new EncounterPrep({
     encounterId: row.encounter_id,
+    ready: row.ready,
     tactics: row.tactics,
     treasure: row.treasure,
     challenge: row.challenge,
@@ -132,6 +135,7 @@ const prepColumns = (payload: {
   readonly tactics?: ReadonlyArray<string> | undefined;
   readonly treasure?: string | null | undefined;
   readonly challenge?: EncounterChallenge | null | undefined;
+  readonly ready?: boolean | undefined;
 }): Record<string, unknown> =>
   defined({
     tactics:
@@ -145,6 +149,7 @@ const prepColumns = (payload: {
         : payload.challenge === null
           ? null
           : JSON.stringify(payload.challenge),
+    ready: payload.ready,
   });
 
 /** The roster hangs off the encounter. */
@@ -252,12 +257,15 @@ export class Encounters extends Context.Service<
       campaignId: CampaignId,
       id: EncounterId,
     ) => Effect.Effect<Encounter, NotFound, CurrentActor>;
-    /** `from` is the accept path's, and only its — see `Notes.create`. */
+    /**
+     * The encounter, its map, its prep and its roster, in one transaction.
+     * `from` is the accept path's, and only its — see `Notes.create`.
+     */
     readonly create: (
       campaignId: CampaignId,
       payload: EncounterCreate,
       from?: AssistantOrigin,
-    ) => Effect.Effect<Encounter, NotFound, CurrentActor>;
+    ) => Effect.Effect<Encounter, NotFound | Conflict, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
       id: EncounterId,
@@ -282,9 +290,12 @@ export class Encounters extends Context.Service<
     ) => Effect.Effect<ReadonlyArray<EncounterPrep>>;
   }
 >()("Encounters") {
+  // The roster's create is the one way a roster line is written, so the
+  // encounter's create holds it rather than a copy of its statements.
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const encounterCreatures = yield* EncounterCreatures;
       const ordering = createdOrdering<EncounterRow>(sql, "encounter");
 
       /**
@@ -387,7 +398,7 @@ export class Encounters extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<{ readonly id: EncounterId }>`
+                const rows = yield* sql<{ readonly id: EncounterId; readonly kind: EncounterKind }>`
                   insert into encounter ${sql.insert(
                     defined({
                       campaign_id: campaignId,
@@ -398,9 +409,9 @@ export class Encounters extends Context.Service<
                       ...assistantColumns(from),
                     }),
                   )}
-                  returning encounter.id
+                  returning encounter.id, encounter.kind
                 `;
-                const encounter = yield* readBack(campaignId, actor, rows[0]!.id);
+                const { id, kind } = rows[0]!;
                 // Every encounter has its one battle map, made with it: a blank
                 // board, and the setting line the picture is drawn from (or,
                 // without one, the name, tags and roster types) after this
@@ -409,7 +420,7 @@ export class Encounters extends Context.Service<
                 yield* sql`
                   insert into battle_map ${sql.insert(
                     defined({
-                      encounter_id: encounter.id,
+                      encounter_id: id,
                       campaign_id: campaignId,
                       setting: proseColumn(payload.setting),
                     }),
@@ -419,13 +430,28 @@ export class Encounters extends Context.Service<
                 // creator's alone, on a row no player read touches.
                 yield* sql`
                   insert into encounter_prep ${sql.insert({
-                    encounter_id: encounter.id,
+                    encounter_id: id,
                     campaign_id: campaignId,
-                    kind: encounter.kind,
+                    kind,
                     ...prepColumns(payload),
                   })}
                 `;
-                return encounter;
+                // The roster, line by line through the roster's own create —
+                // its copy-in check, its instancing of a Library original and
+                // its duplicate rule — so a roster made with the encounter is
+                // the one a DM adding lines afterwards would have made. Any
+                // line it refuses rolls the whole encounter back.
+                for (const line of payload.creatures ?? []) {
+                  yield* encounterCreatures.create(
+                    campaignId,
+                    id,
+                    { creatureId: line.creatureId, count: line.count },
+                    from,
+                  );
+                }
+                // Read back last, so the count and the difficulty are the
+                // roster's just written.
+                return yield* readBack(campaignId, actor, id);
               }),
             ),
           ),
@@ -538,5 +564,5 @@ export class Encounters extends Context.Service<
           ),
       };
     }),
-  );
+  ).pipe(Layer.provide(EncounterCreatures.layer));
 }

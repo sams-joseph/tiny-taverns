@@ -1110,7 +1110,9 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
       params: { campaignId: CampaignId },
       payload: EncounterCreate,
       success: Encounter,
-      error: NotFound,
+      // A roster line naming a creature twice over, once as a Library
+      // original and once as the campaign's instance of it.
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.get("findById", "/:encounterId", {
       params: { campaignId: CampaignId, encounterId: EncounterId },

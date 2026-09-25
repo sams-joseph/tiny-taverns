@@ -16,7 +16,6 @@ import { SqlClient } from "effect/unstable/sql";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
 import { Characters } from "./Characters.js";
-import { EncounterCreatures } from "./EncounterCreatures.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
@@ -47,9 +46,9 @@ import type { ConversationReach } from "./visibility.js";
  *
  * ### It writes through the ordinary repositories
  *
- * `Notes.create`, `Beats.create`, `Encounters.create`,
- * `EncounterCreatures.create` and `Characters.createOwn`, with one extra
- * argument. No SQL for those tables is written here, so an accepted row is
+ * `Notes.create`, `Beats.create`, `Encounters.create` (whose roster goes
+ * through `EncounterCreatures.create`, as a builder's does) and
+ * `Characters.createOwn`, with one extra argument. No SQL for those tables is written here, so an accepted row is
  * produced by *literally the same statement* that produces an authored one —
  * which is what makes it indistinguishable in usefulness (search finds it, the
  * recap includes it, the screens render it) and completely distinguishable in
@@ -171,7 +170,6 @@ export class Proposals extends Context.Service<
       const notes = yield* Notes;
       const beats = yield* Beats;
       const encounters = yield* Encounters;
-      const encounterCreatures = yield* EncounterCreatures;
       const characters = yield* Characters;
       const sharedWorldHistory = yield* GroupHistory;
 
@@ -208,8 +206,8 @@ export class Proposals extends Context.Service<
             });
 
           case "encounter":
-            return Effect.gen(function* () {
-              const created = yield* encounters.create(
+            return Effect.map(
+              encounters.create(
                 campaignId,
                 {
                   name: proposal.name,
@@ -224,24 +222,18 @@ export class Proposals extends Context.Service<
                   tactics: proposal.tactics,
                   treasure: proposal.treasure,
                   challenge: proposal.challenge,
+                  // The roster the card drew, made with the encounter by the
+                  // same create the form's roster goes through. `ready` is not named: an
+                  // accepted proposal is a draft until the DM says otherwise.
+                  creatures: proposal.roster.map((line) => ({
+                    creatureId: line.creatureId,
+                    count: line.count,
+                  })),
                 },
                 from,
-              );
-              for (const line of proposal.roster) {
-                yield* encounterCreatures.create(
-                  campaignId,
-                  created.id,
-                  { creatureId: line.creatureId, count: line.count },
-                  from,
-                );
-              }
-              // Re-read, because `creatureCount` is computed per read and the
-              // row returned by `create` was counted before the roster existed.
-              // The card the DM is looking at says "6 creatures"; the row they
-              // just made had better say so too.
-              const encounter = yield* encounters.findById(campaignId, created.id);
-              return { accepted: "encounter" as const, encounter };
-            });
+              ),
+              (encounter) => ({ accepted: "encounter" as const, encounter }),
+            );
 
           case "character":
             return Effect.map(
