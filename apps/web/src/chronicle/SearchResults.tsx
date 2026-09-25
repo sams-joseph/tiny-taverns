@@ -24,8 +24,7 @@ const META: Record<SearchHit["source"], { readonly icon: IconName; readonly labe
   note: { icon: "scroll-text", label: "Note" },
   beat: { icon: "history", label: "Beat" },
   creature: { icon: "footprints", label: "Bestiary" },
-  // `shield` is the documented glyph for a player character and `PartyList`
-  // already wears it, so a party hit reads the same in both places.
+  // `shield` is the documented glyph for a player character.
   character: { icon: "shield", label: "Party" },
   npc: { icon: "user-round", label: "Cast" },
 };

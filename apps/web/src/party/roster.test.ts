@@ -7,11 +7,10 @@ import {
   ilse,
   kofi,
   liveInvite,
-  pellSeat,
   sorrelSeat,
   takenInvite,
 } from "./party.fixtures";
-import { initialsOf, needsOf, nameOf, rosterOf, summaryOf, type RosterRow } from "./roster";
+import { nameOf, notPlayingYet, rosterOf, type RosterRow } from "./roster";
 
 /**
  * The derivation, on its own — no rendering, and the clock as an argument.
@@ -136,79 +135,45 @@ describe("the roster", () => {
     const rows = rosterOf([withCharacter], [emptied], []);
     expect(rows[0]?.kind).toBe("playing");
   });
-
-  it("says what is true instead of counting seats", () => {
-    expect(summaryOf(rosterOf([dm, withCharacter, withNone], [brannoc], [waiting]))).toBe(
-      "2 players, 1 invitation outstanding",
-    );
-    expect(summaryOf(rosterOf([dm, withCharacter], [brannoc], []))).toBe("1 player");
-    expect(summaryOf(rosterOf([dm], [], [waiting]))).toBe(
-      "Nobody has joined yet, 1 invitation outstanding",
-    );
-    // Nothing to say: the empty state underneath is already saying it.
-    expect(summaryOf(rosterOf([dm], [], []))).toBeUndefined();
-  });
-
-  it("cuts initials from a name, and copes with the default one", () => {
-    expect(initialsOf("Ilse Vantar")).toBe("IV");
-    expect(initialsOf("Someone")).toBe("S");
-    expect(initialsOf("  ")).toBe("—");
-  });
 });
 
-describe("needs you", () => {
+describe("not playing yet", () => {
   const now = at("2026-08-13T12:00:00.000Z");
 
-  it("names a member who has joined and has no character", () => {
-    const rows = rosterOf([dm, withNone], [], []);
-    expect(needsOf(rows, [], now).map((nudge) => nudge.text)).toEqual([
-      "Kofi Adeyemi has joined the table and has no character yet.",
+  it("lists a member with no character and a live invitation, and nobody who is playing", () => {
+    const rows = rosterOf([dm, withCharacter, withNone], [brannoc], [waiting, spent]);
+    const people = notPlayingYet(rows, now);
+    expect(people.map((person) => [person.kind, person.name])).toEqual([
+      ["no-character", "Kofi Adeyemi"],
+      ["invited", "Hal"],
     ]);
+    expect(people[0]?.detail).toBe("Joined the table, and has no character yet.");
   });
 
-  it("waits three days before an outstanding invitation is worth a line", () => {
+  it("says how long an invitation has waited only once it is three days old", () => {
     const fresh = rosterOf(
       [dm],
       [],
       [invite({ ...liveInvite, createdAt: "2026-08-11T12:00:00.000Z" })],
     );
-    expect(needsOf(fresh, [], now)).toEqual([]);
+    expect(notPlayingYet(fresh, now).map((person) => person.detail)).toEqual([
+      "Invited, and it runs out on 14 January 2099.",
+    ]);
 
     const stale = rosterOf(
       [dm],
       [],
       [invite({ ...liveInvite, createdAt: "2026-08-07T12:00:00.000Z" })],
     );
-    expect(needsOf(stale, [], now).map((nudge) => nudge.text)).toEqual([
-      "Hal has been waiting 6 days and runs out on 14 January 2099.",
+    expect(notPlayingYet(stale, now).map((person) => person.detail)).toEqual([
+      "Invited 6 days ago, and it runs out on 14 January 2099.",
     ]);
   });
 
-  it("names a character the party has left behind, against the middle level", () => {
-    // Levels 1, 5 and 5 across the seats: the middle level is 5, and the
-    // level is the shared character's — the same number every other table
-    // seating them reads.
-    const party = [
-      seatWith(sorrelSeat, { level: 1 }),
-      seatWith(brannocSeat, { level: 5 }),
-      seatWith(pellSeat, {
-        seatId: "2b1f2a1e-0000-4000-8000-00000000095f",
-        level: 5,
-        name: "Wren",
-      }),
-    ];
-    expect(needsOf(rosterOf([dm], party, []), party, now).map((nudge) => nudge.text)).toEqual([
-      "Sorrel Ash is level 1 and the party is mostly level 5.",
-    ]);
-  });
-
-  it("says nothing about levels when there is only one character to say it about", () => {
-    const party = [seatWith(sorrelSeat, { level: 1 })];
-    expect(needsOf(rosterOf([dm], party, []), party, now)).toEqual([]);
-  });
-
-  it("has nothing to say about a table that is up to date", () => {
-    const rows = rosterOf([dm, withCharacter], [brannoc], []);
-    expect(needsOf(rows, [brannoc], now)).toEqual([]);
+  it("is empty for a table where everyone has a character and nothing is outstanding", () => {
+    // Levels 1 and 5: out-levelled is about somebody who is playing, and the
+    // card says its level, so it is no line here.
+    const party = [seatWith(sorrelSeat, { level: 1 }), seatWith(brannocSeat, { level: 5 })];
+    expect(notPlayingYet(rosterOf([dm, withCharacter], party, [spent]), now)).toEqual([]);
   });
 });

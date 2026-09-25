@@ -34,8 +34,8 @@ export const initialsOf = (name: string): string =>
     .join("");
 
 /**
- * `44 / 52`, `52`, or nothing — the same three answers `campaign/PartyList.tsx`
- * gives, and for its reason.
+ * `44 / 52`, `52`, or nothing — the three answers every card that draws a
+ * character's hit points gives.
  *
  * **`hpCurrent` null is *nobody has said*, which is neither full nor zero.** The
  * server refuses to backfill it for exactly that reason, so a screen that filled

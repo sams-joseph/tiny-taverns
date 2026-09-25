@@ -414,7 +414,7 @@ function IdentityCard({
           {character.sheetUrl !== null && (
             // The one column that names somewhere else. A stored link nobody
             // can reach is the same lie as a stubbed field, so it is a real one
-            // — the call `campaign/PartyList.tsx` already made.
+            // — here and on the creator's seat page.
             <a
               href={character.sheetUrl}
               target="_blank"

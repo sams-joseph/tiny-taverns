@@ -189,4 +189,6 @@ export const twSpacing = [
   "overview-overlap",
   "encounters-list-min",
   "encounters-pane",
+  "party-card",
+  "party-portrait",
 ] as const;

@@ -61,7 +61,7 @@ describe("the seat page", () => {
     expect(within(vitals()).getByText("+3 temp")).toBeVisible();
     // The tiles the card draws, each only when answered.
     expect(within(vitals()).getByText("AC")).toBeVisible();
-    expect(within(vitals()).getByText("30 ft.")).toBeVisible();
+    expect(within(vitals()).getByText("30")).toBeVisible();
     expect(within(vitals()).getByText("Spell DC")).toBeVisible();
     // The header says which tab this is within, the way back is to it, and
     // the campaign row keeps *Party* lit on a page within it.
@@ -74,6 +74,28 @@ describe("the seat page", () => {
     const back = screen.getAllByRole("link", { name: "Party" }).filter((link) => link !== tab);
     expect(back).toHaveLength(1);
     expect(back[0]).toHaveAttribute("href", `/campaigns/${campaignId}/party`);
+  });
+
+  it("links the sheet the owner keeps elsewhere", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: [
+        {
+          ...brannocSheetSeat,
+          character: { ...brannocSheetSeat.character, sheetUrl: "https://example.test/brannoc" },
+        },
+      ],
+    });
+    await renderSeat();
+    expect(
+      await screen.findByRole("link", { name: "The sheet they keep elsewhere" }),
+    ).toHaveAttribute("href", "https://example.test/brannoc");
+  });
+
+  it("draws no such link for a character with no sheet elsewhere", async () => {
+    await renderSeat();
+    await screen.findByRole("heading", { level: 2, name: "Brannoc" });
+    expect(screen.queryByRole("link", { name: "The sheet they keep elsewhere" })).toBeNull();
   });
 
   it("answers a player at the URL the way the server does", async () => {
@@ -101,7 +123,7 @@ describe("the seat page", () => {
   it("falls back to the Party tab on a malformed seat id", async () => {
     await renderSeat("not-a-uuid");
 
-    expect(await screen.findByRole("region", { name: "Who is at the table" })).toBeVisible();
+    expect(await screen.findByRole("region", { name: "Characters" })).toBeVisible();
     expect(window.location.pathname).toBe(`/campaigns/${campaignId}/party/not-a-uuid`);
   });
 

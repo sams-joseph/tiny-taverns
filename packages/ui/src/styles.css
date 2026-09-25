@@ -294,6 +294,8 @@
   --spacing-overview-overlap: var(--overview-cover-overlap);
   --spacing-encounters-list-min: var(--encounters-list-min);
   --spacing-encounters-pane: var(--encounters-pane-min);
+  --spacing-party-card: var(--party-card-min);
+  --spacing-party-portrait: var(--party-portrait-h);
   --container-measure: var(--measure);
   --container-overview: var(--overview-w);
   --container-overview-pitch: var(--overview-pitch-w);

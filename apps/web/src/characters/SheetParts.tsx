@@ -26,7 +26,7 @@ import {
  *
  * `Portrait` and `Seat` are two different plates in the delivery: a character's
  * and a person's. The first is `CharacterPortrait.tsx`, because these two
- * screens draw characters. `party/RosterCard.tsx` is where the other one lives.
+ * screens draw characters; no screen draws the second any more.
  */
 
 /**

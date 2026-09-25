@@ -7,7 +7,7 @@ import {
 } from "../campaign/campaign.fixtures";
 import { twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
-import { brannocSheetSeat, fullParty, pellSeat, sorrelSeat } from "../party/party.fixtures";
+import { fullParty, fullPartySeats } from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
 import { liveFight } from "../run/run.fixtures";
 import type { Scenario } from "./screens";
@@ -44,12 +44,9 @@ export const scenarios = {
     const answer = fullCampaign().get("GET /me/campaigns");
     if (answer !== undefined) routes.set("GET /me/campaigns", answer);
     // The seated party, after the Chronicle's empty one, so the Party tab and
-    // a seat's page are measured over characters — Brannoc's with the whole
-    // sheet the seat page draws read-only.
-    routes.set(`GET /campaigns/${campaignId}/party`, {
-      status: 200,
-      body: [brannocSheetSeat, sorrelSeat, pellSeat],
-    });
+    // a seat's page are measured over characters — four cards, one deleted,
+    // Brannoc's with the whole sheet the seat page draws read-only.
+    routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
     return routes;
   },
   // The campaign's reads, with `twoTables`' memberships seating this account

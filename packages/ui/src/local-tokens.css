@@ -69,4 +69,10 @@
   --encounters-list-min: 260px;
   --encounters-list-w: 360px;
   --encounters-pane-min: 420px;
+
+  /* The same drawing's Party tab: a grid of character cards,
+     `repeat(auto-fill, minmax(min(100%, 270px), 1fr))`, each opening on a
+     150px portrait band. */
+  --party-card-min: 270px;
+  --party-portrait-h: 150px;
 }

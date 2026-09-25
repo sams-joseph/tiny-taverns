@@ -24,7 +24,7 @@ test("a player follows an invitation into the DM's party", async ({ browser }) =
 
     const link = await test.step("and invites a player from the Party", async () => {
       await dm.goto(`${new URL(dm.url()).pathname}/party`);
-      await dm.getByRole("button", { name: "Invite a player" }).click();
+      await dm.getByRole("button", { name: "Invite player" }).click();
       await dm.getByRole("textbox", { name: "Who is it for?" }).fill("The player");
       await dm.getByRole("button", { name: "Make a link" }).click();
       const shown = dm.getByRole("dialog").locator("code");
@@ -45,11 +45,12 @@ test("a player follows an invitation into the DM's party", async ({ browser }) =
 
     await test.step("the DM's Party shows the player", async () => {
       await dm.reload();
-      const table = dm.getByRole("region", { name: "Who is at the table" });
-      const joined = table.getByText("No character", { exact: true });
+      // Joined with no character yet: not a card, a line under *Not playing yet*.
+      await expect(dm.getByText("Nobody has a character here yet")).toBeVisible();
+      const waiting = dm.getByRole("region", { name: "Not playing yet" });
+      const joined = waiting.getByText("No character", { exact: true });
       await expect(joined).toBeVisible();
       await expect(joined.locator("xpath=..")).toContainText(playerName);
-      await expect(dm.getByText("1 player", { exact: true })).toBeVisible();
     });
   } finally {
     await dmContext.close();
