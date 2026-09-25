@@ -20,7 +20,6 @@ import {
   Creature,
   CreatureId,
   CurrentActor,
-  Difficulty,
   ENCOUNTER_SETTING_MAX,
   gearLinesNamed,
   type HobProposal,
@@ -385,8 +384,9 @@ const rulesPlace = (rules: DraftRules): string =>
  * *text*, which it then coerces using the published JSON schema. For an
  * integer- or array-typed optional the text `null` parses as JSON `null` and
  * arrives correctly; for a **string-typed** one it stays the string `"null"` —
- * six times out of six on the endpoint the report drove. `proposeEncounter`
- * with `difficulty` left unset produced `"null"` three times and `"None"` once.
+ * six times out of six on the endpoint the report drove. An optional enum left
+ * unset (`proposeEncounter`'s DM-set band, since removed) produced `"null"`
+ * three times and `"None"` once.
  *
  * The list is the vocabulary and its plausible casings, and nothing else. It is
  * safe precisely because it is only ever reached through {@link optional}, and
@@ -889,8 +889,6 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "Only a suggestion; nothing is saved unless the DM accepts it.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
-    /** The DMG band for the whole fight, not a creature's rating. */
-    difficulty: optional(Difficulty),
     tags: optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
     /**
      * The battle map's setting line, bounded as the form bounds it. The one
@@ -1835,14 +1833,13 @@ export const dmHandlersFor = (
           "it; say one short line about it and stop.",
       ),
 
-    proposeEncounter: ({ name, difficulty, tags, setting, creatures }) =>
+    proposeEncounter: ({ name, tags, setting, creatures }) =>
       Effect.flatMap(roster(creatures), (lines) => {
         const settingLine = blank(setting);
         return offer(
           {
             target: "encounter",
             name,
-            difficulty: difficulty ?? null,
             tags: tags ?? [],
             ...(settingLine === undefined ? {} : { setting: settingLine }),
             roster: lines,

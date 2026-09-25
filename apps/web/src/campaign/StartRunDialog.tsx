@@ -163,9 +163,10 @@ export function StartRunDialog({
       // this is also the door that opened the night — which is what `session`
       // being undefined means. Naming them unconditionally would re-read the
       // campaign every time a DM put a second encounter on tonight's table.
+      // The encounters too: a fight on the table moves a list row.
       session === undefined
-        ? [reads.campaign(campaignId), reads.sessions(campaignId)]
-        : [reads.runs(session.id)],
+        ? [reads.campaign(campaignId), reads.sessions(campaignId), reads.encounters(campaignId)]
+        : [reads.runs(session.id), reads.encounters(campaignId)],
     );
 
     if (Result.isSuccess(started)) {

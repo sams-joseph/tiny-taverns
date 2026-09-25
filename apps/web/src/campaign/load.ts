@@ -123,7 +123,10 @@ export const encountersAtom = Atom.family((campaignId: CampaignId) =>
       collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
         client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
       ),
-    [reads.encounters(campaignId)],
+    // Each encounter's difficulty is computed against the seated party, and
+    // its `lastPlayed` names a night by number, so a write to either answers
+    // here without the encounter row ever being sent.
+    [reads.encounters(campaignId), reads.party(campaignId), reads.sessions(campaignId)],
   ),
 );
 

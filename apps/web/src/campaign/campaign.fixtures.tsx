@@ -150,12 +150,25 @@ export const encounter = {
   id: encounterId,
   campaignId,
   name: "Ambush in the reeds",
-  difficulty: "Medium",
+  // Computed by the server per read, from the roster's XP and the seated
+  // party (`EncounterDifficulty.ts`): six Goblin Bosses at 200 XP, ×2 for six
+  // creatures, against four level-5 characters.
+  difficulty: {
+    _tag: "rated",
+    band: "Medium",
+    xp: 1200,
+    adjustedXp: 2400,
+    multiplier: 2,
+    party: { size: 4, minLevel: 5, maxLevel: 5, unlevelled: 0 },
+    thresholds: { easy: 1000, medium: 2000, hard: 3000, deadly: 4400 },
+  },
   tags: ["Marsh", "Night"],
   // `sum(encounter_creature.count)`, computed by the server per read — the
   // prototype's "6 creatures" (`data.js:10`). Required on the wire, so a
   // fixture that omits it fails decoding rather than rendering `undefined`.
   creatureCount: 6,
+  // Never off the table yet. Computed per read from its runs.
+  lastPlayed: null,
   visibility: "dm",
   ...provenance,
   ...stamps,
@@ -184,7 +197,7 @@ export const sketch = {
   ...encounter,
   id: sketchId,
   name: "Whatever is in the crate",
-  difficulty: null,
+  difficulty: { _tag: "unrated", reason: "missing-xp" },
   tags: ["Boss"],
   creatureCount: 1,
 };
@@ -1184,6 +1197,10 @@ export const rosterRow = {
   creatureId: goblinId,
   name: "Goblin Boss",
   count: 6,
+  cr: "1",
+  ac: 17,
+  hp: 21,
+  xp: 200,
   visibility: "dm",
   ...provenance,
   ...stamps,

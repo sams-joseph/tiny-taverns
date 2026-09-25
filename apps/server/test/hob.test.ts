@@ -753,15 +753,15 @@ describe("a tool call the framework cannot read", () => {
 
   it("takes every spelling of absent a model reaches for, on a whole propose call", async () => {
     // The same conversion reaches the propose path directly: four attempts at
-    // `proposeEncounter` with the two optionals unset produced `"null"` three
-    // times and `"None"` once. Each of those used to kill the answer *and* the
-    // card. Restricted-shaped: the two optionals are unset and the required
-    // ones are real.
+    // `proposeEncounter` with its optionals unset produced `"null"` three times
+    // and `"None"` once. Each of those used to kill the answer *and* the card.
+    // Restricted-shaped: the optional is unset and the required ones are real.
+    // (The enum it was measured on, the DM-set band, has since gone; the
+    // search tool's `source` above is the enum case.)
     const { events } = await ask(fixture.dm, fixture.campaign.id, {
       rounds: [
         toolCallChunks("proposeEncounter", {
           name: "Ambush in the reeds",
-          difficulty: "None",
           tags: "null",
           creatures: [{ creatureId: fixture.goblin.id, count: 3 }],
         }),
@@ -777,7 +777,6 @@ describe("a tool call the framework cannot read", () => {
     expect(proposed[0]).toMatchObject({
       target: "encounter",
       name: "Ambush in the reeds",
-      difficulty: null,
       tags: [],
     });
     expect(events.at(-1)?.event).toBe("done");
@@ -1042,7 +1041,6 @@ describe("what Hob offered, remembered", () => {
       rounds: [
         toolCallChunks("proposeEncounter", {
           name: "Ambush in the reeds",
-          difficulty: "Easy",
           tags: ["marsh"],
           creatures: [{ creatureId: fixture.goblin.id, count: 3 }],
         }),
@@ -1460,7 +1458,7 @@ describe("a model that would not use its build tools", () => {
       rounds: [
         textChunks(
           "I'm offering an encounter called **Goblin Ambush**.\n\n" +
-            '```json\n{ "name": "Goblin Ambush", "difficulty": null, "tags": [],\n' +
+            '```json\n{ "name": "Goblin Ambush", "tags": [],\n' +
             '  "creatures": [ { "creatureId": "d0ca", "count": 3 } ] }\n```\n',
         ),
       ] as never,

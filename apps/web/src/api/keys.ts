@@ -97,8 +97,11 @@ export const reads = {
 
   /**
    * Every encounter built for this table — **including each one's
-   * `creatureCount`**, which is computed per read and is why a roster write
-   * names this rather than a key of its own.
+   * `creatureCount`, `difficulty` and `lastPlayed`**, which are computed per
+   * read and are why a roster write, and starting or ending a fight, name this
+   * rather than a key of their own. The difficulty also moves with the party
+   * and `lastPlayed` names a night, so the list's read answers `party` and
+   * `sessions` too.
    */
   encounters: (campaignId: CampaignId): ReadKey => key`encounters:${campaignId}`,
 

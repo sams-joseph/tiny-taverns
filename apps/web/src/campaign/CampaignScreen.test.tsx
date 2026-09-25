@@ -49,8 +49,9 @@ describe("CampaignScreen", () => {
       false,
     );
     // The *Next session* card lists what is on deck as rows, each saying what
-    // the wire knows about it: the difficulty band, `sum(encounter_creature.count)`
-    // and the tags. Null difficulty is its own state, not a missing word.
+    // the wire knows about it: the computed difficulty band,
+    // `sum(encounter_creature.count)` and the tags. An encounter the rule
+    // cannot rate is its own state, not a missing word.
     expect(screen.getByText("Ambush in the reeds")).toBeInTheDocument();
     expect(screen.getByText("Medium · 6 creatures · Marsh, Night")).toBeInTheDocument();
     expect(screen.getByText("Unrated · 1 creature · Boss")).toBeInTheDocument();

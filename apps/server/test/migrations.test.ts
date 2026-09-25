@@ -296,6 +296,7 @@ describe("migrations", () => {
       { migration_id: 56, name: "character_draft_provenance" },
       { migration_id: 57, name: "battle_maps" },
       { migration_id: 58, name: "encounter_run_boards" },
+      { migration_id: 59, name: "computed_encounter_difficulty" },
     ]);
   }, 60_000);
 
@@ -363,6 +364,7 @@ describe("migrations", () => {
       { migration_id: 56, name: "character_draft_provenance" },
       { migration_id: 57, name: "battle_maps" },
       { migration_id: 58, name: "encounter_run_boards" },
+      { migration_id: 59, name: "computed_encounter_difficulty" },
     ]);
   }, 60_000);
 });

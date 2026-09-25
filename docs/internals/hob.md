@@ -26,7 +26,7 @@ Authorization happens before any stream exists, so a denial is a real 404 and an
 
 ## Proposals and the accept path
 
-A `propose*` tool writes nothing. It stashes the draft in a `Ref` that becomes `assistant_turn.proposal`; there is no write repository under `src/assistant/`, which makes "nothing enters the campaign without an accept" a property of the wiring. `proposeEncounter` resolves each `creatureId` through `Creatures.findById`, so an invented id is a readable `NotFound`.
+A `propose*` tool writes nothing. It stashes the draft in a `Ref` that becomes `assistant_turn.proposal`; there is no write repository under `src/assistant/`, which makes "nothing enters the campaign without an accept" a property of the wiring. `proposeEncounter` resolves each `creatureId` through `Creatures.findById`, so an invented id is a readable `NotFound`. It carries no difficulty: the saved encounter's is computed from its roster and the party ([Data model](data-model.md)).
 
 `repo/Proposals.ts` (with its NPC counterpart, `repo/NpcProposals.ts`) is the only path that turns a proposal into a content row, and no create payload carries `origin`. Accept takes no content payload: the row is materialised from the `proposal` column the server wrote. If accept took prose, any client could post its own and have it recorded as the assistant's. It writes through the ordinary `create` methods with one extra `AssistantOrigin` argument (`repo/rows.ts`).
 

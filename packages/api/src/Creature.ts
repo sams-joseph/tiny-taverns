@@ -381,7 +381,8 @@ export class Creature extends Schema.Class<Creature>("Creature")({
 }) {}
 
 /**
- * `"Humanoid"` and `"Small"` are open vocabularies, unlike `Encounter.difficulty`.
+ * `"Humanoid"` and `"Small"` are open vocabularies, unlike the encounter's
+ * `DifficultyBand`.
  *
  * The difference is not taste: `CampaignHome.jsx:13` *branches* on the
  * difficulty strings, so an unrecognised one changes how the card renders and
@@ -389,9 +390,9 @@ export class Creature extends Schema.Class<Creature>("Creature")({
  * type or size — `Bestiary.jsx:46` prints the type verbatim — and homebrew
  * types are a thing people really have.
  *
- * Capitalised for the same reason `difficulty` is: this is the DM's own
- * vocabulary, rendered as written, and lower-casing it here would mean a
- * display map existing only to undo the change.
+ * Capitalised because this is the DM's own vocabulary, rendered as written,
+ * and lower-casing it here would mean a display map existing only to undo the
+ * change.
  */
 const shortLabel = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
 
@@ -511,7 +512,7 @@ export type CreatureUpdate = typeof CreatureUpdate.Type;
  * How the bestiary list is ordered. `Bestiary.jsx:22-24` offers exactly these
  * three, labelled "Sort: CR" / "Sort: Name" / "Sort: Recent".
  *
- * Lower-case on the wire, unlike `difficulty` or `type`: the client writes the
+ * Lower-case on the wire, unlike a difficulty band or `type`: the client writes the
  * label, so nothing here is rendered verbatim.
  */
 export const CreatureSort = Schema.Literals(["cr", "name", "recent"]);

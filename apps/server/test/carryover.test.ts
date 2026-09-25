@@ -117,9 +117,7 @@ const makeFixture = Effect.gen(function* () {
       hp: 82,
     }),
   );
-  const encounter = yield* as(
-    encounters.create(campaign.id, { name: "Ambush in the reeds", difficulty: "Medium" }),
-  );
+  const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: hag.id, count: 2 }));
 
   return {

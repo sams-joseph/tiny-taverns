@@ -96,9 +96,6 @@ describe("authoring an encounter", () => {
     );
     await userEvent.type(screen.getByRole("textbox", { name: "Tags" }), "Marsh, Night");
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Difficulty" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Deadly" }));
-
     // The picker is the bestiary API, campaign-scoped in the path — so the
     // global `system` corpus arrives through it and needs no second call.
     await userEvent.click(await screen.findByRole("button", { name: "Add Goblin Boss" }));
@@ -111,7 +108,6 @@ describe("authoring an encounter", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/encounters")).toEqual({
         name: "Ambush in the reeds",
-        difficulty: "Deadly",
         tags: ["Marsh", "Night"],
         // The DM did not touch the switch, so this is the column default said
         // out loud — not a guess, and not `shared`.
@@ -197,11 +193,8 @@ describe("authoring an encounter", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Too late");
   });
 
-  it("opens on what is already there, and patches with a null to unrate", async () => {
-    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, {
-      status: 200,
-      body: { ...encounter, difficulty: null },
-    });
+  it("opens on what is already there, and patches what the DM changed", async () => {
+    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
     await renderScreen(mintingSession());
 
     await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
@@ -216,17 +209,21 @@ describe("authoring an encounter", () => {
     // the bestiary — a roster line carries an id, not a copy of the creature.
     expect(screen.getByRole("spinbutton", { name: "How many Goblin Boss" })).toHaveValue(6);
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Difficulty" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Unrated" }));
+    // Difficulty is computed from the roster and the party, so the form has
+    // no control for it and the payload no field.
+    expect(screen.queryByRole("combobox", { name: "Difficulty" })).toBeNull();
+
+    const tags = screen.getByRole("textbox", { name: "Tags" });
+    await userEvent.clear(tags);
+    await userEvent.type(tags, "Marsh");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-    // `null` on update, where create omits the field: an encounter that has
-    // never been rated has no value, and one the DM un-rated has a null.
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
-        difficulty: null,
+        tags: ["Marsh"],
       }),
     );
+    expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("difficulty");
     // An untouched line is not sent.
     expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).not.toHaveProperty("setting");
   });

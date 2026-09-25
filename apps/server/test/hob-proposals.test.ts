@@ -205,7 +205,6 @@ const proposedIn = (events: ReadonlyArray<HobEvent>) => {
 const anEncounter = (creatureId: string, count = 3) =>
   toolCallChunks("proposeEncounter", {
     name: "Song in the reeds",
-    difficulty: "Hard",
     tags: ["Marsh"],
     creatures: [{ creatureId, count }],
   });
@@ -352,7 +351,6 @@ describe("a proposal is not a row", () => {
     expect(answer?.proposal).toMatchObject({
       target: "encounter",
       name: "Song in the reeds",
-      difficulty: "Hard",
     });
     expect(answer?.acceptedAt).toBeNull();
   }, 60_000);
@@ -415,7 +413,6 @@ describe("accepting one", () => {
     const encounter = accepted.success.encounter;
 
     expect(encounter.name).toBe("Song in the reeds");
-    expect(encounter.difficulty).toBe("Hard");
     expect(encounter.tags).toEqual(["Marsh"]);
     // Computed per read, so this is the roster really being there.
     expect(encounter.creatureCount).toBe(6);

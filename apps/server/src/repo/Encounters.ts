@@ -3,17 +3,23 @@ import {
   type CampaignId,
   type CreatedOrder,
   type CreatedPageFilterValues,
+  creatureXp,
   CurrentActor,
-  type Difficulty,
   Encounter,
   type EncounterCreate,
+  encounterDifficulty,
   type EncounterId,
+  type EncounterRunEndedReason,
+  type EncounterRunId,
   type EncounterUpdate,
   NotFound,
   type Page,
+  type SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
+import { statBlockXp } from "./EncounterCreatures.js";
+import { RUN } from "./liveTables.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
@@ -26,34 +32,72 @@ import {
   setClause,
 } from "./rows.js";
 import {
+  containedRowReadable,
   ensureCampaignReadable,
   ensureCampaignWritable,
   type NestedTable,
   nestedRowReadableWithin,
+  ownedRowReadable,
   rowReadable,
   rowWritable,
 } from "./visibility.js";
+
+/** One visible roster line, as the difficulty needs it — `json_agg`'d per encounter. */
+interface RosterXpRow {
+  readonly count: number;
+  readonly cr: string;
+  readonly stat_block_xp: number | null;
+}
 
 interface EncounterRow extends ProvenanceColumns {
   readonly id: EncounterId;
   readonly campaign_id: CampaignId;
   readonly name: string;
-  readonly difficulty: Difficulty | null;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly tags: ReadonlyArray<string>;
   readonly creature_count: number;
+  /** `json`, which the pg driver parses. */
+  readonly roster_xp: ReadonlyArray<RosterXpRow>;
+  /** The last visible ended run's columns, all null when there is none. */
+  readonly played_run_id: EncounterRunId | null;
+  readonly played_session_id: SessionId | null;
+  readonly played_session_number: number | null;
+  readonly played_ended_at: Date | null;
+  readonly played_ended_reason: EncounterRunEndedReason | null;
 }
 
-const toEncounter = (row: EncounterRow): Encounter =>
-  new Encounter({
-    id: row.id,
-    campaignId: row.campaign_id,
-    name: row.name,
-    difficulty: row.difficulty,
-    tags: row.tags,
-    creatureCount: row.creature_count,
-    ...provenanceOf(row),
-  });
+/**
+ * The row, with its difficulty computed against `partyLevels` — the one read
+ * of the party the whole statement's encounters share.
+ */
+const toEncounter =
+  (partyLevels: ReadonlyArray<number | null>) =>
+  (row: EncounterRow): Encounter =>
+    new Encounter({
+      id: row.id,
+      campaignId: row.campaign_id,
+      name: row.name,
+      difficulty: encounterDifficulty(
+        row.roster_xp.map((line) => ({
+          count: line.count,
+          xp: creatureXp({ cr: line.cr, statBlockXp: line.stat_block_xp }),
+        })),
+        partyLevels,
+      ),
+      tags: row.tags,
+      creatureCount: row.creature_count,
+      lastPlayed:
+        row.played_run_id === null
+          ? null
+          : {
+              runId: row.played_run_id,
+              sessionId: row.played_session_id!,
+              sessionNumber: row.played_session_number!,
+              endedAt: DateTime.fromDateUnsafe(row.played_ended_at!),
+              endedReason: row.played_ended_reason!,
+            },
+      ...provenanceOf(row),
+    });
 
 /** The roster hangs off the encounter. */
 const ROSTER: NestedTable = {
@@ -84,6 +128,61 @@ const creatureCount = (
     select sum(encounter_creature.count) from encounter_creature
     where ${nestedRowReadableWithin(sql, ROSTER, campaignId, actor)}
   ), 0)::int as creature_count`;
+
+/**
+ * The roster the difficulty is computed from: each visible line's count, and
+ * its creature's rating and stated XP — `creatureXp` turns those into XP in
+ * `toEncounter`, the same function the roster read uses, so the band and the
+ * roster table cannot disagree about a creature.
+ *
+ * The same visibility rule as `creatureCount`, and for the same reason: a
+ * creature hidden from this reader moves neither the count nor the band.
+ */
+const rosterXp = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`coalesce((
+    select json_agg(json_build_object(
+      'count', encounter_creature.count,
+      'cr', creature.cr,
+      'stat_block_xp', ${statBlockXp(sql)}
+    ))
+    from encounter_creature
+    join creature on creature.id = encounter_creature.creature_id
+    where ${nestedRowReadableWithin(sql, ROSTER, campaignId, actor)}
+  ), '[]'::json) as roster_xp`;
+
+/**
+ * The last time each encounter came off the table, among the runs this reader
+ * can see — `containedRowReadable` over `RUN`, the predicate every run read
+ * uses, so a fight the DM kept hidden, or one on a night the DM kept hidden,
+ * is not played as far as a player knows.
+ *
+ * The session number is a correlated subquery rather than a join for
+ * `Recap.ts`'s reason: the predicate names the unaliased `session` inside its
+ * own scope.
+ */
+const lastPlayed = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`left join lateral (
+    select encounter_run.id as played_run_id,
+           encounter_run.session_id as played_session_id,
+           (select session.number from session
+             where session.id = encounter_run.session_id) as played_session_number,
+           encounter_run.ended_at as played_ended_at,
+           encounter_run.ended_reason as played_ended_reason
+    from encounter_run
+    where encounter_run.encounter_id = encounter.id
+      and encounter_run.ended_at is not null
+      and ${containedRowReadable(sql, RUN, campaignId, actor)}
+    order by encounter_run.ended_at desc, encounter_run.id desc
+    limit 1
+  ) as last_played on true`;
 
 /**
  * Reads and writes over `encounter`, the authored template.
@@ -127,21 +226,79 @@ export class Encounters extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const ordering = createdOrdering<EncounterRow>(sql, "encounter");
 
+      /**
+       * The level of every live seat's character this reader can see — the
+       * party the difficulty is rated for. `ownedRowReadable` over the seat is
+       * `Party.list`'s own gate, so the party a band is computed against is
+       * exactly the party this reader is shown. A seat whose character was
+       * deleted holds nobody and is not in it; a character with no level is,
+       * as a `null` the rule counts and leaves out.
+       */
+      const partyLevels = (campaignId: CampaignId, actor: Actor) =>
+        Effect.map(
+          sql<{ readonly level: number | null }>`
+            select character.level from campaign_character
+            join character on character.id = campaign_character.character_id
+            where campaign_character.left_at is null
+              and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+          `,
+          (rows) => rows.map((row) => row.level),
+        );
+
+      /**
+       * Encounters with everything computed on read: the count, the roster
+       * XP, the last playing. Every read goes through here, and a write reads
+       * its row back through here, so no path answers a thinner `Encounter`.
+       */
+      const selectEncounters = (
+        campaignId: CampaignId,
+        actor: Actor,
+        where: Statement.Fragment,
+        tail: Statement.Fragment = sql``,
+      ) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<EncounterRow>`
+            select encounter.*, ${creatureCount(sql, campaignId, actor)},
+                   ${rosterXp(sql, campaignId, actor)}, last_played.*
+            from encounter
+            ${lastPlayed(sql, campaignId, actor)}
+            where ${where}
+            ${tail}
+          `;
+          const levels = rows.length === 0 ? [] : yield* partyLevels(campaignId, actor);
+          return { rows, toEncounter: toEncounter(levels) };
+        });
+
+      /**
+       * One row just written, read back the way every read reads it — through
+       * `rowReadable` too, which the roster subqueries rely on the enclosing
+       * query to have applied.
+       */
+      const readBack = (campaignId: CampaignId, actor: Actor, id: EncounterId) =>
+        Effect.map(
+          selectEncounters(
+            campaignId,
+            actor,
+            sql.and([sql`encounter.id = ${id}`, rowReadable(sql, "encounter", campaignId, actor)]),
+          ),
+          ({ rows, toEncounter }) => toEncounter(rows[0]!),
+        );
+
       return {
         list: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<EncounterRow>`
-                select encounter.*, ${creatureCount(sql, campaignId, actor)} from encounter
-                where ${sql.and([
+              const { rows, toEncounter } = yield* selectEncounters(
+                campaignId,
+                actor,
+                sql.and([
                   rowReadable(sql, "encounter", campaignId, actor),
                   ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
+                ]),
+                sql`order by ${orderClause(sql, ordering)} limit ${pageLimit(filter.limit)}`,
+              );
               return pageOfRows(rows, filter.limit, ordering, "created", toEncounter);
             }),
           ),
@@ -150,11 +307,14 @@ export class Encounters extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<EncounterRow>`
-                select encounter.*, ${creatureCount(sql, campaignId, actor)} from encounter
-                where encounter.id = ${id}
-                  and ${rowReadable(sql, "encounter", campaignId, actor)}
-              `;
+              const { rows, toEncounter } = yield* selectEncounters(
+                campaignId,
+                actor,
+                sql.and([
+                  sql`encounter.id = ${id}`,
+                  rowReadable(sql, "encounter", campaignId, actor),
+                ]),
+              );
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
               return toEncounter(rows[0]!);
             }),
@@ -166,20 +326,19 @@ export class Encounters extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
-                const rows = yield* sql<EncounterRow>`
+                const rows = yield* sql<{ readonly id: EncounterId }>`
                   insert into encounter ${sql.insert(
                     defined({
                       campaign_id: campaignId,
                       name: payload.name,
-                      difficulty: payload.difficulty,
                       tags: payload.tags,
                       visibility: payload.visibility,
                       ...assistantColumns(from),
                     }),
                   )}
-                  returning *, ${creatureCount(sql, campaignId, actor)}
+                  returning encounter.id
                 `;
-                const encounter = toEncounter(rows[0]!);
+                const encounter = yield* readBack(campaignId, actor, rows[0]!.id);
                 // Every encounter has its one battle map, made with it: a blank
                 // board, and the setting line the picture is drawn from (or,
                 // without one, the name, tags and roster types) after this
@@ -206,15 +365,14 @@ export class Encounters extends Context.Service<
                 const actor = yield* CurrentActor;
                 const columns = defined({
                   name: patch.name,
-                  difficulty: patch.difficulty,
                   tags: patch.tags,
                   visibility: patch.visibility,
                 });
-                const rows = yield* sql<EncounterRow>`
+                const rows = yield* sql<{ readonly id: EncounterId }>`
                   update encounter set ${setClause(sql, columns)}
                   where encounter.id = ${id}
                     and ${rowWritable(sql, "encounter", campaignId, actor)}
-                  returning *, ${creatureCount(sql, campaignId, actor)}
+                  returning encounter.id
                 `;
                 if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
                 // The setting line lives on the map, the creator's alone; the
@@ -227,7 +385,7 @@ export class Encounters extends Context.Service<
                       and ${rowWritable(sql, "battle_map", campaignId, actor)}
                   `;
                 }
-                return toEncounter(rows[0]!);
+                return yield* readBack(campaignId, actor, id);
               }),
             ),
           ),

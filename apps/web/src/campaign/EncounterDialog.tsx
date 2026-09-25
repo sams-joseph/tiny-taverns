@@ -1,7 +1,6 @@
 import {
   type CampaignId,
   type CreatureId,
-  type Difficulty,
   type Encounter,
   type EncounterCreatureId,
   type EncounterId,
@@ -18,11 +17,6 @@ import {
   DialogTitle,
   Icon,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
@@ -86,11 +80,6 @@ interface RosterLine {
   readonly savedCount: number | undefined;
 }
 
-/** The one value `difficulty` takes that is not a band. */
-const UNRATED = "";
-
-const BANDS: ReadonlyArray<Difficulty> = ["Easy", "Medium", "Hard", "Deadly"];
-
 const MAX_TAGS = 16;
 const MAX_TAG_LENGTH = 40;
 const MIN_COUNT = 1;
@@ -109,7 +98,6 @@ const parseTags = (raw: string): ReadonlyArray<string> => {
 interface Draft {
   readonly name: string;
   readonly setting: string;
-  readonly difficulty: Difficulty | null;
   readonly tags: ReadonlyArray<string>;
   readonly visibility: Visibility;
 }
@@ -199,7 +187,6 @@ function EncounterForm({
 }) {
   const [name, setName] = useState(encounter?.name ?? "");
   const [setting, setSetting] = useState(initialSetting);
-  const [difficulty, setDifficulty] = useState<string>(encounter?.difficulty ?? UNRATED);
   const [tagText, setTagText] = useState(encounter?.tags.join(", ") ?? "");
   // `dm` for a new encounter: the column default, and the only safe one to fail to.
   const [visibility, setVisibility] = useState<Visibility>(encounter?.visibility ?? "dm");
@@ -212,7 +199,6 @@ function EncounterForm({
   const draft: Draft = {
     name,
     setting,
-    difficulty: difficulty === UNRATED ? null : (difficulty as Difficulty),
     tags: parseTags(tagText),
     visibility,
   };
@@ -252,14 +238,10 @@ function EncounterForm({
         Effect.gen(function* () {
           const written =
             encounter === undefined
-              ? // `difficulty` is `optional(Difficulty)` on create and
-                // `optional(NullOr(Difficulty))` on update: an encounter has never
-                // been rated, so unrated is an absent field rather than a null.
-                yield* client.encounters.create({
+              ? yield* client.encounters.create({
                   params: { campaignId },
                   payload: {
                     name: trimmed,
-                    ...(draft.difficulty === null ? {} : { difficulty: draft.difficulty }),
                     tags: draft.tags,
                     visibility: draft.visibility,
                     ...(settingLine === "" ? {} : { setting: settingLine }),
@@ -269,7 +251,6 @@ function EncounterForm({
                   params: { campaignId, encounterId: encounter.id },
                   payload: {
                     name: trimmed,
-                    difficulty: draft.difficulty,
                     tags: draft.tags,
                     visibility: draft.visibility,
                     // Only a changed line is sent; none clears it.
@@ -370,36 +351,6 @@ function EncounterForm({
             aria-invalid={showProblems && problems.setting !== undefined}
             onChange={(event) => setSetting(event.target.value)}
           />
-        </Field>
-
-        <Field
-          label="Difficulty"
-          htmlFor="encounter-difficulty"
-          hint="The DMG band for the party, not a creature's challenge rating."
-        >
-          <Select value={difficulty} onValueChange={(value) => setDifficulty(String(value))}>
-            <SelectTrigger id="encounter-difficulty">
-              {/* The label is written here, not left to Base UI. `Select.Value`
-                  with neither `items` nor children falls back to serialising
-                  the *value* — so a select keyed on anything that is not
-                  already its own label renders the raw string, and one keyed
-                  on `""` renders nothing at all. Both were on screen before
-                  this was a function. */}
-              <SelectValue>
-                {(value) => (value === UNRATED ? "Unrated" : String(value))}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {/* Unrated is a state, not a missing value: a sketched encounter
-                  the DM has not weighed yet is information, and the card says so. */}
-              <SelectItem value={UNRATED}>Unrated</SelectItem>
-              {BANDS.map((band) => (
-                <SelectItem key={band} value={band}>
-                  {band}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </Field>
 
         <Field

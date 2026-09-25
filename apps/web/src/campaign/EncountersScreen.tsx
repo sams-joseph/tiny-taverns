@@ -12,6 +12,7 @@ import {
 } from "@taverns/ui";
 import { useState } from "react";
 import { CampaignChrome } from "./CampaignChrome";
+import { difficultyWord } from "./difficulty";
 import { EncounterCard } from "./EncounterCard";
 import { EncounterDialog } from "./EncounterDialog";
 import { matches } from "./load";
@@ -43,7 +44,7 @@ import { matches } from "./load";
 const encounterFacets = (encounters: ReadonlyArray<Encounter>): ReadonlyArray<FilterInputFacet> => {
   const tags = [...new Set(encounters.flatMap((encounter) => encounter.tags))].sort();
   const difficulties = [
-    ...new Set(encounters.flatMap((encounter) => encounter.difficulty ?? [])),
+    ...new Set(encounters.map((encounter) => difficultyWord(encounter.difficulty))),
   ].sort();
   const out: Array<FilterInputFacet> = [];
   // Exclusion and Match any are offered here because the filter is the
@@ -74,7 +75,7 @@ const satisfies = (encounter: Encounter, condition: FilterCondition): boolean =>
     condition.facet === "tag"
       ? encounter.tags.some((tag) => condition.values.includes(tag))
       : condition.facet === "difficulty"
-        ? encounter.difficulty !== null && condition.values.includes(encounter.difficulty)
+        ? condition.values.includes(difficultyWord(encounter.difficulty))
         : true;
   return condition.operator === "not" ? !has : has;
 };

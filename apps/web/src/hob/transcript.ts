@@ -94,9 +94,12 @@ export type HobArtifact =
        * one. Shown on the card because accepting draws the map from it.
        */
       readonly setting?: string;
-      /** Absent from anything Hob proposes: no shipped column holds a creature's XP. */
+      /**
+       * The adjusted XP and the band — `"Hard for 4 level-5s"`. Absent from
+       * anything Hob proposes: both are computed on the saved encounter against
+       * the party (`EncounterDifficulty.ts`), and a proposal is not one yet.
+       */
       readonly adjustedXp?: string;
-      /** The band, in the DM's words: `"Hard for 4 level-5s"`. */
       readonly verdict?: string;
     })
   | (ArtifactBase & { readonly kind: "readaloud"; readonly text: string })
@@ -157,9 +160,6 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
           hp: `${line.hp} hp`,
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
-        // The DMG band, as the DM's own vocabulary — `Difficulty` is
-        // capitalised and rendered verbatim everywhere else too.
-        ...(proposal.difficulty === null ? {} : { verdict: proposal.difficulty }),
       };
     }
     case "note":

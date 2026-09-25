@@ -71,9 +71,7 @@ const makeFixture = Effect.gen(function* () {
   const as = withActor(dm);
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road", visibility: "shared" }));
-  const encounter = yield* as(
-    encounters.create(campaign.id, { name: "Ambush in the reeds", difficulty: "Medium" }),
-  );
+  const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
   const session = yield* as(
     sessions.create(campaign.id, { number: 12, title: "The ford", visibility: "shared" }),
   );

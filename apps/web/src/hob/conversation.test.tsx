@@ -333,7 +333,6 @@ const aWorldThread = (title: string) => ({
 const anEncounter = {
   target: "encounter",
   name: "Song in the reeds",
-  difficulty: "Hard",
   tags: ["Marsh"],
   roster: [
     {
@@ -732,8 +731,9 @@ describe("what Hob offers, and the one thing that writes", () => {
     expect(screen.getByText("Bullywug Croaker")).toBeInTheDocument();
     expect(screen.getByText("×3")).toBeInTheDocument();
     expect(screen.getByText("CR 1/4")).toBeInTheDocument();
-    // The DMG band, verbatim. No adjusted XP: no shipped column holds one.
-    expect(screen.getByText("Hard")).toBeInTheDocument();
+    // No band and no adjusted XP: both are computed on the saved encounter,
+    // against the party, and an offer is not one yet.
+    expect(screen.queryByText("Hard")).toBeNull();
     expect(screen.getByText("3 creatures")).toBeInTheDocument();
   });
 
