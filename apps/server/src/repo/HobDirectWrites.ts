@@ -14,7 +14,7 @@ import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { RUNS } from "./liveTables.js";
+import { initiativeOrderKeys, RUNS } from "./liveTables.js";
 import { reserveHobTurn } from "./HobThreads.js";
 import { dieOnSqlError } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
@@ -268,10 +268,7 @@ export class HobDirectWrites extends Context.Service<
                   and combatant.kind = 'pc'
                   and combatant.character_id is not null
                   and (resource.value ->> 'used')::integer < (resource.value ->> 'max')::integer
-                order by combatant.initiative desc,
-                         combatant.created_at asc,
-                         combatant.id asc,
-                         resource.ordinality asc
+                order by ${initiativeOrderKeys(sql)}, resource.ordinality asc
               `;
               return {
                 sessionId: active.session_id,

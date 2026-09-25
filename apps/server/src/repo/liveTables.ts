@@ -57,4 +57,8 @@ export const ROSTER: NestedTable = {
  * order they were added" and building on a guarantee that is not there.
  */
 export const initiativeOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
-  sql`order by combatant.initiative desc, combatant.created_at asc, combatant.id asc`;
+  sql`order by ${initiativeOrderKeys(sql)}`;
+
+/** The keys of `initiativeOrder`, for a query that orders by more after them. */
+export const initiativeOrderKeys = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`combatant.initiative desc, combatant.created_at asc, combatant.id asc`;
