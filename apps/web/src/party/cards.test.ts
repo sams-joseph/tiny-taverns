@@ -3,7 +3,17 @@ import { emptyCharacterSheet } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { hpBand, hpFraction, passiveOf, passivePerceptionOf, savesOf } from "../characters/sheet";
-import { bestInParty, partySummary, passivesOf, seatCard } from "./cards";
+import {
+  bestInParty,
+  feetOf,
+  hpAfter,
+  partySummary,
+  passivesOf,
+  pressed,
+  seatCard,
+  summaryLine,
+  type PartySummary,
+} from "./cards";
 import { brannocSeat, ilse, pellSeat, sorrelSeat } from "./party.fixtures";
 
 /**
@@ -68,7 +78,7 @@ describe("a seat's card", () => {
       tempHp: 4,
       stats: [
         { key: "ac", label: "AC", value: "18" },
-        { key: "speed", label: "Speed", value: "30 ft." },
+        { key: "speed", label: "Speed", value: "30" },
         { key: "spellDc", label: "Spell DC", value: "13" },
         { key: "passive", label: "Passive", value: "13" },
       ],
@@ -133,6 +143,28 @@ describe("a seat's card", () => {
   });
 });
 
+describe("a speed's figure", () => {
+  it("takes the feet from a single walking speed, and nothing from anything else", () => {
+    expect(feetOf("30 ft.")).toBe(30);
+    expect(feetOf(" 25ft ")).toBe(25);
+    expect(feetOf("35 feet")).toBe(35);
+    expect(feetOf("30 ft., fly 60 ft.")).toBeUndefined();
+    expect(feetOf("fast")).toBeUndefined();
+    expect(feetOf(undefined)).toBeUndefined();
+  });
+
+  it("draws a speed with no single figure as written", () => {
+    const card = seatCard(
+      brannocWith({ sheet: sheet({ identity: { speed: "30 ft., fly 60 ft." } }) }),
+    );
+    expect(card.kind === "character" ? card.stats : []).toContainEqual({
+      key: "speed",
+      label: "Speed",
+      value: "30 ft., fly 60 ft.",
+    });
+  });
+});
+
 describe("the party's summary", () => {
   it("counts characters, sums hit points with null as max, and names the low and the down", () => {
     const summary = partySummary([
@@ -172,6 +204,75 @@ describe("the party's summary", () => {
       expect(summary.down.length === 1).toBe(band === "down");
       expect(summary.low.length === 1).toBe(band === "low");
     }
+  });
+});
+
+describe("the header's line", () => {
+  const summary = (fields: Partial<PartySummary>): PartySummary => ({
+    characters: 4,
+    level: "Lvl 5",
+    hp: { current: 125, max: 159 },
+    low: [],
+    down: [],
+    ...fields,
+  });
+
+  it("says how many, what level, the hit points, and that nobody is hurting", () => {
+    expect(summaryLine(summary({}))).toBe(
+      "4 characters · Lvl 5 · 125 / 159 hp · Everyone's on their feet",
+    );
+    expect(summaryLine(summary({ characters: 1 }))).toMatch(/^1 character · /);
+  });
+
+  it("names the down before the low, in the bar's own words", () => {
+    expect(summaryLine(summary({ low: ["Tamsin"] }))).toBe(
+      "4 characters · Lvl 5 · 125 / 159 hp · Tamsin is low",
+    );
+    expect(summaryLine(summary({ low: ["Wren", "Odo"], down: ["Tamsin"] }))).toBe(
+      "4 characters · Lvl 5 · 125 / 159 hp · Tamsin is down, Wren and Odo are low",
+    );
+    expect(summaryLine(summary({ low: ["Wren", "Odo", "Brannoc"] }))).toMatch(
+      /Wren, Odo and Brannoc are low$/,
+    );
+  });
+
+  it("leaves out what the party cannot answer, and has no line for no characters", () => {
+    // No max anywhere: no sum, and nothing read off a bar that is not drawn.
+    expect(summaryLine(summary({ level: undefined, hp: undefined }))).toBe("4 characters");
+    expect(summaryLine(partySummary([]))).toBeUndefined();
+  });
+});
+
+describe("a press of − or +", () => {
+  const at = (hpCurrent: number | null, hpMax: number | null) => ({ hpCurrent, hpMax });
+
+  it("lands where the server's clamp puts it", () => {
+    expect(hpAfter(at(44, 52), 3)).toBe(41);
+    expect(hpAfter(at(44, 52), -20)).toBe(52);
+    expect(hpAfter(at(4, 52), 10)).toBe(0);
+    // Nobody has said: counts down from the max.
+    expect(hpAfter(at(null, 52), 2)).toBe(50);
+    // No max: nothing to restore to but the column's bound, and zero below.
+    expect(hpAfter(at(null, null), 1)).toBe(0);
+    expect(hpAfter(at(5, null), -3)).toBe(8);
+  });
+
+  it("adds up into one delta that says what the screen shows", () => {
+    const brannoc = at(44, 52);
+    let owed = 0;
+    owed = pressed(brannoc, owed, "damage");
+    owed = pressed(brannoc, owed, "damage");
+    owed = pressed(brannoc, owed, "heal");
+    expect(owed).toBe(1);
+    expect(hpAfter(brannoc, owed)).toBe(43);
+  });
+
+  it("ignores a press that would move nothing, so the next one counts", () => {
+    const full = at(52, 52);
+    const owed = pressed(full, 0, "heal");
+    expect(owed).toBe(0);
+    expect(pressed(full, owed, "damage")).toBe(1);
+    expect(pressed(at(0, 52), 0, "damage")).toBe(0);
   });
 });
 

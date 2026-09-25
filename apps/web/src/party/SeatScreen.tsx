@@ -175,11 +175,14 @@ function Identity({
   portrait,
   lineage,
   player,
+  sheetUrl,
 }: {
   readonly name: string;
   readonly portrait: Character["portrait"];
   readonly lineage: string | undefined;
   readonly player: string | undefined;
+  /** The one column that names somewhere else: the sheet the owner keeps there. */
+  readonly sheetUrl: string | null;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -191,6 +194,16 @@ function Identity({
         )}
         {player !== undefined && (
           <p className="mb-0 text-body-s leading-body text-faint">Played by {player}</p>
+        )}
+        {sheetUrl !== null && (
+          <a
+            href={sheetUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-label-s leading-none font-medium text-muted-foreground underline decoration-hairline underline-offset-2 hover:text-foreground"
+          >
+            The sheet they keep elsewhere
+          </a>
         )}
       </div>
     </div>
@@ -208,7 +221,7 @@ function DeletedCharacter({
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-card">
-        <Identity name={name} portrait={null} lineage={undefined} player={player} />
+        <Identity name={name} portrait={null} lineage={undefined} player={player} sheetUrl={null} />
         <p className="mb-0 text-body-s leading-body text-muted-foreground">
           Character deleted. Its owner removed it, so there is no sheet to read; the seat keeps the
           name the table knew it by.
@@ -294,6 +307,7 @@ function Vitals({
           portrait={character.portrait}
           lineage={card.lineage}
           player={card.player}
+          sheetUrl={character.sheetUrl}
         />
 
         <section aria-label="Hit points" className="flex flex-col gap-2">

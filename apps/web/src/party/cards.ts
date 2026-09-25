@@ -26,7 +26,7 @@ import {
 export interface StatTile {
   readonly key: "ac" | "speed" | "spellDc" | "passive";
   readonly label: string;
-  /** As the card draws it: the sheet's own words for speed and DC. */
+  /** As the card draws it: the DC as written, the speed as its figure in feet. */
   readonly value: string;
 }
 
@@ -98,6 +98,16 @@ const lineageOf = (character: NonNullable<PartySeat["character"]>): string | und
   return [head, subclass].filter((part) => part !== undefined).join(" · ") || undefined;
 };
 
+/**
+ * `"30 ft."` → 30: a speed written as one walking figure in feet. Anything more
+ * (`"30 ft., fly 60 ft."`) or anything else has no single figure and is
+ * undefined, so the tile says it as written.
+ */
+export const feetOf = (speed: string | undefined): number | undefined => {
+  const match = speed?.trim().match(/^(\d+)\s*(?:ft\.?|feet)$/i);
+  return match === null || match === undefined ? undefined : Number(match[1]);
+};
+
 const statsOf = (character: NonNullable<PartySeat["character"]>): ReadonlyArray<StatTile> => {
   const speed = present(character.sheet.identity?.speed);
   const spellDc = present(character.sheet.spellcasting?.save);
@@ -106,7 +116,11 @@ const statsOf = (character: NonNullable<PartySeat["character"]>): ReadonlyArray<
     ...(character.ac === null
       ? []
       : [{ key: "ac", label: "AC", value: String(character.ac) } as const]),
-    ...(speed === undefined ? [] : [{ key: "speed", label: "Speed", value: speed } as const]),
+    // The bare figure where the sheet wrote one, as the drawing's tile does: a
+    // quarter of a card has no room for the unit, and every speed here is feet.
+    ...(speed === undefined
+      ? []
+      : [{ key: "speed", label: "Speed", value: String(feetOf(speed) ?? speed) } as const]),
     ...(spellDc === undefined
       ? []
       : [{ key: "spellDc", label: "Spell DC", value: spellDc } as const]),
@@ -185,6 +199,77 @@ export const partySummary = (party: ReadonlyArray<PartySeat>): PartySummary => {
     low: inBand("low"),
     down: inBand("down"),
   };
+};
+
+/**
+ * The header's line, as one string: `"4 characters · Lvl 5 · 125 / 159 hp ·
+ * Tamsin is low"`. Each part is left out when the party cannot answer it, and
+ * the last says who is hurting by the bar's own bands, so the header and the
+ * cards cannot disagree about who is low. A party with no characters has no
+ * line: the empty state under it is already saying so.
+ */
+export const summaryLine = (summary: PartySummary): string | undefined => {
+  if (summary.characters === 0) return undefined;
+  const hurting = [
+    ...(summary.down.length === 0 ? [] : [`${names(summary.down)} ${isAre(summary.down)} down`]),
+    ...(summary.low.length === 0 ? [] : [`${names(summary.low)} ${isAre(summary.low)} low`]),
+  ];
+  return [
+    `${String(summary.characters)} character${summary.characters === 1 ? "" : "s"}`,
+    ...(summary.level === undefined ? [] : [summary.level]),
+    ...(summary.hp === undefined
+      ? []
+      : [`${String(summary.hp.current)} / ${String(summary.hp.max)} hp`]),
+    // Said only when there is a bar to have read it off.
+    ...(summary.hp === undefined
+      ? []
+      : [hurting.length === 0 ? "Everyone's on their feet" : hurting.join(", ")]),
+  ].join(" · ");
+};
+
+/** `"Tamsin"`, `"Tamsin and Odo"`, `"Tamsin, Odo and Wren"`. */
+const names = (list: ReadonlyArray<string>): string =>
+  list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list.at(-1)!}`;
+
+const isAre = (list: ReadonlyArray<string>): string => (list.length === 1 ? "is" : "are");
+
+/**
+ * Where a character's current hit points land after a signed delta — positive
+ * damages, negative heals — by the server's own clamp (`clampedCharacterHp`,
+ * `apps/server/src/repo/vitals.ts`): a null current counts down from the max,
+ * and the result stays within zero and the max. Temporary hit points are not
+ * spent by it, because the server does not spend them.
+ *
+ * It is what lets a card show a press before the write returns, and show
+ * exactly the number the write will produce.
+ */
+export const hpAfter = (
+  character: { readonly hpCurrent: number | null; readonly hpMax: number | null },
+  amount: number,
+): number =>
+  Math.max(
+    0,
+    Math.min(character.hpMax ?? MAX_HP, (character.hpCurrent ?? character.hpMax ?? 0) - amount),
+  );
+
+/** The column's own bound, the ceiling the server clamps to when there is no max. */
+const MAX_HP = 10_000;
+
+/**
+ * The delta a card owes the server after one more press of − or +.
+ *
+ * Presses add up into one delta, sent once the DM pauses. A press that would
+ * move nothing (a heal at full, a hit at zero) leaves the delta alone, so the
+ * delta always says what the screen shows: + at full then − is one hit point
+ * down, as it looks, not a net zero.
+ */
+export const pressed = (
+  character: { readonly hpCurrent: number | null; readonly hpMax: number | null },
+  owed: number,
+  press: "damage" | "heal",
+): number => {
+  const next = owed + (press === "damage" ? 1 : -1);
+  return hpAfter(character, next) === hpAfter(character, owed) ? owed : next;
 };
 
 /** The three passives the table draws, each absent when the sheet cannot make it. */

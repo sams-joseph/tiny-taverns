@@ -5,8 +5,6 @@ import {
   bodyOf,
   campaign,
   campaignId,
-  character,
-  characterSeat,
   encounterId,
   installStubServer,
   liveRun,
@@ -245,7 +243,8 @@ describe("the seats — the creator's two verbs", () => {
    * campaign holds a *seat* over it. So the Party screen offers no *Add
    * character* and no per-row pencil any more — the creator's writes are the
    * seat's own two verbs, sharing it with the table and retiring it, which is
-   * the whole of `PartySeatUpdate` and `party.leave` given controls.
+   * the whole of `PartySeatUpdate` and `party.leave` given controls, on the
+   * seat's own page.
    */
   const openParty = async () => {
     await renderParty(mintingSession());
@@ -260,60 +259,16 @@ describe("the seats — the creator's two verbs", () => {
     expect(screen.queryByRole("button", { name: "Edit Brannoc" })).toBeNull();
   });
 
-  it("shares a seat with the table, naming the seat and nothing of the sheet", async () => {
-    server.routes.set(`PATCH ${partyPath}/${seatId}`, {
-      status: 200,
-      body: { seat: { ...characterSeat, visibility: "shared" }, character },
-    });
+  it("leaves the seat's verbs to the seat's page, which the card opens", async () => {
     await openParty();
+    const link = await screen.findByRole("link", { name: "Brannoc" });
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Share Brannoc with the table" }),
-    );
-
-    // The payload is the seat's own column and only that: the shared
-    // character's sheet is its owner's, and the PATCH has no field for it.
-    await waitFor(() =>
-      expect(bodyOf(server, "PATCH", `/party/${seatId}`)).toEqual({ visibility: "shared" }),
-    );
-  });
-
-  it("hides a shared seat again — the same button, reading the current answer", async () => {
-    server.routes.set(`GET ${partyPath}`, {
-      status: 200,
-      body: [{ seat: { ...characterSeat, visibility: "shared" }, character }],
-    });
-    server.routes.set(`PATCH ${partyPath}/${seatId}`, {
-      status: 200,
-      body: { seat: characterSeat, character },
-    });
-    await openParty();
-
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Hide Brannoc from the table" }),
-    );
-
-    await waitFor(() =>
-      expect(bodyOf(server, "PATCH", `/party/${seatId}`)).toEqual({ visibility: "dm" }),
-    );
-  });
-
-  it("retires a seat, which is a DELETE and never touches the character", async () => {
-    server.routes.set(`DELETE ${partyPath}/${seatId}`, { status: 204, body: undefined });
-    await openParty();
-
-    await userEvent.click(await screen.findByRole("button", { name: "Retire Brannoc's seat" }));
-
-    await waitFor(() =>
-      expect(
-        server.calls.some(
-          (call) => call.method === "DELETE" && call.pathname === `${partyPath}/${seatId}`,
-        ),
-      ).toBe(true),
-    );
-    // Retiring is the only removal, and it is the seat's: no request of any
-    // kind names `/me/characters` — the shared row is its owner's to keep.
-    expect(server.calls.some((call) => call.pathname.includes("/me/characters"))).toBe(false);
+    // Sharing, hiding and retiring manage the seat, so they live on its page
+    // (`party/SeatScreen.test.tsx` drives each); the card keeps only − and +.
+    expect(screen.queryByRole("button", { name: /Share .* with the table/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Hide .* from the table/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Retire .*'s seat/ })).toBeNull();
+    expect(link).toHaveAttribute("href", `${partyPath}/${seatId}`);
   });
 });
 

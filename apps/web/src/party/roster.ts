@@ -1,5 +1,4 @@
-import type { CampaignInvite, CampaignMember, Character, PartySeat } from "@taverns/api";
-import type { IconName } from "@taverns/ui";
+import type { CampaignInvite, CampaignMember, PartySeat } from "@taverns/api";
 import { DateTime } from "effect";
 import { dayOf } from "../chronicle/format";
 
@@ -86,20 +85,6 @@ export const nameOf = (row: RosterRow): string =>
     : row.member.name;
 
 /**
- * Two letters for the avatar, or one, or a dash.
- *
- * `PlayerParts.jsx`'s `Seat` takes them ready-made from the fixture; nothing on
- * the wire carries initials, so they are cut from the name here. An account
- * provisioned just-in-time is called *"Someone"*, which yields `S` — correct,
- * and the reason `DEFAULT_ACCOUNT_NAME` is not *"DM"*.
- */
-export const initialsOf = (name: string): string => {
-  const words = name.split(/\s+/).filter((word) => word !== "");
-  const letters = words.slice(0, 2).map((word) => word[0] ?? "");
-  return letters.join("").toUpperCase() || "—";
-};
-
-/**
  * The roster: the DM, then the players, then whoever has been invited and has
  * not arrived.
  *
@@ -138,49 +123,27 @@ export const rosterOf = (
 };
 
 /**
- * The subtitle, which is what is true rather than *"4 of 6 seats"*.
+ * *Not playing yet*: the people at the table, or invited to it, who have no
+ * character in the party — each with the one sentence worth saying about them.
  *
- * The drawn subtitle counts a denominator that does not exist. This counts the
- * two things that do — people at the table, and invitations still outstanding —
- * and says nothing at all when there is neither, because the empty state under
- * it is already saying it.
- */
-export const summaryOf = (rows: ReadonlyArray<RosterRow>): string | undefined => {
-  const players = rows.filter(
-    (row) => row.kind === "playing" || row.kind === "no-character",
-  ).length;
-  const invited = rows.filter((row) => row.kind === "invited").length;
-  if (players === 0 && invited === 0) return undefined;
-
-  const parts = [
-    players === 0
-      ? "Nobody has joined yet"
-      : `${String(players)} player${players === 1 ? "" : "s"}`,
-    ...(invited === 0
-      ? []
-      : [`${String(invited)} invitation${invited === 1 ? "" : "s"} outstanding`]),
-  ];
-  return parts.join(", ");
-};
-
-/**
- * *Needs you* — the aside, and the best thing on the drawn screen.
+ * It is *Needs you* folded into the list it was always about. A member who has
+ * joined with no character is the nudge itself; an invitation says when it runs
+ * out, and once it has sat for a few days, how long it has been waiting. The
+ * third kind of line *Needs you* drew — a character the party has out-levelled —
+ * is about somebody who is playing, and every card already says its level.
  *
- * Three lines, each derived from rows that already exist and none of them a new
- * source. The drawing's fourth kind of urgency is a date (*"session 13 is in
- * four days"*) and there is no column anywhere that holds when a night will be
- * played, so it is absent rather than invented.
+ * Empty for a table where everyone has a character and nothing is outstanding,
+ * which is when the screen draws no list at all.
  */
-export interface Nudge {
+export interface NotPlaying {
   readonly key: string;
-  readonly icon: IconName;
-  /** A theme colour name, never a value — `styles.css` §2 owns what these are. */
-  readonly tone: "text-danger-ink" | "text-accent-ink" | "text-faint";
-  readonly text: string;
+  readonly kind: "no-character" | "invited";
+  readonly name: string;
+  readonly detail: string;
 }
 
 /**
- * How long an invitation may sit before it is worth a line.
+ * How long an invitation may sit before its line says how long it has waited.
  *
  * Not *"hasn't opened it"* — the drawing says that and nothing records whether a
  * link was followed; what is recorded is that it is still live, which after a
@@ -190,74 +153,35 @@ const STALE_INVITE_DAYS = 3;
 
 const DAY_MS = 86_400_000;
 
-/**
- * The middle level of the party, taking the lower of the two when there is an
- * even number.
- *
- * The lower median rather than their mean, so the sentence names a level
- * somebody is actually at: *"the party is mostly level 4.5"* is not a thing a DM
- * can act on.
- */
-const medianLevel = (levels: ReadonlyArray<number>): number | undefined => {
-  if (levels.length < 2) return undefined;
-  const sorted = [...levels].sort((a, b) => a - b);
-  return sorted[Math.floor((sorted.length - 1) / 2)];
-};
-
-export const needsOf = (
+export const notPlayingYet = (
   rows: ReadonlyArray<RosterRow>,
-  party: ReadonlyArray<PartySeat>,
   now: DateTime.Utc,
-): ReadonlyArray<Nudge> => {
-  const nudges: Array<Nudge> = [];
-
-  for (const row of rows) {
+): ReadonlyArray<NotPlaying> =>
+  rows.flatMap((row): ReadonlyArray<NotPlaying> => {
     if (row.kind === "no-character") {
-      nudges.push({
-        key: `no-character:${row.member.accountId}`,
-        icon: "user-round-x",
-        tone: "text-danger-ink",
-        text: `${row.member.name} has joined the table and has no character yet.`,
-      });
+      return [
+        {
+          key: keyOf(row),
+          kind: row.kind,
+          name: nameOf(row),
+          detail: "Joined the table, and has no character yet.",
+        },
+      ];
     }
-  }
-
-  for (const row of rows) {
-    if (row.kind !== "invited") continue;
+    if (row.kind !== "invited") return [];
     const waiting = Math.floor(
       (DateTime.toEpochMillis(now) - DateTime.toEpochMillis(row.invite.createdAt)) / DAY_MS,
     );
-    if (waiting < STALE_INVITE_DAYS) continue;
-    nudges.push({
-      key: `stale-invite:${row.invite.id}`,
-      icon: "mail",
-      tone: "text-faint",
-      text: `${nameOf(row)} has been waiting ${String(waiting)} days and runs out on ${dayOf(
-        row.invite.expiresAt,
-      )}.`,
-    });
-  }
-
-  // Levelling is measured over every seated character — the shared row's
-  // level, which is the same number every other table seating them reads.
-  const levelled = party
-    .map((row) => row.character)
-    .filter(
-      (character): character is Character & { readonly level: number } =>
-        character !== null && character.level !== null,
-    );
-  const median = medianLevel(levelled.map((character) => character.level));
-  if (median !== undefined) {
-    for (const character of levelled) {
-      if (character.level >= median) continue;
-      nudges.push({
-        key: `behind:${character.id}`,
-        icon: "arrow-big-up-dash",
-        tone: "text-accent-ink",
-        text: `${character.name} is level ${String(character.level)} and the party is mostly level ${String(median)}.`,
-      });
-    }
-  }
-
-  return nudges;
-};
+    const runsOut = dayOf(row.invite.expiresAt);
+    return [
+      {
+        key: keyOf(row),
+        kind: row.kind,
+        name: nameOf(row),
+        detail:
+          waiting >= STALE_INVITE_DAYS
+            ? `Invited ${String(waiting)} days ago, and it runs out on ${runsOut}.`
+            : `Invited, and it runs out on ${runsOut}.`,
+      },
+    ];
+  });

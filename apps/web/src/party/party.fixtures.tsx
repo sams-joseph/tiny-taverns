@@ -7,6 +7,7 @@ import {
   characterSeat,
   dmAccountId,
   dmMember,
+  drawnPortrait,
   fullCampaign,
   worldId,
   ilseAccountId,
@@ -106,13 +107,7 @@ export const sorrelSeat = {
   character: sorrelCharacter,
 };
 
-/**
- * A third seated character, so the party has a middle level at all.
- *
- * Two characters have no median worth naming — see `needsOf` — so a fixture with
- * only Brannoc and Sorrel could never draw the levelling line, and the screen's
- * *Needs you* would be pinned one nudge short of what it renders.
- */
+/** A third seated character, at Brannoc's level, over Sorrel's: a party with a span. */
 export const pellCharacter = {
   ...sorrelCharacter,
   id: "2b1f2a1e-0000-4000-8000-000000000903",
@@ -145,6 +140,83 @@ export const brannocSheetSeat = {
   character: { ...brannocSeat.character, tempHp: 3, conditions: ["Poisoned"], sheet: fullSheet },
 };
 
+/**
+ * Sorrel with a ranger's sheet: a speed, a passive from a written Perception
+ * bonus, and all six saves — no spellcasting, so no Spell DC tile — and one
+ * condition.
+ */
+export const sorrelSheetSeat = {
+  ...sorrelSeat,
+  character: {
+    ...sorrelSeat.character,
+    conditions: ["Concentrating"],
+    sheet: {
+      notes: "",
+      abilities: [
+        { label: "STR", score: "12", modifier: "+1", save: "+3", proficient: true },
+        { label: "DEX", score: "16", modifier: "+3", save: "+5", proficient: true },
+        { label: "CON", score: "13", modifier: "+1", save: "+1" },
+        { label: "INT", score: "10", modifier: "+0", save: "+0" },
+        { label: "WIS", score: "14", modifier: "+2", save: "+2" },
+        { label: "CHA", score: "8", modifier: "-1", save: "-1" },
+      ],
+      traits: [],
+      identity: { speed: "35 ft.", proficiency: "+2" },
+      skills: [{ name: "Perception", ability: "WIS", bonus: "+4", proficient: true }],
+    },
+  },
+};
+
+/**
+ * Pell, shared with the table and badly hurt — 9 of 52, the bar's *low* band —
+ * with Hob's portrait, a cleric's Spell DC, two conditions and no saves written.
+ */
+export const pellSheetSeat = {
+  seat: { ...pellSeat.seat, visibility: "shared" },
+  character: {
+    ...pellSeat.character,
+    hpCurrent: 9,
+    ac: 16,
+    conditions: ["Poisoned", "Frightened"],
+    portrait: drawnPortrait,
+    sheet: {
+      notes: "",
+      abilities: [
+        { label: "INT", score: "11", modifier: "+0" },
+        { label: "WIS", score: "16", modifier: "+3" },
+      ],
+      traits: [],
+      identity: { speed: "25 ft.", proficiency: "+2" },
+      skills: [{ name: "Insight", ability: "WIS", proficient: true }],
+      spellcasting: { ability: "WIS", save: "13", attack: "+5" },
+    },
+  },
+};
+
+/**
+ * The DM's own seat whose character they deleted — a seat, not a player, so
+ * it moves no one in the roster: Kofi stays the member with no character.
+ */
+export const goneSeatId = "2b1f2a1e-0000-4000-8000-000000000955";
+
+export const goneSeat = {
+  seat: {
+    ...characterSeat,
+    id: goneSeatId,
+    characterId: null,
+    accountId: dmAccountId,
+    displayName: "Odo",
+  },
+  character: null,
+};
+
+/**
+ * The full table the Party tab is drawn over: four seats, three characters with
+ * sheets and one deleted; one shared, the rest hidden; a lineage long enough to
+ * wrap on a card; a portrait; conditions and temporary hit points.
+ */
+export const fullPartySeats = [brannocSheetSeat, sorrelSheetSeat, pellSheetSeat, goneSeat];
+
 /** A seat whose character its owner deleted: the snapshot stands, with no sheet. */
 export const deletedSeatId = "2b1f2a1e-0000-4000-8000-000000000954";
 
@@ -161,8 +233,8 @@ export const deletedSeat = {
 };
 
 /**
- * A live invitation, minted long enough ago to be one of *Needs you*'s lines
- * whatever day the suite runs. The freshly-minted case is unit-tested in
+ * A live invitation, minted long enough ago that its line says how long it has
+ * waited, whatever day the suite runs. The freshly-minted case is unit-tested in
  * `roster.test.ts`, where the clock is an argument.
  */
 export const liveInvite = {
@@ -189,7 +261,8 @@ export const takenInvite = {
 };
 
 /**
- * A table with a DM, two players and somebody invited.
+ * A table with a DM, two players (one with no character) and somebody invited,
+ * over `fullPartySeats`.
  *
  * **Built on `fullCampaign()` rather than beside it**, because the party is one
  * of the campaign's destinations and wears `CampaignChrome` — so the screen
@@ -202,19 +275,14 @@ export const fullParty = (): Map<string, Answer> => {
   const routes = fullCampaign();
   routes.set(`GET ${base}/members`, { status: 200, body: [dmMember, ilse, kofi] });
   routes.set(`GET ${base}/invites`, { status: 200, body: [liveInvite, takenInvite] });
-  routes.set(`GET ${base}/party`, {
-    status: 200,
-    body: [brannocSeat, sorrelSeat, pellSeat],
-  });
-  // The creator's two seat verbs, on Brannoc's seat: sharing it with the
-  // table, and retiring it. Both answers are what the server would say; what a
-  // test asserts is the request each button makes and the re-read that follows.
+  routes.set(`GET ${base}/party`, { status: 200, body: fullPartySeats });
+  // Brannoc's writes: the seat PATCH, the hit-point delta (the card's − and +
+  // and the seat page's), and retiring him. Each answer is what the server
+  // would say; what a test asserts is the request and the re-read that follows.
   routes.set(`PATCH ${base}/party/${brannocSeat.seat.id}`, {
     status: 200,
     body: { ...brannocSeat, seat: { ...brannocSeat.seat, visibility: "shared" } },
   });
-  routes.set(`DELETE ${base}/party/${sorrelSeatId}`, { status: 204, body: undefined });
-  // The seat page's writes on Brannoc: the hit-point delta, and retiring him.
   routes.set(`POST ${base}/party/${brannocSeat.seat.id}/damage`, {
     status: 200,
     body: brannocSeat.character,
