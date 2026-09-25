@@ -50,12 +50,12 @@ import type {
  * knowing as the shape of the thing:
  *
  *  - `Encounter.creatureCount` is `sum(encounter_creature.count)` **computed
- *    per read**, so writing a roster line changes a number on the encounter
- *    card without the encounter row ever being sent. Hence
+ *    per read**, so writing a roster line changes a number on the Encounters
+ *    list without the encounter row ever being sent. Hence
  *    `encounterCreatures.*` names `reads.encounters`.
- *  - A note's attachment moves the *note count* on an encounter card, which is
- *    counted in the browser over the notes list. Hence a note write refreshes
- *    the notes, and the encounter screen redraws from them.
+ *  - A note's attachment moves the read-aloud in an encounter's preview, which
+ *    is found in the browser over the notes list. Hence a note write refreshes
+ *    the notes, and the encounter screens redraw from them.
  *
  * Prefer over-naming to under-naming. A key nobody is listening on costs
  * nothing — `withReactivity` only registers an atom that something is actually
@@ -116,9 +116,10 @@ export const reads = {
   /**
    * This campaign's notes.
    *
-   * The encounter cards' *"· 1 note"* is counted in the browser over this list,
-   * so a note that is attached or detached moves a number on a card that is not
-   * a note — refreshing the notes is what redraws it.
+   * An encounter's attached notes — its preview's read-aloud, its page's notes
+   * — are found in the browser over this list, so a note that is attached or
+   * detached changes what an encounter shows — refreshing the notes is what
+   * redraws it.
    */
   notes: (campaignId: CampaignId): ReadKey => key`notes:${campaignId}`,
 

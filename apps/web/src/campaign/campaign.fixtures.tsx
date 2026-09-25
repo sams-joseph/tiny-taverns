@@ -1351,6 +1351,223 @@ export const combatRuleDetail = {
   ],
 };
 
+/**
+ * A shelf of encounters of every kind, one of them played — the Encounters
+ * page's groups, pills and preview sections, read over one wire by the
+ * Playwright layout suite and `encountersPage.test.tsx`. Apart from
+ * `fullCampaign` so the screens that count or list the campaign's two
+ * encounters keep counting two.
+ */
+export const wellId = "2b1f2a1e-0000-4000-8000-000000000603";
+export const bargainId = "2b1f2a1e-0000-4000-8000-000000000604";
+export const stormId = "2b1f2a1e-0000-4000-8000-000000000605";
+export const bridgeId = "2b1f2a1e-0000-4000-8000-000000000606";
+export const wolvesId = "2b1f2a1e-0000-4000-8000-000000000607";
+export const playedSessionId = "2b1f2a1e-0000-4000-8000-000000000502";
+export const playedRunId = "2b1f2a1e-0000-4000-8000-000000000c02";
+
+const unrated = (reason: "no-creatures" | "missing-xp" | "no-party") => ({
+  _tag: "unrated",
+  reason,
+});
+
+const partyOfFour = { size: 4, minLevel: 5, maxLevel: 5, unlevelled: 0 };
+const fifthLevel = { easy: 1000, medium: 2000, hard: 3000, deadly: 4400 };
+
+export const dryWell = {
+  ...encounter,
+  id: wellId,
+  name: "The dry well",
+  kind: "challenge",
+  difficulty: unrated("no-creatures"),
+  tags: [],
+  creatureCount: 0,
+};
+
+export const hagsBargain = {
+  ...encounter,
+  id: bargainId,
+  name: "The hag's bargain",
+  kind: "social",
+  difficulty: {
+    _tag: "rated",
+    band: "Hard",
+    xp: 1600,
+    adjustedXp: 3200,
+    multiplier: 2,
+    party: partyOfFour,
+    thresholds: fifthLevel,
+  },
+  tags: ["Marsh"],
+  creatureCount: 3,
+  visibility: "shared",
+};
+
+export const sandstorm = {
+  ...encounter,
+  id: stormId,
+  name: "Salt-flat sandstorm",
+  kind: "hazard",
+  difficulty: unrated("no-creatures"),
+  tags: [],
+  creatureCount: 0,
+};
+
+export const tollBridge = {
+  ...encounter,
+  id: bridgeId,
+  name: "Toll bridge standoff",
+  kind: "social",
+  difficulty: unrated("no-creatures"),
+  tags: [],
+  creatureCount: 0,
+  lastPlayed: {
+    runId: playedRunId,
+    sessionId: playedSessionId,
+    sessionNumber: 11,
+    endedAt: "2026-08-01T21:40:00.000Z",
+    endedReason: "resolved",
+  },
+};
+
+export const wolves = {
+  ...encounter,
+  id: wolvesId,
+  name: "Wolves at the caravan",
+  difficulty: {
+    _tag: "rated",
+    band: "Trivial",
+    xp: 300,
+    adjustedXp: 600,
+    multiplier: 2,
+    party: partyOfFour,
+    thresholds: fifthLevel,
+  },
+  tags: [],
+  creatureCount: 6,
+  lastPlayed: {
+    runId: playedRunId,
+    sessionId: playedSessionId,
+    sessionNumber: 10,
+    endedAt: "2026-07-18T21:40:00.000Z",
+    endedReason: "resolved",
+  },
+};
+
+const prepFor = (encounterId: string, over: object = {}) => ({
+  encounterId,
+  tactics: [],
+  treasure: null,
+  challenge: null,
+  ...over,
+});
+
+export const shelfPrep = [
+  encounterPrep,
+  prepFor(sketchId),
+  prepFor(wellId, {
+    tactics: [
+      "Success: they find the buried cache and a safe route across the flats.",
+      "Each failure costs one day's water for the caravan.",
+    ],
+    challenge: {
+      kind: "challenge",
+      dc: 14,
+      successes: 3,
+      failures: 2,
+      skills: ["Athletics", "Survival", "Investigation", "Nature"],
+    },
+  }),
+  prepFor(bargainId, {
+    tactics: ["She wants the warm crate and offers news of a lost brother in exchange."],
+    treasure: "A jar of marsh-salt that heals 2d4 hit points when eaten",
+  }),
+  prepFor(stormId, {
+    challenge: {
+      kind: "hazard",
+      save: { ability: "CON", dc: 13 },
+      onFail: "1 level of exhaustion",
+      duration: "1d4 hours",
+      skills: ["Survival", "Animal Handling"],
+    },
+  }),
+  prepFor(bridgeId, { tactics: ["Grusk would rather be paid than fight."] }),
+  prepFor(wolvesId),
+];
+
+const line = (id: string, encounterId: string, over: object) => ({
+  ...rosterRow,
+  id,
+  encounterId,
+  ...over,
+});
+
+/** The hag's roster — long names, so the creature table is measured at its hardest. */
+export const bargainRoster = [
+  line("2b1f2a1e-0000-4000-8000-000000000b02", bargainId, {
+    creatureId: hagId,
+    name: "Green Hag",
+    count: 1,
+    cr: "3",
+    ac: 17,
+    hp: 82,
+    xp: 700,
+  }),
+  line("2b1f2a1e-0000-4000-8000-000000000b03", bargainId, {
+    name: "Swarm of Poisonous Snakes",
+    count: 2,
+    cr: "2",
+    ac: 14,
+    hp: 36,
+    xp: 450,
+  }),
+];
+
+/** The crate's one line: a homebrew rating the XP table does not know, so no XP. */
+export const sketchRoster = [
+  line("2b1f2a1e-0000-4000-8000-000000000b04", sketchId, {
+    name: "Thing in the Crate",
+    count: 1,
+    cr: "1/3",
+    ac: 12,
+    hp: 19,
+    xp: null,
+  }),
+];
+
+/**
+ * Every route the shelf reads: the list, the prep, and each encounter's map,
+ * roster and own prep.
+ */
+export const encounterShelf = (): Map<string, Answer> => {
+  const c = `/campaigns/${campaignId}`;
+  const shelf = [encounter, sketch, dryWell, hagsBargain, sandstorm, tollBridge, wolves];
+  const routes = new Map<string, Answer>([
+    [`GET ${c}/encounters`, { status: 200, body: page(shelf) }],
+    [`GET ${c}/encounter-prep`, { status: 200, body: shelfPrep }],
+  ]);
+  for (const row of shelf) {
+    routes.set(`GET ${c}/encounters/${row.id}/map`, {
+      status: 200,
+      body: { ...battleMap, id: row.id, encounterId: row.id, setting: null },
+    });
+    routes.set(`GET ${c}/encounters/${row.id}/creatures`, { status: 200, body: [] });
+  }
+  // What the edit form opens on: each encounter's own prep.
+  for (const prep of shelfPrep) {
+    routes.set(`GET ${c}/encounters/${prep.encounterId}/prep`, { status: 200, body: prep });
+  }
+  routes.set(`GET ${c}/encounters/${encounterId}/map`, { status: 200, body: battleMap });
+  routes.set(`GET ${c}/encounters/${encounterId}/creatures`, { status: 200, body: [rosterRow] });
+  routes.set(`GET ${c}/encounters/${bargainId}/map`, {
+    status: 200,
+    body: { ...battleMap, encounterId: bargainId, setting: "Hag's stilt-hut, deep in the marsh" },
+  });
+  routes.set(`GET ${c}/encounters/${bargainId}/creatures`, { status: 200, body: bargainRoster });
+  routes.set(`GET ${c}/encounters/${sketchId}/creatures`, { status: 200, body: sketchRoster });
+  return routes;
+};
+
 /** Everything a fully populated campaign answers, before a test re-aims it. */
 export const fullCampaign = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -1483,6 +1700,19 @@ export const fullCampaign = (): Map<string, Answer> =>
       `GET /campaigns/${campaignId}/encounters/${encounterId}/prep`,
       { status: 200, body: encounterPrep },
     ],
+    // The Encounters page's own read: every encounter's prep, in one list.
+    [
+      `GET /campaigns/${campaignId}/encounter-prep`,
+      { status: 200, body: [encounterPrep, prepFor(sketchId)] },
+    ],
+    [
+      `GET /campaigns/${campaignId}/encounters/${sketchId}/creatures`,
+      { status: 200, body: sketchRoster },
+    ],
+    [
+      `GET /campaigns/${campaignId}/encounters/${sketchId}/map`,
+      { status: 200, body: { ...battleMap, encounterId: sketchId, setting: null } },
+    ],
     // The nights this table has had — read by both doors into a session, and
     // only ever to work out the next number. Session 12 is the highest, so the
     // next one is 13 wherever it is opened from.
@@ -1495,7 +1725,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`GET /campaigns/${campaignId}/sessions/${sessionId}/prep`, { status: 200, body: [prepItem] }],
     // No fight on the table. A test that wants one re-aims this at `[liveRun]`,
     // which is what turns the top bar's "Start session" into "Back to the
-    // fight" and lights the encounter card.
+    // fight" and puts the encounter under "On the table now".
     [`GET /campaigns/${campaignId}/sessions/${sessionId}/runs`, { status: 200, body: [] }],
     [
       `PATCH /campaigns/${campaignId}/sessions/${sessionId}/prep/${prepItemId}`,

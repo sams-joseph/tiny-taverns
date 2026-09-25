@@ -59,7 +59,7 @@ export interface CampaignActs {
    *
    * One function for both because it is one press to a DM, and which of the two
    * it is depends on the live run. **It opens a night if there is not one** —
-   * `StartRunDialog`'s cold branch — so an encounter card's *Run* still works in
+   * `StartRunDialog`'s cold branch — so an encounter's *Run* still works in
    * one step on a campaign that has never played.
    */
   readonly run: (encounterId?: EncounterId) => void;
@@ -90,7 +90,7 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
    * Where the runner is, when there is a fight to go back to.
    *
    * Memoised because it is an object: a fresh literal every render would give
-   * `run` a fresh identity every render, and `run` reaches an encounter grid.
+   * `run` a fresh identity every render, and `run` reaches every encounter row.
    */
   const live: LinkProps | undefined = useMemo(
     () =>

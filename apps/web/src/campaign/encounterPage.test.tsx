@@ -48,10 +48,10 @@ const lines = (kind: "column" | "row") =>
   document.querySelectorAll(`[data-slot=battle-map-grid] [data-line=${kind}]`);
 
 describe("an encounter's page", () => {
-  it("opens from anywhere on the encounter's card", async () => {
+  it("opens from the heading of the Encounters page's preview", async () => {
     await renderEncounters();
-    const link = await screen.findByRole("link", { name: "Ambush in the reeds" });
-    expect(link).toHaveAttribute("data-card-link");
+    const preview = await screen.findByRole("article", { name: "Ambush in the reeds" });
+    const link = within(preview).getByRole("link", { name: "Ambush in the reeds" });
 
     await userEvent.click(link);
 
@@ -61,9 +61,9 @@ describe("an encounter's page", () => {
     expect(screen.getByRole("link", { name: "All encounters" })).toBeInTheDocument();
   });
 
-  it("keeps the card's pencil a button that does not navigate", async () => {
+  it("keeps the preview's Edit a button that does not navigate", async () => {
     await renderEncounters();
-    await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("dialog");
     expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/encounters`);
   });

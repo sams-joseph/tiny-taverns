@@ -60,4 +60,13 @@
   --overview-cover-h: clamp(180px, 24vw, 280px);
   --overview-cover-overlap: 48px;
   --overview-pitch-w: 62ch;
+
+  /* The same drawing's Encounters tab: a list beside a preview of the selected
+     encounter, as two wrapping columns — the list `flex: 1 1 260px` capped at
+     `max-width: 360px`, the preview `flex: 2 1 420px` — so the two stand side
+     by side down to 704px of content and the preview drops under the list
+     below it. The page is centred at `--overview-w`, the Overview's own. */
+  --encounters-list-min: 260px;
+  --encounters-list-w: 360px;
+  --encounters-pane-min: 420px;
 }

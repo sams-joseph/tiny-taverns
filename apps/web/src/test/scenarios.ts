@@ -1,4 +1,10 @@
-import { campaign, campaignId, fullCampaign, type Answer } from "../campaign/campaign.fixtures";
+import {
+  campaign,
+  campaignId,
+  encounterShelf,
+  fullCampaign,
+  type Answer,
+} from "../campaign/campaign.fixtures";
 import { twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
 import { fullParty } from "../party/party.fixtures";
@@ -25,14 +31,18 @@ export const scenarios = {
   // Chronicle's sessions go after them or the campaign's own list wins back.
   // The membership is the campaign's, not the Chronicle's world-less one, so
   // the campaign row carries its Shared World chip; the encounters are the
-  // campaign's too, so the Encounters list and one encounter's page have one.
+  // shelf of every kind, one of them played, so the Encounters page draws each
+  // group, pill and preview section, and one encounter's page has its own.
   creator: () => {
-    const routes = new Map([...fullParty(), ...fullRules(), ...fullChronicle(), ...liveFight()]);
-    const campaignOwn = fullCampaign();
-    for (const route of ["GET /me/campaigns", `GET /campaigns/${campaignId}/encounters`]) {
-      const answer = campaignOwn.get(route);
-      if (answer !== undefined) routes.set(route, answer);
-    }
+    const routes = new Map([
+      ...fullParty(),
+      ...fullRules(),
+      ...fullChronicle(),
+      ...liveFight(),
+      ...encounterShelf(),
+    ]);
+    const answer = fullCampaign().get("GET /me/campaigns");
+    if (answer !== undefined) routes.set("GET /me/campaigns", answer);
     return routes;
   },
   // The campaign's reads, with `twoTables`' memberships seating this account

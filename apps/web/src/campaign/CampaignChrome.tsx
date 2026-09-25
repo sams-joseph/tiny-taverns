@@ -3,7 +3,7 @@ import { Button, Icon, Loading } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { ActionsMenu } from "../ui/ActionsMenu";
@@ -66,9 +66,8 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * bounds the risk this swapped in. The two failures the old argument named are
  * both still real and both answered by naming the resource rather than the
  * screen: `Encounter.creatureCount` is computed per read, so a roster write
- * refreshes `reads.encounters`; a note's attachment moves a count on an
- * encounter card, which is counted over the notes and so redraws when the notes
- * do.
+ * refreshes `reads.encounters`; a note's attachment moves an encounter's
+ * read-aloud, which is found over the notes and so redraws when the notes do.
  *
  * **`slots` therefore has no `reload`, and that is the point of the change
  * rather than an omission.** There is no way for a screen to say "something
@@ -167,6 +166,7 @@ export function CampaignChrome<Extra = undefined>({
   actions,
   tabs,
   extra: extraFrom,
+  centred = false,
   children,
 }: {
   readonly campaignId: CampaignId;
@@ -190,6 +190,12 @@ export function CampaignChrome<Extra = undefined>({
    * its own identity, so there is nothing left for a caller to forget.
    */
   readonly extra?: CampaignExtraAtom<Extra>;
+  /**
+   * Centre the header and the body at the Overview's width (`max-w-overview`)
+   * rather than the window's — the redesign's frame, which the Encounters tab
+   * is drawn in. One box around both, so the header's left edge is the body's.
+   */
+  readonly centred?: boolean;
   readonly children: (slots: CampaignChromeSlots<Extra>) => ReactNode;
 }) {
   /**
@@ -276,8 +282,10 @@ export function CampaignChrome<Extra = undefined>({
           openSettings,
         };
 
+  const Frame = centred ? CentredFrame : Fragment;
+
   return (
-    <>
+    <Frame>
       {title !== undefined && (
         <TopBar
           title={title}
@@ -344,10 +352,14 @@ export function CampaignChrome<Extra = undefined>({
           onFinished={() => setFinishing(false)}
         />
       )}
-      {/* An encounter card's *Run*, and its cold branch that opens a night. */}
+      {/* An encounter's *Run*, and its cold branch that opens a night. */}
       {dialogs}
-    </>
+    </Frame>
   );
+}
+
+function CentredFrame({ children }: { readonly children: ReactNode }) {
+  return <div className="mx-auto w-full max-w-overview">{children}</div>;
 }
 
 /**

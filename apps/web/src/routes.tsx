@@ -259,13 +259,24 @@ const campaignIndexRoute = createRoute({
 const encountersRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "encounters",
+  /**
+   * Which encounter the preview shows, so a reload, a shared link and the
+   * Overview's rows land on it. A bad or missing id is no choice, and the
+   * screen shows the first encounter it lists — see `EncountersScreen`.
+   */
+  validateSearch: (search: Record<string, unknown>): { encounter?: EncounterId } => {
+    const encounter = asEncounterId(
+      typeof search["encounter"] === "string" ? search["encounter"] : undefined,
+    );
+    return encounter === undefined ? {} : { encounter };
+  },
   component: EncountersScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
 /**
- * One encounter: its details and its battle map, the object an encounter card
- * opens. The creator's alone, like the list — a player's reads of this URL are
+ * One encounter: its details and its battle map, which the Encounters
+ * preview's heading opens. The creator's alone, like the list — a player's reads of this URL are
  * refused by the server, which is the gate (`BattleMapsGroup`). A different
  * encounter is a different board, so the leaf remounts on the id; a bad id
  * falls back to the list rather than to the campaign.

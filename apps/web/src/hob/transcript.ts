@@ -188,7 +188,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         id: turnId,
         kind: "encounter",
         title: proposal.name,
-        // A fight is what an encounter card always said; any other kind says so.
+        // A fight goes without saying; any other kind says so.
         meta:
           kind === "combat"
             ? (count ?? "No creatures")

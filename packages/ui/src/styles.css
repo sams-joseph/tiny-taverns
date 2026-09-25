@@ -292,9 +292,12 @@
   --spacing-overview-aside: var(--overview-aside-w);
   --spacing-overview-cover: var(--overview-cover-h);
   --spacing-overview-overlap: var(--overview-cover-overlap);
+  --spacing-encounters-list-min: var(--encounters-list-min);
+  --spacing-encounters-pane: var(--encounters-pane-min);
   --container-measure: var(--measure);
   --container-overview: var(--overview-w);
   --container-overview-pitch: var(--overview-pitch-w);
+  --container-encounters-list: var(--encounters-list-w);
 }
 
 /* --------------------------------------------------------------------------

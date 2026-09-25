@@ -229,8 +229,11 @@ describe("the next session card", () => {
     expect(rows[0]).toHaveTextContent("Ambush in the reeds");
     expect(rows[0]).toHaveTextContent("Medium · 6 creatures · Marsh, Night");
     expect(rows[1]).toHaveTextContent("Unrated · 1 creature · Boss");
-    // The row is not a link; its own verbs are its buttons.
-    expect(within(rows[0]!).queryByRole("link")).toBeNull();
+    // The row opens its encounter selected on the Encounters tab, from its
+    // name's link, which covers the row; its own verbs are buttons above it.
+    const open = within(rows[0]!).getByRole("link", { name: "Ambush in the reeds" });
+    expect(open).toHaveAttribute("href", `${base}/encounters?encounter=${encounter.id}`);
+    expect(open).toHaveAttribute("data-card-link");
     expect(
       within(rows[0]!).getByRole("button", { name: "Run Ambush in the reeds" }),
     ).toBeInTheDocument();

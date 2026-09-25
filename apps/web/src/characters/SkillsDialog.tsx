@@ -42,8 +42,7 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  *
  * Saving writes only the rows that are proficient or carry a bonus. Eighteen
  * rows of nothing would fill the panel with a list of what this character is
- * *not* good at, which is the same call the coin piles and the encounter card's
- * absent count already make.
+ * *not* good at, which is the same call the coin piles already make.
  */
 export function SkillsDialog({
   owned,

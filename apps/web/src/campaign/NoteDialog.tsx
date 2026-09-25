@@ -103,9 +103,9 @@ export function NoteDialog({
               payload: { ...payload, attachedTo },
             }),
       // The notes, and nothing else — **including when the attachment moves.**
-      // An encounter card's *"· 1 note"* is counted in the browser over this
-      // list, so the card redraws because the notes did; the encounter row
-      // itself never carried the number and does not have to be re-read.
+      // An encounter's read-aloud and attached notes are found in the browser
+      // over this list, so its preview and page redraw because the notes did;
+      // the encounter row itself never carried them and is not re-read.
       [reads.notes(campaignId)],
     );
 
