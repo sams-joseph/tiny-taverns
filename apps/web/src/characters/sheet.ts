@@ -59,6 +59,19 @@ export const hpFraction = (current: number | null, max: number | null): number |
 };
 
 /**
+ * Which band a hit-point fraction sits in — the one rule the bar's colour and a
+ * header's *"is down"* / *"is low"* words both read, so the two cannot name
+ * different thresholds.
+ *
+ * `down` is exactly zero; `low` is at most a third; `hurt` at most two thirds;
+ * `well` above that.
+ */
+export type HpBand = "down" | "low" | "hurt" | "well";
+
+export const hpBand = (fraction: number): HpBand =>
+  fraction === 0 ? "down" : fraction <= 0.34 ? "low" : fraction <= 0.67 ? "hurt" : "well";
+
+/**
  * `"Half-orc Paladin"` — the descriptor without its level, for a card that
  * draws the level somewhere of its own.
  *
@@ -107,22 +120,53 @@ export const initiativeOf = (sheet: CharacterSheet): string | undefined => {
 };
 
 /**
- * Passive Perception — 10 plus the Perception bonus, the 2014 rule.
+ * A passive score — 10 plus the skill's bonus, the 2014 rule.
  *
- * The bonus is the sheet's `Perception` row when it wrote one. Without a bonus,
- * it is the Wisdom modifier, plus the proficiency bonus when the row says
+ * The bonus is the sheet's row for `skill` when it wrote one. Without a bonus,
+ * it is the `ability` modifier, plus the proficiency bonus when the row says
  * proficient — and when that proficiency bonus is not written either, the sum
  * cannot be made and the answer is absent rather than a guess one short.
+ *
+ * The skill is named rather than keyed because the sheet's rows are open text;
+ * the match is the one the sheet has always made, trimmed and case-blind.
  */
-export const passivePerceptionOf = (sheet: CharacterSheet): number | undefined => {
-  const row = sheet.skills?.find((skill) => skill.name.trim().toLowerCase() === "perception");
+export const passiveOf = (
+  sheet: CharacterSheet,
+  skill: string,
+  ability: string,
+): number | undefined => {
+  const wanted = skill.trim().toLowerCase();
+  const row = sheet.skills?.find((candidate) => candidate.name.trim().toLowerCase() === wanted);
   const written = signedNumber(row?.bonus);
   if (written !== undefined) return 10 + written;
-  const wis = abilityModifier(sheet, "WIS");
-  if (wis === undefined) return undefined;
-  if (row?.proficient !== true) return 10 + wis;
+  const modifier = abilityModifier(sheet, ability);
+  if (modifier === undefined) return undefined;
+  if (row?.proficient !== true) return 10 + modifier;
   const proficiency = signedNumber(sheet.identity?.proficiency);
-  return proficiency === undefined ? undefined : 10 + wis + proficiency;
+  return proficiency === undefined ? undefined : 10 + modifier + proficiency;
+};
+
+/** Passive Perception — the passive the character cards draw. */
+export const passivePerceptionOf = (sheet: CharacterSheet): number | undefined =>
+  passiveOf(sheet, "Perception", "WIS");
+
+/**
+ * The six saving throws as the sheet wrote them, by ability label, parsed to a
+ * number so a table can compare them.
+ *
+ * Only a written, signed-integer save is an answer: the modifier is **not** a
+ * save, because a proficient save differs from it and nothing on the sheet says
+ * which ones are proficient unless the save was written. A sheet with no save
+ * written anywhere has no row of saves at all, so the answer is absent rather
+ * than an empty record a table would draw as six blanks.
+ */
+export const savesOf = (sheet: CharacterSheet): Readonly<Record<string, number>> | undefined => {
+  const saves: Record<string, number> = {};
+  for (const ability of sheet.abilities) {
+    const value = signedNumber(ability.save);
+    if (value !== undefined) saves[ability.label.trim().toUpperCase()] = value;
+  }
+  return Object.keys(saves).length === 0 ? undefined : saves;
 };
 
 /** Which coins are actually held. An absent pile is absent, not a zero. */
