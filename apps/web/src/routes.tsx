@@ -1,4 +1,5 @@
 import {
+  CampaignCharacterId,
   CampaignId,
   CharacterId,
   EncounterId,
@@ -40,6 +41,7 @@ import {
 import { SharedWorldsScreen } from "./shared-world/SharedWorldsScreen";
 import { SignedOutGate } from "./marketing/SignedOutGate";
 import { PartyScreen } from "./party/PartyScreen";
+import { SeatScreen } from "./party/SeatScreen";
 import { PlayerTableScreen } from "./play/PlayerTableScreen";
 import { OptionLibraryScreen } from "./rules/OptionLibraryScreen";
 import { RunScreen } from "./run/RunScreen";
@@ -111,6 +113,7 @@ const decoder = <A,>(schema: Schema.Codec<A, string>) => {
 const asCampaignId = decoder(CampaignId);
 const asWorldId = decoder(SharedWorldId);
 const asCharacterId = decoder(CharacterId);
+const asSeatId = decoder(CampaignCharacterId);
 const asEncounterId = decoder(EncounterId);
 const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
@@ -535,6 +538,36 @@ const partyRoute = createRoute({
   remountDeps: ({ params }) => params.campaignId,
 });
 
+/**
+ * One seat, the creator's: the seat's settings and the character's sheet read
+ * through it (`party/SeatScreen.tsx`). Named by the seat rather than the
+ * character, because the seat is what this table owns — a deleted character
+ * leaves a seat standing, and one character seated at two tables is two pages.
+ * Creator-only through its read, like the Party tab it sits under. A different
+ * seat is a different set of drafts, so the leaf remounts on the id; a bad id
+ * falls back to the Party tab.
+ */
+const partySeatRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "party/$seatId",
+  params: {
+    parse: ({ seatId }) => {
+      const decoded = asSeatId(seatId);
+      return decoded === undefined ? false : { seatId: decoded };
+    },
+  },
+  component: SeatScreen,
+  remountDeps: ({ params }) => params.seatId,
+});
+
+/** A half-typed seat link still knows it meant the party. */
+const partySplatRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "party/$",
+  component: PartyScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
 /** The player-safe view of a live table, reached only when this account has a seat. */
 const playerTableRoute = createRoute({
   getParentRoute: () => campaignRoute,
@@ -713,6 +746,8 @@ export const routeTree = rootRoute.addChildren([
       castSplatRoute,
       chronicleRoute,
       partyRoute,
+      partySeatRoute,
+      partySplatRoute,
       playerTableRoute,
       characterCreateRoute,
       runRoute,
@@ -777,6 +812,7 @@ export const routes = {
   npc: npcRoute,
   chronicle: chronicleRoute,
   party: partyRoute,
+  partySeat: partySeatRoute,
   characterCreate: characterCreateRoute,
   run: runRoute,
   characters: charactersRoute,

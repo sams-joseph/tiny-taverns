@@ -1,4 +1,5 @@
 import type { PartySeat } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
 import { Badge, Button, Card, Icon } from "@taverns/ui";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
@@ -167,9 +168,22 @@ export function PartyList({
               size="row"
               fallback={<Icon name="shield" size={15} className="text-faint" />}
             />
-            <span className="text-body-s leading-body text-foreground">
-              {character?.name ?? row.seat.displayName}
-            </span>
+            {canManage ? (
+              // The seat's own page, where its settings and the character's
+              // sheet are (`party/SeatScreen.tsx`) — the creator's way into a
+              // character they do not own.
+              <Link
+                to="/campaigns/$campaignId/party/$seatId"
+                params={{ campaignId: row.seat.campaignId, seatId: row.seat.id }}
+                className="text-body-s leading-body text-foreground underline decoration-hairline underline-offset-2 hover:text-link-hover"
+              >
+                {character?.name ?? row.seat.displayName}
+              </Link>
+            ) : (
+              <span className="text-body-s leading-body text-foreground">
+                {character?.name ?? row.seat.displayName}
+              </span>
+            )}
             {detail.length > 0 && (
               <span className="text-body-s leading-body text-muted-foreground">
                 {detail.join(" · ")}

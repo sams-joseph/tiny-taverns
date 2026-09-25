@@ -21,7 +21,7 @@ const displayFaceElsewhere: Readonly<Record<string, number>> = {
   // Figures: a roll total, a level, a modifier, a score. The delivery draws
   // numbers in the display face at `leading-none`, which no heading is.
   "characters/AbilityFields.tsx": 1,
-  "characters/CharacterSheetScreen.tsx": 2,
+  "characters/SheetDocument.tsx": 2,
   "characters/SheetParts.tsx": 3,
   "run/RunScreen.tsx": 1,
   // A verdict: the encounter builder's difficulty band, the drawing's big word

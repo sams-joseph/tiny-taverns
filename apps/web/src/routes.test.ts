@@ -1,4 +1,5 @@
 import {
+  CampaignCharacterId,
   CampaignId,
   CharacterId,
   EncounterId,
@@ -34,6 +35,7 @@ const SESSION_ID = Schema.decodeSync(SessionId)("2b1f2a1e-0000-4000-8000-0000000
 const RUN_ID = Schema.decodeSync(EncounterRunId)("2b1f2a1e-0000-4000-8000-000000000c01");
 const CHARACTER_ID = Schema.decodeSync(CharacterId)("2b1f2a1e-0000-4000-8000-000000000901");
 const ENCOUNTER_ID = Schema.decodeSync(EncounterId)("2b1f2a1e-0000-4000-8000-000000000601");
+const SEAT_ID = Schema.decodeSync(CampaignCharacterId)("2b1f2a1e-0000-4000-8000-000000000951");
 
 const routerAt = (path: string) =>
   createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
@@ -95,7 +97,14 @@ describe("the route table", () => {
       {
         to: "/campaigns/$campaignId/party",
         params: { campaignId: CAMPAIGN_ID },
-        at: "/campaigns/$campaignId/party",
+        // The party's splat takes an empty rest, so the bare tab resolves on it
+        // — the same screen and remount key, as `encounters/$` and `cast/$`.
+        at: "/campaigns/$campaignId/party/$",
+      },
+      {
+        to: "/campaigns/$campaignId/party/$seatId",
+        params: { campaignId: CAMPAIGN_ID, seatId: SEAT_ID },
+        at: "/campaigns/$campaignId/party/$seatId",
       },
       {
         to: "/campaigns/$campaignId/encounters/$encounterId",
@@ -251,11 +260,21 @@ describe("the route table", () => {
   it("hangs the party off a campaign, because the roster is one table's", () => {
     // `members.list` and `invites.list` are both `/campaigns/:campaignId/…` and
     // both behind the DM gate, which is checked against exactly that path.
+    // The splat is the Party screen too; see the round trip above.
     expect(landsOn(`/campaigns/${CAMPAIGN_ID}/party`)).toEqual({
-      at: "/campaigns/$campaignId/party",
+      at: "/campaigns/$campaignId/party/$",
       params: { campaignId: CAMPAIGN_ID },
     });
     expect(landsOn("/campaigns/not-a-uuid/party").at).toBe("/$");
+    // One seat is named by the seat, which is the campaign's row; a seat id we
+    // never minted still knows it meant the party.
+    expect(landsOn(`/campaigns/${CAMPAIGN_ID}/party/${SEAT_ID}`)).toEqual({
+      at: "/campaigns/$campaignId/party/$seatId",
+      params: { campaignId: CAMPAIGN_ID, seatId: SEAT_ID },
+    });
+    expect(landsOn(`/campaigns/${CAMPAIGN_ID}/party/nope`).at).toBe(
+      "/campaigns/$campaignId/party/$",
+    );
   });
 
   it("falls back a level, not all the way, on a half-typed run link", () => {
@@ -333,6 +352,7 @@ describe("the route table", () => {
       { path: "/campaigns/nope", at: "/$" },
       { path: "/campaigns/nope/chronicle", at: "/$" },
       { path: "/campaigns/nope/party", at: "/$" },
+      { path: `/campaigns/${CAMPAIGN_ID}/party/nope`, at: "/campaigns/$campaignId/party/$" },
       {
         path: `/campaigns/${CAMPAIGN_ID}/sessions/nope/runs/${RUN_ID}`,
         at: "/campaigns/$campaignId/$",

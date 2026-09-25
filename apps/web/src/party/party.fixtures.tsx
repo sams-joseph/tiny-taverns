@@ -44,6 +44,7 @@ export {
   seatId,
 } from "../campaign/campaign.fixtures";
 import { TEST_SESSION } from "../test/session";
+import { fullSheet } from "../characters/characters.fixtures";
 
 const base = `/campaigns/${campaignId}`;
 
@@ -136,6 +137,30 @@ export const pellSeat = {
 };
 
 /**
+ * Brannoc with the whole document behind him, a condition and temporary hit
+ * points — what the seat page's vitals and its read-only sheet draw.
+ */
+export const brannocSheetSeat = {
+  ...brannocSeat,
+  character: { ...brannocSeat.character, tempHp: 3, conditions: ["Poisoned"], sheet: fullSheet },
+};
+
+/** A seat whose character its owner deleted: the snapshot stands, with no sheet. */
+export const deletedSeatId = "2b1f2a1e-0000-4000-8000-000000000954";
+
+export const deletedSeat = {
+  seat: {
+    ...characterSeat,
+    id: deletedSeatId,
+    characterId: null,
+    accountId: kofiAccountId,
+    displayName: "Odo",
+    playerDisplayName: "Kofi",
+  },
+  character: null,
+};
+
+/**
  * A live invitation, minted long enough ago to be one of *Needs you*'s lines
  * whatever day the suite runs. The freshly-minted case is unit-tested in
  * `roster.test.ts`, where the clock is an argument.
@@ -189,6 +214,12 @@ export const fullParty = (): Map<string, Answer> => {
     body: { ...brannocSeat, seat: { ...brannocSeat.seat, visibility: "shared" } },
   });
   routes.set(`DELETE ${base}/party/${sorrelSeatId}`, { status: 204, body: undefined });
+  // The seat page's writes on Brannoc: the hit-point delta, and retiring him.
+  routes.set(`POST ${base}/party/${brannocSeat.seat.id}/damage`, {
+    status: 200,
+    body: brannocSeat.character,
+  });
+  routes.set(`DELETE ${base}/party/${brannocSeat.seat.id}`, { status: 204, body: undefined });
   routes.set(`POST ${base}/invites`, {
     status: 200,
     body: { invite: liveInvite, token: "a-token" },
@@ -265,6 +296,13 @@ export const installPartyServer = (): PartyStubServer => {
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 export const renderParty = async (): Promise<void> => {
   await renderAt(`/campaigns/${campaignId}/party`, (screen) => (
+    <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
+  ));
+};
+
+/** The creator's page for one seat — Brannoc's unless another is named. */
+export const renderSeat = async (seat: string = brannocSeat.seat.id): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/party/${seat}`, (screen) => (
     <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

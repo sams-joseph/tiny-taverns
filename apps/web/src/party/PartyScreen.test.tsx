@@ -144,6 +144,15 @@ describe("the creator's seat verbs", () => {
     });
   });
 
+  it("opens a seat's own page from its row, where the seat is managed", async () => {
+    await renderParty();
+    const link = await screen.findByRole("link", { name: "Brannoc" });
+    expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/party/${brannocSeat.seat.id}`);
+
+    await userEvent.click(link);
+    expect(await screen.findByRole("region", { name: "Hit points" })).toBeVisible();
+  });
+
   it("offers no way to assign, because assignment is not a thing", async () => {
     await renderParty();
     await screen.findByText("Kofi Adeyemi");
