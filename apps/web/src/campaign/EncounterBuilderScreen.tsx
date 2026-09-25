@@ -38,10 +38,12 @@ import {
 import { DateTime, Effect, Result } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { apiAtom } from "../api/atoms";
+import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
+import { HobCover } from "../hob/HobCover";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
@@ -67,7 +69,7 @@ import {
   validate,
 } from "./encounterDraft";
 import { KIND_ICON } from "./encounterList";
-import { encounterPrepListAtom } from "./load";
+import { encounterPageAtom, encounterPrepListAtom } from "./load";
 
 /**
  * Writing an encounter, new or already made: the redesign's encounter builder
@@ -554,26 +556,6 @@ function EncounterBuilder({
             </div>
 
             <Field
-              label="Location"
-              htmlFor="encounter-setting"
-              hint={
-                encounter === undefined
-                  ? "One line on the ground it happens on, with no creatures in it. Hob draws the battle map from it once, as the encounter is made. Only you see the map."
-                  : "The battle map was drawn once, when the encounter was made; changing this does not redraw it. Only you see it."
-              }
-              error={shown("setting")}
-            >
-              <Input
-                id="encounter-setting"
-                maxLength={ENCOUNTER_SETTING_MAX}
-                placeholder="Where it happens"
-                value={draft.setting}
-                aria-invalid={shown("setting") !== undefined}
-                onChange={(event) => patch({ setting: event.target.value })}
-              />
-            </Field>
-
-            <Field
               label="Read aloud"
               htmlFor="encounter-read-aloud"
               hint="What you say to the table when it starts."
@@ -626,6 +608,28 @@ function EncounterBuilder({
           </BuilderCard>
 
           <div className="flex min-w-0 flex-col gap-5 @4xl:col-start-1 @4xl:row-start-2">
+            <BattleMapCard campaignId={campaignId} encounterId={encounter?.id}>
+              <Field
+                label="Location"
+                htmlFor="encounter-setting"
+                hint={
+                  encounter === undefined
+                    ? "One line on the ground it happens on, with no creatures in it. Hob draws the battle map from it once, as the encounter is made. Only you see the map."
+                    : "The battle map was drawn once, when the encounter was made; changing this does not redraw it. Only you see it."
+                }
+                error={shown("setting")}
+              >
+                <Input
+                  id="encounter-setting"
+                  maxLength={ENCOUNTER_SETTING_MAX}
+                  placeholder="Where it happens"
+                  value={draft.setting}
+                  aria-invalid={shown("setting") !== undefined}
+                  onChange={(event) => patch({ setting: event.target.value })}
+                />
+              </Field>
+            </BattleMapCard>
+
             {showCreatures && (
               <Card
                 id="creatures"
@@ -928,6 +932,70 @@ function OtherReadAloud({
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The *Battle map* card: the picture Hob drew of the place, whole, over the
+ * setting line it was drawn from.
+ *
+ * **Hob's picture, never an upload.** The drawing's card is a drop target;
+ * a map is drawn once, from the setting line, as the encounter is made, with no
+ * redraw and no upload, so the card shows what Hob drew. A new encounter has
+ * nothing drawn yet and an old one may have no picture at all (images off,
+ * nothing to draw from, a refused or failed draw); either way the card is the
+ * setting line alone, with no empty slot. While Hob is still drawing it says
+ * so, and re-reads the map until the picture lands.
+ *
+ * The picture is the encounter page's read (`encounterPageAtom`), the one the
+ * preview and the page already hold, so arriving from either costs no request.
+ */
+function BattleMapCard({
+  campaignId,
+  encounterId,
+  children,
+}: {
+  readonly campaignId: CampaignId;
+  readonly encounterId: EncounterId | undefined;
+  /** The setting line's field. */
+  readonly children: ReactNode;
+}) {
+  return (
+    <Card role="region" aria-labelledby="battle-map-heading" className="min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-hairline px-5 py-4">
+        <SectionHeading id="battle-map-heading" size="title">
+          Battle map
+        </SectionHeading>
+        <span className="text-body-s leading-snug text-muted-foreground">
+          A grid goes over it when you run the encounter.
+        </span>
+      </div>
+      {encounterId !== undefined && <DrawnMap campaignId={campaignId} encounterId={encounterId} />}
+      <div className="p-5">{children}</div>
+    </Card>
+  );
+}
+
+/** The picture itself, or Hob drawing it, or nothing. */
+function DrawnMap({
+  campaignId,
+  encounterId,
+}: {
+  readonly campaignId: CampaignId;
+  readonly encounterId: EncounterId;
+}) {
+  const [page] = useApiAtom(encounterPageAtom({ campaignId, encounterId }));
+  const map = page.state === "ready" ? page.value.map : null;
+  const invalidate = useInvalidate();
+  const rereadMap = useCallback(
+    () => invalidate([reads.battleMap(encounterId)]),
+    [invalidate, encounterId],
+  );
+  useHobDrawingPolling(map?.imagePending ?? false, rereadMap);
+  // The builder has already read the map for its setting line, so a failure
+  // here is a second read's; the form still works without the picture.
+  return map === null ? null : (
+    <HobCover image={map.image} pending={map.imagePending} shape="whole" />
   );
 }
 

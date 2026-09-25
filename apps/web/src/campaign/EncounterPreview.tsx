@@ -8,9 +8,12 @@ import {
 } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Badge, Button, Icon, Loading, SectionHeading } from "@taverns/ui";
-import { useEffect, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
-import { useApiAtom } from "../api/atoms";
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
+import { useApiAtom, useInvalidate } from "../api/atoms";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { reads } from "../api/keys";
+import { HobCover } from "../hob/HobCover";
+import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { describeDifficulty } from "./difficulty";
 import { DifficultyMeter } from "./DifficultyMeter";
 import { BAND_TEXT } from "./encounterList";
@@ -24,10 +27,17 @@ import { ReadyBadge } from "./ReadyBadge";
  * **Everything on it is something the wire has.** The head and the difficulty
  * are the `Encounter` row; the read-aloud is the notes attached to it; tactics,
  * treasure and a challenge's numbers are its prep (`encounterPrep.list`, the
- * page's `extra`); the where line and the creature table are the two reads the
- * encounter's own page makes (`encounterPageAtom`), both the creator's alone.
- * A section with nothing to say is not drawn. *Ready* or *Draft* is the prep's
- * too, and a played encounter says when it was played instead.
+ * page's `extra`); the where line, the battle map and the creature table are
+ * the two reads the encounter's own page makes (`encounterPageAtom`), both the
+ * creator's alone. A section with nothing to say is not drawn. *Ready* or
+ * *Draft* is the prep's too, and a played encounter says when it was played
+ * instead.
+ *
+ * **The battle map is a band under the header, for every kind**, the picture
+ * Hob drew cropped to the drawing's 24:9 and opening the encounter's page,
+ * where the board and its grid are. The drawing's empty *Drop a battle map*
+ * slot is not drawn: with no picture there is no band, and while Hob is still
+ * drawing one the band says so and the pane re-reads the map until it lands.
  *
  * **Its tactics are always "Running it".** The drawing retitles them *What
  * happened* once the encounter is played, but they are the DM's plan, written
@@ -79,7 +89,14 @@ export function EncounterPreview({
   useEffect(() => {
     if (settled) onSettledRef.current();
   }, [settled]);
-  const setting = page.state === "ready" ? page.value.map.setting : null;
+  const map = page.state === "ready" ? page.value.map : null;
+  const setting = map?.setting ?? null;
+  const invalidate = useInvalidate();
+  const rereadMap = useCallback(
+    () => invalidate([reads.battleMap(encounter.id)]),
+    [invalidate, encounter.id],
+  );
+  useHobDrawingPolling(map?.imagePending ?? false, rereadMap);
   const played = encounter.lastPlayed;
   const tactics = prep?.tactics ?? [];
   const treasure = prep?.treasure ?? null;
@@ -163,6 +180,18 @@ export function EncounterPreview({
           )}
         </div>
       </header>
+
+      {map !== null && (
+        <HobCover image={map.image} pending={map.imagePending} shape="strip">
+          <Link
+            to="/campaigns/$campaignId/encounters/$encounterId"
+            params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+            aria-label={`Battle map of ${encounter.name}`}
+            // Drawn inside the band, whose frame and the pane both clip.
+            className="absolute inset-0 focus-visible:shadow-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
+          />
+        </HobCover>
+      )}
 
       <div className="flex flex-col gap-6 px-6 py-5">
         <DifficultySection encounter={encounter} />

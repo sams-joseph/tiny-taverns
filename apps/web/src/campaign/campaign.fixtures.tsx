@@ -177,7 +177,7 @@ export const encounter = {
 
 /**
  * The encounter's battle map, as its creator reads it: a blank board with the
- * setting line the edit form opens on. The picture is the next PR's to show.
+ * setting line the edit form opens on.
  */
 export const battleMap = {
   id: "2b1f2a1e-0000-4000-8000-000000000611",
@@ -193,6 +193,17 @@ export const battleMap = {
   imagePending: false,
   ...stamps,
 };
+
+/** A battle map's picture as the server signs it: `BattleMap.image`. */
+export const drawnMapPicture = {
+  cardUrl: "/battle-map-images/2b1f2a1e-0000-4000-8000-00000000c003/card?e=1&s=c",
+  fullUrl: "/battle-map-images/2b1f2a1e-0000-4000-8000-00000000c003/full?e=1&s=f",
+  width: 1536,
+  height: 1024,
+};
+
+/** The same map once Hob has drawn it: the picture under the same board. */
+export const drawnBattleMap = { ...battleMap, image: drawnMapPicture };
 
 /**
  * The encounter's DM prep, as its creator reads it: the tactics and treasure
@@ -1540,7 +1551,7 @@ export const sketchRoster = [
 
 /**
  * Every route the shelf reads: the list, the prep, and each encounter's map,
- * roster and own prep.
+ * roster and own prep. Only the ambush's map has a picture.
  */
 export const encounterShelf = (): Map<string, Answer> => {
   const c = `/campaigns/${campaignId}`;
@@ -1560,7 +1571,9 @@ export const encounterShelf = (): Map<string, Answer> => {
   for (const prep of shelfPrep) {
     routes.set(`GET ${c}/encounters/${prep.encounterId}/prep`, { status: 200, body: prep });
   }
-  routes.set(`GET ${c}/encounters/${encounterId}/map`, { status: 200, body: battleMap });
+  // The shelf's one drawn map: the preview's band, the page's board and the
+  // builder's card each have a picture to draw.
+  routes.set(`GET ${c}/encounters/${encounterId}/map`, { status: 200, body: drawnBattleMap });
   routes.set(`GET ${c}/encounters/${encounterId}/creatures`, { status: 200, body: [rosterRow] });
   routes.set(`GET ${c}/encounters/${bargainId}/map`, {
     status: 200,
