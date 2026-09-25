@@ -28,11 +28,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * than to scroll — and following the cursor here would spend round trips
  * building a list nobody reads to the end. The line under it is what keeps that
  * honest: the alternative is a DM concluding a creature is not in the bestiary
- * because it sorted past the fiftieth.
+ * because it sorted past the twelfth.
+ *
+ * **It is part of the page, not a box that scrolls.** It sits in the encounter
+ * builder's rail, and a page scrolls with the window: a list with a scroller of
+ * its own is where the wheel gets stuck. So it shows few enough rows to read
+ * down in place.
  */
 
 /** As many as are worth looking down before typing another letter. */
-const SHOWN = 25;
+const SHOWN = 12;
 
 /**
  * Long enough that typing a name is one request rather than eight, short enough
@@ -105,7 +110,7 @@ export function CreaturePicker({
             Nothing in the bestiary answers to that. Try a shorter word, or a trait.
           </p>
         ) : (
-          <ul className="flex max-h-56 flex-col overflow-y-auto rounded-md border border-hairline">
+          <ul className="m-0 flex list-none flex-col rounded-md border border-hairline p-0">
             {resource.value.items.map((creature, index) => {
               const already = chosen.has(creature.id);
               return (

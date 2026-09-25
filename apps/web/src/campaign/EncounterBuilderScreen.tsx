@@ -1,0 +1,904 @@
+import {
+  ABILITY_KEYS,
+  type AbilityKey,
+  type CampaignId,
+  type Creature,
+  type CreatureId,
+  type Encounter,
+  type EncounterId,
+  ENCOUNTER_HAZARD_TEXT_MAX,
+  ENCOUNTER_KINDS,
+  ENCOUNTER_SETTING_MAX,
+  ENCOUNTER_TREASURE_MAX,
+} from "@taverns/api";
+import { Link, useBlocker, useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Icon,
+  Input,
+  Label,
+  SectionHeading,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+  Toggle,
+} from "@taverns/ui";
+import { Effect, Result } from "effect";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { apiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
+import { useMutation } from "../api/mutation";
+import { TopBar } from "../shell/TopBar";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
+import { CampaignChrome, type CampaignExtraAtom } from "./CampaignChrome";
+import { CreaturePicker } from "./CreaturePicker";
+import {
+  addCreature,
+  createPayload,
+  draftFrom,
+  type EncounterDraft,
+  lineFor,
+  NEW_ENCOUNTER,
+  removeLine,
+  rosterDiff,
+  type RosterLine,
+  type SavedEncounter,
+  skillChips,
+  stepCount,
+  toggleSkill,
+  updatePayload,
+  validate,
+} from "./encounterDraft";
+import { KIND_ICON } from "./encounterList";
+import { encounterPrepListAtom } from "./load";
+
+/**
+ * Writing an encounter, new or already made: the redesign's encounter builder
+ * (`Campaign Overview.dc.html`), at `/encounters/new` and
+ * `/encounters/<id>/edit`. Every way into writing one — the list's *New
+ * encounter*, the preview's *Edit* and *Add creature*, the Overview's *Add
+ * encounter* and its rows' *Edit*, the encounter page's *Edit* — lands here, so
+ * there is one editor. What the form holds and what a save sends are
+ * `encounterDraft.ts`; this is the view over it.
+ *
+ * ### A page, not a dialog
+ *
+ * It is a two-column form with a rail beside it — the roster on the left, the
+ * bestiary it is added from on the right — which fits neither a modal at 390
+ * nor one at 1440, and a DM building a fight wants the window's whole height
+ * for it. The character create form is the precedent: a flow with its own
+ * peach whose way out is *Cancel*, so the campaign row's press stands down on
+ * both routes (`CampaignRow` in `shell/AppShell.tsx`) and there is no separate
+ * back link.
+ *
+ * ### Two columns, or one in the order a DM works
+ *
+ * The container decides, not the window: from `@4xl` of content (the
+ * drawing's `480px` form, its `24px` gap and a `340px` rail, rounded to the
+ * scale) the rail stands beside the form; below it everything is one column
+ * in the order the DM works down it — details, what is in it, then the rail
+ * that adds to it, then how it is run. The drawing's own wrap put the rail
+ * under the whole form, a screen or more below the roster it changes.
+ *
+ * ### Saving is one call for a new encounter
+ *
+ * The roster goes with the create (`EncounterCreate.creatures`), which the
+ * server makes in one transaction, so a creature it refuses leaves no encounter
+ * behind. An edit is the encounter's update and then the roster's per-line
+ * writes — the lines already have rows — composed into one `Effect` for one
+ * `submit`. Either way it lands on the list with the encounter selected.
+ *
+ * ### A kind switch never deletes a creature
+ *
+ * The creatures card is drawn for a fight and a conversation, and for a skill
+ * challenge or a hazard whenever it has lines: switching a fight to a hazard
+ * keeps the roster in view, where the DM can take it off by hand, rather than
+ * hiding lines the save would still keep.
+ *
+ * ### Leaving asks first
+ *
+ * Unsaved changes are asked about before any navigation — *Cancel*, a tab, the
+ * browser's back — through the router's blocker, and before the tab closes.
+ * Nothing is drafted anywhere else: a draft that is left is gone.
+ *
+ * ### What is deliberately not here yet
+ *
+ * The drawing's live difficulty card and its bestiary with CR pills take the
+ * rail's place in a later change; until then the rail is the shipped creature
+ * picker. The *Read aloud* box and the *When* toggles are not drawn: the first
+ * is a note of its own with its own change coming, the second has nothing on
+ * the wire to store it.
+ *
+ * A roster line carries a `visibility` of its own and this form does not offer
+ * it: the column default is `dm`, so every line starts closed exactly as the
+ * server intends.
+ */
+export function EncounterBuilderScreen() {
+  const params = useParams({ strict: false });
+  const campaignId = params.campaignId as CampaignId;
+  const encounterId = params.encounterId;
+
+  return (
+    <CampaignChrome
+      campaignId={campaignId}
+      centred
+      extra={builderAtom({ campaignId, encounterId })}
+    >
+      {({ view, extra }) => {
+        if (encounterId === undefined) {
+          return (
+            <EncounterBuilder
+              campaignId={campaignId}
+              encounter={undefined}
+              saved={{ ...extra, encounter: undefined }}
+            />
+          );
+        }
+        const encounter = view.encounters.find((row) => row.id === encounterId);
+        if (encounter === undefined) {
+          return (
+            <>
+              <TopBar title="Edit encounter" />
+              <EmptyState icon="swords" title="No such encounter">
+                It is not among this table&rsquo;s encounters any more.{" "}
+                <Link
+                  to="/campaigns/$campaignId/encounters"
+                  params={{ campaignId }}
+                  className="text-link hover:text-link-hover"
+                >
+                  All encounters
+                </Link>
+              </EmptyState>
+            </>
+          );
+        }
+        return (
+          <EncounterBuilder
+            campaignId={campaignId}
+            encounter={encounter}
+            saved={{ ...extra, encounter }}
+          />
+        );
+      }}
+    </CampaignChrome>
+  );
+}
+
+type Stored = Omit<SavedEncounter, "encounter">;
+
+/**
+ * What the builder opens on beyond the `Encounter` row, which is the campaign
+ * view's: its roster, its map's setting line and its prep, each read through
+ * the creator's own read.
+ *
+ * **A new encounter reads the creator's prep list and nothing from it.** Every
+ * other read a blank builder needs a player may also make, so without one the
+ * page would draw a form to a player whose save the server refuses. The prep
+ * list is the creator's alone, so a player gets the page's `NotFound`, as they
+ * do on the encounter's own page; it is the list page's atom, so arriving from
+ * the list costs nothing.
+ *
+ * The name of each roster line rides on the row (`EncounterCreature.name`,
+ * resolved server-side), because a line may point at a campaign instance no
+ * bestiary list returns.
+ */
+const builderAtom = Atom.family(
+  ({
+    campaignId,
+    encounterId,
+  }: {
+    readonly campaignId: CampaignId;
+    readonly encounterId: EncounterId | undefined;
+  }): CampaignExtraAtom<Stored> =>
+    encounterId === undefined
+      ? Atom.readable((get) =>
+          AsyncResult.map(get(encounterPrepListAtom(campaignId)), (): Stored => NEW_ENCOUNTER),
+        )
+      : apiAtom(
+          (client) =>
+            Effect.map(
+              Effect.all(
+                {
+                  roster: client.encounterCreatures.list({ params: { campaignId, encounterId } }),
+                  map: client.battleMaps.find({ params: { campaignId, encounterId } }),
+                  prep: client.encounterPrep.find({ params: { campaignId, encounterId } }),
+                },
+                { concurrency: "unbounded" },
+              ),
+              ({ roster, map, prep }): Stored => ({
+                roster,
+                setting: map.setting ?? "",
+                prep,
+                readAloud: undefined,
+              }),
+            ),
+          // What the save names, so a builder opened again reads what was saved.
+          [reads.encounters(campaignId)],
+        ),
+);
+
+/** Where *Cancel* and a save go: the list, with this encounter selected when there is one. */
+const listOf = (campaignId: CampaignId, encounterId: EncounterId | undefined) =>
+  ({
+    to: "/campaigns/$campaignId/encounters",
+    params: { campaignId },
+    search: encounterId === undefined ? {} : { encounter: encounterId },
+  }) as const;
+
+function EncounterBuilder({
+  campaignId,
+  encounter,
+  saved,
+}: {
+  readonly campaignId: CampaignId;
+  readonly encounter: Encounter | undefined;
+  /** What the form opens on, and what its save is measured against. */
+  readonly saved: SavedEncounter;
+}) {
+  const [initial] = useState(() => draftFrom(saved));
+  const [draft, setDraft] = useState(initial);
+  const [showProblems, setShowProblems] = useState(false);
+  const { busy, failure, submit } = useMutation();
+  const navigate = useNavigate();
+  const hash = useLocation({ select: (location) => location.hash });
+  /** Where the page was opened: `#creatures` from the preview's *Add creature*. */
+  const [arrivedAt] = useState(() => hash);
+
+  const patch = (next: Partial<EncounterDraft>) => setDraft((current) => ({ ...current, ...next }));
+  const setRoster = useCallback(
+    (next: (roster: ReadonlyArray<RosterLine>) => ReadonlyArray<RosterLine>) =>
+      setDraft((current) => ({ ...current, roster: next(current.roster) })),
+    [],
+  );
+  const pick = useCallback(
+    (creature: Creature) => setRoster((roster) => addCreature(roster, lineFor(creature))),
+    [setRoster],
+  );
+
+  /**
+   * Unsaved changes: anything that differs from what the page opened on. The
+   * draft is plain data — strings, numbers, arrays of them — so its JSON is
+   * its value.
+   */
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  /** Set once a save has landed, so the way to the list is not asked about. */
+  const leaving = useRef(false);
+  const shouldBlock = useCallback(() => !leaving.current, []);
+  const blocker = useBlocker({
+    shouldBlockFn: shouldBlock,
+    enableBeforeUnload: shouldBlock,
+    disabled: !dirty,
+    withResolver: true,
+  });
+
+  // *Add creature* on the preview opens this page at `#creatures`. The card is
+  // drawn only once the reads have answered, after the router has looked for it.
+  // Once, on arriving: a hash the DM scrolls away from is not a place to return to.
+  useEffect(() => {
+    const card = arrivedAt === "creatures" ? document.getElementById("creatures") : null;
+    // jsdom lays nothing out and has no `scrollIntoView` at all.
+    if (card !== null && typeof card.scrollIntoView === "function") card.scrollIntoView();
+  }, [arrivedAt]);
+
+  const problems = validate(draft);
+  const refused = Object.keys(problems).length > 0;
+  const shown = <K extends keyof typeof problems>(key: K) =>
+    showProblems ? problems[key] : undefined;
+
+  const save = async () => {
+    setShowProblems(true);
+    if (refused) return;
+
+    const result = await submit(
+      (client) =>
+        encounter === undefined
+          ? client.encounters.create({ params: { campaignId }, payload: createPayload(draft) })
+          : Effect.gen(function* () {
+              const encounterId = encounter.id;
+              const written = yield* client.encounters.update({
+                params: { campaignId, encounterId },
+                payload: updatePayload(draft, saved),
+              });
+              const diff = rosterDiff(saved.roster, draft.roster);
+              // Removals first: a creature's row on its way out is still the row
+              // a create for the same creature would be refused against.
+              yield* Effect.all(
+                diff.remove.map((encounterCreatureId) =>
+                  client.encounterCreatures.remove({
+                    params: { campaignId, encounterId, encounterCreatureId },
+                  }),
+                ),
+                { concurrency: "unbounded" },
+              );
+              yield* Effect.all(
+                [
+                  ...diff.create.map((payload) =>
+                    client.encounterCreatures.create({
+                      params: { campaignId, encounterId },
+                      payload,
+                    }),
+                  ),
+                  ...diff.update.map(({ id, count }) =>
+                    client.encounterCreatures.update({
+                      params: { campaignId, encounterId, encounterCreatureId: id },
+                      payload: { count },
+                    }),
+                  ),
+                ],
+                { concurrency: "unbounded" },
+              );
+              return written;
+            }),
+      // **`Encounter.creatureCount` and its difficulty are computed per read
+      // from the roster**, so the roster half of a save moves numbers on the list
+      // the encounter row was never sent for — and the prep, the map's setting
+      // line and the roster all answer this one key.
+      [reads.encounters(campaignId)],
+    );
+
+    if (Result.isSuccess(result)) {
+      leaving.current = true;
+      // Replacing the builder: *Back* from the list goes where the DM came from,
+      // not into a blank form again.
+      await navigate({ ...listOf(campaignId, result.success.id), replace: true });
+    }
+  };
+
+  const total = draft.roster.reduce(
+    (sum, line) => sum + (Number.isFinite(line.count) ? line.count : 0),
+    0,
+  );
+  const chosen = new Set<CreatureId>(draft.roster.map((line) => line.creatureId));
+  const takesChallenge = draft.kind === "challenge" || draft.kind === "hazard";
+  const showCreatures = !takesChallenge || draft.roster.length > 0;
+  const { skillChallenge: skill, hazard } = draft;
+
+  return (
+    <>
+      <TopBar
+        title={encounter === undefined ? "New encounter" : "Edit encounter"}
+        subtitle={
+          encounter === undefined
+            ? "A template you can run any night. Running it never changes what is written here."
+            : encounter.name
+        }
+      >
+        <div className="flex items-center gap-2">
+          <Switch
+            id="encounter-ready"
+            checked={draft.ready}
+            onCheckedChange={(ready) => patch({ ready })}
+          />
+          <Label htmlFor="encounter-ready" className="whitespace-nowrap">
+            Ready to run
+          </Label>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          nativeButton={false}
+          render={<Link {...listOf(campaignId, encounter?.id)} />}
+        >
+          Cancel
+        </Button>
+        <Button size="sm" disabled={busy} onClick={() => void save()}>
+          <Icon name="check" size={13} />
+          {busy ? "Saving…" : "Save encounter"}
+        </Button>
+      </TopBar>
+
+      {/* Beside the button just pressed, which is at the top of the page: the
+          page scrolls with the window, so the header is where the DM is. */}
+      {(failure !== undefined || (showProblems && refused)) && (
+        <div className="mb-5">
+          {failure !== undefined ? (
+            <SaveFailure failure={failure} />
+          ) : (
+            <p role="alert" className="text-body-s leading-body text-danger">
+              Some of this will not save as it is. Each field that needs a change says so.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="@container">
+        <div
+          data-slot="encounter-builder"
+          className="grid grid-cols-1 items-start gap-5 @4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @4xl:grid-rows-[auto_auto_1fr] @4xl:gap-x-6"
+        >
+          <BuilderCard className="@4xl:col-start-1 @4xl:row-start-1">
+            <Field label="Name" htmlFor="encounter-name" error={shown("name")}>
+              <Input
+                id="encounter-name"
+                placeholder="What you call it, e.g. Ambush in the reeds"
+                value={draft.name}
+                aria-invalid={shown("name") !== undefined}
+                onChange={(event) => patch({ name: event.target.value })}
+              />
+            </Field>
+
+            <div className="flex flex-col gap-1.5">
+              <span
+                id="encounter-kind"
+                className="text-label leading-snug font-medium text-heading"
+              >
+                Type
+              </span>
+              <div
+                role="group"
+                aria-labelledby="encounter-kind"
+                className="flex flex-wrap items-center gap-1.5"
+              >
+                {ENCOUNTER_KINDS.map(([kind, label]) => (
+                  <Toggle
+                    key={kind}
+                    size="sm"
+                    pressed={draft.kind === kind}
+                    onPressedChange={() => patch({ kind })}
+                  >
+                    <Icon name={KIND_ICON[kind]} size={13} />
+                    {label}
+                  </Toggle>
+                ))}
+              </div>
+            </div>
+
+            <Field
+              label="Location"
+              htmlFor="encounter-setting"
+              hint={
+                encounter === undefined
+                  ? "One line on the ground it happens on, with no creatures in it. Hob draws the battle map from it once, as the encounter is made. Only you see the map."
+                  : "The battle map was drawn once, when the encounter was made; changing this does not redraw it. Only you see it."
+              }
+              error={shown("setting")}
+            >
+              <Input
+                id="encounter-setting"
+                maxLength={ENCOUNTER_SETTING_MAX}
+                placeholder="Where it happens"
+                value={draft.setting}
+                aria-invalid={shown("setting") !== undefined}
+                onChange={(event) => patch({ setting: event.target.value })}
+              />
+            </Field>
+
+            <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+              <div className="min-w-0 flex-1 basis-60">
+                <Field
+                  label="Tags"
+                  htmlFor="encounter-tags"
+                  hint="Separated by commas — Marsh, Night, Boss."
+                  error={shown("tags")}
+                >
+                  <Input
+                    id="encounter-tags"
+                    placeholder="Marsh, Night"
+                    value={draft.tags}
+                    aria-invalid={shown("tags") !== undefined}
+                    onChange={(event) => patch({ tags: event.target.value })}
+                  />
+                </Field>
+              </div>
+              <div className="min-w-0 flex-1 basis-60 pt-1">
+                <VisibilityField
+                  id="encounter-visibility"
+                  value={draft.visibility}
+                  onChange={(visibility) => patch({ visibility })}
+                  shared="Your players can see this encounter and its tags."
+                  hidden="Only you can see this encounter."
+                />
+              </div>
+            </div>
+          </BuilderCard>
+
+          <div className="flex min-w-0 flex-col gap-5 @4xl:col-start-1 @4xl:row-start-2">
+            {showCreatures && (
+              <Card
+                id="creatures"
+                role="region"
+                aria-labelledby="creatures-heading"
+                className="scroll-mt-(--chrome-height) overflow-hidden"
+              >
+                <div className="flex items-baseline gap-2.5 border-b border-hairline px-5 py-4">
+                  <SectionHeading id="creatures-heading" size="title">
+                    Creatures
+                  </SectionHeading>
+                  <span className="font-mono text-mono leading-none font-medium text-muted-foreground">
+                    {total}
+                  </span>
+                </div>
+                {draft.roster.length === 0 ? (
+                  <p className="mb-0 px-5 py-7 text-center text-body-s leading-body text-muted-foreground">
+                    No creatures yet. Add them from the bestiary.
+                  </p>
+                ) : (
+                  <ul data-slot="encounter-roster" className="m-0 flex list-none flex-col p-0">
+                    {draft.roster.map((line) => (
+                      <RosterRow
+                        key={line.creatureId}
+                        line={line}
+                        onStep={(by) =>
+                          setRoster((roster) => stepCount(roster, line.creatureId, by))
+                        }
+                        onRemove={() => setRoster((roster) => removeLine(roster, line.creatureId))}
+                      />
+                    ))}
+                  </ul>
+                )}
+                {shown("roster") !== undefined && (
+                  <p
+                    role="alert"
+                    className="mb-0 border-t border-hairline px-5 py-3 text-caption leading-body text-danger-ink"
+                  >
+                    {shown("roster")}
+                  </p>
+                )}
+              </Card>
+            )}
+
+            {draft.kind === "challenge" && (
+              <BuilderCard title="Skill challenge">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(8.75rem,1fr))] gap-4">
+                  <Field label="DC" htmlFor="challenge-dc">
+                    <Input
+                      id="challenge-dc"
+                      mono
+                      type="number"
+                      min={1}
+                      max={30}
+                      placeholder="14"
+                      value={skill.dc}
+                      onChange={(event) =>
+                        patch({ skillChallenge: { ...skill, dc: event.target.value } })
+                      }
+                    />
+                  </Field>
+                  <Field label="Successes needed" htmlFor="challenge-successes">
+                    <Input
+                      id="challenge-successes"
+                      mono
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="3"
+                      value={skill.successes}
+                      onChange={(event) =>
+                        patch({ skillChallenge: { ...skill, successes: event.target.value } })
+                      }
+                    />
+                  </Field>
+                  <Field label="Failures allowed" htmlFor="challenge-failures">
+                    <Input
+                      id="challenge-failures"
+                      mono
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="2"
+                      value={skill.failures}
+                      onChange={(event) =>
+                        patch({ skillChallenge: { ...skill, failures: event.target.value } })
+                      }
+                    />
+                  </Field>
+                </div>
+                <SkillChips
+                  draft={skill}
+                  onChange={(skills) => patch({ skillChallenge: { ...skill, skills } })}
+                  error={shown("challenge")}
+                />
+              </BuilderCard>
+            )}
+
+            {draft.kind === "hazard" && (
+              <BuilderCard title="Hazard">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(8.75rem,1fr))] gap-4">
+                  <Field label="Saving throw" htmlFor="hazard-ability">
+                    <Select
+                      value={hazard.ability}
+                      onValueChange={(value) =>
+                        patch({ hazard: { ...hazard, ability: String(value) as AbilityKey | "" } })
+                      }
+                    >
+                      <SelectTrigger id="hazard-ability">
+                        <SelectValue>
+                          {(value) => (value === "" ? "Choose one" : String(value))}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ABILITY_KEYS.map((ability) => (
+                          <SelectItem key={ability} value={ability}>
+                            {ability}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Save DC" htmlFor="hazard-dc">
+                    <Input
+                      id="hazard-dc"
+                      mono
+                      type="number"
+                      min={1}
+                      max={30}
+                      placeholder="13"
+                      value={hazard.dc}
+                      onChange={(event) => patch({ hazard: { ...hazard, dc: event.target.value } })}
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
+                  <Field label="On a failed save" htmlFor="hazard-on-fail">
+                    <Input
+                      id="hazard-on-fail"
+                      maxLength={ENCOUNTER_HAZARD_TEXT_MAX}
+                      placeholder="1 level of exhaustion"
+                      value={hazard.onFail}
+                      onChange={(event) =>
+                        patch({ hazard: { ...hazard, onFail: event.target.value } })
+                      }
+                    />
+                  </Field>
+                  <Field label="Duration" htmlFor="hazard-duration">
+                    <Input
+                      id="hazard-duration"
+                      maxLength={ENCOUNTER_HAZARD_TEXT_MAX}
+                      placeholder="1d4 hours"
+                      value={hazard.duration}
+                      onChange={(event) =>
+                        patch({ hazard: { ...hazard, duration: event.target.value } })
+                      }
+                    />
+                  </Field>
+                </div>
+                <SkillChips
+                  draft={hazard}
+                  onChange={(skills) => patch({ hazard: { ...hazard, skills } })}
+                  error={shown("challenge")}
+                />
+              </BuilderCard>
+            )}
+          </div>
+
+          {/* The rail. The live difficulty card goes first in it, pinned under the
+              chrome, when it comes; the bestiary under it scrolls with the page. */}
+          <aside
+            aria-label="Add creatures"
+            data-slot="encounter-builder-rail"
+            className="flex min-w-0 flex-col gap-5 self-stretch @4xl:col-start-2 @4xl:row-span-3 @4xl:row-start-1"
+          >
+            <BuilderCard title="Bestiary">
+              <CreaturePicker campaignId={campaignId} chosen={chosen} onPick={pick} />
+            </BuilderCard>
+          </aside>
+
+          <BuilderCard className="@4xl:col-start-1 @4xl:row-start-3">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-baseline gap-2">
+                <Label htmlFor="encounter-tactics">Running it</Label>
+                <span className="text-caption leading-none text-faint">One beat per line</span>
+              </div>
+              <Textarea
+                id="encounter-tactics"
+                rows={4}
+                placeholder="How the creatures fight, what they want, when they run."
+                value={draft.tactics}
+                aria-invalid={shown("tactics") !== undefined}
+                aria-describedby="encounter-tactics-hint"
+                onChange={(event) => patch({ tactics: event.target.value })}
+              />
+              {shown("tactics") !== undefined ? (
+                <span
+                  id="encounter-tactics-hint"
+                  role="alert"
+                  className="text-caption leading-body text-danger-ink"
+                >
+                  {shown("tactics")}
+                </span>
+              ) : (
+                <span
+                  id="encounter-tactics-hint"
+                  className="text-caption leading-body text-muted-foreground"
+                >
+                  How you mean to run it, in order. Only you see these.
+                </span>
+              )}
+            </div>
+
+            <Field
+              label="Treasure"
+              htmlFor="encounter-treasure"
+              hint="What the party can come away with. Only you see it."
+              error={shown("treasure")}
+            >
+              <Input
+                id="encounter-treasure"
+                maxLength={ENCOUNTER_TREASURE_MAX}
+                placeholder="Coin, items, clues"
+                value={draft.treasure}
+                onChange={(event) => patch({ treasure: event.target.value })}
+              />
+            </Field>
+          </BuilderCard>
+        </div>
+      </div>
+
+      {blocker.status === "blocked" && (
+        <Dialog open onOpenChange={(open) => !open && blocker.reset()}>
+          <DialogContent aria-label="Leave without saving">
+            <DialogHeader>
+              <DialogTitle>Leave without saving?</DialogTitle>
+              <DialogDescription>
+                What you changed here has not been saved, and leaving throws it away.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" onClick={blocker.reset}>
+                Keep editing
+              </Button>
+              <Button variant="destructive" size="sm" onClick={blocker.proceed}>
+                Discard changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+/** One of the builder's cards: a heading when it has one, then its fields. */
+function BuilderCard({
+  title,
+  className,
+  children,
+}: {
+  readonly title?: string;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  const headingId =
+    title === undefined ? undefined : `builder-${title.toLowerCase().replace(/\W+/g, "-")}`;
+  return (
+    <Card
+      {...(headingId !== undefined && { role: "region", "aria-labelledby": headingId })}
+      className={`min-w-0 gap-4.5 p-5 ${className ?? ""}`}
+    >
+      {title !== undefined && (
+        <SectionHeading id={headingId} size="title">
+          {title}
+        </SectionHeading>
+      )}
+      {children}
+    </Card>
+  );
+}
+
+/**
+ * One line of the roster, as drawn: the creature, its numbers, a stepper, the
+ * line's XP and a remove. Stepping below one removes the line.
+ *
+ * **It wraps rather than squeezing.** The drawing's row gave the name 21px at
+ * 390, "G…" over a column of one word per line; here the stepper, the XP and the
+ * remove drop under the name once the row cannot hold both, so the name keeps
+ * the row's width.
+ */
+function RosterRow({
+  line,
+  onStep,
+  onRemove,
+}: {
+  readonly line: RosterLine;
+  readonly onStep: (by: -1 | 1) => void;
+  readonly onRemove: () => void;
+}) {
+  return (
+    <li
+      data-slot="roster-line"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-hairline py-2 pr-3 pl-5 first:border-t-0"
+    >
+      <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+        <Icon name="skull" size={15} className="shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div
+            data-slot="roster-name"
+            className="text-body-s leading-snug font-semibold [overflow-wrap:anywhere] text-heading"
+          >
+            {line.name}
+          </div>
+          <div
+            data-slot="roster-meta"
+            className="mt-0.5 font-mono text-caption leading-snug font-medium whitespace-nowrap text-muted-foreground"
+          >
+            CR {line.cr} · AC {line.ac} · {line.hp} hp
+          </div>
+        </div>
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-3">
+        <div className="flex items-center gap-0.5 rounded-control border border-strong bg-surface-sunken">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`One fewer ${line.name}`}
+            onClick={() => onStep(-1)}
+          >
+            <Icon name="minus" size={14} />
+          </Button>
+          <output
+            aria-label={`How many ${line.name}`}
+            className="min-w-6 text-center font-mono text-mono leading-none font-medium text-heading"
+          >
+            {line.count}
+          </output>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`One more ${line.name}`}
+            onClick={() => onStep(1)}
+          >
+            <Icon name="plus" size={14} />
+          </Button>
+        </div>
+        <span className="w-16 text-right font-mono text-mono leading-none font-medium whitespace-nowrap text-muted-foreground">
+          {line.xp === null ? "No XP" : `${(line.xp * line.count).toLocaleString("en")} xp`}
+        </span>
+        <Button variant="ghost" size="icon" aria-label={`Remove ${line.name}`} onClick={onRemove}>
+          <Icon name="x" size={14} />
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/** A challenge's skills as chips over the standard list, capped where the wire caps them. */
+function SkillChips({
+  draft,
+  onChange,
+  error,
+}: {
+  readonly draft: {
+    readonly skills: ReadonlyArray<string>;
+    readonly offered: ReadonlyArray<string>;
+  };
+  readonly onChange: (skills: ReadonlyArray<string>) => void;
+  readonly error: string | undefined;
+}) {
+  return (
+    <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+      <legend className="pb-1.5 text-label leading-snug font-medium text-heading">
+        Skills that help
+      </legend>
+      <div className="flex flex-wrap gap-1.5">
+        {skillChips(draft).map((chip) => (
+          <Toggle
+            key={chip.name}
+            size="sm"
+            pressed={chip.pressed}
+            disabled={chip.disabled}
+            onPressedChange={() => onChange(toggleSkill(draft.skills, chip.name))}
+          >
+            {chip.name}
+          </Toggle>
+        ))}
+      </div>
+      {error !== undefined && (
+        <span role="alert" className="text-caption leading-body text-danger-ink">
+          {error}
+        </span>
+      )}
+    </fieldset>
+  );
+}

@@ -12,6 +12,7 @@ import {
   character,
   characterSeat,
   encounter,
+  encounterPrep,
   installStubServer,
   liveRun,
   mintingSession,
@@ -237,9 +238,10 @@ describe("the next session card", () => {
     expect(
       within(rows[0]!).getByRole("button", { name: "Run Ambush in the reeds" }),
     ).toBeInTheDocument();
+    // Its *Edit* is the encounter builder, a page of its own.
     expect(
       within(rows[0]!).getByRole("button", { name: "Edit Ambush in the reeds" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("href", `${base}/encounters/${encounter.id}/edit`);
 
     expect(within(card).getByRole("link", { name: "All encounters" })).toHaveAttribute(
       "href",
@@ -250,8 +252,10 @@ describe("the next session card", () => {
     expect(
       within(card).getByRole("checkbox", { name: "Reread the reeds ambush" }),
     ).toBeInTheDocument();
-    // The redesign's date, CR and readiness are not on the wire.
-    expect(within(card).queryByText(/Ready|Draft|CR \d/)).toBeNull();
+    // Ready or Draft is the DM's word off each encounter's prep; the
+    // redesign's date and CR are not on the wire.
+    expect(within(rows[0]!).getByText("Draft")).toBeInTheDocument();
+    expect(within(card).queryByText(/CR \d/)).toBeNull();
   });
 
   it("uses the night's own title when it has one", async () => {
@@ -276,15 +280,31 @@ describe("the next session card", () => {
     expect(within(card).queryByText(readAloud.body)).toBeNull();
   });
 
-  it("adds an encounter through the same dialog the Encounters tab opens", async () => {
+  it("adds an encounter in the same builder the Encounters tab opens", async () => {
     await renderScreen(mintingSession());
     const card = await cardOf("Session 12");
 
     const add = within(card).getByRole("button", { name: "Add encounter" });
     // A section's create is never the screen's peach.
     expect(add).not.toHaveClass("bg-accent");
+    expect(add).toHaveAttribute("href", `${base}/encounters/new`);
     await userEvent.click(add);
-    expect(await screen.findByRole("button", { name: "Create encounter" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "New encounter" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says Ready on a row the DM has said is ready", async () => {
+    server.routes.set(`GET ${base}/encounter-prep`, {
+      status: 200,
+      body: [{ ...encounterPrep, ready: true }],
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("Session 12");
+    const rows = within(card).getAllByRole("listitem");
+    expect(within(rows[0]!).getByText("Ready")).toBeInTheDocument();
+    // No prep read for the second, so no word for it either rather than a guess.
+    expect(within(rows[1]!).queryByText(/^(Ready|Draft)$/)).toBeNull();
   });
 
   it("says so with no night open and nothing built", async () => {

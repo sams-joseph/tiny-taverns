@@ -1,6 +1,5 @@
-import type { Encounter } from "@taverns/api";
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
@@ -10,12 +9,11 @@ import {
   type CampaignChromeSlots,
 } from "./CampaignChrome";
 import { CampaignHero } from "./CampaignHero";
-import { EncounterDialog } from "./EncounterDialog";
 import { LastTime } from "./LastTime";
 import { LiveBanner } from "./LiveBanner";
 import { NextSession } from "./NextSession";
 import { OverviewPage } from "./OverviewParts";
-import { lastNightAtom, type LastNight } from "./overview";
+import { overviewExtraAtom, type OverviewExtra } from "./overview";
 import { PartyCard } from "./PartyCard";
 import { RecentNotes } from "./RecentNotes";
 
@@ -34,21 +32,20 @@ import { RecentNotes } from "./RecentNotes";
  * **Do not render a field the API does not have**, because a stubbed value is a
  * worse lie than an absent line. Left out rather than invented, each for the
  * reason on the card that would have drawn it: a scheduled date for the next
- * night, encounters assigned to it, an encounter's CR, DC and readiness, *Open
- * threads*, *At the table*, and *Last time* as a prose summary. The Overview's
- * rows are a summary and open nothing; each card's header link is the way in.
+ * night, encounters assigned to it, an encounter's CR and DC, *Open threads*,
+ * *At the table*, and *Last time* as a prose summary. The Overview's rows are a
+ * summary and open nothing; each card's header link is the way in.
  *
- * Everything but *Last time* is `CampaignView`, which the frame already loads.
- * *Last time* is the one read the Overview adds, handed to the frame as its
- * `extra` so the screen is still one resource (`LastTime.tsx`).
+ * Everything but *Last time* and the encounters' *Ready* or *Draft* is
+ * `CampaignView`, which the frame already loads. Those two are the reads the
+ * Overview adds, handed to the frame as its `extra` so the screen is still one
+ * resource (`overviewExtraAtom`). Writing an encounter is the encounter
+ * builder's page, which *Add encounter* and each row's *Edit* open.
  */
 
-/** The one dialog slot the Overview raises for itself. */
-type Editing = { readonly what: "encounter"; readonly encounter: Encounter | undefined };
-
-function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | undefined> }) {
-  const { view, extra: lastNight, run, finishSession, openSettings } = slots;
-  const [editing, setEditing] = useState<Editing | undefined>();
+function Overview({ slots }: { readonly slots: CampaignChromeSlots<OverviewExtra> }) {
+  const { view, extra, run, finishSession, openSettings } = slots;
+  const { lastNight } = extra;
   const invalidate = useInvalidate();
   const campaignId = view.campaign.id;
   // A campaign opens here the moment it is made, while Hob is still drawing its
@@ -60,57 +57,42 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots<LastNight | u
   useHobDrawingPolling(view.campaign.imagePending, rereadCover);
 
   return (
-    <>
-      <OverviewPage
-        lead={
-          <>
-            {view.session !== undefined && view.run !== undefined && (
-              <LiveBanner session={view.session} run={view.run} onFinish={finishSession} />
-            )}
-            <CampaignHero campaign={view.campaign}>
-              <CampaignSettingsButtons view={view} onOpen={openSettings} />
-            </CampaignHero>
-          </>
-        }
-        main={
-          <>
-            <NextSession
-              view={view}
-              onRun={(encounter) => run(encounter.id)}
-              onFinish={finishSession}
-              onAddEncounter={() => setEditing({ what: "encounter", encounter: undefined })}
-              onEditEncounter={(encounter) => setEditing({ what: "encounter", encounter })}
-            />
-            {lastNight !== undefined && (
-              <LastTime lastNight={lastNight} campaignId={campaignId} audience="creator" />
-            )}
-          </>
-        }
-        aside={
-          <>
-            <PartyCard
-              party={view.party}
-              campaignId={campaignId}
-              audience="creator"
-              playerCount={view.campaign.playerCount}
-            />
-            <RecentNotes notes={view.notes} campaignId={campaignId} audience="creator" />
-          </>
-        }
-      />
-
-      {/* Keyed on what is being edited, so opening the dialog on a second row
-          builds a fresh form rather than showing the first row's fields. */}
-      {editing?.what === "encounter" && (
-        <EncounterDialog
-          key={editing.encounter?.id ?? "new-encounter"}
-          campaignId={campaignId}
-          encounter={editing.encounter}
-          onClose={() => setEditing(undefined)}
-          onSaved={() => setEditing(undefined)}
-        />
-      )}
-    </>
+    <OverviewPage
+      lead={
+        <>
+          {view.session !== undefined && view.run !== undefined && (
+            <LiveBanner session={view.session} run={view.run} onFinish={finishSession} />
+          )}
+          <CampaignHero campaign={view.campaign}>
+            <CampaignSettingsButtons view={view} onOpen={openSettings} />
+          </CampaignHero>
+        </>
+      }
+      main={
+        <>
+          <NextSession
+            view={view}
+            prep={extra.prep}
+            onRun={(encounter) => run(encounter.id)}
+            onFinish={finishSession}
+          />
+          {lastNight !== undefined && (
+            <LastTime lastNight={lastNight} campaignId={campaignId} audience="creator" />
+          )}
+        </>
+      }
+      aside={
+        <>
+          <PartyCard
+            party={view.party}
+            campaignId={campaignId}
+            audience="creator"
+            playerCount={view.campaign.playerCount}
+          />
+          <RecentNotes notes={view.notes} campaignId={campaignId} audience="creator" />
+        </>
+      }
+    />
   );
 }
 
@@ -119,7 +101,7 @@ export function CampaignScreen() {
 
   return (
     // No `title`: the Overview's `h1` is the campaign's name, in its hero.
-    <CampaignChrome campaignId={campaignId} extra={lastNightAtom(campaignId)}>
+    <CampaignChrome campaignId={campaignId} extra={overviewExtraAtom(campaignId)}>
       {(slots) => <Overview slots={slots} />}
     </CampaignChrome>
   );

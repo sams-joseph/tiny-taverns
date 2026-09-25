@@ -89,6 +89,7 @@ const savedAmbush: SavedEncounter = {
     visibility: "dm",
   },
   prep: {
+    ready: true,
     tactics: ["Archers open from the reeds.", "The boss hangs back."],
     treasure: "28 sp",
     challenge: null,
@@ -371,13 +372,25 @@ describe("the payloads", () => {
       kind: "combat",
       tags: ["Desert"],
       visibility: "dm",
+      // A draft until the DM says otherwise, said out loud.
+      ready: false,
     });
   });
 
-  it("does not send the ready flag the wire has no field for", () => {
-    const draft = blank({ ready: true });
-    expect(createPayload(draft)).not.toHaveProperty("ready");
-    expect(updatePayload(draft, NEW_ENCOUNTER)).not.toHaveProperty("ready");
+  it("creates the roster with the encounter, one line per creature", () => {
+    expect(
+      createPayload(blank({ roster: [line(bossId, 1), line(goblinId, 4)] })).creatures,
+    ).toEqual([
+      { creatureId: bossId, count: 1 },
+      { creatureId: goblinId, count: 4 },
+    ]);
+  });
+
+  it("reads Ready from the prep and sends it back on both payloads", () => {
+    const draft = draftFrom(savedAmbush);
+    expect(draft.ready).toBe(true);
+    expect(updatePayload({ ...draft, ready: false }, savedAmbush)).toMatchObject({ ready: false });
+    expect(createPayload(blank({ ready: true }))).toMatchObject({ ready: true });
   });
 
   it("sends the setting line only when it changed, and null when emptied", () => {

@@ -99,8 +99,11 @@ describe("the Encounters page", () => {
     expect(within(rowFor("The hag's bargain")).getByText("Shared")).toBeInTheDocument();
     expect(rowFor("Toll bridge standoff")).toHaveTextContent("Social·No combat");
     expect(rowFor("Toll bridge standoff")).toHaveTextContent("Played · Session 11");
-    // The drawing's Ready and Draft have nothing behind them.
-    expect(screen.queryByText(/^(Ready|Draft)$/)).toBeNull();
+    // Ready or Draft is the DM's own word, off the prep; a played one says when
+    // instead.
+    expect(within(rowFor("The dry well")).getByText("Ready")).toBeInTheDocument();
+    expect(within(rowFor("Ambush in the reeds")).getByText("Draft")).toBeInTheDocument();
+    expect(within(rowFor("Toll bridge standoff")).queryByText(/^(Ready|Draft)$/)).toBeNull();
     // A row selects; it carries no Edit or Run of its own.
     expect(screen.queryByRole("button", { name: /^(Edit|Run) Ambush/ })).toBeNull();
   });
@@ -151,6 +154,7 @@ describe("the preview", () => {
     const pane = await screen.findByRole("article");
 
     expect(within(pane).getByText("Combat · Not yet played")).toBeInTheDocument();
+    expect(within(pane).getByText("Draft")).toBeInTheDocument();
     expect(await within(pane).findByText("A boardwalk over black water")).toBeInTheDocument();
 
     const difficulty = within(pane).getByRole("region", { name: "Difficulty" });
@@ -214,6 +218,12 @@ describe("the preview", () => {
     expect(pane.querySelector("header p")).toBeNull();
   });
 
+  it("says Ready when the DM has said so", async () => {
+    await renderAt(`${encountersPath}?encounter=${wellId}`);
+    await waitFor(() => expect(preview()).toHaveAccessibleName("The dry well"));
+    expect(within(preview()).getByText("Ready")).toBeInTheDocument();
+  });
+
   it("draws a hazard by its save", async () => {
     await renderAt(`${encountersPath}?encounter=${stormId}`);
     await waitFor(() => expect(preview()).toHaveAccessibleName("Salt-flat sandstorm"));
@@ -231,6 +241,8 @@ describe("the preview", () => {
     await renderAt(`${encountersPath}?encounter=${bridgeId}`);
     await waitFor(() => expect(preview()).toHaveAccessibleName("Toll bridge standoff"));
     const pane = preview();
+    // Played, so it says when rather than Ready or Draft.
+    expect(within(pane).queryByText(/^(Ready|Draft)$/)).toBeNull();
 
     expect(within(pane).getByText("Social · Played · Session 11")).toBeInTheDocument();
     expect(within(pane).getByRole("button", { name: "View log" })).toHaveAttribute(
@@ -242,17 +254,39 @@ describe("the preview", () => {
     expect(within(pane).queryByText("What happened")).toBeNull();
   });
 
-  it("edits the encounter it shows, and adds creatures through the same form", async () => {
+  it("edits the encounter it shows, and adds creatures, in the encounter builder", async () => {
     await renderAt(`${encountersPath}?encounter=${bargainId}`);
     await waitFor(() => expect(preview()).toHaveAccessibleName("The hag's bargain"));
+
+    expect(within(preview()).getByRole("button", { name: "Edit" })).toHaveAttribute(
+      "href",
+      `${encountersPath}/${bargainId}/edit`,
+    );
+    // At its creatures, which is what the DM pressed it for.
+    expect(within(preview()).getByRole("button", { name: "Add creature" })).toHaveAttribute(
+      "href",
+      `${encountersPath}/${bargainId}/edit#creatures`,
+    );
 
     await userEvent.click(within(preview()).getByRole("button", { name: "Edit" }));
     expect(await screen.findByRole("textbox", { name: "Name" })).toHaveValue("The hag's bargain");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(preview()).toHaveAccessibleName("The hag's bargain"));
 
     await userEvent.click(within(preview()).getByRole("button", { name: "Add creature" }));
-    expect(await screen.findByRole("textbox", { name: "Name" })).toHaveValue("The hag's bargain");
+    expect(await screen.findByRole("region", { name: /^Creatures/ })).toHaveAttribute(
+      "id",
+      "creatures",
+    );
+    expect(globalThis.location.hash).toBe("#creatures");
+  });
+
+  it("opens a new encounter in the builder from its header", async () => {
+    await renderEncounters(mintingSession());
+    expect(await screen.findByRole("button", { name: "New encounter" })).toHaveAttribute(
+      "href",
+      `${encountersPath}/new`,
+    );
   });
 
   it("puts the encounter on the table through the campaign's own run", async () => {

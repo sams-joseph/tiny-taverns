@@ -12,6 +12,7 @@ import { Schema } from "effect";
 import { LibraryScreen } from "./bestiary/LibraryScreen";
 import { CampaignRouteScreen } from "./campaign/CampaignRoute";
 import { CampaignsScreen } from "./campaign/CampaignsScreen";
+import { EncounterBuilderScreen } from "./campaign/EncounterBuilderScreen";
 import { EncounterScreen } from "./campaign/EncounterScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
@@ -291,6 +292,33 @@ const encounterRoute = createRoute({
     },
   },
   component: EncounterScreen,
+  remountDeps: ({ params }) => params.encounterId,
+});
+
+/**
+ * Writing an encounter: a new one, and one already made. One page for both
+ * (`EncounterBuilderScreen`), the creator's alone — its read is the creator's
+ * prep, so a player who types the URL reads the same `NotFound` the encounter's
+ * own page gives. The static `new` outranks `$encounterId` beside it, and a
+ * different encounter is a different draft, so the edit remounts on its id.
+ */
+const encounterNewRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "encounters/new",
+  component: EncounterBuilderScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+const encounterEditRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "encounters/$encounterId/edit",
+  params: {
+    parse: ({ encounterId }) => {
+      const decoded = asEncounterId(encounterId);
+      return decoded === undefined ? false : { encounterId: decoded };
+    },
+  },
+  component: EncounterBuilderScreen,
   remountDeps: ({ params }) => params.encounterId,
 });
 
@@ -661,7 +689,9 @@ export const routeTree = rootRoute.addChildren([
     campaignRoute.addChildren([
       campaignIndexRoute,
       encountersRoute,
+      encounterNewRoute,
       encounterRoute,
+      encounterEditRoute,
       encountersSplatRoute,
       notesRoute,
       castRoute,
@@ -727,6 +757,8 @@ export const routes = {
   campaign: campaignRoute,
   encounters: encountersRoute,
   encounter: encounterRoute,
+  encounterNew: encounterNewRoute,
+  encounterEdit: encounterEditRoute,
   notes: notesRoute,
   cast: castRoute,
   npcFollowUp: npcFollowUpRoute,

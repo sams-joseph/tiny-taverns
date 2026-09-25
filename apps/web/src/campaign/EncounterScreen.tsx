@@ -14,7 +14,6 @@ import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
 import { describeDifficulty } from "./difficulty";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { describeRoster } from "./encounterList";
-import { EncounterDialog } from "./EncounterDialog";
 import { encounterPageAtom, type EncounterPage } from "./load";
 import { NoteCard } from "./NotesList";
 import { NoteDialog } from "./NoteDialog";
@@ -25,8 +24,8 @@ import { NoteDialog } from "./NoteDialog";
  * it is refused to everybody else (`campaign/load.ts`, `encounterPageAtom`),
  * so a player who pastes the URL reads the same failure a stranger does.
  *
- * Built from what the campaign already draws: the encounter's own dialog edits
- * it (the name, the roster and the setting line the map was drawn from), the
+ * Built from what the campaign already draws: the encounter builder edits it
+ * (the name, the roster and the setting line the map was drawn from), the
  * campaign's `run` puts it on the table, `NoteCard` shows what is attached.
  * There is no redraw: a picture is drawn once, as the encounter is made. The
  * grid is shown where the map says it sits, and *Adjust grid* lines it up in
@@ -45,7 +44,6 @@ export function EncounterScreen() {
     from: "/_shell/campaigns/$campaignId/encounters/$encounterId",
   });
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingNote, setEditingNote] = useState<Note>();
   const find = (encounters: ReadonlyArray<Encounter>) =>
@@ -68,7 +66,17 @@ export function EncounterScreen() {
             </BackLink>
             {encounter !== undefined && (
               <>
-                <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to="/campaigns/$campaignId/encounters/$encounterId/edit"
+                      params={{ campaignId, encounterId }}
+                    />
+                  }
+                >
                   <Icon name="pencil" size={14} />
                   Edit
                 </Button>
@@ -119,14 +127,6 @@ export function EncounterScreen() {
               running={view.run?.encounterId === encounter.id}
               onEditNote={setEditingNote}
             />
-            {editing && (
-              <EncounterDialog
-                campaignId={campaignId}
-                encounter={encounter}
-                onClose={() => setEditing(false)}
-                onSaved={() => setEditing(false)}
-              />
-            )}
             {deleting && (
               <DeleteEncounterDialog
                 campaignId={campaignId}

@@ -1,10 +1,19 @@
-import type { Beat, CampaignId, Encounter, Note, PartySeat, Session } from "@taverns/api";
+import type {
+  Beat,
+  CampaignId,
+  Encounter,
+  EncounterPrep,
+  Note,
+  PartySeat,
+  Session,
+} from "@taverns/api";
 import { DateTime, Effect } from "effect";
-import { Atom } from "effect/unstable/reactivity";
-import { apiAtom } from "../api/atoms";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { CarriedFight } from "../chronicle/fight";
 import { difficultyWord } from "./difficulty";
+import { encounterPrepListAtom } from "./load";
 
 /**
  * The Overview's rules about its data, apart from its cards so each can be
@@ -52,6 +61,32 @@ export const lastNightAtom = Atom.family((campaignId: CampaignId) =>
         return { session, recap } satisfies LastNight;
       }),
     [reads.sessions(campaignId)],
+  ),
+);
+
+/** What the Overview reads on top of the campaign view. */
+export interface OverviewExtra {
+  readonly lastNight: LastNight | undefined;
+  /** Every encounter's prep, for *Next session*'s *Ready* and *Draft*. */
+  readonly prep: ReadonlyArray<EncounterPrep>;
+}
+
+/**
+ * The Overview's `extra`: *Last time*, and the encounters' prep the Encounters
+ * page reads too — its atom, so moving between the two costs no request. Both
+ * are the creator's, as the Overview is. Derived, so the frame's *Try again*
+ * reaches it through the keys its parts answer (`reads.sessions`,
+ * `reads.encounters`), which `campaignViewKeys` names.
+ */
+export const overviewExtraAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable((get: Atom.AtomContext): AsyncResult.AsyncResult<OverviewExtra, unknown> =>
+    combine(
+      get,
+      AsyncResult.all({
+        lastNight: get(lastNightAtom(campaignId)),
+        prep: get(encounterPrepListAtom(campaignId)),
+      }) as AsyncResult.AsyncResult<OverviewExtra, unknown>,
+    ),
   ),
 );
 
@@ -115,9 +150,9 @@ export const openingReadAloud = (
 
 /**
  * `Medium · 6 creatures · Marsh, Night` — what the wire has to say about an
- * encounter. The drawing's DC and readiness (*Ready*, *Draft*) are not on
- * `Encounter` and are left out; the band is the one the server computed from
- * the roster and the party.
+ * encounter. The drawing's DC is not on `Encounter` and is left out; the band
+ * is the one the server computed from the roster and the party. *Ready* or
+ * *Draft* is the prep's, drawn beside this rather than in it.
  */
 export const encounterDetail = (encounter: Encounter): string =>
   [

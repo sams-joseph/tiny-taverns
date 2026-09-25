@@ -15,6 +15,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { describeDifficulty } from "./difficulty";
 import { BAND_TEXT } from "./encounterList";
 import { encounterPageAtom } from "./load";
+import { ReadyBadge } from "./ReadyBadge";
 
 /**
  * The selected encounter, beside the list — the redesign's preview pane
@@ -25,8 +26,8 @@ import { encounterPageAtom } from "./load";
  * treasure and a challenge's numbers are its prep (`encounterPrep.list`, the
  * page's `extra`); the where line and the creature table are the two reads the
  * encounter's own page makes (`encounterPageAtom`), both the creator's alone.
- * A section with nothing to say is not drawn. The drawing's *Ready* and
- * *Draft* badges have no data behind them and are left out.
+ * A section with nothing to say is not drawn. *Ready* or *Draft* is the prep's
+ * too, and a played encounter says when it was played instead.
  *
  * **Its tactics are always "Running it".** The drawing retitles them *What
  * happened* once the encounter is played, but they are the DM's plan, written
@@ -35,6 +36,8 @@ import { encounterPageAtom } from "./load";
  *
  * **None of its buttons is the peach.** The campaign row's press is this
  * screen's one primary, so *Edit*, *Run encounter* and *View log* are outline.
+ * *Edit* and *Add creature* open the encounter builder, the second at its
+ * creatures.
  */
 export function EncounterPreview({
   encounter,
@@ -43,7 +46,6 @@ export function EncounterPreview({
   group,
   live,
   fightOn,
-  onEdit,
   onRun,
   paneRef,
   onSettled,
@@ -61,7 +63,6 @@ export function EncounterPreview({
    * as the campaign's `run` does and the encounter page's *Run* says.
    */
   readonly fightOn: boolean;
-  readonly onEdit: () => void;
   readonly onRun: () => void;
   readonly paneRef: Ref<HTMLElement>;
   /** Its reads have answered, so it is as tall as it is going to be. */
@@ -96,6 +97,7 @@ export function EncounterPreview({
       <header className="flex flex-wrap items-start gap-4 border-b border-hairline px-6 pt-5.5 pb-4.5">
         <div className="min-w-0 flex-1 basis-70">
           <div className="flex flex-wrap items-center gap-2 text-label leading-none font-medium text-muted-foreground">
+            {played === null && <ReadyBadge prep={prep} />}
             {encounter.visibility === "shared" && <Badge variant="info">Shared</Badge>}
             <span>
               {encounterKindLabel(encounter.kind)} · {group}
@@ -118,7 +120,17 @@ export function EncounterPreview({
           )}
         </div>
         <div className="flex flex-none flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onEdit}>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={
+              <Link
+                to="/campaigns/$campaignId/encounters/$encounterId/edit"
+                params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+              />
+            }
+          >
             <Icon name="pencil" size={13} />
             Edit
           </Button>
@@ -175,7 +187,7 @@ export function EncounterPreview({
         {page.state === "failed" && <ApiFailureNotice failure={page.failure} onRetry={retry} />}
         {page.state === "ready" &&
           (page.value.roster.length > 0 || encounter.kind === "combat") && (
-            <Creatures roster={page.value.roster} onAdd={onEdit} />
+            <Creatures encounter={encounter} roster={page.value.roster} />
           )}
 
         {challenge !== null && <ChallengeSection challenge={challenge} />}
@@ -349,17 +361,29 @@ const dash = (value: string | number | null): string =>
  * move under the name as a caption instead of taking two columns.
  */
 function Creatures({
+  encounter,
   roster,
-  onAdd,
 }: {
+  readonly encounter: Encounter;
   readonly roster: ReadonlyArray<EncounterCreature>;
-  readonly onAdd: () => void;
 }) {
   return (
     <Section
       title="Creatures"
       action={
-        <Button variant="ghost" size="sm" className="-mr-2.5" onClick={onAdd}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-mr-2.5"
+          nativeButton={false}
+          render={
+            <Link
+              to="/campaigns/$campaignId/encounters/$encounterId/edit"
+              params={{ campaignId: encounter.campaignId, encounterId: encounter.id }}
+              hash="creatures"
+            />
+          }
+        >
           <Icon name="plus" size={13} />
           Add creature
         </Button>

@@ -61,11 +61,10 @@ describe("an encounter's page", () => {
     expect(screen.getByRole("link", { name: "All encounters" })).toBeInTheDocument();
   });
 
-  it("keeps the preview's Edit a button that does not navigate", async () => {
+  it("keeps the preview's Edit apart from the page: it opens the builder", async () => {
     await renderEncounters();
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    await screen.findByRole("dialog");
-    expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/encounters`);
+    await waitFor(() => expect(globalThis.location.pathname).toBe(`${pagePath}/edit`));
   });
 
   it("lays a line at every square's edge over the blank board", async () => {
@@ -149,12 +148,15 @@ describe("an encounter's page", () => {
     expect(screen.getByText("Read aloud at the water")).toBeInTheDocument();
   });
 
-  it("edits the encounter in its own dialog", async () => {
+  it("edits the encounter in the encounter builder", async () => {
     await renderAt(pagePath);
     await screen.findByRole("heading", { name: "Battle map" });
+    expect(screen.getByRole("button", { name: "Edit" })).toHaveAttribute(
+      "href",
+      `${pagePath}/edit`,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByLabelText(/What the place looks like/)).toHaveValue(
+    expect(await screen.findByRole("textbox", { name: "Location" })).toHaveValue(
       "A boardwalk over black water",
     );
   });

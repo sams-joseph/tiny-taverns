@@ -1,7 +1,7 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { renderAt } from "../test/renderRoute";
-import { campaign, campaignId, installStubServer } from "./campaign.fixtures";
+import { campaign, campaignId, encounterId, installStubServer } from "./campaign.fixtures";
 
 /**
  * The campaign's chrome says the same thing on every one of its screens.
@@ -188,6 +188,24 @@ describe("the campaign's chrome, across every destination it offers", () => {
         .queryAllByRole("button")
         .filter((button) => !nav.contains(button)),
     ).toEqual([press]);
+  }, 30_000);
+
+  it("draws no press on the encounter builder, and keeps Encounters lit", async () => {
+    for (const [path, title] of [
+      [`/campaigns/${campaignId}/encounters/new`, "New encounter"],
+      [`/campaigns/${campaignId}/encounters/${encounterId}/edit`, "Edit encounter"],
+    ] as const) {
+      await renderAt(path);
+      await screen.findByRole("heading", { level: 1, name: title });
+      await within(campaignRow()).findByText(/^Session \d+$/);
+      expect(within(campaignRow()).queryByRole("button", { name: ACT })).toBeNull();
+      expect(
+        within(screen.getByRole("navigation", { name: "This campaign" })).getByRole("link", {
+          name: "Encounters",
+        }),
+      ).toHaveAttribute("aria-current");
+      cleanup();
+    }
   }, 30_000);
 
   it("draws no press on the create form, whose own next step is its peach", async () => {
