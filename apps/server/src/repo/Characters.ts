@@ -27,7 +27,7 @@ import {
 import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -300,6 +300,7 @@ interface OpenSeatSessionRow {
 }
 
 interface LiveFightRow {
+  readonly campaign_id: CampaignId;
   readonly campaign_name: string;
 }
 
@@ -366,6 +367,119 @@ const nextResourcesForRest = (
 
 const withoutConcentration = (conditions: ReadonlyArray<string>): ReadonlyArray<string> =>
   conditions.filter((condition) => !condition.trim().toLowerCase().startsWith("concentrating"));
+
+/**
+ * Spend a resource or rest request id for one character, once. `false` means
+ * it was spent already and the caller answers from the row as it stands.
+ */
+export const claimCharacterRequest = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+  requestId: string | undefined,
+): Effect.Effect<boolean> =>
+  requestId === undefined
+    ? Effect.succeed(true)
+    : sql<{ readonly request_id: string }>`
+        insert into character_resource_request (character_id, request_id)
+        values (${characterId}, ${requestId})
+        on conflict do nothing
+        returning request_id
+      `.pipe(
+        Effect.map((rows) => rows.length === 1),
+        Effect.orDie,
+      );
+
+/**
+ * The live fight this character is on the table in, at any campaign. A rest
+ * is refused while there is one: the combatant holds the fight's copy of the
+ * character's hit points and conditions, and a rest would leave the two apart.
+ */
+export const liveFightOf = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+): Effect.Effect<LiveFightRow | undefined> =>
+  sql<LiveFightRow>`
+    select campaign.id as campaign_id, campaign.name as campaign_name
+    from combatant
+    join encounter_run on encounter_run.id = combatant.encounter_run_id
+    join session on session.id = encounter_run.session_id
+    join campaign on campaign.id = session.campaign_id
+    where combatant.character_id = ${characterId}
+      and encounter_run.ended_at is null
+    order by encounter_run.created_at desc, encounter_run.id desc
+    limit 1
+  `.pipe(
+    Effect.map((rows) => rows[0]),
+    Effect.orDie,
+  );
+
+/**
+ * **The rest rule**, as one statement over one character, whoever asks. The
+ * owner rests their own character (`Characters.rest`, reach `ownCharacter`);
+ * the creator rests the party (`Party.rest`, reach `characterVitalsWritable`).
+ * Both call this, so the two cannot disagree about what a rest gives back.
+ *
+ * A long rest heals to full, zeroes temporary hit points, resets every
+ * recharging counter, returns half the hit dice and ends concentration; other
+ * conditions stay. A short rest resets short counters and spends up to the
+ * requested hit dice on rolled healing.
+ *
+ * Runs inside the caller's transaction, after its fight check and retry claim.
+ * `before` is the row the caller read under the same reach.
+ */
+export const restCharacterRow = (
+  sql: SqlClient.SqlClient,
+  before: CharacterRow,
+  kind: CharacterRest["kind"],
+  hitDiceRequested: number,
+  reach: Statement.Fragment,
+): Effect.Effect<
+  {
+    readonly row: CharacterRow;
+    readonly detail: {
+      readonly rest: CharacterRest["kind"];
+      readonly hitDiceSpent: number;
+      readonly healing: number;
+    };
+  },
+  SqlError.SqlError
+> =>
+  Effect.gen(function* () {
+    const resources = before.body.resources ?? [];
+    const { resources: nextResources, hitDiceSpent } = nextResourcesForRest(
+      resources,
+      kind,
+      hitDiceRequested,
+    );
+    const hitDiceResource = resources.find((resource) => resource.id === "hit-dice");
+    const healing =
+      kind === "short"
+        ? rollHitDiceHealing(
+            hitDiceSpent,
+            hitDieSides(hitDiceResource, before.body),
+            conModifier(before.body),
+          )
+        : 0;
+    const nextSheet: CharacterSheet = { ...before.body, resources: nextResources };
+    const nextConditions =
+      kind === "long" ? withoutConcentration(before.conditions) : before.conditions;
+    const hpCurrent =
+      kind === "long" ? sql`character.hp_max` : clampedCharacterHp(sql, healing > 0 ? -healing : 0);
+    const tempHp = kind === "long" ? sql`0` : sql`character.temp_hp`;
+    const rows = yield* sql<CharacterRow>`
+      update character
+      set body = ${encodeSheet(nextSheet)}::jsonb,
+          hp_current = ${hpCurrent},
+          temp_hp = ${tempHp},
+          conditions = ${nextConditions},
+          version = character.version + 1,
+          updated_at = now()
+      where character.id = ${before.id}
+        and ${reach}
+      returning character.*, ${portraitColumns(sql)}
+    `;
+    return { row: rows[0]!, detail: { rest: kind, hitDiceSpent, healing } };
+  });
 
 interface LevelSpellRow {
   readonly id: SpellId;
@@ -566,22 +680,6 @@ export class Characters extends Context.Service<
           ),
         );
 
-      const claimRequest = (
-        characterId: CharacterId,
-        requestId: string | undefined,
-      ): Effect.Effect<boolean> =>
-        requestId === undefined
-          ? Effect.succeed(true)
-          : sql<{ readonly request_id: string }>`
-              insert into character_resource_request (character_id, request_id)
-              values (${characterId}, ${requestId})
-              on conflict do nothing
-              returning request_id
-            `.pipe(
-              Effect.map((rows) => rows.length === 1),
-              Effect.orDie,
-            );
-
       const readOwn = (id: CharacterId, actor: Actor): Effect.Effect<CharacterRow, NotFound> =>
         sql<CharacterRow>`
           select character.*, ${portraitColumns(sql)} from character where character.id = ${id} and ${ownCharacter(sql, actor)}
@@ -649,22 +747,6 @@ export class Characters extends Context.Service<
               requestId,
             }),
           { discard: true },
-        );
-
-      const liveFightOf = (characterId: CharacterId): Effect.Effect<string | undefined> =>
-        sql<LiveFightRow>`
-          select campaign.name as campaign_name
-          from combatant
-          join encounter_run on encounter_run.id = combatant.encounter_run_id
-          join session on session.id = encounter_run.session_id
-          join campaign on campaign.id = session.campaign_id
-          where combatant.character_id = ${characterId}
-            and encounter_run.ended_at is null
-          order by encounter_run.created_at desc, encounter_run.id desc
-          limit 1
-        `.pipe(
-          Effect.map((rows) => rows[0]?.campaign_name),
-          Effect.orDie,
         );
 
       const recomputeForLevel = (
@@ -938,7 +1020,7 @@ export class Characters extends Context.Service<
                 .withTransaction(
                   Effect.gen(function* () {
                     yield* readOwn(id, actor);
-                    const claimed = yield* claimRequest(id, payload.requestId);
+                    const claimed = yield* claimCharacterRequest(sql, id, payload.requestId);
                     if (!claimed) {
                       return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
                     }
@@ -995,60 +1077,25 @@ export class Characters extends Context.Service<
                 .withTransaction(
                   Effect.gen(function* () {
                     const before = yield* readOwn(id, actor);
-                    const liveFight = yield* liveFightOf(id);
-                    if (liveFight !== undefined) return yield* restWhileFighting(liveFight);
-                    const claimed = yield* claimRequest(id, payload.requestId);
+                    const liveFight = yield* liveFightOf(sql, id);
+                    if (liveFight !== undefined) {
+                      return yield* restWhileFighting(liveFight.campaign_name);
+                    }
+                    const claimed = yield* claimCharacterRequest(sql, id, payload.requestId);
                     if (!claimed) {
                       return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
                     }
 
-                    const resources = before.body.resources ?? [];
-                    const { resources: nextResources, hitDiceSpent } = nextResourcesForRest(
-                      resources,
+                    const rested = yield* restCharacterRow(
+                      sql,
+                      before,
                       payload.kind,
                       payload.hitDice ?? 0,
+                      ownCharacter(sql, actor),
                     );
-                    const hitDiceResource = resources.find(
-                      (resource) => resource.id === "hit-dice",
-                    );
-                    const healing =
-                      payload.kind === "short"
-                        ? rollHitDiceHealing(
-                            hitDiceSpent,
-                            hitDieSides(hitDiceResource, before.body),
-                            conModifier(before.body),
-                          )
-                        : 0;
-                    const nextSheet: CharacterSheet = { ...before.body, resources: nextResources };
-                    const nextConditions =
-                      payload.kind === "long"
-                        ? withoutConcentration(before.conditions)
-                        : before.conditions;
-                    const hpCurrent =
-                      payload.kind === "long"
-                        ? sql`character.hp_max`
-                        : clampedCharacterHp(sql, healing > 0 ? -healing : 0);
-                    const tempHp = payload.kind === "long" ? sql`0` : sql`character.temp_hp`;
-                    const rows = yield* sql<CharacterRow>`
-                      update character
-                      set body = ${encodeSheet(nextSheet)}::jsonb,
-                          hp_current = ${hpCurrent},
-                          temp_hp = ${tempHp},
-                          conditions = ${nextConditions},
-                          version = character.version + 1,
-                          updated_at = now()
-                      where character.id = ${id}
-                        and ${ownCharacter(sql, actor)}
-                      returning character.*, ${portraitColumns(sql)}
-                    `;
                     const sessions = yield* openSeatSessions(id, actor);
-                    yield* appendTouched(
-                      id,
-                      sessions,
-                      { rest: payload.kind, hitDiceSpent, healing },
-                      payload.requestId,
-                    );
-                    return { character: asCharacter(rows[0]!), sessions };
+                    yield* appendTouched(id, sessions, rested.detail, payload.requestId);
+                    return { character: asCharacter(rested.row), sessions };
                   }),
                 )
                 .pipe(

@@ -18,12 +18,13 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * - **The owner seats their own character** (`POST …/party { characterId }`) —
  *   the schema proves ownership with a composite key, so a creator cannot take
  *   somebody else's character; consent is which endpoint exists.
- * - **The creator manages the table**: seat visibility, retiring any seat, and
- *   the damage delta. An owner may retire their own seat too — leaving a table
- *   is theirs.
- * - **Nobody writes another account's character through a seat.** Damage is
- *   the one write that reaches the shared row from the campaign side, and it
- *   is the same delta-with-one-clamp the fight has always made.
+ * - **The creator manages the table**: seat visibility, retiring any seat, the
+ *   damage delta, and the party's long rest. An owner may retire their own seat
+ *   too — leaving a table is theirs.
+ * - **Nobody edits another account's sheet through a seat.** What reaches the
+ *   shared row from the campaign side is live play: the damage delta (the same
+ *   delta-with-one-clamp the fight has always made), conditions and temporary
+ *   hit points, and the long rest, which applies the owner's own rest rule.
  */
 export class CampaignCharacter extends Schema.Class<CampaignCharacter>("CampaignCharacter")({
   id: CampaignCharacterId,
@@ -99,6 +100,20 @@ export const PartySeatUpdate = Schema.Struct({
   inspiration: Schema.optional(Schema.Boolean),
 });
 export type PartySeatUpdate = typeof PartySeatUpdate.Type;
+
+/**
+ * The creator's long rest for the whole table: every live seat's character
+ * rests by the owner's own rule (`CharacterRest` with `kind: "long"`), in one
+ * transaction. There is no short rest here: a short rest spends hit dice the
+ * owner chooses, and nobody chooses them for another account. Refused with a
+ * `Conflict` while a seated character is in a live fight. `requestId` guards a
+ * retry per character, as the owner's rest does.
+ */
+export const PartyRest = Schema.Struct({
+  kind: Schema.Literal("long"),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type PartyRest = typeof PartyRest.Type;
 
 /** Where one of this account's characters is seated — `GET /me/characters`' join keys. */
 export class CharacterSeatRef extends Schema.Class<CharacterSeatRef>("CharacterSeatRef")({
