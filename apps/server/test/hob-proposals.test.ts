@@ -420,9 +420,10 @@ describe("accepting one", () => {
     expect(encounter.assistantTurnId).toBe(turnId);
 
     const roster = await runtime.runPromise(
-      Effect.flatMap(EncounterCreatures, (repo) =>
-        repo.list(fixture.campaign.id, encounter.id),
-      ).pipe(withActor(fixture.dm), Effect.orDie),
+      Effect.all([EncounterCreatures, asDm(fixture.dm, fixture.campaign.id)]).pipe(
+        Effect.flatMap(([repo, dm]) => repo.list(dm, encounter.id)),
+        Effect.orDie,
+      ),
     );
     expect(roster).toHaveLength(1);
     // The source was the DM's Library original, so the accept minted the
@@ -438,8 +439,8 @@ describe("accepting one", () => {
 
     // And it reads back through the ordinary endpoint, unchanged.
     const read = await runtime.runPromise(
-      Effect.flatMap(Encounters, (repo) => repo.findById(fixture.campaign.id, encounter.id)).pipe(
-        withActor(fixture.dm),
+      Effect.all([Encounters, asDm(fixture.dm, fixture.campaign.id)]).pipe(
+        Effect.flatMap(([repo, dm]) => repo.findById(dm, encounter.id)),
         Effect.orDie,
       ),
     );

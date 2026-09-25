@@ -110,9 +110,8 @@ const asDmOf = Effect.map(
  * `drawBattleMap` records the one picture it will ever have. The roster's
  * creature types go with it: empty after the form's create, which carries no
  * roster, and the accepted roster after Hob's, which commits it first. Answers the
- * encounter unchanged — `Encounter` carries no map, because a player may read
- * a shared encounter — and never fails: a picture is not worth failing a
- * create for.
+ * encounter unchanged — `Encounter` carries no map; the map is its own
+ * creator read — and never fails: a picture is not worth failing a create for.
  */
 const drawEncounterMapOf = Effect.map(
   Effect.all({ creators: CampaignCreatorActors, maps: BattleMaps, images: HobImages }),
@@ -526,16 +525,22 @@ const EncountersLive = HttpApiBuilder.group(
     const encounters = yield* Encounters;
     const drawMap = yield* drawEncounterMapOf;
     const images = yield* HobImages;
+    const asDm = yield* asDmOf;
     return (
       handlers
-        .handle("list", ({ params, query }) => encounters.list(params.campaignId, query))
+        // The reads are the creator's alone — `Encounter` carries the
+        // difficulty — so anybody else is `NotFound` before a row is read. A
+        // player reads `playerEncounters`.
+        .handle("list", ({ params, query }) =>
+          asDm(params.campaignId, (creator) => encounters.list(creator, query)),
+        )
         // The battle map is started after the create commits; Hob's accept is
         // the other way an encounter is made, and does the same.
         .handle("create", ({ params, payload }) =>
           encounters.create(params.campaignId, payload).pipe(Effect.flatMap(drawMap)),
         )
         .handle("findById", ({ params }) =>
-          encounters.findById(params.campaignId, params.encounterId),
+          asDm(params.campaignId, (creator) => encounters.findById(creator, params.encounterId)),
         )
         .handle("update", ({ params, payload }) =>
           encounters.update(params.campaignId, params.encounterId, payload),
@@ -548,6 +553,20 @@ const EncountersLive = HttpApiBuilder.group(
             .pipe(Effect.tap(() => images.drainSoon)),
         )
     );
+  }),
+);
+
+/** The shared encounters as a player is told them: no difficulty, names and counts. */
+const PlayerEncountersLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerEncounters",
+  Effect.fnUntraced(function* (handlers) {
+    const encounters = yield* Encounters;
+    return handlers
+      .handle("list", ({ params }) => encounters.listAsPlayer(params.campaignId))
+      .handle("find", ({ params }) =>
+        encounters.findAsPlayer(params.campaignId, params.encounterId),
+      );
   }),
 );
 
@@ -726,8 +745,11 @@ const EncounterCreaturesLive = HttpApiBuilder.group(
   "encounterCreatures",
   Effect.fnUntraced(function* (handlers) {
     const roster = yield* EncounterCreatures;
+    const asDm = yield* asDmOf;
     return handlers
-      .handle("list", ({ params }) => roster.list(params.campaignId, params.encounterId))
+      .handle("list", ({ params }) =>
+        asDm(params.campaignId, (creator) => roster.list(creator, params.encounterId)),
+      )
       .handle("create", ({ params, payload }) =>
         roster.create(params.campaignId, params.encounterId, payload),
       )
@@ -1577,6 +1599,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     NotesLive,
     EncountersLive,
     BattleMapsLive,
+    PlayerEncountersLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

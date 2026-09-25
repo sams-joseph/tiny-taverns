@@ -328,13 +328,13 @@ describe("the prep is the creator's alone", () => {
 
   it("shows a player the shared encounter's kind, and nothing of its prep", async () => {
     const found = await as(ilse.token, (client) =>
-      client.encounters.findById({ params: { campaignId: table, encounterId: shown } }),
+      client.playerEncounters.find({ params: { campaignId: table, encounterId: shown } }),
     );
     const listed = await as(ilse.token, (client) =>
-      client.encounters.list({ params: { campaignId: table }, query: {} }),
+      client.playerEncounters.list({ params: { campaignId: table } }),
     );
     expect(found.kind).toBe("challenge");
-    expect(listed.items.map((entry) => entry.id)).toContain(shown);
+    expect(listed.map((entry) => entry.id)).toContain(shown);
     for (const read of [found, listed]) {
       const text = JSON.stringify(read);
       expect(text).not.toContain("TACTIC-THE-CARAVAN-MASTER-LIES");
@@ -683,7 +683,7 @@ describe("an encounter's Ready", () => {
       ready: true,
     });
     const found = await as(quill.token, (client) =>
-      client.encounters.findById({ params: { campaignId: table, encounterId: shared.id } }),
+      client.playerEncounters.find({ params: { campaignId: table, encounterId: shared.id } }),
     );
     expect(found).not.toHaveProperty("ready");
     expect(

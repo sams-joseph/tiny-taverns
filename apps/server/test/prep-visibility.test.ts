@@ -12,7 +12,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Sessions } from "../src/repo/Sessions.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -181,7 +181,9 @@ describe("a player actor, on encounters", () => {
   it("cannot read a dm-visibility encounter", async () => {
     const error = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.player)(encounters.findById(fixture.campaign.id, fixture.encounter.id)),
+        withActor(fixture.player)(
+          encounters.findAsPlayer(fixture.campaign.id, fixture.encounter.id),
+        ),
       ),
     );
 
@@ -190,14 +192,14 @@ describe("a player actor, on encounters", () => {
   });
 
   it("sees only the shared encounter when listing", async () => {
-    const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(items(encounters.list(fixture.campaign.id, {}))),
+    const asCreator = await runtime.runPromise(
+      Effect.flatMap(asDm(fixture.dm, fixture.campaign.id), (dm) => items(encounters.list(dm, {}))),
     );
     const asPlayer = await runtime.runPromise(
-      withActor(fixture.player)(items(encounters.list(fixture.campaign.id, {}))),
+      withActor(fixture.player)(encounters.listAsPlayer(fixture.campaign.id)),
     );
 
-    expect(asDm.map((e) => e.id)).toContain(fixture.encounter.id);
+    expect(asCreator.map((e) => e.id)).toContain(fixture.encounter.id);
     expect(asPlayer.map((e) => e.id)).toEqual([fixture.sharedEncounter.id]);
   });
 
@@ -221,7 +223,9 @@ describe("a player actor, on encounters", () => {
     expect(removed._tag).toBe("NotFound");
 
     const stillThere = await runtime.runPromise(
-      withActor(fixture.dm)(encounters.findById(fixture.campaign.id, fixture.sharedEncounter.id)),
+      Effect.flatMap(asDm(fixture.dm, fixture.campaign.id), (dm) =>
+        encounters.findById(dm, fixture.sharedEncounter.id),
+      ),
     );
     expect(stillThere.name).toBe("The ferryman's price");
   });
@@ -345,23 +349,25 @@ describe("a campaign-scoped actor", () => {
     const found = await runtime.runPromise(
       Effect.flip(
         withActor(fixture.player)(
-          encounters.findById(fixture.otherTable.id, fixture.encounterElsewhere.id),
+          encounters.findAsPlayer(fixture.otherTable.id, fixture.encounterElsewhere.id),
         ),
       ),
     );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(items(encounters.list(fixture.otherTable.id, {})))),
+      Effect.flip(withActor(fixture.player)(encounters.listAsPlayer(fixture.otherTable.id))),
     );
 
     expect(found._tag).toBe("NotFound");
     expect(listed._tag).toBe("NotFound");
 
     // …and it really is there and really is shared.
-    const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(items(encounters.list(fixture.otherTable.id, {}))),
+    const asCreator = await runtime.runPromise(
+      Effect.flatMap(asDm(fixture.dm, fixture.otherTable.id), (dm) =>
+        items(encounters.list(dm, {})),
+      ),
     );
-    expect(asDm.map((e) => e.id)).toEqual([fixture.encounterElsewhere.id]);
-    expect(asDm[0]!.visibility).toBe("shared");
+    expect(asCreator.map((e) => e.id)).toEqual([fixture.encounterElsewhere.id]);
+    expect(asCreator[0]!.visibility).toBe("shared");
   });
 
   it("cannot reach the other campaign's checklist, by either path", async () => {
@@ -396,7 +402,7 @@ describe("a campaign-scoped actor", () => {
     const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
 
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(items(encounters.list(fixture.otherTable.id, {})))),
+      Effect.flip(withActor(scopedDm)(encounters.listAsPlayer(fixture.otherTable.id))),
     );
     const written = await runtime.runPromise(
       Effect.flip(
@@ -423,7 +429,9 @@ describe("another account", () => {
 
     const encounter = await runtime.runPromise(
       Effect.flip(
-        withActor(outsider)(encounters.findById(fixture.campaign.id, fixture.sharedEncounter.id)),
+        withActor(outsider)(
+          encounters.findAsPlayer(fixture.campaign.id, fixture.sharedEncounter.id),
+        ),
       ),
     );
     const item = await runtime.runPromise(

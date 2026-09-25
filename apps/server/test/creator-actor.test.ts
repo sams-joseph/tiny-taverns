@@ -475,7 +475,12 @@ describe("the scope, counted", () => {
     // Ninety-three to ninety-five are `SeatPreps.list`, `update` and the inner
     // read both restate: a seat's hook and secret are the DM's own notes about
     // a player's character, gated from the day they were declared.
-    expect(gated).toBe(95);
+    // Ninety-six through ninety-eight are `Encounters.list`, `findById` and
+    // `EncounterCreatures.list`: `Encounter` carries the computed difficulty
+    // and a roster line its creature's numbers, which a player is not told
+    // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
+    // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
+    expect(gated).toBe(98);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -715,7 +720,10 @@ describe("the scope, counted", () => {
     // `Party.rest` is the one hundred and sixty-first, for `Party`'s reason
     // above: it is a write whose reach is `characterVitalsWritable`, and
     // `campaignWritableById` underneath is already the creator predicate.
-    expect(ungated).toBe(161);
+    // Gating `Encounters.list`, `findById` and `EncounterCreatures.list` gave
+    // three up, and `Encounters.listAsPlayer` and `findAsPlayer` took two
+    // back: `Recap`'s arithmetic, with the roster folded into the encounter.
+    expect(ungated).toBe(160);
   });
 });
 

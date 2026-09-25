@@ -725,9 +725,16 @@ const READS: Record<
   spell: () => items(Effect.flatMap(Spells, (r) => r.library({ q: "Shield" }))),
   equipment: () => items(Effect.flatMap(EquipmentRepo, (r) => r.library({ q: "Hemp Rope" }))),
   magic_item: () => items(Effect.flatMap(MagicItems, (r) => r.library({ q: "Lantern Ring" }))),
-  encounter: (f) => items(Effect.flatMap(Encounters, (r) => r.list(f.campaign.id, {}))),
+  // An encounter and its roster are creator-only in their wide reads (a
+  // player's is `Encounters.listAsPlayer`), gated like the tables below.
+  encounter: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      items(Effect.flatMap(Encounters, (r) => r.list(dm, {}))),
+    ),
   encounter_creature: (f) =>
-    Effect.flatMap(EncounterCreatures, (r) => r.list(f.campaign.id, f.encounter.id)),
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(EncounterCreatures, (r) => r.list(dm, f.encounter.id)),
+    ),
   // The three DM-gated tables. The proof is obtained the same way `src` obtains
   // it — from the ambient actor — so a stranger fails at the gate rather than
   // at the read, which is the `NotFound` branch this file already allows for.

@@ -18,6 +18,8 @@ import {
   type EncounterUpdate,
   NotFound,
   type Page,
+  PlayerEncounter,
+  type PlayerEncounterCreature,
   type SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -93,18 +95,51 @@ const toEncounter =
       kind: row.kind,
       tags: row.tags,
       creatureCount: row.creature_count,
-      lastPlayed:
-        row.played_run_id === null
-          ? null
-          : {
-              runId: row.played_run_id,
-              sessionId: row.played_session_id!,
-              sessionNumber: row.played_session_number!,
-              endedAt: DateTime.fromDateUnsafe(row.played_ended_at!),
-              endedReason: row.played_ended_reason!,
-            },
+      lastPlayed: playedOf(row),
       ...provenanceOf(row),
     });
+
+type PlayedColumns = Pick<
+  EncounterRow,
+  | "played_run_id"
+  | "played_session_id"
+  | "played_session_number"
+  | "played_ended_at"
+  | "played_ended_reason"
+>;
+
+/**
+ * The player projection's row: the encounter's own player-safe columns, the
+ * visible roster as names and counts, and the last playing. No creature
+ * number is selected, so none can reach `PlayerEncounter` by a forgotten drop.
+ */
+interface PlayerEncounterRow
+  extends PlayedColumns, Pick<EncounterRow, "id" | "campaign_id" | "name" | "kind" | "tags"> {
+  /** `json`, which the pg driver parses. */
+  readonly creatures: ReadonlyArray<PlayerEncounterCreature>;
+}
+
+const playedOf = (row: PlayedColumns) =>
+  row.played_run_id === null
+    ? null
+    : {
+        runId: row.played_run_id,
+        sessionId: row.played_session_id!,
+        sessionNumber: row.played_session_number!,
+        endedAt: DateTime.fromDateUnsafe(row.played_ended_at!),
+        endedReason: row.played_ended_reason!,
+      };
+
+const toPlayerEncounter = (row: PlayerEncounterRow): PlayerEncounter =>
+  new PlayerEncounter({
+    id: row.id,
+    campaignId: row.campaign_id,
+    name: row.name,
+    kind: row.kind,
+    tags: row.tags,
+    creatures: row.creatures,
+    lastPlayed: playedOf(row),
+  });
 
 interface EncounterPrepRow {
   readonly encounter_id: EncounterId;
@@ -208,6 +243,26 @@ const rosterXp = (
   ), '[]'::json) as roster_xp`;
 
 /**
+ * The roster as a player is told it: each visible line's creature name and
+ * count, oldest line first. The same visibility rule as `creatureCount`, and
+ * nothing else of the creature is selected — its numbers are the creator's.
+ */
+const rosterNames = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`coalesce((
+    select json_agg(json_build_object(
+      'name', creature.name,
+      'count', encounter_creature.count
+    ) order by encounter_creature.created_at, encounter_creature.id)
+    from encounter_creature
+    join creature on creature.id = encounter_creature.creature_id
+    where ${nestedRowReadableWithin(sql, ROSTER, campaignId, actor)}
+  ), '[]'::json) as creatures`;
+
+/**
  * The last time each encounter came off the table, among the runs this reader
  * can see — `containedRowReadable` over `RUN`, the predicate every run read
  * uses, so a fight the DM kept hidden, or one on a night the DM kept hidden,
@@ -248,15 +303,30 @@ const lastPlayed = (
 export class Encounters extends Context.Service<
   Encounters,
   {
-    /** Paged, oldest first — see `repo/paging.ts`. */
+    /**
+     * Paged, oldest first — see `repo/paging.ts`. The creator's alone, so it
+     * takes the proof: `Encounter` carries the difficulty, which no player is
+     * told. A player's read is `listAsPlayer`.
+     */
     readonly list: (
-      campaignId: CampaignId,
+      creator: CampaignCreatorActor,
       filter: CreatedPageFilterValues,
-    ) => Effect.Effect<Page<Encounter, CreatedOrder>, NotFound, CurrentActor>;
+    ) => Effect.Effect<Page<Encounter, CreatedOrder>>;
     readonly findById: (
+      creator: CampaignCreatorActor,
+      id: EncounterId,
+    ) => Effect.Effect<Encounter, NotFound>;
+    /**
+     * The encounters this reader can see, as `PlayerEncounter`: no
+     * difficulty, and the roster as names and counts. Oldest first, unpaged.
+     */
+    readonly listAsPlayer: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<ReadonlyArray<PlayerEncounter>, NotFound, CurrentActor>;
+    readonly findAsPlayer: (
       campaignId: CampaignId,
       id: EncounterId,
-    ) => Effect.Effect<Encounter, NotFound, CurrentActor>;
+    ) => Effect.Effect<PlayerEncounter, NotFound, CurrentActor>;
     /**
      * The encounter, its map, its prep and its roster, in one transaction.
      * `from` is the accept path's, and only its — see `Notes.create`.
@@ -356,17 +426,37 @@ export class Encounters extends Context.Service<
           ({ rows, toEncounter }) => toEncounter(rows[0]!),
         );
 
+      /**
+       * The player projection: the same `rowReadable` and the same roster
+       * rule as every read here, and none of the numbers.
+       */
+      const selectPlayerEncounters = (
+        campaignId: CampaignId,
+        actor: Actor,
+        where: Statement.Fragment,
+      ) =>
+        Effect.map(
+          sql<PlayerEncounterRow>`
+            select encounter.id, encounter.campaign_id, encounter.name, encounter.kind,
+                   encounter.tags, ${rosterNames(sql, campaignId, actor)}, last_played.*
+            from encounter
+            ${lastPlayed(sql, campaignId, actor)}
+            where ${sql.and([rowReadable(sql, "encounter", campaignId, actor), where])}
+            order by encounter.created_at, encounter.id
+          `,
+          (rows) => rows.map(toPlayerEncounter),
+        );
+
       return {
-        list: (campaignId, filter) =>
+        list: (creator, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const { campaign, actor } = creator;
               const { rows, toEncounter } = yield* selectEncounters(
-                campaignId,
+                campaign,
                 actor,
                 sql.and([
-                  rowReadable(sql, "encounter", campaignId, actor),
+                  rowReadable(sql, "encounter", campaign, actor),
                   ...pageClauses(sql, ordering, filter.cursor),
                 ]),
                 sql`order by ${orderClause(sql, ordering)} limit ${pageLimit(filter.limit)}`,
@@ -375,20 +465,43 @@ export class Encounters extends Context.Service<
             }),
           ),
 
-        findById: (campaignId, id) =>
+        findById: (creator, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
+              const { campaign, actor } = creator;
               const { rows, toEncounter } = yield* selectEncounters(
-                campaignId,
+                campaign,
                 actor,
                 sql.and([
                   sql`encounter.id = ${id}`,
-                  rowReadable(sql, "encounter", campaignId, actor),
+                  rowReadable(sql, "encounter", campaign, actor),
                 ]),
               );
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
               return toEncounter(rows[0]!);
+            }),
+          ),
+
+        listAsPlayer: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              return yield* selectPlayerEncounters(campaignId, actor, sql`true`);
+            }),
+          ),
+
+        findAsPlayer: (campaignId, id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* selectPlayerEncounters(
+                campaignId,
+                actor,
+                sql`encounter.id = ${id}`,
+              );
+              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
+              return rows[0]!;
             }),
           ),
 
