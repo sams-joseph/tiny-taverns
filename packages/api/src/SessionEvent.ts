@@ -30,6 +30,16 @@ export const SessionEventKind = Schema.Literals([
   /** A token was put on the board, moved, or taken off it. Carries `{from, to}`. */
   "combatant-moved",
   "turn-advanced",
+  /** A conversation turned into a fight: the run's mode became `combat`. */
+  "run-escalated",
+  /**
+   * The DM changed a running scene — a beat ticked, the attitude noted, a
+   * hazard's stages — or logged or removed a check or a save. The DM's alone,
+   * like the scene: these are appended `dm` whatever the run's visibility.
+   */
+  "scene-updated",
+  "check-logged",
+  "check-removed",
   /**
    * A character changed while the night was running.
    *

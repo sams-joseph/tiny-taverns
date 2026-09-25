@@ -79,6 +79,12 @@ const NOT_CONTENT = [
   // creator's alone through the creator proof like the map it came from. See
   // 0058_encounter_run_boards.ts.
   "encounter_run_board",
+  // A running scene's log of checks and saves, and the scene itself — its
+  // beats, its challenge's snapshot, the DM's notes: copied from and sitting
+  // beside the prep, the creator's alone through the creator proof, with their
+  // run's provenance. See 0065_run_scenes.ts.
+  "encounter_run_check",
+  "encounter_run_scene",
   "equipment_category",
   "equipment_content",
   "equipment_property",

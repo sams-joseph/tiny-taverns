@@ -22,6 +22,7 @@ import { Groups } from "../src/repo/Groups.js";
 import { Characters } from "../src/repo/Characters.js";
 import { ClassProgression } from "../src/repo/ClassProgression.js";
 import { BattleMaps } from "../src/repo/BattleMaps.js";
+import { RunScenes } from "../src/repo/RunScenes.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { type CampaignCreatorActor, CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -303,6 +304,7 @@ const runtime = ManagedRuntime.make(
     CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
+    RunScenes.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     EquipmentRepo.layer,
     Feats.layer,
@@ -469,7 +471,10 @@ const makeFixture = Effect.gen(function* () {
       hp: 11,
     }),
   );
-  const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
+  // A conversation, so the run keeps a scene with a check in it to miss.
+  const encounter = yield* as(
+    encounters.create(campaign.id, { name: "Ambush in the reeds", kind: "social" }),
+  );
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: creature.id, count: 6 }));
 
   // A homebrew class, authored into this account's Library. Since the
@@ -538,7 +543,16 @@ const makeFixture = Effect.gen(function* () {
 
   const asDm = yield* as(dmOf(campaign.id));
   const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
-  yield* as(combatants.create(asDm, session.id, run.id, { displayName: "Croaker 1" }));
+  const croaker = yield* as(
+    combatants.create(asDm, session.id, run.id, { displayName: "Croaker 1" }),
+  );
+  yield* Effect.flatMap(RunScenes, (scenes) =>
+    scenes.logCheck(asDm, session.id, run.id, {
+      combatantId: croaker.id,
+      skill: "Insight",
+      outcome: "success",
+    }),
+  ).pipe(Effect.orDie);
 
   const thread = yield* as(hob.start("dm", campaign.id, "Who is the ferryman?"));
   yield* as(
@@ -644,6 +658,7 @@ const READS: Record<
     | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns
+    | RunScenes
     | Encounters
     | EquipmentRepo
     | Feats
@@ -753,6 +768,19 @@ const READS: Record<
         Effect.map(r.forRun(dm, f.session.id, f.run.id), (board) =>
           board === null ? [] : [board],
         ),
+      ),
+    ),
+  // A running scene and its log of checks, gated like the run they belong to.
+  encounter_run_scene: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(RunScenes, (r) =>
+        Effect.map(r.read(dm, f.session.id, f.run.id), (scene) => [scene]),
+      ),
+    ),
+  encounter_run_check: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      Effect.flatMap(RunScenes, (r) =>
+        Effect.map(r.read(dm, f.session.id, f.run.id), (scene) => scene.checks),
       ),
     ),
   session_event: (f) =>

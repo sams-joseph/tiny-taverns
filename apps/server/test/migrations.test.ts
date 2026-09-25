@@ -26,6 +26,7 @@ import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
 import encounterPrep from "../src/migrations/0060_encounter_prep.js";
 import encounterReady from "../src/migrations/0061_encounter_ready.js";
 import characterInspiration from "../src/migrations/0062_character_inspiration.js";
+import runScenes from "../src/migrations/0065_run_scenes.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -81,6 +82,10 @@ const inspirationRuntime = ManagedRuntime.make(
   freshDatabase("taverns_test_migrations_inspiration"),
 );
 afterAll(() => inspirationRuntime.dispose());
+
+/** A fifteenth, for runs played before a run had a mode or a scene. */
+const scenesRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_scenes"));
+afterAll(() => scenesRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -197,6 +202,8 @@ describe("migrations", () => {
       "encounter_prep",
       "encounter_run",
       "encounter_run_board",
+      "encounter_run_check",
+      "encounter_run_scene",
       "equipment",
       "equipment_category",
       "equipment_content",
@@ -321,6 +328,7 @@ describe("migrations", () => {
       { migration_id: 62, name: "character_inspiration" },
       { migration_id: 63, name: "seat_prep" },
       { migration_id: 64, name: "combatant_positions" },
+      { migration_id: 65, name: "run_scenes" },
     ]);
   }, 60_000);
 
@@ -394,6 +402,7 @@ describe("migrations", () => {
       { migration_id: 62, name: "character_inspiration" },
       { migration_id: 63, name: "seat_prep" },
       { migration_id: 64, name: "combatant_positions" },
+      { migration_id: 65, name: "run_scenes" },
     ]);
   }, 60_000);
 });
@@ -1446,5 +1455,74 @@ describe("upgrading a database whose characters predate inspiration", () => {
 
     expect(measured.characters).toEqual([{ name: "Brannoc", inspiration: false }]);
     expect(measured.cleared).toContain("not-null");
+  }, 60_000);
+});
+
+describe("upgrading a database whose runs predate modes and scenes", () => {
+  it("makes every run a fight, whatever its encounter's kind, with an empty scene", async () => {
+    const measured = await scenesRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0064` left: no mode, no scene, no checks.
+        yield* sql`drop table encounter_run_check`;
+        yield* sql`drop table encounter_run_scene`;
+        yield* sql`alter table encounter_run drop column mode`;
+
+        const accounts = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "scenes-hash" })}
+          returning id
+        `;
+        const campaign = yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road");
+        // A conversation — which the runner could only play as a fight then.
+        const encounters = yield* sql<{ readonly id: string }>`
+          insert into encounter ${sql.insert({
+            campaign_id: campaign,
+            name: "A bargain at the ford",
+            kind: "social",
+          })}
+          returning id
+        `;
+        yield* sql`
+          insert into encounter_prep ${sql.insert({
+            encounter_id: encounters[0]!.id,
+            campaign_id: campaign,
+            kind: "social",
+            tactics: JSON.stringify(["Wants the toll waived"]),
+          })}
+        `;
+        const sessions = yield* sql<{ readonly id: string }>`
+          insert into session ${sql.insert({ campaign_id: campaign, number: 1 })}
+          returning id
+        `;
+        const runs = yield* sql<{ readonly id: string }>`
+          insert into encounter_run ${sql.insert({
+            session_id: sessions[0]!.id,
+            encounter_id: encounters[0]!.id,
+            encounter_name: "A bargain at the ford",
+          })}
+          returning id
+        `;
+
+        yield* runScenes;
+        const modes = yield* sql<{ readonly id: string; readonly mode: string }>`
+          select id, mode from encounter_run
+        `;
+        const scenes = yield* sql<{
+          readonly run_id: string;
+          readonly beats: ReadonlyArray<unknown>;
+          readonly challenge: unknown;
+          readonly stage: number | null;
+        }>`
+          select run_id, beats, challenge, stage from encounter_run_scene
+        `;
+        return { run: runs[0]!.id, modes, scenes };
+      }).pipe(Effect.orDie),
+    );
+    expect(measured.modes).toEqual([{ id: measured.run, mode: "combat" }]);
+    // Nothing copied from today's prep: that run was never played as a scene.
+    expect(measured.scenes).toEqual([
+      { run_id: measured.run, beats: [], challenge: null, stage: null },
+    ]);
   }, 60_000);
 });

@@ -94,6 +94,7 @@ const run = (id: string, sessionId: string, round: number) => ({
   sessionId,
   encounterId: null,
   encounterName: "Ambush in the reeds",
+  mode: "combat",
   round,
   activeCombatantId: null,
   startedAt: "2026-07-19T20:00:00.000Z",
@@ -176,6 +177,7 @@ export const recap11 = {
     {
       run: carriedRun,
       combatants: [combatant],
+      checks: [],
       continuedFrom: null,
       // The successor's round at read time — where the fight has got to *since*,
       // and emphatically not the round it paused at.
@@ -202,6 +204,7 @@ export const recap12 = {
     {
       run: resumedRun,
       combatants: [],
+      checks: [],
       // The predecessor's frozen round — the round the fight paused on.
       continuedFrom: { runId: run11Id, sessionId: session11Id, sessionNumber: 11, round: 4 },
       continuedInto: null,

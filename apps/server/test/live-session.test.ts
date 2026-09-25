@@ -1,4 +1,11 @@
-import { Actor, type CombatantId, CurrentActor, NotFound, type SessionId } from "@taverns/api";
+import {
+  Actor,
+  type CombatantId,
+  type Conflict,
+  CurrentActor,
+  NotFound,
+  type SessionId,
+} from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -857,19 +864,20 @@ describe("a campaign-scoped actor", () => {
     );
     const wrong = await freshSession(151);
 
+    const calls: ReadonlyArray<Effect.Effect<unknown, NotFound | Conflict, CurrentActor>> = [
+      runs.findById(fixture.asDm, wrong.id, run.id),
+      runs.update(fixture.asDm, wrong.id, run.id, { round: 9 }),
+      runs.nextTurn(fixture.asDm, wrong.id, run.id, {}),
+      runs.end(fixture.asDm, wrong.id, run.id),
+      combatants.list(fixture.asDm, wrong.id, run.id),
+      combatants.create(fixture.asDm, wrong.id, run.id, { displayName: "smuggled" }),
+      combatants.update(fixture.asDm, wrong.id, run.id, list[0]!.id, { initiative: 30 }),
+      combatants.damage(fixture.asDm, wrong.id, run.id, list[0]!.id, { amount: 5 }),
+      combatants.remove(fixture.asDm, wrong.id, run.id, list[0]!.id),
+      events.listForRun(fixture.asDm, wrong.id, run.id, 0, 100),
+    ];
     const attempts = await Promise.all(
-      [
-        runs.findById(fixture.asDm, wrong.id, run.id),
-        runs.update(fixture.asDm, wrong.id, run.id, { round: 9 }),
-        runs.nextTurn(fixture.asDm, wrong.id, run.id, {}),
-        runs.end(fixture.asDm, wrong.id, run.id),
-        combatants.list(fixture.asDm, wrong.id, run.id),
-        combatants.create(fixture.asDm, wrong.id, run.id, { displayName: "smuggled" }),
-        combatants.update(fixture.asDm, wrong.id, run.id, list[0]!.id, { initiative: 30 }),
-        combatants.damage(fixture.asDm, wrong.id, run.id, list[0]!.id, { amount: 5 }),
-        combatants.remove(fixture.asDm, wrong.id, run.id, list[0]!.id),
-        events.listForRun(fixture.asDm, wrong.id, run.id, 0, 100),
-      ].map((effect) => runtime.runPromise(Effect.flip(withActor(fixture.dm)(effect)))),
+      calls.map((effect) => runtime.runPromise(Effect.flip(withActor(fixture.dm)(effect)))),
     );
 
     expect(attempts.map((error) => error._tag)).toEqual(Array(attempts.length).fill("NotFound"));

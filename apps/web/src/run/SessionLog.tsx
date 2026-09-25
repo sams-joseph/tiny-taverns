@@ -36,6 +36,11 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   "combatant-damaged": (who) => `${who ?? "A combatant"} took a hit`,
   "combatant-moved": (who) => `${who ?? "A combatant"} moved on the board`,
   "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
+  "run-escalated": () => "The conversation turned into a fight",
+  // The scene is the DM's alone; these say only that it moved, never how.
+  "scene-updated": () => "The scene changed",
+  "check-logged": (who) => `${who ?? "Someone"} made a check`,
+  "check-removed": () => "A check was taken back",
   // A character changed while the night was running — the party list, not the
   // initiative order. It names a combatant only when the write reached the
   // fight from outside it, which is why the name resolves here at all; a hit

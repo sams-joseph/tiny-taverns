@@ -6,6 +6,7 @@ import {
   type Encounter,
   type EncounterId,
   ENCOUNTER_HAZARD_TEXT_MAX,
+  ENCOUNTER_OUTCOME_MAX,
   ENCOUNTER_KINDS,
   ENCOUNTER_SETTING_MAX,
   ENCOUNTER_TREASURE_MAX,
@@ -716,6 +717,30 @@ function EncounterBuilder({
                       value={skill.failures}
                       onChange={(event) =>
                         patch({ skillChallenge: { ...skill, failures: event.target.value } })
+                      }
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
+                  <Field label="If they make it" htmlFor="challenge-on-success">
+                    <Input
+                      id="challenge-on-success"
+                      maxLength={ENCOUNTER_OUTCOME_MAX}
+                      placeholder="They find the buried cache"
+                      value={skill.onSuccess}
+                      onChange={(event) =>
+                        patch({ skillChallenge: { ...skill, onSuccess: event.target.value } })
+                      }
+                    />
+                  </Field>
+                  <Field label="If it goes wrong" htmlFor="challenge-on-failure">
+                    <Input
+                      id="challenge-on-failure"
+                      maxLength={ENCOUNTER_OUTCOME_MAX}
+                      placeholder="The rope snaps, and the well is lost"
+                      value={skill.onFailure}
+                      onChange={(event) =>
+                        patch({ skillChallenge: { ...skill, onFailure: event.target.value } })
                       }
                     />
                   </Field>

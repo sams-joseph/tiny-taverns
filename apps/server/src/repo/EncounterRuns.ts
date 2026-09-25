@@ -14,6 +14,8 @@ import {
   type EncounterRunStart,
   type EncounterRunUpdate,
   type EncounterId,
+  type EncounterKind,
+  encounterKindLabel,
   type NextTurn,
   NotFound,
   type Origin,
@@ -47,6 +49,7 @@ export interface EncounterRunRow extends ProvenanceColumns {
   readonly session_id: SessionId;
   readonly encounter_id: EncounterId | null;
   readonly encounter_name: string;
+  readonly mode: EncounterKind;
   readonly round: number;
   readonly active_combatant_id: CombatantId | null;
   readonly started_at: Date;
@@ -62,6 +65,7 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     sessionId: row.session_id,
     encounterId: row.encounter_id,
     encounterName: row.encounter_name,
+    mode: row.mode,
     round: row.round,
     activeCombatantId: row.active_combatant_id,
     startedAt: DateTime.fromDateUnsafe(row.started_at),
@@ -110,7 +114,8 @@ export const runColumns = (
   return sql`encounter_run.id, encounter_run.session_id,
     case when ${known} then encounter_run.encounter_id end as encounter_id,
     ${fightName(sql, sql.or([known, campaignWritableById(sql, campaignId, actor)]))} as encounter_name,
-    encounter_run.round, encounter_run.active_combatant_id, encounter_run.started_at,
+    encounter_run.mode, encounter_run.round, encounter_run.active_combatant_id,
+    encounter_run.started_at,
     encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
     encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
     encounter_run.assistant_turn_id, encounter_run.created_at, encounter_run.updated_at`;
@@ -185,6 +190,23 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
     }
     return Effect.fail(error);
   });
+
+/** A logged check, copied onto a resumed run's log. */
+interface CarriedCheckRow {
+  readonly combatant_id: CombatantId | null;
+  readonly display_name: string;
+  readonly skill: string | null;
+  readonly save_ability: string | null;
+  readonly total: number | null;
+  readonly dc: number | null;
+  readonly outcome: string;
+  readonly stage: number | null;
+  readonly created_at: Date;
+}
+
+/** Why a scene that is not a fight refuses a turn. */
+const notAFight = (mode: EncounterKind): string =>
+  `a ${encounterKindLabel(mode).toLowerCase()} scene takes no turns`;
 
 interface PartyRow {
   readonly id: CharacterId;
@@ -271,7 +293,12 @@ export class EncounterRuns extends Context.Service<
       sessionId: SessionId,
       id: EncounterRunId,
       payload: NextTurn,
-    ) => Effect.Effect<EncounterRun, NotFound>;
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
+    readonly escalate: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      id: EncounterRunId,
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly end: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -392,8 +419,9 @@ export class EncounterRuns extends Context.Service<
                     const encounters = yield* sql<{
                       readonly id: EncounterId;
                       readonly name: string;
+                      readonly kind: EncounterKind;
                     }>`
-                      select encounter.id, encounter.name from encounter
+                      select encounter.id, encounter.name, encounter.kind from encounter
                       where encounter.id = ${payload.encounterId}
                         and ${rowReadable(sql, "encounter", campaignId, actor)}
                     `;
@@ -411,6 +439,7 @@ export class EncounterRuns extends Context.Service<
                           session_id: sessionId,
                           encounter_id: encounter.id,
                           encounter_name: encounter.name,
+                          mode: encounter.kind,
                           visibility: payload.visibility,
                         }),
                       )}
@@ -435,6 +464,27 @@ export class EncounterRuns extends Context.Service<
                       from battle_map
                       where battle_map.encounter_id = ${encounter.id}
                         and ${rowWritable(sql, "battle_map", campaignId, actor)}
+                    `;
+
+                    // The scene: the prep's tactic lines as beats, none ticked,
+                    // and its challenge, copied so a later edit to the prep is
+                    // the next run's (`0065_run_scenes.ts`). Every run has one,
+                    // so it is inserted empty and filled from the prep, read
+                    // through the creator's predicate beneath the proof.
+                    yield* sql`insert into encounter_run_scene (run_id) values (${run.id})`;
+                    yield* sql`
+                      update encounter_run_scene
+                      set challenge = encounter_prep.challenge,
+                          beats = coalesce(
+                            (select jsonb_agg(jsonb_build_object('text', line.text, 'done', false)
+                                              order by line.at)
+                             from jsonb_array_elements_text(encounter_prep.tactics)
+                                    with ordinality as line(text, at)),
+                            '[]'::jsonb)
+                      from encounter_prep
+                      where encounter_run_scene.run_id = ${run.id}
+                        and encounter_prep.encounter_id = ${encounter.id}
+                        and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
                     `;
 
                     // Seed the party. `data.js:15,17,20` — the PCs are in
@@ -539,8 +589,13 @@ export class EncounterRuns extends Context.Service<
                     }
 
                     // Put it on the table, and put the marker on whoever is
-                    // first. Both pointers are written here and nowhere else.
-                    const { activeCombatantId } = yield* advance(campaignId, run.id, actor, null);
+                    // first — in a fight. A conversation, a challenge or a
+                    // hazard takes no turns, so nobody is up until one turns
+                    // into a fight (`escalate`).
+                    const { activeCombatantId } =
+                      run.mode === "combat"
+                        ? yield* advance(campaignId, run.id, actor, null)
+                        : { activeCombatantId: null };
                     const started = yield* sql<EncounterRunRow>`
                       update encounter_run
                       set active_combatant_id = ${activeCombatantId}, updated_at = now()
@@ -635,6 +690,7 @@ export class EncounterRuns extends Context.Service<
                         session_id: sessionId,
                         encounter_id: from.encounter_id,
                         encounter_name: from.encounter_name,
+                        mode: from.mode,
                         round: from.round,
                         visibility: from.visibility,
                         origin: from.origin,
@@ -704,6 +760,48 @@ export class EncounterRuns extends Context.Service<
                     }
                     if (copies.length > 0) {
                       yield* sql`insert into combatant ${sql.insert(copies)}`;
+                    }
+
+                    // The same scene: its beats as ticked, its snapshot, the
+                    // DM's notes and the hazard's stage, and its log of checks,
+                    // each pointing at the same combatant's new row. A skill
+                    // challenge picked up next week is two successes in, not
+                    // back at none.
+                    yield* sql`
+                      insert into encounter_run_scene (run_id, beats, challenge, attitude, stages, stage)
+                      select ${run.id}, beats, challenge, attitude, stages, stage
+                      from encounter_run_scene
+                      where encounter_run_scene.run_id = ${from.id}
+                    `;
+                    yield* sql`
+                      insert into encounter_run_scene (run_id) values (${run.id})
+                      on conflict (run_id) do nothing
+                    `;
+                    const checks = yield* sql<CarriedCheckRow>`
+                      select combatant_id, display_name, skill, save_ability, total, dc,
+                             outcome, stage, created_at
+                      from encounter_run_check
+                      where encounter_run_check.encounter_run_id = ${from.id}
+                      order by encounter_run_check.created_at asc, encounter_run_check.id asc
+                    `;
+                    if (checks.length > 0) {
+                      yield* sql`insert into encounter_run_check ${sql.insert(
+                        checks.map((check) => ({
+                          encounter_run_id: run.id,
+                          combatant_id:
+                            check.combatant_id === null
+                              ? null
+                              : (idFor.get(check.combatant_id) ?? null),
+                          display_name: check.display_name,
+                          skill: check.skill,
+                          save_ability: check.save_ability,
+                          total: check.total,
+                          dc: check.dc,
+                          outcome: check.outcome,
+                          stage: check.stage,
+                          created_at: check.created_at,
+                        })),
+                      )}`;
                     }
 
                     // The marker, remapped. Null when the predecessor had
@@ -814,6 +912,9 @@ export class EncounterRuns extends Context.Service<
                   }
 
                   const current = yield* readRun(campaignId, sessionId, id, actor);
+                  if (current.mode !== "combat") {
+                    return yield* new Conflict({ message: notAFight(current.mode) });
+                  }
                   const { activeCombatantId, wrapped } = yield* advance(
                     campaignId,
                     id,
@@ -855,6 +956,52 @@ export class EncounterRuns extends Context.Service<
                 ),
                 Effect.tap(() => live.touched(sessionId)),
               ),
+          ),
+
+        /**
+         * A conversation turns into a fight.
+         *
+         * The same run, so the same night's log, the same combatants — the
+         * NPC and whoever came with them were seeded when it started — and the
+         * checks already logged stay its history. Round 1 and the marker on
+         * whoever is first, as `start` does for a fight.
+         */
+        escalate: ({ actor, campaign: campaignId }, sessionId, id) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const current = yield* readRun(campaignId, sessionId, id, actor);
+                  if (current.endedAt !== null) {
+                    return yield* new Conflict({ message: "that scene is over" });
+                  }
+                  if (current.mode !== "social") {
+                    return yield* new Conflict({
+                      message: "only a conversation turns into a fight",
+                    });
+                  }
+                  const { activeCombatantId } = yield* advance(campaignId, id, actor, null);
+                  const rows = yield* sql<EncounterRunRow>`
+                    update encounter_run
+                    set mode = 'combat', round = 1,
+                        active_combatant_id = ${activeCombatantId}, updated_at = now()
+                    where encounter_run.id = ${id} and encounter_run.mode = 'social'
+                    returning *
+                  `;
+                  // A second press raced past the check above and found the
+                  // mode already moved: the answer is the fight it became.
+                  if (rows.length === 0) return yield* readRun(campaignId, sessionId, id, actor);
+                  const run = toEncounterRun(rows[0]!);
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "run-escalated",
+                    encounterRunId: id,
+                    visibility: run.visibility,
+                  });
+                  return run;
+                }),
+              )
+              .pipe(Effect.tap(() => live.touched(sessionId))),
           ),
 
         /**

@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Combatant } from "./Combatant.js";
 import { EncounterRun } from "./EncounterRun.js";
+import { EncounterRunCheck } from "./EncounterRunScene.js";
 import { EncounterRunId, SessionId } from "./Ids.js";
 import { Note } from "./Note.js";
 import { PrepItem } from "./PrepItem.js";
@@ -69,6 +70,12 @@ export class RecapFight extends Schema.Class<RecapFight>("RecapFight")({
    * somebody left.
    */
   combatants: Schema.Array(Combatant),
+  /**
+   * The checks and saves the DM logged in it, oldest first — a skill
+   * challenge's or a hazard's story, and a conversation's. Empty for a fight.
+   * The creator's alone: a player's recap has no field for them.
+   */
+  checks: Schema.Array(EncounterRunCheck),
   /** The fight this one continues, when it was picked up from an earlier night. */
   continuedFrom: Schema.NullOr(RecapRunLink),
   /** The night that picked this one up, when a later one did. */

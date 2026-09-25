@@ -17,6 +17,7 @@ import { HobDirectWrites } from "../src/repo/HobDirectWrites.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Memberships } from "../src/repo/Memberships.js";
 import { Recap } from "../src/repo/Recap.js";
+import { RunScenes } from "../src/repo/RunScenes.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
@@ -186,6 +187,7 @@ describe("the compiler carries it", () => {
       resume: true,
       update: true,
       nextTurn: true,
+      escalate: true,
       end: true,
     };
     const events: GatedOn<(typeof SessionEvents)["Service"]> = {
@@ -233,6 +235,16 @@ describe("the compiler carries it", () => {
       undo: true,
     };
 
+    // `RunScenes` is the seventh and wholly gated: a scene is copied from the
+    // encounter's prep, and its checks carry the DCs and targets a player is
+    // never told.
+    const scenes: GatedOn<(typeof RunScenes)["Service"]> = {
+      read: true,
+      update: true,
+      logCheck: true,
+      removeCheck: true,
+    };
+
     expect([
       Object.keys(combatants).length,
       Object.keys(runs).length,
@@ -240,7 +252,8 @@ describe("the compiler carries it", () => {
       Object.keys(recap).length,
       Object.keys(memberships).length,
       Object.keys(direct).length,
-    ]).toEqual([6, 7, 3, 2, 2, 4]);
+      Object.keys(scenes).length,
+    ]).toEqual([6, 8, 3, 2, 2, 4, 4]);
   });
 });
 
@@ -483,7 +496,11 @@ describe("the scope, counted", () => {
     // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
     // Ninety-nine is `Combatants.move`: a token's square is the DM's alone
     // until the map is shared.
-    expect(gated).toBe(99);
+    // A hundred is `EncounterRuns.escalate`, and a hundred and one to a
+    // hundred and four are `RunScenes`' four: a running scene is copied from
+    // the prep and its checks carry DCs a player is not told, gated from the
+    // day declared.
+    expect(gated).toBe(104);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

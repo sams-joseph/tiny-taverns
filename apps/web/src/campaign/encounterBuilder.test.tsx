@@ -206,6 +206,15 @@ describe("writing a new encounter", () => {
     await userEvent.click(screen.getByRole("button", { name: "Survival" }));
     await userEvent.click(screen.getByRole("button", { name: "Stealth" }));
     await userEvent.click(screen.getByRole("button", { name: "Stealth" }));
+    // What the runner says when it resolves, written here and nowhere else.
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "If they make it" }),
+      "They find the buried cache",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "If it goes wrong" }),
+      "The rope snaps",
+    );
     expect(screen.getByRole("button", { name: "Athletics" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -232,6 +241,8 @@ describe("writing a new encounter", () => {
           successes: 3,
           failures: 2,
           skills: ["Athletics", "Survival"],
+          onSuccess: "They find the buried cache",
+          onFailure: "The rope snaps",
         },
         tactics: ["Success: the buried cache.", "Each failure costs a day's water."],
         treasure: "A waterskin that never empties",

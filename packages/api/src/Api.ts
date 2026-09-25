@@ -86,6 +86,12 @@ import {
   EncounterRunUpdate,
   NextTurn,
 } from "./EncounterRun.js";
+import {
+  EncounterRunCheck,
+  EncounterRunCheckCreate,
+  EncounterRunScene,
+  EncounterRunSceneUpdate,
+} from "./EncounterRunScene.js";
 import { Conflict, NotFound, RateLimited } from "./Errors.js";
 import {
   SharedWorld,
@@ -117,6 +123,7 @@ import {
   CreatureId,
   EncounterCreatureId,
   EncounterId,
+  EncounterRunCheckId,
   EncounterRunId,
   EquipmentId,
   FeatId,
@@ -2497,11 +2504,66 @@ class RunsGroup extends HttpApiGroup.make("runs")
       success: EncounterRun,
       error: NotFound,
     }),
-    /** Advance initiative, rolling the round over at the end of the order. */
+    /**
+     * Advance initiative, rolling the round over at the end of the order.
+     * `Conflict` for a scene that is not a fight: a conversation, a skill
+     * challenge or a hazard takes no turns.
+     */
     HttpApiEndpoint.post("nextTurn", "/:runId/next-turn", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: NextTurn,
       success: EncounterRun,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * A conversation turns into a fight: the same run, its mode now `combat`,
+     * with the combatants it already has. One way, deliberately — a fight that
+     * calms down is a new conversation. `Conflict` for any run that is not a
+     * conversation, and for one already over.
+     */
+    HttpApiEndpoint.post("escalate", "/:runId/escalate", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: Schema.Struct({}),
+      success: EncounterRun,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * The running scene: its beats, its challenge, the DM's notes on it and
+     * its log of checks and saves — the creator's alone, like the prep it was
+     * copied from. See `EncounterRunScene`.
+     */
+    HttpApiEndpoint.get("scene", "/:runId/scene", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      success: EncounterRunScene,
+      error: NotFound,
+    }),
+    /** `Conflict` for a field the run's mode has no use for, or a stage outside the stages. */
+    HttpApiEndpoint.patch("updateScene", "/:runId/scene", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: EncounterRunSceneUpdate,
+      success: EncounterRunScene,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Log a check or a save. `Conflict` in a fight, in a settled skill
+     * challenge, for a second save by one creature in one hazard stage, and
+     * for a check with neither an outcome nor the total and DC to work it out.
+     */
+    HttpApiEndpoint.post("logCheck", "/:runId/checks", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: EncounterRunCheckCreate,
+      success: EncounterRunCheck,
+      error: [NotFound, Conflict],
+    }),
+    /** A check logged by mistake, removed; a settled challenge it settled reopens. */
+    HttpApiEndpoint.delete("removeCheck", "/:runId/checks/:checkId", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        checkId: EncounterRunCheckId,
+      },
+      success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
     /** Take the fight off the table. Idempotent — ending an ended run is a no-op. */

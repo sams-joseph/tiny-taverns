@@ -46,6 +46,7 @@ import { Creatures } from "./repo/Creatures.js";
 import { CampaignCreatorActors } from "./repo/CreatorActor.js";
 import { EncounterCreatures } from "./repo/EncounterCreatures.js";
 import { EncounterRuns } from "./repo/EncounterRuns.js";
+import { RunScenes } from "./repo/RunScenes.js";
 import { BattleMaps } from "./repo/BattleMaps.js";
 import { Encounters } from "./repo/Encounters.js";
 import { EquipmentRepo } from "./repo/Equipment.js";
@@ -457,6 +458,7 @@ export const servicesOver = <E>(
   | CampaignCreatorActors
   | EncounterCreatures
   | EncounterRuns
+  | RunScenes
   | Encounters
   | EquipmentRepo
   | Feats
@@ -546,6 +548,8 @@ export const servicesOver = <E>(
     CampaignCreatorActors.layer,
     EncounterCreatures.layer,
     EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
+    // A running scene and its checks: creator-only, like the runs above.
+    RunScenes.layer.pipe(Layer.provide(LiveEvents.layer)),
     Encounters.layer,
     // Every encounter's battle map: creator-only, every method behind the
     // `CampaignCreatorActor` proof. A read signs the picture's URLs, and only
@@ -754,6 +758,7 @@ export const applicationOver = <E>(
     | CampaignCreatorActors
     | EncounterCreatures
     | EncounterRuns
+    | RunScenes
     | Encounters
     | EquipmentRepo
     | Feats
