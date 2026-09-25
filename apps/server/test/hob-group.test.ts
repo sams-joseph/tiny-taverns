@@ -159,7 +159,10 @@ const makeFixture = Effect.gen(function* () {
   const fought = yield* asWren(
     encounters.create(hagsBargain.id, {
       name: "CANONFIGHT ambush in the reeds",
+      // Shared and Ready, so the world may be told its name: a fight from any
+      // other encounter is told as "A fight" (`encounter-drafts.test.ts`).
       visibility: "shared",
+      ready: true,
     }),
   );
   yield* asWren(campaigns.update(hagsBargain.id, { currentSessionId: played.id }));

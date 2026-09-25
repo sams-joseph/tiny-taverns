@@ -428,7 +428,9 @@ export class Encounters extends Context.Service<
 
       /**
        * The player projection: the same `rowReadable` and the same roster
-       * rule as every read here, and none of the numbers.
+       * rule as every read here, and none of the numbers. `rowReadable` is
+       * what holds a draft back: a player reads an encounter only when it is
+       * Shared and Ready (`sharedWithPlayers`).
        */
       const selectPlayerEncounters = (
         campaignId: CampaignId,

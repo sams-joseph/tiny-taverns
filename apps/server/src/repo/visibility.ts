@@ -407,7 +407,7 @@ export const ensureGroupWritable = (
  * never a reach on its own.
  */
 export const toldTheWorld = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
-  sql`${sql(table)}.visibility = 'shared'`;
+  sharedWithPlayers(sql, table);
 
 /**
  * A fight its Shared World may be told of: shared, and over. A fight still on
@@ -416,6 +416,18 @@ export const toldTheWorld = (sql: SqlClient.SqlClient, table: string): Statement
  */
 export const fightToldTheWorld = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql.and([toldTheWorld(sql, "encounter_run"), sql`encounter_run.ended_at is not null`]);
+
+/**
+ * Whether its Shared World may be told which encounter the correlated
+ * `encounter_run` was started from: the encounter is shared with its table's
+ * players (Shared and Ready, `sharedWithPlayers`). `runEncounterReadable`'s
+ * question asked at world level, so a world member is never told a fight's name
+ * that the table's own players are not.
+ */
+export const runEncounterToldTheWorld = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`exists (select 1 from encounter
+              where encounter.id = encounter_run.encounter_id
+                and ${toldTheWorld(sql, "encounter")})`;
 
 /**
  * The half of a row read that is about the *campaign*: this row is in the
@@ -438,6 +450,35 @@ const withinReadableCampaign = (
   sql`exists (select 1 from campaign where campaign.id = ${sql(table)}.campaign_id and ${campaignReadable(sql, actor, campaignId)})`,
 ];
 
+/**
+ * Whether the correlated row of `table` is shared with the table's players —
+ * the row-level half of every campaign-content read below, and the one place
+ * that says what "shared" means for a row.
+ *
+ * `visibility = 'shared'` for every table but one. **An encounter is shared
+ * only when it is also Ready** (`encounter_prep.ready`, `0061`): a draft is the
+ * DM's work in progress, and stays theirs whatever its own Share switch says.
+ * That is the captain's decision of 2026-09-25, and it is written here rather
+ * than at the call sites because an encounter is reached from more than its own
+ * reads — the player's encounter read and its roster names, a run's encounter name
+ * (`runEncounterReadable`), the last playing on the card. Every one of them
+ * asks this question, so none can answer it without the Ready half.
+ *
+ * Ready stays on `encounter_prep` and is not selected by any player read: this
+ * is an `exists` over it, so a player learns that an encounter is readable and
+ * never which of the two conditions made it so. The creator's disjunct sits
+ * beside this in every caller, so nothing here changes what a DM reads.
+ */
+const sharedWithPlayers = (sql: SqlClient.SqlClient, table: string): Statement.Fragment =>
+  table === "encounter"
+    ? sql.and([
+        sql`encounter.visibility = 'shared'`,
+        sql`exists (select 1 from encounter_prep
+                    where encounter_prep.encounter_id = encounter.id
+                      and encounter_prep.ready)`,
+      ])
+    : sql`${sql(table)}.visibility = 'shared'`;
+
 /** Rows of a campaign-scoped table (`session`, `character`, `note`) this actor may read. */
 export const rowReadable = (
   sql: SqlClient.SqlClient,
@@ -447,8 +488,32 @@ export const rowReadable = (
 ): Statement.Fragment =>
   sql.and([
     ...withinReadableCampaign(sql, table, campaignId, actor),
-    sql.or([isCreator(sql, campaignId, actor), sql`${sql(table)}.visibility = 'shared'`]),
+    sql.or([isCreator(sql, campaignId, actor), sharedWithPlayers(sql, table)]),
   ]);
+
+/**
+ * Whether the encounter the correlated `encounter_run` was started from is one
+ * this actor may read — the question behind the name a fight goes by.
+ *
+ * A run carries its encounter's id and a snapshot of its name, and its own
+ * Share switch decides whether a player sees the fight at all. Neither says
+ * whether the player may know *which encounter* it was: that is the
+ * encounter's own readability — Shared and Ready — asked here through
+ * `rowReadable` over the encounter row rather than restated. So sharing a fight
+ * shows the fight and never publishes the name of an encounter the DM has kept
+ * to themselves or not finished (the captain's decision of 2026-09-25).
+ *
+ * False once the template has been deleted: nothing is left to say it may be
+ * named, and a read that cannot tell fails closed.
+ */
+export const runEncounterReadable = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from encounter
+              where encounter.id = encounter_run.encounter_id
+                and ${rowReadable(sql, "encounter", campaignId, actor)})`;
 
 /**
  * Rows of a campaign-scoped table whose rows may *belong to* an account — today
@@ -497,7 +562,7 @@ export const ownedRowReadable = (
     ...withinReadableCampaign(sql, table, campaignId, actor),
     sql.or([
       isCreator(sql, campaignId, actor),
-      sql`${sql(table)}.visibility = 'shared'`,
+      sharedWithPlayers(sql, table),
       sql`${sql(table)}.account_id = ${actor.accountId}`,
     ]),
   ]);
@@ -1269,7 +1334,7 @@ export const containedRowReadable = (
   const { table, foreignKey, parent } = containment;
   return sql.and([
     sql`exists (select 1 from ${sql(parent.table)} where ${sql(`${parent.table}.id`)} = ${sql(`${table}.${foreignKey}`)} and ${containedRowReadable(sql, parent, campaignId, actor)})`,
-    sql.or([isCreator(sql, campaignId, actor), sql`${sql(`${table}.visibility`)} = 'shared'`]),
+    sql.or([isCreator(sql, campaignId, actor), sharedWithPlayers(sql, table)]),
   ]);
 };
 
@@ -1347,10 +1412,7 @@ export const nestedRowReadableWithin = (
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${sql(`${nested.parent}.id`)}`,
-    sql.or([
-      isCreator(sql, campaignId, actor),
-      sql`${sql(`${nested.table}.visibility`)} = 'shared'`,
-    ]),
+    sql.or([isCreator(sql, campaignId, actor), sharedWithPlayers(sql, nested.table)]),
   ]);
 
 /** Rows of a nested table this actor may write. Not `nestedRowReadable`. */

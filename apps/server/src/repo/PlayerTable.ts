@@ -5,8 +5,6 @@ import {
   type CharacterId,
   type CombatantId,
   CurrentActor,
-  type EncounterId,
-  type EncounterRunId,
   NotFound,
   PlayerLiveTable,
   type PlayerLiveCombatant,
@@ -18,6 +16,7 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
+import { type EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { COMBATANT, RUNS } from "./liveTables.js";
 import { dieOnSqlError } from "./rows.js";
 import {
@@ -173,14 +172,10 @@ export class PlayerTable extends Context.Service<
               const session = sessions[0];
               if (session === undefined) return null;
 
-              const runs = yield* sql<{
-                readonly id: EncounterRunId;
-                readonly encounter_id: EncounterId | null;
-                readonly round: number;
-                readonly active_combatant_id: CombatantId | null;
-              }>`
-                select encounter_run.id, encounter_run.encounter_id, encounter_run.round,
-                       encounter_run.active_combatant_id
+              // `runColumns`, so the fight names no encounter this player may
+              // not read — its id is how the screen finds the read-aloud.
+              const runs = yield* sql<EncounterRunRow>`
+                select ${runColumns(sql, campaignId, actor)}
                 from encounter_run
                 where encounter_run.ended_at is null
                   and ${nestedRowReadable(sql, RUNS, session.id, campaignId, actor)}

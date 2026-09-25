@@ -85,6 +85,11 @@ export interface PlayerTableView {
   readonly table: PlayerLiveTable | null;
   readonly characters: ReadonlyArray<OwnedCharacter>;
   readonly rolls: ReadonlyArray<Roll>;
+  /**
+   * The shared read-alouds attached to the fight's encounter. None when the
+   * fight names no encounter, which is also what a player gets for one they
+   * may not read (not Shared, or not Ready).
+   */
   readonly readAloud: ReadonlyArray<Note>;
 }
 

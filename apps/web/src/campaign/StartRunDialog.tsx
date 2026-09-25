@@ -264,7 +264,7 @@ export function StartRunDialog({
               id="run-visibility"
               value={visibility}
               onChange={setVisibility}
-              shared="Your players can see the fight, except the lines you hide."
+              shared="Your players can see the fight, except the lines you hide, and its name only if the encounter is shared and ready to run."
               hidden="Only you can see the fight. You can share it mid-combat."
             />
           </div>

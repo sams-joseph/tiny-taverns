@@ -17,6 +17,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
+import { fightName } from "./EncounterRuns.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -24,7 +25,12 @@ import {
   dieOnSqlError,
   likeContains,
 } from "./rows.js";
-import { ensureGroupReadable, fightToldTheWorld, toldTheWorld } from "./visibility.js";
+import {
+  ensureGroupReadable,
+  fightToldTheWorld,
+  runEncounterToldTheWorld,
+  toldTheWorld,
+} from "./visibility.js";
 
 /**
  * The group's chronicle — report §3.5, under the decisions of 2026-09-01 and
@@ -332,8 +338,11 @@ export class GroupHistory extends Context.Service<
        * the Chronicle keeps cannot disagree. Every part composes the Share
        * switch in SQL (`toldTheWorld`, `fightToldTheWorld`), so a hidden fight,
        * a fight still on the table, and a beat, prep line or combatant kept to
-       * the DM are never selected. The caller has already bound the session to
-       * its campaign and group and checked that it was played.
+       * the DM are never selected. A told fight is named after its encounter
+       * only when that encounter is shared with the table's players (Shared and
+       * Ready, `runEncounterToldTheWorld`), and is otherwise "A fight", as it is
+       * to those players. The caller has already bound the session to its
+       * campaign and group and checked that it was played.
        */
       const toldNight = (night: {
         readonly sessionId: SessionId;
@@ -355,7 +364,8 @@ export class GroupHistory extends Context.Service<
             readonly ended_reason: "resolved" | "carried";
             readonly fell: ReadonlyArray<string>;
           }>`
-            select encounter_run.encounter_name, encounter_run.round,
+            select ${fightName(sql, runEncounterToldTheWorld(sql))} as encounter_name,
+                   encounter_run.round,
                    encounter_run.ended_reason,
                    array(
                      select combatant.display_name from combatant

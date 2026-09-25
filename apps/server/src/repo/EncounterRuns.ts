@@ -21,13 +21,14 @@ import {
   type Visibility,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
+  campaignWritableById,
   containedChildWritable,
   containedRowReadable,
   corpusRowReadable,
@@ -38,6 +39,7 @@ import {
   nestedRowWritable,
   rowReadable,
   rowWritable,
+  runEncounterReadable,
 } from "./visibility.js";
 
 export interface EncounterRunRow extends ProvenanceColumns {
@@ -69,6 +71,50 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     continuedFrom: row.continued_from,
     ...provenanceOf(row),
   });
+
+/**
+ * What a fight is called to somebody who may see the fight and not the
+ * encounter it was started from.
+ */
+export const NEUTRAL_FIGHT_NAME = "A fight";
+
+/**
+ * The correlated run's name to a reader for whom `named` says whether its
+ * encounter may be named: the snapshot, or `NEUTRAL_FIGHT_NAME`. The one
+ * spelling of the fallback, for the table's reads (`runColumns`) and the Shared
+ * World's (`GroupHistory`).
+ */
+export const fightName = (
+  sql: SqlClient.SqlClient,
+  named: Statement.Fragment,
+): Statement.Fragment =>
+  sql`case when ${named} then encounter_run.encounter_name else ${NEUTRAL_FIGHT_NAME} end`;
+
+/**
+ * An `encounter_run` row as this actor may read it, for every read that is not
+ * the creator's alone — the recap and the player's table.
+ *
+ * Every column of the row, listed rather than `encounter_run.*`, because two of
+ * them are narrowed and the wide ones must not be selected beside them: to a
+ * reader who may not read the encounter (`runEncounterReadable`), the fight has
+ * no `encounter_id` and is called `NEUTRAL_FIGHT_NAME`. The creator is named
+ * the snapshot whatever became of the template — `campaignWritableById` is the
+ * creator's test — so nothing a DM reads changes, a deleted template included.
+ */
+export const runColumns = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => {
+  const known = runEncounterReadable(sql, campaignId, actor);
+  return sql`encounter_run.id, encounter_run.session_id,
+    case when ${known} then encounter_run.encounter_id end as encounter_id,
+    ${fightName(sql, sql.or([known, campaignWritableById(sql, campaignId, actor)]))} as encounter_name,
+    encounter_run.round, encounter_run.active_combatant_id, encounter_run.started_at,
+    encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
+    encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
+    encounter_run.assistant_turn_id, encounter_run.created_at, encounter_run.updated_at`;
+};
 
 /**
  * Everything about a combatant that is *not* its identity or its timestamps.

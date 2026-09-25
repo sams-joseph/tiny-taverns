@@ -119,6 +119,7 @@ const makeFixture = Effect.gen(function* () {
     encounters.create(campaign.id, {
       name: "Ambush in the reeds",
       visibility: "shared",
+      ready: true,
     }),
   );
   yield* as(roster.create(campaign.id, encounter.id, { creatureId: hagSource.id, count: 1 }));

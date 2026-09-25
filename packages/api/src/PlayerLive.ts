@@ -88,6 +88,7 @@ export type PlayerLiveCombatant = typeof PlayerLiveCombatant.Type;
 
 export const PlayerLiveFight = Schema.Struct({
   id: EncounterRunId,
+  /** `null` unless this player may read the encounter (Shared and Ready). */
   encounterId: Schema.NullOr(EncounterId),
   round: Schema.Int,
   /** `null` when the DM has set no marker, or has hidden the row it names. */

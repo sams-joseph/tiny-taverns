@@ -100,7 +100,11 @@ const makeFixture = Effect.gen(function* () {
   );
 
   const ambush = yield* as(
-    encounters.create(campaign.id, { name: "Ambush in the reeds", visibility: "shared" }),
+    encounters.create(campaign.id, {
+      name: "Ambush in the reeds",
+      visibility: "shared",
+      ready: true,
+    }),
   );
   yield* as(
     roster.create(campaign.id, ambush.id, {

@@ -1193,7 +1193,7 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
  * Not behind the creator proof, for `table`'s reason: there is no creator
  * projection of this to diverge from — the creator has `encounters` — and a DM
  * calling it gets the same narrow shape over their own rows. The rows a reader
- * gets are `repo/visibility.ts`'s answer: a player's are the shared encounters
+ * gets are `repo/visibility.ts`'s answer: a player's are the Shared and Ready encounters
  * and, on each, the shared roster lines. Unpaged, as `encounterPrep.list` is.
  */
 class PlayerEncountersGroup extends HttpApiGroup.make("playerEncounters")

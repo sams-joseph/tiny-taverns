@@ -614,7 +614,11 @@ function EncounterBuilder({
                   id="encounter-visibility"
                   value={draft.visibility}
                   onChange={(visibility) => patch({ visibility })}
-                  shared="Your players can see this encounter and its tags."
+                  shared={
+                    draft.ready
+                      ? "Your players can see this encounter and its tags."
+                      : "Your players see it once you mark it Ready to run. Until then it stays yours."
+                  }
                   hidden="Only you can see this encounter."
                 />
               </div>

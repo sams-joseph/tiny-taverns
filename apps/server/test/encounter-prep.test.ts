@@ -320,6 +320,7 @@ describe("the prep is the creator's alone", () => {
         tactics: ["TACTIC-THE-CARAVAN-MASTER-LIES"],
         treasure: "TREASURE-UNDER-THE-FLOORBOARD",
         visibility: "shared",
+        ready: true,
       })
     ).id;
     player = await run(admittedTo(table, ilse.actor, "Ilse"));
