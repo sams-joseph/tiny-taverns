@@ -82,6 +82,19 @@ for (const width of WIDTHS) {
         }
       });
 
+      await test.step("every bestiary row keeps its name readable", async () => {
+        const names = await page
+          .locator('[data-slot="picker-name"]')
+          .evaluateAll((spans) => spans.map((span) => span.getBoundingClientRect().width));
+        expect.soft(names.length, "bestiary rows").toBeGreaterThan(0);
+        for (const name of names)
+          expect.soft(name, "a bestiary name's width").toBeGreaterThanOrEqual(96);
+        const rows = await page
+          .locator('[data-slot="picker-row"]')
+          .evaluateAll((items) => items.map((item) => item.scrollWidth <= item.clientWidth + 0.5));
+        for (const fits of rows) expect.soft(fits, "a bestiary row fits its box").toBe(true);
+      });
+
       await test.step("a press on the stepper lands on it, and counts", async () => {
         const more = page.getByRole("button", { name: "One more Goblin Boss" });
         await more.scrollIntoViewIfNeeded();
