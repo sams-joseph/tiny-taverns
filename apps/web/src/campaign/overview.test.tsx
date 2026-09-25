@@ -368,6 +368,22 @@ describe("the live banner", () => {
     expect(screen.getByRole("button", { name: /On the table now/ })).toBeInTheDocument();
   });
 
+  it("says a fight still rolling initiative is rolling, not in a round", async () => {
+    onTheTable(null);
+    server.routes.set(`GET ${base}/sessions/${sessionId}/runs`, {
+      status: 200,
+      body: [{ ...liveRun, phase: "initiative", activeCombatantId: null }],
+    });
+    await renderScreen(mintingSession());
+
+    const banner = (await screen.findByText("Session 12 is running")).closest<HTMLElement>(
+      "[data-slot='card']",
+    )!;
+    expect(
+      within(banner).getByText("Rolling initiative for Ambush in the reeds"),
+    ).toBeInTheDocument();
+  });
+
   it("goes back to the fight from the campaign row", async () => {
     onTheTable(null);
     await renderScreen(mintingSession());

@@ -33,7 +33,8 @@ const shared = {
   /** `"Half-orc paladin"`, `"Small humanoid"`. */
   subtitle: Schema.NullOr(Schema.String),
   playerName: Schema.NullOr(Schema.String),
-  initiative: Schema.Int,
+  /** `null` for somebody who never had a number — a fight ended while rolling. */
+  initiative: Schema.NullOr(Schema.Int),
   /**
    * Whole, and **not filtered one condition at a time.**
    *

@@ -122,7 +122,8 @@ function CombatantRow({
           active ? "text-accent-ink" : "text-muted-foreground"
         }`}
       >
-        {combatant.initiative}
+        {/* No number yet: the fight is still rolling initiative. */}
+        {combatant.initiative ?? "—"}
       </span>
 
       {/* A PC's portrait when its seat lets this reader see one; otherwise the
@@ -204,6 +205,7 @@ export function InitiativeList({
   onSelect,
   onAdd,
   onRoll,
+  onReroll,
 }: {
   readonly run: EncounterRun;
   readonly combatants: ReadonlyArray<Combatant>;
@@ -213,6 +215,8 @@ export function InitiativeList({
   readonly onSelect: (combatant: Combatant) => void;
   readonly onAdd: () => void;
   readonly onRoll: () => void;
+  /** Back to rolling initiative, numbers kept. Offered while turns are taken. */
+  readonly onReroll: () => void;
 }) {
   const shared = run.visibility === "shared";
   const held = combatants.filter((combatant) => combatant.visibility === "dm").length;
@@ -258,11 +262,9 @@ export function InitiativeList({
           column has room for its title and the count, not for buttons too. */}
       <div className="flex flex-col gap-2 px-panel py-2.5">
         <div className="flex flex-wrap gap-1.5">
-          {/* `EncounterRunner.jsx:138`'s reroll, narrowed to what a DM can
-              honestly do: the app cannot roll for the people at the table, and
-              a button that overwrote the numbers they just called out would be
-              worse than no button. Everything seeds at initiative 0, so this is
-              the first thing pressed in a fight. */}
+          {/* The monsters' d20s, each plus its bonus: the party roll their own
+              and call them out (or enter them at their table). A fight opens
+              with no numbers, so this is the first thing pressed in one. */}
           <Tooltip>
             <TooltipTrigger
               render={
@@ -279,6 +281,21 @@ export function InitiativeList({
             />
             <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
           </Tooltip>
+          {run.phase === "turns" && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button variant="ghost" size="sm" disabled={disabled} onClick={onReroll}>
+                    <Icon name="refresh-cw" size={13} />
+                    Reroll initiative
+                  </Button>
+                }
+              />
+              <TooltipContent>
+                Back to rolling initiative. Every number is kept; change what changed.
+              </TooltipContent>
+            </Tooltip>
+          )}
           <Button variant="ghost" size="sm" disabled={disabled} onClick={onAdd}>
             <Icon name="plus" size={13} />
             Add combatant

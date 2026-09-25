@@ -16,6 +16,22 @@ export const EncounterRunEndedReason = Schema.Literals(["resolved", "carried"]);
 export type EncounterRunEndedReason = typeof EncounterRunEndedReason.Type;
 
 /**
+ * Where a fight is: still collecting initiative, or taking turns.
+ *
+ * `initiative` — the numbers are arriving (the DM rolls for the monsters and
+ * types what the table calls out; a player may enter their own). Nobody is up
+ * and *Next turn* is refused. `turns` — *Start round 1* happened, the marker
+ * is on somebody, and the order is being played through.
+ *
+ * A fight starts in `initiative`; `begin` moves it to `turns` once every
+ * combatant has a number, and `reroll` moves it back, keeping every number so
+ * the DM changes only what changed. A fight that was running before phases
+ * existed is `turns`.
+ */
+export const EncounterRunPhase = Schema.Literals(["initiative", "turns"]);
+export type EncounterRunPhase = typeof EncounterRunPhase.Type;
+
+/**
  * One playing of an encounter — the live fight, as distinct from the authored
  * template it was started from.
  *
@@ -66,6 +82,7 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    */
   mode: EncounterKind,
   round: Schema.Int,
+  phase: EncounterRunPhase,
   /**
    * Whose turn it is, as a pointer rather than an index into initiative order.
    *
@@ -177,7 +194,10 @@ export type EncounterRunResume = typeof EncounterRunResume.Type;
 
 export const EncounterRunUpdate = Schema.Struct({
   round: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10_000 }))),
-  /** Moving the turn marker by hand — `EncounterRunner.jsx:143` `onSelect`. */
+  /**
+   * Moving the turn marker by hand — `EncounterRunner.jsx:143` `onSelect`.
+   * Refused as a `Conflict` during the initiative phase, when nobody is up.
+   */
   activeCombatantId: Schema.optional(Schema.NullOr(CombatantId)),
   /** The `Share` switch. */
   visibility: Schema.optional(Visibility),
@@ -196,6 +216,24 @@ export type EncounterRunUpdate = typeof EncounterRunUpdate.Type;
  */
 const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128)));
 
-/** Advance initiative — `EncounterRunner.jsx:112-116`, including the round roll-over. */
+/**
+ * Advance initiative — `EncounterRunner.jsx:112-116`, including the round
+ * roll-over. A monster at zero hit points is passed over; a character at zero
+ * still gets a turn, for death saves.
+ */
 export const NextTurn = Schema.Struct({ requestId });
 export type NextTurn = typeof NextTurn.Type;
+
+/**
+ * *Start round 1*: leave the initiative phase and put the marker on whoever is
+ * first. Refused while any combatant has no number.
+ */
+export const BeginTurns = Schema.Struct({ requestId });
+export type BeginTurns = typeof BeginTurns.Type;
+
+/**
+ * *Reroll initiative*: go back to the initiative phase. Every number is kept
+ * and so is the round; the marker comes off.
+ */
+export const RerollInitiative = Schema.Struct({ requestId });
+export type RerollInitiative = typeof RerollInitiative.Type;

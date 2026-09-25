@@ -4,7 +4,10 @@ import {
   type CampaignId,
   type CharacterId,
   type CombatantId,
+  Conflict,
   CurrentActor,
+  type EncounterRunId,
+  type InitiativeSetBy,
   NotFound,
   PlayerLiveTable,
   type PlayerLiveCombatant,
@@ -15,14 +18,17 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
 import { type EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { COMBATANT, initiativeOrder, RUNS } from "./liveTables.js";
 import { dieOnSqlError } from "./rows.js";
+import { appendEvent } from "./SessionEvents.js";
 import {
   containedRowReadable,
   ensureCampaignReadable,
   nestedRowReadable,
+  ownSeatedCombatant,
   rowReadable,
 } from "./visibility.js";
 
@@ -39,7 +45,11 @@ interface LiveCombatantRow {
   readonly display_name: string;
   readonly subtitle: string | null;
   readonly player_name: string | null;
-  readonly initiative: number;
+  readonly initiative: number | null;
+  /** Selected only for the asker's own row; `null` on every other. */
+  readonly initiative_bonus: number | null;
+  /** Selected only for the asker's own row; `null` on every other. */
+  readonly initiative_set_by: InitiativeSetBy | null;
   readonly kind: "pc" | "npc";
   readonly conditions: ReadonlyArray<string>;
   readonly hp_current: number;
@@ -66,6 +76,26 @@ export class PlayerTable extends Context.Service<
       campaignId: CampaignId,
     ) => Effect.Effect<PlayerLiveTable | null, NotFound, CurrentActor>;
     /**
+     * Enter your own character's initiative, from your Table.
+     *
+     * Reaches one row: the combatant `ownSeatedCombatant` allows, in the named
+     * fight. Anything else is `NotFound`, the answer the read gives.
+     *
+     * **When it is refused as a `Conflict`**, both states the player can see on
+     * their own table: the fight is not rolling initiative (it has begun, or
+     * it is over), or the DM has already written this number. The rule is
+     * `combatant.initiative_set_by`: a player may enter a number where there
+     * is none, and change one they entered themselves, until the DM writes
+     * one — after that the DM's number stands, and nothing the player sends
+     * overwrites it. The DM can always overwrite the player's.
+     */
+    readonly setInitiative: (
+      campaignId: CampaignId,
+      runId: EncounterRunId,
+      combatantId: CombatantId,
+      initiative: number,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
+    /**
      * Contentless player live ticks. The cursor is `session_event.seq`; the
      * event payload is deliberately not returned, and clients re-read the
      * table/log through narrow endpoints.
@@ -82,6 +112,7 @@ export class PlayerTable extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
       const sign = yield* portraitSigner;
 
       const activeSeats = (campaignId: CampaignId, actor: Actor) =>
@@ -117,6 +148,8 @@ export class PlayerTable extends Context.Service<
             displayName: row.display_name,
             subtitle: row.subtitle,
             initiative: row.initiative,
+            initiativeBonus: row.initiative_bonus,
+            initiativeSetBy: row.initiative_set_by,
             hpCurrent: row.hp_current,
             hpMax: row.hp_max,
             tempHp: row.temp_hp,
@@ -201,6 +234,10 @@ export class PlayerTable extends Context.Service<
                        combatant.subtitle,
                        combatant.player_name,
                        combatant.initiative,
+                       case when own_seated.id is not null
+                         then combatant.initiative_bonus end as initiative_bonus,
+                       case when own_seated.id is not null
+                         then combatant.initiative_set_by end as initiative_set_by,
                        combatant.kind,
                        combatant.conditions,
                        combatant.hp_current,
@@ -266,11 +303,82 @@ export class PlayerTable extends Context.Service<
                   id: run.id,
                   encounterId: run.encounter_id,
                   round: run.round,
+                  phase: run.phase,
                   upNext,
                   seats,
                   order,
                 },
               });
+            }),
+          ),
+
+        setInitiative: (campaignId, runId, combatantId, initiative) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+
+              const sessionId = yield* sql.withTransaction(
+                Effect.gen(function* () {
+                  // The row, locked, through the one predicate that says which
+                  // row a player may write — and only in the fight on this
+                  // table tonight: the campaign's current night, as the read.
+                  const rows = yield* sql<{
+                    readonly session_id: SessionId;
+                    readonly phase: "initiative" | "turns";
+                    readonly ended_at: Date | null;
+                    readonly initiative_set_by: InitiativeSetBy | null;
+                    readonly character_id: CharacterId;
+                  }>`
+                    select encounter_run.session_id, encounter_run.phase, encounter_run.ended_at,
+                           combatant.initiative_set_by, combatant.character_id
+                    from combatant
+                    join encounter_run on encounter_run.id = combatant.encounter_run_id
+                    where combatant.id = ${combatantId}
+                      and combatant.encounter_run_id = ${runId}
+                      and encounter_run.session_id = (
+                            select campaign.current_session_id from campaign
+                            where campaign.id = ${campaignId}
+                          )
+                      and ${ownSeatedCombatant(sql, COMBATANT, campaignId, actor)}
+                    for update of combatant, encounter_run
+                  `;
+                  const row = rows[0];
+                  if (row === undefined) {
+                    return yield* new NotFound({ resource: "combatant", id: combatantId });
+                  }
+                  if (row.ended_at !== null || row.phase !== "initiative") {
+                    return yield* new Conflict({
+                      message: "this fight is not rolling initiative; tell your DM your number",
+                    });
+                  }
+                  if (row.initiative_set_by === "dm") {
+                    return yield* new Conflict({
+                      message: "your DM has already written your initiative",
+                    });
+                  }
+
+                  yield* sql`
+                    update combatant
+                    set initiative = ${initiative}, initiative_set_by = 'player', updated_at = now()
+                    where combatant.id = ${combatantId}
+                  `;
+                  // The row and the fight are both shared — the predicate
+                  // above read them — so the line is too, and it rings every
+                  // seated player's doorbell as well as the DM's.
+                  yield* appendEvent(sql, {
+                    sessionId: row.session_id,
+                    kind: "combatant-updated",
+                    encounterRunId: runId,
+                    combatantId,
+                    characterId: row.character_id,
+                    payload: { initiative, setBy: "player" },
+                    visibility: "shared",
+                  });
+                  return row.session_id;
+                }),
+              );
+              yield* live.touched(sessionId);
             }),
           ),
 

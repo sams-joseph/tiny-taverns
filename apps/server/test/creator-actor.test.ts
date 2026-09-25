@@ -178,6 +178,7 @@ describe("the compiler carries it", () => {
       update: true,
       damage: true,
       move: true,
+      setInitiative: true,
       remove: true,
     };
     const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
@@ -188,6 +189,8 @@ describe("the compiler carries it", () => {
       update: true,
       nextTurn: true,
       escalate: true,
+      begin: true,
+      reroll: true,
       end: true,
     };
     const events: GatedOn<(typeof SessionEvents)["Service"]> = {
@@ -253,7 +256,7 @@ describe("the compiler carries it", () => {
       Object.keys(memberships).length,
       Object.keys(direct).length,
       Object.keys(scenes).length,
-    ]).toEqual([6, 8, 3, 2, 2, 4, 4]);
+    ]).toEqual([7, 10, 3, 2, 2, 4, 4]);
   });
 });
 
@@ -500,7 +503,12 @@ describe("the scope, counted", () => {
     // hundred and four are `RunScenes`' four: a running scene is copied from
     // the prep and its checks carry DCs a player is not told, gated from the
     // day declared.
-    expect(gated).toBe(104);
+    // A hundred and five to a hundred and seven are the initiative phase:
+    // `begin`, `reroll` and `Combatants.setInitiative`, the fight's own
+    // writes. The player's own-initiative write is `PlayerTable.setInitiative`,
+    // which is ungated for the read's reason: it reaches exactly the row
+    // `ownSeatedCombatant` allows, and there is no DM projection of it.
+    expect(gated).toBe(107);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -743,7 +751,11 @@ describe("the scope, counted", () => {
     // Gating `Encounters.list`, `findById` and `EncounterCreatures.list` gave
     // three up, and `Encounters.listAsPlayer` and `findAsPlayer` took two
     // back: `Recap`'s arithmetic, with the roster folded into the encounter.
-    expect(ungated).toBe(160);
+    // `PlayerTable.setInitiative` is the one hundred and sixty-first: a
+    // player's own initiative, whose reach is `ownSeatedCombatant` — their own
+    // seated character's row in a fight they can see — for `PlayerTable`'s
+    // reason above.
+    expect(ungated).toBe(161);
   });
 });
 

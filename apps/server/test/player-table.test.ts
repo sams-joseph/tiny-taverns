@@ -32,6 +32,7 @@ import {
   scopedTo,
 } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { aFightUnderWay } from "./support/fights.js";
 import { SqlClient } from "effect/unstable/sql";
 
 const services = Layer.mergeAll(
@@ -47,7 +48,7 @@ const services = Layer.mergeAll(
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
   Invites.layer,
-  PlayerTable.layer,
+  PlayerTable.layer.pipe(Layer.provide(LiveEvents.layer)),
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_player_table")));
 const runtime = ManagedRuntime.make(services);
@@ -129,7 +130,7 @@ const makeFixture = Effect.gen(function* () {
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
   const dmOf = yield* as(asDm(dm, campaign.id));
   const run = yield* as(
-    runs.start(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
+    aFightUnderWay(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
   );
   const seeded = yield* as(combatants.list(dmOf, session.id, run.id));
   for (const row of seeded) {

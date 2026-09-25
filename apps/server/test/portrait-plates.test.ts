@@ -54,7 +54,7 @@ const services = Layer.mergeAll(
   EncounterRuns.layer.pipe(Layer.provide(live)),
   Encounters.layer,
   Invites.layer,
-  PlayerTable.layer,
+  PlayerTable.layer.pipe(Layer.provide(live)),
   Recap.layer,
   Sessions.layer.pipe(Layer.provide(live)),
 ).pipe(Layer.provide(urls), Layer.provideMerge(migratedDatabase("taverns_test_portrait_plates")));

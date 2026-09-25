@@ -86,7 +86,8 @@ function RollCall({ combatants }: { readonly combatants: ReadonlyArray<PlayerCom
           {/* The number the order was read out in. `initiativeOrder` is the
               server's and is kept — a second sort here could only disagree. */}
           <span className="w-6 shrink-0 text-right font-mono text-mono leading-none font-medium text-faint">
-            {combatant.initiative}
+            {/* None: the fight came off the table while still rolling. */}
+            {combatant.initiative ?? "—"}
           </span>
           <span className="text-body-s leading-body text-foreground">{combatant.displayName}</span>
           {combatant.playerName !== null && combatant.playerName !== "" && (

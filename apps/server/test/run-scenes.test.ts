@@ -438,13 +438,40 @@ describe("a conversation", () => {
     const fight = await as(jo.token, (client) =>
       client.runs.escalate({ params: params(talk.id), payload: {} }),
     );
-    expect(fight).toMatchObject({ id: talk.id, mode: "combat", round: 1 });
-    expect(before.map((row) => row.id)).toContain(fight.activeCombatantId);
+    // It opens as any fight does: rolling initiative, with nobody up and no
+    // numbers yet.
+    expect(fight).toMatchObject({
+      id: talk.id,
+      mode: "combat",
+      phase: "initiative",
+      round: 1,
+      activeCombatantId: null,
+    });
     const after = await as(jo.token, (client) =>
       client.combatants.list({ params: params(talk.id) }),
     );
     expect(after.map((row) => row.id).sort()).toEqual(before.map((row) => row.id).sort());
+    expect(after.every((row) => row.initiative === null)).toBe(true);
     expect((await sceneOf(talk.id)).checks).toHaveLength(1);
+    expect(
+      await tagOf(jo.token, (client) =>
+        client.runs.nextTurn({ params: params(talk.id), payload: {} }),
+      ),
+    ).toBe("Conflict");
+
+    // Every number in, round 1 starts on whoever is first.
+    const ordered = await as(jo.token, (client) =>
+      client.runs.setInitiative({
+        params: params(talk.id),
+        payload: {
+          entries: after.map((row, index) => ({ combatantId: row.id, initiative: 20 - index })),
+        },
+      }),
+    );
+    const begun = await as(jo.token, (client) =>
+      client.runs.begin({ params: params(talk.id), payload: {} }),
+    );
+    expect(begun).toMatchObject({ phase: "turns", activeCombatantId: ordered[0]!.id });
 
     // One way: a fight does not escalate, takes turns, and logs no checks.
     expect(
@@ -473,13 +500,20 @@ describe("a conversation", () => {
     await endRun(talk.id);
   });
 
-  it("is the only scene that escalates", async () => {
+  it("is the only scene that escalates, and no scene rolls initiative until it is a fight", async () => {
     const challenge = await startRun(well);
     expect(
       await tagOf(jo.token, (client) =>
         client.runs.escalate({ params: params(challenge.id), payload: {} }),
       ),
     ).toBe("Conflict");
+    for (const press of ["begin", "reroll"] as const) {
+      expect(
+        await tagOf(jo.token, (client) =>
+          client.runs[press]({ params: params(challenge.id), payload: {} }),
+        ),
+      ).toBe("Conflict");
+    }
     await endRun(challenge.id);
   });
 });

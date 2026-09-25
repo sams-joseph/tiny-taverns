@@ -68,6 +68,24 @@ describe("the live banner", () => {
     expect(banner?.inTheFight).toBe(true);
   });
 
+  it("says the table is rolling initiative rather than naming a round nobody has started", () => {
+    const banner = liveBanner(
+      table({
+        id: "r-1",
+        round: 1,
+        phase: "initiative",
+        upNext: null,
+        seats: [mySeat],
+      } as unknown as PlayerLiveTable["fight"]),
+      yours,
+      "The Salt Road",
+    );
+
+    expect(banner?.detail).toBe("Session 12 · rolling initiative");
+    expect(banner?.yourTurn).toBe(false);
+    expect(banner?.inTheFight).toBe(true);
+  });
+
   it("names whoever is up when it is not you, and still knows you are in the fight", () => {
     const banner = liveBanner(
       table({

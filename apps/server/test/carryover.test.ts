@@ -27,6 +27,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { aFightUnderWay } from "./support/fights.js";
 
 /**
  * A fight that crosses nights.
@@ -171,7 +172,9 @@ const finish = (sessionId: SessionId) =>
  * and a copy of it could be wrong in ways nothing would show.
  */
 const aFightInProgress = async (sessionId: SessionId) => {
-  const run = await as(runs.start(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }));
+  const run = await as(
+    aFightUnderWay(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
+  );
   const order = await as(combatants.list(fixture.asDm, sessionId, run.id));
   const hag = order.find((row) => row.kind === "npc")!;
   await as(combatants.damage(fixture.asDm, sessionId, run.id, hag.id, { amount: 41 }));
@@ -179,6 +182,7 @@ const aFightInProgress = async (sessionId: SessionId) => {
     combatants.update(fixture.asDm, sessionId, run.id, hag.id, {
       conditions: ["Frightened"],
       initiative: 17,
+      initiativeBonus: 3,
       visibility: "shared",
     }),
   );
@@ -345,6 +349,8 @@ describe("resuming a carried fight", () => {
       subtitle: row.subtitle,
       playerName: row.playerName,
       initiative: row.initiative,
+      initiativeBonus: row.initiativeBonus,
+      initiativeSetBy: row.initiativeSetBy,
       hpCurrent: row.hpCurrent,
       hpMax: row.hpMax,
       ac: row.ac,
@@ -407,6 +413,30 @@ describe("resuming a carried fight", () => {
     expect(resumed.activeCombatantId).not.toEqual(run.activeCombatantId);
     expect(isUp?.displayName).toEqual(wasUp.displayName);
     expect(isUp?.initiative).toEqual(wasUp.initiative);
+  }, 60_000);
+
+  it("keeps a fight that was still rolling initiative rolling, with the numbers it had", async () => {
+    const first = await freshSession();
+    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
+    const seeded = await as(combatants.list(fixture.asDm, first.id, run.id));
+    const called = seeded.find((row) => row.kind === "pc")!;
+    await as(
+      combatants.setInitiative(fixture.asDm, first.id, run.id, {
+        entries: [{ combatantId: called.id, initiative: 14 }],
+      }),
+    );
+    await finish(first.id);
+
+    const second = await freshSession();
+    const resumed = await as(runs.resume(fixture.asDm, second.id, { continuedFrom: run.id }));
+    const after = await as(combatants.list(fixture.asDm, second.id, resumed.id));
+
+    expect(resumed).toMatchObject({ phase: "initiative", activeCombatantId: null, round: 1 });
+    expect(after.find((row) => row.displayName === called.displayName)).toMatchObject({
+      initiative: 14,
+      initiativeSetBy: "dm",
+    });
+    expect(after.filter((row) => row.initiative === null)).toHaveLength(seeded.length - 1);
   }, 60_000);
 
   it("refuses a second successor for the same fight", async () => {

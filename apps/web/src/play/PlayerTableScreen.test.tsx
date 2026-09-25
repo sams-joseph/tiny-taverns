@@ -135,6 +135,8 @@ describe("PlayerTableScreen", () => {
             displayName: "Brannoc Duskharrow",
             subtitle: "Level 5 Half-orc Paladin",
             initiative: 16,
+            initiativeBonus: 1,
+            initiativeSetBy: "dm",
             hpCurrent: 44,
             hpMax: 52,
             tempHp: 3,
@@ -202,6 +204,8 @@ describe("PlayerTableScreen", () => {
             displayName: "Brannoc Duskharrow",
             subtitle: null,
             initiative: 16,
+            initiativeBonus: 1,
+            initiativeSetBy: "dm",
             hpCurrent: 44,
             hpMax: 52,
             tempHp: 0,
@@ -434,5 +438,126 @@ describe("PlayerTableScreen", () => {
     ).toBeNull();
     expect(within(screen.getByRole("main")).queryByRole("button", { name: /Heal 5/i })).toBeNull();
     expect(within(screen.getByRole("main")).queryByRole("button", { name: /Take 5/i })).toBeNull();
+  });
+});
+
+describe("rolling initiative at your table", () => {
+  const initiativePath = `PUT /campaigns/${campaignId}/table/runs/${liveRunId}/combatants/${yourCombatantId}/initiative`;
+  const yourRow = (overrides: Record<string, unknown>) => ({
+    kind: "you",
+    combatantId: yourCombatantId,
+    characterId: brannocId,
+    campaignCharacterId: brannocSeatRef.campaignCharacterId,
+    displayName: "Brannoc Duskharrow",
+    subtitle: null,
+    initiative: null,
+    initiativeBonus: 3,
+    initiativeSetBy: null,
+    hpCurrent: 44,
+    hpMax: 52,
+    tempHp: 0,
+    conditions: [],
+    portrait: null,
+    ...overrides,
+  });
+  const rolling = (you: Record<string, unknown>) =>
+    playing(campaignId, {
+      phase: "initiative",
+      upNext: null,
+      order: [
+        you,
+        {
+          kind: "npc",
+          combatantId: hagCombatantId,
+          displayName: "Marsh Hag",
+          subtitle: "Medium Fey",
+          initiative: null,
+          hpBand: "unhurt",
+          conditions: [],
+        },
+      ],
+    });
+  const sent = () =>
+    server.calls
+      .filter((call) => `${call.method} ${call.pathname}` === initiativePath)
+      .map((call) => JSON.parse(call.body) as unknown);
+
+  it("says the fight is rolling, and sends the total you type as your own", async () => {
+    server.routes.set(...rolling(yourRow({})));
+    server.routes.set(initiativePath, { status: 204, body: null });
+
+    await renderTable();
+
+    const card = within(
+      (await screen.findByText("Your initiative")).closest("[data-slot=card]") as HTMLElement,
+    );
+    expect(screen.getByText(/Rolling initiative\. The first round starts/)).toBeInTheDocument();
+    expect(screen.getAllByText("Initiative —")).toHaveLength(2);
+    const send = card.getByRole("button", { name: "Send" });
+    expect(send).toBeDisabled();
+
+    const user = userEvent.setup();
+    await user.type(card.getByLabelText("Total"), "17");
+    await user.click(send);
+
+    await waitFor(() => expect(sent()).toEqual([{ initiative: 17 }]));
+  });
+
+  it("rolls d20 plus your bonus into the tray, and sends the total", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    server.routes.set(...rolling(yourRow({})));
+    server.routes.set(initiativePath, { status: 204, body: null });
+    server.routes.set(`POST /campaigns/${campaignId}/rolls`, {
+      status: 200,
+      body: { ...roll, label: "Initiative", notation: "1d20+3", dice: [11], kept: [11], total: 14 },
+    });
+
+    await renderTable();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Roll d20 +3" }));
+
+    await waitFor(() => expect(sent()).toEqual([{ initiative: 14 }]));
+    const recorded = server.calls.find(
+      (call) => call.method === "POST" && call.pathname === `/campaigns/${campaignId}/rolls`,
+    );
+    expect(JSON.parse(recorded!.body)).toMatchObject({ label: "Initiative", total: 14 });
+  });
+
+  it("says what you sent, and lets you change it", async () => {
+    server.routes.set(...rolling(yourRow({ initiative: 12, initiativeSetBy: "player" })));
+
+    await renderTable();
+
+    expect(await screen.findByText(/You sent 12\. You can change it/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Total")).toBeInTheDocument();
+  });
+
+  it("offers nothing to change once your DM has written your number", async () => {
+    server.routes.set(...rolling(yourRow({ initiative: 15, initiativeSetBy: "dm" })));
+
+    await renderTable();
+
+    expect(await screen.findByText("Your DM has you at 15.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Total")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Roll d20/ })).toBeNull();
+  });
+
+  it("offers no roll when your sheet gives no bonus, only the total", async () => {
+    server.routes.set(...rolling(yourRow({ initiativeBonus: null })));
+
+    await renderTable();
+
+    expect(await screen.findByLabelText("Total")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Roll d20/ })).toBeNull();
+  });
+
+  it("draws no initiative card once round 1 has started", async () => {
+    server.routes.set(...playing(campaignId, {}));
+
+    await renderTable();
+
+    await screen.findByText("Initiative");
+    expect(screen.queryByText("Your initiative")).toBeNull();
   });
 });

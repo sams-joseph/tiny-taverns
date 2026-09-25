@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { CharacterPortraitImages } from "./Character.js";
 import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
+import { MAX_INITIATIVE_BONUS, MIN_INITIATIVE_BONUS } from "./Initiative.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -9,6 +10,18 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  */
 export const CombatantKind = Schema.Literals(["pc", "npc"]);
 export type CombatantKind = typeof CombatantKind.Type;
+
+/**
+ * Who put a combatant's initiative number there: the DM (from the runner), or
+ * the player whose character it is (from their Table, during the initiative
+ * phase). `null` exactly when there is no number yet.
+ *
+ * It is what decides whether the player may still change it. A player's own
+ * number is theirs to correct until the fight begins; once the DM has written
+ * one, the DM's is the table's answer and the player's write is refused.
+ */
+export const InitiativeSetBy = Schema.Literals(["dm", "player"]);
+export type InitiativeSetBy = typeof InitiativeSetBy.Type;
 
 /**
  * A condition badge — `"Hostile"`, `"Concentrating"`, `"Prone"`, `"Downed"`,
@@ -89,7 +102,22 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    * `Character` already documents for the same string.
    */
   playerName: Schema.NullOr(Schema.String),
-  initiative: Schema.Int,
+  /**
+   * `null` until somebody says: a fight is seeded with no numbers, and the
+   * initiative phase (`EncounterRun.phase`) is where they arrive. A row with
+   * no number sorts after every row with one.
+   */
+  initiative: Schema.NullOr(Schema.Int),
+  /**
+   * What this combatant adds to a d20 for initiative, snapshotted at seed time
+   * from the sheet (its written initiative, else DEX) or the stat block (DEX).
+   * `null` when the document says nothing usable, and for a row added by hand.
+   *
+   * Two jobs: "roll for them" is d20 plus this, and it breaks initiative ties
+   * (`repo/liveTables.ts`, `initiativeOrderKeys`).
+   */
+  initiativeBonus: Schema.NullOr(Schema.Int),
+  initiativeSetBy: Schema.NullOr(InitiativeSetBy),
   /** Zero is a legal, common, deliberate value. It does not mean "gone". */
   hpCurrent: Schema.Int,
   hpMax: Schema.Int,
@@ -118,6 +146,9 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
 }) {}
 
 const initiative = Schema.Int.check(Schema.isBetween({ minimum: -50, maximum: 100 }));
+const initiativeBonus = Schema.Int.check(
+  Schema.isBetween({ minimum: MIN_INITIATIVE_BONUS, maximum: MAX_INITIATIVE_BONUS }),
+);
 const hp = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
 const ac = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }));
 
@@ -137,6 +168,7 @@ export const CombatantCreate = Schema.Struct({
   playerName: Schema.optional(Schema.String),
   kind: Schema.optional(CombatantKind),
   initiative: Schema.optional(initiative),
+  initiativeBonus: Schema.optional(initiativeBonus),
   hpMax: Schema.optional(hp),
   hpCurrent: Schema.optional(hp),
   ac: Schema.optional(ac),
@@ -150,6 +182,7 @@ export const CombatantUpdate = Schema.Struct({
   subtitle: Schema.optional(Schema.NullOr(Schema.String)),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
   initiative: Schema.optional(initiative),
+  initiativeBonus: Schema.optional(Schema.NullOr(initiativeBonus)),
   hpCurrent: Schema.optional(hp),
   hpMax: Schema.optional(hp),
   ac: Schema.optional(Schema.NullOr(ac)),
@@ -194,3 +227,36 @@ export const CombatantMove = Schema.Struct({
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
 });
 export type CombatantMove = typeof CombatantMove.Type;
+
+/**
+ * One line of the DM's initiative write: this combatant's number, or `null` to
+ * clear one typed in error.
+ */
+export const InitiativeEntry = Schema.Struct({
+  combatantId: CombatantId,
+  initiative: Schema.NullOr(initiative),
+});
+export type InitiativeEntry = typeof InitiativeEntry.Type;
+
+/**
+ * The DM's initiative numbers, several at once: *Roll for monsters*, or the
+ * totals the table called out. One transaction and one log line, so a roll for
+ * seven goblins is one write that lands whole or not at all, and a repeat of
+ * one already applied (`requestId`) changes nothing.
+ */
+export const InitiativeSet = Schema.Struct({
+  entries: Schema.Array(InitiativeEntry).check(Schema.isLengthBetween(1, 200)),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+});
+export type InitiativeSet = typeof InitiativeSet.Type;
+
+/**
+ * A player's own initiative, from their Table, during the initiative phase.
+ *
+ * The combatant is in the path and must be the row of a character seated in
+ * one of the asker's own seats; the server refuses anything else as not
+ * found. See `PlayerTable.setInitiative` for when it is refused as a
+ * conflict instead.
+ */
+export const PlayerInitiative = Schema.Struct({ initiative });
+export type PlayerInitiative = typeof PlayerInitiative.Type;

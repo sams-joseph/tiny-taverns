@@ -27,6 +27,7 @@ import encounterPrep from "../src/migrations/0060_encounter_prep.js";
 import encounterReady from "../src/migrations/0061_encounter_ready.js";
 import characterInspiration from "../src/migrations/0062_character_inspiration.js";
 import runScenes from "../src/migrations/0065_run_scenes.js";
+import initiativePhase from "../src/migrations/0066_initiative_phase.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -86,6 +87,9 @@ afterAll(() => inspirationRuntime.dispose());
 /** A fifteenth, for runs played before a run had a mode or a scene. */
 const scenesRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_scenes"));
 afterAll(() => scenesRuntime.dispose());
+/** A sixteenth, for fights on file before a fight rolled initiative. */
+const phaseRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_phase"));
+afterAll(() => phaseRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -329,6 +333,7 @@ describe("migrations", () => {
       { migration_id: 63, name: "seat_prep" },
       { migration_id: 64, name: "combatant_positions" },
       { migration_id: 65, name: "run_scenes" },
+      { migration_id: 66, name: "initiative_phase" },
     ]);
   }, 60_000);
 
@@ -403,6 +408,7 @@ describe("migrations", () => {
       { migration_id: 63, name: "seat_prep" },
       { migration_id: 64, name: "combatant_positions" },
       { migration_id: 65, name: "run_scenes" },
+      { migration_id: 66, name: "initiative_phase" },
     ]);
   }, 60_000);
 });
@@ -1524,5 +1530,89 @@ describe("upgrading a database whose runs predate modes and scenes", () => {
     expect(measured.scenes).toEqual([
       { run_id: measured.run, beats: [], challenge: null, stage: null },
     ]);
+  }, 60_000);
+});
+
+describe("upgrading a database whose fights predate the initiative phase", () => {
+  it("leaves every fight taking turns and every number the DM's, and lets a new row have none", async () => {
+    const measured = await phaseRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0065` left: no phase, and a number on every combatant.
+        yield* sql`alter table encounter_run drop constraint encounter_run_nobody_up_while_rolling`;
+        yield* sql`alter table encounter_run drop column phase`;
+        yield* sql`alter table combatant drop column initiative_set_by`;
+        yield* sql`alter table combatant drop column initiative_bonus`;
+        yield* sql`alter table combatant alter column initiative set default 0`;
+        yield* sql`alter table combatant alter column initiative set not null`;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "phase-hash" })}
+          returning id
+        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
+        const session = (yield* sql<{ readonly id: string }>`
+          insert into session ${sql.insert({ campaign_id: campaign, number: 1 })}
+          returning id
+        `)[0]!.id;
+        const run = (yield* sql<{ readonly id: string }>`
+          insert into encounter_run ${sql.insert({ session_id: session, encounter_name: "Reeds" })}
+          returning id
+        `)[0]!.id;
+        yield* sql`
+          insert into combatant ${sql.insert([
+            { encounter_run_id: run, display_name: "Brannoc", initiative: 17, kind: "pc" },
+            { encounter_run_id: run, display_name: "Goblin", initiative: 0, kind: "npc" },
+          ])}
+        `;
+        const [goblin] = yield* sql<{ readonly id: string }>`
+          select id from combatant where display_name = 'Goblin'
+        `;
+        yield* sql`update encounter_run set active_combatant_id = ${goblin!.id} where id = ${run}`;
+
+        yield* initiativePhase;
+        const runs = yield* sql<{ readonly phase: string; readonly up: boolean }>`
+          select phase, active_combatant_id is not null as up from encounter_run
+        `;
+        const combatants = yield* sql<{
+          readonly display_name: string;
+          readonly initiative: number | null;
+          readonly initiative_bonus: number | null;
+          readonly initiative_set_by: string | null;
+        }>`
+          select display_name, initiative, initiative_bonus, initiative_set_by
+          from combatant order by display_name
+        `;
+        yield* sql`
+          insert into combatant ${sql.insert({ encounter_run_id: run, display_name: "Wolf" })}
+        `;
+        const wolf = yield* sql<{ readonly initiative: number | null }>`
+          select initiative from combatant where display_name = 'Wolf'
+        `;
+        const numberWithoutWho = yield* sql`
+          update combatant set initiative = 12 where display_name = 'Wolf'
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        const upWhileRolling = yield* sql`
+          update encounter_run set phase = 'initiative' where id = ${run}
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { runs, combatants, wolf, numberWithoutWho, upWhileRolling };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.runs).toEqual([{ phase: "turns", up: true }]);
+    expect(measured.combatants).toEqual([
+      { display_name: "Brannoc", initiative: 17, initiative_bonus: null, initiative_set_by: "dm" },
+      { display_name: "Goblin", initiative: 0, initiative_bonus: null, initiative_set_by: "dm" },
+    ]);
+    expect(measured.wolf).toEqual([{ initiative: null }]);
+    expect(measured.numberWithoutWho).toContain("combatant_initiative_set_by_follows");
+    expect(measured.upWhileRolling).toContain("encounter_run_nobody_up_while_rolling");
   }, 60_000);
 });

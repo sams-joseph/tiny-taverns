@@ -21,6 +21,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { aFightUnderWay } from "./support/fights.js";
 
 /**
  * The recap: what happened on the night.
@@ -149,7 +150,7 @@ const makeFixture = Effect.gen(function* () {
 
   const dmOf = yield* as(asDm(dm, campaign.id));
   const run = yield* as(
-    runs.start(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
+    aFightUnderWay(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
   );
   const roll = yield* as(runs.nextTurn(dmOf, session.id, run.id, {}));
   const inTheFight = yield* as(combatantsOf(dmOf, session.id, run.id));
@@ -335,7 +336,7 @@ describe("a fight that paused and was picked up the following week", () => {
   it("says so from both ends", async () => {
     const first = await as(sessions.create(fixture.campaign.id, { number: 20 }));
     const paused = await as(
-      runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
+      aFightUnderWay(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
     );
     await as(runs.nextTurn(fixture.asDm, first.id, paused.id, {}));
     // The night ends over the top of it: `Sessions.update` carries the live

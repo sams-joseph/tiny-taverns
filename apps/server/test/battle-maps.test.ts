@@ -941,7 +941,16 @@ describe("a fight keeps its board", () => {
     const stillOn = await as(kit.token, (client) => client.runs.findById({ params }));
     expect(stillOn.encounterId).toBeNull();
     expect(stillOn.endedAt).toBeNull();
-    await as(kit.token, (client) => client.combatants.list({ params }));
+    const rows = await as(kit.token, (client) => client.combatants.list({ params }));
+    if (rows.length > 0) {
+      await as(kit.token, (client) =>
+        client.runs.setInitiative({
+          params,
+          payload: { entries: rows.map((row) => ({ combatantId: row.id, initiative: 10 })) },
+        }),
+      );
+    }
+    await as(kit.token, (client) => client.runs.begin({ params, payload: {} }));
     await as(kit.token, (client) =>
       client.runs.nextTurn({ params, payload: { requestId: crypto.randomUUID() } }),
     );
@@ -994,7 +1003,7 @@ describe("a fight keeps its board", () => {
     expect(read?.fight?.id).toBe(fight.id);
     // The player's table is exactly what it was before fights kept boards.
     expect(Object.keys(read!.fight!).sort()).toEqual(
-      ["encounterId", "id", "order", "round", "seats", "upNext"].sort(),
+      ["encounterId", "id", "order", "phase", "round", "seats", "upNext"].sort(),
     );
     const text = JSON.stringify(read);
     expect(text).not.toContain("battle-map-images");

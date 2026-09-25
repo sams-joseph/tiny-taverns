@@ -146,9 +146,18 @@ beforeAll(async () => {
       params: { campaignId: campaign.id, sessionId: session.id },
       payload: { encounterId: encounter.id },
     });
-    const combatants = yield* api.combatants.list({
-      params: { campaignId: campaign.id, sessionId: session.id, runId: run.id },
+    const params = { campaignId: campaign.id, sessionId: session.id, runId: run.id };
+    const combatants = yield* api.combatants.list({ params });
+    // Round 1, so *Next turn* has an order to walk. Everything after the
+    // first event is what the stream is tested on, so these two are not
+    // counted by the tests below.
+    yield* api.runs.setInitiative({
+      params,
+      payload: {
+        entries: combatants.map((row, index) => ({ combatantId: row.id, initiative: 20 - index })),
+      },
     });
+    yield* api.runs.begin({ params, payload: {} });
 
     return { api, campaign, session, run, combatant: combatants[0]! };
   }).pipe(Effect.orDie);

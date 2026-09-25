@@ -3,6 +3,7 @@ import {
   type AssistantTurnId,
   type CampaignId,
   type CharacterId,
+  type CharacterSheet,
   type CombatantId,
   type CombatantKind,
   Conflict,
@@ -10,16 +11,23 @@ import {
   EncounterRun,
   type EncounterRunEndedReason,
   type EncounterRunId,
+  type EncounterRunPhase,
   type EncounterRunResume,
   type EncounterRunStart,
   type EncounterRunUpdate,
+  type BeginTurns,
   type EncounterId,
   type EncounterKind,
   encounterKindLabel,
+  type InitiativeSetBy,
+  initiativeBonusOf,
   type NextTurn,
   NotFound,
   type Origin,
+  type RerollInitiative,
   type SessionId,
+  type StatBlock,
+  statBlockInitiativeBonus,
   type Visibility,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -51,6 +59,7 @@ export interface EncounterRunRow extends ProvenanceColumns {
   readonly encounter_name: string;
   readonly mode: EncounterKind;
   readonly round: number;
+  readonly phase: EncounterRunPhase;
   readonly active_combatant_id: CombatantId | null;
   readonly started_at: Date;
   readonly ended_at: Date | null;
@@ -67,6 +76,7 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     encounterName: row.encounter_name,
     mode: row.mode,
     round: row.round,
+    phase: row.phase,
     activeCombatantId: row.active_combatant_id,
     startedAt: DateTime.fromDateUnsafe(row.started_at),
     endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
@@ -114,7 +124,8 @@ export const runColumns = (
   return sql`encounter_run.id, encounter_run.session_id,
     case when ${known} then encounter_run.encounter_id end as encounter_id,
     ${fightName(sql, sql.or([known, campaignWritableById(sql, campaignId, actor)]))} as encounter_name,
-    encounter_run.mode, encounter_run.round, encounter_run.active_combatant_id,
+    encounter_run.mode, encounter_run.round, encounter_run.phase,
+    encounter_run.active_combatant_id,
     encounter_run.started_at,
     encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
     encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
@@ -145,7 +156,9 @@ interface CarriedCombatantRow {
   readonly display_name: string;
   readonly subtitle: string | null;
   readonly player_name: string | null;
-  readonly initiative: number;
+  readonly initiative: number | null;
+  readonly initiative_bonus: number | null;
+  readonly initiative_set_by: InitiativeSetBy | null;
   readonly hp_current: number;
   readonly hp_max: number;
   readonly ac: number | null;
@@ -218,6 +231,8 @@ interface PartyRow {
   /** Null means nobody has said, which a seed reads as full. See `0014`. */
   readonly hp_current: number | null;
   readonly conditions: ReadonlyArray<string>;
+  /** `character.body`, the sheet — read for its initiative bonus and nothing else. */
+  readonly sheet: CharacterSheet;
 }
 
 interface RosterRow {
@@ -228,6 +243,8 @@ interface RosterRow {
   readonly type: string;
   readonly ac: number;
   readonly hp: number;
+  /** `creature.body`, the stat block — read for its initiative bonus and nothing else. */
+  readonly stat_block: StatBlock;
 }
 
 /**
@@ -242,6 +259,13 @@ interface RosterRow {
  */
 const npcSubtitle = (size: string | null, type: string): string =>
   size === null || size === "" ? type : `${size} ${type.toLowerCase()}`;
+
+/**
+ * A document's ability cells, or none. `body` is `jsonb` and every writer puts
+ * `abilities` in it, but a seed is the wrong place to find out one did not.
+ */
+const abilityCells = (body: { readonly abilities?: unknown } | null): StatBlock["abilities"] =>
+  body !== null && Array.isArray(body.abilities) ? body.abilities : [];
 
 /**
  * The live session.
@@ -287,7 +311,7 @@ export class EncounterRuns extends Context.Service<
       sessionId: SessionId,
       id: EncounterRunId,
       patch: EncounterRunUpdate,
-    ) => Effect.Effect<EncounterRun, NotFound>;
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly nextTurn: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -298,6 +322,18 @@ export class EncounterRuns extends Context.Service<
       dm: CampaignCreatorActor,
       sessionId: SessionId,
       id: EncounterRunId,
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
+    readonly begin: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      id: EncounterRunId,
+      payload: BeginTurns,
+    ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
+    readonly reroll: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      id: EncounterRunId,
+      payload: RerollInitiative,
     ) => Effect.Effect<EncounterRun, NotFound | Conflict>;
     readonly end: (
       dm: CampaignCreatorActor,
@@ -353,17 +389,33 @@ export class EncounterRuns extends Context.Service<
         from: CombatantId | null,
       ) =>
         Effect.gen(function* () {
-          const rows = yield* sql<{ readonly id: CombatantId }>`
-            select combatant.id from combatant
+          const rows = yield* sql<{
+            readonly id: CombatantId;
+            readonly kind: CombatantKind;
+            readonly hp_current: number;
+          }>`
+            select combatant.id, combatant.kind, combatant.hp_current from combatant
             where ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
             ${initiativeOrder(sql)}
           `;
           if (rows.length === 0) return { activeCombatantId: null, wrapped: false };
           const at = from === null ? -1 : rows.findIndex((row) => row.id === from);
-          const next = (at + 1) % rows.length;
+          // A monster at zero hit points has no turn to take, so the marker
+          // passes over it; a character at zero still gets one, for death
+          // saves (the captain's call). Nothing is removed and nothing is
+          // marked — the row stays where it is, and healing it back above zero
+          // gives it its turns again. When every row would be passed over,
+          // nobody is: the marker moves one step, as it always did.
+          const takesATurn = (index: number) =>
+            rows[index]!.kind === "pc" || rows[index]!.hp_current > 0;
+          let next = (at + 1) % rows.length;
+          for (let step = 1; step < rows.length && !takesATurn(next); step += 1) {
+            next = (at + 1 + step) % rows.length;
+          }
+          if (!takesATurn(next)) next = (at + 1) % rows.length;
           // Wrapping past the bottom of the order is what ends a round —
           // `EncounterRunner.jsx:112-116`. Starting from nobody does not.
-          return { activeCombatantId: rows[next]!.id, wrapped: at >= 0 && next === 0 };
+          return { activeCombatantId: rows[next]!.id, wrapped: at >= 0 && next <= at };
         });
 
       return {
@@ -432,6 +484,12 @@ export class EncounterRuns extends Context.Service<
                       });
                     }
                     const encounter = encounters[0]!;
+                    // A fight opens on rolling initiative. The other modes take
+                    // no turns and so have nothing to roll; `phase` means
+                    // nothing to them until one becomes a fight (`escalate`),
+                    // which rolls then.
+                    const phase: EncounterRunPhase =
+                      encounter.kind === "combat" ? "initiative" : "turns";
 
                     const runs = yield* sql<EncounterRunRow>`
                       insert into encounter_run ${sql.insert(
@@ -440,6 +498,7 @@ export class EncounterRuns extends Context.Service<
                           encounter_id: encounter.id,
                           encounter_name: encounter.name,
                           mode: encounter.kind,
+                          phase,
                           visibility: payload.visibility,
                         }),
                       )}
@@ -503,7 +562,8 @@ export class EncounterRuns extends Context.Service<
                             select character.id, campaign_character.display_name as name,
                                    character.player_name,
                                    character.descriptor, character.ac, character.hp_max,
-                                   character.hp_current, character.conditions
+                                   character.hp_current, character.conditions,
+                                   character.body as sheet
                             from campaign_character
                             join character on character.id = campaign_character.character_id
                             where campaign_character.left_at is null
@@ -524,7 +584,8 @@ export class EncounterRuns extends Context.Service<
                     const roster = yield* sql<RosterRow>`
                       select encounter_creature.count as count,
                              creature.id as creature_id, creature.name, creature.size,
-                             creature.type, creature.ac, creature.hp
+                             creature.type, creature.ac, creature.hp,
+                             creature.body as stat_block
                       from encounter_creature
                       join creature on creature.id = encounter_creature.creature_id
                       where ${nestedRowReadable(sql, ROSTER, encounter.id, campaignId, actor)}
@@ -547,7 +608,15 @@ export class EncounterRuns extends Context.Service<
                         display_name: member.name,
                         subtitle: member.descriptor,
                         player_name: member.player_name,
-                        initiative: 0,
+                        // Nobody has rolled yet. The bonus is what a roll for
+                        // them adds, snapshotted like every field here.
+                        initiative: null,
+                        initiative_bonus:
+                          initiativeBonusOf({
+                            abilities: abilityCells(member.sheet),
+                            identity: member.sheet?.identity,
+                          }) ?? null,
+                        initiative_set_by: null,
                         // Where they actually are, not where they started the
                         // campaign. A party that walked in at half health is in
                         // initiative at half health — a seed from `hp_max`
@@ -570,7 +639,12 @@ export class EncounterRuns extends Context.Service<
                           display_name: line.name,
                           subtitle: npcSubtitle(line.size, line.type),
                           player_name: null,
-                          initiative: 0,
+                          initiative: null,
+                          initiative_bonus:
+                            statBlockInitiativeBonus({
+                              abilities: abilityCells(line.stat_block),
+                            }) ?? null,
+                          initiative_set_by: null,
                           hp_current: line.hp,
                           hp_max: line.hp,
                           ac: line.ac,
@@ -588,14 +662,11 @@ export class EncounterRuns extends Context.Service<
                       yield* sql`insert into combatant ${sql.insert(seeded)}`;
                     }
 
-                    // Put it on the table, and put the marker on whoever is
-                    // first — in a fight. A conversation, a challenge or a
-                    // hazard takes no turns, so nobody is up until one turns
-                    // into a fight (`escalate`).
-                    const { activeCombatantId } =
-                      run.mode === "combat"
-                        ? yield* advance(campaignId, run.id, actor, null)
-                        : { activeCombatantId: null };
+                    // Put it on the table. Nobody is up yet in any run: a fight
+                    // opens rolling initiative and `begin` puts the marker on
+                    // whoever is first; a conversation, a challenge or a hazard
+                    // takes no turns until one turns into a fight (`escalate`).
+                    const activeCombatantId = null;
                     const started = yield* sql<EncounterRunRow>`
                       update encounter_run
                       set active_combatant_id = ${activeCombatantId}, updated_at = now()
@@ -692,6 +763,7 @@ export class EncounterRuns extends Context.Service<
                         encounter_name: from.encounter_name,
                         mode: from.mode,
                         round: from.round,
+                        phase: from.phase,
                         visibility: from.visibility,
                         origin: from.origin,
                         assistant_turn_id: from.assistant_turn_id,
@@ -723,7 +795,8 @@ export class EncounterRuns extends Context.Service<
                     const carried = yield* sql<CarriedCombatantRow>`
                       select combatant.id, combatant.character_id, combatant.creature_id,
                              combatant.display_name, combatant.subtitle, combatant.player_name,
-                             combatant.initiative, combatant.hp_current, combatant.hp_max,
+                             combatant.initiative, combatant.initiative_bonus,
+                             combatant.initiative_set_by, combatant.hp_current, combatant.hp_max,
                              combatant.ac, combatant.kind, combatant.conditions,
                              combatant.board_column, combatant.board_row,
                              combatant.visibility, combatant.origin, combatant.assistant_turn_id
@@ -746,6 +819,8 @@ export class EncounterRuns extends Context.Service<
                         subtitle: row.subtitle,
                         player_name: row.player_name,
                         initiative: row.initiative,
+                        initiative_bonus: row.initiative_bonus,
+                        initiative_set_by: row.initiative_set_by,
                         hp_current: row.hp_current,
                         hp_max: row.hp_max,
                         ac: row.ac,
@@ -849,6 +924,18 @@ export class EncounterRuns extends Context.Service<
               .withTransaction(
                 Effect.gen(function* () {
                   yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
+                  // Nobody is up while initiative is being rolled — the schema
+                  // holds it (`encounter_run_nobody_up_while_rolling`), and this
+                  // says it as a refusal the DM can read rather than a 404.
+                  if (patch.activeCombatantId !== undefined && patch.activeCombatantId !== null) {
+                    const current = yield* readRun(campaignId, sessionId, id, actor);
+                    if (current.phase === "initiative") {
+                      return yield* new Conflict({
+                        message:
+                          "nobody is up while initiative is being rolled; start round 1 first",
+                      });
+                    }
+                  }
                   const columns = defined({
                     round: patch.round,
                     active_combatant_id: patch.activeCombatantId,
@@ -915,6 +1002,11 @@ export class EncounterRuns extends Context.Service<
                   if (current.mode !== "combat") {
                     return yield* new Conflict({ message: notAFight(current.mode) });
                   }
+                  if (current.phase === "initiative") {
+                    return yield* new Conflict({
+                      message: "this fight is still rolling initiative; start round 1 first",
+                    });
+                  }
                   const { activeCombatantId, wrapped } = yield* advance(
                     campaignId,
                     id,
@@ -963,8 +1055,9 @@ export class EncounterRuns extends Context.Service<
          *
          * The same run, so the same night's log, the same combatants — the
          * NPC and whoever came with them were seeded when it started — and the
-         * checks already logged stay its history. Round 1 and the marker on
-         * whoever is first, as `start` does for a fight.
+         * checks already logged stay its history. It opens on rolling
+         * initiative at round 1, as `start` opens a fight: nobody is up until
+         * every row has a number and the DM starts the round (`begin`).
          */
         escalate: ({ actor, campaign: campaignId }, sessionId, id) =>
           dieOnSqlError(
@@ -980,11 +1073,10 @@ export class EncounterRuns extends Context.Service<
                       message: "only a conversation turns into a fight",
                     });
                   }
-                  const { activeCombatantId } = yield* advance(campaignId, id, actor, null);
                   const rows = yield* sql<EncounterRunRow>`
                     update encounter_run
-                    set mode = 'combat', round = 1,
-                        active_combatant_id = ${activeCombatantId}, updated_at = now()
+                    set mode = 'combat', phase = 'initiative', round = 1,
+                        active_combatant_id = null, updated_at = now()
                     where encounter_run.id = ${id} and encounter_run.mode = 'social'
                     returning *
                   `;
@@ -1002,6 +1094,129 @@ export class EncounterRuns extends Context.Service<
                 }),
               )
               .pipe(Effect.tap(() => live.touched(sessionId))),
+          ),
+
+        /**
+         * *Start round 1* — out of the initiative phase.
+         *
+         * Every combatant needs a number first, hidden ones included: they take
+         * turns too, and a row with no number has no place in the order to
+         * take them from. The marker goes on the first in the order that takes
+         * a turn (`advance` from nobody). The round is left alone — a fresh
+         * fight is at 1, and one that went back to rolling keeps the round it
+         * was in.
+         *
+         * A fight already taking turns is answered as it is and nothing is
+         * logged, so a repeated press cannot restart anybody's turn.
+         */
+        begin: ({ actor, campaign: campaignId }, sessionId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureNestedRowWritable(sql, RUNS, id, sessionId, campaignId, actor);
+                  const current = yield* readRun(campaignId, sessionId, id, actor);
+                  if (current.mode !== "combat") {
+                    return yield* new Conflict({ message: notAFight(current.mode) });
+                  }
+                  // Over, or already under way: nothing to start.
+                  if (current.endedAt !== null || current.phase === "turns") return current;
+                  if (yield* requestAlreadyApplied(sql, id, payload.requestId)) return current;
+
+                  const unset = yield* sql<{ readonly count: number }>`
+                    select count(*)::int as count from combatant
+                    where ${containedChildWritable(sql, COMBATANT, id, campaignId, actor)}
+                      and combatant.initiative is null
+                  `;
+                  const missing = unset[0]?.count ?? 0;
+                  if (missing > 0) {
+                    return yield* new Conflict({
+                      message:
+                        missing === 1
+                          ? "one combatant has no initiative yet"
+                          : `${String(missing)} combatants have no initiative yet`,
+                    });
+                  }
+
+                  const { activeCombatantId } = yield* advance(campaignId, id, actor, null);
+                  const rows = yield* sql<EncounterRunRow>`
+                    update encounter_run
+                    set phase = 'turns', active_combatant_id = ${activeCombatantId},
+                        updated_at = now()
+                    where encounter_run.id = ${id}
+                    returning *
+                  `;
+                  const run = toEncounterRun(rows[0]!);
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "run-updated",
+                    encounterRunId: id,
+                    combatantId: activeCombatantId ?? undefined,
+                    payload: { phase: "turns", round: run.round },
+                    requestId: payload.requestId,
+                    visibility: run.visibility,
+                  });
+                  return run;
+                }),
+              )
+              .pipe(
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readRun(campaignId, sessionId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
+         * *Reroll initiative* — back to the initiative phase.
+         *
+         * **Every number is kept**, and so is the round. The drawing clears
+         * them all, which throws away what the table called out; keeping them
+         * means the DM changes only what changed (`setInitiative`) and starts
+         * the round again. The marker comes off, because nobody is up while
+         * initiative is being rolled.
+         */
+        reroll: ({ actor, campaign: campaignId }, sessionId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureNestedRowWritable(sql, RUNS, id, sessionId, campaignId, actor);
+                  const current = yield* readRun(campaignId, sessionId, id, actor);
+                  if (current.mode !== "combat") {
+                    return yield* new Conflict({ message: notAFight(current.mode) });
+                  }
+                  if (current.endedAt !== null || current.phase === "initiative") return current;
+                  if (yield* requestAlreadyApplied(sql, id, payload.requestId)) return current;
+
+                  const rows = yield* sql<EncounterRunRow>`
+                    update encounter_run
+                    set phase = 'initiative', active_combatant_id = null, updated_at = now()
+                    where encounter_run.id = ${id}
+                    returning *
+                  `;
+                  const run = toEncounterRun(rows[0]!);
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "run-updated",
+                    encounterRunId: id,
+                    payload: { phase: "initiative", round: run.round },
+                    requestId: payload.requestId,
+                    visibility: run.visibility,
+                  });
+                  return run;
+                }),
+              )
+              .pipe(
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readRun(campaignId, sessionId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
           ),
 
         /**

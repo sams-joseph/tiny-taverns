@@ -151,7 +151,8 @@ export function CombatantDialog({
     subtitle: combatant?.subtitle ?? "",
     playerName: combatant?.playerName ?? "",
     kind: combatant?.kind ?? "npc",
-    initiative: combatant === undefined ? "" : String(combatant.initiative),
+    initiative:
+      combatant === undefined || combatant.initiative === null ? "" : String(combatant.initiative),
     hpMax: combatant === undefined ? "" : String(combatant.hpMax),
     hpCurrent: combatant === undefined ? "" : String(combatant.hpCurrent),
     ac: combatant?.ac === null || combatant?.ac === undefined ? "" : String(combatant.ac),

@@ -36,6 +36,8 @@ import {
   CombatantDamage,
   CombatantMove,
   CombatantUpdate,
+  InitiativeSet,
+  PlayerInitiative,
 } from "./Combatant.js";
 import {
   Creature,
@@ -80,11 +82,13 @@ import {
   EncounterCreatureUpdate,
 } from "./EncounterCreature.js";
 import {
+  BeginTurns,
   EncounterRun,
   EncounterRunResume,
   EncounterRunStart,
   EncounterRunUpdate,
   NextTurn,
+  RerollInitiative,
 } from "./EncounterRun.js";
 import {
   EncounterRunCheck,
@@ -1945,6 +1949,23 @@ class PlayerTableGroup extends HttpApiGroup.make("table")
       success: Schema.Array(Roll),
       error: NotFound,
     }),
+    /**
+     * Your own initiative, while the fight is rolling it.
+     *
+     * The one write in this group. It reaches exactly one row: the combatant of
+     * a character in one of your own active seats, in the fight this table
+     * shows you. Anything else — another player's character, a monster, a fight
+     * that is not shared, a campaign you are not in — is `NotFound`, the same
+     * answer the read gives. `Conflict` when the fight is no longer rolling
+     * initiative, or when the DM has already written this number (the DM's
+     * stands; see `InitiativeSetBy`).
+     */
+    HttpApiEndpoint.put("setInitiative", "/table/runs/:runId/combatants/:combatantId/initiative", {
+      params: { campaignId: CampaignId, runId: EncounterRunId, combatantId: CombatantId },
+      payload: PlayerInitiative,
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
   )
   .prefix("/campaigns/:campaignId")
   .middleware(Authorization) {}
@@ -2498,16 +2519,18 @@ class RunsGroup extends HttpApiGroup.make("runs")
       success: EncounterRun,
       error: NotFound,
     }),
+    /** `Conflict` for a turn marker set while the fight is rolling initiative. */
     HttpApiEndpoint.patch("update", "/:runId", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: EncounterRunUpdate,
       success: EncounterRun,
-      error: NotFound,
+      error: [NotFound, Conflict],
     }),
     /**
      * Advance initiative, rolling the round over at the end of the order.
-     * `Conflict` for a scene that is not a fight: a conversation, a skill
-     * challenge or a hazard takes no turns.
+     * `Conflict` for a scene that is not a fight (a conversation, a skill
+     * challenge or a hazard takes no turns), and during the initiative phase,
+     * when there is no order yet.
      */
     HttpApiEndpoint.post("nextTurn", "/:runId/next-turn", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
@@ -2517,13 +2540,36 @@ class RunsGroup extends HttpApiGroup.make("runs")
     }),
     /**
      * A conversation turns into a fight: the same run, its mode now `combat`,
-     * with the combatants it already has. One way, deliberately — a fight that
-     * calms down is a new conversation. `Conflict` for any run that is not a
-     * conversation, and for one already over.
+     * with the combatants it already has, rolling initiative as any fight
+     * opens. One way, deliberately — a fight that calms down is a new
+     * conversation. `Conflict` for any run that is not a conversation, and for
+     * one already over.
      */
     HttpApiEndpoint.post("escalate", "/:runId/escalate", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: Schema.Struct({}),
+      success: EncounterRun,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Set several combatants' initiative in one write, in any phase. Answers
+     * with the whole list, in its new order. Every combatant named must be in
+     * this fight, or nothing is written.
+     */
+    HttpApiEndpoint.post("setInitiative", "/:runId/initiative", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: InitiativeSet,
+      success: Schema.Array(Combatant),
+      error: NotFound,
+    }),
+    /**
+     * *Start round 1*: out of the initiative phase, marker on the first in the
+     * order. `Conflict` while any combatant has no number, and for a scene
+     * that is not a fight. A fight already taking turns is answered as it is.
+     */
+    HttpApiEndpoint.post("begin", "/:runId/begin", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: BeginTurns,
       success: EncounterRun,
       error: [NotFound, Conflict],
     }),
@@ -2565,6 +2611,17 @@ class RunsGroup extends HttpApiGroup.make("runs")
       },
       success: HttpApiSchema.NoContent,
       error: NotFound,
+    }),
+    /**
+     * *Reroll initiative*: back to the initiative phase, numbers and round
+     * kept, marker off. A fight already rolling is answered as it is;
+     * `Conflict` for a scene that is not a fight.
+     */
+    HttpApiEndpoint.post("reroll", "/:runId/reroll", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: RerollInitiative,
+      success: EncounterRun,
+      error: [NotFound, Conflict],
     }),
     /** Take the fight off the table. Idempotent — ending an ended run is a no-op. */
     HttpApiEndpoint.post("end", "/:runId/end", {

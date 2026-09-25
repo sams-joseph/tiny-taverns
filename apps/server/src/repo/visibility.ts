@@ -1231,6 +1231,42 @@ export const characterVitalsWritable = (
     campaignWritableById(sql, campaignId, actor),
   ]);
 
+/**
+ * The one live row a player may write: **their own character's combatant**,
+ * in a fight they can see — today, to enter their own initiative.
+ *
+ * Three clauses, and all of them are the table's existing gates rather than
+ * new ones. The combatant must be readable through its containment chain
+ * (`containedRowReadable`: a live membership, a credential that reaches this
+ * campaign, a shared night, a shared fight and a shared row). It must be a
+ * `pc` row. And its character must sit in an **active seat this account
+ * holds** at this campaign — the same seat test the player's table read makes
+ * (`repo/PlayerTable.ts`), so a player can write exactly the row that read
+ * calls "you". The account is compared to the actor's own and to nothing a
+ * caller supplied; there is no request shape that names somebody else's seat.
+ *
+ * The containment is a parameter only because `repo/liveTables.ts`, where the
+ * combatant's chain is spelled, already imports this file.
+ *
+ * What the player may write, and when, is the caller's (`PlayerTable`); this
+ * decides only which row.
+ */
+export const ownSeatedCombatant = (
+  sql: SqlClient.SqlClient,
+  combatant: Containment,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    containedRowReadable(sql, combatant, campaignId, actor),
+    sql`combatant.kind = 'pc'`,
+    sql`exists (select 1 from campaign_character
+                where campaign_character.campaign_id = ${campaignId}
+                  and campaign_character.character_id = combatant.character_id
+                  and campaign_character.account_id = ${actor.accountId}
+                  and campaign_character.left_at is null)`,
+  ]);
+
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (
   sql: SqlClient.SqlClient,

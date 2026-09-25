@@ -23,7 +23,7 @@ import {
   SectionHeading,
   Loading,
 } from "@taverns/ui";
-import { Effect, Result } from "effect";
+import { Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
@@ -701,12 +701,16 @@ export function RunScreen() {
   const frozen = over || dialogOpen;
 
   const active = state?.combatants.find((row) => row.id === state.run.activeCombatantId);
+  // Rolling initiative: nobody is up, and round 1 waits until every row has a
+  // number. `toRoll` is the count the header's button waits on.
+  const rolling = state?.run.phase === "initiative";
+  const toRoll = state?.combatants.filter((row) => row.initiative === null).length ?? 0;
   const selected =
     state?.combatants.find((row) => row.id === selectedId) ??
     (selectedId === undefined ? active : undefined);
 
   const advance = useCallback(async () => {
-    if (state === undefined || turn.busy) return;
+    if (state === undefined || turn.busy || state.run.phase === "initiative") return;
     // Nothing outside this screen is a function of whose turn it is, so this
     // names no reads — and must not name the fight itself: the runner learns
     // what it just did from the write's own answer, which is `applyRun` below.
@@ -734,28 +738,30 @@ export function RunScreen() {
   }, [advance, frozen, state]);
 
   /**
-   * A d20 for every monster, in one submit.
+   * A d20 plus its initiative bonus for every monster, in one write.
    *
    * There is no roll endpoint and there should not be — a roll is not durable
-   * state, only the number it produced is — so this is `combatants.update` per
-   * monster, composed into one Effect for the reason every other multi-write in
-   * this app is: one busy flag, one failure. The party are left alone; they
-   * roll their own dice and the DM types what they say.
+   * state, only the number it produced is — so this is the fight's own
+   * initiative write, which takes every number at once and lands them
+   * together. The party are left alone; they roll their own dice, and the DM
+   * types what they say or they enter it at their table.
    */
   const rollInitiative = async () => {
     if (state === undefined) return;
     const monsters = state.combatants.filter((combatant) => combatant.kind === "npc");
+    if (monsters.length === 0) return;
     const rolled = await turn.submit(
       (client) =>
-        Effect.all(
-          monsters.map((combatant) =>
-            client.combatants.update({
-              params: { ...path, combatantId: combatant.id },
-              payload: { initiative: 1 + Math.floor(Math.random() * 20) },
-            }),
-          ),
-          { concurrency: "unbounded" },
-        ),
+        client.runs.setInitiative({
+          params: path,
+          payload: {
+            entries: monsters.map((combatant) => ({
+              combatantId: combatant.id,
+              initiative: 1 + Math.floor(Math.random() * 20) + (combatant.initiativeBonus ?? 0),
+            })),
+            requestId: newRequestId(),
+          },
+        }),
       // Initiative is the fight's alone, and the fight is re-read by the
       // controller below rather than by an atom.
       [],
@@ -763,6 +769,29 @@ export function RunScreen() {
     // The list reorders, so this is a re-read rather than a merge — the same
     // rule the campaign screen follows for anything that changes a list's shape.
     if (Result.isSuccess(rolled)) refresh();
+  };
+
+  /** *Start round N*: out of the initiative phase, the marker on the first in the order. */
+  const begin = async () => {
+    if (state === undefined || turn.busy) return;
+    const begun = await turn.submit(
+      (client) => client.runs.begin({ params: path, payload: { requestId: newRequestId() } }),
+      [],
+    );
+    if (Result.isSuccess(begun)) {
+      controller.applyRun(begun.success);
+      setSelectedId(undefined);
+    }
+  };
+
+  /** Back to rolling initiative, every number kept. */
+  const reroll = async () => {
+    if (state === undefined || turn.busy) return;
+    const back = await turn.submit(
+      (client) => client.runs.reroll({ params: path, payload: { requestId: newRequestId() } }),
+      [],
+    );
+    if (Result.isSuccess(back)) controller.applyRun(back.success);
   };
 
   const setShared = async (shared: boolean) => {
@@ -880,10 +909,18 @@ export function RunScreen() {
         framed
         title={state?.run.encounterName ?? "The fight"}
         {...(state !== undefined && {
-          badge: <Badge variant="secondary">Round {state.run.round}</Badge>,
+          badge: (
+            <Badge variant="secondary">
+              {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
+            </Badge>
+          ),
           subtitle: over
             ? "This fight is over"
-            : upLine(state.combatants, state.run.activeCombatantId),
+            : rolling
+              ? `Rolling initiative · ${
+                  toRoll === 0 ? "everyone has a number" : `${String(toRoll)} still to roll`
+                }`
+              : upLine(state.combatants, state.run.activeCombatantId),
         })}
       >
         {state !== undefined && !over && (
@@ -903,17 +940,25 @@ export function RunScreen() {
               />
               <Label htmlFor="run-share">Share</Label>
             </span>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
-                    {turn.busy ? "Advancing…" : "Next turn"}
-                    <Icon name="chevron-right" size={14} />
-                  </Button>
-                }
-              />
-              <TooltipContent shortcut="SPACE">Advance initiative</TooltipContent>
-            </Tooltip>
+            {rolling ? (
+              // Enabled once every row has a number; the subtitle says how
+              // many are still to come.
+              <Button size="sm" disabled={turn.busy || toRoll > 0} onClick={() => void begin()}>
+                {turn.busy ? "Starting…" : `Start round ${String(state.run.round)}`}
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
+                      {turn.busy ? "Advancing…" : "Next turn"}
+                      <Icon name="chevron-right" size={14} />
+                    </Button>
+                  }
+                />
+                <TooltipContent shortcut="SPACE">Advance initiative</TooltipContent>
+              </Tooltip>
+            )}
             <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
               End
             </Button>
@@ -964,6 +1009,7 @@ export function RunScreen() {
                 onSelect={(combatant) => setSelectedId(combatant.id)}
                 onAdd={() => setAdding(true)}
                 onRoll={() => void rollInitiative()}
+                onReroll={() => void reroll()}
               />
             }
             map={
@@ -980,6 +1026,7 @@ export function RunScreen() {
                 following={selectedId === undefined}
                 disabled={frozen || share.busy}
                 conditionsBusy={conditions.busy}
+                rolling={rolling}
                 onTheirTurn={() => selected !== undefined && void setActive(selected)}
                 onEdit={() => setEditing(selected)}
                 onFollow={() => setSelectedId(undefined)}
