@@ -138,9 +138,15 @@ const setReady = (label: Label, ready: boolean) =>
     }),
   );
 
-const listedBy = async (who: Person) =>
+/** What a player is told is there: the player path, `playerEncounters`. */
+const playerListing = async () =>
+  (await as(pip.token, (client) => client.playerEncounters.list({ params: { campaignId: table } })))
+    .map((encounter) => encounter.name)
+    .sort();
+
+const creatorListing = async () =>
   (
-    await as(who.token, (client) =>
+    await as(dm.token, (client) =>
       client.encounters.list({ params: { campaignId: table }, query: {} }),
     )
   ).items
@@ -180,8 +186,8 @@ beforeAll(async () => {
       client.encounters.create({ params: { campaignId: table }, payload }),
     );
     ids[label] = made.id;
-    // Every roster line shared, so the roster's refusal below is the
-    // encounter's and not the line's own switch.
+    // Every roster line shared, so a missing roster below is the
+    // encounter's refusal and not the line's own switch.
     const roster = await as(dm.token, (client) =>
       client.encounterCreatures.list({ params: { campaignId: table, encounterId: made.id } }),
     );
@@ -218,43 +224,35 @@ beforeAll(async () => {
 
 describe("a player's reads of an encounter", () => {
   it("lists only the encounter that is both Shared and Ready; the creator lists all four", async () => {
-    expect(await listedBy(pip)).toEqual([nameOf("SHARED-READY")]);
-    expect(await listedBy(dm)).toEqual(COMBINATIONS.map(([label]) => nameOf(label)).sort());
+    expect(await playerListing()).toEqual([nameOf("SHARED-READY")]);
+    expect(await creatorListing()).toEqual(COMBINATIONS.map(([label]) => nameOf(label)).sort());
 
-    const raw = await wire(pip.token, `/campaigns/${table}/encounters`);
+    const raw = await wire(pip.token, `/campaigns/${table}/player-encounters`);
     expect(raw.status).toBe(200);
     expect(leaked(raw.body, ["SHARED-READY"])).toEqual([]);
   });
 
-  it("refuses a Shared draft by id, and its roster, exactly as an unshared one", async () => {
+  it("refuses a Shared draft by id, with its roster, exactly as an unshared one", async () => {
     for (const label of ["SHARED-DRAFT", "UNSHARED-READY", "UNSHARED-DRAFT"] as const) {
       expect(
         await attempt(pip.token, (client) =>
-          client.encounters.findById({ params: { campaignId: table, encounterId: ids[label] } }),
+          client.playerEncounters.find({ params: { campaignId: table, encounterId: ids[label] } }),
         ),
       ).toEqual({ ok: false, tag: "NotFound" });
-      expect(
-        await attempt(pip.token, (client) =>
-          client.encounterCreatures.list({
-            params: { campaignId: table, encounterId: ids[label] },
-          }),
-        ),
-      ).toEqual({ ok: false, tag: "NotFound" });
+      const raw = await wire(pip.token, `/campaigns/${table}/player-encounters/${ids[label]}`);
+      // The refusal names the id the player sent and nothing else of it.
+      expect(raw.status).toBe(404);
+      expect(raw.body).not.toContain(nameOf(label));
     }
 
     const shown = await as(pip.token, (client) =>
-      client.encounters.findById({
+      client.playerEncounters.find({
         params: { campaignId: table, encounterId: ids["SHARED-READY"] },
       }),
     );
     expect(shown.name).toBe(nameOf("SHARED-READY"));
     expect(shown).not.toHaveProperty("ready");
-    const roster = await as(pip.token, (client) =>
-      client.encounterCreatures.list({
-        params: { campaignId: table, encounterId: ids["SHARED-READY"] },
-      }),
-    );
-    expect(roster.map((line) => line.count)).toEqual([2]);
+    expect(shown.creatures).toEqual([{ name: "Marsh Hag", count: 2 }]);
 
     // The creator's reads of a draft are unchanged.
     const draft = await as(dm.token, (client) =>
@@ -267,13 +265,14 @@ describe("a player's reads of an encounter", () => {
 
   it("shows a Shared draft once it is marked Ready, and hides it again on the way back", async () => {
     await setReady("SHARED-DRAFT", true);
-    expect(await listedBy(pip)).toEqual([nameOf("SHARED-DRAFT"), nameOf("SHARED-READY")].sort());
-
+    const both = await playerListing();
     await setReady("SHARED-DRAFT", false);
-    expect(await listedBy(pip)).toEqual([nameOf("SHARED-READY")]);
+    expect(both).toEqual([nameOf("SHARED-DRAFT"), nameOf("SHARED-READY")].sort());
+
+    expect(await playerListing()).toEqual([nameOf("SHARED-READY")]);
     expect(
       await attempt(pip.token, (client) =>
-        client.encounters.findById({
+        client.playerEncounters.find({
           params: { campaignId: table, encounterId: ids["SHARED-DRAFT"] },
         }),
       ),
@@ -286,7 +285,7 @@ describe("a player's reads of an encounter", () => {
       Effect.exit(
         Effect.flatMap(Encounters, (encounters) =>
           Effect.provideService(
-            encounters.findById(table, ids["SHARED-READY"]),
+            encounters.findAsPlayer(table, ids["SHARED-READY"]),
             CurrentActor,
             wren,
           ),
@@ -366,10 +365,10 @@ describe("a shared fight, to a player", () => {
   });
 
   it("gives the last playing only on the encounter the player may read", async () => {
-    const page = await as(pip.token, (client) =>
-      client.encounters.list({ params: { campaignId: table }, query: {} }),
+    const told = await as(pip.token, (client) =>
+      client.playerEncounters.list({ params: { campaignId: table } }),
     );
-    expect(page.items.map((encounter) => encounter.lastPlayed?.runId ?? null)).toEqual([
+    expect(told.map((encounter) => encounter.lastPlayed?.runId ?? null)).toEqual([
       runs["SHARED-READY"],
     ]);
   });

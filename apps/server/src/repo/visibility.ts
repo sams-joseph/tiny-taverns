@@ -460,7 +460,7 @@ const withinReadableCampaign = (
  * DM's work in progress, and stays theirs whatever its own Share switch says.
  * That is the captain's decision of 2026-09-25, and it is written here rather
  * than at the call sites because an encounter is reached from more than its own
- * reads — the roster's containment chain, a run's encounter name
+ * reads — the player's encounter read and its roster names, a run's encounter name
  * (`runEncounterReadable`), the last playing on the card. Every one of them
  * asks this question, so none can answer it without the Ready half.
  *

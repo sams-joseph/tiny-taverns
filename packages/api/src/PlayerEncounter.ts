@@ -16,7 +16,8 @@ export const PlayerEncounterCreature = Schema.Struct({
 export type PlayerEncounterCreature = typeof PlayerEncounterCreature.Type;
 
 /**
- * A shared encounter, told to somebody sitting at the table.
+ * A shared encounter, told to somebody sitting at the table — Shared and
+ * Ready: a draft reaches no player, whatever its Share switch says.
  *
  * **A distinct type on a distinct path, not a filtered `Encounter`** — the
  * `PlayerSessionRecap` decision, for the same reason. `Encounter` carries the

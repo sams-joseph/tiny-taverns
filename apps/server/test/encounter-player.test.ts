@@ -178,6 +178,7 @@ beforeAll(async () => {
       payload: {
         name: "Ambush in the reeds",
         visibility: "shared",
+        ready: true,
         tags: ["Marsh"],
         creatures: [
           { creatureId: archer.id, count: 4 },
