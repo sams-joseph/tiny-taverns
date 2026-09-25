@@ -1,4 +1,5 @@
 import {
+  type Actor,
   type CampaignId,
   Conflict,
   CurrentActor,
@@ -10,11 +11,13 @@ import {
   type SessionUpdate,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
+import { RUN } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
+  containedRowReadable,
   ensureCampaignReadable,
   ensureCampaignWritable,
   rowReadable,
@@ -44,6 +47,33 @@ export const toSession = (row: SessionRow): Session =>
     activeEncounterRunId: row.active_encounter_run_id,
     ...provenanceOf(row),
   });
+
+/**
+ * A session row as this actor may read it: every column, with the live-fight
+ * pointer narrowed to runs they can read.
+ *
+ * `active_encounter_run_id` is a pointer into `encounter_run`, and a run has
+ * its own Share switch. Selected raw, it tells a player that a hidden fight is
+ * on the table, when it started and ended, and its id, while every run read
+ * answers them `NotFound`. So the pointer goes through the run predicate and
+ * comes back null for a fight they cannot see, as though none were running.
+ * Every read that serialises a `Session` for a caller selects through this.
+ */
+export const sessionColumns = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`
+  session.id, session.campaign_id, session.number, session.title,
+  session.started_at, session.ended_at,
+  session.visibility, session.origin, session.assistant_turn_id,
+  session.created_at, session.updated_at,
+  case when exists (
+    select 1 from encounter_run
+    where encounter_run.id = session.active_encounter_run_id
+      and ${containedRowReadable(sql, RUN, campaignId, actor)}
+  ) then session.active_encounter_run_id end as active_encounter_run_id
+`;
 
 /**
  * `(campaign_id, number)` is unique, so a repeated session number surfaces as a
@@ -181,7 +211,7 @@ export class Sessions extends Context.Service<
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<SessionRow>`
-                select * from session
+                select ${sessionColumns(sql, campaignId, actor)} from session
                 where ${rowReadable(sql, "session", campaignId, actor)}
                 order by session.number desc
               `;
@@ -194,7 +224,7 @@ export class Sessions extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<SessionRow>`
-                select * from session
+                select ${sessionColumns(sql, campaignId, actor)} from session
                 where session.id = ${id} and ${rowReadable(sql, "session", campaignId, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "session", id });

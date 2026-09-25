@@ -19,8 +19,10 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import { RUN } from "./liveTables.js";
 import {
   campaignReadable,
+  containedRowReadable,
   campaignWritableById,
   ensureCampaignReadable,
   rowReadable,
@@ -161,22 +163,38 @@ export class Rolls extends Context.Service<
           ),
         );
 
-      const selectRoll = sql`
-        character_roll.*, account.name as account_name, character.name as character_name
+      // The run pointer goes through the run predicate for the reason
+      // `sessionColumns` gives: a roll made while a hidden fight is on the
+      // table must not tell a player that fight exists.
+      const selectRoll = (campaignId: CampaignId, actor: Actor) => sql`
+        character_roll.id, character_roll.campaign_id, character_roll.session_id,
+        case when exists (
+          select 1 from encounter_run
+          where encounter_run.id = character_roll.encounter_run_id
+            and ${containedRowReadable(sql, RUN, campaignId, actor)}
+        ) then character_roll.encounter_run_id end as encounter_run_id,
+        character_roll.account_id, character_roll.character_id,
+        character_roll.label, character_roll.notation, character_roll.dice,
+        character_roll.kept, character_roll.modifier, character_roll.total,
+        character_roll.mode, character_roll.critical, character_roll.request_id,
+        character_roll.visibility, character_roll.origin, character_roll.assistant_turn_id,
+        character_roll.created_at, character_roll.updated_at,
+        account.name as account_name, character.name as character_name
         from character_roll
         join account on account.id = character_roll.account_id
         left join character on character.id = character_roll.character_id
       `;
 
       const existing = (
+        campaignId: CampaignId,
+        actor: Actor,
         sessionId: SessionId,
-        accountId: Actor["accountId"],
         requestId: string,
       ): Effect.Effect<Roll | undefined> =>
         sql<RollRow>`
-          select ${selectRoll}
+          select ${selectRoll(campaignId, actor)}
           where character_roll.session_id = ${sessionId}
-            and character_roll.account_id = ${accountId}
+            and character_roll.account_id = ${actor.accountId}
             and character_roll.request_id = ${requestId}
           limit 1
         `.pipe(
@@ -214,8 +232,9 @@ export class Rolls extends Context.Service<
 
                   if (payload.requestId !== undefined) {
                     const seen = yield* existing(
+                      campaignId,
+                      actor,
                       night.session_id,
-                      actor.accountId,
                       payload.requestId,
                     );
                     if (seen !== undefined) return { roll: seen, inserted: false };
@@ -246,14 +265,15 @@ export class Rolls extends Context.Service<
                   `;
                   if (rows.length === 0 && payload.requestId !== undefined) {
                     const seen = yield* existing(
+                      campaignId,
+                      actor,
                       night.session_id,
-                      actor.accountId,
                       payload.requestId,
                     );
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
                   const fetched = yield* sql<RollRow>`
-                    select ${selectRoll}
+                    select ${selectRoll(campaignId, actor)}
                     where character_roll.id = ${rows[0]!.id}
                   `;
                   const roll = toRoll(fetched[0]!);
@@ -284,7 +304,7 @@ export class Rolls extends Context.Service<
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<RollRow>`
-                select ${selectRoll}
+                select ${selectRoll(campaignId, actor)}
                 where character_roll.session_id = ${sessionId}
                   and ${rollReadable(sql, campaignId, actor)}
                 order by character_roll.created_at desc, character_roll.id desc
@@ -323,7 +343,7 @@ export class Rolls extends Context.Service<
                 return yield* new NotFound({ resource: "session", id: sessionId });
               }
               const rows = yield* sql<RollRow>`
-                select ${selectRoll}
+                select ${selectRoll(campaignId, actor)}
                 where character_roll.campaign_id = ${campaignId}
                   and character_roll.session_id = ${sessionId}
                   and character_roll.character_id = ${characterId}
@@ -340,7 +360,7 @@ export class Rolls extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<RollRow>`
-                select ${selectRoll}
+                select ${selectRoll(campaignId, actor)}
                 where character_roll.id = ${rollId}
                   and character_roll.session_id = ${sessionId}
                   and ${rollReadable(sql, campaignId, actor)}

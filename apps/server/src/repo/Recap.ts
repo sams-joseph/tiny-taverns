@@ -28,7 +28,7 @@ import {
 } from "./playerCombatant.js";
 import { PREP, type PrepItemRow, toPrepItem } from "./PrepItems.js";
 import { dieOnSqlError } from "./rows.js";
-import { type SessionRow, toSession } from "./Sessions.js";
+import { type SessionRow, sessionColumns, toSession } from "./Sessions.js";
 import { containedRowReadable, nestedRowReadable, rowReadable } from "./visibility.js";
 
 /**
@@ -216,7 +216,7 @@ export class Recap extends Context.Service<
           // unreachable session is a 404 naming the session rather than an
           // empty recap, which would read as "nothing happened".
           const sessions = yield* sql<SessionRow>`
-            select session.* from session
+            select ${sessionColumns(sql, campaignId, actor)} from session
             where session.id = ${sessionId}
               and ${rowReadable(sql, "session", campaignId, actor)}
           `;

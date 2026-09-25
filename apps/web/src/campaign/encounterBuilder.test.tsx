@@ -657,7 +657,7 @@ describe("who may write one", () => {
     });
     await renderAt(newPath);
 
-    expect(await screen.findByText("Not here")).toBeInTheDocument();
+    expect(await screen.findByText("The DM's side of the screen")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save encounter" })).toBeNull();
   });
