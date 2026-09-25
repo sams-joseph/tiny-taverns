@@ -1,4 +1,9 @@
-import type { AssistantTurnId, HobProposal } from "@taverns/api";
+import {
+  type AssistantTurnId,
+  type EncounterChallenge,
+  encounterKindLabel,
+  type HobProposal,
+} from "@taverns/api";
 import type { IconName } from "@taverns/ui";
 
 /**
@@ -95,6 +100,15 @@ export type HobArtifact =
        */
       readonly setting?: string;
       /**
+       * A skill challenge's or a hazard's numbers as label and value —
+       * `["DC", "14"]`, `["Save", "CON 13"]` — and the skills it names.
+       */
+      readonly challenge?: ReadonlyArray<readonly [string, string]>;
+      readonly skills?: ReadonlyArray<string>;
+      /** How to run it, in order, as the accept will write it. */
+      readonly tactics?: ReadonlyArray<string>;
+      readonly treasure?: string;
+      /**
        * The adjusted XP and the band — `"Hard for 4 level-5s"`. Absent from
        * anything Hob proposes: both are computed on the saved encounter against
        * the party (`EncounterDifficulty.ts`), and a proposal is not one yet.
@@ -134,6 +148,25 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
 /**
+ * A challenge's numbers as the drawing sets them out: a label over a value.
+ * Only what was written — a hazard with no duration has no duration row.
+ */
+export const challengeFacts = (
+  challenge: EncounterChallenge,
+): ReadonlyArray<readonly [string, string]> =>
+  challenge.kind === "challenge"
+    ? [
+        ["DC", String(challenge.dc)],
+        ["Successes", String(challenge.successes)],
+        ["Failures", String(challenge.failures)],
+      ]
+    : [
+        ["Save", `${challenge.save.ability} ${challenge.save.dc}`],
+        ...(challenge.onFail === undefined ? [] : [["On fail", challenge.onFail] as const]),
+        ...(challenge.duration === undefined ? [] : [["Duration", challenge.duration] as const]),
+      ];
+
+/**
  * A proposal from the wire, as the card the designers drew.
  *
  * The only translation in this direction, and it is deliberately lossless in the
@@ -147,11 +180,19 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
   switch (proposal.target) {
     case "encounter": {
       const creatures = proposal.roster.reduce((total, line) => total + line.count, 0);
+      const kind = proposal.kind ?? "combat";
+      const challenge = proposal.challenge;
+      const count =
+        creatures === 0 ? undefined : `${creatures} ${creatures === 1 ? "creature" : "creatures"}`;
       return {
         id: turnId,
         kind: "encounter",
         title: proposal.name,
-        meta: `${creatures} ${creatures === 1 ? "creature" : "creatures"}`,
+        // A fight is what an encounter card always said; any other kind says so.
+        meta:
+          kind === "combat"
+            ? (count ?? "No creatures")
+            : [encounterKindLabel(kind), count].filter((part) => part !== undefined).join(" · "),
         chips: [],
         roster: proposal.roster.map((line) => ({
           count: line.count,
@@ -160,6 +201,11 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
           hp: `${line.hp} hp`,
         })),
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
+        ...(challenge === undefined
+          ? {}
+          : { challenge: challengeFacts(challenge), skills: challenge.skills }),
+        ...(proposal.tactics === undefined ? {} : { tactics: proposal.tactics }),
+        ...(proposal.treasure === undefined ? {} : { treasure: proposal.treasure }),
       };
     }
     case "note":

@@ -67,6 +67,10 @@ const NOT_CONTENT = [
   "creature_spell",
   "damage_type",
   "effect_sql_migrations",
+  // An encounter's DM prep — tactics, treasure, challenge numbers: part of its
+  // encounter, the creator's alone through the creator proof, and its
+  // provenance is the encounter's. See 0060_encounter_prep.ts.
+  "encounter_prep",
   // A fight's board: its run's copy of the grid and a pointer to its map, the
   // creator's alone through the creator proof like the map it came from. See
   // 0058_encounter_run_boards.ts.

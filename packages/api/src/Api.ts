@@ -32,7 +32,7 @@ import {
   CreatureSort,
   LibraryFilter,
 } from "./Creature.js";
-import { Encounter, EncounterCreate, EncounterUpdate } from "./Encounter.js";
+import { Encounter, EncounterCreate, EncounterPrep, EncounterUpdate } from "./Encounter.js";
 import { Feat, FeatFilter, FeatLibraryCreate, FeatLibraryUpdate, FeatSort } from "./Feat.js";
 import {
   Equipment,
@@ -1159,6 +1159,29 @@ class BattleMapsGroup extends HttpApiGroup.make("battleMaps")
     }),
   )
   .prefix("/campaigns/:campaignId/encounters/:encounterId/map")
+  .middleware(Authorization) {}
+
+/**
+ * An encounter's DM prep — its tactics, treasure and challenge numbers — and
+ * **the creator's alone**, as the battle map is: a player, a Shared World member
+ * and a stranger get `NotFound` from both endpoints, whether or not the
+ * encounter is shared. It is written through the encounter's own create and
+ * update. The list is every encounter's in the campaign, for the list screen
+ * that shows each one's challenge beside its name.
+ */
+class EncounterPrepGroup extends HttpApiGroup.make("encounterPrep")
+  .add(
+    HttpApiEndpoint.get("list", "/campaigns/:campaignId/encounter-prep", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(EncounterPrep),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("find", "/campaigns/:campaignId/encounters/:encounterId/prep", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      success: EncounterPrep,
+      error: NotFound,
+    }),
+  )
   .middleware(Authorization) {}
 
 /**
@@ -2581,6 +2604,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(NotesGroup)
   .add(EncountersGroup)
   .add(BattleMapsGroup)
+  .add(EncounterPrepGroup)
   .add(CreaturesGroup)
   .add(CharacterOptionsGroup)
   .add(LibraryGroup)

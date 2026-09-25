@@ -6,11 +6,14 @@ import {
   creatureXp,
   CurrentActor,
   Encounter,
+  type EncounterChallenge,
   type EncounterCreate,
   encounterDifficulty,
   type EncounterId,
   type EncounterRunEndedReason,
   type EncounterRunId,
+  type EncounterKind,
+  EncounterPrep,
   type EncounterUpdate,
   NotFound,
   type Page,
@@ -20,6 +23,7 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import { statBlockXp } from "./EncounterCreatures.js";
 import { RUN } from "./liveTables.js";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
@@ -53,6 +57,7 @@ interface EncounterRow extends ProvenanceColumns {
   readonly id: EncounterId;
   readonly campaign_id: CampaignId;
   readonly name: string;
+  readonly kind: EncounterKind;
   /** `text[]`; the pg driver hands these back as a real JS array. */
   readonly tags: ReadonlyArray<string>;
   readonly creature_count: number;
@@ -84,6 +89,7 @@ const toEncounter =
         })),
         partyLevels,
       ),
+      kind: row.kind,
       tags: row.tags,
       creatureCount: row.creature_count,
       lastPlayed:
@@ -98,6 +104,48 @@ const toEncounter =
             },
       ...provenanceOf(row),
     });
+
+interface EncounterPrepRow {
+  readonly encounter_id: EncounterId;
+  /** `jsonb`; the pg driver parses it, so these arrive as the documents themselves. */
+  readonly tactics: ReadonlyArray<string>;
+  readonly treasure: string | null;
+  readonly challenge: EncounterChallenge | null;
+}
+
+const toEncounterPrep = (row: EncounterPrepRow): EncounterPrep =>
+  new EncounterPrep({
+    encounterId: row.encounter_id,
+    tactics: row.tactics,
+    treasure: row.treasure,
+    challenge: row.challenge,
+  });
+
+/**
+ * The prep's columns from a payload. The documents go in as JSON text, which
+ * Postgres casts to `jsonb` on the way in — `Creatures.ts`'s rule, and here for
+ * the same reason: a bare JS array bound to a statement becomes a Postgres
+ * array literal. Each line is trimmed, as the treasure is; the wire has
+ * already refused a blank one.
+ */
+const prepColumns = (payload: {
+  readonly tactics?: ReadonlyArray<string> | undefined;
+  readonly treasure?: string | null | undefined;
+  readonly challenge?: EncounterChallenge | null | undefined;
+}): Record<string, unknown> =>
+  defined({
+    tactics:
+      payload.tactics === undefined
+        ? undefined
+        : JSON.stringify(payload.tactics.map((line) => line.trim())),
+    treasure: proseColumn(payload.treasure),
+    challenge:
+      payload.challenge === undefined
+        ? undefined
+        : payload.challenge === null
+          ? null
+          : JSON.stringify(payload.challenge),
+  });
 
 /** The roster hangs off the encounter. */
 const ROSTER: NestedTable = {
@@ -219,6 +267,19 @@ export class Encounters extends Context.Service<
       campaignId: CampaignId,
       id: EncounterId,
     ) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * The encounter's DM prep, or `NotFound` for an encounter this creator
+     * does not hold. The creator's alone, so it takes the proof: no player
+     * path reads `encounter_prep`.
+     */
+    readonly prep: (
+      creator: CampaignCreatorActor,
+      id: EncounterId,
+    ) => Effect.Effect<EncounterPrep, NotFound>;
+    /** Every encounter's DM prep in the creator's campaign, oldest encounter first. */
+    readonly prepList: (
+      creator: CampaignCreatorActor,
+    ) => Effect.Effect<ReadonlyArray<EncounterPrep>>;
   }
 >()("Encounters") {
   static readonly layer = Layer.effect(this)(
@@ -331,6 +392,7 @@ export class Encounters extends Context.Service<
                     defined({
                       campaign_id: campaignId,
                       name: payload.name,
+                      kind: payload.kind,
                       tags: payload.tags,
                       visibility: payload.visibility,
                       ...assistantColumns(from),
@@ -353,6 +415,16 @@ export class Encounters extends Context.Service<
                     }),
                   )}
                 `;
+                // And its prep, the same way and for the same reason: the
+                // creator's alone, on a row no player read touches.
+                yield* sql`
+                  insert into encounter_prep ${sql.insert({
+                    encounter_id: encounter.id,
+                    campaign_id: campaignId,
+                    kind: encounter.kind,
+                    ...prepColumns(payload),
+                  })}
+                `;
                 return encounter;
               }),
             ),
@@ -363,8 +435,22 @@ export class Encounters extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                // A new kind clears a challenge written for another, before the
+                // kind moves: the prep row carries its encounter's kind through
+                // its key, and its check would refuse the cascade otherwise
+                // (`0060_encounter_prep.ts`). A challenge for the new kind, when
+                // this patch has one, is written below.
+                if (patch.kind !== undefined) {
+                  yield* sql`
+                    update encounter_prep set ${setClause(sql, { challenge: null })}
+                    where encounter_prep.encounter_id = ${id}
+                      and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
+                      and encounter_prep.challenge ->> 'kind' <> ${patch.kind}
+                  `;
+                }
                 const columns = defined({
                   name: patch.name,
+                  kind: patch.kind,
                   tags: patch.tags,
                   visibility: patch.visibility,
                 });
@@ -383,6 +469,14 @@ export class Encounters extends Context.Service<
                     update battle_map set ${setClause(sql, { setting: proseColumn(patch.setting) })}
                     where battle_map.encounter_id = ${id}
                       and ${rowWritable(sql, "battle_map", campaignId, actor)}
+                  `;
+                }
+                const prep = prepColumns(patch);
+                if (Object.keys(prep).length > 0) {
+                  yield* sql`
+                    update encounter_prep set ${setClause(sql, prep)}
+                    where encounter_prep.encounter_id = ${id}
+                      and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
                   `;
                 }
                 return yield* readBack(campaignId, actor, id);
@@ -415,6 +509,32 @@ export class Encounters extends Context.Service<
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
             }),
+          ),
+
+        prep: (creator, id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const rows = yield* sql<EncounterPrepRow>`
+                select encounter_prep.* from encounter_prep
+                where encounter_prep.encounter_id = ${id}
+                  and ${rowWritable(sql, "encounter_prep", creator.campaign, creator.actor)}
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
+              return toEncounterPrep(rows[0]!);
+            }),
+          ),
+
+        prepList: (creator) =>
+          dieOnSqlError(
+            Effect.map(
+              sql<EncounterPrepRow>`
+                select encounter_prep.* from encounter_prep
+                join encounter on encounter.id = encounter_prep.encounter_id
+                where ${rowWritable(sql, "encounter_prep", creator.campaign, creator.actor)}
+                order by encounter.created_at, encounter.id
+              `,
+              (rows) => rows.map(toEncounterPrep),
+            ),
           ),
       };
     }),

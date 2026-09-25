@@ -1,10 +1,23 @@
 import {
+  ABILITY_KEYS,
+  type AbilityKey,
   type CampaignId,
   type CreatureId,
   type Encounter,
+  type EncounterChallenge,
   type EncounterCreatureId,
   type EncounterId,
+  type EncounterKind,
+  ENCOUNTER_HAZARD_TEXT_MAX,
+  ENCOUNTER_KINDS,
   ENCOUNTER_SETTING_MAX,
+  ENCOUNTER_SKILL_MAX,
+  ENCOUNTER_SKILLS_MAX,
+  ENCOUNTER_TACTIC_MAX,
+  ENCOUNTER_TACTICS_MAX,
+  ENCOUNTER_TREASURE_MAX,
+  encounterKindLabel,
+  type EncounterPrep,
   type Visibility,
 } from "@taverns/api";
 import {
@@ -17,6 +30,11 @@ import {
   DialogTitle,
   Icon,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
@@ -58,6 +76,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * back through the creator's map read (`battleMaps.find`) and writes it through
  * the encounter's own update. Changing it later redraws nothing.
  *
+ * ### The prep is the creator's too
+ *
+ * The tactics, the treasure and a skill challenge's or a hazard's numbers are
+ * `EncounterPrep`: written through the encounter's create and update like the
+ * setting line, and read back through the creator's prep read
+ * (`encounterPrep.find`), never off `Encounter`. The numbers are asked for
+ * only when the type takes them, and a challenge is sent with the type it
+ * belongs to — the wire refuses one without it — so switching the type away
+ * sends none and the server clears what was there.
+ *
  * ### What is deliberately not here
  *
  * A roster line carries a `visibility` of its own and this form does not offer
@@ -95,11 +123,150 @@ const parseTags = (raw: string): ReadonlyArray<string> => {
   return [...seen];
 };
 
+/** A skill challenge's numbers as typed: strings, so a cleared box is a blank rather than `NaN`. */
+interface SkillChallengeDraft {
+  readonly dc: string;
+  readonly successes: string;
+  readonly failures: string;
+  readonly skills: string;
+}
+
+interface HazardDraft {
+  /** `""` until the DM picks one. */
+  readonly ability: AbilityKey | "";
+  readonly dc: string;
+  readonly onFail: string;
+  readonly duration: string;
+  readonly skills: string;
+}
+
+const NO_ABILITY = "";
+
+const skillChallengeDraft = (challenge: EncounterChallenge | null): SkillChallengeDraft =>
+  challenge?.kind === "challenge"
+    ? {
+        dc: String(challenge.dc),
+        successes: String(challenge.successes),
+        failures: String(challenge.failures),
+        skills: challenge.skills.join(", "),
+      }
+    : { dc: "", successes: "", failures: "", skills: "" };
+
+const hazardDraft = (challenge: EncounterChallenge | null): HazardDraft =>
+  challenge?.kind === "hazard"
+    ? {
+        ability: challenge.save.ability,
+        dc: String(challenge.save.dc),
+        onFail: challenge.onFail ?? "",
+        duration: challenge.duration ?? "",
+        skills: challenge.skills.join(", "),
+      }
+    : { ability: NO_ABILITY, dc: "", onFail: "", duration: "", skills: "" };
+
+/** A whole number in range, or `undefined` for anything else a box can hold. */
+const wholeIn = (raw: string, minimum: number, maximum: number): number | undefined => {
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return undefined;
+  const value = Number(text);
+  return value >= minimum && value <= maximum ? value : undefined;
+};
+
+/**
+ * The challenge the form would send for this type, or what is wrong with it.
+ *
+ * Every box blank is a challenge not yet set out — `null`, which the DM can
+ * fill in later. Anything typed means the DM is setting one out, and then the
+ * numbers the type needs are needed. A fight or a conversation has none.
+ */
+const challengeOf = (
+  kind: EncounterKind,
+  skill: SkillChallengeDraft,
+  hazard: HazardDraft,
+): { readonly challenge: EncounterChallenge | null; readonly problem?: string } => {
+  switch (kind) {
+    case "challenge": {
+      const skills = parseTags(skill.skills);
+      if ([skill.dc, skill.successes, skill.failures].every((box) => box.trim() === "")) {
+        return skills.length === 0
+          ? { challenge: null }
+          : { challenge: null, problem: "Give the DC, the successes and the failures too." };
+      }
+      const dc = wholeIn(skill.dc, 1, 30);
+      const successes = wholeIn(skill.successes, 1, 20);
+      const failures = wholeIn(skill.failures, 1, 20);
+      if (dc === undefined || successes === undefined || failures === undefined) {
+        return {
+          challenge: null,
+          problem: "A DC runs from 1 to 30, and successes and failures from 1 to 20.",
+        };
+      }
+      const problem = skillsProblem(skills);
+      return {
+        challenge: { kind, dc, successes, failures, skills },
+        ...(problem === undefined ? {} : { problem }),
+      };
+    }
+    case "hazard": {
+      const skills = parseTags(hazard.skills);
+      const onFail = hazard.onFail.trim();
+      const duration = hazard.duration.trim();
+      if (
+        hazard.ability === NO_ABILITY &&
+        hazard.dc.trim() === "" &&
+        onFail === "" &&
+        duration === "" &&
+        skills.length === 0
+      ) {
+        return { challenge: null };
+      }
+      const dc = wholeIn(hazard.dc, 1, 30);
+      if (hazard.ability === NO_ABILITY || dc === undefined) {
+        return {
+          challenge: null,
+          problem: "A hazard needs the save it forces: an ability, and a DC from 1 to 30.",
+        };
+      }
+      const problem = skillsProblem(skills);
+      return {
+        challenge: {
+          kind,
+          save: { ability: hazard.ability, dc },
+          ...(onFail === "" ? {} : { onFail }),
+          ...(duration === "" ? {} : { duration }),
+          skills,
+        },
+        ...(problem === undefined ? {} : { problem }),
+      };
+    }
+    default:
+      return { challenge: null };
+  }
+};
+
+const skillsProblem = (skills: ReadonlyArray<string>): string | undefined =>
+  skills.length > ENCOUNTER_SKILLS_MAX
+    ? `Eight skills is the most a challenge names. That is ${skills.length}.`
+    : skills.some((skill) => skill.length > ENCOUNTER_SKILL_MAX)
+      ? `Keep each skill under ${ENCOUNTER_SKILL_MAX + 1} characters.`
+      : undefined;
+
+/** One line of the tactics, before and after it is saved. */
+interface TacticLine {
+  /** Stable across renders and reorders. */
+  readonly key: number;
+  readonly text: string;
+}
+
 interface Draft {
   readonly name: string;
   readonly setting: string;
+  readonly kind: EncounterKind;
   readonly tags: ReadonlyArray<string>;
   readonly visibility: Visibility;
+  /** Trimmed, with the blank lines left out: an empty box is a line not written. */
+  readonly tactics: ReadonlyArray<string>;
+  readonly treasure: string;
+  readonly challenge: { readonly challenge: EncounterChallenge | null; readonly problem?: string };
 }
 
 /**
@@ -114,7 +281,15 @@ interface Draft {
  * what renders the backstop if one is ever missed.
  */
 const validate = (draft: Draft, lines: ReadonlyArray<RosterLine>) => {
-  const problems: { name?: string; setting?: string; tags?: string; roster?: string } = {};
+  const problems: {
+    name?: string;
+    setting?: string;
+    tags?: string;
+    roster?: string;
+    challenge?: string;
+    tactics?: string;
+    treasure?: string;
+  } = {};
 
   if (draft.name.trim() === "") problems.name = "Give it a name.";
 
@@ -126,6 +301,18 @@ const validate = (draft: Draft, lines: ReadonlyArray<RosterLine>) => {
     problems.tags = `Sixteen tags is the most an encounter carries. That is ${draft.tags.length}.`;
   } else if (draft.tags.some((tag) => tag.length > MAX_TAG_LENGTH)) {
     problems.tags = `Keep each tag under ${MAX_TAG_LENGTH + 1} characters.`;
+  }
+
+  if (draft.challenge.problem !== undefined) problems.challenge = draft.challenge.problem;
+
+  if (draft.tactics.length > ENCOUNTER_TACTICS_MAX) {
+    problems.tactics = `Twelve lines is the most the tactics hold. That is ${draft.tactics.length}.`;
+  } else if (draft.tactics.some((line) => line.length > ENCOUNTER_TACTIC_MAX)) {
+    problems.tactics = `Keep each line to ${ENCOUNTER_TACTIC_MAX} characters.`;
+  }
+
+  if (draft.treasure.length > ENCOUNTER_TREASURE_MAX) {
+    problems.treasure = `Keep it to ${ENCOUNTER_TREASURE_MAX} characters.`;
   }
 
   if (lines.some((line) => !Number.isInteger(line.count))) {
@@ -169,11 +356,65 @@ function RosterRow({
   );
 }
 
+function TacticRow({
+  index,
+  count,
+  line,
+  onText,
+  onMove,
+  onRemove,
+}: {
+  readonly index: number;
+  readonly count: number;
+  readonly line: TacticLine;
+  readonly onText: (text: string) => void;
+  readonly onMove: (by: -1 | 1) => void;
+  readonly onRemove: () => void;
+}) {
+  const n = index + 1;
+  return (
+    <li className="flex items-center gap-1.5">
+      <span className="w-5 shrink-0 text-right font-mono text-mono leading-snug font-medium text-faint">
+        {n}
+      </span>
+      <Input
+        aria-label={`Tactic ${n}`}
+        maxLength={ENCOUNTER_TACTIC_MAX}
+        value={line.text}
+        onChange={(event) => onText(event.target.value)}
+        className="min-w-0 flex-1"
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Move tactic ${n} up`}
+        disabled={index === 0}
+        onClick={() => onMove(-1)}
+      >
+        <Icon name="chevron-up" size={14} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Move tactic ${n} down`}
+        disabled={index === count - 1}
+        onClick={() => onMove(1)}
+      >
+        <Icon name="chevron-down" size={14} />
+      </Button>
+      <Button variant="ghost" size="icon" aria-label={`Remove tactic ${n}`} onClick={onRemove}>
+        <Icon name="x" size={14} />
+      </Button>
+    </li>
+  );
+}
+
 function EncounterForm({
   campaignId,
   encounter,
   initialRoster,
   initialSetting,
+  initialPrep,
   onClose,
   onSaved,
 }: {
@@ -182,11 +423,21 @@ function EncounterForm({
   readonly initialRoster: ReadonlyArray<RosterLine>;
   /** The map's setting line as stored; `""` for a new encounter or none. */
   readonly initialSetting: string;
+  /** The prep as stored; empty for a new encounter. */
+  readonly initialPrep: Prep;
   readonly onClose: () => void;
   readonly onSaved: () => void;
 }) {
   const [name, setName] = useState(encounter?.name ?? "");
   const [setting, setSetting] = useState(initialSetting);
+  const [kind, setKind] = useState<EncounterKind>(encounter?.kind ?? "combat");
+  const [skill, setSkill] = useState(() => skillChallengeDraft(initialPrep.challenge));
+  const [hazard, setHazard] = useState(() => hazardDraft(initialPrep.challenge));
+  const [tactics, setTactics] = useState<ReadonlyArray<TacticLine>>(() =>
+    initialPrep.tactics.map((text, key) => ({ key, text })),
+  );
+  const [nextTacticKey, setNextTacticKey] = useState(initialPrep.tactics.length);
+  const [treasure, setTreasure] = useState(initialPrep.treasure ?? "");
   const [tagText, setTagText] = useState(encounter?.tags.join(", ") ?? "");
   // `dm` for a new encounter: the column default, and the only safe one to fail to.
   const [visibility, setVisibility] = useState<Visibility>(encounter?.visibility ?? "dm");
@@ -199,8 +450,12 @@ function EncounterForm({
   const draft: Draft = {
     name,
     setting,
+    kind,
     tags: parseTags(tagText),
     visibility,
+    tactics: tactics.map((line) => line.text.trim()).filter((line) => line !== ""),
+    treasure: treasure.trim(),
+    challenge: challengeOf(kind, skill, hazard),
   };
   const problems = validate(draft, lines);
   const refused = Object.keys(problems).length > 0;
@@ -233,6 +488,7 @@ function EncounterForm({
 
     const trimmed = draft.name.trim();
     const settingLine = draft.setting.trim();
+    const { challenge } = draft.challenge;
     const saved = await submit(
       (client) =>
         Effect.gen(function* () {
@@ -242,9 +498,13 @@ function EncounterForm({
                   params: { campaignId },
                   payload: {
                     name: trimmed,
+                    kind: draft.kind,
                     tags: draft.tags,
                     visibility: draft.visibility,
                     ...(settingLine === "" ? {} : { setting: settingLine }),
+                    ...(draft.tactics.length === 0 ? {} : { tactics: draft.tactics }),
+                    ...(draft.treasure === "" ? {} : { treasure: draft.treasure }),
+                    ...(challenge === null ? {} : { challenge }),
                   },
                 })
               : yield* client.encounters.update({
@@ -257,6 +517,13 @@ function EncounterForm({
                     ...(settingLine === initialSetting.trim()
                       ? {}
                       : { setting: settingLine === "" ? null : settingLine }),
+                    // The prep is sent whole, as the form shows it: the kind with
+                    // it, because a challenge travels with its kind, and a type
+                    // switched away sends none so the server clears it.
+                    kind: draft.kind,
+                    tactics: draft.tactics,
+                    treasure: draft.treasure === "" ? null : draft.treasure,
+                    challenge,
                   },
                 });
 
@@ -333,6 +600,21 @@ function EncounterForm({
           />
         </Field>
 
+        <Field label="Type" htmlFor="encounter-kind">
+          <Select value={kind} onValueChange={(value) => setKind(value as EncounterKind)}>
+            <SelectTrigger id="encounter-kind">
+              <SelectValue>{(value) => encounterKindLabel(value as EncounterKind)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {ENCOUNTER_KINDS.map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
         <Field
           label="What the place looks like"
           htmlFor="encounter-setting"
@@ -352,6 +634,135 @@ function EncounterForm({
             onChange={(event) => setSetting(event.target.value)}
           />
         </Field>
+
+        {kind === "challenge" && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="pb-1 text-label leading-snug font-medium text-heading">
+              The challenge
+            </legend>
+            <div className="grid grid-cols-3 gap-2.5">
+              <Field label="DC" htmlFor="challenge-dc">
+                <Input
+                  id="challenge-dc"
+                  mono
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={skill.dc}
+                  onChange={(event) => setSkill({ ...skill, dc: event.target.value })}
+                />
+              </Field>
+              <Field label="Successes" htmlFor="challenge-successes">
+                <Input
+                  id="challenge-successes"
+                  mono
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={skill.successes}
+                  onChange={(event) => setSkill({ ...skill, successes: event.target.value })}
+                />
+              </Field>
+              <Field label="Failures" htmlFor="challenge-failures">
+                <Input
+                  id="challenge-failures"
+                  mono
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={skill.failures}
+                  onChange={(event) => setSkill({ ...skill, failures: event.target.value })}
+                />
+              </Field>
+            </div>
+            <Field
+              label="Skills"
+              htmlFor="challenge-skills"
+              hint="Separated by commas — Athletics, Survival."
+              error={showProblems ? problems.challenge : undefined}
+            >
+              <Input
+                id="challenge-skills"
+                placeholder="Athletics, Survival"
+                value={skill.skills}
+                onChange={(event) => setSkill({ ...skill, skills: event.target.value })}
+              />
+            </Field>
+          </fieldset>
+        )}
+
+        {kind === "hazard" && (
+          <fieldset className="flex flex-col gap-3">
+            <legend className="pb-1 text-label leading-snug font-medium text-heading">
+              The hazard
+            </legend>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Field label="Saving throw" htmlFor="hazard-ability">
+                <Select
+                  value={hazard.ability}
+                  onValueChange={(value) =>
+                    setHazard({ ...hazard, ability: String(value) as AbilityKey | "" })
+                  }
+                >
+                  <SelectTrigger id="hazard-ability">
+                    <SelectValue>
+                      {(value) => (value === NO_ABILITY ? "Choose one" : String(value))}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ABILITY_KEYS.map((ability) => (
+                      <SelectItem key={ability} value={ability}>
+                        {ability}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Save DC" htmlFor="hazard-dc">
+                <Input
+                  id="hazard-dc"
+                  mono
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={hazard.dc}
+                  onChange={(event) => setHazard({ ...hazard, dc: event.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="On a failed save" htmlFor="hazard-on-fail">
+              <Input
+                id="hazard-on-fail"
+                maxLength={ENCOUNTER_HAZARD_TEXT_MAX}
+                placeholder="1 level of exhaustion"
+                value={hazard.onFail}
+                onChange={(event) => setHazard({ ...hazard, onFail: event.target.value })}
+              />
+            </Field>
+            <Field label="Duration" htmlFor="hazard-duration">
+              <Input
+                id="hazard-duration"
+                maxLength={ENCOUNTER_HAZARD_TEXT_MAX}
+                placeholder="1d4 hours"
+                value={hazard.duration}
+                onChange={(event) => setHazard({ ...hazard, duration: event.target.value })}
+              />
+            </Field>
+            <Field
+              label="Skills"
+              htmlFor="hazard-skills"
+              hint="What gets the party through it, separated by commas."
+              error={showProblems ? problems.challenge : undefined}
+            >
+              <Input
+                id="hazard-skills"
+                placeholder="Survival, Animal Handling"
+                value={hazard.skills}
+                onChange={(event) => setHazard({ ...hazard, skills: event.target.value })}
+              />
+            </Field>
+          </fieldset>
+        )}
 
         <Field
           label="Tags"
@@ -414,6 +825,76 @@ function EncounterForm({
 
           <CreaturePicker campaignId={campaignId} chosen={chosen} onPick={pick} />
         </div>
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-label leading-snug font-medium text-heading">Tactics</span>
+            <span className="text-caption leading-body text-muted-foreground">
+              How you mean to run it, one short line each, in order. Only you see these.
+            </span>
+          </div>
+          {tactics.length > 0 && (
+            <ol className="flex flex-col gap-1.5">
+              {tactics.map((line, index) => (
+                <TacticRow
+                  key={line.key}
+                  index={index}
+                  count={tactics.length}
+                  line={line}
+                  onText={(text) =>
+                    setTactics((current) =>
+                      current.map((other) => (other.key === line.key ? { ...other, text } : other)),
+                    )
+                  }
+                  onMove={(by) =>
+                    setTactics((current) => {
+                      const next = [...current];
+                      const [moved] = next.splice(index, 1);
+                      next.splice(index + by, 0, moved!);
+                      return next;
+                    })
+                  }
+                  onRemove={() =>
+                    setTactics((current) => current.filter((other) => other.key !== line.key))
+                  }
+                />
+              ))}
+            </ol>
+          )}
+          {showProblems && problems.tactics !== undefined && (
+            <span role="alert" className="text-caption leading-body text-danger-ink">
+              {problems.tactics}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start"
+            disabled={tactics.length >= ENCOUNTER_TACTICS_MAX}
+            onClick={() => {
+              setTactics((current) => [...current, { key: nextTacticKey, text: "" }]);
+              setNextTacticKey((key) => key + 1);
+            }}
+          >
+            <Icon name="plus" size={13} />
+            Add a line
+          </Button>
+        </div>
+
+        <Field
+          label="Treasure"
+          htmlFor="encounter-treasure"
+          hint="What the party can come away with. Only you see it."
+          error={showProblems ? problems.treasure : undefined}
+        >
+          <Input
+            id="encounter-treasure"
+            maxLength={ENCOUNTER_TREASURE_MAX}
+            placeholder="28 sp and a bone whistle"
+            value={treasure}
+            onChange={(event) => setTreasure(event.target.value)}
+          />
+        </Field>
       </div>
 
       {/* The failure belongs in the footer, not at the end of the body: the body
@@ -437,14 +918,20 @@ function EncounterForm({
   );
 }
 
+/** The prep the form edits: `EncounterPrep` without its key. */
+type Prep = Pick<EncounterPrep, "tactics" | "treasure" | "challenge">;
+
+const NO_PREP: Prep = { tactics: [], treasure: null, challenge: null };
+
 interface Loaded {
   readonly roster: ReadonlyArray<RosterLine>;
   readonly setting: string;
+  readonly prep: Prep;
 }
 
 /**
- * What an edit starts from beyond the `Encounter` itself: its roster and its
- * map's setting line, keyed on the campaign and the encounter — or on
+ * What an edit starts from beyond the `Encounter` itself: its roster, its
+ * map's setting line and its prep, keyed on the campaign and the encounter — or on
  * `undefined`, which is a new encounter, an empty list and no line rather than
  * a request.
  *
@@ -466,16 +953,17 @@ const formAtom = Atom.family(
     apiAtom(
       (client) =>
         encounterId === undefined
-          ? Effect.succeed<Loaded>({ roster: [], setting: "" })
+          ? Effect.succeed<Loaded>({ roster: [], setting: "", prep: NO_PREP })
           : Effect.map(
               Effect.all(
                 {
                   rows: client.encounterCreatures.list({ params: { campaignId, encounterId } }),
                   map: client.battleMaps.find({ params: { campaignId, encounterId } }),
+                  prep: client.encounterPrep.find({ params: { campaignId, encounterId } }),
                 },
                 { concurrency: "unbounded" },
               ),
-              ({ rows, map }): Loaded => ({
+              ({ rows, map, prep }): Loaded => ({
                 roster: rows.map((row): RosterLine => ({
                   key: row.id,
                   id: row.id,
@@ -485,6 +973,7 @@ const formAtom = Atom.family(
                   savedCount: row.count,
                 })),
                 setting: map.setting ?? "",
+                prep,
               }),
             ),
       // This encounter's own roster and setting line. `reads.encounters` is
@@ -539,6 +1028,7 @@ export function EncounterDialog({
             encounter={encounter}
             initialRoster={loaded.value.roster}
             initialSetting={loaded.value.setting}
+            initialPrep={loaded.value.prep}
             onClose={onClose}
             onSaved={onSaved}
           />

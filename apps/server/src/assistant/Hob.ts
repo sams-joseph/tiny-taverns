@@ -1503,6 +1503,10 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "skirmish",
   "monster",
   "monsters",
+  "challenge",
+  "challenges",
+  "hazard",
+  "hazards",
   "note",
   "notes",
   "read-aloud",
@@ -1951,11 +1955,34 @@ const offered = (turn: HobTurn): string | undefined => {
     case "beat":
       return `[You offered the DM a beat — ${kept}: ${proposal.body}]`;
     case "encounter": {
+      const kind = proposal.kind ?? "combat";
       const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;
       const roster = proposal.roster
         .map((line) => `${line.count} × ${line.name} (CR ${line.cr}, id ${line.creatureId})`)
         .join("; ");
-      return `[You offered the DM an encounter called "${proposal.name}"${tags} — ${kept}: ${roster}]`;
+      // Read back in the tool's own words, so "make it harder" can redraft the
+      // challenge and keep the tactics rather than losing them.
+      const challenge = proposal.challenge;
+      const parts = [
+        roster === "" ? undefined : roster,
+        challenge === undefined
+          ? undefined
+          : challenge.kind === "challenge"
+            ? `dc ${challenge.dc}, successes ${challenge.successes}, failures ${challenge.failures}`
+            : [
+                `saveAbility ${challenge.save.ability}, dc ${challenge.save.dc}`,
+                challenge.onFail === undefined ? undefined : `onFail ${challenge.onFail}`,
+                challenge.duration === undefined ? undefined : `duration ${challenge.duration}`,
+              ]
+                .filter((part) => part !== undefined)
+                .join(", "),
+        challenge === undefined || challenge.skills.length === 0
+          ? undefined
+          : `skills ${challenge.skills.join(", ")}`,
+        proposal.tactics === undefined ? undefined : `tactics: ${proposal.tactics.join(" / ")}`,
+        proposal.treasure === undefined ? undefined : `treasure: ${proposal.treasure}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered the DM a ${kind} encounter called "${proposal.name}"${tags} — ${kept}: ${parts.join("; ")}]`;
     }
     /**
      * **The redraft loop is this case**, and without it *"make her a ranger

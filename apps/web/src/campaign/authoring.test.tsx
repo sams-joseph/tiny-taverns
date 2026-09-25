@@ -108,6 +108,9 @@ describe("authoring an encounter", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/encounters")).toEqual({
         name: "Ambush in the reeds",
+        // The type the DM did not change: a fight, said out loud. No tactics,
+        // treasure or challenge were written, so none are sent.
+        kind: "combat",
         tags: ["Marsh", "Night"],
         // The DM did not touch the switch, so this is the column default said
         // out loud — not a guess, and not `shared`.
@@ -241,6 +244,154 @@ describe("authoring an encounter", () => {
     await waitFor(() =>
       expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
         setting: null,
+      }),
+    );
+  });
+
+  it("sets out a skill challenge, and writes its tactics in the order the DM left them", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("The dry well"));
+    await openCreate("New encounter");
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "The dry well");
+    // No challenge boxes until the type takes them.
+    expect(screen.queryByRole("spinbutton", { name: "DC" })).toBeNull();
+    await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Challenge" }));
+
+    await userEvent.type(screen.getByRole("spinbutton", { name: "DC" }), "14");
+    await userEvent.type(screen.getByRole("spinbutton", { name: "Successes" }), "3");
+    await userEvent.type(screen.getByRole("spinbutton", { name: "Failures" }), "2");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Skills" }),
+      "Athletics, Survival, Athletics",
+    );
+
+    for (const line of ["Each failure costs a day's water.", "Success: the buried cache."]) {
+      await userEvent.click(screen.getByRole("button", { name: "Add a line" }));
+      const boxes = screen.getAllByRole("textbox", { name: /^Tactic \d+$/ });
+      await userEvent.type(boxes[boxes.length - 1]!, line);
+    }
+    // A third line left blank is a line not written.
+    await userEvent.click(screen.getByRole("button", { name: "Add a line" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move tactic 2 up" }));
+    expect(screen.getByRole("textbox", { name: "Tactic 1" })).toHaveValue(
+      "Success: the buried cache.",
+    );
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Treasure" }),
+      "  A waterskin that never empties ",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create encounter" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        name: "The dry well",
+        kind: "challenge",
+        challenge: {
+          kind: "challenge",
+          dc: 14,
+          successes: 3,
+          failures: 2,
+          skills: ["Athletics", "Survival"],
+        },
+        tactics: ["Success: the buried cache.", "Each failure costs a day's water."],
+        treasure: "A waterskin that never empties",
+      }),
+    );
+  });
+
+  it("asks a hazard for the save it forces before anything is sent", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("Salt-flat sandstorm"));
+    await openCreate("New encounter");
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: "Name" }),
+      "Salt-flat sandstorm",
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Hazard" }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "On a failed save" }),
+      "1 level of exhaustion",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create encounter" }));
+
+    expect(
+      await screen.findByText(
+        "A hazard needs the save it forces: an ability, and a DC from 1 to 30.",
+      ),
+    ).toBeInTheDocument();
+    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
+
+    await userEvent.click(screen.getByRole("combobox", { name: "Saving throw" }));
+    await userEvent.click(await screen.findByRole("option", { name: "CON" }));
+    await userEvent.type(screen.getByRole("spinbutton", { name: "Save DC" }), "13");
+    await userEvent.click(screen.getByRole("button", { name: "Create encounter" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({
+        kind: "hazard",
+        challenge: {
+          kind: "hazard",
+          save: { ability: "CON", dc: 13 },
+          onFail: "1 level of exhaustion",
+          skills: [],
+        },
+      }),
+    );
+    // No duration was written, so none is sent.
+    expect(
+      (bodyOf(server, "POST", "/encounters") as { challenge: object }).challenge,
+    ).not.toHaveProperty("duration");
+  });
+
+  it("sends no challenge once the DM switches to a type that takes none", async () => {
+    server.routes.set(`POST ${encountersPath}`, created("The hag's bargain"));
+    await openCreate("New encounter");
+
+    await userEvent.type(await screen.findByRole("textbox", { name: "Name" }), "The hag's bargain");
+    await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Challenge" }));
+    await userEvent.type(screen.getByRole("spinbutton", { name: "DC" }), "14");
+    await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Social" }));
+    expect(screen.queryByRole("spinbutton", { name: "DC" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Create encounter" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/encounters")).toMatchObject({ kind: "social" }),
+    );
+    expect(bodyOf(server, "POST", "/encounters")).not.toHaveProperty("challenge");
+  });
+
+  it("opens on the prep already written, and sends it whole with its kind", async () => {
+    server.routes.set(`PATCH ${encountersPath}/${encounterId}`, { status: 200, body: encounter });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit Ambush in the reeds" }));
+
+    // The prep is the creator's, read back through the creator's prep read.
+    expect(await screen.findByRole("textbox", { name: "Tactic 1" })).toHaveValue(
+      "Archers open from the reeds with full cover.",
+    );
+    expect(screen.getByRole("textbox", { name: "Treasure" })).toHaveValue(
+      "28 sp and a bone whistle",
+    );
+    expect(screen.getByRole("combobox", { name: "Type" })).toHaveTextContent("Combat");
+
+    await userEvent.click(screen.getByRole("button", { name: "Move tactic 1 down" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove tactic 1" }));
+    await userEvent.clear(screen.getByRole("textbox", { name: "Treasure" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/encounters/${encounterId}`)).toMatchObject({
+        kind: "combat",
+        tactics: ["Archers open from the reeds with full cover."],
+        treasure: null,
+        challenge: null,
       }),
     );
   });

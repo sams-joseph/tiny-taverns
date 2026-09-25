@@ -55,6 +55,47 @@ function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
           </span>
         </div>
       ))}
+      {/* The kind's numbers, the tactics and the treasure are what the accept
+          writes into the DM's prep, so the card shows them before it does. */}
+      {artifact.challenge !== undefined && (
+        <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+          {artifact.challenge.map(([label, value]) => (
+            <div key={label} className="flex flex-col gap-1">
+              <span className="text-caption leading-snug text-muted-foreground">{label}</span>
+              <span className="font-mono text-mono leading-snug font-medium text-heading">
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {artifact.skills !== undefined && artifact.skills.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {artifact.skills.map((skill) => (
+            <Badge key={skill} variant="outline">
+              {skill}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {artifact.tactics !== undefined && (
+        <ol className="flex flex-col gap-1 pt-1">
+          {artifact.tactics.map((line, index) => (
+            <li key={line} className="flex gap-2.5 text-body-s leading-body text-foreground">
+              <span className="w-3 shrink-0 font-mono text-mono leading-body text-faint">
+                {index + 1}
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {artifact.treasure !== undefined && (
+        <p className="flex items-start gap-2 text-body-s leading-body text-foreground">
+          <Icon name="gem" size={14} className="mt-0.5 shrink-0 text-accent-ink" />
+          <span>{artifact.treasure}</span>
+        </p>
+      )}
       <div className="flex gap-3.5 pt-1 font-mono text-mono leading-snug font-medium text-muted-foreground">
         <span>{artifact.adjustedXp}</span>
         <span className="text-accent-ink">{artifact.verdict}</span>

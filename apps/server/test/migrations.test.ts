@@ -23,6 +23,7 @@ import searchIndex from "../src/migrations/0009_search_index.js";
 import assistantConversation from "../src/migrations/0010_assistant_conversation.js";
 import campaignMoveKeys from "../src/migrations/0053_campaign_move_keys.js";
 import encounterRunBoards from "../src/migrations/0058_encounter_run_boards.js";
+import encounterPrep from "../src/migrations/0060_encounter_prep.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -64,6 +65,10 @@ afterAll(() => moveKeysRuntime.dispose());
 /** An eleventh, for fights on file before a fight kept its board. */
 const boardsRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_boards"));
 afterAll(() => boardsRuntime.dispose());
+
+/** A twelfth, for encounters written before they had a kind or any prep. */
+const prepRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_prep"));
+afterAll(() => prepRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -176,6 +181,7 @@ describe("migrations", () => {
       "effect_sql_migrations",
       "encounter",
       "encounter_creature",
+      "encounter_prep",
       "encounter_run",
       "encounter_run_board",
       "equipment",
@@ -297,6 +303,7 @@ describe("migrations", () => {
       { migration_id: 57, name: "battle_maps" },
       { migration_id: 58, name: "encounter_run_boards" },
       { migration_id: 59, name: "computed_encounter_difficulty" },
+      { migration_id: 60, name: "encounter_prep" },
     ]);
   }, 60_000);
 
@@ -365,6 +372,7 @@ describe("migrations", () => {
       { migration_id: 57, name: "battle_maps" },
       { migration_id: 58, name: "encounter_run_boards" },
       { migration_id: 59, name: "computed_encounter_difficulty" },
+      { migration_id: 60, name: "encounter_prep" },
     ]);
   }, 60_000);
 });
@@ -1246,5 +1254,92 @@ describe("upgrading a database whose fights predate their boards", () => {
         offset_x_px: 7,
       },
     ]);
+  }, 60_000);
+});
+
+describe("upgrading a database whose encounters predate their kind and prep", () => {
+  it("makes every encounter a fight with empty prep, and ties a challenge to its kind", async () => {
+    const measured = await prepRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0059` left: no prep table and no kind.
+        yield* sql`drop table encounter_prep`;
+        yield* sql`alter table encounter drop column kind`;
+
+        const accounts = yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "prep-hash" })}
+          returning id
+        `;
+        const campaign = yield* rawCampaign(sql, accounts[0]!.id, "The Salt Road");
+        const encounters = yield* sql<{ readonly id: string }>`
+          insert into encounter ${sql.insert([
+            { campaign_id: campaign, name: "Ambush in the reeds" },
+            { campaign_id: campaign, name: "The dry well" },
+          ])}
+          returning id
+        `;
+        const [ambush, well] = [encounters[0]!.id, encounters[1]!.id];
+
+        yield* encounterPrep;
+        const kinds = yield* sql<{ readonly id: string; readonly kind: string }>`
+          select id, kind from encounter order by name
+        `;
+        const preps = yield* sql<{
+          readonly encounter_id: string;
+          readonly kind: string;
+          readonly tactics: ReadonlyArray<string>;
+          readonly treasure: string | null;
+          readonly challenge: unknown;
+        }>`
+          select encounter_id, kind, tactics, treasure, challenge from encounter_prep
+          order by encounter_id
+        `;
+
+        const challenge = JSON.stringify({
+          kind: "challenge",
+          dc: 14,
+          successes: 3,
+          failures: 2,
+          skills: ["Survival"],
+        });
+        // A skill challenge's numbers on a fight: the check refuses them.
+        const onAFight = yield* sql`
+          update encounter_prep set challenge = ${challenge} where encounter_id = ${ambush}
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        // The kind moves the prep row's copy with it, so the numbers are
+        // accepted once the encounter is a skill challenge…
+        yield* sql`update encounter set kind = 'challenge' where id = ${well}`;
+        yield* sql`update encounter_prep set challenge = ${challenge} where encounter_id = ${well}`;
+        // …and moving it away again, with the numbers still there, is refused.
+        const movedAway = yield* sql`update encounter set kind = 'hazard' where id = ${well}`.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        const unknownKind =
+          yield* sql`update encounter set kind = 'puzzle' where id = ${well}`.pipe(
+            Effect.as("written"),
+            Effect.catch((error) => Effect.succeed(describeError(error))),
+          );
+        return { kinds, preps, onAFight, movedAway, unknownKind, ambush, well };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.kinds.map((row) => row.kind)).toEqual(["combat", "combat"]);
+    expect(measured.preps).toEqual(
+      [measured.ambush, measured.well].sort().map((id) => ({
+        encounter_id: id,
+        kind: "combat",
+        tactics: [],
+        treasure: null,
+        challenge: null,
+      })),
+    );
+    expect(measured.onAFight).toContain("encounter_prep_challenge_kind");
+    expect(measured.movedAway).toContain("encounter_prep_challenge_kind");
+    expect(measured.unknownKind).toContain("encounter_kind_known");
   }, 60_000);
 });

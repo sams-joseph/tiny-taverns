@@ -958,6 +958,10 @@ describe("a stranger reads nothing", () => {
               -- refusal there is covered in battle-maps.test.ts.
               'battle_map',
               'battle_map_image',
+              -- An encounter's prep is read only through the creator's prep
+              -- reads, behind the creator proof; a stranger's refusal there is
+              -- covered in encounter-prep.test.ts.
+              'encounter_prep',
               -- A cover is read only as a field of the campaign, through the
               -- campaign's own shipped reads; it has no read of its own.
               'campaign_image',
