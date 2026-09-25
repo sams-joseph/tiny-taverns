@@ -10,6 +10,11 @@ export default defineConfig({
   // The web and server suites' load-sensitive budget (AGENTS.md): each test
   // loads the dev server's unbundled app from cold, which a busy machine slows.
   timeout: 60_000,
+  // A web-first wait is on the same dev server: a screen's reads run in a
+  // chain (the campaign, then the encounter, then the bestiary), and under
+  // load the chain outlasts the default 5s while nothing is wrong with the
+  // page. Only waits retry; a measured layout value is asserted once.
+  expect: { timeout: 20_000 },
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: [["list"], ["html", { open: "never" }]],
