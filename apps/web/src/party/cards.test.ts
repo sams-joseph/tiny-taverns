@@ -83,6 +83,7 @@ describe("a seat's card", () => {
         { key: "passive", label: "Passive", value: "13" },
       ],
       conditions: ["Blessed"],
+      inspiration: false,
     });
   });
 

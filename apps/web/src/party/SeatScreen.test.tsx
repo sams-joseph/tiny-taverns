@@ -199,6 +199,18 @@ describe("the vitals", () => {
     await waitFor(() => expect(sent("PATCH", base)).toEqual({ conditions: [] }));
   });
 
+  it("awards inspiration through the seat, and says whose it is", async () => {
+    await renderSeat();
+    const toggle = await screen.findByRole("button", { name: "Inspiration for Brannoc" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    const mark = server.calls.length;
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(sent("PATCH", base)).toEqual({ inspiration: true }));
+    await waitFor(() => expect(partyReads(mark)).toBe(1));
+  });
+
   it("does not send a condition the seat already carries", async () => {
     await renderSeat();
     await userEvent.type(await screen.findByRole("textbox", { name: "Conditions" }), "Poisoned");

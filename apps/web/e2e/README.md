@@ -27,7 +27,7 @@ pnpm -F web e2e -g "760px party"               # one title: "<width>px <screen>"
   - `campaign.spec.ts`: every campaign screen's content starts at one y.
   - `encounters.spec.ts`: the Encounters list beside its preview, and the preview brought into view when the two are stacked.
   - `encounter-builder.spec.ts`: the encounter builder's rail beside the form or stacked under the roster, its difficulty card pinned under the chrome beside the form, roster lines readable on a phone, and the stepper's press landing on it.
-  - `party.spec.ts`: the Party tab's card columns, each card's rows level with its neighbours', − and + pressing above the card's link without opening it, and _Passives and saves_ fitting with no scroller of its own.
+  - `party.spec.ts`: the Party tab's card columns, each card's rows level with its neighbours', − and + and the inspiration toggle pressing above the card's link without opening it, and _Passives and saves_ fitting with no scroller of its own.
   - `hob.spec.ts`: the Hob panel walked across navigation, inline and as the overlay.
   - `global-nav.spec.ts`: the global row's panels, opened with a pointer and shut with Escape.
   - `menu-highlight.spec.ts`: a hovered or keyboard-highlighted row in a top-nav popup (a global panel, the campaign row's _More_) computes a fill that is neither the popup's nor its own at rest.

@@ -55,6 +55,8 @@ export type SeatCard =
       readonly stats: ReadonlyArray<StatTile>;
       /** The DM's own words, in their order; nothing branches on them. */
       readonly conditions: ReadonlyArray<string>;
+      /** The DM's award, unspent. */
+      readonly inspiration: boolean;
     }
   | {
       readonly kind: "deleted";
@@ -154,6 +156,7 @@ export const seatCard = (row: PartySeat, member?: CampaignMember): SeatCard => {
     tempHp: character.tempHp,
     stats: statsOf(character),
     conditions: character.conditions,
+    inspiration: character.inspiration,
   };
 };
 

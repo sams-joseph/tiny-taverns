@@ -11,6 +11,7 @@ import { HpBar } from "../characters/SheetParts";
 import { newRequestId } from "../run/state";
 import { SaveFailure } from "../ui/form";
 import { hpAfter, pressed, type SeatCard as SeatCardModel } from "./cards";
+import { InspirationToggle } from "./InspirationToggle";
 
 /**
  * One seat on the Party tab, as the redesign draws the card: the portrait band,
@@ -19,9 +20,10 @@ import { hpAfter, pressed, type SeatCard as SeatCardModel } from "./cards";
  *
  * **The whole card opens the seat's page** (`SeatScreen.tsx`), where the seat
  * is managed and the sheet is read. The name is the one link, its `::after`
- * stretched over the card; − and + are buttons, which `<Card linked>` lifts
- * above that overlay, so a press changes the number and navigates nowhere.
- * They are the in-play verbs and stay on the card; everything that manages the
+ * stretched over the card; − and +, and inspiration's toggle, are buttons,
+ * which `<Card linked>` lifts above that overlay, so a press changes the number
+ * or the award and navigates nowhere. They are the in-play verbs and stay on
+ * the card; everything that manages the
  * seat (sharing it, temporary hit points, conditions, retiring) is on its page.
  *
  * **The rows line up across the grid.** A card is `grid-rows-subgrid` over
@@ -51,7 +53,7 @@ export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card
         <CharacterPortrait name={card.name} portrait={character?.portrait ?? null} size="card" />
       </div>
 
-      <div className="flex items-start gap-3 px-card pt-4">
+      <div className="flex flex-wrap items-start gap-3 px-card pt-4">
         <div className="min-w-0 flex-1">
           <SectionHeading size="title">
             <Link
@@ -81,7 +83,11 @@ export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card
             </p>
           )}
         </div>
-        {/* Inspiration's toggle stands here, top right, in the drawing. */}
+        {character !== null && card.kind === "character" && (
+          // Top right, as drawn: an in-play verb, so it stays on the card,
+          // lifted above the link like − and +.
+          <InspirationToggle row={row} character={character} name={card.name} />
+        )}
       </div>
 
       <div className="px-card pt-4">
@@ -113,23 +119,33 @@ export function SeatCard({ row, card }: { readonly row: PartySeat; readonly card
       </div>
 
       <div className="px-card pt-3.5 pb-card">
-        {card.kind === "character" && (card.conditions.length > 0 || card.tempHp > 0) && (
-          // One variant for every condition: the words are the DM's own and
-          // nothing in the product branches on them, so none is drawn as more
-          // alarming than another. Inspiration's badge joins these.
-          <ul aria-label="Conditions" className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {card.conditions.map((condition) => (
-              <li key={condition}>
-                <Badge variant="secondary">{condition}</Badge>
-              </li>
-            ))}
-            {card.tempHp > 0 && (
-              <li>
-                <Badge variant="info">+{card.tempHp} temp</Badge>
-              </li>
-            )}
-          </ul>
-        )}
+        {card.kind === "character" &&
+          (card.conditions.length > 0 || card.tempHp > 0 || card.inspiration) && (
+            // One variant for every condition: the words are the DM's own and
+            // nothing in the product branches on them, so none is drawn as more
+            // alarming than another. Inspiration is the owner's sheet's outline
+            // badge, never the peach fill a primary wears.
+            <ul aria-label="Conditions" className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+              {card.conditions.map((condition) => (
+                <li key={condition}>
+                  <Badge variant="secondary">{condition}</Badge>
+                </li>
+              ))}
+              {card.inspiration && (
+                <li>
+                  <Badge variant="outline">
+                    <Icon name="sparkles" size={11} />
+                    Inspired
+                  </Badge>
+                </li>
+              )}
+              {card.tempHp > 0 && (
+                <li>
+                  <Badge variant="info">+{card.tempHp} temp</Badge>
+                </li>
+              )}
+            </ul>
+          )}
       </div>
     </Card>
   );
