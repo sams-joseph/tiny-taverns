@@ -86,7 +86,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
-  GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+  GroupHistory.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   EquipmentRepo.layer,

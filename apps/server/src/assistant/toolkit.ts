@@ -741,11 +741,12 @@ export const ReadStorySoFarSources = Tool.make("readStorySoFarSources", {
 
 /**
  * The group toolkit's own reads: the campaigns, the played timeline, and one
- * night's canonical story. These are the decision's *canonical events* made
- * reachable — played sessions, story beats, combat outcomes — and nothing of
- * anybody's unplayed prep: `nightStory` refuses a planned session exactly as
- * it refuses a missing one, and no tool here can name a note, a prep item or
- * an encounter that never ran.
+ * night's story. These are the decision's *canonical events* made reachable —
+ * played sessions, and the beats and finished fights their DMs shared — and
+ * nothing of anybody's unplayed prep: `nightStory` refuses a planned session
+ * exactly as it refuses a missing one, and no tool here can name a note, a
+ * prep item or an encounter that never ran. What a DM kept hidden, and a fight
+ * still on the table, is not in them (`GroupHistory.nightStory`).
  */
 export const ListSharedWorldCampaigns = Tool.make("listSharedWorldCampaigns", {
   description:
@@ -784,10 +785,10 @@ export const ListPlayedNights = Tool.make("listPlayedNights", {
 
 export const NightStory = Tool.make("nightStory", {
   description:
-    "What happened on one played night, anywhere in the Shared World: the DM's " +
-    "story beats verbatim and each fight by name and outcome. No numbers and " +
-    "no stat blocks — outcomes, not mechanics. Take the ids from " +
-    "listPlayedNights.",
+    "What happened on one played night, anywhere in the Shared World, as far " +
+    "as its DM shared it: the shared story beats verbatim and each shared, " +
+    "finished fight by name and outcome. No numbers and no stat blocks — " +
+    "outcomes, not mechanics. Take the ids from listPlayedNights.",
   parameters: Schema.Struct({
     campaignId: CampaignId,
     sessionId: SessionId,
@@ -801,7 +802,7 @@ export const NightStory = Tool.make("nightStory", {
       Schema.Struct({
         name: Schema.String,
         round: Schema.Int,
-        outcome: Schema.String,
+        outcome: Schema.Literals(["resolved", "carried"]),
       }),
     ),
   }),

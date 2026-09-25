@@ -510,7 +510,7 @@ export const servicesOver = <E>(
     // reason: the bare `Groups.layer` Hob reads a world through stays unsigned.
     Layer.fresh(Groups.layer).pipe(Layer.provide(imageUrls)),
     // The chronicle renders recaps at share time, so it composes `Recap`.
-    GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+    GroupHistory.layer,
     // The group's shared Library shelf — grants to copy, never content.
     LibraryShares.layer,
     // The owner's half of the shared character. Most durable sheet writes do
@@ -656,7 +656,7 @@ export const servicesOver = <E>(
         Encounters.layer,
         // Group Hob's accepted chronicle line goes through the same
         // `GroupHistory.create` a member's own hand does.
-        GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+        GroupHistory.layer,
         Notes.layer,
       ]),
     ),
@@ -690,7 +690,7 @@ export const servicesOver = <E>(
         // The group surface: the directory and the chronicle. Same memoised
         // layers the handlers already hold.
         Groups.layer,
-        GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+        GroupHistory.layer,
         HobThreads.layer,
         Npcs.layer,
         NpcKnowledge.layer,

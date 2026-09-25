@@ -44,16 +44,19 @@ import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./s
 
 /**
  * Group Hob, measured at the provider wire — the group-Hob boundary decision
- * of 2026-09-01 as assertions.
+ * of 2026-09-01, as the captain narrowed it on 2026-09-25, as assertions.
  *
- * The decision grants Hob **all canonical events across the group** — played
- * sessions, story beats, combat outcomes, shared recaps — and forbids it
- * everything unplayed: private notes, planned encounters, prep lines, drafts.
- * An assistant that leaks looks like helpfulness, so the flagship tests here
- * do not argue about predicates: they capture every byte sent to the model
- * and count occurrences of planted secrets. Canonical bytes must be present;
- * prep bytes must appear **zero times, in any request, ever**; and another
- * group's record must be just as absent.
+ * The decision grants Hob **the canonical events across the group** — played
+ * sessions, and the story beats and finished fights their DMs shared, and
+ * shared recaps — and forbids it everything unplayed: private notes, planned
+ * encounters, prep lines, drafts. The narrowing forbids it what a DM kept
+ * hidden in a played night too: a fight with its Share switch off, a fight
+ * still on the table, a DM-only beat or prep line. An assistant that leaks
+ * looks like helpfulness, so the flagship tests here do not argue about
+ * predicates: they capture every byte sent to the model and count occurrences
+ * of planted secrets. Canonical bytes must be present; secret bytes must
+ * appear **zero times, in any request, ever**; and another group's record
+ * must be just as absent.
  */
 
 const services = Layer.mergeAll(
@@ -61,7 +64,7 @@ const services = Layer.mergeAll(
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   Groups.layer,
-  GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+  GroupHistory.layer,
   Creatures.layer,
   CampaignCreatorActors.layer,
   Encounters.layer,
@@ -83,7 +86,7 @@ const services = Layer.mergeAll(
       Characters.layer,
       EncounterCreatures.layer,
       Encounters.layer,
-      GroupHistory.layer.pipe(Layer.provide(Recap.layer)),
+      GroupHistory.layer,
       Notes.layer,
     ]),
   ),
@@ -134,11 +137,15 @@ const makeFixture = Effect.gen(function* () {
   // Pim: a player at the Salt Road — a group member who created nothing.
   const pim = yield* aPlayerAt(saltRoad.id, "Pim");
 
-  // ── Canonical history at Wren's table: a played night, a beat, a fight. ──
+  // ── Canonical history at Wren's table: a played night, a shared beat, a
+  // shared fight that ended. ──
   const played = yield* asWren(sessions.create(hagsBargain.id, { number: 1, title: "The bog" }));
   yield* asWren(sessions.update(hagsBargain.id, played.id, { startedAt: DateTime.nowUnsafe() }));
   yield* asWren(
-    beats.create(hagsBargain.id, played.id, { body: "CANONBEAT the hag took the lantern." }),
+    beats.create(hagsBargain.id, played.id, {
+      body: "CANONBEAT the hag took the lantern.",
+      visibility: "shared",
+    }),
   );
   const marsh = yield* asWren(
     creatures.libraryCreate({
@@ -150,17 +157,42 @@ const makeFixture = Effect.gen(function* () {
     }),
   );
   const fought = yield* asWren(
-    encounters.create(hagsBargain.id, { name: "CANONFIGHT ambush in the reeds" }),
+    encounters.create(hagsBargain.id, {
+      name: "CANONFIGHT ambush in the reeds",
+      visibility: "shared",
+    }),
   );
   yield* asWren(campaigns.update(hagsBargain.id, { currentSessionId: played.id }));
   const wrenDm = yield* Effect.flatMap(CampaignCreatorActors, (actors) =>
     asWren(actors.of(hagsBargain.id)),
   );
-  const run = yield* Effect.flatMap(EncounterRuns, (r) =>
-    r.start(wrenDm, played.id, { encounterId: fought.id }),
-  );
-  yield* Effect.flatMap(EncounterRuns, (r) => r.end(wrenDm, played.id, run.id));
+  const runs = yield* EncounterRuns;
+  const run = yield* runs.start(wrenDm, played.id, {
+    encounterId: fought.id,
+    visibility: "shared",
+  });
+  yield* runs.end(wrenDm, played.id, run.id);
   void marsh;
+
+  // ── What Wren kept to the table in that same played night. ──
+  // A fight fought with its Share switch off (the default), and ended.
+  const hiddenFight = yield* asWren(
+    encounters.create(hagsBargain.id, { name: "HIDDENFIGHT the bog's second mouth" }),
+  );
+  const hidden = yield* runs.start(wrenDm, played.id, { encounterId: hiddenFight.id });
+  yield* runs.end(wrenDm, played.id, hidden.id);
+  // A shared fight still on the table: it has no outcome yet.
+  const runningFight = yield* asWren(
+    encounters.create(hagsBargain.id, { name: "RUNNINGFIGHT the hag comes back" }),
+  );
+  yield* runs.start(wrenDm, played.id, { encounterId: runningFight.id, visibility: "shared" });
+  // A beat and a ticked prep line the DM did not share.
+  yield* asWren(
+    beats.create(hagsBargain.id, played.id, { body: "DMBEAT the lantern is the hag's heart." }),
+  );
+  yield* asWren(
+    prep.create(hagsBargain.id, played.id, { label: "DMSETTLED the ferryman lied", done: true }),
+  );
 
   // ── Unplayed prep at Wren's table: every kind the decision keeps private. ──
   yield* asWren(
@@ -254,6 +286,9 @@ const askSharedWorld = (
 
 const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify(requests);
 
+/** What Wren kept to the table inside the played night — see the fixture. */
+const TABLE_SECRETS = ["HIDDENFIGHT", "RUNNINGFIGHT", "DMBEAT", "DMSETTLED"] as const;
+
 describe("what the model is shown", () => {
   it("carries the other table's canonical night and not one byte of its prep", async () => {
     // Jo asks — a member who did NOT create the Hag's Bargain — and the
@@ -284,6 +319,10 @@ describe("what the model is shown", () => {
     expect(shown).not.toContain("SECRETENCOUNTER");
     expect(shown).not.toContain("SECRETDRAFT");
 
+    // What the DM kept hidden in the played night: absent too, from the
+    // night's story and from the Chronicle's copy of it alike.
+    for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
+
     // Another group's record: just as absent.
     expect(shown).not.toContain("OTHERGROUP");
 
@@ -291,6 +330,41 @@ describe("what the model is shown", () => {
     // that hallucinated another group's id has nowhere to put it.
     const tools = requests[0]?.tools ?? [];
     expect(JSON.stringify(tools).toLowerCase()).not.toContain("groupid");
+  }, 60_000);
+
+  it("tells every member only what the night's DM shared, whoever asks", async () => {
+    // Pim, a player at the *other* table; Jo, that table's creator; and Wren,
+    // who ran this night. The world's account of a night is the world's, not
+    // the asker's: its own DM gets the same narrowed story through world Hob.
+    for (const asker of [fixture.pim, fixture.jo, fixture.wren]) {
+      const { requests } = await askSharedWorld(asker, fixture.groupId, {
+        rounds: [
+          toolCallChunks("listPlayedNights", {}),
+          toolCallChunks("nightStory", {
+            campaignId: fixture.hagsBargain.id,
+            sessionId: fixture.played.id,
+          }),
+          toolCallChunks("searchSharedWorldHistory", { query: "Session 1" }),
+          textChunks("The reeds ambush was fought to a finish."),
+        ],
+      });
+      const shown = shownTo(requests);
+      expect(shown).toContain("CANONBEAT");
+      expect(shown).toContain("CANONFIGHT");
+      for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
+    }
+
+    // The repository answer the tool is built from, exactly: one shared beat,
+    // one shared fight that ended — not the hidden one, not the running one.
+    const story = await runtime.runPromise(
+      Effect.flatMap(GroupHistory, (history) =>
+        history.nightStory(fixture.groupId, fixture.hagsBargain.id, fixture.played.id),
+      ).pipe(withActor(fixture.pim)),
+    );
+    expect(story.beats).toEqual(["CANONBEAT the hag took the lantern."]);
+    expect(story.fights).toEqual([
+      { name: "CANONFIGHT ambush in the reeds", round: 1, outcome: "resolved" },
+    ]);
   }, 60_000);
 
   it("refuses the planned night through the tool, as the ordinary not-found", async () => {

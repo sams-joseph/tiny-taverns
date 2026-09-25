@@ -18,6 +18,8 @@ Reads and writes use different predicates. A player may read a `shared` note and
 
 Visibility is two levels: `campaign.visibility` is the master toggle and a row's own `visibility` narrows within it, so a `shared` note inside an unshared campaign stays invisible. A table that hangs off another row adds a level through a `Containment` chain the `nested*` and `contained*` families walk; it gets no denormalised `campaign_id`, because a child whose copy disagreed with its parent's would be readable in a campaign it is not part of and no `WHERE` clause would notice.
 
+The one read that crosses campaigns on Shared World membership alone, a played night's story (`GroupHistory.nightStory`, and the Chronicle entry `fromRecap` renders from the same read), applies the same row-level switch through `toldTheWorld` and `fightToldTheWorld`: a world member is never told more of a night than the table's own players, and a fight still on the table is not told at all. See [Shared Worlds](shared-worlds.md).
+
 ### `campaignInScope` is the base case
 
 `campaignInScope` is `isMember` (a live `campaign_member` row) conjoined with `scopeAllowsCampaign`. Every campaign-level predicate reaches it. `groupInScope` is the same base case one level up, and the two are deliberately not connected: group membership is eligibility to found campaigns, never reach into one. `campaign.creator_account_id` is authority, not a reach path; the creator holds an ordinary participation row too, enforced by the deferred `campaign_creator_is_campaign_member` in `0001_init.ts`.
