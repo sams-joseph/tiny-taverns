@@ -150,7 +150,65 @@ describe("the cards", () => {
       within(brannoc)
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["Damage Brannoc", "Heal Brannoc"]);
+    ).toEqual(["Inspiration for Brannoc", "Damage Brannoc", "Heal Brannoc"]);
+  });
+});
+
+describe("the card's inspiration", () => {
+  const brannocSeatPath = `${base}/party/${brannocSeat.seat.id}`;
+
+  it("awards it through the seat at once, going nowhere", async () => {
+    await renderParty();
+    const brannoc = await card("Brannoc");
+    const toggle = within(brannoc).getByRole("button", { name: "Inspiration for Brannoc" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(within(brannoc).queryByText("Inspired")).not.toBeInTheDocument();
+
+    const mark = server.calls.length;
+    await userEvent.click(toggle);
+    // The press shows before the server answers, and stays through the re-read.
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    await waitFor(() => expect(called("PATCH", brannocSeatPath)).toBe(true));
+    const patch = server.calls.find((call) => call.method === "PATCH")!;
+    expect(patch.pathname).toBe(brannocSeatPath);
+    expect(JSON.parse(patch.body)).toEqual({ inspiration: true });
+    await waitFor(() => expect(readsOf(`${base}/party`, mark)).toBe(1));
+    // Still the Party tab: the press did not open the seat.
+    expect(screen.getByRole("region", { name: "Characters" })).toBeVisible();
+  });
+
+  it("says an award the DM made, and takes it back through the same toggle", async () => {
+    const inspired = {
+      ...brannocSeat,
+      character: { ...brannocSeat.character!, inspiration: true },
+    };
+    server.routes.set(`GET ${base}/party`, { status: 200, body: [inspired] });
+    await renderParty();
+    const brannoc = await card("Brannoc");
+    // Beside the conditions, in the owner's sheet's outline rather than peach.
+    expect(within(brannoc).getByText("Inspired")).toBeVisible();
+    const toggle = within(brannoc).getByRole("button", { name: "Inspiration for Brannoc" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(toggle);
+    await waitFor(() => expect(called("PATCH", brannocSeatPath)).toBe(true));
+    const patch = server.calls.find((call) => call.method === "PATCH")!;
+    expect(JSON.parse(patch.body)).toEqual({ inspiration: false });
+  });
+
+  it("says a refused award, and the toggle returns to the server's", async () => {
+    server.routes.set(`PATCH ${base}/party/${sorrelSeatId}`, {
+      status: 404,
+      body: { _tag: "NotFound", resource: "campaign_character", id: sorrelSeatId },
+    });
+    await renderParty();
+    const sorrel = await card("Sorrel Ash");
+    const toggle = within(sorrel).getByRole("button", { name: "Inspiration for Sorrel Ash" });
+    await userEvent.click(toggle);
+
+    expect(await within(sorrel).findByRole("alert")).toBeVisible();
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
 });
 

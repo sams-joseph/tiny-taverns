@@ -2,8 +2,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
 /**
  * The Party tab (`party/PartyScreen.tsx`) at every width: the card grid's
- * columns, the rows of a card lining up with its neighbours', − and + pressing
- * rather than opening the card, and *Passives and saves* fitting without a
+ * columns, the rows of a card lining up with its neighbours', − and + and
+ * inspiration pressing rather than opening the card, and *Passives and saves* fitting without a
  * scroller of its own. All of it is layout, stacking or hit-testing, which
  * jsdom does not compute.
  *
@@ -122,6 +122,38 @@ for (const width of WIDTHS) {
         // One write for the two presses, once the presses pause.
         await expect.poll(() => writes.length).toBe(1);
         expect.soft(writes[0]).toMatchObject({ amount: 2 });
+      });
+
+      await test.step("inspiration stands top right, above the link, and presses in place", async () => {
+        const brannoc = cards.filter({ has: page.getByRole("link", { name: "Brannoc" }) });
+        const toggle = brannoc.getByRole("button", { name: "Inspiration for Brannoc" });
+        await toggle.scrollIntoViewIfNeeded();
+        const card = await box(brannoc);
+        const name = await box(brannoc.getByRole("link", { name: "Brannoc" }));
+        const at = await box(toggle);
+        // Beside the name, at the card's right edge, not under it.
+        expect.soft(at.y, "toggle top").toBeLessThanOrEqual(name.y + name.height);
+        expect
+          .soft(card.x + card.width - (at.x + at.width), "toggle to right edge")
+          .toBeLessThan(32);
+        const hit = await toggle.evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          const top = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+          return top !== null && el.contains(top);
+        });
+        expect.soft(hit, "the toggle is what a press hits").toBe(true);
+
+        const path = new URL(page.url()).pathname;
+        const writes: Array<unknown> = [];
+        page.on("request", (request) => {
+          if (request.method() === "PATCH") writes.push(request.postDataJSON());
+        });
+        await expect(toggle).toHaveAttribute("aria-pressed", "false");
+        await toggle.click();
+        await expect(toggle).toHaveAttribute("aria-pressed", "true");
+        expect.soft(new URL(page.url()).pathname, "still on the Party tab").toBe(path);
+        await expect.poll(() => writes.length).toBe(1);
+        expect.soft(writes[0]).toEqual({ inspiration: true });
       });
 
       await test.step("the card opens its seat from anywhere on its face", async () => {

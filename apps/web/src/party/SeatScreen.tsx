@@ -26,6 +26,7 @@ import { newRequestId } from "../run/state";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { SaveFailure, VisibilityField } from "../ui/form";
 import { seatCard, type SeatCard } from "./cards";
+import { InspirationToggle } from "./InspirationToggle";
 import { RetireSeatDialog } from "./RetireSeatDialog";
 
 /**
@@ -50,8 +51,8 @@ import { RetireSeatDialog } from "./RetireSeatDialog";
  *
  * ### What lives here and what does not
  *
- * The seat's settings: its hit points (a delta through `party.damage`), its
- * temporary hit points and conditions (`PartySeatUpdate`, written through to
+ * The seat's settings: its hit points (a delta through `party.damage`),
+ * inspiration, its temporary hit points and conditions (`PartySeatUpdate`, written through to
  * the shared character), whether the table may see it, and retiring it. The
  * sheet under them is the owner's document drawn read-only — the same
  * `SheetDocument` the owner writes, with no `writes`, so nothing on it presses:
@@ -362,8 +363,9 @@ function Vitals({
           </div>
         )}
 
-        {/* Inspiration's toggle goes here, beside the vitals it sits with on
-            the card — a later change wires `PartySeatUpdate.inspiration`. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <InspirationToggle row={row} character={character} name={card.name} labelled />
+        </div>
 
         {/* Keyed on the value, so a draft never outlives the number it was
             typed over: damage spends temporary hit points first, and the
