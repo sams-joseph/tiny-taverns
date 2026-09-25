@@ -34,6 +34,7 @@ const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = 
   // the combatant it names is gone and there is no name to resolve.
   "combatant-removed": () => "Someone left the order",
   "combatant-damaged": (who) => `${who ?? "A combatant"} took a hit`,
+  "combatant-moved": (who) => `${who ?? "A combatant"} moved on the board`,
   "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
   // A character changed while the night was running — the party list, not the
   // initiative order. It names a combatant only when the write reached the

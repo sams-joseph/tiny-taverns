@@ -30,7 +30,13 @@ import {
   OptionLibraryUpdate,
   OptionVocabulary,
 } from "./CharacterOption.js";
-import { Combatant, CombatantCreate, CombatantDamage, CombatantUpdate } from "./Combatant.js";
+import {
+  Combatant,
+  CombatantCreate,
+  CombatantDamage,
+  CombatantMove,
+  CombatantUpdate,
+} from "./Combatant.js";
 import {
   Creature,
   CreatureFacets,
@@ -2582,6 +2588,17 @@ class CombatantsGroup extends HttpApiGroup.make("combatants")
       payload: CombatantDamage,
       success: Combatant,
       error: NotFound,
+    }),
+    HttpApiEndpoint.post("move", "/:combatantId/move", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantMove,
+      success: Combatant,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.delete("remove", "/:combatantId", {
       params: {

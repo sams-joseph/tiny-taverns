@@ -1430,6 +1430,11 @@ const CombatantsLive = HttpApiBuilder.group(
           combatants.damage(as, params.sessionId, params.runId, params.combatantId, payload),
         ),
       )
+      .handle("move", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          combatants.move(as, params.sessionId, params.runId, params.combatantId, payload),
+        ),
+      )
       .handle("remove", ({ params }) =>
         dm(params.campaignId, (as) =>
           combatants.remove(as, params.sessionId, params.runId, params.combatantId),

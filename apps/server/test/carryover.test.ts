@@ -182,6 +182,11 @@ const aFightInProgress = async (sessionId: SessionId) => {
       visibility: "shared",
     }),
   );
+  await as(
+    combatants.move(fixture.asDm, sessionId, run.id, hag.id, {
+      position: { column: 3, row: 2 },
+    }),
+  );
   // Walk the whole order once so the round rolls over and the marker is
   // somewhere other than where a seed leaves it.
   for (let step = 0; step <= order.length; step += 1) {
@@ -345,6 +350,7 @@ describe("resuming a carried fight", () => {
       ac: row.ac,
       kind: row.kind,
       conditions: row.conditions,
+      position: row.position,
       visibility: row.visibility,
       origin: row.origin,
       assistantTurnId: row.assistantTurnId,
@@ -379,6 +385,7 @@ describe("resuming a carried fight", () => {
     // claim about damage rather than about a full-health seed.
     expect(after.some((row) => row.hpCurrent < row.hpMax)).toBe(true);
     expect(after.some((row) => row.conditions.includes("Frightened"))).toBe(true);
+    expect(after.some((row) => row.position !== null)).toBe(true);
   }, 60_000);
 
   it("keeps whose turn it was, remapped onto the new combatant", async () => {
