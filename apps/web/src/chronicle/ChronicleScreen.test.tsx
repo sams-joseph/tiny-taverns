@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaignId,
   installChronicleServer,
+  recap11,
+  recap12,
   renderChronicle,
   session11Id,
   session12Id,
@@ -87,6 +89,81 @@ describe("a fight that carried across two nights", () => {
     expect(await screen.findByText("Resumed from round 4 of session 11.")).toBeInTheDocument();
     expect(screen.getByText("On the table now, at round 7.")).toBeInTheDocument();
     expect(screen.queryByText(/Resumed from round 7/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A skill challenge on the same night, told as the DM's recap counts it: made
+ * or lost against its own numbers, with the prep's line, and never by a round
+ * or an initiative count its seated party never had.
+ */
+describe("a scene that was not a fight", () => {
+  it("says they made it, with the prep's line and the log counted", async () => {
+    const fight = recap12.fights[0]!;
+    const run = {
+      ...fight.run,
+      id: "2b1f2a1e-0000-4000-8000-000000000e01",
+      continuedFrom: null,
+      encounterName: "The dry well",
+      mode: "challenge",
+      endedAt: "2026-07-26T21:30:00.000Z",
+    };
+    const made = (n: number) => ({
+      id: `2b1f2a1e-0000-4000-8000-00000000c1${String(n).padStart(2, "0")}`,
+      runId: run.id,
+      combatantId: null,
+      displayName: "Brannoc",
+      skill: "Athletics",
+      save: null,
+      total: 16,
+      dc: 13,
+      outcome: "success",
+      stage: null,
+      createdAt: "2026-07-26T21:00:00.000Z",
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, {
+      status: 200,
+      body: {
+        ...recap12,
+        fights: [
+          ...recap12.fights,
+          {
+            run,
+            // The seated party a scene seeds: never an initiative count.
+            combatants: recap11.fights[0]!.combatants,
+            checks: [made(1), made(2)],
+            scene: {
+              challenge: {
+                kind: "challenge",
+                dc: 13,
+                successes: 2,
+                failures: 3,
+                skills: ["Athletics"],
+                onSuccess: "They haul the bucket up, and the cache with it.",
+              },
+              attitude: null,
+              stage: null,
+              stages: null,
+            },
+            continuedFrom: null,
+            continuedInto: null,
+          },
+        ],
+      },
+    });
+    await renderChronicle();
+
+    const name = await screen.findByText("The dry well");
+    const card = name.closest("[data-slot=card]") as HTMLElement;
+    expect(within(card).getByText("Skill challenge")).toBeInTheDocument();
+    expect(within(card).getByText("They made it.")).toBeInTheDocument();
+    expect(
+      within(card).getByText("They haul the bucket up, and the cache with it."),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText("2 of 2 successes and 0 of 3 failures, at DC 13."),
+    ).toBeInTheDocument();
+    expect(within(card).queryByText(/round|initiative/)).not.toBeInTheDocument();
   });
 });
 

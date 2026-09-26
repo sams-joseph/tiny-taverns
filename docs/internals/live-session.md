@@ -77,7 +77,7 @@ A night may finish with a fight on the table, and the fight continues into the n
 
 A `RecapFight` is `run` plus two `RecapRunLink`s carrying the other run's session number and round, so a pause and its pickup are expressible from either end. Following `continued_from` grants no reach: the far run goes through `containedRowReadable` and comes back `null` when the actor cannot see it (`recap.test.ts`). Paused-versus-finished is `run.endedReason`, never a guess from `endedAt`; the Chronicle's round trap is in [Web screens](web-screens.md).
 
-The creator's `RecapFight` also carries the run's checks and saves, oldest first; the player's has no field for them.
+The creator's `RecapFight` also carries the run's checks and saves, oldest first, and for a scene that was not a fight its `scene`: the challenge snapshot, the last attitude and the hazard's stages, which the Chronicle counts the log against. The player's has no field for either.
 
 It is a server-side repository because it has two consumers, the Chronicle and Hob's `sessionRecap` tool; composed client-side, the assistant would write a second version.
 
@@ -92,7 +92,7 @@ It is a server-side repository because it has two consumers, the Chronicle and H
 - Seat proof comes first and is an active `campaign_character` row, not `combatant.character_id`. A member with no seat gets `null`.
 - The order is `you | ally | npc`. Only `you` carries exact `hpCurrent`/`hpMax`/`tempHp`; `npc` carries a band; `ally` carries no total. NPC armour class is never selected.
 - `you` and `ally` carry the character's `portrait`, selected in SQL by `seatedPortraitColumn`, so it is exactly what the party read would give the same reader. `npc` has no field for one.
-- `mode` says what kind of scene is on the table. A run that is not a fight has no order: only the asker's own rows are selected, for `seats`, and `order` is empty with `upNext` null. Nothing of the scene is on this read: its kind, the read-aloud through `encounterId` and the player's own rolls are all a player has of it (the captain's decision of 2026-09-25). `apps/server/test/player-scenes.test.ts` plants every scene field and reads the raw wire for it.
+- `mode` says what kind of scene is on the table. A run that is not a fight has no order: only the asker's own rows are selected, for `seats`, and `order` is empty with `upNext` null. Nothing of the scene is on this read: its kind, the read-aloud through `encounterId` and the player's own rolls are all a player has of it (the captain's decision of 2026-09-25). `apps/server/test/player-scenes.test.ts` plants every scene field and reads the raw wire for it. The table draws the kind as a card in place of the initiative list, titled by its neutral name whatever the encounter (`play/SceneOnTheTable.tsx`), since the table never carries the encounter's name.
 - The encounter's name is deliberately absent. A fight on the table may be something the DM has not said yet, so attachments key on `encounterId`.
 - Each visibility switch takes exactly one thing away, fail-closed: an unshared session is `null`; an unshared run is the night with `fight: null`; an unshared combatant drops the row and nulls `upNext` if it named it. That applies to a player's own row too.
 - `fight.phase` says whether the table is rolling initiative. Initiatives may be null. Only `you` carries `initiativeBonus` and `initiativeSetBy`, selected in SQL for the asker's own row alone.

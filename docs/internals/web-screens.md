@@ -118,6 +118,8 @@ A carried fight is two runs, and `RecapRunLink` carries the other run's round at
 
 `fight.test.ts` uses a fixture where the two numbers differ (paused at 4, since reached 7); with equal numbers the assertion holds whichever the screen picked. The state comes from `run.endedReason`, never from `endedAt`, and `fightStory` is shared by the DM's and the player's Chronicle so there is one chance to get it right.
 
+A conversation, a skill challenge or a hazard (`run.mode`) takes no turns, so `fightStory` never tells one by a round, and a carried scene is "Resumed from session M" with no round. The DM's recap carries the scene (`RecapFight.scene`) and its log, so the DM reads a challenge made or lost against its own numbers, with the prep's _If they make it_ / _If it goes wrong_ line only when one was written, and a hazard by the stages it lasted, with the log counted in place of the initiative line. The player's recap has neither, and the same function tells a player the kind and that it ended (the captain's decision of 2026-09-25).
+
 Three more rules: the spine loads and the recaps do not (`RecapBody` mounts only while its card is open, because a list must not cost one recap per night); a search answer carries its own `q` (`SearchAnswer.q`), because the box is debounced and a count beside the current text describes the wrong search; and the excerpt is plain text rendered as spans by `search.ts`'s `segments`, never as markup.
 
 ## The character sheet screen

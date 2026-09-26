@@ -1,5 +1,6 @@
 import {
   initiativeFrom,
+  NEUTRAL_RUN_NAMES,
   type CampaignId,
   type EncounterRunId,
   type NpcId,
@@ -47,6 +48,7 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
 import { PlayerBattleMap } from "./PlayerBoard";
+import { SceneOnTheTable } from "./SceneOnTheTable";
 import { usePlayerTableStream } from "./tableStream";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -526,9 +528,11 @@ export function PlayerTableScreen() {
               : `Session ${String(table.sessionNumber)}${
                   fight === null
                     ? " · nothing on the table"
-                    : fight.phase === "initiative"
-                      ? " · rolling initiative"
-                      : ` · round ${String(fight.round)}`
+                    : fight.mode !== "combat"
+                      ? ` · ${NEUTRAL_RUN_NAMES[fight.mode].toLowerCase()}`
+                      : fight.phase === "initiative"
+                        ? " · rolling initiative"
+                        : ` · round ${String(fight.round)}`
                 }`
         }
       >
@@ -583,19 +587,23 @@ export function PlayerTableScreen() {
                     onRolled={recordRoll}
                   />
                 )}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Initiative</CardTitle>
-                    {fight.phase === "initiative" && (
-                      <p className="text-body-s leading-body text-muted-foreground">
-                        Rolling initiative. The first round starts once everyone has a number.
-                      </p>
-                    )}
-                  </CardHeader>
-                  {fight.order.map((row) => (
-                    <CombatantRow key={row.combatantId} row={row} />
-                  ))}
-                </Card>
+                {fight.mode !== "combat" ? (
+                  <SceneOnTheTable mode={fight.mode} />
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Initiative</CardTitle>
+                      {fight.phase === "initiative" && (
+                        <p className="text-body-s leading-body text-muted-foreground">
+                          Rolling initiative. The first round starts once everyone has a number.
+                        </p>
+                      )}
+                    </CardHeader>
+                    {fight.order.map((row) => (
+                      <CombatantRow key={row.combatantId} row={row} />
+                    ))}
+                  </Card>
+                )}
 
                 {fight.board !== null && (
                   <PlayerBattleMap

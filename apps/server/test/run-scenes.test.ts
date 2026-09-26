@@ -654,11 +654,23 @@ describe("the scene is the creator's alone", () => {
     const fight = recap.fights.find((entry) => entry.run.id === scene.id)!;
     expect(fight.run.mode).toBe("challenge");
     expect(fight.checks.map((check) => check.id)).toEqual([checkId]);
+    // What the Chronicle counts the log against: the challenge's own numbers.
+    expect(fight.scene?.challenge).toMatchObject({ kind: "challenge", onSuccess: SECRET_OUTCOME });
+    for (const other of recap.fights.filter((entry) => entry.run.mode === "combat")) {
+      expect(other.scene).toBeNull();
+    }
 
     const raw = await rawBody(ilse.token, `/campaigns/${table}/sessions/${night}/recap/player`);
     expect(raw.status).toBe(200);
     expect(raw.text).toContain(scene.id);
-    for (const secret of [SECRET_TACTIC, SECRET_OUTCOME, SECRET_SKILL, '"checks"']) {
+    for (const secret of [
+      SECRET_TACTIC,
+      SECRET_OUTCOME,
+      SECRET_SKILL,
+      '"checks"',
+      '"scene"',
+      '"successes"',
+    ]) {
       expect(raw.text).not.toContain(secret);
     }
   });

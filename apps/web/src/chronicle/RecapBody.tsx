@@ -39,6 +39,7 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<RecapFight> }) {
                 <span className="text-label leading-snug font-semibold text-heading">
                   {story.name}
                 </span>
+                {story.kind !== null && <Badge variant="outline">{story.kind}</Badge>}
                 {story.live ? (
                   <Badge>On the table</Badge>
                 ) : fight.run.endedReason === "carried" ? (
@@ -49,6 +50,11 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<RecapFight> }) {
                 <Drafted origin={fight.run.origin} />
               </div>
               <p className="text-body-s leading-body text-foreground">{story.state}</p>
+              {story.outcome !== null && (
+                <p className="max-w-measure font-serif text-body-s leading-body italic text-foreground">
+                  {story.outcome}
+                </p>
+              )}
               {/* The two directions of a carried fight, each naming the round
                   that end actually means. See `fight.ts` — they are different
                   numbers and swapping them is invisible. */}
@@ -65,9 +71,12 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<RecapFight> }) {
                 </p>
               )}
               <p className="text-caption leading-body text-faint">
-                {total === 0
-                  ? "Nobody left in initiative."
-                  : `${String(total)} in initiative${down === 0 ? "" : `, ${String(down)} at zero`}.`}
+                {/* A scene is told by its log; its seated party was never an
+                    initiative order. */}
+                {story.tally ??
+                  (total === 0
+                    ? "Nobody left in initiative."
+                    : `${String(total)} in initiative${down === 0 ? "" : `, ${String(down)} at zero`}.`)}
               </p>
             </Card>
           );

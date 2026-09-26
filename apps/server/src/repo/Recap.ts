@@ -8,6 +8,7 @@ import {
   PlayerSessionRecap,
   RecapFight,
   RecapRunLink,
+  RecapScene,
   type Session,
   SessionRecap,
   type SessionId,
@@ -19,7 +20,7 @@ import { portraitSigner } from "./Characters.js";
 import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
-import { type CheckRow, toCheck } from "./RunScenes.js";
+import { type CheckRow, type SceneRow, toCheck } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { type NoteRow, toNote } from "./Notes.js";
 import {
@@ -326,6 +327,16 @@ export class Recap extends Context.Service<
           };
         });
 
+      const sceneOf = (row: SceneRow | undefined): RecapScene | null =>
+        row === undefined
+          ? null
+          : new RecapScene({
+              challenge: row.challenge,
+              attitude: row.attitude,
+              stage: row.stage,
+              stages: row.stages,
+            });
+
       return {
         read: ({ actor, campaign: campaignId }, sessionId) =>
           dieOnSqlError(
@@ -362,6 +373,19 @@ export class Recap extends Context.Service<
                       order by encounter_run_check.created_at asc, encounter_run_check.id asc
                     `;
 
+              // Where each scene stood — what "they made it" and "lasted two
+              // stages" are counted from. The creator's, as the checks are.
+              const scenes =
+                state.runIds.length === 0
+                  ? []
+                  : yield* sql<SceneRow>`
+                      select encounter_run_scene.* from encounter_run_scene
+                      join encounter_run on encounter_run.id = encounter_run_scene.run_id
+                      where ${sql.in("encounter_run_scene.run_id", state.runIds)}
+                        and encounter_run.mode <> 'combat'
+                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
+                    `;
+
               return new SessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId) =>
@@ -375,6 +399,7 @@ export class Recap extends Context.Service<
                       checks: checks
                         .filter((check) => check.encounter_run_id === fight.run.id)
                         .map(toCheck),
+                      scene: sceneOf(scenes.find((scene) => scene.run_id === fight.run.id)),
                     }),
                 ),
                 beats: state.beats.map(toBeat),
