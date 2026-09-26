@@ -45,7 +45,7 @@ export function ClassProgressionDialog({
         </DialogHeader>
 
         <DetailBody className="@container">
-          {resource.state === "loading" && <Loading label="Reading the progression…" />}
+          {resource.state === "loading" && <Loading label="Reading the progression…" inline />}
           {resource.state === "failed" && (
             <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           )}

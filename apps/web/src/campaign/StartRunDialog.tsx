@@ -179,7 +179,7 @@ export function StartRunDialog({
 
         {number.state === "loading" && (
           <div className="px-gutter py-gutter">
-            <Loading label="Counting the sessions…" />
+            <Loading label="Counting the sessions…" inline />
           </div>
         )}
         {number.state === "failed" && (

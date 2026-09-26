@@ -139,7 +139,7 @@ export function ArchivedDialog({ onClose }: { readonly onClose: () => void }) {
         </DialogHeader>
 
         <div className="flex max-h-[60vh] flex-col overflow-y-auto px-gutter py-3">
-          {resource.state === "loading" && <Loading label="Reading the shelf…" />}
+          {resource.state === "loading" && <Loading label="Reading the shelf…" inline />}
           {resource.state === "failed" && (
             <ApiFailureNotice failure={resource.failure} onRetry={retry} />
           )}

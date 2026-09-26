@@ -570,9 +570,21 @@ describe("PageHeader", () => {
 });
 
 describe("states", () => {
-  it("announces a load as a status line", () => {
+  it("draws a load as the page's skeleton and announces it as a status", () => {
     render(<Loading label="Reading the bestiary…" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Reading the bestiary…");
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Reading the bestiary…");
+    expect(status).toHaveAttribute("data-slot", "loading");
+    const blocks = status.querySelectorAll('[data-slot="skeleton"]');
+    expect(blocks).toHaveLength(4);
+    for (const block of blocks) expect(block).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("draws an inline load as two lines", () => {
+    render(<Loading label="Counting the sessions…" inline />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Counting the sessions…");
+    expect(status.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(2);
   });
 
   it("says what is empty and what to do next", () => {

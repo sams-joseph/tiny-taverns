@@ -72,7 +72,7 @@ In Tailwind v4 `-translate-x-1/2` compiles to the independent `translate` proper
 
 The bridge's motion names are self-referential on purpose: `--ease-out: var(--ease-out)` works because the Tailwind theme lands in `@layer theme`, the design system's `:root` lands in `@layer base`, and base outranks theme (same shape for `--font-*` and `--shadow-*`). It is load-bearing that the tokens keep their `layer(base)` import; drop it and every one becomes a genuine cycle that kills the `animation` shorthand with nothing in the console. `motion.test.ts` asserts a real `cubic-bezier` survives.
 
-`prefers-reduced-motion` zeroes every `--dur-*` token upstream in `tokens/motion.css`, so anything timed from a token flattens and anything timed from a literal does not. The one exception is `skeleton`'s `animate-pulse`, which has no start and no end; `styles.css` §7 stops it by hand, the only reduced-motion rule the product writes. Before diagnosing "the animations don't run", check `matchMedia("(prefers-reduced-motion: reduce)")`.
+`prefers-reduced-motion` zeroes every `--dur-*` token upstream in `tokens/motion.css`, so anything timed from a token flattens and anything timed from a literal does not. Nothing loops: the theme resets `--animate-*`, so `animate-pulse` and `animate-spin` emit no rule, and `Skeleton` holds still. Before diagnosing "the animations don't run", check `matchMedia("(prefers-reduced-motion: reduce)")`.
 
 ## shadcn on Base UI, not Radix
 

@@ -4,6 +4,7 @@ import { Button } from "./button";
 import { Card } from "./card";
 import { Icon, type IconName } from "./icon";
 import { sectionHeadingVariants } from "./section-heading";
+import { Skeleton } from "./skeleton";
 
 /**
  * The three states every data-backed screen has, written once.
@@ -18,18 +19,45 @@ import { sectionHeadingVariants } from "./section-heading";
  */
 
 /**
- * A load in flight.
+ * A load in flight: the shape of the page that has not arrived.
  *
- * Deliberately a line of text and not a spinner or a shimmering skeleton: the
- * theme resets `--animate-*` to `initial`, so `animate-spin` and `animate-pulse`
- * are not classes that exist here, and the motion rules ("nothing overshoots and
- * nothing steps") are what put them out of reach in the first place.
+ * One skeleton for every screen, not one per screen. It sits under the header
+ * the screen has already drawn, so it is only the body: a heading line and a
+ * few card-sized blocks. `inline` is the two-line form for a dialog or a
+ * picker, where a page's worth of blocks would push the dialog open and then
+ * snap it shut.
+ *
+ * Static on purpose: the theme resets `--animate-*` to `initial`, so there is
+ * no pulse to reach for, and the motion rules ("nothing overshoots and nothing
+ * steps") are what put one out of reach in the first place.
+ *
+ * The label is the `status` a screen reader announces; the blocks are hidden
+ * from it. `data-slot="loading"` is what the tests wait on to disappear.
  */
-function Loading({ label = "Loading…" }: { readonly label?: string }) {
+function Loading({
+  label = "Loading…",
+  inline = false,
+}: {
+  readonly label?: string;
+  readonly inline?: boolean;
+}) {
   return (
-    <p role="status" data-slot="loading" className="text-body-s leading-body text-faint">
-      {label}
-    </p>
+    <div role="status" data-slot="loading" className="flex flex-col gap-3">
+      <span className="sr-only">{label}</span>
+      {inline ? (
+        <>
+          <Skeleton aria-hidden className="h-3.5 w-full" />
+          <Skeleton aria-hidden className="h-3.5 w-2/3" />
+        </>
+      ) : (
+        <>
+          <Skeleton aria-hidden className="h-5 w-48" />
+          <Skeleton aria-hidden className="h-28 rounded-card" />
+          <Skeleton aria-hidden className="h-28 rounded-card" />
+          <Skeleton aria-hidden className="h-28 rounded-card" />
+        </>
+      )}
+    </div>
   );
 }
 
