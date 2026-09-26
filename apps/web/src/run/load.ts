@@ -297,6 +297,15 @@ export const upLine = (
     : `${active.displayName} is up · ${next.displayName} next`;
 };
 
+/** The bar's line while the fight is rolling initiative: `Rolling initiative · 4 players, 7 monsters`. */
+export const rollingLine = (combatants: ReadonlyArray<Combatant>): string => {
+  const party = combatants.filter((row) => row.kind === "pc").length;
+  const monsters = combatants.length - party;
+  return `Rolling initiative · ${String(party)} ${party === 1 ? "player" : "players"}, ${String(
+    monsters,
+  )} ${monsters === 1 ? "monster" : "monsters"}`;
+};
+
 /** Whether the fight has a board to draw, so the layout can close the gap when it has none. */
 export const hasBoard = (resource: Resource<EncounterRunBoard | null>): boolean =>
   !(resource.state === "ready" && resource.value === null);

@@ -7,6 +7,25 @@ import type { Ability } from "./Creature.js";
 export const MIN_INITIATIVE_BONUS = -20;
 export const MAX_INITIATIVE_BONUS = 30;
 
+/**
+ * The initiative numbers a combatant row can hold, and the database's check on
+ * `combatant.initiative`.
+ */
+export const MIN_INITIATIVE = -50;
+export const MAX_INITIATIVE = 100;
+
+/**
+ * An initiative total somebody typed — the DM on the runner, a player on their
+ * Table — or absent when it is not one: a whole number, optionally negative,
+ * inside the bounds a row holds. `"+12"`, `"1d20"` and `"12.5"` are not totals.
+ */
+export const initiativeFrom = (text: string): number | undefined => {
+  const trimmed = text.trim().replace(/^−/, "-");
+  if (!/^-?\d{1,3}$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return value < MIN_INITIATIVE || value > MAX_INITIATIVE ? undefined : value;
+};
+
 const believable = (bonus: number | undefined): number | undefined =>
   bonus === undefined || bonus < MIN_INITIATIVE_BONUS || bonus > MAX_INITIATIVE_BONUS
     ? undefined

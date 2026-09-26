@@ -244,8 +244,9 @@ export function CombatantPanel({
       <Card role="region" aria-label="Selected combatant">
         <CardContent className="pt-card">
           <p className="text-body-s leading-body text-muted-foreground">
-            Pick a line in the initiative list and whoever is on it shows up here, stat block and
-            all.
+            {rolling
+              ? "Pick a name while you roll initiative and they show up here, stat block and all."
+              : "Pick a line in the initiative list and whoever is on it shows up here, stat block and all."}
           </p>
         </CardContent>
       </Card>

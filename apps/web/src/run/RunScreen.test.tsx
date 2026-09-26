@@ -858,51 +858,163 @@ describe("rolling initiative", () => {
   const rollingWith = (combatants: ReadonlyArray<unknown>) => {
     server.routes.set(`GET ${serverRunBase()}`, { status: 200, body: rollingRun });
     server.routes.set(`GET ${serverRunBase()}/combatants`, { status: 200, body: combatants });
+    server.routes.set(`POST ${serverRunBase()}/initiative`, { status: 200, body: combatants });
   };
+  const rollPanel = () => within(screen.getByRole("region", { name: "Roll initiative" }));
+  const boxFor = (name: string) => rollPanel().getByLabelText(`${name} initiative`);
+  const initiativeWrites = () =>
+    server.calls.filter((call) => call.method === "POST" && call.pathname.endsWith("/initiative"));
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("waits for every number before round 1, and Space does not advance", async () => {
+  /**
+   * A different d20 face at every call. Other code on the page draws from
+   * `Math.random` too, so a test can say which rolls matched and which did
+   * not, but not which faces came up.
+   */
+  const everyRollDifferent = () => {
+    let calls = 0;
+    vi.spyOn(Math, "random").mockImplementation(() => (calls++ % 20) / 20 + 0.01);
+  };
+  type Sent = { entries: ReadonlyArray<{ combatantId: string; initiative: number }> };
+  const sentAt = (index: number): Sent => JSON.parse(initiativeWrites()[index]!.body) as Sent;
+
+  it("takes the initiative list's place, and waits for every number before round 1", async () => {
     rollingWith(unrolled);
     await renderRunner();
 
-    await screen.findByText("Rolling initiative · 2 still to roll");
-    expect(screen.getByRole("button", { name: "Start round 1" })).toBeDisabled();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+    expect(screen.queryByRole("table", { name: "Initiative order" })).toBeNull();
+    expect(rollPanel().getByRole("button", { name: "Start round 1" })).toBeDisabled();
+    expect(rollPanel().getByText("1 player to go · monsters not rolled")).toBeInTheDocument();
+    // One way into the round, the panel's; the bar has no second one.
+    expect(screen.getAllByRole("button", { name: /Start round/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reroll initiative" })).toBeNull();
-    expect(within(rowFor("Brannoc")).getByText("—")).toBeInTheDocument();
-    // Nobody is up, so nobody can be made up.
-    await userEvent.click(rowFor("Brannoc"));
+    expect(boxFor("Brannoc")).toHaveValue("");
+    // The name opens the row on the card; nobody is up, so nobody can be made up.
+    await userEvent.click(rollPanel().getByRole("button", { name: "Brannoc" }));
+    expect(panel().getByLabelText("Hit points to apply to Brannoc")).toBeInTheDocument();
     expect(panel().queryByRole("button", { name: /Make it/ })).toBeNull();
 
+    await userEvent.click(document.body);
     await userEvent.keyboard(" ");
     expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
   });
 
-  it("rolls d20 plus each monster's bonus, in one write, and leaves the party alone", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
-    rollingWith(unrolled);
-    server.routes.set(`POST ${serverRunBase()}/initiative`, {
-      status: 200,
-      body: [{ ...unrolled[1], initiative: 13, initiativeSetBy: "dm" }, unrolled[0]],
-    });
+  it("rolls one d20 per creature type, plus each bonus, in one write", async () => {
+    everyRollDifferent();
+    const secondGoblin = {
+      ...unrolled[1],
+      id: "5d1c7c52-0000-4000-8000-00000000c0b2",
+    };
+    const wolf = {
+      ...unrolled[1],
+      id: "5d1c7c52-0000-4000-8000-00000000c0b3",
+      creatureId: null,
+      displayName: "Wolf",
+      initiativeBonus: null,
+    };
+    rollingWith([...unrolled, secondGoblin, wolf]);
     await renderRunner();
-    await screen.findByText("Rolling initiative · 2 still to roll");
+    await screen.findByText("Rolling initiative · 1 player, 3 monsters");
+    expect(rollPanel().getByRole("switch", { name: "One roll per creature type" })).toBeChecked();
 
-    await userEvent.click(screen.getByRole("button", { name: "Roll for monsters" }));
+    await userEvent.click(rollPanel().getByRole("button", { name: "Roll for monsters" }));
+
+    await waitFor(() => expect(initiativeWrites()).toHaveLength(1));
+    const at = new Map(sentAt(0).entries.map((entry) => [entry.combatantId, entry.initiative]));
+    expect([...at.keys()].sort()).toEqual([goblinBoss.id, secondGoblin.id, wolf.id].sort());
+    // Both goblins on one d20, plus their 2; the hand-added wolf rolls its own, plus nothing.
+    expect(at.get(goblinBoss.id)).toBe(at.get(secondGoblin.id));
+    expect(at.get(wolf.id)).not.toBe(at.get(goblinBoss.id)! - 2);
+    const entries = sentAt(0).entries;
+    // The party are nobody's to roll for in that press.
+    expect(entries.some((entry) => entry.combatantId === brannoc.id)).toBe(false);
+  });
+
+  it("rolls each monster its own d20 with the switch off, and rerolls one row alone", async () => {
+    everyRollDifferent();
+    const secondGoblin = { ...unrolled[1], id: "5d1c7c52-0000-4000-8000-00000000c0b2" };
+    rollingWith([...unrolled, secondGoblin]);
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 1 player, 2 monsters");
+
+    await userEvent.click(rollPanel().getByRole("switch", { name: "One roll per creature type" }));
+    await userEvent.click(rollPanel().getByRole("button", { name: "Roll for monsters" }));
+    await waitFor(() => expect(initiativeWrites()).toHaveLength(1));
+    const [one, two] = sentAt(0).entries;
+    expect(one!.initiative).not.toBe(two!.initiative);
+
+    await userEvent.click(rollPanel().getAllByRole("button", { name: "Reroll Goblin Boss" })[0]!);
+    await waitFor(() => expect(initiativeWrites()).toHaveLength(2));
+    expect(sentAt(1).entries).toHaveLength(1);
+  });
+
+  it("sends a typed total for one row on Enter, digits and a minus only", async () => {
+    rollingWith(unrolled);
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+
+    await userEvent.type(boxFor("Goblin Boss"), "1x5{Enter}");
 
     await waitFor(() =>
       expect(bodyOf(server, "POST", "/initiative")).toMatchObject({
-        entries: [{ combatantId: goblinBoss.id, initiative: 13 }],
+        entries: [{ combatantId: goblinBoss.id, initiative: 15 }],
       }),
     );
-    expect(
-      server.calls.filter(
-        (call) => call.method === "POST" && call.pathname.endsWith("/initiative"),
-      ),
-    ).toHaveLength(1);
+    expect(initiativeWrites()).toHaveLength(1);
+  });
+
+  it("rolls for a player with d20 plus their bonus", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    rollingWith(unrolled);
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+
+    await userEvent.click(rollPanel().getByRole("button", { name: "Roll for Brannoc" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/initiative")).toMatchObject({
+        entries: [{ combatantId: brannoc.id, initiative: 12 }],
+      }),
+    );
+  });
+
+  it("does not roll for a character whose sheet gives no bonus", async () => {
+    rollingWith([{ ...unrolled[0], initiativeBonus: null }, unrolled[1]]);
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+
+    expect(rollPanel().queryByRole("button", { name: "Roll for Brannoc" })).toBeNull();
+    expect(boxFor("Brannoc")).toBeEnabled();
+  });
+
+  it("shows the number a player sent, and the DM's typing replaces it", async () => {
+    rollingWith([{ ...unrolled[0], initiative: 14, initiativeSetBy: "player" }, unrolled[1]]);
+    await renderRunner();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+
+    expect(boxFor("Brannoc")).toHaveValue("14");
+    expect(rollPanel().getByText(/sent from their table/)).toBeInTheDocument();
+    expect(rollPanel().getByText("monsters not rolled")).toBeInTheDocument();
+
+    // Leaving the box untouched sends nothing.
+    await userEvent.click(boxFor("Brannoc"));
+    await userEvent.tab();
+    expect(initiativeWrites()).toHaveLength(0);
+
+    await userEvent.clear(boxFor("Brannoc"));
+    await userEvent.type(boxFor("Brannoc"), "9");
+    await userEvent.tab();
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/initiative")).toMatchObject({
+        entries: [{ combatantId: brannoc.id, initiative: 9 }],
+      }),
+    );
   });
 
   it("starts the round once everyone has a number", async () => {
@@ -913,11 +1025,12 @@ describe("rolling initiative", () => {
     server.routes.set(`POST ${serverRunBase()}/begin`, { status: 200, body: liveRun });
     await renderRunner();
 
-    await screen.findByText("Rolling initiative · everyone has a number");
-    await userEvent.click(screen.getByRole("button", { name: "Start round 1" }));
+    await screen.findByText("Ties go to the higher initiative bonus, then the players.");
+    await userEvent.click(rollPanel().getByRole("button", { name: "Start round 1" }));
 
     await screen.findByText("Brannoc is up · Goblin Boss next");
     expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Initiative order" })).toBeInTheDocument();
     expect((bodyOf(server, "POST", "/begin") as { requestId: string }).requestId).toMatch(/.+/);
   });
 
@@ -931,9 +1044,10 @@ describe("rolling initiative", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Reroll initiative" }));
 
-    await screen.findByText("Rolling initiative · everyone has a number");
-    expect(screen.getByRole("button", { name: "Start round 3" })).toBeEnabled();
-    expect(within(rowFor("Brannoc")).getByText("21")).toBeInTheDocument();
+    await screen.findByText("Rolling initiative · 1 player, 1 monster");
+    expect(rollPanel().getByRole("button", { name: "Start round 3" })).toBeEnabled();
+    expect(boxFor("Brannoc")).toHaveValue("21");
+    expect(boxFor("Goblin Boss")).toHaveValue("19");
   });
 });
 

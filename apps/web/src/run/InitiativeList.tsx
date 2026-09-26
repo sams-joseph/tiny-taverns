@@ -204,7 +204,6 @@ export function InitiativeList({
   disabled,
   onSelect,
   onAdd,
-  onRoll,
   onReroll,
 }: {
   readonly run: EncounterRun;
@@ -214,14 +213,18 @@ export function InitiativeList({
   readonly disabled: boolean;
   readonly onSelect: (combatant: Combatant) => void;
   readonly onAdd: () => void;
-  readonly onRoll: () => void;
-  /** Back to rolling initiative, numbers kept. Offered while turns are taken. */
+  /**
+   * Back to rolling initiative, numbers kept, where *Roll initiative*
+   * (`InitiativePhase.tsx`) takes this list's place. Offered while turns are
+   * taken.
+   */
   readonly onReroll: () => void;
 }) {
   const shared = run.visibility === "shared";
   const held = combatants.filter((combatant) => combatant.visibility === "dm").length;
-  const monsters = combatants.filter((combatant) => combatant.kind === "npc");
-  const standing = monsters.filter((combatant) => hpOf(combatant) > 0).length;
+  const standing = combatants
+    .filter((combatant) => combatant.kind === "npc")
+    .filter((combatant) => hpOf(combatant) > 0).length;
 
   return (
     // `clip` keeps the rows inside the card's corners without making the card
@@ -262,25 +265,6 @@ export function InitiativeList({
           column has room for its title and the count, not for buttons too. */}
       <div className="flex flex-col gap-2 px-panel py-2.5">
         <div className="flex flex-wrap gap-1.5">
-          {/* The monsters' d20s, each plus its bonus: the party roll their own
-              and call them out (or enter them at their table). A fight opens
-              with no numbers, so this is the first thing pressed in one. */}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled || monsters.length === 0}
-                  onClick={onRoll}
-                >
-                  <Icon name="dices" size={13} />
-                  Roll for monsters
-                </Button>
-              }
-            />
-            <TooltipContent>Roll d20 for the monsters. The party keep theirs.</TooltipContent>
-          </Tooltip>
           {run.phase === "turns" && (
             <Tooltip>
               <TooltipTrigger

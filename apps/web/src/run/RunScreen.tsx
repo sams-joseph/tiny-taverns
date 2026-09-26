@@ -40,6 +40,7 @@ import { useDmDice } from "./dice";
 import { DmDiceCard } from "./DmDice";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
+import { InitiativePhase } from "./InitiativePhase";
 import { RunBoardCard } from "./RunBoardCard";
 import { RunLayout } from "./RunLayout";
 import {
@@ -48,6 +49,7 @@ import {
   rollsAtom,
   runBoardAtom,
   runViewAtom,
+  rollingLine,
   upLine,
   type RunPath,
 } from "./load";
@@ -711,7 +713,6 @@ export function RunScreen() {
   // Rolling initiative: nobody is up, and round 1 waits until every row has a
   // number. `toRoll` is the count the header's button waits on.
   const rolling = state?.run.phase === "initiative";
-  const toRoll = state?.combatants.filter((row) => row.initiative === null).length ?? 0;
   const selected =
     state?.combatants.find((row) => row.id === selectedId) ??
     (selectedId === undefined ? active : undefined);
@@ -743,40 +744,6 @@ export function RunScreen() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [advance, frozen, state]);
-
-  /**
-   * A d20 plus its initiative bonus for every monster, in one write.
-   *
-   * There is no roll endpoint and there should not be — a roll is not durable
-   * state, only the number it produced is — so this is the fight's own
-   * initiative write, which takes every number at once and lands them
-   * together. The party are left alone; they roll their own dice, and the DM
-   * types what they say or they enter it at their table.
-   */
-  const rollInitiative = async () => {
-    if (state === undefined) return;
-    const monsters = state.combatants.filter((combatant) => combatant.kind === "npc");
-    if (monsters.length === 0) return;
-    const rolled = await turn.submit(
-      (client) =>
-        client.runs.setInitiative({
-          params: path,
-          payload: {
-            entries: monsters.map((combatant) => ({
-              combatantId: combatant.id,
-              initiative: 1 + Math.floor(Math.random() * 20) + (combatant.initiativeBonus ?? 0),
-            })),
-            requestId: newRequestId(),
-          },
-        }),
-      // Initiative is the fight's alone, and the fight is re-read by the
-      // controller below rather than by an atom.
-      [],
-    );
-    // The list reorders, so this is a re-read rather than a merge — the same
-    // rule the campaign screen follows for anything that changes a list's shape.
-    if (Result.isSuccess(rolled)) refresh();
-  };
 
   /** *Start round N*: out of the initiative phase, the marker on the first in the order. */
   const begin = async () => {
@@ -966,9 +933,7 @@ export function RunScreen() {
           subtitle: over
             ? "This fight is over"
             : rolling
-              ? `Rolling initiative · ${
-                  toRoll === 0 ? "everyone has a number" : `${String(toRoll)} still to roll`
-                }`
+              ? rollingLine(state.combatants)
               : upLine(state.combatants, state.run.activeCombatantId),
         })}
       >
@@ -989,13 +954,9 @@ export function RunScreen() {
               />
               <Label htmlFor="run-share">Share</Label>
             </span>
-            {rolling ? (
-              // Enabled once every row has a number; the subtitle says how
-              // many are still to come.
-              <Button size="sm" disabled={turn.busy || toRoll > 0} onClick={() => void begin()}>
-                {turn.busy ? "Starting…" : `Start round ${String(state.run.round)}`}
-              </Button>
-            ) : (
+            {/* While rolling, the round's one start is the panel's *Start
+                round N*, so the bar carries no second peach button. */}
+            {!rolling && (
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -1049,17 +1010,31 @@ export function RunScreen() {
 
           <RunLayout
             initiative={
-              <InitiativeList
-                run={state.run}
-                combatants={state.combatants}
-                hpOf={controller.hpOf}
-                selectedId={selected?.id}
-                disabled={frozen}
-                onSelect={(combatant) => setSelectedId(combatant.id)}
-                onAdd={() => setAdding(true)}
-                onRoll={() => void rollInitiative()}
-                onReroll={() => void reroll()}
-              />
+              rolling && !over ? (
+                <InitiativePhase
+                  path={path}
+                  run={state.run}
+                  combatants={state.combatants}
+                  selectedId={selected?.id}
+                  disabled={frozen}
+                  starting={turn.busy}
+                  onSelect={(combatant) => setSelectedId(combatant.id)}
+                  onAdd={() => setAdding(true)}
+                  onWritten={refresh}
+                  onBegin={() => void begin()}
+                />
+              ) : (
+                <InitiativeList
+                  run={state.run}
+                  combatants={state.combatants}
+                  hpOf={controller.hpOf}
+                  selectedId={selected?.id}
+                  disabled={frozen}
+                  onSelect={(combatant) => setSelectedId(combatant.id)}
+                  onAdd={() => setAdding(true)}
+                  onReroll={() => void reroll()}
+                />
+              )
             }
             map={
               hasBoard(boardResource) ? (

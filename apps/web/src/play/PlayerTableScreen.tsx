@@ -1,14 +1,15 @@
-import type {
-  CampaignId,
-  EncounterRunId,
-  NpcId,
-  PlayerNpc,
-  PlayerLiveCombatant,
-  PlayerLiveCombatantYou,
-  Roll,
-  RollMode,
-  SessionId,
-  SheetAction,
+import {
+  initiativeFrom,
+  type CampaignId,
+  type EncounterRunId,
+  type NpcId,
+  type PlayerNpc,
+  type PlayerLiveCombatant,
+  type PlayerLiveCombatantYou,
+  type Roll,
+  type RollMode,
+  type SessionId,
+  type SheetAction,
 } from "@taverns/api";
 import { Link, useParams } from "@tanstack/react-router";
 import {
@@ -124,17 +125,6 @@ function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
     </div>
   );
 }
-
-/** The bounds `combatant.initiative` holds (`Combatant.ts`). */
-const MIN_INITIATIVE = -50;
-const MAX_INITIATIVE = 100;
-
-const initiativeFrom = (text: string): number | undefined => {
-  const trimmed = text.trim();
-  if (!/^-?\d{1,3}$/.test(trimmed)) return undefined;
-  const value = Number(trimmed);
-  return value < MIN_INITIATIVE || value > MAX_INITIATIVE ? undefined : value;
-};
 
 /**
  * Your own initiative, while the fight is rolling it: roll it here or type the
