@@ -1,4 +1,4 @@
-import type { CampaignId, Encounter, Note, NoteCategory, NoteId } from "@taverns/api";
+import type { CampaignId, Encounter, Note, NoteCategory, NoteId, PartySeat } from "@taverns/api";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import {
   Button,
@@ -109,6 +109,7 @@ export function NotesScreen() {
           campaignId={campaignId}
           notes={pins.over(withCreated(created, view.notes))}
           encounters={view.encounters}
+          party={view.party}
           fresh={fresh}
           onFreshFocused={() => setFresh(undefined)}
           onForget={(noteId) => setCreated((note) => (note?.id === noteId ? undefined : note))}
@@ -218,6 +219,7 @@ function NoteBrowser({
   campaignId,
   notes,
   encounters,
+  party,
   fresh,
   onFreshFocused,
   onForget,
@@ -232,6 +234,7 @@ function NoteBrowser({
   readonly campaignId: CampaignId;
   readonly notes: ReadonlyArray<Note>;
   readonly encounters: ReadonlyArray<Encounter>;
+  readonly party: ReadonlyArray<PartySeat>;
   /** The note *New note* made, whose title the pane selects. */
   readonly fresh: NoteId | undefined;
   readonly onFreshFocused: () => void;
@@ -378,6 +381,7 @@ function NoteBrowser({
             note={selected}
             saver={saverFor(selected)}
             encounters={encounters}
+            party={party}
             focusTitle={selected.id === fresh}
             onShown={() => {
               if (selected.id === fresh) onFreshFocused();

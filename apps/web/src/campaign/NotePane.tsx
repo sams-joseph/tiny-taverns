@@ -1,4 +1,4 @@
-import type { Encounter, EncounterId, Note } from "@taverns/api";
+import type { Encounter, EncounterId, Note, PartySeat } from "@taverns/api";
 import {
   Button,
   Icon,
@@ -23,6 +23,7 @@ import {
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { VisibilityField } from "../ui/form";
 import type { NoteFields, NoteSaver, SaveStatus } from "./noteAutosave";
+import { NoteLinks } from "./NoteLinks";
 import { CATEGORIES, editedAgo, KINDS, noteLabel } from "./noteText";
 import { useNow } from "./when";
 
@@ -43,8 +44,9 @@ const UNATTACHED = "";
  * pressing the lit one clears it, since no category is a real state), the
  * register (*Note* or *Read aloud*) beside them, the title, the body, the one
  * encounter it is attached to, and who can see it through `VisibilityField`,
- * the product's one control for that. The drawing's links are not on the wire
- * yet and are not drawn.
+ * the product's one control for that. Under it all, the *Linked* chips
+ * (`NoteLinks`): the attachment first, then what the note is linked to, each
+ * opening its object.
  *
  * *Pin* is not an edit and does not go through the saver: it is the screen's
  * own press (`onPin`), sent at once to the pin endpoints, and the pane only
@@ -62,6 +64,7 @@ export function NotePane({
   note,
   saver,
   encounters,
+  party,
   focusTitle,
   onShown,
   paneRef,
@@ -74,6 +77,8 @@ export function NotePane({
   readonly saver: NoteSaver;
   /** Everything attachable, already loaded by the screen. */
   readonly encounters: ReadonlyArray<Encounter>;
+  /** The seats a note can be linked to, already loaded by the screen. */
+  readonly party: ReadonlyArray<PartySeat>;
   /** Just made by *New note*: the title is focused and selected, ready to type over. */
   readonly focusTitle: boolean;
   /** Drawn: the screen may bring it into view. */
@@ -273,6 +278,14 @@ export function NotePane({
           hidden="Only you can read this."
         />
       </div>
+
+      <NoteLinks
+        campaignId={note.campaignId}
+        note={note}
+        attachedTo={draft.attachedTo}
+        encounters={encounters}
+        party={party}
+      />
     </article>
   );
 }
