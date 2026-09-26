@@ -25,7 +25,7 @@ import {
  * played as that kind of scene instead of a fight.
  */
 export type Scenario =
-  "creator" | "creator-social" | "creator-challenge" | "creator-hazard" | "player";
+  "creator" | "creator-social" | "creator-challenge" | "creator-hazard" | "player" | "seated";
 
 export interface Screen {
   readonly name: string;
@@ -35,7 +35,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The twenty-four screens. */
+/** The twenty-five screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -73,4 +73,5 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "sheet", scenario: "player", path: `/characters/${brannocId}` },
   { name: "player-overview", scenario: "player", path: c },
   { name: "player-table", scenario: "player", path: `${c}/table` },
+  { name: "player-table-fight", scenario: "seated", path: `${c}/table` },
 ];

@@ -27,12 +27,27 @@ import {
  */
 export const tokenLabels = (
   combatants: ReadonlyArray<Combatant>,
+): ReadonlyMap<CombatantId, string> =>
+  labelsInOrder(
+    [...combatants].sort(
+      (a, b) =>
+        a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds || a.id.localeCompare(b.id),
+    ),
+  );
+
+/**
+ * `tokenLabels`' initials over rows already in the order their numbers should
+ * follow. A player's board has no creation time to go by, only the order its
+ * table answered (`play/PlayerBoard.tsx`).
+ */
+export const labelsInOrder = (
+  rows: ReadonlyArray<{ readonly id: CombatantId; readonly displayName: string }>,
 ): ReadonlyMap<CombatantId, string> => {
-  const byName = new Map<string, Array<Combatant>>();
-  for (const combatant of combatants) {
-    const same = byName.get(combatant.displayName) ?? [];
-    same.push(combatant);
-    byName.set(combatant.displayName, same);
+  const byName = new Map<string, Array<CombatantId>>();
+  for (const row of rows) {
+    const same = byName.get(row.displayName) ?? [];
+    same.push(row.id);
+    byName.set(row.displayName, same);
   }
   const labels = new Map<CombatantId, string>();
   for (const [name, same] of byName) {
@@ -45,12 +60,8 @@ export const tokenLabels = (
       .slice(0, 2)
       .join("");
     const base = `${initials === "" ? "?" : initials}${numbered ? last : ""}`;
-    const added = [...same].sort(
-      (a, b) =>
-        a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds || a.id.localeCompare(b.id),
-    );
-    added.forEach((combatant, index) =>
-      labels.set(combatant.id, same.length > 1 ? `${base}${String(index + 1)}` : base),
+    same.forEach((id, index) =>
+      labels.set(id, same.length > 1 ? `${base}${String(index + 1)}` : base),
     );
   }
   return labels;

@@ -11,6 +11,7 @@ import {
   goblinBoss,
   installRunServer,
   liveRun,
+  liveScene,
   npcId,
   playerCazril,
   renderRunner,
@@ -1269,5 +1270,103 @@ describe("the fight's tokens", () => {
     expect(hint()).toHaveTextContent("Where everyone stood when it ended.");
     expect(card().queryByRole("button", { name: /off the board/ })).toBeNull();
     expect(moves()).toEqual([]);
+  });
+});
+
+describe("what the table sees of the map", () => {
+  const card = () => within(screen.getByRole("region", { name: "Battle map" }));
+  const shareMap = () => screen.getByRole("switch", { name: "Share map" });
+  /** Every write to the run itself, in the order they were sent. */
+  const runPatches = () =>
+    server.calls
+      .filter((call) => call.method === "PATCH" && call.pathname.endsWith(`/runs/${liveRun.id}`))
+      .map((call) => JSON.parse(call.body) as unknown);
+  const answerRun = (run: Record<string, unknown>) =>
+    server.routes.set(`PATCH ${serverRunBase()}`, { status: 200, body: { ...liveRun, ...run } });
+
+  it("waits for the fight to be shared, then shares the map as a switch of its own", async () => {
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await waitFor(() => expect(shareMap()).toHaveAttribute("aria-disabled", "true"));
+    // Off by default, fail closed.
+    expect(shareMap()).toHaveAttribute("aria-checked", "false");
+
+    answerRun({ visibility: "shared" });
+    await userEvent.click(screen.getByRole("switch", { name: "Share" }));
+    await waitFor(() => expect(shareMap()).not.toHaveAttribute("aria-disabled"));
+
+    answerRun({ visibility: "shared", mapShown: true });
+    await userEvent.click(shareMap());
+    await waitFor(() => expect(shareMap()).toHaveAttribute("aria-checked", "true"));
+    // Each switch writes itself and nothing else.
+    expect(runPatches()).toEqual([{ visibility: "shared" }, { mapShown: true }]);
+
+    // Unsharing the fight leaves the map where the DM put it, and waits again.
+    answerRun({ visibility: "dm", mapShown: true });
+    await userEvent.click(screen.getByRole("switch", { name: "Share" }));
+    await waitFor(() => expect(shareMap()).toHaveAttribute("aria-disabled", "true"));
+    expect(shareMap()).toHaveAttribute("aria-checked", "true");
+    expect(runPatches().at(-1)).toEqual({ visibility: "dm" });
+  });
+
+  it("has no Share map for a fight with no board", async () => {
+    reaim("/board", { status: 200, body: null });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(screen.getByRole("switch", { name: "Share" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
+  });
+
+  it("has no Share map for a run that is not a fight, which shows players no board", async () => {
+    // A conversation on the same board: the board is read, and still no switch.
+    server.routes = liveScene("social");
+    await renderRunner();
+    await screen.findByRole("switch", { name: "Share" });
+    await waitFor(() =>
+      expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
+  });
+
+  it("hides every monster token from the players at once, and fades them here", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 9, row: 4 } }],
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    const boss = await card().findByRole("button", { name: /^Goblin Boss, column/ });
+    const hide = card().getByRole("button", { name: "Hide from players" });
+    expect(hide).toHaveAttribute("aria-pressed", "false");
+    expect(boss.className).not.toMatch(/opacity-/);
+
+    answerRun({ hostileTokensHidden: true });
+    await userEvent.click(hide);
+    await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "true"));
+    expect(runPatches()).toEqual([{ hostileTokensHidden: true }]);
+    expect(card().getByRole("button", { name: /^Goblin Boss, column/ }).className).toMatch(
+      /opacity-60/,
+    );
+    expect(card().getByRole("button", { name: /^Brannoc, column/ }).className).not.toMatch(
+      /opacity-/,
+    );
+
+    answerRun({ hostileTokensHidden: false });
+    await userEvent.click(hide);
+    await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "false"));
+    expect(runPatches().at(-1)).toEqual({ hostileTokensHidden: false });
+  });
+
+  it("changes nothing once the fight is over", async () => {
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
+      }
+    }
+    await renderRunner();
+    await screen.findByText(/came off the table/);
+    expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
+    expect(await card().findByRole("button", { name: "Hide from players" })).toBeDisabled();
   });
 });

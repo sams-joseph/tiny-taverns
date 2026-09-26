@@ -13,11 +13,13 @@ import {
   liveRunId,
   playing,
   renderSheet,
+  sharedBoard,
+  tableOrder,
   sessionId,
   yourCombatantId,
 } from "../characters/characters.fixtures";
 import { apiUrl } from "../api/client";
-import { drawnPortrait } from "../campaign/campaign.fixtures";
+import { drawnMapPicture, drawnPortrait } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { TEST_SESSION } from "../test/session";
@@ -179,7 +181,7 @@ describe("PlayerTableScreen", () => {
     expect(screen.queryByText(/AC 17|17 AC/i)).toBeNull();
   });
 
-  it("shows a player no map and asks for no board: the fight's board is the DM's", async () => {
+  it("shows no map until the DM shares one, and asks for no board of its own", async () => {
     server.routes.set(...playing(campaignId, {}));
     await renderTable();
     await screen.findByText("Initiative");
@@ -190,6 +192,68 @@ describe("PlayerTableScreen", () => {
         (call) => call.pathname.endsWith("/board") || call.pathname.endsWith("/map"),
       ),
     ).toBe(false);
+  });
+
+  it("draws the board the DM shared: the picture, the grid and who stands on it", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const picture = document.querySelector<HTMLImageElement>("[data-slot=battle-map] img");
+    expect(picture?.getAttribute("src")).toBe(apiUrl(drawnMapPicture.fullUrl));
+    // The table sends no setting line, so the picture says what it is generically.
+    expect(picture?.getAttribute("alt")).toBe("The place, as Hob drew it");
+    expect(document.querySelectorAll("[data-line=column]")).toHaveLength(25);
+    expect(map.getByText("24 × 16 squares · 5 ft each · 120 × 80 ft")).toBeInTheDocument();
+
+    // A token for each row the table put down, on its square; Nessa is in the
+    // order but not on the board, so she has none.
+    const you = map.getByRole("img", { name: "Brannoc Duskharrow (you), column 6, row 5" });
+    expect(you.style.left).toMatch(/^20\.8333/);
+    expect(you.style.top).toBe("25%");
+    expect(you).toHaveTextContent("BD");
+    expect(map.getByRole("img", { name: "Marsh Hag, column 12, row 7" })).toHaveTextContent("MH");
+    expect(map.queryByRole("img", { name: /^Nessa/ })).toBeNull();
+
+    // Read-only: nothing on the map to press, and nothing more to fetch.
+    expect(map.queryAllByRole("button")).toEqual([]);
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+    expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(false);
+  });
+
+  it("fades a token that is down, and rings whoever is up", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.map((row) => (row.kind === "npc" ? { ...row, hpBand: "down" } : row)),
+        upNext: { combatantId: hagCombatantId, displayName: "Marsh Hag" },
+        board: sharedBoard,
+      }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const hag = map.getByRole("img", { name: /^Marsh Hag/ });
+    expect(hag.className).toMatch(/opacity-45/);
+    expect(map.getByRole("img", { name: /^Brannoc/ }).className).not.toMatch(/opacity-/);
+    // The turn's ring is the one extra circle on the hag's face.
+    expect(hag.querySelectorAll("circle")).toHaveLength(2);
+  });
+
+  it("draws no token for a row the table did not send, whatever the board says", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.filter((row) => row.kind !== "npc"),
+        board: sharedBoard,
+      }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const tokens = [...document.querySelectorAll("[data-slot=token]")];
+    expect(tokens.map((token) => token.getAttribute("aria-label"))).toEqual([
+      "Brannoc Duskharrow (you), column 6, row 5",
+    ]);
+    expect(map.queryByRole("img", { name: /^Marsh Hag/ })).toBeNull();
   });
 
   it("lays an ally's portrait on its row, and draws none where there is none", async () => {

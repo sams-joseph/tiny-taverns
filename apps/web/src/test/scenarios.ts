@@ -1,16 +1,27 @@
 import {
   campaign,
   campaignId,
+  sessionId,
   encounterShelf,
   fullCampaign,
   type Answer,
 } from "../campaign/campaign.fixtures";
-import { twoTables } from "../characters/characters.fixtures";
+import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
 import { fullParty, fullPartyPrep, fullPartySeats } from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
 import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
+import { brannocId } from "./ids";
 import type { Scenario } from "./screens";
+
+// The campaign's reads, with `twoTables`' memberships seating this account as a
+// player — the composition `PlayerCampaignScreen.test.tsx` makes.
+const player = (): Map<string, Answer> =>
+  new Map([
+    ...fullCampaign(),
+    ...twoTables(),
+    [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+  ]);
 
 /**
  * The wire each screen in `test/screens.ts` is read over.
@@ -60,12 +71,24 @@ export const scenarios = {
   "creator-social": creatorScene("social"),
   "creator-challenge": creatorScene("challenge"),
   "creator-hazard": creatorScene("hazard"),
-  // The campaign's reads, with `twoTables`' memberships seating this account
-  // as a player — the composition `PlayerCampaignScreen.test.tsx` makes.
-  player: () =>
+  player,
+  // The same player with a fight on the table and its map shared: themselves,
+  // an ally and a monster in the order, and the board with two of them on it.
+  // The doorbell is refused, as `PlayerTableScreen.test.tsx` refuses it: a
+  // stub cannot hold a stream open, and one that closed would be retried and
+  // re-read for as long as the page is measured.
+  seated: () =>
     new Map([
-      ...fullCampaign(),
-      ...twoTables(),
-      [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
+      ...player(),
+      playing(campaignId, { order: tableOrder, board: sharedBoard }),
+      [
+        `GET /campaigns/${campaignId}/table/sessions/${sessionId}/characters/${brannocId}/rolls`,
+        { status: 200, body: [] },
+      ],
+      [`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, { status: 200, body: [] }],
+      [
+        `GET /campaigns/${campaignId}/table/sessions/${sessionId}/events`,
+        { status: 404, body: { _tag: "NotFound", resource: "session" } },
+      ],
     ]),
 } satisfies Record<Scenario, () => Map<string, Answer>>;

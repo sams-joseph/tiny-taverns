@@ -52,6 +52,12 @@ export interface TokenProps {
   readonly speedOf: (combatant: Combatant) => number | undefined;
   /** False once the fight is over or a dialog is open: tokens select, nothing moves. */
   readonly movable: boolean;
+  /**
+   * The map's *Hide from players*: every token but the party's is off the
+   * players' board, so the DM's draws them faded, as the drawing does (less than
+   * a token at zero hit points, which it still is when both are true).
+   */
+  readonly hostileTokensHidden: boolean;
   readonly onSelect: (combatant: Combatant) => void;
   /** Put it on a square, or `null` to take it off the board. */
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => void;
@@ -60,20 +66,21 @@ export interface TokenProps {
 /**
  * The counter itself, in a 100-unit box that fills its square: a disc 86 across
  * (the drawing's), and the rings outside it. Strokes keep their pixel width at
- * any size, so a ring reads the same on a small board and a large one.
+ * any size, so a ring reads the same on a small board and a large one. The
+ * player's board (`play/PlayerBoard.tsx`) wears the same face.
  */
-function TokenFace({
-  combatant,
+export function TokenFace({
+  party,
   label,
   selected,
   active,
 }: {
-  readonly combatant: Combatant;
+  /** The party's colour rather than everyone else's. */
+  readonly party: boolean;
   readonly label: string;
   readonly selected: boolean;
   readonly active: boolean;
 }) {
-  const party = combatant.kind === "pc";
   return (
     <svg viewBox="0 0 100 100" aria-hidden className="size-full overflow-visible">
       {(selected || active) && (
@@ -144,20 +151,36 @@ const STEP: Record<string, readonly [number, number]> = {
 
 /** Everything that stands on the board, as a layer of the board's box. */
 export function RunTokens(props: TokenProps) {
-  const { board, combatants, labels, hpOf, selected, activeId, movable, onSelect, onMove } = props;
+  const {
+    board,
+    combatants,
+    labels,
+    hpOf,
+    selected,
+    activeId,
+    movable,
+    hostileTokensHidden,
+    onSelect,
+    onMove,
+  } = props;
   const plane = battleMapPlane(board, board.image);
   const standing = placed(combatants);
   const canMove = movable && selected !== undefined;
 
   const face = (combatant: Combatant) => (
     <TokenFace
-      combatant={combatant}
+      party={combatant.kind === "pc"}
       label={labels.get(combatant.id) ?? "?"}
       selected={combatant.id === selected?.id}
       active={combatant.id === activeId}
     />
   );
-  const fade = (combatant: Combatant) => (hpOf(combatant) === 0 ? "opacity-45" : "");
+  const fade = (combatant: Combatant) =>
+    hpOf(combatant) === 0
+      ? "opacity-45"
+      : hostileTokensHidden && combatant.kind !== "pc"
+        ? "opacity-60"
+        : "";
   const at = (square: BoardSquare) => percentOf(cellRect(board, square), plane);
 
   /** A click on the board: the square under it, in the plane's pixels. */
