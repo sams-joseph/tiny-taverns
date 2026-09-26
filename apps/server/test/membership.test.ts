@@ -988,8 +988,9 @@ describe("a stranger reads nothing", () => {
               'ability_score',
               'account',
               -- An encounter's map and its picture are read only through the
-              -- creator's map reads, behind the creator proof; a stranger's
-              -- refusal there is covered in battle-maps.test.ts.
+              -- creator's map reads, behind the creator proof, and as a shown
+              -- fight's board on the live table; a stranger's refusal is
+              -- covered in battle-maps.test.ts and player-board.test.ts.
               'battle_map',
               'battle_map_image',
               -- An encounter's prep is read only through the creator's prep

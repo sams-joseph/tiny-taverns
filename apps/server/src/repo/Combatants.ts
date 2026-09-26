@@ -17,7 +17,6 @@ import {
   type InitiativeSetBy,
   NotFound,
   type SessionId,
-  type Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
@@ -29,7 +28,7 @@ import {
   seatedPortraitColumn,
 } from "./Characters.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
+import { COMBATANT, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
 import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { type CharacterVitals, clampedCombatantHp, writeThroughToCharacter } from "./vitals.js";
@@ -536,9 +535,12 @@ export class Combatants extends Context.Service<
          * wherever they like, whenever they like, as they would a miniature.
          * Two tokens may share a square for the same reason.
          *
-         * The log line is shared only while both the combatant and the fight
-         * are, the narrower of the two, so a hidden creature's move rings no
-         * player's doorbell. It carries `from` and `to` for the DM's own log.
+         * The log line is shared only while a player's board shows this
+         * token: the fight and the combatant are both shared, the map is
+         * shown, and it is not a monster while hostile tokens are hidden
+         * (`liveTables.ts`'s `tokenShown`, which the player's table selects
+         * positions under). So a move no player can see leaves no shared line.
+         * It carries `from` and `to` for the DM's own log.
          */
         move: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
           dieOnSqlError(
@@ -584,7 +586,7 @@ export class Combatants extends Context.Service<
                   const from = before[0];
                   if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
 
-                  const rows = yield* sql<CombatantRow & { readonly run_visibility: Visibility }>`
+                  const rows = yield* sql<CombatantRow & { readonly token_shown: boolean }>`
                     update combatant
                     set board_column = ${to?.column ?? null},
                         board_row = ${to?.row ?? null},
@@ -592,8 +594,8 @@ export class Combatants extends Context.Service<
                     where combatant.id = ${id}
                       and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
                     returning ${combatantColumns(sql, campaignId, actor)},
-                      (select encounter_run.visibility from encounter_run
-                        where encounter_run.id = combatant.encounter_run_id) as run_visibility
+                      (select ${tokenShown(sql)} from encounter_run
+                        where encounter_run.id = combatant.encounter_run_id) as token_shown
                   `;
                   const row = rows[0];
                   if (row === undefined) return yield* new NotFound({ resource: "combatant", id });
@@ -612,9 +614,7 @@ export class Combatants extends Context.Service<
                     },
                     requestId: payload.requestId,
                     visibility:
-                      combatant.visibility === "shared" && row.run_visibility === "shared"
-                        ? "shared"
-                        : "dm",
+                      combatant.visibility === "shared" && row.token_shown ? "shared" : "dm",
                   });
                   return combatant;
                 }),

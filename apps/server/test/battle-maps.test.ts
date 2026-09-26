@@ -708,7 +708,7 @@ describe("the map is the creator's alone", () => {
     }
   });
 
-  it("puts no map on the live player table while the fight is shared", async () => {
+  it("puts no map on the live player table while the fight is shared and the map is not shown", async () => {
     await run(aCharacterAt(table, ilse.actor, { name: "Ilse's Ranger" }));
     const session = await as(jo.token, (client) =>
       client.sessions.create({
@@ -741,7 +741,8 @@ describe("the map is the creator's alone", () => {
 /**
  * **A fight keeps its board** (`0058_encounter_run_boards.ts`): `start` copies
  * the encounter's grid onto the run, `resume` copies the predecessor's, and the
- * picture is read through the map. The runner reads it; no player path does.
+ * picture is read through the map. The runner reads it; a player's table
+ * shows it only once the DM shows the map (`player-board.test.ts`).
  */
 describe("a fight keeps its board", () => {
   let kit: Person;
@@ -971,7 +972,7 @@ describe("a fight keeps its board", () => {
     );
   });
 
-  it("is the creator's alone: a player and a stranger get NotFound, and the player's table carries no board", async () => {
+  it("is the creator's alone: a player and a stranger get NotFound, and the player's table carries no board until the DM shows it", async () => {
     const player = await person("Pip");
     await run(admittedTo(own, player.actor, "Pip"));
     await run(aCharacterAt(own, player.actor, { name: "Pip's Rogue" }));
@@ -1001,10 +1002,11 @@ describe("a fight keeps its board", () => {
       client.table.read({ params: { campaignId: own } }),
     );
     expect(read?.fight?.id).toBe(fight.id);
-    // The player's table is exactly what it was before fights kept boards.
+    // The player's table as it was before fights kept boards, and no board.
     expect(Object.keys(read!.fight!).sort()).toEqual(
-      ["encounterId", "id", "order", "phase", "round", "seats", "upNext"].sort(),
+      ["board", "encounterId", "id", "order", "phase", "round", "seats", "upNext"].sort(),
     );
+    expect(read?.fight?.board).toBeNull();
     const text = JSON.stringify(read);
     expect(text).not.toContain("battle-map-images");
     expect(text).not.toContain("SETTING-A-ROTTEN-PIER");

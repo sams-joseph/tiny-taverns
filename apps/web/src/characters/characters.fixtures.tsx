@@ -393,6 +393,7 @@ export const playing = (
                   portrait: null,
                 },
               ],
+              board: null,
             },
     },
   },

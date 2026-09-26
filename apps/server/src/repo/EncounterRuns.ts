@@ -65,6 +65,8 @@ export interface EncounterRunRow extends ProvenanceColumns {
   readonly ended_at: Date | null;
   readonly ended_reason: EncounterRunEndedReason;
   readonly allow_hob_direct_writes: boolean;
+  readonly map_shown: boolean;
+  readonly hostile_tokens_hidden: boolean;
   readonly continued_from: EncounterRunId | null;
 }
 
@@ -82,6 +84,8 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
     endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
     endedReason: row.ended_reason,
     allowHobDirectWrites: row.allow_hob_direct_writes,
+    mapShown: row.map_shown,
+    hostileTokensHidden: row.hostile_tokens_hidden,
     continuedFrom: row.continued_from,
     ...provenanceOf(row),
   });
@@ -128,7 +132,7 @@ export const runColumns = (
     encounter_run.active_combatant_id,
     encounter_run.started_at,
     encounter_run.ended_at, encounter_run.ended_reason, encounter_run.allow_hob_direct_writes,
-    encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
+    encounter_run.map_shown, encounter_run.hostile_tokens_hidden, encounter_run.continued_from, encounter_run.visibility, encounter_run.origin,
     encounter_run.assistant_turn_id, encounter_run.created_at, encounter_run.updated_at`;
 };
 
@@ -765,6 +769,8 @@ export class EncounterRuns extends Context.Service<
                         round: from.round,
                         phase: from.phase,
                         visibility: from.visibility,
+                        map_shown: from.map_shown,
+                        hostile_tokens_hidden: from.hostile_tokens_hidden,
                         origin: from.origin,
                         assistant_turn_id: from.assistant_turn_id,
                         continued_from: from.id,
@@ -941,6 +947,8 @@ export class EncounterRuns extends Context.Service<
                     active_combatant_id: patch.activeCombatantId,
                     visibility: patch.visibility,
                     allow_hob_direct_writes: patch.allowHobDirectWrites,
+                    map_shown: patch.mapShown,
+                    hostile_tokens_hidden: patch.hostileTokensHidden,
                   });
                   const rows = yield* sql<EncounterRunRow>`
                     update encounter_run set ${setClause(sql, columns)}

@@ -30,8 +30,8 @@ import { migratedDatabase } from "./support/database.js";
  * a square is checked against the grid the fight was started on; a repeated
  * `requestId` applies once; the move is contained by the run in its path; and
  * a resumed fight keeps its tokens where they stood. No player read carries a
- * position — that is a later decision, gated on the DM sharing the map — so
- * the player's table and recap are read raw for it.
+ * position until the DM shows the map (`player-board.test.ts` is that side),
+ * so the player's table and recap are read raw for it.
  *
  * The people are minted the shipped way (`support/actors.ts`): a player
  * admitted through a real invitation with a shared seat, a member whose
@@ -439,8 +439,8 @@ describe("a resumed fight", () => {
   });
 });
 
-describe("no player read carries a position yet", () => {
-  it("leaves the player's table and recap without one, and rings no doorbell for a hidden token", async () => {
+describe("no player read carries a position while the map is not shown", () => {
+  it("leaves the player's table and recap without one, and shares no move's line", async () => {
     const session = await night();
     const { fight, params, order } = await fightOn(session);
     const [shown, hidden] = order.filter((row) => row.kind === "npc");
@@ -477,16 +477,10 @@ describe("no player read carries a position yet", () => {
     expect(recap.body).not.toContain('"position"');
     expect(recap.body).not.toContain('"column"');
 
-    // The log line is shared only where both the combatant and the fight are.
+    // The log line is shared only where a player's board shows the token,
+    // and no board is shown: the fight is shared, the map is not.
     const log = await movesIn(fight.id);
-    expect(
-      log.map((event) => [event.combatant_id === hidden!.id, event.visibility]).sort(),
-    ).toEqual(
-      [
-        [false, "shared"],
-        [false, "shared"],
-        [true, "dm"],
-      ].sort(),
-    );
+    expect(log).toHaveLength(3);
+    expect(log.every((event) => event.visibility === "dm")).toBe(true);
   });
 });

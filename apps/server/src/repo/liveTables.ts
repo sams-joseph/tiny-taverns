@@ -67,3 +67,24 @@ export const initiativeOrder = (sql: SqlClient.SqlClient): Statement.Fragment =>
 export const initiativeOrderKeys = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`combatant.initiative desc nulls last, combatant.initiative_bonus desc nulls last,
       (combatant.kind = 'pc') desc, combatant.created_at asc, combatant.id asc`;
+
+/**
+ * Over `encounter_run` in scope: a seated player's table shows this fight's
+ * board — it is a fight (a conversation, a challenge or a hazard shows a
+ * player no order, so no tokens either), it is shared, and the DM has turned
+ * on *Share map* (`0067_run_map_sharing.ts`).
+ */
+export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`(encounter_run.mode = 'combat'
+    and encounter_run.visibility = 'shared' and encounter_run.map_shown)`;
+
+/**
+ * Over `combatant` and its `encounter_run` in scope: this row's token is on a
+ * player's board, if the row is in their order at all — the board is shown,
+ * and it is not a monster while hostile tokens are hidden. The player's table
+ * selects positions under it and a move's log line is shared under it, so the
+ * two cannot disagree about which moves a player can see.
+ */
+export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`(${boardShown(sql)}
+    and (combatant.kind = 'pc' or not encounter_run.hostile_tokens_hidden))`;

@@ -121,6 +121,19 @@ export class EncounterRun extends Schema.Class<EncounterRun>("EncounterRun")({
    */
   allowHobDirectWrites: Schema.Boolean,
   /**
+   * The runner's *Share map* switch: whether a player seated at the table sees
+   * the fight's board (`PlayerLiveFight.board`). It narrows `visibility`
+   * rather than replacing it, so the board is shown only while the fight is
+   * shared as well. `false` by default: fail closed.
+   */
+  mapShown: Schema.Boolean,
+  /**
+   * The map's *Hide from players*: while on, no NPC row has a token on a
+   * player's board, though its row stays in their order. A combatant's own
+   * `visibility` still removes its row, token and all.
+   */
+  hostileTokensHidden: Schema.Boolean,
+  /**
    * The fight this one continues, for a run created by `resume`.
    *
    * **Provenance, never an access path** — the same status as
@@ -203,6 +216,10 @@ export const EncounterRunUpdate = Schema.Struct({
   visibility: Schema.optional(Visibility),
   /** The per-fight direct-write switch for the DM's Hob. */
   allowHobDirectWrites: Schema.optional(Schema.Boolean),
+  /** The *Share map* switch. */
+  mapShown: Schema.optional(Schema.Boolean),
+  /** The map's *Hide from players*, over every NPC token at once. */
+  hostileTokensHidden: Schema.optional(Schema.Boolean),
 });
 export type EncounterRunUpdate = typeof EncounterRunUpdate.Type;
 

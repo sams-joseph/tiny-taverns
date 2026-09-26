@@ -102,6 +102,8 @@ const run = (id: string, sessionId: string, round: number) => ({
   endedAt: null,
   endedReason: "resolved",
   allowHobDirectWrites: false,
+  mapShown: false,
+  hostileTokensHidden: false,
   continuedFrom: null,
   visibility: "dm",
   ...provenance,
