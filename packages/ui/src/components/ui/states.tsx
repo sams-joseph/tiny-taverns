@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { cn } from "../../lib/utils";
+
 import { Button } from "./button";
 import { Card } from "./card";
 import { Icon, type IconName } from "./icon";
@@ -27,6 +29,10 @@ import { Skeleton } from "./skeleton";
  * picker, where a page's worth of blocks would push the dialog open and then
  * snap it shut.
  *
+ * The page form sits in the Overview's centred frame (`max-w-overview`), the
+ * width every page is moving to, so a load's left edge is where the page's
+ * content will land. Inside a frame that is already centred it changes nothing.
+ *
  * Static on purpose: the theme resets `--animate-*` to `initial`, so there is
  * no pulse to reach for, and the motion rules ("nothing overshoots and nothing
  * steps") are what put one out of reach in the first place.
@@ -42,7 +48,11 @@ function Loading({
   readonly inline?: boolean;
 }) {
   return (
-    <div role="status" data-slot="loading" className="flex flex-col gap-3">
+    <div
+      role="status"
+      data-slot="loading"
+      className={cn("flex flex-col gap-3", !inline && "mx-auto w-full max-w-overview")}
+    >
       <span className="sr-only">{label}</span>
       {inline ? (
         <>

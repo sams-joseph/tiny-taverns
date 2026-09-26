@@ -580,6 +580,14 @@ describe("states", () => {
     for (const block of blocks) expect(block).toHaveAttribute("aria-hidden", "true");
   });
 
+  it("centres the page skeleton at the Overview's width, and leaves the inline one to fill", () => {
+    const { unmount } = render(<Loading />);
+    expect(screen.getByRole("status")).toHaveClass("mx-auto", "w-full", "max-w-overview");
+    unmount();
+    render(<Loading inline />);
+    expect(screen.getByRole("status")).not.toHaveClass("max-w-overview");
+  });
+
   it("draws an inline load as two lines", () => {
     render(<Loading label="Counting the sessions…" inline />);
     const status = screen.getByRole("status");
