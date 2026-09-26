@@ -5,6 +5,7 @@ import {
   bodyOf,
   campaign,
   campaignId,
+  encounter,
   encounterId,
   installStubServer,
   liveRun,
@@ -540,6 +541,21 @@ describe("starting a session", () => {
       encounterId,
       visibility: "dm",
     });
+  });
+
+  it("words the dialog as the kind of scene the encounter is run as", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/encounters`, {
+      status: 200,
+      body: page([{ ...encounter, kind: "social", name: "The hag's bargain" }]),
+    });
+    await renderScreen(mintingSession());
+
+    await userEvent.click(await screen.findByRole("button", { name: "Run The hag's bargain" }));
+    await screen.findByText("Put an encounter on the table");
+    expect(
+      screen.getByText(/joins the conversation, and the initiative list if/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start the conversation" })).toBeInTheDocument();
   });
 
   it("says so rather than offering a select with nothing in it", async () => {

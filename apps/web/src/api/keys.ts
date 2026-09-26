@@ -3,6 +3,7 @@ import type {
   CharacterId,
   CharacterOptionId,
   EncounterId,
+  EncounterRunId,
   FeatId,
   NpcId,
   RuleArticleId,
@@ -212,6 +213,13 @@ export const reads = {
 
   /** The fights of one night, as a list — which one is on the table, and which are over. */
   runs: (sessionId: SessionId): ReadKey => key`runs:${sessionId}`,
+
+  /**
+   * A running scene — a conversation, a skill challenge or a hazard: its beats,
+   * the DM's notes on it and its log of checks and saves. The creator's alone,
+   * and written only from the runner that reads it.
+   */
+  runScene: (runId: EncounterRunId): ReadKey => key`run-scene:${runId}`,
 
   /**
    * What a night is assembled into.

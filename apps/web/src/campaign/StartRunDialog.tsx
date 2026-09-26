@@ -34,6 +34,7 @@ import { useMutation } from "../api/mutation";
 import { nextSessionNumber, startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import { sceneNoun } from "../run/scene";
 
 /**
  * Putting an encounter on the table — the way into the runner.
@@ -126,6 +127,9 @@ export function StartRunDialog({
   const { busy, failure, submit } = useMutation();
 
   const chosen = encounters.find((encounter) => encounter.id === encounterId);
+  // Worded as the kind it will be run as; a fight until one is picked.
+  const kind = chosen?.kind ?? "combat";
+  const noun = sceneNoun(kind);
   const problem = chosen === undefined ? "Pick the encounter you are about to run." : undefined;
 
   const start = async () => {
@@ -217,7 +221,15 @@ export function StartRunDialog({
             <Field
               label="Encounter"
               htmlFor="run-encounter"
-              hint="Its roster becomes the initiative list, one row per creature."
+              hint={
+                kind === "combat"
+                  ? "Its roster becomes the initiative list, one row per creature."
+                  : kind === "social"
+                    ? "Its roster joins the conversation, and the initiative list if it turns into a fight."
+                    : kind === "challenge"
+                      ? "Run as a skill challenge: log the party's checks against its numbers."
+                      : "Run as a hazard: the party saves, stage by stage."
+              }
               error={showProblems ? problem : undefined}
             >
               <Select value={encounterId} onValueChange={(value) => setEncounterId(String(value))}>
@@ -254,9 +266,11 @@ export function StartRunDialog({
                 <Label htmlFor="run-party">Bring the party in</Label>
               </div>
               <span className="text-caption leading-body text-muted-foreground">
-                {includeParty
-                  ? "Every character rolls into initiative alongside the creatures."
-                  : "Only the encounter's creatures. Add the party by hand later."}
+                {!includeParty
+                  ? "Only the encounter's creatures. Add the party by hand later."
+                  : kind === "combat"
+                    ? "Every character rolls into initiative alongside the creatures."
+                    : `Every character joins the ${noun}, so their checks can be logged.`}
               </span>
             </div>
 
@@ -264,8 +278,12 @@ export function StartRunDialog({
               id="run-visibility"
               value={visibility}
               onChange={setVisibility}
-              shared="Your players can see the fight, except the lines you hide, and its name only if the encounter is shared and ready to run."
-              hidden="Only you can see the fight. You can share it mid-combat."
+              shared={`Your players can see the ${noun}, except the lines you hide, and its name only if the encounter is shared and ready to run.`}
+              hidden={
+                kind === "combat"
+                  ? "Only you can see the fight. You can share it mid-combat."
+                  : `Only you can see the ${noun}. You can share it once it is under way.`
+              }
             />
           </div>
         )}
@@ -284,7 +302,7 @@ export function StartRunDialog({
             disabled={busy || number.state !== "ready" || encounters.length === 0}
             onClick={() => void start()}
           >
-            {busy ? "Starting…" : "Start the fight"}
+            {busy ? "Starting…" : `Start the ${noun}`}
           </Button>
         </DialogFooter>
       </DialogContent>

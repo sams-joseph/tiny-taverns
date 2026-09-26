@@ -12,11 +12,16 @@ import {
   characterSeat,
   goblin,
   goblinBoss,
+  bargainId,
   liveRun,
   npcId,
+  page,
+  readAloud,
   runId as runIdRaw,
   session,
   sessionId as sessionIdRaw,
+  stormId,
+  wellId,
   type Answer,
   type Call,
 } from "../campaign/campaign.fixtures";
@@ -48,6 +53,7 @@ export {
   session,
 } from "../campaign/campaign.fixtures";
 import { TEST_SESSION } from "../test/session";
+import { fullPartySeats, sorrelCharacter } from "../party/party.fixtures";
 
 export const sessionId = Schema.decodeSync(SessionId)(sessionIdRaw);
 export const runId = Schema.decodeSync(EncounterRunId)(runIdRaw);
@@ -186,6 +192,164 @@ export const liveFight = (): Map<string, Answer> =>
     ],
     [`POST ${runBase}/end`, { status: 200, body: { ...liveRun, endedAt: stamps.updatedAt } }],
   ]);
+
+/** The three kinds of scene a run can be besides a fight. */
+export type SceneMode = "social" | "challenge" | "hazard";
+
+/** A second party member, seeded from Sorrel — whose sheet has all six saves. */
+export const sorrel = {
+  ...brannoc,
+  id: "2b1f2a1e-0000-4000-8000-000000000d03",
+  characterId: sorrelCharacter.id,
+  displayName: "Sorrel",
+  subtitle: "Wood elf ranger",
+  playerName: "Kofi",
+  hpCurrent: 27,
+  hpMax: 27,
+  ac: 15,
+  conditions: [],
+};
+
+/** The other side of a conversation: an NPC row with no stat block to fetch. */
+export const greenHag = {
+  ...goblinBoss,
+  id: "2b1f2a1e-0000-4000-8000-000000000d04",
+  creatureId: null,
+  displayName: "Green Hag",
+  subtitle: "Medium fey",
+  conditions: [],
+};
+
+/** A read-aloud attached to the hag's bargain, so the conversation has one to show. */
+export const bargainReadAloud = {
+  ...readAloud,
+  id: "2b1f2a1e-0000-4000-8000-000000000a71",
+  title: "The hut",
+  body: "The hut stands on legs of driftwood. A kettle is already whistling, and there are exactly four cups set out.",
+  attachedTo: { kind: "encounter", id: bargainId },
+};
+
+/** One logged line, as the scene answers it. */
+export const loggedCheck = (over: Record<string, unknown>): Record<string, unknown> => ({
+  id: "2b1f2a1e-0000-4000-8000-000000000e01",
+  runId: runIdRaw,
+  combatantId: brannoc.id,
+  displayName: "Brannoc",
+  skill: null,
+  save: null,
+  total: null,
+  dc: null,
+  outcome: "success",
+  stage: null,
+  createdAt: "2026-08-04T19:10:00.000Z",
+  ...over,
+});
+
+/** The run, played as a scene rather than a fight: nobody is up. */
+export const sceneRun = (mode: SceneMode): Record<string, unknown> => ({
+  ...liveRun,
+  mode,
+  activeCombatantId: null,
+  ...(mode === "social"
+    ? { encounterId: bargainId, encounterName: "The hag's bargain" }
+    : mode === "challenge"
+      ? { encounterId: wellId, encounterName: "The dry well" }
+      : { encounterId: stormId, encounterName: "Salt-flat sandstorm" }),
+});
+
+/** Each scene part-way through, as `runs.scene` answers the DM. */
+export const sceneOf = (mode: SceneMode): Record<string, unknown> =>
+  mode === "social"
+    ? {
+        runId: runIdRaw,
+        beats: [
+          {
+            text: "She wants the warm crate and offers news of a lost brother in exchange.",
+            done: true,
+          },
+          { text: "If insulted, she vanishes and the wisps lead the party into mud.", done: false },
+        ],
+        challenge: null,
+        attitude: "hostile",
+        stage: null,
+        stages: null,
+        checks: [loggedCheck({ skill: "Persuasion", total: 12, dc: 15, outcome: "failure" })],
+      }
+    : mode === "challenge"
+      ? {
+          runId: runIdRaw,
+          beats: [
+            { text: "Each failure costs one day's water for the caravan.", done: false },
+            { text: "Two failures: the caravan master pushes on through the night.", done: false },
+          ],
+          challenge: {
+            kind: "challenge",
+            dc: 14,
+            successes: 3,
+            failures: 2,
+            skills: ["Athletics", "Survival", "Investigation", "Nature"],
+            onSuccess: "They find the buried cache and a safe route across the flats.",
+          },
+          attitude: null,
+          stage: null,
+          stages: null,
+          checks: [
+            loggedCheck({
+              combatantId: sorrel.id,
+              displayName: "Sorrel",
+              skill: "Survival",
+              total: 15,
+              dc: 14,
+            }),
+          ],
+        }
+      : {
+          runId: runIdRaw,
+          beats: [{ text: "Visibility drops to 10 ft; the caravan can split.", done: false }],
+          challenge: {
+            kind: "hazard",
+            save: { ability: "CON", dc: 13 },
+            onFail: "1 level of exhaustion",
+            duration: "1d4 hours",
+            skills: ["Survival", "Animal Handling"],
+          },
+          attitude: null,
+          stage: 1,
+          stages: 2,
+          checks: [loggedCheck({ save: "CON", total: 17, dc: 13, stage: 1 })],
+        };
+
+/**
+ * Everything a scene on the table answers: the fight's routes, with the run
+ * played as this kind, the party (with their sheets, for *Roll for them*), a
+ * read-aloud, and the scene and its writes.
+ */
+export const liveScene = (mode: SceneMode): Map<string, Answer> => {
+  const routes = liveFight();
+  const run = sceneRun(mode);
+  const scene = sceneOf(mode);
+  routes.set(`GET ${runBase}`, { status: 200, body: run });
+  routes.set(`GET ${runBase}/combatants`, {
+    status: 200,
+    body: mode === "social" ? [brannoc, sorrel, greenHag] : [brannoc, sorrel],
+  });
+  routes.set(`GET ${base}/sessions/${sessionIdRaw}/runs`, { status: 200, body: [run] });
+  routes.set(`GET ${base}/party`, { status: 200, body: fullPartySeats });
+  routes.set(`GET ${base}/notes`, { status: 200, body: page([readAloud, bargainReadAloud]) });
+  routes.set(`GET ${runBase}/scene`, { status: 200, body: scene });
+  routes.set(`PATCH ${runBase}/scene`, { status: 200, body: scene });
+  routes.set(`POST ${runBase}/checks`, { status: 200, body: loggedCheck({}) });
+  routes.set(`DELETE ${runBase}/checks/2b1f2a1e-0000-4000-8000-000000000e01`, {
+    status: 204,
+    body: null,
+  });
+  routes.set(`POST ${runBase}/escalate`, { status: 200, body: { ...run, mode: "combat" } });
+  routes.set(`POST ${runBase}/end`, {
+    status: 200,
+    body: { ...run, endedAt: stamps.updatedAt },
+  });
+  return routes;
+};
 
 export interface RunStubServer {
   routes: Map<string, Answer>;
