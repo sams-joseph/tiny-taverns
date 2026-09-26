@@ -1047,6 +1047,10 @@ describe("a stranger reads nothing", () => {
               'magic_item_rarity',
               'magic_item_variant',
               'magic_school',
+              -- A note's links are read only as a field of the note, through
+              -- the creator's note reads; a stranger's refusal at the link
+              -- endpoints is covered in note-links.test.ts.
+              'note_link',
               'proficiency',
               'racial_trait_damage_type',
               'racial_trait_proficiency',

@@ -161,6 +161,7 @@ export const readAloudNote = {
   kind: "read_aloud",
   category: null,
   attachedTo: null,
+  links: [],
   visibility: "dm",
   pinnedAt: null,
   ...provenance,

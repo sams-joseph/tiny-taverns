@@ -234,6 +234,7 @@ describe("migrations", () => {
       "magic_item_variant",
       "magic_school",
       "note",
+      "note_link",
       "npc",
       "npc_awareness_candidate",
       "npc_image",
@@ -340,6 +341,7 @@ describe("migrations", () => {
       { migration_id: 66, name: "initiative_phase" },
       { migration_id: 67, name: "run_map_sharing" },
       { migration_id: 68, name: "note_category_pin" },
+      { migration_id: 69, name: "note_links" },
     ]);
   }, 60_000);
 
@@ -417,6 +419,7 @@ describe("migrations", () => {
       { migration_id: 66, name: "initiative_phase" },
       { migration_id: 67, name: "run_map_sharing" },
       { migration_id: 68, name: "note_category_pin" },
+      { migration_id: 69, name: "note_links" },
     ]);
   }, 60_000);
 });

@@ -130,13 +130,14 @@ export type PlayerRecapFight = typeof PlayerRecapFight.Type;
  * away from disclosing everything, whereas a separate response schema makes a
  * leak something somebody has to *write*. `repo/Recap.ts` assembles both from
  * one set of queries, so the two cannot drift about what a night contains —
- * only about how much of a combatant each is allowed to say.
+ * only about how much of a combatant or a note each is allowed to say.
  *
  * `beats` and `prepDone` are the DM's types, unchanged, because they are
  * already narrowed by `repo/visibility.ts` at the row level: a player's are
  * the `shared` ones and nothing else, and that seam has been the answer since
  * `0001`. The combatant said too much on a `shared` row, and so did the note
- * once it carried the DM's pin; both are their player projections here.
+ * once it carried the DM's pin and links; both are their player projections
+ * here.
  */
 export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("PlayerSessionRecap")({
   session: Session,
@@ -148,7 +149,8 @@ export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("Player
   prepDone: Schema.Array(PrepItem),
   /**
    * The read-alouds that were actually read out, and were shared — as
-   * `PlayerNote`, so the DM's working fields (the pin, provenance) stay theirs.
+   * `PlayerNote`, so the DM's working fields (the pin, the links, provenance)
+   * stay theirs.
    */
   notes: Schema.Array(PlayerNote),
 }) {}
