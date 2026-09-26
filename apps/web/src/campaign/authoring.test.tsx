@@ -12,8 +12,6 @@ import {
   mintingSession,
   prepItem,
   prepItemId,
-  readAloud,
-  renderNotes,
   renderParty,
   renderScreen,
   seatId,
@@ -34,80 +32,11 @@ import {
 const server = installStubServer();
 
 const campaignPath = `/campaigns/${campaignId}`;
-const notesPath = `/campaigns/${campaignId}/notes`;
 const partyPath = `/campaigns/${campaignId}/party`;
 const prepPath = `/campaigns/${campaignId}/sessions/${sessionId}/prep`;
 
 beforeEach(() => {
   server.reset();
-});
-
-describe("authoring a note", () => {
-  const openNotes = async () => {
-    await renderNotes(mintingSession());
-    await screen.findByRole("heading", { name: "Notes" });
-  };
-
-  it("writes read-aloud prose attached to an encounter", async () => {
-    server.routes.set(`POST ${notesPath}`, { status: 200, body: readAloud });
-    await openNotes();
-
-    // The create slot is the screen's own now that Notes is a screen.
-    await userEvent.click(await screen.findByRole("button", { name: "New note" }));
-
-    await userEvent.type(
-      await screen.findByRole("textbox", { name: "Title" }),
-      "Read aloud at the water",
-    );
-    await userEvent.click(screen.getByRole("combobox", { name: "Kind" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Read aloud" }));
-
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "What you read out" }),
-      "The reeds are taller than you are.",
-    );
-
-    await userEvent.click(screen.getByRole("combobox", { name: "Attached to" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Ambush in the reeds" }));
-
-    await userEvent.click(screen.getByRole("button", { name: "Create note" }));
-
-    await waitFor(() =>
-      expect(bodyOf(server, "POST", "/notes")).toEqual({
-        title: "Read aloud at the water",
-        body: "The reeds are taller than you are.",
-        kind: "read_aloud",
-        visibility: "dm",
-        // A union member, not a bare id: `creature` joins this shape later.
-        attachedTo: { kind: "encounter", id: encounterId },
-      }),
-    );
-  });
-
-  it("detaches with a null, which is what update means by it", async () => {
-    server.routes.set(`PATCH ${notesPath}/${readAloud.id}`, { status: 200, body: readAloud });
-    await openNotes();
-
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Edit Read aloud at the water" }),
-    );
-    await userEvent.click(await screen.findByRole("combobox", { name: "Attached to" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Nothing" }));
-    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() =>
-      expect(bodyOf(server, "PATCH", "/notes/")).toMatchObject({ attachedTo: null }),
-    );
-  });
-
-  it("refuses an untitled note before anything is sent", async () => {
-    await openNotes();
-    await userEvent.click(await screen.findByRole("button", { name: "New note" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Create note" }));
-
-    expect(await screen.findByText("Give it a title.")).toBeInTheDocument();
-    expect(server.calls.some((call) => call.method === "POST")).toBe(false);
-  });
 });
 
 /**

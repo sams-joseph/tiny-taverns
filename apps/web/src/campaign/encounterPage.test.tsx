@@ -11,6 +11,7 @@ import {
   encounter,
   encounterId,
   installStubServer,
+  readAloud,
   liveRun,
   renderEncounters,
   sessionId,
@@ -146,6 +147,10 @@ describe("an encounter's page", () => {
     expect(within(roster as HTMLElement).getByText("×6")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notes" })).toBeInTheDocument();
     expect(screen.getByText("Read aloud at the water")).toBeInTheDocument();
+    // Written in one place: the pencil opens the note on the Notes tab.
+    expect(
+      screen.getByRole("button", { name: "Edit Read aloud at the water in Notes" }),
+    ).toHaveAttribute("href", `/campaigns/${campaignId}/notes?note=${readAloud.id}`);
   });
 
   it("edits the encounter in the encounter builder", async () => {

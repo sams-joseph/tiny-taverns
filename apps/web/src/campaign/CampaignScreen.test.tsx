@@ -71,11 +71,15 @@ describe("CampaignScreen", () => {
   it("sets read-aloud prose apart, in the prose face", async () => {
     await renderNotes(mintingSession());
 
-    const prose = await screen.findByText(/The reeds are taller than you are/);
+    const prose = await screen.findByRole("textbox", { name: "What you read out" });
+    expect((prose as HTMLTextAreaElement).value).toMatch(/^The reeds are taller than you are/);
     // `--type-read-aloud`: italic Alegreya at --fs-body-l / --lh-loose. The one
     // register shift in the product, and it has to be visible, not just tonal.
     expect(prose).toHaveClass("font-serif", "italic", "text-body-l", "leading-loose");
-    expect(screen.getByText("Read aloud")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Read aloud" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("draws the party as a summary, with the way to the screen that authors it", async () => {

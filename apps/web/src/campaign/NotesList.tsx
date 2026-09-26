@@ -1,95 +1,66 @@
-import type { Encounter, Note } from "@taverns/api";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Icon } from "@taverns/ui";
+import type { Note } from "@taverns/api";
+import { Badge, cn } from "@taverns/ui";
+import { editedAgo, kindLabel, previewOf } from "./noteText";
+import { useNow } from "./when";
 
 /**
- * The Notes tab.
+ * The Notes list, as the drawing draws its rows: the title, *Shared* beside it
+ * when the players can read it (the default is the DM's alone, so the shared
+ * ones are the ones marked), a two-line preview of the first line, and
+ * *Read aloud · Edited 3 days ago* under it. Read-aloud previews in the prose
+ * face, as it is read.
  *
- * One `note` table with a `kind`, so read-aloud is a note set differently rather
- * than a second thing (`Note.ts`). The register shift is the whole point:
- * read-aloud is the only prose in the product that is not UI voice, and the
- * readme asks for it in italic Alegreya at `--fs-body-l` / `--lh-loose` — that
- * is `--type-read-aloud`, spelled here in the theme's names.
- *
- * `READ ALOUD` is uppercase on purpose and is one of the two places the system
- * allows it (the 12.5px micro-label; the other is `STR` / `DEX`).
+ * **A row selects; it does not open.** It is a button that puts its note in
+ * the pane beside it, as the Encounters list does, and the pane is the note.
  */
-export function NoteCard({
-  note,
-  encounter,
-  onEdit,
-}: {
-  readonly note: Note;
-  readonly encounter: Encounter | undefined;
-  readonly onEdit: () => void;
-}) {
-  const readAloud = note.kind === "read_aloud";
-
-  return (
-    <Card>
-      <CardHeader>
-        {readAloud && (
-          <span className="text-caption leading-snug font-medium tracking-caps uppercase text-faint">
-            Read aloud
-          </span>
-        )}
-        <div className="flex flex-wrap items-start gap-2.5">
-          <CardTitle className="flex-1">{note.title}</CardTitle>
-          {note.visibility === "shared" && <Badge variant="info">Shared</Badge>}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="-mt-1 -mr-1 size-7 shrink-0"
-            aria-label={`Edit ${note.title}`}
-            onClick={onEdit}
-          >
-            <Icon name="pencil" size={14} />
-          </Button>
-        </div>
-        {encounter !== undefined && (
-          <span className="flex items-center gap-1.5 text-body-s leading-body text-muted-foreground">
-            <Icon name="swords" size={14} />
-            {encounter.name}
-          </span>
-        )}
-      </CardHeader>
-      {note.body !== "" && (
-        <CardContent>
-          <p
-            className={
-              readAloud
-                ? "max-w-measure font-serif text-body-l leading-loose font-normal text-slate-300 italic"
-                : "max-w-measure text-body leading-body text-foreground"
-            }
-          >
-            {note.body}
-          </p>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
 export function NotesList({
   notes,
-  encounters,
-  onEdit,
+  selected,
+  onSelect,
 }: {
   readonly notes: ReadonlyArray<Note>;
-  readonly encounters: ReadonlyArray<Encounter>;
-  readonly onEdit: (note: Note) => void;
+  readonly selected: Note["id"] | undefined;
+  readonly onSelect: (note: Note) => void;
 }) {
-  const byId = new Map(encounters.map((encounter) => [encounter.id, encounter]));
+  const now = useNow();
 
   return (
-    <div className="flex flex-col gap-4">
-      {notes.map((note) => (
-        <NoteCard
-          key={note.id}
-          note={note}
-          encounter={note.attachedTo === null ? undefined : byId.get(note.attachedTo.id)}
-          onEdit={() => onEdit(note)}
-        />
-      ))}
-    </div>
+    <ul className="m-0 flex list-none flex-col gap-1 p-0">
+      {notes.map((note) => {
+        const preview = previewOf(note.body);
+        return (
+          <li key={note.id}>
+            <button
+              type="button"
+              aria-current={note.id === selected ? "true" : undefined}
+              onClick={() => onSelect(note)}
+              className="flex w-full cursor-pointer flex-col items-stretch rounded-md border border-transparent bg-transparent px-3.5 py-3 text-left font-sans transition-control outline-none hover:bg-surface-card focus-visible:ring-focus aria-current:border-accent aria-current:bg-surface-card"
+            >
+              <span className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-body-s leading-snug font-semibold text-heading">
+                  {note.title}
+                </span>
+                {note.visibility === "shared" && <Badge variant="info">Shared</Badge>}
+              </span>
+              <span
+                className={cn(
+                  "mt-1 line-clamp-2 text-body-s leading-snug",
+                  preview === ""
+                    ? "text-faint"
+                    : note.kind === "read_aloud"
+                      ? "font-serif text-muted-foreground italic"
+                      : "text-muted-foreground",
+                )}
+              >
+                {preview === "" ? "Empty note" : preview}
+              </span>
+              <span className="mt-1.5 text-caption leading-snug text-faint">
+                {kindLabel(note.kind)} · {editedAgo(note, now)}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
