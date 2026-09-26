@@ -525,6 +525,15 @@ const NotesLive = HttpApiBuilder.group(
           notes.update(params.campaignId, params.noteId, payload),
         )
         .handle("remove", ({ params }) => notes.remove(params.campaignId, params.noteId))
+        // Links are the creator's to read, so they are the creator's to write.
+        .handle("addLink", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) => notes.addLink(creator, params.noteId, payload)),
+        )
+        .handle("removeLink", ({ params }) =>
+          asDm(params.campaignId, (creator) =>
+            notes.removeLink(creator, params.noteId, params.kind, params.targetId),
+          ),
+        )
     );
   }),
 );

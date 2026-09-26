@@ -14,7 +14,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { BEATS, type BeatRow, toBeat } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
 import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
@@ -22,7 +22,14 @@ import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
 import { type CheckRow, type SceneRow, toCheck } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
-import { type NoteRow, toNote } from "./Notes.js";
+import {
+  noteColumns,
+  type NoteRow,
+  playerNoteColumns,
+  type PlayerNoteRow,
+  toNote,
+  toPlayerNote,
+} from "./Notes.js";
 import {
   playerCombatantColumns,
   type PlayerCombatantRow,
@@ -61,16 +68,17 @@ const toLink = (row: LinkRow): RecapRunLink =>
   });
 
 /**
- * Everything a recap is made of **except the initiative lists** — which is
- * exactly the part the two projections disagree about.
+ * Everything a recap is made of **except the initiative lists and the notes'
+ * columns** — which is exactly the part the two projections disagree about.
  *
- * The four other sources are already narrowed row by row by
- * `repo/visibility.ts`, so a player's beats, notes and ticked prep are the
- * `shared` ones and nothing else, and that has been true since `0001`. Reading
- * them once and handing them to both projections is what stops the DM's recap
- * and the player's from coming to disagree about what a night contains — the
- * same argument that made this a server-side repository in the first place,
- * applied inside the file.
+ * The other sources are already narrowed row by row by `repo/visibility.ts`,
+ * so a player's beats and ticked prep are the `shared` ones and nothing else,
+ * and that has been true since `0001`. Reading them once and handing them to
+ * both projections is what stops the DM's recap and the player's from coming
+ * to disagree about what a night contains — the same argument that made this
+ * a server-side repository in the first place, applied inside the file. The
+ * notes are the same rows for both, chosen by one `where` (`nightNotes`), and
+ * each projection names its own select list.
  */
 interface Night {
   readonly session: Session;
@@ -80,7 +88,6 @@ interface Night {
   readonly successorByPredecessor: ReadonlyMap<EncounterRunId, LinkRow>;
   readonly beats: ReadonlyArray<BeatRow>;
   readonly prepDone: ReadonlyArray<PrepItemRow>;
-  readonly notes: ReadonlyArray<NoteRow>;
 }
 
 /**
@@ -115,8 +122,9 @@ interface Night {
  * the encounter (Shared and Ready) is told the kind of scene instead, "A fight"
  * or "A conversation" (`runColumns`, the captain's decisions of 2026-09-25).
  * A scene that is not a fight carries no combatants to a player, as it showed
- * them no order at the table. The four non-combat sources are not narrowed
- * past their rows.
+ * them no order at the table. The beats and the prep are not narrowed past
+ * their rows; a note is told as `PlayerNote`, as on the player's Overview, so
+ * the creator's links and provenance stay the creator's.
  *
  * ### Why it is a repository and not a client composition
  *
@@ -270,24 +278,6 @@ export class Recap extends Context.Service<
             order by prep_item.created_at asc, prep_item.id asc
           `;
 
-          // The prose that was actually read out: a note attached to an
-          // encounter one of tonight's fights was started from. Structural
-          // rather than a timestamp heuristic — see `SessionRecap.notes`.
-          // The `exists` re-applies the run predicate rather than trusting
-          // the ids above, so this query is safe read on its own terms.
-          const notes = yield* sql<NoteRow>`
-            select note.* from note
-            where note.encounter_id is not null
-              and exists (
-                select 1 from encounter_run
-                where encounter_run.session_id = ${sessionId}
-                  and encounter_run.encounter_id = note.encounter_id
-                  and ${containedRowReadable(sql, RUN, campaignId, actor)}
-              )
-              and ${rowReadable(sql, "note", campaignId, actor)}
-            order by note.created_at asc, note.id asc
-          `;
-
           return {
             session: toSession(sessions[0]!),
             runRows,
@@ -300,9 +290,35 @@ export class Recap extends Context.Service<
             ),
             beats,
             prepDone,
-            notes,
           };
         });
+
+      /**
+       * The prose that was actually read out: a note attached to an encounter
+       * one of tonight's fights was started from. Structural rather than a
+       * timestamp heuristic — see `SessionRecap.notes`. The `exists`
+       * re-applies the run predicate rather than trusting the night's ids, so
+       * this query is safe read on its own terms. Which rows is one answer;
+       * `columns` is the projection's (`noteColumns` or `playerNoteColumns`).
+       */
+      const nightNotes = <Row extends object>(
+        campaignId: CampaignId,
+        actor: Actor,
+        sessionId: SessionId,
+        columns: Statement.Fragment,
+      ) =>
+        sql<Row>`
+          select ${columns} from note
+          where note.encounter_id is not null
+            and exists (
+              select 1 from encounter_run
+              where encounter_run.session_id = ${sessionId}
+                and encounter_run.encounter_id = note.encounter_id
+                and ${containedRowReadable(sql, RUN, campaignId, actor)}
+            )
+            and ${rowReadable(sql, "note", campaignId, actor)}
+          order by note.created_at asc, note.id asc
+        `;
 
       /**
        * One fight per run, with whichever combatant projection the caller read.
@@ -404,7 +420,12 @@ export class Recap extends Context.Service<
                 ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
-                notes: state.notes.map(toNote),
+                notes: (yield* nightNotes<NoteRow>(
+                  campaignId,
+                  actor,
+                  sessionId,
+                  noteColumns(sql),
+                )).map(toNote),
               });
             }),
           ),
@@ -448,7 +469,12 @@ export class Recap extends Context.Service<
                 ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
-                notes: state.notes.map(toNote),
+                notes: (yield* nightNotes<PlayerNoteRow>(
+                  campaignId,
+                  actor,
+                  sessionId,
+                  playerNoteColumns(sql, campaignId, actor),
+                )).map(toPlayerNote),
               });
             }),
           ),

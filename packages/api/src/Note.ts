@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignId, EncounterId, NoteId } from "./Ids.js";
+import { CampaignCharacterId, CampaignId, EncounterId, NoteId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -36,6 +36,31 @@ export const NoteAttachment = Schema.Struct({
 });
 export type NoteAttachment = typeof NoteAttachment.Type;
 
+/**
+ * What a note is about: an encounter or a seat in its campaign. A note has any
+ * number of these, and each is added and removed on its own
+ * (`notes.addLink` / `notes.removeLink`).
+ *
+ * **Not the attachment.** `attachedTo` is the read-aloud's one encounter, the
+ * thing the runner reads out; a link is only a pointer the creator follows.
+ * The two are independent, and a note may be attached to an encounter it is
+ * also linked to.
+ *
+ * `seat` is the character's place in this party (`CampaignCharacterId`), not
+ * the account-owned character: the link is a fact about this table.
+ *
+ * **The creator's alone.** `PlayerNote` has no links, because a link names an
+ * encounter or a seat whether or not the reader may read it.
+ */
+export const NoteLinkKind = Schema.Literals(["encounter", "seat"]);
+export type NoteLinkKind = typeof NoteLinkKind.Type;
+
+export const NoteLink = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("encounter"), id: EncounterId }),
+  Schema.Struct({ kind: Schema.Literal("seat"), id: CampaignCharacterId }),
+]);
+export type NoteLink = typeof NoteLink.Type;
+
 export class Note extends Schema.Class<Note>("Note")({
   id: NoteId,
   campaignId: CampaignId,
@@ -43,6 +68,8 @@ export class Note extends Schema.Class<Note>("Note")({
   body: Schema.String,
   kind: NoteKind,
   attachedTo: Schema.NullOr(NoteAttachment),
+  /** In the order they were added. */
+  links: Schema.Array(NoteLink),
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,

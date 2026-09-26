@@ -47,6 +47,7 @@ const note = (title: string) => ({
   body: "",
   kind: "note",
   attachedTo: null,
+  links: [],
   visibility: "dm",
   origin: "authored",
   assistantTurnId: null,

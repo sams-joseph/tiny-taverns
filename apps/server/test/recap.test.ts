@@ -1,4 +1,11 @@
-import { Actor, type CampaignId, CurrentActor, NotFound, type PlayerCombatant } from "@taverns/api";
+import {
+  Actor,
+  type CampaignId,
+  CurrentActor,
+  NotFound,
+  type PlayerCombatant,
+  PlayerNote,
+} from "@taverns/api";
 import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
@@ -151,6 +158,9 @@ const makeFixture = Effect.gen(function* () {
   yield* as(prep.create(campaign.id, session.id, { label: "Decide what the crate contains" }));
 
   const dmOf = yield* as(asDm(dm, campaign.id));
+  // The DM links the read-aloud to its encounter: a pointer for them to
+  // follow, and nothing a player's recap says.
+  yield* notes.addLink(dmOf, readAloud.id, { kind: "encounter", id: encounter.id });
   const run = yield* as(
     aFightUnderWay(dmOf, session.id, { encounterId: encounter.id, visibility: "shared" }),
   );
@@ -488,6 +498,21 @@ describe("scoping", () => {
     // shared on purpose, is there.
     expect(night.prepDone).toEqual([]);
     expect(night.notes.map((note) => note.id)).toEqual([fixture.readAloud.id]);
+  });
+
+  it("tells a player a note as `PlayerNote`, without the creator's links", async () => {
+    const night = await asPlayer(recap.readAsPlayer(fixture.campaign.id, fixture.session.id));
+    const [note] = night.notes;
+
+    expect(note).toBeInstanceOf(PlayerNote);
+    for (const key of ["links", "visibility", "origin", "assistantTurnId"]) {
+      expect(Object.keys(note!)).not.toContain(key);
+    }
+    // The encounter is Shared but not Ready, so the attachment is not named.
+    expect(note!.attachedTo).toBeNull();
+
+    const dmNight = await as(recap.read(fixture.asDm, fixture.session.id));
+    expect(dmNight.notes[0]!.links).toEqual([{ kind: "encounter", id: fixture.encounter.id }]);
   });
 
   it("does not follow a carry-over link out of what the actor can see", async () => {

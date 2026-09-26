@@ -157,7 +157,7 @@ import {
   IssuedInvite,
 } from "./Invite.js";
 import { CampaignMember, CampaignMemberAdd, CampaignMembership } from "./Membership.js";
-import { Note, NoteCreate, NoteUpdate } from "./Note.js";
+import { Note, NoteCreate, NoteLink, NoteLinkKind, NoteUpdate } from "./Note.js";
 import {
   Npc,
   NpcCreate,
@@ -1155,6 +1155,32 @@ class NotesGroup extends HttpApiGroup.make("notes")
     HttpApiEndpoint.delete("remove", "/:noteId", {
       params: { campaignId: CampaignId, noteId: NoteId },
       success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * Links the note to an encounter or a seat of this campaign, and answers
+     * the note with its links. Adding a link it already has changes nothing.
+     * A target that is not in this campaign — or a seat whose character has
+     * left — is `NotFound`, as the note would be.
+     */
+    HttpApiEndpoint.post("addLink", "/:noteId/links", {
+      params: { campaignId: CampaignId, noteId: NoteId },
+      payload: NoteLink,
+      success: Note,
+      error: NotFound,
+    }),
+    /**
+     * `addLink`'s reverse, keyed by the target so a chip can name what it
+     * removes. Removing a link the note does not have changes nothing.
+     */
+    HttpApiEndpoint.delete("removeLink", "/:noteId/links/:kind/:targetId", {
+      params: {
+        campaignId: CampaignId,
+        noteId: NoteId,
+        kind: NoteLinkKind,
+        targetId: Schema.Union([EncounterId, CampaignCharacterId]),
+      },
+      success: Note,
       error: NotFound,
     }),
   )

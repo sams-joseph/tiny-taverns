@@ -1,16 +1,17 @@
-import type { Beat, Note, PrepItem } from "@taverns/api";
+import type { Beat, Note, PlayerNote, PrepItem } from "@taverns/api";
 import { Badge, Icon, type IconName, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 
 /**
  * A night, laid out — the half of a recap that is the same for both audiences.
  *
- * **`SessionRecap` and `PlayerSessionRecap` differ in exactly one field.** The
- * beats, the notes and the ticked prep are already the `shared` ones by
- * row-level predicate and reach the player unchanged (`PlayerRecap.ts` says so
- * in as many words); only the combatant was ever the disclosure. So everything
- * here is shared between `RecapBody` and `PlayerRecapBody`, and each supplies
- * its own already-rendered fights.
+ * **`SessionRecap` and `PlayerSessionRecap` differ in two fields.** The beats
+ * and the ticked prep are already the `shared` ones by row-level predicate and
+ * reach the player unchanged (`PlayerRecap.ts` says so in as many words); the
+ * combatant was the first disclosure, and the note, which a player is told as
+ * `PlayerNote`, the second. So everything here is shared between `RecapBody`
+ * and `PlayerRecapBody`, a note is drawn from the fields both projections
+ * have, and each supplies its own already-rendered fights.
  *
  * That is not tidiness. The read-aloud rule below — *the toggle drops the DM's
  * document rather than restyling it* — is the delivery's own (`Chronicle.jsx:3-5`)
@@ -74,11 +75,14 @@ export function Drafted({ origin }: { readonly origin: string }) {
   );
 }
 
+/** A note as either recap tells it: the creator's `Note`, or a player's `PlayerNote`. */
+type RecapNote = Note | PlayerNote;
+
 export function Notes({
   notes,
   readAloud,
 }: {
-  readonly notes: ReadonlyArray<Note>;
+  readonly notes: ReadonlyArray<RecapNote>;
   readonly readAloud: boolean;
 }) {
   return (
@@ -91,7 +95,8 @@ export function Notes({
                 {note.title}
               </span>
               {note.kind === "read_aloud" && <Badge variant="outline">Read aloud</Badge>}
-              <Drafted origin={note.origin} />
+              {/* A player is not told a note's provenance. */}
+              {"origin" in note && <Drafted origin={note.origin} />}
             </div>
             {note.body !== "" && (
               <p
@@ -188,7 +193,7 @@ export function RecapDocument({
   readAloud,
 }: {
   readonly beats: ReadonlyArray<Beat>;
-  readonly notes: ReadonlyArray<Note>;
+  readonly notes: ReadonlyArray<RecapNote>;
   readonly prepDone: ReadonlyArray<PrepItem>;
   readonly fights: ReactNode | null;
   readonly ticked: string;

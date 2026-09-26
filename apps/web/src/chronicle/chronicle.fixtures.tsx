@@ -160,9 +160,21 @@ export const readAloudNote = {
   body: "The reeds are taller than you are and they are not moving, even though there is a wind.",
   kind: "read_aloud",
   attachedTo: null,
+  links: [],
   visibility: "dm",
   ...provenance,
   ...stamps,
+};
+
+/** The same read-aloud in a player's recap: a `PlayerNote`, with none of the creator's columns. */
+export const playerReadAloudNote = {
+  id: readAloudNote.id,
+  campaignId,
+  title: readAloudNote.title,
+  body: readAloudNote.body,
+  kind: readAloudNote.kind,
+  attachedTo: readAloudNote.attachedTo,
+  updatedAt: readAloudNote.updatedAt,
 };
 
 export const prepItem = {
