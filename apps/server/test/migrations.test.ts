@@ -28,6 +28,7 @@ import encounterReady from "../src/migrations/0061_encounter_ready.js";
 import characterInspiration from "../src/migrations/0062_character_inspiration.js";
 import runScenes from "../src/migrations/0065_run_scenes.js";
 import initiativePhase from "../src/migrations/0066_initiative_phase.js";
+import noteCategoryPin from "../src/migrations/0068_note_category_pin.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -90,6 +91,9 @@ afterAll(() => scenesRuntime.dispose());
 /** A sixteenth, for fights on file before a fight rolled initiative. */
 const phaseRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_phase"));
 afterAll(() => phaseRuntime.dispose());
+/** A seventeenth, for notes written before a note had a category or a pin. */
+const noteRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_note"));
+afterAll(() => noteRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -335,6 +339,7 @@ describe("migrations", () => {
       { migration_id: 65, name: "run_scenes" },
       { migration_id: 66, name: "initiative_phase" },
       { migration_id: 67, name: "run_map_sharing" },
+      { migration_id: 68, name: "note_category_pin" },
     ]);
   }, 60_000);
 
@@ -411,6 +416,7 @@ describe("migrations", () => {
       { migration_id: 65, name: "run_scenes" },
       { migration_id: 66, name: "initiative_phase" },
       { migration_id: 67, name: "run_map_sharing" },
+      { migration_id: 68, name: "note_category_pin" },
     ]);
   }, 60_000);
 });
@@ -1616,5 +1622,52 @@ describe("upgrading a database whose fights predate the initiative phase", () =>
     expect(measured.wolf).toEqual([{ initiative: null }]);
     expect(measured.numberWithoutWho).toContain("combatant_initiative_set_by_follows");
     expect(measured.upWhileRolling).toContain("encounter_run_nobody_up_while_rolling");
+  }, 60_000);
+});
+
+describe("upgrading a database whose notes predate categories and pins", () => {
+  it("leaves every note already written uncategorised and unpinned, and refuses a sixth category", async () => {
+    const measured = await noteRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0067` left: a note with a register and no topic.
+        yield* sql`alter table note drop column category, drop column pinned_at`;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "note-hash" })}
+          returning id
+        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
+        yield* sql`
+          insert into note ${sql.insert({
+            campaign_id: campaign,
+            title: "Cazril",
+            body: "The ferryman.",
+            kind: "read_aloud",
+          })}
+        `;
+
+        yield* noteCategoryPin;
+        const notes = yield* sql<{
+          readonly title: string;
+          readonly kind: string;
+          readonly category: string | null;
+          readonly pinned_at: Date | null;
+        }>`
+          select title, kind, category, pinned_at from note
+        `;
+        const sixth = yield* sql`update note set category = 'monster'`.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { notes, sixth };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.notes).toEqual([
+      { title: "Cazril", kind: "read_aloud", category: null, pinned_at: null },
+    ]);
+    expect(measured.sixth).toContain("note_category_check");
   }, 60_000);
 });

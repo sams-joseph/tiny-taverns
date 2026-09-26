@@ -1,14 +1,15 @@
-import type { Beat, Note, PrepItem } from "@taverns/api";
+import type { Beat, Note, PlayerNote, PrepItem } from "@taverns/api";
 import { Badge, Icon, type IconName, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 
 /**
  * A night, laid out — the half of a recap that is the same for both audiences.
  *
- * **`SessionRecap` and `PlayerSessionRecap` differ in exactly one field.** The
- * beats, the notes and the ticked prep are already the `shared` ones by
+ * **`SessionRecap` and `PlayerSessionRecap` differ in the combatant and the
+ * note.** The beats and the ticked prep are already the `shared` ones by
  * row-level predicate and reach the player unchanged (`PlayerRecap.ts` says so
- * in as many words); only the combatant was ever the disclosure. So everything
+ * in as many words); a player's notes are `PlayerNote`, which carries no
+ * provenance, so their *Hob's draft* badge is the DM's alone. Everything else
  * here is shared between `RecapBody` and `PlayerRecapBody`, and each supplies
  * its own already-rendered fights.
  *
@@ -78,7 +79,7 @@ export function Notes({
   notes,
   readAloud,
 }: {
-  readonly notes: ReadonlyArray<Note>;
+  readonly notes: ReadonlyArray<Note | PlayerNote>;
   readonly readAloud: boolean;
 }) {
   return (
@@ -91,7 +92,7 @@ export function Notes({
                 {note.title}
               </span>
               {note.kind === "read_aloud" && <Badge variant="outline">Read aloud</Badge>}
-              <Drafted origin={note.origin} />
+              {"origin" in note && <Drafted origin={note.origin} />}
             </div>
             {note.body !== "" && (
               <p
@@ -188,7 +189,7 @@ export function RecapDocument({
   readAloud,
 }: {
   readonly beats: ReadonlyArray<Beat>;
-  readonly notes: ReadonlyArray<Note>;
+  readonly notes: ReadonlyArray<Note | PlayerNote>;
   readonly prepDone: ReadonlyArray<PrepItem>;
   readonly fights: ReactNode | null;
   readonly ticked: string;

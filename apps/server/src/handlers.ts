@@ -525,6 +525,8 @@ const NotesLive = HttpApiBuilder.group(
           notes.update(params.campaignId, params.noteId, payload),
         )
         .handle("remove", ({ params }) => notes.remove(params.campaignId, params.noteId))
+        .handle("pin", ({ params }) => notes.setPinned(params.campaignId, params.noteId, true))
+        .handle("unpin", ({ params }) => notes.setPinned(params.campaignId, params.noteId, false))
     );
   }),
 );

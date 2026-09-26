@@ -34,6 +34,7 @@ import {
   gearLinesNamed,
   type HobProposal,
   type HobRosterLine,
+  NoteCategory,
   NpcKnowledgeSourceKind,
   isClassOption,
   isRaceOption,
@@ -872,6 +873,11 @@ export const ProposeNote = Tool.make("proposeNote", {
     body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
     /** Read-aloud is a kind of note, not a table — see `NoteKind`. */
     readAloud: optional(Schema.Boolean),
+    /**
+     * What the note is about, when it is plainly one of these; left out
+     * otherwise, and the DM can choose one later. Independent of `readAloud`.
+     */
+    category: optional(NoteCategory),
   }),
   success: Schema.String,
   failure: proposalFailure,
@@ -1977,12 +1983,20 @@ export const dmHandlersFor = (
     searchSharedWorldHistory: searchHistoryWith(repositories.history, dm.group, as),
     readSharedWorldSummary: summaryWith(repositories.history, dm.group, as),
 
-    proposeNote: ({ title, body, readAloud }) =>
-      offer(
-        { target: "note", title, body, kind: readAloud === true ? "read_aloud" : "note" },
+    proposeNote: ({ title, body, readAloud, category }) => {
+      const topic = absent(category);
+      return offer(
+        {
+          target: "note",
+          title,
+          body,
+          kind: readAloud === true ? "read_aloud" : "note",
+          ...(topic === undefined ? {} : { category: topic }),
+        },
         `Offered the DM a note called "${title}". They can save it or discard it; ` +
           "say one short line about it and stop.",
-      ),
+      );
+    },
 
     proposeBeat: ({ body }) =>
       offer(

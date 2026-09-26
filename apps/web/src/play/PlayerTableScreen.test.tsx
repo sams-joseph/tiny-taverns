@@ -652,6 +652,7 @@ describe("the fight's read-aloud", () => {
     campaignId,
     body: "",
     kind: "read_aloud",
+    category: null,
     attachedTo: null,
     updatedAt: "2026-08-04T19:00:00.000Z",
     ...over,

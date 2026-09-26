@@ -88,7 +88,7 @@ const person = async (name: string): Promise<Person> => {
  * Every JSON key of `Note` that `PlayerNote` does not have. Keys, not values:
  * `"dm"` or `"authored"` could turn up inside a body.
  */
-const WIDE_KEYS = ['"visibility"', '"origin"', '"assistantTurnId"', '"createdAt"'];
+const WIDE_KEYS = ['"visibility"', '"origin"', '"assistantTurnId"', '"createdAt"', '"pinnedAt"'];
 
 let jo: Person;
 let ilse: Person;

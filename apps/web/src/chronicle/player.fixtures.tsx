@@ -23,8 +23,9 @@ import { TEST_SESSION } from "../test/session";
  * The campaign, both nights and both halves of the carried fight are imported
  * from `chronicle.fixtures.tsx` rather than restated, which is the point: the
  * two screens read one record, and a second set of nights could drift into
- * telling a different story about the same rounds. What is written here is the
- * one thing that genuinely differs — `PlayerSessionRecap`'s combatants.
+ * telling a different story about the same rounds. What is written here is
+ * what genuinely differs — `PlayerSessionRecap`'s combatants, and its notes as
+ * `PlayerNote`.
  *
  * Bodies are the JSON the server sends, so `PlayerCombatant`'s union has to
  * decode. A monster fixture carrying an `ac` would be *refused* here rather than
@@ -33,6 +34,18 @@ import { TEST_SESSION } from "../test/session";
  */
 
 export { campaignId, session11Id, session12Id };
+
+/** The read-aloud as a player's recap tells it: no visibility, pin or provenance. */
+const playerReadAloudNote = {
+  id: readAloudNote.id,
+  campaignId: readAloudNote.campaignId,
+  title: readAloudNote.title,
+  body: readAloudNote.body,
+  kind: readAloudNote.kind,
+  category: readAloudNote.category,
+  attachedTo: readAloudNote.attachedTo,
+  updatedAt: readAloudNote.updatedAt,
+};
 
 /**
  * Somebody at the table: exact hit points, on purpose. The party already reads
@@ -101,7 +114,7 @@ export const playerRecap11 = {
   ],
   beats: [beat],
   prepDone: [],
-  notes: [readAloudNote],
+  notes: [playerReadAloudNote],
 };
 
 /** Session 12, from the far side of the join. */
