@@ -46,6 +46,7 @@ import {
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { loadPlayerTableView } from "./load";
+import { PlayerBattleMap } from "./PlayerBoard";
 import { usePlayerTableStream } from "./tableStream";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -595,6 +596,14 @@ export function PlayerTableScreen() {
                     <CombatantRow key={row.combatantId} row={row} />
                   ))}
                 </Card>
+
+                {fight.board !== null && (
+                  <PlayerBattleMap
+                    board={fight.board}
+                    order={fight.order}
+                    upNextId={fight.upNext?.combatantId}
+                  />
+                )}
 
                 {view.readAloud.length > 0 && (
                   <div className="flex flex-col gap-3">

@@ -11,6 +11,7 @@ import {
   campaignOptions,
   coreOptions,
   character,
+  drawnMapPicture,
   sessionId,
   type Answer,
   type Call,
@@ -348,6 +349,7 @@ export const playing = (
     readonly round?: number;
     readonly phase?: "initiative" | "turns";
     readonly mode?: "combat" | "social" | "challenge" | "hazard";
+    readonly board?: Record<string, unknown> | null;
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -395,11 +397,74 @@ export const playing = (
                   portrait: null,
                 },
               ],
-              board: null,
+              board: fight.board ?? null,
             },
     },
   },
 ];
+
+export const allyCombatantId = "2b1f2a1e-0000-4000-8000-000000000d0b";
+
+/**
+ * A fight as a seated player reads it with the whole cast: themselves, an ally
+ * at the table, and a monster they may see — each arm of `PlayerLiveCombatant`.
+ */
+export const tableOrder: ReadonlyArray<Record<string, unknown>> = [
+  {
+    kind: "you",
+    combatantId: yourCombatantId,
+    characterId: brannocId,
+    campaignCharacterId: brannocSeatRef.campaignCharacterId,
+    displayName: "Brannoc Duskharrow",
+    subtitle: "Level 5 Half-orc Paladin",
+    initiative: 16,
+    initiativeBonus: 1,
+    initiativeSetBy: "dm",
+    hpCurrent: 44,
+    hpMax: 52,
+    tempHp: 3,
+    conditions: ["Blessed"],
+    portrait: null,
+  },
+  {
+    kind: "ally",
+    combatantId: allyCombatantId,
+    characterId: "2b1f2a1e-0000-4000-8000-000000000902",
+    displayName: "Nessa",
+    subtitle: "Level 4 Ranger",
+    playerName: "Wren",
+    initiative: 14,
+    conditions: [],
+    portrait: null,
+  },
+  {
+    kind: "npc",
+    combatantId: hagCombatantId,
+    displayName: "Marsh Hag",
+    subtitle: "Medium Fey",
+    initiative: 12,
+    hpBand: "bloodied",
+    conditions: ["Frightened"],
+  },
+];
+
+/**
+ * `PlayerLiveFight.board` once the DM shares the map: Hob's picture under a
+ * 24 × 16 grid of 64px squares, with Brannoc and the Marsh Hag standing on it
+ * and Nessa not put down yet. Nothing about the map's setting, as on the wire.
+ */
+export const sharedBoard = {
+  grid: "square",
+  columns: 24,
+  rows: 16,
+  feetPerCell: 5,
+  alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
+  image: drawnMapPicture,
+  tokens: [
+    { combatantId: yourCombatantId, position: { column: 5, row: 4 } },
+    { combatantId: hagCombatantId, position: { column: 11, row: 6 } },
+  ],
+};
 
 /**
  * Hob, configured and reachable, for one campaign.

@@ -9,9 +9,10 @@ import { RunTokens, TokenTray, type TokenProps } from "./RunTokens";
 import { moveLine } from "./tokens";
 
 /**
- * The fight's board: **open, and the DM's alone.** The runner is the creator's
- * screen, so no player ever reaches this; showing the map to the table is a
- * later feature with a player read of its own.
+ * The fight's board: **open, and the DM's own.** The runner is the creator's
+ * screen, so no player ever reaches this card; what the table sees of the map
+ * is its own read, shown only while the header's *Share map* is on
+ * (`PlayerLiveBoard`, drawn by `play/PlayerBoard.tsx`).
  *
  * The redesign puts it at the centre of the fight rather than in a band under
  * the list, so it is drawn open, as wide as its column (`RunLayout.tsx`), with
@@ -25,22 +26,34 @@ import { moveLine } from "./tokens";
  *
  * *Grid* is the DM's view of it, not a write: it hides the lines on this screen
  * and nowhere else, and the squares still measure and still take a token.
+ * *Hide from players* is a write (`EncounterRun.hostileTokensHidden`): every
+ * token but the party's comes off the players' board at once, while their rows
+ * stay in the players' order. It can be set before the map is shared, so a
+ * fight can open with the monsters already hidden.
  */
 export function RunBoardCard({
   resource,
   reload,
   over,
   tokens,
+  hostileTokensHidden,
+  hiding,
+  onHideHostile,
 }: {
   readonly resource: Resource<EncounterRunBoard | null>;
   readonly reload: () => void;
   /** The fight is off the table: the board is where everyone finished. */
   readonly over: boolean;
   /** Everything but the board, which this card reads. */
-  readonly tokens: Omit<TokenProps, "board" | "onMove"> & {
+  readonly tokens: Omit<TokenProps, "board" | "onMove" | "hostileTokensHidden"> & {
     /** The move's write; resolves true once the server has the square. */
     readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<boolean>;
   };
+  /** The map's *Hide from players*, as the fight holds it. */
+  readonly hostileTokensHidden: boolean;
+  /** Its write is in flight. */
+  readonly hiding: boolean;
+  readonly onHideHostile: (hidden: boolean) => void;
 }) {
   const board = resource.state === "ready" ? resource.value : null;
   // A fight started straight after its encounter was made may begin before
@@ -76,7 +89,7 @@ export function RunBoardCard({
       if (moved) setLastMove(line);
     });
   };
-  const withBoard = board === null ? undefined : { ...tokens, board, onMove };
+  const withBoard = board === null ? undefined : { ...tokens, board, onMove, hostileTokensHidden };
 
   return (
     <Card aria-label="Battle map" role="region" data-slot="run-board" className="overflow-clip">
@@ -87,26 +100,35 @@ export function RunBoardCard({
         </SectionHeading>
         {board !== null && (
           <>
+            {/* The hint has a line of its own under the title and the toggles,
+                so a longer one after a selection or a move never rewraps the
+                header and slides the board out from under the pointer. */}
             <span
               role="status"
-              className="hidden min-w-0 text-body-s leading-snug text-muted-foreground @3xl:inline"
+              className="order-last hidden min-w-0 basis-full text-body-s leading-snug text-muted-foreground @3xl:block"
             >
               {hint}
             </span>
-            <span className="min-w-0 text-body-s leading-snug text-muted-foreground @3xl:hidden">
+            <span className="order-last min-w-0 basis-full text-body-s leading-snug text-muted-foreground @3xl:hidden">
               {over
                 ? "Where everyone stood when it ended."
                 : "Select from the initiative list. Tokens move on a wider screen."}
             </span>
-            <Toggle
-              size="sm"
-              pressed={gridShown}
-              onPressedChange={(pressed) => setGrid(pressed)}
-              className="ml-auto"
-            >
-              <Icon name="grid-3x3" size={13} />
-              Grid
-            </Toggle>
+            <div className="ml-auto flex gap-1.5">
+              <Toggle size="sm" pressed={gridShown} onPressedChange={(pressed) => setGrid(pressed)}>
+                <Icon name="grid-3x3" size={13} />
+                Grid
+              </Toggle>
+              <Toggle
+                size="sm"
+                pressed={hostileTokensHidden}
+                disabled={over || hiding}
+                onPressedChange={(pressed) => onHideHostile(pressed)}
+              >
+                <Icon name="eye-off" size={13} />
+                Hide from players
+              </Toggle>
+            </div>
           </>
         )}
       </div>

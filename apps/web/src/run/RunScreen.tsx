@@ -2,6 +2,7 @@ import type {
   BoardSquare,
   Combatant,
   CombatantId,
+  EncounterRunUpdate,
   HobDirectResourceUpdate,
   Npc,
   NpcSessionMonitor,
@@ -686,6 +687,7 @@ export function RunScreen() {
   const direct = useMutation();
   const conditions = useMutation();
   const moves = useMutation();
+  const mapShare = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -785,14 +787,20 @@ export function RunScreen() {
     if (Result.isSuccess(back)) controller.applyRun(back.success);
   };
 
-  const setShared = async (shared: boolean) => {
+  /**
+   * The three switches over what the table sees: *Share* (the fight), *Share
+   * map* and the map's *Hide from players*. Each changes only what a seated
+   * player's table answers, so each names that read and nothing of the DM's —
+   * a DM seated at their own table reads it too.
+   */
+  const setShown = async (
+    mutation: ReturnType<typeof useMutation>,
+    payload: Pick<EncounterRunUpdate, "visibility" | "mapShown" | "hostileTokensHidden">,
+  ) => {
     if (state === undefined) return;
-    const saved = await share.submit(
-      (client) =>
-        client.runs.update({ params: path, payload: { visibility: shared ? "shared" : "dm" } }),
-      // What this changes is what a *player* sees, in another browser. There is
-      // nothing of this DM's to refresh.
-      [],
+    const saved = await mutation.submit(
+      (client) => client.runs.update({ params: path, payload }),
+      [reads.playerTable(campaignId)],
     );
     if (Result.isSuccess(saved)) controller.applyRun(saved.success);
   };
@@ -927,6 +935,10 @@ export function RunScreen() {
     return leadingFeet(character?.sheet.identity?.speed);
   };
   const labels = useMemo(() => tokenLabels(state?.combatants ?? []), [state?.combatants]);
+  // Only a fight shows a player its board (`boardShown`, the server's), and
+  // only one that has a board; anywhere else the switch would move nothing.
+  const mapToShare =
+    state?.run.mode === "combat" && boardResource.state === "ready" && boardResource.value !== null;
 
   const saved = useCallback(() => {
     setAdding(false);
@@ -1003,10 +1015,26 @@ export function RunScreen() {
                 id="run-share"
                 checked={state.run.visibility === "shared"}
                 disabled={share.busy}
-                onCheckedChange={(next) => void setShared(next)}
+                onCheckedChange={(next) =>
+                  void setShown(share, { visibility: next ? "shared" : "dm" })
+                }
               />
               <Label htmlFor="run-share">Share</Label>
             </span>
+            {mapToShare && (
+              // A narrowing of *Share*, not a second way in: players see the
+              // map only while they see the fight, so it waits for that. Off,
+              // it keeps what the DM left it at for when the fight is shared.
+              <span className="flex items-center gap-2">
+                <Switch
+                  id="run-share-map"
+                  checked={state.run.mapShown}
+                  disabled={mapShare.busy || state.run.visibility !== "shared"}
+                  onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
+                />
+                <Label htmlFor="run-share-map">Share map</Label>
+              </span>
+            )}
             {/* While rolling, the round's one start is the panel's *Start
                 round N*, so the bar carries no second peach button. */}
             {!rolling && scene === undefined && (
@@ -1127,6 +1155,11 @@ export function RunScreen() {
                       onSelect: (combatant) => setSelectedId(combatant.id),
                       onMove: move,
                     }}
+                    hostileTokensHidden={state.run.hostileTokensHidden}
+                    hiding={mapShare.busy}
+                    onHideHostile={(hidden) =>
+                      void setShown(mapShare, { hostileTokensHidden: hidden })
+                    }
                   />
                 ) : null
               }

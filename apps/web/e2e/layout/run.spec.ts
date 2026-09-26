@@ -151,6 +151,21 @@ for (const width of WIDTHS) {
         });
       }
 
+      await test.step("the map's toggles stay inside its card, and Share map waits for Share", async () => {
+        const edge = await box(map);
+        for (const name of ["Grid", "Hide from players"]) {
+          const toggle = await box(map.getByRole("button", { name, exact: true }));
+          expect.soft(toggle.x, `${name} left`).toBeGreaterThanOrEqual(edge.x - 0.5);
+          expect
+            .soft(toggle.x + toggle.width, `${name} right`)
+            .toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+        }
+        // The fixture fight is not shared, so its map cannot be yet.
+        const shareMap = page.getByRole("switch", { name: "Share map" });
+        await expect.soft(shareMap).toBeVisible();
+        await expect.soft(shareMap).toHaveAttribute("aria-disabled", "true");
+      });
+
       await test.step("the header is the drawn card, with the round beside the title", async () => {
         const header = page.locator('main [data-slot="page-heading"]');
         await expect.soft(header).toHaveCSS("border-top-width", "3px");

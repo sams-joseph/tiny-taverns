@@ -2,7 +2,7 @@ import { Combatant } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { brannoc, goblinBoss } from "../campaign/campaign.fixtures";
-import { leadingFeet, moveLine, reachRect, tokenLabels } from "./tokens";
+import { labelsInOrder, leadingFeet, moveLine, reachRect, tokenLabels } from "./tokens";
 
 const decode = Schema.decodeUnknownSync(Combatant);
 const row = (id: string, displayName: string, createdAt: string) =>
@@ -23,6 +23,22 @@ describe("a token's label", () => {
     expect(of("000000000c03")).toBe("GA2");
     expect(of("000000000c01")).toBe("GA1");
     expect(of("000000000c02")).toBe("W2");
+  });
+
+  it("numbers in the order it is given, for a board with no creation times", () => {
+    const [first, second, alone] = [0, 1, 2].map(
+      (n) => decode({ ...goblinBoss, id: `2b1f2a1e-0000-4000-8000-00000000c0${String(n)}0` }).id,
+    );
+    const labels = labelsInOrder([
+      { id: second!, displayName: "Goblin archer" },
+      { id: alone!, displayName: "Marsh Hag" },
+      { id: first!, displayName: "Goblin archer" },
+    ]);
+    expect([labels.get(second!), labels.get(first!), labels.get(alone!)]).toEqual([
+      "GA1",
+      "GA2",
+      "MH",
+    ]);
   });
 });
 
