@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
 import type { CampaignView } from "./load";
-import { playedLabel } from "./encounterList";
+import { playedLabel, playthroughOf } from "./encounterList";
 import { encounterDetail, openingReadAloud } from "./overview";
 import { sectionLink } from "./OverviewParts";
 import { PrepChecklist } from "./PrepChecklist";
@@ -160,7 +160,8 @@ function EncounterRow({
  * **What the drawing has that the wire does not** is left out rather than
  * stubbed: a scheduled date (a session has when it *ran*, not when it is
  * planned for) and encounters assigned to a night (encounters are the
- * campaign's). Each row's *Ready* or *Draft* is the encounter's prep, and a
+ * campaign's). A played encounter is left off: what is on deck is what is
+ * still to be played. Each row's *Ready* or *Draft* is the encounter's prep, and a
  * played one says when it was played instead. *Open prep* is gone because the prep is here:
  * the checklist the drawing dropped is this card's own section, and so is
  * ending the night when no fight is running. *All encounters* is the way to the
@@ -189,8 +190,15 @@ export function NextSession({
 }) {
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
   const { session, run: live } = view;
-  const count = view.encounters.length;
-  const onDeck = view.encounters.slice(0, ON_DECK);
+  const total = view.encounters.length;
+  // A played encounter is over (an encounter is played once), so it is not on
+  // deck. One on the table and one carried and not yet picked up are still to
+  // be played, so they stay.
+  const toPlay = view.encounters.filter(
+    (encounter) => playthroughOf(encounter, live?.encounterId ?? undefined)._tag !== "played",
+  );
+  const count = toPlay.length;
+  const onDeck = toPlay.slice(0, ON_DECK);
   const opening = openingReadAloud(view.encounters, view.notes);
 
   return (
@@ -227,7 +235,7 @@ export function NextSession({
         {onDeck.length === 0 ? (
           <div className="border-b border-hairline px-card py-4">
             <p className="mb-0 text-body-s leading-snug font-medium text-heading">
-              No encounters yet
+              {total === 0 ? "No encounters yet" : "Every encounter has been played"}
             </p>
             <p className="mb-0 text-body-s leading-body text-muted-foreground">
               Add one and it lands here, ready to run.
@@ -272,7 +280,7 @@ export function NextSession({
             params={{ campaignId: view.campaign.id }}
             className={`ml-auto ${sectionLink}`}
           >
-            {count > ON_DECK ? `All ${String(count)} encounters` : "All encounters"}
+            {total > onDeck.length ? `All ${String(total)} encounters` : "All encounters"}
           </Link>
         </div>
       </div>
