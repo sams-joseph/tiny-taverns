@@ -1,7 +1,12 @@
 import { Schema } from "effect";
 import { CharacterPortraitImages } from "./Character.js";
 import { CharacterId, CombatantId, CreatureId, EncounterRunId } from "./Ids.js";
-import { MAX_INITIATIVE_BONUS, MIN_INITIATIVE_BONUS } from "./Initiative.js";
+import {
+  MAX_INITIATIVE,
+  MAX_INITIATIVE_BONUS,
+  MIN_INITIATIVE,
+  MIN_INITIATIVE_BONUS,
+} from "./Initiative.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -146,7 +151,9 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-const initiative = Schema.Int.check(Schema.isBetween({ minimum: -50, maximum: 100 }));
+const initiative = Schema.Int.check(
+  Schema.isBetween({ minimum: MIN_INITIATIVE, maximum: MAX_INITIATIVE }),
+);
 const initiativeBonus = Schema.Int.check(
   Schema.isBetween({ minimum: MIN_INITIATIVE_BONUS, maximum: MAX_INITIATIVE_BONUS }),
 );

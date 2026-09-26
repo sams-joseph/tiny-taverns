@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { initiativeBonusOf, signedModifier, statBlockInitiativeBonus } from "./Initiative.js";
+import {
+  initiativeBonusOf,
+  initiativeFrom,
+  signedModifier,
+  statBlockInitiativeBonus,
+} from "./Initiative.js";
 
 const cells = (dex: string) => [
   { label: "STR", score: "10", modifier: "+0" },
@@ -31,5 +36,17 @@ describe("the initiative bonus", () => {
     expect(statBlockInitiativeBonus({ abilities: cells("+4") })).toBe(4);
     expect(statBlockInitiativeBonus({ abilities: cells("+45") })).toBeUndefined();
     expect(statBlockInitiativeBonus({ abilities: [] })).toBeUndefined();
+  });
+
+  it("reads a typed total as a whole number a row can hold, and nothing else", () => {
+    expect(initiativeFrom("17")).toBe(17);
+    expect(initiativeFrom(" -2 ")).toBe(-2);
+    expect(initiativeFrom("−2")).toBe(-2);
+    expect(initiativeFrom("100")).toBe(100);
+    expect(initiativeFrom("101")).toBeUndefined();
+    expect(initiativeFrom("-51")).toBeUndefined();
+    expect(initiativeFrom("+12")).toBeUndefined();
+    expect(initiativeFrom("12.5")).toBeUndefined();
+    expect(initiativeFrom("")).toBeUndefined();
   });
 });

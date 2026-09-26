@@ -1,4 +1,10 @@
-import type { Combatant, CombatantKind, Visibility } from "@taverns/api";
+import {
+  MAX_INITIATIVE,
+  MIN_INITIATIVE,
+  type Combatant,
+  type CombatantKind,
+  type Visibility,
+} from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -41,8 +47,6 @@ import { combatantWrites, type RunPath } from "./load";
  * combatant rather than an edit.
  */
 
-const MIN_INITIATIVE = -50;
-const MAX_INITIATIVE = 100;
 const MAX_HP = 10_000;
 const MAX_AC = 40;
 const MAX_CONDITIONS = 24;
