@@ -18,6 +18,7 @@ import { NpcAppearance } from "../cast/NpcAppearance";
 import { NpcAvatar } from "../cast/NpcAvatar";
 import { CampaignHero } from "../campaign/CampaignHero";
 import { LastTime } from "../campaign/LastTime";
+import { noteTags } from "../campaign/noteText";
 import { sharedNoteAnchor } from "../campaign/overview";
 import { OverviewPage, SHARED_NOTES } from "../campaign/OverviewParts";
 import { PartyCard } from "../campaign/PartyCard";
@@ -61,17 +62,19 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * Read-aloud keeps its register — italic Alegreya at `--fs-body-l`, the one
  * place in the product whose prose is not UI voice — because that is precisely
- * the text this audience is here to read.
+ * the text this audience is here to read. Its micro-label says what the note
+ * is about and how it is set (*NPC · Read aloud*), as far as the DM said.
  */
 function SharedNote({ note }: { readonly note: PlayerNote }) {
   const readAloud = note.kind === "read_aloud";
+  const tags = noteTags(note);
 
   return (
     <Card id={sharedNoteAnchor(note.id)} className="scroll-mt-(--chrome-height)">
       <CardHeader>
-        {readAloud && (
+        {tags.length > 0 && (
           <span className="text-caption leading-snug font-medium tracking-caps uppercase text-faint">
-            Read aloud
+            {tags.join(" · ")}
           </span>
         )}
         <CardTitle>{note.title}</CardTitle>

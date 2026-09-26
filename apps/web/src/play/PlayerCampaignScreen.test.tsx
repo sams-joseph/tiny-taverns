@@ -16,6 +16,7 @@ import {
   npcId,
   readAloud,
   page,
+  playerReadAloud,
 } from "../campaign/campaign.fixtures";
 import { beat, session11, sessions } from "../chronicle/chronicle.fixtures";
 import { marshHag, playerRecap11 } from "../chronicle/player.fixtures";
@@ -352,6 +353,22 @@ describe("the player Overview's cards", () => {
     expect(document.getElementById("shared-with-you")).toHaveTextContent(readAloud.body);
     // A player has no Notes tab to be sent to.
     expect(screen.queryByRole("link", { name: /^Notes$/ })).toBeNull();
+  });
+
+  it("says what a shared note is about, and draws its row with that category's glyph", async () => {
+    server.routes.set(`GET ${base}/player-notes`, {
+      status: 200,
+      body: page([{ ...playerReadAloud, category: "place" }]),
+    });
+    await renderScreen();
+    const card = await cardOf("Recent notes");
+
+    await waitFor(() =>
+      expect(document.getElementById(`note-${readAloud.id}`)).toHaveTextContent(
+        /^Place · Read aloud/,
+      ),
+    );
+    expect(within(card).getByRole("listitem").querySelector("svg")).toHaveClass("lucide-map-pin");
   });
 
   it("puts the night and what was shared in the main column, and the table in the aside", async () => {

@@ -1,6 +1,7 @@
 import type { Encounter, EncounterId, Note } from "@taverns/api";
 import {
   Button,
+  Icon,
   Label,
   Select,
   SelectContent,
@@ -22,7 +23,7 @@ import {
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { VisibilityField } from "../ui/form";
 import type { NoteFields, NoteSaver, SaveStatus } from "./noteAutosave";
-import { editedAgo, KINDS, kindLabel } from "./noteText";
+import { CATEGORIES, editedAgo, KINDS, noteLabel } from "./noteText";
 import { useNow } from "./when";
 
 /** The one option that is not an encounter. */
@@ -38,11 +39,16 @@ const UNATTACHED = "";
  * blurring a field, choosing another note or leaving the tab sends what is
  * unsaved.
  *
- * What it edits is today's note and nothing more: the title, the register
- * (*Note* or *Read aloud*, the drawing's toolbar toggles), the body, the one
+ * What it edits: the category (the drawing's toolbar toggles, one at most —
+ * pressing the lit one clears it, since no category is a real state), the
+ * register (*Note* or *Read aloud*) beside them, the title, the body, the one
  * encounter it is attached to, and who can see it through `VisibilityField`,
- * the product's one control for that. The drawing's category, pin and links
- * are not on the wire yet and are not drawn.
+ * the product's one control for that. The drawing's links are not on the wire
+ * yet and are not drawn.
+ *
+ * *Pin* is not an edit and does not go through the saver: it is the screen's
+ * own press (`onPin`), sent at once to the pin endpoints, and the pane only
+ * says whether the note is pinned.
  *
  * The body grows with its text and the window scrolls: `field-sizing-content`
  * where the browser has it, its own height measured where it does not. Never
@@ -59,6 +65,8 @@ export function NotePane({
   focusTitle,
   onShown,
   paneRef,
+  pinning,
+  onPin,
   onDelete,
 }: {
   /** The note as the server last answered it: its edited time. */
@@ -71,6 +79,9 @@ export function NotePane({
   /** Drawn: the screen may bring it into view. */
   readonly onShown: () => void;
   readonly paneRef: Ref<HTMLElement>;
+  /** A pin is on its way. */
+  readonly pinning: boolean;
+  readonly onPin: (pin: boolean) => void;
   readonly onDelete: () => void;
 }) {
   const now = useNow();
@@ -105,6 +116,7 @@ export function NotePane({
 
   const titleHeld = draft.title.trim() === "";
   const readAloud = draft.kind === "read_aloud";
+  const pinned = note.pinnedAt !== null;
 
   return (
     <article
@@ -114,6 +126,20 @@ export function NotePane({
       className="min-w-0 shrink grow-2 basis-notes-pane scroll-mt-(--chrome-height) overflow-hidden rounded-card border border-hairline bg-surface-card shadow-1"
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-5 py-3.5">
+        <div role="group" aria-label="Category" className="flex flex-wrap gap-1.5">
+          {CATEGORIES.map(({ value, label }) => (
+            <Toggle
+              key={value}
+              size="sm"
+              className="rounded-pill"
+              pressed={draft.category === value}
+              onPressedChange={(pressed) => set({ category: pressed ? value : null })}
+            >
+              {label}
+            </Toggle>
+          ))}
+        </div>
+        <span aria-hidden="true" className="mx-1 h-5 w-px bg-hairline" />
         <div role="group" aria-label="Kind" className="flex flex-wrap gap-1.5">
           {KINDS.map(([value, label]) => (
             <Toggle
@@ -129,12 +155,26 @@ export function NotePane({
         </div>
         <div className="ml-auto flex items-center gap-3">
           <SaveState status={status} onRetry={() => void saver.flush()} />
-          <ActionsMenu
-            label="Note actions"
-            items={[
-              { label: "Delete note", icon: "trash-2", destructive: true, onSelect: onDelete },
-            ]}
-          />
+          <div className="flex items-center gap-1">
+            <Button
+              variant={pinned ? "secondary" : "ghost"}
+              size="icon"
+              className="size-control-sm"
+              aria-label="Pin note"
+              aria-pressed={pinned}
+              title={pinned ? "Unpin" : "Pin"}
+              disabled={pinning}
+              onClick={() => onPin(!pinned)}
+            >
+              <Icon name="pin" size={14} />
+            </Button>
+            <ActionsMenu
+              label="Note actions"
+              items={[
+                { label: "Delete note", icon: "trash-2", destructive: true, onSelect: onDelete },
+              ]}
+            />
+          </div>
         </div>
       </div>
 
@@ -159,7 +199,7 @@ export function NotePane({
           </span>
         )}
         <div className="flex flex-wrap items-center gap-2 text-body-s leading-snug text-muted-foreground">
-          <span>{kindLabel(draft.kind)}</span>
+          <span>{noteLabel(draft)}</span>
           <span aria-hidden="true" className="text-faint">
             ·
           </span>

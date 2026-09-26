@@ -1,5 +1,5 @@
-import type { Note, NoteKind } from "@taverns/api";
-import { cn } from "@taverns/ui";
+import type { Note, NoteCategory, NoteKind } from "@taverns/api";
+import { cn, type IconName } from "@taverns/ui";
 import { DateTime } from "effect";
 import { agoOf } from "./when";
 
@@ -19,6 +19,57 @@ export const KINDS: ReadonlyArray<readonly [NoteKind, string]> = [
 
 export const kindLabel = (kind: NoteKind): string =>
   KINDS.find(([value]) => value === kind)?.[1] ?? "Note";
+
+/**
+ * What a note is about, as the drawing names and draws each: the pane's
+ * toggle, the list's pill (plural, as a heading over many), and the glyph a
+ * row and an Overview row carry. Independent of the register above.
+ */
+export const CATEGORIES: ReadonlyArray<{
+  readonly value: NoteCategory;
+  readonly label: string;
+  readonly plural: string;
+  readonly icon: IconName;
+}> = [
+  { value: "npc", label: "NPC", plural: "NPCs", icon: "user" },
+  { value: "place", label: "Place", plural: "Places", icon: "map-pin" },
+  { value: "lore", label: "Lore", plural: "Lore", icon: "book-open" },
+  { value: "prep", label: "Prep", plural: "Prep", icon: "clock" },
+  { value: "rules", label: "Rules", plural: "Rules", icon: "scale" },
+];
+
+const categoryOf = (category: NoteCategory | null) =>
+  CATEGORIES.find((entry) => entry.value === category);
+
+/**
+ * The category and the register, only as far as either is set — *NPC*,
+ * *Place · Read aloud*, *Read aloud*, or nothing: the words both a list row
+ * and a shared note's micro-label build on.
+ */
+export const noteTags = (note: {
+  readonly kind: NoteKind;
+  readonly category: NoteCategory | null;
+}): ReadonlyArray<string> =>
+  [
+    categoryOf(note.category)?.label,
+    note.kind === "read_aloud" ? kindLabel(note.kind) : undefined,
+  ].filter((word) => word !== undefined);
+
+/** An uncategorised note wears the plain note glyph the Overview always drew. */
+export const categoryIcon = (category: NoteCategory | null): IconName =>
+  categoryOf(category)?.icon ?? "scroll-text";
+
+/**
+ * What a row's foot and the pane's head say a note is: `noteTags`, and *Note*
+ * when it is neither categorised nor read aloud.
+ */
+export const noteLabel = (note: {
+  readonly kind: NoteKind;
+  readonly category: NoteCategory | null;
+}): string => {
+  const tags = noteTags(note);
+  return tags.length === 0 ? kindLabel(note.kind) : tags.join(" · ");
+};
 
 /**
  * A note's body as it is read: read-aloud in the prose face, the only text in
@@ -43,13 +94,16 @@ export const editedAgo = (note: Note, now: number): string => {
 };
 
 /**
- * Newest first, by when each note was made. Not by when it was edited: the
- * pane saves as the DM types, and a list that re-sorted on every save would
- * move the row being written out from under them.
+ * Pinned first, then newest first by when each note was made. Not by when it
+ * was edited: the pane saves as the DM types, and a list that re-sorted on
+ * every save would move the row being written out from under them. Pinning is
+ * the one press that moves a row, and it is the DM asking for exactly that.
  */
-export const newestFirst = (notes: ReadonlyArray<Note>): ReadonlyArray<Note> =>
+export const pinnedFirst = (notes: ReadonlyArray<Note>): ReadonlyArray<Note> =>
   [...notes].sort(
-    (a, b) => DateTime.toEpochMillis(b.createdAt) - DateTime.toEpochMillis(a.createdAt),
+    (a, b) =>
+      Number(b.pinnedAt !== null) - Number(a.pinnedAt !== null) ||
+      DateTime.toEpochMillis(b.createdAt) - DateTime.toEpochMillis(a.createdAt),
   );
 
 /** The first line with anything on it, which the row clamps to two. */

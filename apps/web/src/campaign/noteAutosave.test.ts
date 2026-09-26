@@ -14,6 +14,7 @@ const note: NoteFields = {
   title: "Grusk",
   body: "Half-orc.",
   kind: "note",
+  category: null,
   attachedTo: null,
   visibility: "dm",
 };
@@ -48,6 +49,11 @@ describe("changesOf", () => {
     expect(
       changesOf({ ...note, attachedTo: { kind: "encounter", id: "e" as never } }, note),
     ).toEqual({ attachedTo: { kind: "encounter", id: "e" } });
+  });
+
+  it("sends a category, and `null` when it is cleared", () => {
+    expect(changesOf({ ...note, category: "npc" }, note)).toEqual({ category: "npc" });
+    expect(changesOf(note, { ...note, category: "npc" })).toEqual({ category: null });
   });
 });
 

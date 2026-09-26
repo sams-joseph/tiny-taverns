@@ -37,6 +37,8 @@ const open = async (search = "") => {
   return screen.findByRole("article");
 };
 
+const titles = () =>
+  rows().map((row) => row.querySelector('[data-slot="note-row-title"]')?.textContent);
 const rows = () =>
   within(document.querySelector<HTMLElement>('[data-slot="note-list"] ul')!).getAllByRole("button");
 const rowFor = (title: string) => screen.getByRole("button", { name: new RegExp(`^${title}`) });
@@ -49,31 +51,35 @@ const reads = () =>
   server.calls.filter((call) => call.method === "GET" && call.pathname === notesPath).length;
 
 describe("the Notes list", () => {
-  it("lists newest first, marks the shared ones, and previews the first line", async () => {
+  it("lists pinned first, then newest, marks pins and shared ones, and previews the first line", async () => {
     await open();
 
-    expect(rows().map((row) => row.querySelector("span")?.textContent)).toEqual([
-      "House rule: flankingShared",
+    expect(titles()).toEqual([
+      "The salt flats",
+      "House rule: flanking",
       "Grusk, the toll-keeper",
       "Read aloud at the water",
-      "The salt flats",
     ]);
     // Only the shared note is marked: the default is the DM's alone.
     expect(within(rowFor("House rule")).getByText("Shared")).toBeInTheDocument();
     expect(within(rowFor("Grusk")).queryByText("Shared")).toBeNull();
+    expect(within(rowFor("The salt flats")).getByText("Pinned")).toBeInTheDocument();
+    expect(within(rowFor("Grusk")).queryByText("Pinned")).toBeNull();
     // The first line, not the whole body.
     expect(rowFor("Grusk")).toHaveTextContent(/Owes the Salt Company more than he admits\./);
     expect(rowFor("Grusk")).not.toHaveTextContent(/in favours/);
     expect(rowFor("The salt flats")).toHaveTextContent("Empty note");
+    // The category, the register when it is read aloud, and *Note* when neither.
     expect(rowFor("Read aloud at the water")).toHaveTextContent(/Read aloud · Edited /);
-    expect(rowFor("Grusk")).toHaveTextContent(/Note · Edited /);
-    expect(screen.getByText("4 notes")).toBeInTheDocument();
+    expect(rowFor("Grusk")).toHaveTextContent(/NPC · Edited /);
+    expect(rowFor("The salt flats")).toHaveTextContent(/Place · Edited /);
+    expect(screen.getByText("4 notes · 1 pinned")).toBeInTheDocument();
   });
 
   it("puts the first row in the pane when nothing is chosen", async () => {
     const pane = await open();
-    expect(pane).toHaveAccessibleName(houseRule.title);
-    expect(rowFor("House rule")).toHaveAttribute("aria-current", "true");
+    expect(pane).toHaveAccessibleName(blankNote.title);
+    expect(rowFor("The salt flats")).toHaveAttribute("aria-current", "true");
     expect(chosen()).toBeNull();
   });
 
@@ -113,9 +119,38 @@ describe("the Notes list", () => {
     await open();
     await userEvent.type(screen.getByRole("combobox", { name: "Search notes" }), "zzzz");
 
-    expect(await screen.findByText(/Nothing here answers to/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing matches/)).toBeInTheDocument();
     expect(screen.queryByRole("article")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Search notes" })).toBeInTheDocument();
+  });
+
+  it("filters by one category pill AND the search", async () => {
+    await open(`?note=${readAloud.id}`);
+    const pills = screen.getByRole("group", { name: "Filter by category" });
+    expect(within(pills).getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await userEvent.click(within(pills).getByRole("button", { name: "NPCs" }));
+    expect(titles()).toEqual(["Grusk, the toll-keeper"]);
+    // The choice the pill hides gives way to the first note it shows.
+    await waitFor(() => expect(chosen()).toBeNull());
+    expect(screen.getByRole("article")).toHaveAccessibleName(grusk.title);
+    expect(within(pills).getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    // The search narrows within the pill, never beyond it.
+    await userEvent.type(screen.getByRole("combobox", { name: "Search notes" }), "flanking");
+    expect(await screen.findByText(/Nothing matches/)).toBeInTheDocument();
+
+    await userEvent.click(within(pills).getByRole("button", { name: "Rules" }));
+    expect(titles()).toEqual(["House rule: flanking"]);
+
+    // The counts are of every note, not of what the filter shows.
+    expect(screen.getByText("4 notes · 1 pinned")).toBeInTheDocument();
   });
 
   it("says so when there are no notes at all", async () => {
@@ -206,6 +241,29 @@ describe("writing a note in the pane", () => {
     expect(patches(readAloud.id)).toHaveLength(3);
   });
 
+  it("saves a category through the same autosave, and pressing it again clears it", async () => {
+    await open(`?note=${grusk.id}`);
+    const toggles = screen.getByRole("group", { name: "Category" });
+    expect(within(toggles).getByRole("button", { name: "NPC" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await userEvent.click(within(toggles).getByRole("button", { name: "Lore" }));
+    await waitFor(() => expect(patches(grusk.id)).toEqual([{ category: "lore" }]));
+    expect(within(toggles).getByRole("button", { name: "NPC" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("article")).toHaveTextContent(/Lore\s*·\s*Edited /);
+
+    // No category is a real state: the lit one, pressed, clears to `null`.
+    await userEvent.click(within(toggles).getByRole("button", { name: "Lore" }));
+    await waitFor(() => expect(patches(grusk.id)).toContainEqual({ category: null }));
+    for (const toggle of within(toggles).getAllByRole("button"))
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("says when a save fails, and tries again on Retry", async () => {
     server.routes.set(`PATCH ${notesPath}/${grusk.id}`, {
       status: 500,
@@ -224,10 +282,73 @@ describe("writing a note in the pane", () => {
   });
 });
 
+describe("pinning a note", () => {
+  const pinPath = (id: string) => `${notesPath}/${id}/pin`;
+  const pinCalls = () => server.calls.filter((call) => call.pathname.endsWith("/pin"));
+
+  it("sends the pin endpoint, not a PATCH, and the row leads the list at once", async () => {
+    const pinned = { ...grusk, pinnedAt: "2026-08-11T09:00:00.000Z" };
+    server.routes.set(`PUT ${pinPath(grusk.id)}`, { status: 200, body: pinned });
+    await open(`?note=${grusk.id}`);
+    const pin = screen.getByRole("button", { name: "Pin note" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+
+    // The list's own read now says what the server says.
+    server.routes.set(`GET ${notesPath}`, {
+      status: 200,
+      body: page(noteShelf.map((note) => (note.id === grusk.id ? pinned : note))),
+    });
+    await userEvent.click(pin);
+
+    // Pinned notes lead, newest first among them.
+    expect(titles().slice(0, 2)).toEqual(["Grusk, the toll-keeper", "The salt flats"]);
+    await waitFor(() =>
+      expect(pinCalls().map((call) => `${call.method} ${call.pathname}`)).toEqual([
+        `PUT ${pinPath(grusk.id)}`,
+      ]),
+    );
+    expect(patches(grusk.id)).toEqual([]);
+    await waitFor(() => expect(screen.getByText("4 notes · 2 pinned")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Pin note" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(rowFor("Grusk")).getByText("Pinned")).toBeInTheDocument();
+  });
+
+  it("unpins through its reverse, and a refused press puts the row back", async () => {
+    server.routes.set(`DELETE ${pinPath(blankNote.id)}`, {
+      status: 500,
+      body: { _tag: "InternalError" },
+    });
+    await open(`?note=${blankNote.id}`);
+    const pin = screen.getByRole("button", { name: "Pin note" });
+    expect(pin).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(pin);
+    await waitFor(() =>
+      expect(pinCalls().map((call) => `${call.method} ${call.pathname}`)).toEqual([
+        `DELETE ${pinPath(blankNote.id)}`,
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Pin note" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(titles()[0]).toBe("The salt flats");
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(patches(blankNote.id)).toEqual([]);
+  });
+});
+
 describe("a new note", () => {
   it("is made at once, the DM's alone, and lands in the pane with its title selected", async () => {
     const made = {
       ...blankNote,
+      category: null,
+      pinnedAt: null,
       id: newId,
       title: "Untitled note",
       createdAt: "2026-08-09T09:00:00.000Z",
@@ -247,9 +368,9 @@ describe("a new note", () => {
       visibility: "dm",
     });
     expect(screen.getByRole("article")).toHaveAccessibleName("Untitled note");
-    // First in the list, even before the list's own read has it, and the
-    // search is cleared so it can be seen.
-    expect(rows()[0]).toHaveAccessibleName(/^Untitled note/);
+    // First after the pinned, even before the list's own read has it, and
+    // the search is cleared so it can be seen.
+    expect(titles().slice(0, 2)).toEqual(["The salt flats", "Untitled note"]);
     expect(rows()).toHaveLength(5);
 
     const title = screen.getByRole("textbox", { name: "Title" });
@@ -302,6 +423,6 @@ describe("deleting a note", () => {
     await waitFor(() => expect(reads()).toBeGreaterThan(readsBefore));
     await waitFor(() => expect(chosen()).toBeNull());
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Grusk/ })).toBeNull());
-    expect(screen.getByRole("article")).toHaveAccessibleName(houseRule.title);
+    expect(screen.getByRole("article")).toHaveAccessibleName(blankNote.title);
   });
 });
