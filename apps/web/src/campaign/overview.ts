@@ -166,3 +166,6 @@ export const encounterDetail = (encounter: Encounter): string =>
   ]
     .filter((part) => part !== "")
     .join(" · ");
+
+/** The anchor of one shared note on a player's Overview, which its Recent notes row jumps to. */
+export const sharedNoteAnchor = (id: string): string => `note-${id}`;

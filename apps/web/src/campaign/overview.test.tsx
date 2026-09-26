@@ -177,10 +177,13 @@ describe("the recent notes card", () => {
     );
     expect(within(rows[0]!).getByText(when)).toBeInTheDocument();
 
-    const links = within(card).getAllByRole("link");
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveTextContent("All notes");
-    expect(links[0]).toHaveAttribute("href", `${base}/notes`);
+    // Each row opens its note on the Notes tab; the header's link opens the tab.
+    expect(within(rows[0]!).getByRole("link", { name: "Newest" })).toHaveAttribute(
+      "href",
+      `${base}/notes?note=${notes[1]!.id}`,
+    );
+    const all = within(card).getByRole("link", { name: "All notes" });
+    expect(all).toHaveAttribute("href", `${base}/notes`);
   });
 
   it("says so when there are none", async () => {
