@@ -168,12 +168,12 @@ describe("Shared World lifecycle", () => {
         const directoryAfterFirstInvite = yield* player.sharedWorlds.campaigns({
           params: { worldId: world.id },
         });
-        const firstNotes = yield* player.notes.list({
+        const firstNotes = yield* player.playerNotes.list({
           params: { campaignId: first.id },
           query: {},
         });
         const secondBeforeInvite = yield* Effect.result(
-          player.notes.list({ params: { campaignId: second.id }, query: {} }),
+          player.playerNotes.list({ params: { campaignId: second.id }, query: {} }),
         );
         const chronicleAfterFirstInvite = yield* player.sharedWorldHistory.list({
           params: { worldId: world.id },
@@ -190,7 +190,7 @@ describe("Shared World lifecycle", () => {
           params: { worldId: world.id },
         });
         const membershipsAfterSecondInvite = yield* player.me.campaigns();
-        const secondNotes = yield* player.notes.list({
+        const secondNotes = yield* player.playerNotes.list({
           params: { campaignId: second.id },
           query: {},
         });

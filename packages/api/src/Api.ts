@@ -190,6 +190,7 @@ import {
 } from "./Npc.js";
 import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
 import { PlayerEncounter } from "./PlayerEncounter.js";
+import { PlayerNote } from "./PlayerNote.js";
 import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
 import { PlayerSessionRecap } from "./PlayerRecap.js";
 import { PrepItem, PrepItemCreate, PrepItemUpdate } from "./PrepItem.js";
@@ -1111,6 +1112,14 @@ class SeatPrepGroup extends HttpApiGroup.make("seatPrep")
   )
   .middleware(Authorization) {}
 
+/**
+ * The campaign's notes, as its creator keeps them.
+ *
+ * **The creator's alone**, reads as well as writes: `Note` is the working
+ * record, and a player, a Shared World member and a stranger get `NotFound`
+ * from every endpoint here, whether or not the note is shared. A player reads
+ * a shared note through `playerNotes`.
+ */
 class NotesGroup extends HttpApiGroup.make("notes")
   .add(
     /**
@@ -1227,6 +1236,29 @@ class PlayerEncountersGroup extends HttpApiGroup.make("playerEncounters")
     }),
   )
   .prefix("/campaigns/:campaignId/player-encounters")
+  .middleware(Authorization) {}
+
+/**
+ * The shared notes, told to somebody sitting at the table: a distinct
+ * `PlayerNote` on a distinct path, the `playerEncounters` decision. It has no
+ * visibility and no provenance, and its attachment names only an encounter the
+ * reader may read.
+ *
+ * Not behind the creator proof, for `playerEncounters`' reason: a DM calling
+ * it gets the same narrow shape over their own rows. The rows a reader gets
+ * are `repo/visibility.ts`'s answer: a player's are the shared notes of a
+ * shared campaign they sit at. Paged, oldest first, as `notes.list` is.
+ */
+class PlayerNotesGroup extends HttpApiGroup.make("playerNotes")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      query: createdPageFilter,
+      success: createdPageOf(PlayerNote),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/player-notes")
   .middleware(Authorization) {}
 
 /**
@@ -2823,6 +2855,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(PartyGroup)
   .add(SeatPrepGroup)
   .add(NotesGroup)
+  .add(PlayerNotesGroup)
   .add(EncountersGroup)
   .add(PlayerEncountersGroup)
   .add(BattleMapsGroup)

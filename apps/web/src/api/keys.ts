@@ -115,7 +115,8 @@ export const reads = {
   battleMap: (encounterId: EncounterId): ReadKey => key`battle-map:${encounterId}`,
 
   /**
-   * This campaign's notes.
+   * This campaign's notes — the creator's `notes` and a player's
+   * `playerNotes`, which are two paths to one resource and so one key.
    *
    * An encounter's attached notes — its preview's read-aloud, its page's notes
    * — are found in the browser over this list, so a note that is attached or

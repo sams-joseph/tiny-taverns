@@ -458,7 +458,11 @@ describe("another account", () => {
 describe("a note attached to an encounter", () => {
   it("round-trips the attachment", async () => {
     const found = await runtime.runPromise(
-      withActor(fixture.dm)(notes.findById(fixture.campaign.id, fixture.readAloud.id)),
+      withActor(fixture.dm)(
+        Effect.flatMap(asDm(fixture.dm, fixture.campaign.id), (dm) =>
+          notes.findById(dm, fixture.readAloud.id),
+        ),
+      ),
     );
 
     expect(found.kind).toBe("read_aloud");
@@ -495,7 +499,8 @@ describe("a note attached to an encounter", () => {
           attachedTo: { kind: "encounter", id: doomed.id },
         });
         yield* encounters.remove(fixture.campaign.id, doomed.id);
-        return yield* notes.findById(fixture.campaign.id, note.id);
+        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
+        return yield* notes.findById(dm, note.id);
       }).pipe(withActor(fixture.dm), Effect.orDie),
     );
 

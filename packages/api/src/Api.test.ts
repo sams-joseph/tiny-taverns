@@ -17,6 +17,7 @@ import { MagicItem, MagicItemCreate } from "./MagicItem.js";
 import { CampaignId } from "./Ids.js";
 import { Note, NoteCreate } from "./Note.js";
 import { Npc, NpcCreate } from "./Npc.js";
+import { PlayerNote } from "./PlayerNote.js";
 import { PrepItem, PrepItemCreate } from "./PrepItem.js";
 import { Roll, RollCreate } from "./Roll.js";
 import { RuleArticle, RuleArticleLibraryCreate } from "./RuleArticle.js";
@@ -330,6 +331,10 @@ describe("the API declaration", () => {
       // difficulty (captain's decision, 2026-09-25). `encounters` is the
       // creator's.
       "playerEncounters",
+      // A shared note as a player is told it: no visibility, no provenance,
+      // and an attachment only to an encounter they may read. `notes` is the
+      // creator's.
+      "playerNotes",
       "prep",
       "recap",
       "rolls",
@@ -406,6 +411,21 @@ describe("every content schema", () => {
     expect(fields).toContain("version");
     expect(fields).not.toContain("visibility");
     expect(fields).not.toContain("campaignId");
+  });
+
+  it("gives a player's note no visibility and no provenance", () => {
+    // The player projection of a content row is a narrower type, not the wide
+    // one filtered: a field added to `Note` must not reach a player by
+    // default, so this names every key `PlayerNote` may carry.
+    expect(Object.keys(PlayerNote.fields).sort()).toEqual([
+      "attachedTo",
+      "body",
+      "campaignId",
+      "id",
+      "kind",
+      "title",
+      "updatedAt",
+    ]);
   });
 
   it("leaves visibility optional on create, so the column default decides", () => {

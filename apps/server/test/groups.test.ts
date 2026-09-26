@@ -135,7 +135,7 @@ describe("membership is eligibility, not participation", () => {
     );
     const noteRows = await runtime.runPromise(
       Effect.flatMap(Notes, (repo) =>
-        as(fixture.bystander)(items(repo.list(fixture.campaign.id, {}))),
+        as(fixture.bystander)(items(repo.listAsPlayer(fixture.campaign.id, {}))),
       ).pipe(Effect.result),
     );
     const roster = await runtime.runPromise(
@@ -150,12 +150,12 @@ describe("membership is eligibility, not participation", () => {
   it("gives a participant the shared content and the creator everything", async () => {
     const playerNotes = await runtime.runPromise(
       Effect.flatMap(Notes, (repo) =>
-        as(fixture.player)(items(repo.list(fixture.campaign.id, {}))),
+        as(fixture.player)(items(repo.listAsPlayer(fixture.campaign.id, {}))),
       ).pipe(Effect.orDie),
     );
     const creatorNotes = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) =>
-        as(fixture.creator)(items(repo.list(fixture.campaign.id, {}))),
+      Effect.flatMap(asDm(fixture.creator, fixture.campaign.id), (creator) =>
+        Effect.flatMap(Notes, (repo) => items(repo.list(creator, {}))),
       ).pipe(Effect.orDie),
     );
 

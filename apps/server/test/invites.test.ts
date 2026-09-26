@@ -357,17 +357,17 @@ describe("the first player actor, and what it reaches", () => {
     const { account: player } = await joinAs("Sova", issued.token, fixture.campaign.id);
 
     const notes = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(player)(items(repo.list(fixture.campaign.id, {})))).pipe(
-        Effect.orDie,
-      ),
+      Effect.flatMap(Notes, (repo) =>
+        as(player)(items(repo.listAsPlayer(fixture.campaign.id, {}))),
+      ).pipe(Effect.orDie),
     );
     // The other table is the same DM's, and membership is per campaign — so a
     // player at one is a stranger at the other, exactly as an account with no
     // membership is.
     const elsewhere = await runtime.runPromise(
-      Effect.flatMap(Notes, (repo) => as(player)(items(repo.list(fixture.otherTable.id, {})))).pipe(
-        Effect.result,
-      ),
+      Effect.flatMap(Notes, (repo) =>
+        as(player)(items(repo.listAsPlayer(fixture.otherTable.id, {}))),
+      ).pipe(Effect.result),
     );
 
     expect(notes.map((note) => note.title)).toEqual(["The ferry"]);
@@ -537,7 +537,7 @@ describe("the lifetime rules", () => {
 
     const before = await runtime.runPromise(
       Effect.flatMap(Notes, (repo) =>
-        as(wrongPerson)(items(repo.list(fixture.campaign.id, {}))),
+        as(wrongPerson)(items(repo.listAsPlayer(fixture.campaign.id, {}))),
       ).pipe(Effect.result),
     );
     const listedBefore = await listInvites(fixture.campaign);
@@ -546,7 +546,7 @@ describe("the lifetime rules", () => {
 
     const after = await runtime.runPromise(
       Effect.flatMap(Notes, (repo) =>
-        as(wrongPerson)(items(repo.list(fixture.campaign.id, {}))),
+        as(wrongPerson)(items(repo.listAsPlayer(fixture.campaign.id, {}))),
       ).pipe(Effect.result),
     );
 

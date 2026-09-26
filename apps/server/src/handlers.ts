@@ -508,14 +508,36 @@ const NotesLive = HttpApiBuilder.group(
   "notes",
   Effect.fnUntraced(function* (handlers) {
     const notes = yield* Notes;
-    return handlers
-      .handle("list", ({ params, query }) => notes.list(params.campaignId, query))
-      .handle("create", ({ params, payload }) => notes.create(params.campaignId, payload))
-      .handle("findById", ({ params }) => notes.findById(params.campaignId, params.noteId))
-      .handle("update", ({ params, payload }) =>
-        notes.update(params.campaignId, params.noteId, payload),
-      )
-      .handle("remove", ({ params }) => notes.remove(params.campaignId, params.noteId));
+    const asDm = yield* asDmOf;
+    return (
+      handlers
+        // The reads are the creator's alone — `Note` is the working record —
+        // so anybody else is `NotFound` before a row is read. A player reads
+        // `playerNotes`.
+        .handle("list", ({ params, query }) =>
+          asDm(params.campaignId, (creator) => notes.list(creator, query)),
+        )
+        .handle("create", ({ params, payload }) => notes.create(params.campaignId, payload))
+        .handle("findById", ({ params }) =>
+          asDm(params.campaignId, (creator) => notes.findById(creator, params.noteId)),
+        )
+        .handle("update", ({ params, payload }) =>
+          notes.update(params.campaignId, params.noteId, payload),
+        )
+        .handle("remove", ({ params }) => notes.remove(params.campaignId, params.noteId))
+    );
+  }),
+);
+
+/** The shared notes as a player is told them: no visibility, no provenance. */
+const PlayerNotesLive = HttpApiBuilder.group(
+  TavernsApi,
+  "playerNotes",
+  Effect.fnUntraced(function* (handlers) {
+    const notes = yield* Notes;
+    return handlers.handle("list", ({ params, query }) =>
+      notes.listAsPlayer(params.campaignId, query),
+    );
   }),
 );
 
@@ -1644,6 +1666,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     EncountersLive,
     BattleMapsLive,
     PlayerEncountersLive,
+    PlayerNotesLive,
     EncounterPrepLive,
     CreaturesLive,
     CharacterOptionsLive,

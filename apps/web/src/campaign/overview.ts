@@ -117,7 +117,9 @@ const RECENT = 3;
  * rewritten this morning is more recent than the order it was first written in.
  * Copied before sorting: `view.notes` is the frame's list and is shared.
  */
-export const recentNotes = (notes: ReadonlyArray<Note>): ReadonlyArray<Note> =>
+export const recentNotes = <N extends Pick<Note, "updatedAt">>(
+  notes: ReadonlyArray<N>,
+): ReadonlyArray<N> =>
   [...notes]
     .sort((a, b) => DateTime.toEpochMillis(b.updatedAt) - DateTime.toEpochMillis(a.updatedAt))
     .slice(0, RECENT);
