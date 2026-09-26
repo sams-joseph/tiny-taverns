@@ -86,6 +86,7 @@ const aNoteRow = {
   kind: "note",
   category: null,
   attachedTo: null,
+  links: [],
   visibility: "dm",
   pinnedAt: null,
   origin: "assistant",

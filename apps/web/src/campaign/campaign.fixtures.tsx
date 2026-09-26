@@ -237,6 +237,7 @@ export const readAloud = {
   kind: "read_aloud",
   category: null,
   attachedTo: { kind: "encounter", id: encounterId },
+  links: [],
   visibility: "dm",
   pinnedAt: null,
   ...provenance,

@@ -23,6 +23,7 @@ import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRun
 import { type CheckRow, type SceneRow, toCheck } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import {
+  noteColumns,
   type NoteRow,
   playerNoteColumns,
   type PlayerNoteRow,
@@ -72,13 +73,12 @@ const toLink = (row: LinkRow): RecapRunLink =>
  * The notes are here as the `where` that picks them, so both projections read
  * the same rows.
  *
- * The four other sources are already narrowed row by row by
- * `repo/visibility.ts`, so a player's beats, notes and ticked prep are the
- * `shared` ones and nothing else, and that has been true since `0001`. Reading
- * them once and handing them to both projections is what stops the DM's recap
- * and the player's from coming to disagree about what a night contains — the
- * same argument that made this a server-side repository in the first place,
- * applied inside the file.
+ * The other sources are already narrowed row by row by `repo/visibility.ts`,
+ * so a player's beats and ticked prep are the `shared` ones and nothing else,
+ * and that has been true since `0001`. Reading them once and handing them to
+ * both projections is what stops the DM's recap and the player's from coming
+ * to disagree about what a night contains — the same argument that made this
+ * a server-side repository in the first place, applied inside the file.
  */
 interface Night {
   readonly session: Session;
@@ -91,7 +91,7 @@ interface Night {
   /**
    * Which notes were read out tonight, as a `where`: the two projections
    * select different columns from the same rows — a player's are
-   * `PlayerNote`'s, with no visibility, provenance or pin.
+   * `PlayerNote`'s, with no visibility, provenance, pin or links.
    */
   readonly readOut: Statement.Fragment;
 }
@@ -128,8 +128,9 @@ interface Night {
  * the encounter (Shared and Ready) is told the kind of scene instead, "A fight"
  * or "A conversation" (`runColumns`, the captain's decisions of 2026-09-25).
  * A scene that is not a fight carries no combatants to a player, as it showed
- * them no order at the table. The four non-combat sources are not narrowed
- * past their rows.
+ * them no order at the table. The beats and the prep are not narrowed past
+ * their rows; a note is told as `PlayerNote`, as on the player's Overview, so
+ * the creator's links and provenance stay the creator's.
  *
  * ### Why it is a repository and not a client composition
  *
@@ -398,7 +399,7 @@ export class Recap extends Context.Service<
                     `;
 
               const notes = yield* sql<NoteRow>`
-                select note.* from note where ${state.readOut}
+                select ${noteColumns(sql)} from note where ${state.readOut}
                 order by note.created_at asc, note.id asc
               `;
 

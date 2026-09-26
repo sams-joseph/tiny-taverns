@@ -527,6 +527,15 @@ const NotesLive = HttpApiBuilder.group(
         .handle("remove", ({ params }) => notes.remove(params.campaignId, params.noteId))
         .handle("pin", ({ params }) => notes.setPinned(params.campaignId, params.noteId, true))
         .handle("unpin", ({ params }) => notes.setPinned(params.campaignId, params.noteId, false))
+        // Links are the creator's to read, so they are the creator's to write.
+        .handle("addLink", ({ params, payload }) =>
+          asDm(params.campaignId, (creator) => notes.addLink(creator, params.noteId, payload)),
+        )
+        .handle("removeLink", ({ params }) =>
+          asDm(params.campaignId, (creator) =>
+            notes.removeLink(creator, params.noteId, params.kind, params.targetId),
+          ),
+        )
     );
   }),
 );
