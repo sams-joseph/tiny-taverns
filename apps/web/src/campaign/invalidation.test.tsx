@@ -183,14 +183,19 @@ describe("a roster line, which moves a number the write never sent", () => {
  * same atom. Nobody has to know that screen exists.
  */
 describe("a note's attachment, which moves a preview on a screen it never saw", () => {
+  /** The Notes pane's *Attached to*, which saves the moment it is chosen. */
+  const attach = async (to: string) => {
+    await userEvent.click(await screen.findByRole("combobox", { name: "Attached to" }));
+    await userEvent.click(await screen.findByRole("option", { name: to }));
+  };
+
   it("re-reads the notes and not the encounters", async () => {
     server.routes.set(`PATCH ${notesPath}/${readAloud.id}`, { status: 200, body: readAloud });
     await renderNotes(mintingSession());
-    await screen.findByRole("button", { name: `Edit ${readAloud.title}` });
+    await screen.findByRole("article", { name: readAloud.title });
 
     const mark = server.calls.length;
-    await userEvent.click(screen.getByRole("button", { name: `Edit ${readAloud.title}` }));
-    await userEvent.click(await screen.findByRole("button", { name: "Save changes" }));
+    await attach("Nothing");
 
     await waitFor(() => expect(reads(mark, notesPath)).toBe(1));
     expect(reads(mark, encountersPath)).toBe(0);
@@ -199,7 +204,7 @@ describe("a note's attachment, which moves a preview on a screen it never saw", 
 
   it("and the encounter's preview reads it aloud the moment it is drawn", async () => {
     // The wire either side of the write: nothing attached, then attached. What
-    // is asserted is that the *encounters* screen, which the note dialog has
+    // is asserted is that the *encounters* screen, which the Notes pane has
     // never seen, draws the read-aloud from the refreshed notes rather than from
     // a read of its own.
     server.routes.set(`GET ${notesPath}`, {
@@ -208,12 +213,12 @@ describe("a note's attachment, which moves a preview on a screen it never saw", 
     });
     server.routes.set(`PATCH ${notesPath}/${readAloud.id}`, { status: 200, body: readAloud });
     await renderNotes(mintingSession());
-    await screen.findByRole("button", { name: `Edit ${readAloud.title}` });
+    await screen.findByRole("article", { name: readAloud.title });
 
     server.routes.set(`GET ${notesPath}`, { status: 200, body: page([readAloud]) });
-    await userEvent.click(screen.getByRole("button", { name: `Edit ${readAloud.title}` }));
-    await userEvent.click(await screen.findByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const before = server.calls.length;
+    await attach("Ambush in the reeds");
+    await waitFor(() => expect(reads(before, notesPath)).toBe(1));
 
     const mark = server.calls.length;
     await userEvent.click(

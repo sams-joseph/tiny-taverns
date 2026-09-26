@@ -189,6 +189,11 @@ for (const width of WIDTHS) {
       // Edit, which opens the encounter builder rather than the Encounters tab.
       const editButton = row.getByRole("button", { name: "Edit Whatever is in the crate" });
       await expect(editButton).toHaveAttribute("href", /\/encounters\/[^/]+\/edit$/);
+      // In view and clear of the sticky chrome: on a phone the read-aloud
+      // inset above the rows puts them below the first screen.
+      await editButton.evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
       const editBox = await box(editButton);
       const hit = await page.evaluate(
         ({ x, y }) => document.elementFromPoint(x, y)?.closest("a")?.getAttribute("aria-label"),

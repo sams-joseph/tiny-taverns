@@ -4,6 +4,7 @@ import {
   CharacterId,
   EncounterId,
   EncounterRunId,
+  NoteId,
   SharedWorldId,
   NpcId,
   SessionId,
@@ -115,6 +116,7 @@ const asWorldId = decoder(SharedWorldId);
 const asCharacterId = decoder(CharacterId);
 const asSeatId = decoder(CampaignCharacterId);
 const asEncounterId = decoder(EncounterId);
+const asNoteId = decoder(NoteId);
 const asNpcId = decoder(NpcId);
 const asSessionId = decoder(SessionId);
 const asRunId = decoder(EncounterRunId);
@@ -255,13 +257,15 @@ const campaignIndexRoute = createRoute({
 });
 
 /**
- * The encounter screens are the creator's. The server refuses every read
- * behind them to a player, and that is the gate; `creatorOnly` is what a
- * player who types one of these URLs reads instead of the refusal.
+ * The encounter screens and Notes are the creator's. The server refuses every
+ * read behind them to a player, and that is the gate; `creatorOnly` is what a
+ * player who types one of these URLs reads instead of the refusal. A player
+ * reads the shared notes on their own Overview.
  */
 const EncountersRouteScreen = creatorOnly("Encounters", EncountersScreen);
 const EncounterRouteScreen = creatorOnly("Encounters", EncounterScreen);
 const EncounterBuilderRouteScreen = creatorOnly("Encounters", EncounterBuilderScreen);
+const NotesRouteScreen = creatorOnly("Notes", NotesScreen);
 
 /**
  * The encounters built for this table, and the Notes beside them.
@@ -348,7 +352,16 @@ const encountersSplatRoute = createRoute({
 const notesRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "notes",
-  component: NotesScreen,
+  /**
+   * Which note the pane holds, so a reload, a shared link and *New note* land
+   * on it. A bad or missing id is no choice, and the screen shows the first
+   * note it lists — see `NotesScreen`.
+   */
+  validateSearch: (search: Record<string, unknown>): { note?: NoteId } => {
+    const note = asNoteId(typeof search["note"] === "string" ? search["note"] : undefined);
+    return note === undefined ? {} : { note };
+  },
+  component: NotesRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 

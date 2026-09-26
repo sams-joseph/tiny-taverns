@@ -5,7 +5,7 @@ import { renderAt } from "../test/renderRoute";
 import { campaign, campaignId, encounterId, installStubServer } from "./campaign.fixtures";
 
 /**
- * The encounter screens, typed by somebody who only sits at the table.
+ * The encounter screens and Notes, typed by somebody who only sits at the table.
  *
  * The server refuses a player every read behind these screens, and it stays
  * the gate. What is checked here is what the player reads instead of that
@@ -38,6 +38,7 @@ const encounterRoutes = [
   ["a new encounter", `${base}/encounters/new`],
   ["an encounter's edit", `${base}/encounters/${encounterId}/edit`],
   ["a half-typed link", `${base}/encounters/${encounterId}/nowhere`],
+  ["the notes", `${base}/notes`],
 ] as const;
 
 /** Anything under `…/encounters`, `…/encounter-prep` or a run: the creator's reads. */

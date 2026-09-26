@@ -4,6 +4,8 @@ import {
   sessionId,
   encounterShelf,
   fullCampaign,
+  noteShelf,
+  page,
   type Answer,
 } from "../campaign/campaign.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
@@ -67,6 +69,12 @@ const creator = (): Map<string, Answer> => {
   // their prep, so a card's foot draws a hook and a secret.
   routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
   routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
+  // The Notes tab's shelf, after the Chronicle's empty list, so the list and
+  // the pane are measured over notes: a read-aloud, two paragraphs, a shared
+  // one and an empty one.
+  routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page(noteShelf) });
+  for (const note of noteShelf)
+    routes.set(`PATCH /campaigns/${campaignId}/notes/${note.id}`, { status: 200, body: note });
   return routes;
 };
 

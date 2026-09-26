@@ -70,6 +70,14 @@
   --encounters-list-w: 360px;
   --encounters-pane-min: 420px;
 
+  /* The same drawing's Notes tab: the list `flex: 1 1 280px` capped at
+     `max-width: 380px` beside the note's pane at `flex: 2 1 420px`, so the two
+     stand side by side down to 724px of content and the pane drops under the
+     list below it. Centred at `--overview-w`, like the Encounters tab. */
+  --notes-list-min: 280px;
+  --notes-list-w: 380px;
+  --notes-pane-min: 420px;
+
   /* The same drawing's Party tab: a grid of character cards,
      `repeat(auto-fill, minmax(min(100%, 270px), 1fr))`, each opening on a
      150px portrait band. */

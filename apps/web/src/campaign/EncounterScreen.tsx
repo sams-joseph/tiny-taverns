@@ -15,8 +15,7 @@ import { describeDifficulty } from "./difficulty";
 import { DifficultyBadge } from "./DifficultyBadge";
 import { describeRoster, playthroughOf } from "./encounterList";
 import { encounterPageAtom, type EncounterPage } from "./load";
-import { NoteCard } from "./NotesList";
-import { NoteDialog } from "./NoteDialog";
+import { NoteCard } from "./NoteCard";
 import { sceneNoun } from "../run/scene";
 
 /**
@@ -49,7 +48,6 @@ export function EncounterScreen() {
   });
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
-  const [editingNote, setEditingNote] = useState<Note>();
   const find = (encounters: ReadonlyArray<Encounter>) =>
     encounters.find((row) => row.id === encounterId);
 
@@ -165,7 +163,6 @@ export function EncounterScreen() {
               page={extra}
               notes={notes}
               running={view.run?.encounterId === encounter.id}
-              onEditNote={setEditingNote}
             />
             {deleting && (
               <DeleteEncounterDialog
@@ -177,16 +174,6 @@ export function EncounterScreen() {
                 onDeleted={() =>
                   void navigate({ to: "/campaigns/$campaignId/encounters", params: { campaignId } })
                 }
-              />
-            )}
-            {editingNote !== undefined && (
-              <NoteDialog
-                key={editingNote.id}
-                campaignId={campaignId}
-                note={editingNote}
-                encounters={view.encounters}
-                onClose={() => setEditingNote(undefined)}
-                onSaved={() => setEditingNote(undefined)}
               />
             )}
           </>
@@ -201,13 +188,11 @@ function EncounterBody({
   page,
   notes,
   running,
-  onEditNote,
 }: {
   readonly encounter: Encounter;
   readonly page: EncounterPage;
   readonly notes: ReadonlyArray<Note>;
   readonly running: boolean;
-  readonly onEditNote: (note: Note) => void;
 }) {
   const { map, roster } = page;
   const grid = useGridAdjustment({ campaignId: encounter.campaignId, map });
@@ -332,12 +317,7 @@ function EncounterBody({
           </SectionHeading>
           <div className="flex flex-col gap-4">
             {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                encounter={undefined}
-                onEdit={() => onEditNote(note)}
-              />
+              <NoteCard key={note.id} note={note} />
             ))}
           </div>
         </section>
