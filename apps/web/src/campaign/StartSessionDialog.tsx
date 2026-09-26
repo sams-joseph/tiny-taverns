@@ -100,7 +100,7 @@ export function StartSessionDialog({
         </DialogHeader>
 
         <div className="px-gutter py-3">
-          {number.state === "loading" && <Loading label="Counting the sessions…" />}
+          {number.state === "loading" && <Loading label="Counting the sessions…" inline />}
           {number.state === "failed" && (
             <ApiFailureNotice failure={number.failure} onRetry={reload} />
           )}

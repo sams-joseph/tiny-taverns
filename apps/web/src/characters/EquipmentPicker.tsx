@@ -78,7 +78,7 @@ export function EquipmentPicker({ onPick }: { readonly onPick: (row: Equipment) 
         )}
       </div>
 
-      {resource.state === "loading" && <Loading label="Reading the catalogue…" />}
+      {resource.state === "loading" && <Loading label="Reading the catalogue…" inline />}
       {resource.state === "failed" && (
         <ApiFailureNotice failure={resource.failure} onRetry={reload} />
       )}

@@ -283,7 +283,10 @@ function Chronicle({
               the list does not blank on every keystroke — with a quiet line
               saying a newer one is coming. */}
           {hits.state === "loading" && (
-            <Loading label={answered === undefined ? "Looking through the record…" : "Looking…"} />
+            <Loading
+              label={answered === undefined ? "Looking through the record…" : "Looking…"}
+              inline
+            />
           )}
           {answered !== undefined &&
             answered.q !== "" &&

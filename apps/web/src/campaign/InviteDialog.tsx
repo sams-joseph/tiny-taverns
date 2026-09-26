@@ -238,7 +238,7 @@ export function InviteDialog({
             <span className="pb-1 text-label leading-snug font-semibold text-heading">
               Invitations
             </span>
-            {resource.state === "loading" && <Loading label="Reading your invitations…" />}
+            {resource.state === "loading" && <Loading label="Reading your invitations…" inline />}
             {resource.state === "failed" && (
               <ApiFailureNotice failure={resource.failure} onRetry={retry} />
             )}

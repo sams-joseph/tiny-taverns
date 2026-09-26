@@ -282,7 +282,7 @@ export function SpellPickerDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-label="Choose spells" className="@container">
         {resource.state === "loading" ? (
-          <Loading label="Reading your spell list…" />
+          <Loading label="Reading your spell list…" inline />
         ) : resource.state === "failed" ? (
           <div className="p-gutter">
             <ApiFailureNotice failure={resource.failure} onRetry={reload} />
