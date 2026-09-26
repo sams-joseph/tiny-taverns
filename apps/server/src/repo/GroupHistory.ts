@@ -3,6 +3,7 @@ import {
   type AssistantTurnId,
   type CampaignId,
   Conflict,
+  type EncounterKind,
   CurrentActor,
   type SharedWorldHistoryEntryCreate,
   SharedWorldHistoryEntry,
@@ -138,9 +139,14 @@ export interface ToldNight {
   /** Shared fights that have ended, in the order they started. */
   readonly fights: ReadonlyArray<{
     readonly name: string;
+    /** A fight, or a scene of another kind, which has no rounds to tell. */
+    readonly mode: EncounterKind;
     readonly round: number;
     readonly outcome: "resolved" | "carried";
-    /** Shared combatants who ended it at zero hit points. */
+    /**
+     * Shared combatants who ended a fight at zero hit points. Always empty for
+     * a scene that was not a fight: its players were shown nobody in it.
+     */
     readonly fell: ReadonlyArray<string>;
   }>;
   /** Shared prep lines the DM ticked. */
@@ -174,9 +180,13 @@ export const renderNightEntry = (
 
   const fightLines = night.fights.map((fight) => {
     const outcome =
-      fight.outcome === "carried"
-        ? `paused at round ${String(fight.round)}`
-        : `fought to a finish at round ${String(fight.round)}`;
+      fight.mode !== "combat"
+        ? fight.outcome === "carried"
+          ? "paused when the night ended"
+          : "played to its end"
+        : fight.outcome === "carried"
+          ? `paused at round ${String(fight.round)}`
+          : `fought to a finish at round ${String(fight.round)}`;
     const fell = fight.fell.length === 0 ? "" : ` ${fight.fell.join(", ")} went down.`;
     return `${fight.name}: ${outcome}.${fell}`;
   });
@@ -196,6 +206,7 @@ export const renderNightEntry = (
       sessionNumber: night.number,
       fights: night.fights.map((fight) => ({
         name: fight.name,
+        mode: fight.mode,
         round: fight.round,
         endedReason: fight.outcome,
       })),
@@ -227,6 +238,7 @@ export interface NightStory {
   /** Shared, ended fights: name and outcome only — no roster, no numbers, no stat blocks. */
   readonly fights: ReadonlyArray<{
     readonly name: string;
+    readonly mode: EncounterKind;
     readonly round: number;
     readonly outcome: "resolved" | "carried";
   }>;
@@ -341,9 +353,11 @@ export class GroupHistory extends Context.Service<
        * a fight still on the table, and a beat, prep line or combatant kept to
        * the DM are never selected. A told fight is named after its encounter
        * only when that encounter is shared with the table's players (Shared and
-       * Ready, `runEncounterToldTheWorld`), and is otherwise "A fight", as it is
-       * to those players. The caller has already bound the session to its
-       * campaign and group and checked that it was played.
+       * Ready, `runEncounterToldTheWorld`), and is otherwise told by its kind,
+       * "A fight" or "A conversation" (`fightName`), as it is to those
+       * players; a scene that was not a fight tells nobody who fell in it, as
+       * its players were shown nobody in it. The caller has already bound the
+       * session to its campaign and group and checked that it was played.
        */
       const toldNight = (night: {
         readonly sessionId: SessionId;
@@ -361,16 +375,19 @@ export class GroupHistory extends Context.Service<
           `;
           const fights = yield* sql<{
             readonly encounter_name: string;
+            readonly mode: EncounterKind;
             readonly round: number;
             readonly ended_reason: "resolved" | "carried";
             readonly fell: ReadonlyArray<string>;
           }>`
             select ${fightName(sql, runEncounterToldTheWorld(sql))} as encounter_name,
+                   encounter_run.mode,
                    encounter_run.round,
                    encounter_run.ended_reason,
                    array(
                      select combatant.display_name from combatant
                      where combatant.encounter_run_id = encounter_run.id
+                       and encounter_run.mode = 'combat'
                        and combatant.hp_current <= 0
                        and ${toldTheWorld(sql, "combatant")}
                      ${initiativeOrder(sql)}
@@ -395,6 +412,7 @@ export class GroupHistory extends Context.Service<
             beats: beats.map((row) => row.body),
             fights: fights.map((row) => ({
               name: row.encounter_name,
+              mode: row.mode,
               round: row.round,
               outcome: row.ended_reason,
               fell: row.fell,
@@ -704,6 +722,7 @@ export class GroupHistory extends Context.Service<
                 beats: night.beats,
                 fights: night.fights.map((fight) => ({
                   name: fight.name,
+                  mode: fight.mode,
                   round: fight.round,
                   outcome: fight.outcome,
                 })),

@@ -788,7 +788,8 @@ export const NightStory = Tool.make("nightStory", {
   description:
     "What happened on one played night, anywhere in the Shared World, as far " +
     "as its DM shared it: the shared story beats verbatim and each shared, " +
-    "finished fight by name and outcome. No numbers and no stat blocks — " +
+    "finished fight or scene by name, kind and outcome; a conversation, a " +
+    "skill challenge or a hazard has no round. No numbers and no stat blocks — " +
     "outcomes, not mechanics. Take the ids from listPlayedNights.",
   parameters: Schema.Struct({
     campaignId: CampaignId,
@@ -802,7 +803,8 @@ export const NightStory = Tool.make("nightStory", {
     fights: Schema.Array(
       Schema.Struct({
         name: Schema.String,
-        round: Schema.Int,
+        kind: EncounterKind,
+        round: Schema.NullOr(Schema.Int),
         outcome: Schema.Literals(["resolved", "carried"]),
       }),
     ),
@@ -2147,7 +2149,8 @@ export const groupHandlersFor = (
         beats: story.beats,
         fights: story.fights.map((fight) => ({
           name: fight.name,
-          round: fight.round,
+          kind: fight.mode,
+          round: fight.mode === "combat" ? fight.round : null,
           outcome: fight.outcome,
         })),
       })),

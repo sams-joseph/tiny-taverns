@@ -347,6 +347,7 @@ export const playing = (
     readonly order?: ReadonlyArray<Record<string, unknown>>;
     readonly round?: number;
     readonly phase?: "initiative" | "turns";
+    readonly mode?: "combat" | "social" | "challenge" | "hazard";
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -361,6 +362,7 @@ export const playing = (
           ? null
           : {
               id: liveRunId,
+              mode: fight.mode ?? "combat",
               round: fight.round ?? 3,
               phase: fight.phase ?? "turns",
               upNext:

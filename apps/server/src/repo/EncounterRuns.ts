@@ -22,6 +22,7 @@ import {
   type InitiativeSetBy,
   initiativeBonusOf,
   type NextTurn,
+  NEUTRAL_RUN_NAMES,
   NotFound,
   type Origin,
   type RerollInitiative,
@@ -91,22 +92,22 @@ export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
   });
 
 /**
- * What a fight is called to somebody who may see the fight and not the
- * encounter it was started from.
- */
-export const NEUTRAL_FIGHT_NAME = "A fight";
-
-/**
  * The correlated run's name to a reader for whom `named` says whether its
- * encounter may be named: the snapshot, or `NEUTRAL_FIGHT_NAME`. The one
- * spelling of the fallback, for the table's reads (`runColumns`) and the Shared
- * World's (`GroupHistory`).
+ * encounter may be named: the snapshot, or the kind of scene it was
+ * (`NEUTRAL_RUN_NAMES`, by the run's `mode`) — "A fight", "A conversation".
+ * The one spelling of the fallback, for the table's reads (`runColumns`) and
+ * the Shared World's (`GroupHistory`).
  */
 export const fightName = (
   sql: SqlClient.SqlClient,
   named: Statement.Fragment,
-): Statement.Fragment =>
-  sql`case when ${named} then encounter_run.encounter_name else ${NEUTRAL_FIGHT_NAME} end`;
+): Statement.Fragment => {
+  const neutral = Object.entries(NEUTRAL_RUN_NAMES).map(
+    ([mode, name]) => sql`when ${mode} then ${name}`,
+  );
+  return sql`case when ${named} then encounter_run.encounter_name
+    else case encounter_run.mode ${sql.join(" ", false)(neutral)} end end`;
+};
 
 /**
  * An `encounter_run` row as this actor may read it, for every read that is not
@@ -115,7 +116,7 @@ export const fightName = (
  * Every column of the row, listed rather than `encounter_run.*`, because two of
  * them are narrowed and the wide ones must not be selected beside them: to a
  * reader who may not read the encounter (`runEncounterReadable`), the fight has
- * no `encounter_id` and is called `NEUTRAL_FIGHT_NAME`. The creator is named
+ * no `encounter_id` and is called by its kind (`fightName`). The creator is named
  * the snapshot whatever became of the template — `campaignWritableById` is the
  * creator's test — so nothing a DM reads changes, a deleted template included.
  */

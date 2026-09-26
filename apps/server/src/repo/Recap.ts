@@ -111,9 +111,11 @@ interface Night {
  * **A run is narrowed in one place only: which encounter it was.** Its round
  * and ending are things a player who was there lived through. Its encounter's
  * id and name are not — they are the encounter's, and a player who may not read
- * the encounter (Shared and Ready) is told "A fight" (`runColumns`, the
- * captain's decision of 2026-09-25). The four non-combat sources are not
- * narrowed past their rows.
+ * the encounter (Shared and Ready) is told the kind of scene instead, "A fight"
+ * or "A conversation" (`runColumns`, the captain's decisions of 2026-09-25).
+ * A scene that is not a fight carries no combatants to a player, as it showed
+ * them no order at the table. The four non-combat sources are not narrowed
+ * past their rows.
  *
  * ### Why it is a repository and not a client composition
  *
@@ -392,6 +394,11 @@ export class Recap extends Context.Service<
               // narrowing is in the columns rather than in a mapper, so a
               // monster's exact hit points and its armour class are never read
               // out of Postgres at all — see `repo/playerCombatant.ts`.
+              //
+              // Only a fight's: a conversation, a skill challenge or a hazard
+              // had no initiative order at the table (`PlayerTable`), so its
+              // recap names nobody in it either — who the party met, or what
+              // the hazard's roster held, stays the creator's.
               const rows =
                 state.runIds.length === 0
                   ? []
@@ -399,6 +406,11 @@ export class Recap extends Context.Service<
                       select ${playerCombatantColumns(sql)} from combatant
                       where ${sql.in("combatant.encounter_run_id", state.runIds)}
                         and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+                        and exists (
+                          select 1 from encounter_run
+                          where encounter_run.id = combatant.encounter_run_id
+                            and encounter_run.mode = 'combat'
+                        )
                       ${initiativeOrder(sql)}
                     `;
 

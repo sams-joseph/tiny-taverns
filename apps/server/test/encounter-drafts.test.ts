@@ -6,6 +6,7 @@ import {
   type EncounterCreate,
   type EncounterId,
   type EncounterRunId,
+  NEUTRAL_RUN_NAMES,
   type PlayerSessionRecap,
   type SessionId,
   TavernsApi,
@@ -16,7 +17,6 @@ import { HttpApiClient } from "effect/unstable/httpapi";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
-import { NEUTRAL_FIGHT_NAME } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -340,7 +340,7 @@ describe("a shared fight, to a player", () => {
       COMBINATIONS.map(([label]) =>
         label === "SHARED-READY"
           ? [runs[label], nameOf(label), ids[label]]
-          : [runs[label], NEUTRAL_FIGHT_NAME, null],
+          : [runs[label], NEUTRAL_RUN_NAMES.combat, null],
       ),
     );
   });
@@ -387,7 +387,7 @@ describe("a shared fight, to a player", () => {
       ),
     );
     const told = COMBINATIONS.map(([label]) =>
-      label === "SHARED-READY" ? nameOf(label) : NEUTRAL_FIGHT_NAME,
+      label === "SHARED-READY" ? nameOf(label) : NEUTRAL_RUN_NAMES.combat,
     );
     expect(story.fights.map((fight) => fight.name)).toEqual(told);
     expect(leaked(JSON.stringify(story), ["SHARED-READY"])).toEqual([]);
@@ -418,7 +418,7 @@ describe("a shared fight, to a player", () => {
       client.recap.readAsPlayer({ params: { campaignId: table, sessionId: night } }),
     );
     expect(recap.fights.map((fight) => fight.run.encounterName)).toEqual(
-      COMBINATIONS.map(() => NEUTRAL_FIGHT_NAME),
+      COMBINATIONS.map(() => NEUTRAL_RUN_NAMES.combat),
     );
     // The creator keeps the name the fight had that night.
     const dmRecap = await as(dm.token, (client) =>

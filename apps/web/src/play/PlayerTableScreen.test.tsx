@@ -269,7 +269,7 @@ describe("PlayerTableScreen", () => {
   it("keeps a seated player's rolls through a scene that has no initiative order", async () => {
     // A conversation, a skill challenge or a hazard answers no order and
     // nobody up; the seat is what says this player is in it.
-    server.routes.set(...playing(campaignId, { order: [], upNext: null }));
+    server.routes.set(...playing(campaignId, { mode: "challenge", order: [], upNext: null }));
     server.routes.set(`POST /campaigns/${campaignId}/rolls`, {
       status: 200,
       body: { ...roll, requestId: "sent-in-a-scene" },
