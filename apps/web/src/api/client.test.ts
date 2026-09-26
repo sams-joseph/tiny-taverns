@@ -61,6 +61,7 @@ const noteJson = {
   // Free-standing, the shape the Notes tab shows. A read-aloud hanging off an
   // encounter carries `{ kind: "encounter", id }` here instead.
   attachedTo: null,
+  links: [],
   visibility: "dm",
   origin: "authored",
   assistantTurnId: null,

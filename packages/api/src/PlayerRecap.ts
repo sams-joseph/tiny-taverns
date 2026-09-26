@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { EncounterRun } from "./EncounterRun.js";
 import { CombatantId, EncounterRunId } from "./Ids.js";
-import { Note } from "./Note.js";
+import { PlayerNote } from "./PlayerNote.js";
 import { PrepItem } from "./PrepItem.js";
 import { RecapRunLink } from "./Recap.js";
 import { Session } from "./Session.js";
@@ -130,13 +130,15 @@ export type PlayerRecapFight = typeof PlayerRecapFight.Type;
  * away from disclosing everything, whereas a separate response schema makes a
  * leak something somebody has to *write*. `repo/Recap.ts` assembles both from
  * one set of queries, so the two cannot drift about what a night contains —
- * only about how much of a combatant each is allowed to say.
+ * only about how much of a combatant or a note each is allowed to say.
  *
- * Every other field is the DM's, unchanged, because every other field is
+ * The beats and the prep are the DM's types, unchanged, because they are
  * already narrowed by `repo/visibility.ts` at the row level: a player's
- * `beats`, `notes` and `prepDone` are the `shared` ones and nothing else, and
- * that seam has been the answer since `0001`. The combatant was the one place
- * where a `shared` row still said too much.
+ * `beats` and `prepDone` are the `shared` ones and nothing else, and that seam
+ * has been the answer since `0001`. The combatant was the first place where a
+ * `shared` row still said too much; the note is the second — `Note` carries
+ * the creator's links and grows with the Notes screen — so a player's notes
+ * are `PlayerNote`, as on their Overview.
  */
 export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("PlayerSessionRecap")({
   session: Session,
@@ -147,5 +149,5 @@ export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("Player
   /** The ticked lines the DM shared. */
   prepDone: Schema.Array(PrepItem),
   /** The read-alouds that were actually read out, and were shared. */
-  notes: Schema.Array(Note),
+  notes: Schema.Array(PlayerNote),
 }) {}

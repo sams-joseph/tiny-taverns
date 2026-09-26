@@ -512,7 +512,12 @@ describe("the scope, counted", () => {
     // the creator's working record, and a player reads `listAsPlayer`, a
     // `PlayerNote` with no visibility or provenance, ungated for
     // `listAsPlayer`'s reason on `Encounters`.
-    expect(gated).toBe(109);
+    // A hundred and ten to a hundred and thirteen are a note's links:
+    // `Notes.addLink` and `removeLink`, and the two inner helpers they share,
+    // the note's read and the target's check. A link names an encounter or a
+    // seat whether or not a player may read it, so it is the creator's from
+    // the day it was declared, and `PlayerNote` has none.
+    expect(gated).toBe(113);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

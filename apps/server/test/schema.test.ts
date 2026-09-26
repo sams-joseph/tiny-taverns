@@ -112,6 +112,10 @@ const NOT_CONTENT = [
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",
+  // A note's link to an encounter or a seat: an edge between two rows that
+  // each carry their own visibility and provenance, read and written by the
+  // note's creator alone through the creator proof. See 0068_note_links.ts.
+  "note_link",
   // An NPC's portrait: who may see it is exactly who may read the NPC, through
   // the NPC's own reads. See 0050_npc_images.ts.
   "npc_image",

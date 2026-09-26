@@ -85,6 +85,7 @@ const aNoteRow = {
   body: "She trims the wicks at dusk.",
   kind: "note",
   attachedTo: null,
+  links: [],
   visibility: "dm",
   origin: "assistant",
   assistantTurnId: "c4f4b6d2-9b1a-4c3e-8f7a-2b1c3d4e5f60",

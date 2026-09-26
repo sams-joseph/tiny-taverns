@@ -6,7 +6,7 @@ import {
   campaign,
   campaignId,
   carriedRun,
-  readAloudNote,
+  playerReadAloudNote,
   resumedRun,
   session11Id,
   session12Id,
@@ -101,7 +101,7 @@ export const playerRecap11 = {
   ],
   beats: [beat],
   prepDone: [],
-  notes: [readAloudNote],
+  notes: [playerReadAloudNote],
 };
 
 /** Session 12, from the far side of the join. */

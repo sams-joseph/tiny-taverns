@@ -236,6 +236,7 @@ export const readAloud = {
   body: "The reeds are taller than you are and they are not moving, even though there is a wind.",
   kind: "read_aloud",
   attachedTo: { kind: "encounter", id: encounterId },
+  links: [],
   visibility: "dm",
   ...provenance,
   ...stamps,
