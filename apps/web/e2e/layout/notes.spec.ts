@@ -5,11 +5,14 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The Notes tab's list and pane (`campaign/NotesScreen.tsx`), at every width:
  * where the two columns stand, that the header lines up with them and its
  * controls do not collide, that a note chosen while the columns are stacked
- * brings the pane into view, and that a long body grows the page rather than
- * scrolling inside itself. All of it is layout, which jsdom does not compute.
+ * brings the pane into view, that its *Linked* chips wrap inside it and their
+ * × removes without navigating, and that a long body grows the page rather
+ * than scrolling inside itself. All of it is layout, which jsdom does not
+ * compute.
  *
  * Read over the creator scenario's `noteShelf`: a read-aloud, an NPC note of
- * two paragraphs, a shared house rule and an empty place, pinned.
+ * two paragraphs linked to three encounters and three seats, a shared house
+ * rule and an empty place, pinned.
  */
 
 const notes = screens.find((screen) => screen.name === "notes")!;
@@ -151,6 +154,46 @@ for (const width of WIDTHS) {
         } else {
           expect.soft(at.scrollY, "the page did not scroll").toBe(0);
         }
+      });
+
+      await test.step("the Linked chips wrap inside the pane", async () => {
+        const chips = pane.locator('[data-slot="note-link-chip"]');
+        await expect(chips).toHaveCount(6);
+        const inner = await box(pane.locator('[data-slot="note-links"] ul'));
+        const boxes = await chips.evaluateAll((els) =>
+          els.map((el) => {
+            const r = el.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+          }),
+        );
+        for (const chip of boxes) {
+          expect.soft(chip.x, "chip left").toBeGreaterThanOrEqual(inner.x - 0.5);
+          expect
+            .soft(chip.x + chip.width, "chip right")
+            .toBeLessThanOrEqual(inner.x + inner.width + 0.5);
+          expect.soft(chip.height, "chip height").toBeCloseTo(30, 0);
+        }
+        const rows = new Set(boxes.map((chip) => Math.round(chip.y))).size;
+        if (stacked) expect.soft(rows, "chips wrap onto rows").toBeGreaterThan(1);
+        // Every × is a target of at least 24px square.
+        for (const remove of await pane.getByRole("button", { name: /^Unlink / }).all()) {
+          const target = await box(remove);
+          expect.soft(target.width, "× width").toBeGreaterThanOrEqual(24);
+          expect.soft(target.height, "× height").toBeGreaterThanOrEqual(24);
+        }
+      });
+
+      await test.step("the × removes without leaving the note", async () => {
+        const url = page.url();
+        const unlink = page.waitForRequest(
+          (request) => request.method() === "DELETE" && request.url().includes("/links/seat/"),
+        );
+        await pane
+          .getByRole("button", { name: /^Unlink / })
+          .last()
+          .click();
+        await unlink;
+        expect.soft(page.url(), "still on the note").toBe(url);
       });
 
       await test.step("a long body grows the page, never scrolls inside itself", async () => {

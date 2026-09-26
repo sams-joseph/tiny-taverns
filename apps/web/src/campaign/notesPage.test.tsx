@@ -5,12 +5,17 @@ import { renderAt } from "../test/renderRoute";
 import {
   blankNote,
   campaignId,
+  encounter,
+  encounterId,
   grusk,
   houseRule,
   installStubServer,
   noteShelf,
   page,
   readAloud,
+  seatId,
+  sketch,
+  sketchId,
 } from "./campaign.fixtures";
 import { AUTOSAVE_DELAY_MS } from "./noteAutosave";
 
@@ -424,5 +429,113 @@ describe("deleting a note", () => {
     await waitFor(() => expect(chosen()).toBeNull());
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Grusk/ })).toBeNull());
     expect(screen.getByRole("article")).toHaveAccessibleName(blankNote.title);
+  });
+});
+
+describe("the Linked chips", () => {
+  const retiredSeat = "2b1f2a1e-0000-4000-8000-000000000898";
+  const linkedGrusk = {
+    ...grusk,
+    links: [
+      { kind: "encounter", id: sketchId },
+      { kind: "seat", id: seatId },
+      // A retired seat keeps its link, but its page is gone: no chip.
+      { kind: "seat", id: retiredSeat },
+    ],
+  };
+  const withGrusk = (note: typeof linkedGrusk | typeof grusk) =>
+    server.routes.set(`GET ${notesPath}`, {
+      status: 200,
+      body: page(noteShelf.map((each) => (each.id === grusk.id ? note : each))),
+    });
+  const linked = () =>
+    within(within(screen.getByRole("article")).getByRole("list", { name: "Linked" })).getAllByRole(
+      "listitem",
+    );
+  const posts = () =>
+    server.calls
+      .filter(
+        (call) => call.method === "POST" && call.pathname === `${notesPath}/${grusk.id}/links`,
+      )
+      .map((call) => JSON.parse(call.body) as unknown);
+
+  it("draws the attachment first, opening its encounter, with nothing to remove", async () => {
+    await open(`?note=${readAloud.id}`);
+
+    const attached = screen.getByRole("link", { name: `Attached to ${encounter.name}` });
+    expect(attached).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/encounters?encounter=${encounterId}`,
+    );
+    expect(linked()[0]).toContainElement(attached);
+    expect(screen.queryByRole("button", { name: /^Unlink/ })).toBeNull();
+    expect(screen.queryByText("Not linked to anything yet.")).toBeNull();
+  });
+
+  it("opens each link's object, and draws no chip for a seat no longer at the table", async () => {
+    withGrusk(linkedGrusk);
+    await open(`?note=${grusk.id}`);
+
+    expect(screen.getByRole("link", { name: sketch.name })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/encounters?encounter=${sketchId}`,
+    );
+    expect(screen.getByRole("link", { name: "Brannoc" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/party/${seatId}`,
+    );
+    // Two chips and the menu: the retired seat is not drawn.
+    expect(linked()).toHaveLength(3);
+    expect(screen.getByRole("button", { name: `Unlink ${sketch.name}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlink Brannoc" })).toBeInTheDocument();
+  });
+
+  it("says so when there is nothing", async () => {
+    await open(`?note=${grusk.id}`);
+    expect(screen.getByText("Not linked to anything yet.")).toBeInTheDocument();
+  });
+
+  it("links from the menu what the note is not already on, and re-reads the notes", async () => {
+    withGrusk({ ...grusk, links: [{ kind: "encounter", id: sketchId }] });
+    server.routes.set(`POST ${notesPath}/${grusk.id}/links`, { status: 200, body: linkedGrusk });
+    await open(`?note=${grusk.id}`);
+    const readsBefore = reads();
+
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    const items = await screen.findAllByRole("menuitem");
+    // The sketch is already linked; the ambush and Brannoc are offered.
+    expect(items.map((item) => item.textContent)).toEqual([encounter.name, "Brannoc"]);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Brannoc" }));
+
+    await waitFor(() => expect(posts()).toEqual([{ kind: "seat", id: seatId }]));
+    await waitFor(() => expect(reads()).toBeGreaterThan(readsBefore));
+    // Not an edit of the note: nothing went through the autosave.
+    expect(patches(grusk.id)).toEqual([]);
+  });
+
+  it("does not offer the encounter the note is attached to", async () => {
+    await open(`?note=${readAloud.id}`);
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((item) => item.textContent)).toEqual([sketch.name, "Brannoc"]);
+  });
+
+  it("unlinks with the ×, without leaving the note", async () => {
+    withGrusk(linkedGrusk);
+    const unlinkPath = `${notesPath}/${grusk.id}/links/seat/${seatId}`;
+    server.routes.set(`DELETE ${unlinkPath}`, { status: 200, body: grusk });
+    await open(`?note=${grusk.id}`);
+    const readsBefore = reads();
+
+    await userEvent.click(screen.getByRole("button", { name: "Unlink Brannoc" }));
+
+    await waitFor(() =>
+      expect(
+        server.calls.some((call) => call.method === "DELETE" && call.pathname === unlinkPath),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(reads()).toBeGreaterThan(readsBefore));
+    expect(globalThis.location.pathname).toBe(notesPath);
+    expect(chosen()).toBe(grusk.id);
   });
 });

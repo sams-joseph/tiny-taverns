@@ -4,13 +4,24 @@ import {
   sessionId,
   encounterShelf,
   fullCampaign,
+  grusk,
+  hagsBargain,
   noteShelf,
   page,
+  sandstorm,
+  tollBridge,
   type Answer,
 } from "../campaign/campaign.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
-import { fullParty, fullPartyPrep, fullPartySeats } from "../party/party.fixtures";
+import {
+  brannocSheetSeat,
+  fullParty,
+  fullPartyPrep,
+  fullPartySeats,
+  pellSheetSeat,
+  sorrelSheetSeat,
+} from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
 import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
 import { brannocId } from "./ids";
@@ -71,11 +82,29 @@ const creator = (): Map<string, Answer> => {
   routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
   // The Notes tab's shelf, after the Chronicle's empty list, so the list and
   // the pane are measured over notes: a read-aloud, two paragraphs, a shared
-  // one and an empty one.
-  routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page(noteShelf) });
-  for (const note of noteShelf)
+  // one and an empty one. Grusk is linked to three encounters and three
+  // seats, so the pane's *Linked* chips wrap where the pane is narrow.
+  const shelf = noteShelf.map((note) => (note.id === grusk.id ? linkedGrusk : note));
+  routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page(shelf) });
+  for (const note of shelf)
     routes.set(`PATCH /campaigns/${campaignId}/notes/${note.id}`, { status: 200, body: note });
+  for (const link of linkedGrusk.links)
+    routes.set(`DELETE /campaigns/${campaignId}/notes/${grusk.id}/links/${link.kind}/${link.id}`, {
+      status: 200,
+      body: linkedGrusk,
+    });
   return routes;
+};
+
+const linkedGrusk = {
+  ...grusk,
+  links: [
+    ...[hagsBargain, sandstorm, tollBridge].map(({ id }) => ({ kind: "encounter", id })),
+    ...[brannocSheetSeat, sorrelSheetSeat, pellSheetSeat].map(({ seat }) => ({
+      kind: "seat",
+      id: seat.id,
+    })),
+  ],
 };
 
 /** The creator's wire, with the run on the table played as this kind of scene. */
