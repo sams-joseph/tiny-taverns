@@ -18,6 +18,7 @@ import { NpcAppearance } from "../cast/NpcAppearance";
 import { NpcAvatar } from "../cast/NpcAvatar";
 import { CampaignHero } from "../campaign/CampaignHero";
 import { LastTime } from "../campaign/LastTime";
+import { sharedNoteAnchor } from "../campaign/overview";
 import { OverviewPage, SHARED_NOTES } from "../campaign/OverviewParts";
 import { PartyCard } from "../campaign/PartyCard";
 import { RecentNotes } from "../campaign/RecentNotes";
@@ -66,7 +67,7 @@ function SharedNote({ note }: { readonly note: PlayerNote }) {
   const readAloud = note.kind === "read_aloud";
 
   return (
-    <Card>
+    <Card id={sharedNoteAnchor(note.id)} className="scroll-mt-(--chrome-height)">
       <CardHeader>
         {readAloud && (
           <span className="text-caption leading-snug font-medium tracking-caps uppercase text-faint">

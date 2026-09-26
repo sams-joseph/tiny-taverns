@@ -338,17 +338,17 @@ describe("the player Overview's cards", () => {
     expect(card).not.toHaveTextContent("Nothing was written down");
   });
 
-  it("summarises the shared notes, and its All notes goes to them in full on this page", async () => {
+  it("summarises the shared notes, each row jumping to its note in full on this page", async () => {
     await renderScreen();
     const card = await cardOf("Recent notes");
 
-    expect(within(card).getByText(readAloud.title)).toBeInTheDocument();
-    // A summary: the body is the section's, and the row opens nothing.
+    // A summary: the body is the section's, and the row jumps to it.
     expect(within(card).queryByText(readAloud.body)).toBeNull();
-    const links = within(card).getAllByRole("link");
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveTextContent("All notes");
-    expect(links[0]).toHaveAttribute("href", "#shared-with-you");
+    const row = within(card).getByRole("link", { name: readAloud.title });
+    expect(row).toHaveAttribute("href", `#note-${readAloud.id}`);
+    expect(document.getElementById(`note-${readAloud.id}`)).toHaveTextContent(readAloud.body);
+    const all = within(card).getByRole("link", { name: "All notes" });
+    expect(all).toHaveAttribute("href", "#shared-with-you");
     expect(document.getElementById("shared-with-you")).toHaveTextContent(readAloud.body);
     // A player has no Notes tab to be sent to.
     expect(screen.queryByRole("link", { name: /^Notes$/ })).toBeNull();
