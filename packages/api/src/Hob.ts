@@ -11,7 +11,7 @@ import {
   CreatureId,
   SharedWorldId,
 } from "./Ids.js";
-import { Note, NoteKind } from "./Note.js";
+import { Note, NoteCategory, NoteKind } from "./Note.js";
 
 /**
  * Hob: the assistant, on the wire.
@@ -174,6 +174,11 @@ export const HobProposal = Schema.Union([
     title: Schema.String,
     body: Schema.String,
     kind: NoteKind,
+    /**
+     * What the note is about, when Hob named it; absent when it did not, and
+     * on every proposal made before notes had a category.
+     */
+    category: Schema.optional(NoteCategory),
   }),
   Schema.Struct({
     target: Schema.Literal("beat"),

@@ -1,4 +1,5 @@
 import {
+  type Actor,
   type CampaignId,
   type CreatedOrder,
   type CreatedPageFilterValues,
@@ -6,6 +7,7 @@ import {
   type EncounterId,
   Note,
   type NoteAttachment,
+  type NoteCategory,
   type NoteCreate,
   type NoteId,
   type NoteKind,
@@ -15,7 +17,7 @@ import {
   PlayerNote,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
@@ -40,7 +42,9 @@ export interface NoteRow extends ProvenanceColumns {
   readonly title: string;
   readonly body: string;
   readonly kind: NoteKind;
+  readonly category: NoteCategory | null;
   readonly encounter_id: EncounterId | null;
+  readonly pinned_at: Date | null;
 }
 
 export const toNote = (row: NoteRow): Note =>
@@ -50,7 +54,9 @@ export const toNote = (row: NoteRow): Note =>
     title: row.title,
     body: row.body,
     kind: row.kind,
+    category: row.category,
     attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
+    pinnedAt: row.pinned_at === null ? null : DateTime.fromDateUnsafe(row.pinned_at),
     ...provenanceOf(row),
   });
 
@@ -59,24 +65,47 @@ export const toNote = (row: NoteRow): Note =>
  * `encounter_id` already narrowed to an encounter this reader may read.
  * `created_at` is selected for the page cursor and goes no further.
  */
-interface PlayerNoteRow {
+export interface PlayerNoteRow {
   readonly id: NoteId;
   readonly campaign_id: CampaignId;
   readonly title: string;
   readonly body: string;
   readonly kind: NoteKind;
+  readonly category: NoteCategory | null;
   readonly encounter_id: EncounterId | null;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
 
-const toPlayerNote = (row: PlayerNoteRow): PlayerNote =>
+/**
+ * The select list of every player read of `note`: `listAsPlayer` and a
+ * player's recap. None of the wide columns — no visibility, provenance or pin
+ * — and the attachment kept only when the encounter it names passes the
+ * encounter's own `rowReadable` (Shared and Ready for a player), so an
+ * encounter the DM kept is not named, not even by id.
+ */
+export const playerNoteColumns = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`
+  note.id, note.campaign_id, note.title, note.body, note.kind, note.category,
+  note.created_at, note.updated_at,
+  case when exists (
+    select 1 from encounter
+    where encounter.id = note.encounter_id
+      and ${rowReadable(sql, "encounter", campaignId, actor)}
+  ) then note.encounter_id end as encounter_id
+`;
+
+export const toPlayerNote = (row: PlayerNoteRow): PlayerNote =>
   new PlayerNote({
     id: row.id,
     campaignId: row.campaign_id,
     title: row.title,
     body: row.body,
     kind: row.kind,
+    category: row.category,
     attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
     updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   });
@@ -161,6 +190,17 @@ export class Notes extends Context.Service<
       campaignId: CampaignId,
       id: NoteId,
     ) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
+     * Pins the note, or unpins it with `pinned: false`. Neither touches
+     * `updated_at`: pinning orders the DM's list and is not an edit. Pinning
+     * a pinned note keeps the time it was first pinned, so both are
+     * idempotent.
+     */
+    readonly setPinned: (
+      campaignId: CampaignId,
+      id: NoteId,
+      pinned: boolean,
+    ) => Effect.Effect<Note, NotFound, CurrentActor>;
   }
 >()("Notes") {
   static readonly layer = Layer.effect(this)(
@@ -201,23 +241,14 @@ export class Notes extends Context.Service<
           ),
 
         // The player projection: the same `rowReadable` as every read here,
-        // and none of the wide columns. The attachment is kept only when the
-        // encounter it names passes the encounter's own `rowReadable` — Shared
-        // and Ready for a player — so an encounter the DM kept is not named,
-        // not even by id.
+        // and none of the wide columns (`playerNoteColumns`).
         listAsPlayer: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
               const rows = yield* sql<PlayerNoteRow>`
-                select note.id, note.campaign_id, note.title, note.body, note.kind,
-                       note.created_at, note.updated_at,
-                       case when exists (
-                         select 1 from encounter
-                         where encounter.id = note.encounter_id
-                           and ${rowReadable(sql, "encounter", campaignId, actor)}
-                       ) then note.encounter_id end as encounter_id
+                select ${playerNoteColumns(sql, campaignId, actor)}
                 from note
                 where ${sql.and([
                   rowReadable(sql, "note", campaignId, actor),
@@ -244,6 +275,7 @@ export class Notes extends Context.Service<
                       title: payload.title,
                       body: payload.body,
                       kind: payload.kind,
+                      category: payload.category,
                       encounter_id: attachmentColumn(payload.attachedTo),
                       visibility: payload.visibility,
                       ...assistantColumns(from),
@@ -266,6 +298,7 @@ export class Notes extends Context.Service<
                   title: patch.title,
                   body: patch.body,
                   kind: patch.kind,
+                  category: patch.category,
                   encounter_id: attachmentColumn(patch.attachedTo),
                   visibility: patch.visibility,
                 });
@@ -290,6 +323,22 @@ export class Notes extends Context.Service<
                 returning note.id
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
+            }),
+          ),
+
+        // Not `setClause`: that stamps `updated_at`, and a pin is not an edit.
+        setPinned: (campaignId, id, pinned) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const rows = yield* sql<NoteRow>`
+                update note
+                set pinned_at = ${pinned ? sql`coalesce(note.pinned_at, now())` : sql`null`}
+                where note.id = ${id} and ${rowWritable(sql, "note", campaignId, actor)}
+                returning *
+              `;
+              if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
+              return toNote(rows[0]!);
             }),
           ),
       };

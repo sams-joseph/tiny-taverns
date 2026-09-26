@@ -235,8 +235,10 @@ export const readAloud = {
   title: "Read aloud at the water",
   body: "The reeds are taller than you are and they are not moving, even though there is a wind.",
   kind: "read_aloud",
+  category: null,
   attachedTo: { kind: "encounter", id: encounterId },
   visibility: "dm",
+  pinnedAt: null,
   ...provenance,
   ...stamps,
 };
@@ -252,6 +254,7 @@ export const playerReadAloud = {
   title: readAloud.title,
   body: readAloud.body,
   kind: readAloud.kind,
+  category: readAloud.category,
   attachedTo: readAloud.attachedTo,
   updatedAt: readAloud.updatedAt,
 };

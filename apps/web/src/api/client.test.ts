@@ -58,10 +58,12 @@ const noteJson = {
   title: "The crate",
   body: "Decide what the crate contains",
   kind: "note",
+  category: null,
   // Free-standing, the shape the Notes tab shows. A read-aloud hanging off an
   // encounter carries `{ kind: "encounter", id }` here instead.
   attachedTo: null,
   visibility: "dm",
+  pinnedAt: null,
   origin: "authored",
   assistantTurnId: null,
   createdAt: "2026-08-04T13:03:28.070Z",

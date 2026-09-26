@@ -1951,7 +1951,9 @@ const offered = (turn: HobTurn): string | undefined => {
     case "note":
       return `[You offered the DM a ${
         proposal.kind === "read_aloud" ? "read-aloud note" : "note"
-      } called "${proposal.title}" — ${kept}: ${proposal.body}]`;
+      } called "${proposal.title}"${
+        proposal.category === undefined ? "" : ` (category ${proposal.category})`
+      } — ${kept}: ${proposal.body}]`;
     case "beat":
       return `[You offered the DM a beat — ${kept}: ${proposal.body}]`;
     case "encounter": {

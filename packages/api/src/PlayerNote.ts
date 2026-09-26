@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { CampaignId, NoteId } from "./Ids.js";
-import { NoteAttachment, NoteKind } from "./Note.js";
+import { NoteAttachment, NoteCategory, NoteKind } from "./Note.js";
 
 /**
  * A note the DM shared, told to somebody sitting at the table.
@@ -14,6 +14,8 @@ import { NoteAttachment, NoteKind } from "./Note.js";
  *
  * `kind` stays because it is the register the text is set in: read-aloud is
  * read aloud at the table, and a player sees it in serif like the DM does.
+ * `category` stays because it is what the note is about, which the text
+ * already tells them. The pin does not: it is how the DM orders their desk.
  *
  * `attachedTo` is **narrowed in SQL**: it names the encounter only when this
  * reader may read that encounter (Shared and Ready), and is `null` otherwise —
@@ -26,6 +28,7 @@ export class PlayerNote extends Schema.Class<PlayerNote>("PlayerNote")({
   title: Schema.String,
   body: Schema.String,
   kind: NoteKind,
+  category: Schema.NullOr(NoteCategory),
   attachedTo: Schema.NullOr(NoteAttachment),
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}

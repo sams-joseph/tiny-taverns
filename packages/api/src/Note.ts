@@ -11,6 +11,17 @@ export const NoteKind = Schema.Literals(["note", "read_aloud"]);
 export type NoteKind = typeof NoteKind.Type;
 
 /**
+ * What a note is about — an NPC, a place, lore, prep, a house rule — and
+ * independent of `kind`. `kind` is the register the text is set in; a
+ * read-aloud can be about a place, and a plain note about anything.
+ *
+ * Optional and `null` until somebody chooses one: notes written before there
+ * were categories stay uncategorised rather than being given a guess.
+ */
+export const NoteCategory = Schema.Literals(["npc", "place", "lore", "prep", "rules"]);
+export type NoteCategory = typeof NoteCategory.Type;
+
+/**
  * What a note is attached to, or `null` for a free-standing one.
  *
  * The fixtures show read-aloud in both positions: free-standing on the Notes tab
@@ -42,8 +53,15 @@ export class Note extends Schema.Class<Note>("Note")({
   title: Schema.String,
   body: Schema.String,
   kind: NoteKind,
+  category: Schema.NullOr(NoteCategory),
   attachedTo: Schema.NullOr(NoteAttachment),
   visibility: Visibility,
+  /**
+   * When the DM pinned it, or `null`. Written only by the pin endpoints,
+   * which leave `updatedAt` alone: pinning organises the list, it is not an
+   * edit of the note.
+   */
+  pinnedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
@@ -53,6 +71,7 @@ export const NoteCreate = Schema.Struct({
   title: Schema.NonEmptyString,
   body: Schema.optional(Schema.String),
   kind: Schema.optional(NoteKind),
+  category: Schema.optional(NoteCategory),
   attachedTo: Schema.optional(NoteAttachment),
   visibility: Schema.optional(Visibility),
 });
@@ -62,6 +81,8 @@ export const NoteUpdate = Schema.Struct({
   title: Schema.optional(Schema.NonEmptyString),
   body: Schema.optional(Schema.String),
   kind: Schema.optional(NoteKind),
+  /** `null` clears the category; omitting the field leaves it alone. */
+  category: Schema.optional(Schema.NullOr(NoteCategory)),
   /** `null` detaches the note; omitting the field leaves the attachment alone. */
   attachedTo: Schema.optional(Schema.NullOr(NoteAttachment)),
   visibility: Schema.optional(Visibility),

@@ -421,6 +421,7 @@ describe("every content schema", () => {
       "attachedTo",
       "body",
       "campaignId",
+      "category",
       "id",
       "kind",
       "title",
