@@ -1,6 +1,7 @@
 import type { CampaignId, Note, PlayerNote } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { cardLinkClassName, Icon } from "@taverns/ui";
+import { categoryIcon } from "./noteText";
 import { recentNotes, sharedNoteAnchor } from "./overview";
 import {
   type Audience,
@@ -14,7 +15,8 @@ import { agoOf, useNow } from "./when";
 /**
  * The last few things written down, and the way to all of them.
  *
- * `view.notes` is already in the frame's read, so this costs no request. Each
+ * `view.notes` is already in the frame's read, so this costs no request. A row
+ * wears its category's glyph, as the Notes list does. Each
  * row opens its note from anywhere on the row: the creator's on the Notes tab
  * (`?note=`), a player's at its card lower on this page (`sharedNoteAnchor`).
  *
@@ -64,7 +66,11 @@ export function RecentNotes({
               key={note.id}
               className="relative flex gap-2.5 border-t border-hairline px-card py-3 transition-control first:border-t-0 hover:bg-surface-raised has-[a[data-card-link]:focus-visible]:ring-focus"
             >
-              <Icon name="scroll-text" size={14} className="mt-0.5 shrink-0 text-faint" />
+              <Icon
+                name={categoryIcon(note.category)}
+                size={14}
+                className="mt-0.5 shrink-0 text-faint"
+              />
               <div className="min-w-0 flex-1">
                 <div className="text-body-s leading-snug font-medium text-heading">
                   {audience === "creator" ? (

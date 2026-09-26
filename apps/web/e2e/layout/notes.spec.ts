@@ -8,8 +8,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * brings the pane into view, and that a long body grows the page rather than
  * scrolling inside itself. All of it is layout, which jsdom does not compute.
  *
- * Read over the creator scenario's `noteShelf`: a read-aloud, a note of two
- * paragraphs, a shared house rule and an empty note.
+ * Read over the creator scenario's `noteShelf`: a read-aloud, an NPC note of
+ * two paragraphs, a shared house rule and an empty place, pinned.
  */
 
 const notes = screens.find((screen) => screen.name === "notes")!;
@@ -82,6 +82,41 @@ for (const width of WIDTHS) {
       await test.step("the search fills the list's width", async () => {
         const search = await box(list.locator('[data-slot="combobox-chips"]').first());
         expect.soft(search.width, "search width").toBeCloseTo(listBox.width, 0);
+      });
+
+      await test.step("the category pills wrap inside the list, each a real target", async () => {
+        const pills = list.getByRole("group", { name: "Filter by category" });
+        const group = await box(pills);
+        expect
+          .soft(group.x + group.width, "pills right")
+          .toBeLessThanOrEqual(listBox.x + listBox.width + 0.5);
+        for (const pill of await pills.getByRole("button").all()) {
+          const at = await box(pill);
+          expect
+            .soft(at.x + at.width, "pill right")
+            .toBeLessThanOrEqual(group.x + group.width + 0.5);
+          expect.soft(at.height, "pill height").toBeGreaterThanOrEqual(24);
+          expect.soft(at.width, "pill width").toBeGreaterThanOrEqual(24);
+        }
+      });
+
+      await test.step("the pane's toolbar wraps inside the pane", async () => {
+        const toolbar = [
+          pane.getByRole("group", { name: "Category" }),
+          pane.getByRole("group", { name: "Kind" }),
+          pane.getByRole("button", { name: "Pin note" }),
+          pane.getByRole("button", { name: "Note actions" }),
+        ];
+        const boxes = await Promise.all(toolbar.map((control) => box(control)));
+        for (const at of boxes)
+          expect
+            .soft(at.x + at.width, "toolbar control right")
+            .toBeLessThanOrEqual(paneBox.x + paneBox.width + 0.5);
+        const pin = boxes[2]!;
+        expect.soft(pin.height, "Pin height").toBeGreaterThanOrEqual(24);
+        for (const [i, a] of boxes.entries())
+          for (const b of boxes.slice(i + 1))
+            expect.soft(overlaps(a, b), "toolbar controls overlap").toBe(false);
       });
 
       await test.step("the header lines up with the list, and its controls do not collide", async () => {

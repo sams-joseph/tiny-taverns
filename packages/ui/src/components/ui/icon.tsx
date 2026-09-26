@@ -59,6 +59,7 @@ import {
   PanelLeft,
   PanelRightClose,
   Pencil,
+  Pin,
   Play,
   Plus,
   RefreshCw,
@@ -142,7 +143,8 @@ import {
  *
  * The Overview redesign (`Campaign Overview.dc.html`) adds `settings`, on the
  * hero's *Settings* button beside *Invite player*, and its runner adds `grid-3x3`,
- * on the battle map's *Grid* toggle.
+ * on the battle map's *Grid* toggle. Its Notes screen adds `pin`, on a pinned
+ * row and the pane's *Pin*.
  */
 export const icons = {
   archive: Archive,
@@ -206,6 +208,7 @@ export const icons = {
   "panel-left": PanelLeft,
   "panel-right-close": PanelRightClose,
   pencil: Pencil,
+  pin: Pin,
   play: Play,
   plus: Plus,
   "refresh-cw": RefreshCw,

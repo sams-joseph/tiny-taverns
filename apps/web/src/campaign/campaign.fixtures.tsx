@@ -260,9 +260,10 @@ export const playerReadAloud = {
 };
 
 /**
- * The Notes tab's shelf: the read-aloud above and three more, made on
- * different days so the list's order is newest first — a DM's note of two
- * paragraphs, a shared house rule, and one with nothing written in it yet.
+ * The Notes tab's shelf: the read-aloud above (uncategorised, as every note
+ * written before categories is) and three more, made on different days so the
+ * list's order is newest first — an NPC note of two paragraphs, a shared house
+ * rule, and a place with nothing written in it yet, pinned, so it leads.
  */
 export const grusk = {
   ...readAloud,
@@ -270,6 +271,7 @@ export const grusk = {
   title: "Grusk, the toll-keeper",
   body: "Half-orc, missing two fingers. Owes the Salt Company more than he admits.\n\nIf the party pays in coin he waves them through; in favours, he remembers.",
   kind: "note",
+  category: "npc",
   attachedTo: null,
   createdAt: "2026-08-06T09:00:00.000Z",
   updatedAt: "2026-08-07T09:00:00.000Z",
@@ -281,6 +283,7 @@ export const houseRule = {
   title: "House rule: flanking",
   body: "Flanking grants +2 to hit, not advantage.",
   kind: "note",
+  category: "rules",
   attachedTo: null,
   visibility: "shared",
   createdAt: "2026-08-08T09:00:00.000Z",
@@ -293,12 +296,14 @@ export const blankNote = {
   title: "The salt flats",
   body: "",
   kind: "note",
+  category: "place",
   attachedTo: null,
+  pinnedAt: "2026-08-10T09:00:00.000Z",
   createdAt: "2026-08-02T09:00:00.000Z",
   updatedAt: "2026-08-02T09:00:00.000Z",
 };
 
-/** Newest first: the house rule, Grusk, the read-aloud, the salt flats. */
+/** Pinned first, then newest: the salt flats, the house rule, Grusk, the read-aloud. */
 export const noteShelf = [readAloud, grusk, houseRule, blankNote];
 
 /** Who owns Brannoc — the player, whose account the seat below names too. */

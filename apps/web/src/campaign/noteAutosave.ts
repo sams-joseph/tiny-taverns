@@ -2,6 +2,7 @@ import type {
   CampaignId,
   Note,
   NoteAttachment,
+  NoteCategory,
   NoteId,
   NoteKind,
   NoteUpdate,
@@ -21,8 +22,9 @@ import { useCredential } from "../auth/credential";
  * be tested without a screen.
  *
  * - **Debounced.** Typing waits `AUTOSAVE_DELAY_MS` after the last keystroke;
- *   a discrete change (the register, the attachment, who can see it) and a
- *   blur, a switch to another note or leaving the tab save at once.
+ *   a discrete change (the register, the category, the attachment, who can
+ *   see it) and a blur, a switch to another note or leaving the tab save at
+ *   once.
  * - **One request in flight per note.** A save asked for while one is on the
  *   wire waits for it and then sends whatever is still unsaved, so the edits
  *   coalesce and the server hears them in order.
@@ -44,6 +46,7 @@ export interface NoteFields {
   readonly title: string;
   readonly body: string;
   readonly kind: NoteKind;
+  readonly category: NoteCategory | null;
   readonly attachedTo: NoteAttachment | null;
   readonly visibility: Visibility;
 }
@@ -52,6 +55,7 @@ export const fieldsOf = (note: Note): NoteFields => ({
   title: note.title,
   body: note.body,
   kind: note.kind,
+  category: note.category,
   attachedTo: note.attachedTo,
   visibility: note.visibility,
 });
@@ -73,6 +77,7 @@ export const changesOf = (draft: NoteFields, saved: NoteFields): NoteUpdate => {
     ...(title !== "" && title !== saved.title ? { title } : {}),
     ...(draft.body !== saved.body ? { body: draft.body } : {}),
     ...(draft.kind !== saved.kind ? { kind: draft.kind } : {}),
+    ...(draft.category !== saved.category ? { category: draft.category } : {}),
     ...(draft.attachedTo?.id !== saved.attachedTo?.id ? { attachedTo: draft.attachedTo } : {}),
     ...(draft.visibility !== saved.visibility ? { visibility: draft.visibility } : {}),
   };
