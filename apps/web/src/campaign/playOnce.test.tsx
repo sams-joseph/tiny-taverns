@@ -195,7 +195,7 @@ describe("the Overview's Next session rows", () => {
     return link.closest("li")!;
   };
 
-  it("give a played encounter its log, a carried one Pick up, and only the rest Run", async () => {
+  it("leave a played encounter off, give a carried one Pick up, and only the rest Run", async () => {
     server.routes.set(`GET ${base}/encounters`, {
       status: 200,
       body: page([encounter, carriedBridge, wolves]),
@@ -205,11 +205,14 @@ describe("the Overview's Next session rows", () => {
     const ambush = await rowOf("Ambush in the reeds");
     expect(within(ambush).getByRole("button", { name: "Run Ambush in the reeds" })).toBeVisible();
 
-    const wolvesRow = await rowOf("Wolves at the caravan");
-    expect(within(wolvesRow).queryByRole("button", { name: /^Run/ })).toBeNull();
-    expect(
-      within(wolvesRow).getByRole("button", { name: "View log — Wolves at the caravan" }),
-    ).toHaveAttribute("href", logPath);
+    // Played is over, so it is not on deck; the count says what is left.
+    const card = (await screen.findByText("Next session")).closest<HTMLElement>(
+      "[data-slot=card]",
+    )!;
+    expect(within(card).queryByText("Wolves at the caravan")).toBeNull();
+    expect(within(card).getByText("2 encounters on deck")).toBeInTheDocument();
+    expect(within(card).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(card).getByRole("link", { name: "All 3 encounters" })).toBeInTheDocument();
 
     const bridge = await rowOf("Toll bridge standoff");
     expect(within(bridge).queryByRole("button", { name: /^Run/ })).toBeNull();
@@ -219,6 +222,19 @@ describe("the Overview's Next session rows", () => {
     expect(
       await screen.findByRole("dialog", { name: "Pick up Toll bridge standoff" }),
     ).toBeInTheDocument();
+  });
+
+  it("say every encounter has been played rather than draw an empty list", async () => {
+    server.routes.set(`GET ${base}/encounters`, { status: 200, body: page([wolves]) });
+    await renderScreen(mintingSession());
+
+    const card = (await screen.findByText("Next session")).closest<HTMLElement>(
+      "[data-slot=card]",
+    )!;
+    expect(await within(card).findByText("Every encounter has been played")).toBeInTheDocument();
+    expect(within(card).getByText("Nothing is waiting for the party yet.")).toBeInTheDocument();
+    expect(within(card).queryByRole("list")).toBeNull();
+    expect(within(card).queryByText("Wolves at the caravan")).toBeNull();
   });
 
   it("keep the way back to the fight on the table", async () => {
