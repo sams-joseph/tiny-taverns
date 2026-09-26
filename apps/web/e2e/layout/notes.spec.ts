@@ -139,3 +139,17 @@ for (const width of WIDTHS) {
     });
   });
 }
+
+test("an Overview's Recent notes row takes focus and opens its note", async ({ app, page }) => {
+  await app.open(screens.find((screen) => screen.name === "overview")!);
+  const card = page.locator("section, [data-slot='card']").filter({
+    has: page.getByRole("heading", { name: "Recent notes" }),
+  });
+  const row = card.getByRole("listitem").first().getByRole("link");
+  const title = (await row.textContent())!.trim();
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/notes\?note=/);
+  await expect(page.locator('[data-slot="note-pane"]')).toHaveAccessibleName(title);
+});
