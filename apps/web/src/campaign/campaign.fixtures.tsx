@@ -241,6 +241,21 @@ export const readAloud = {
   ...stamps,
 };
 
+/**
+ * The same read-aloud as a player is told it, on `…/player-notes`: shared, so
+ * a player is answered it, and a `PlayerNote` — no visibility, no provenance,
+ * and the attachment kept because the encounter is one they may read.
+ */
+export const playerReadAloud = {
+  id: readAloud.id,
+  campaignId,
+  title: readAloud.title,
+  body: readAloud.body,
+  kind: readAloud.kind,
+  attachedTo: readAloud.attachedTo,
+  updatedAt: readAloud.updatedAt,
+};
+
 /** Who owns Brannoc — the player, whose account the seat below names too. */
 /**
  * One NPC in the cast — the ferryman, with a persona and creator-only
@@ -1660,6 +1675,7 @@ export const fullCampaign = (): Map<string, Answer> =>
     [`POST /campaigns/${campaignId}/restore`, { status: 200, body: campaign }],
     [`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([encounter, sketch]) }],
     [`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([readAloud]) }],
+    [`GET /campaigns/${campaignId}/player-notes`, { status: 200, body: page([playerReadAloud]) }],
     // The cast: one NPC, its detail, and a rehearsal with no model behind it
     // and no thread yet — the ordinary state on a server without a model.
     [`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [cazril] }],

@@ -2,8 +2,8 @@ import type {
   Campaign,
   CampaignId,
   CreatedOrder,
-  Note,
   OwnedCharacter,
+  PlayerNote,
   PlayerNpc,
   PageCursor,
   PartySeat,
@@ -25,8 +25,12 @@ export interface PlayerCampaignView {
    * meant.
    */
   readonly party: ReadonlyArray<PartySeat>;
-  /** What the DM has shared. A player is answered no `dm` row, by predicate. */
-  readonly notes: ReadonlyArray<Note>;
+  /**
+   * What the DM has shared, as the player's own projection: a player is
+   * answered no `dm` row, by predicate, and the creator's `notes` read is not
+   * theirs to call.
+   */
+  readonly notes: ReadonlyArray<PlayerNote>;
   /** NPCs the DM explicitly made player-facing. No private material or usage metadata. */
   readonly npcs: ReadonlyArray<PlayerNpc>;
   /**
@@ -58,7 +62,7 @@ export const loadPlayerCampaignView = (campaignId: CampaignId) => (client: Taver
         client.campaigns.findById({ params: { campaignId } }),
         client.party.list({ params: { campaignId } }),
         collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
-          client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+          client.playerNotes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
         ),
         client.npcs.playerList({ params: { campaignId } }),
         client.sessions.list({ params: { campaignId } }),
@@ -88,9 +92,10 @@ export interface PlayerTableView {
   /**
    * The shared read-alouds attached to the fight's encounter. None when the
    * fight names no encounter, which is also what a player gets for one they
-   * may not read (not Shared, or not Ready).
+   * may not read (not Shared, or not Ready) — and `PlayerNote.attachedTo`
+   * names only an encounter they may read, so the two agree.
    */
-  readonly readAloud: ReadonlyArray<Note>;
+  readonly readAloud: ReadonlyArray<PlayerNote>;
 }
 
 /** The live table, plus only the own-character roll log the screen may show. */
@@ -118,9 +123,12 @@ export const loadPlayerTableView = (campaignId: CampaignId) => (client: TavernsC
               query: { limit: 12 },
             }),
         table?.fight?.encounterId === undefined || table.fight.encounterId === null
-          ? Effect.succeed([] as ReadonlyArray<Note>)
+          ? Effect.succeed([] as ReadonlyArray<PlayerNote>)
           : collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
-              client.notes.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
+              client.playerNotes.list({
+                params: { campaignId },
+                query: { limit: WHOLE_LIST, cursor },
+              }),
             ).pipe(
               Effect.map((all) =>
                 all.filter(

@@ -99,7 +99,10 @@ describe("a table you sit at", () => {
     // one a player may make; the old campaign-scoped character list is gone
     // with the continuity decision.
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/party`);
-    expect(pathsCalled()).toContain(`/campaigns/${campaignId}/notes`);
+    // The player's own projection of the shared notes; the creator's `notes`
+    // read answers a player `NotFound`.
+    expect(pathsCalled()).toContain(`/campaigns/${campaignId}/player-notes`);
+    expect(pathsCalled()).not.toContain(`/campaigns/${campaignId}/notes`);
     expect(pathsCalled()).toContain(`/campaigns/${campaignId}/npcs/-/player`);
     // The creator's load composes these, and the creator gate refuses a player
     // the first of them — which is the whole reason this screen is not that
@@ -171,7 +174,10 @@ describe("a table you sit at", () => {
 
   it("says what an empty table means rather than looking broken", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: [] });
-    server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
+    server.routes.set(`GET /campaigns/${campaignId}/player-notes`, {
+      status: 200,
+      body: page([]),
+    });
     server.routes.set(`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [] });
 
     await renderScreen();

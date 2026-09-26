@@ -12,9 +12,11 @@ import {
   type NoteUpdate,
   NotFound,
   type Page,
+  PlayerNote,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
@@ -50,6 +52,33 @@ export const toNote = (row: NoteRow): Note =>
     kind: row.kind,
     attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
     ...provenanceOf(row),
+  });
+
+/**
+ * A note as a player is told it — only the columns `PlayerNote` has, and
+ * `encounter_id` already narrowed to an encounter this reader may read.
+ * `created_at` is selected for the page cursor and goes no further.
+ */
+interface PlayerNoteRow {
+  readonly id: NoteId;
+  readonly campaign_id: CampaignId;
+  readonly title: string;
+  readonly body: string;
+  readonly kind: NoteKind;
+  readonly encounter_id: EncounterId | null;
+  readonly created_at: Date;
+  readonly updated_at: Date;
+}
+
+const toPlayerNote = (row: PlayerNoteRow): PlayerNote =>
+  new PlayerNote({
+    id: row.id,
+    campaignId: row.campaign_id,
+    title: row.title,
+    body: row.body,
+    kind: row.kind,
+    attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
+    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   });
 
 /**
@@ -96,16 +125,23 @@ export class Notes extends Context.Service<
     /**
      * Paged, oldest first. See `repo/paging.ts` — the cursor is a clause of the
      * same `where` the visibility predicate is in, never a slice of what came
-     * back.
+     * back. The creator's alone, so it takes the proof: `Note` is the working
+     * record, and a player's read is `listAsPlayer`.
      */
     readonly list: (
+      creator: CampaignCreatorActor,
+      filter: CreatedPageFilterValues,
+    ) => Effect.Effect<Page<Note, CreatedOrder>>;
+    readonly findById: (creator: CampaignCreatorActor, id: NoteId) => Effect.Effect<Note, NotFound>;
+    /**
+     * The notes this reader can see, as `PlayerNote`: no visibility, no
+     * provenance, and the attachment only to an encounter they may read.
+     * Paged, oldest first, as `list` is.
+     */
+    readonly listAsPlayer: (
       campaignId: CampaignId,
       filter: CreatedPageFilterValues,
-    ) => Effect.Effect<Page<Note, CreatedOrder>, NotFound, CurrentActor>;
-    readonly findById: (
-      campaignId: CampaignId,
-      id: NoteId,
-    ) => Effect.Effect<Note, NotFound, CurrentActor>;
+    ) => Effect.Effect<Page<PlayerNote, CreatedOrder>, NotFound, CurrentActor>;
     /**
      * `from` is set by `repo/Proposals.ts` and by nothing else — it is the
      * accept path saying which assistant turn produced this row. There is no
@@ -131,17 +167,17 @@ export class Notes extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const ordering = createdOrdering<NoteRow>(sql, "note");
+      const playerOrdering = createdOrdering<PlayerNoteRow>(sql, "note");
 
       return {
-        list: (campaignId, filter) =>
+        list: (creator, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const { campaign, actor } = creator;
               const rows = yield* sql<NoteRow>`
                 select * from note
                 where ${sql.and([
-                  rowReadable(sql, "note", campaignId, actor),
+                  rowReadable(sql, "note", campaign, actor),
                   ...pageClauses(sql, ordering, filter.cursor),
                 ])}
                 order by ${orderClause(sql, ordering)}
@@ -151,16 +187,46 @@ export class Notes extends Context.Service<
             }),
           ),
 
-        findById: (campaignId, id) =>
+        findById: (creator, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
+              const { campaign, actor } = creator;
               const rows = yield* sql<NoteRow>`
                 select * from note
-                where note.id = ${id} and ${rowReadable(sql, "note", campaignId, actor)}
+                where note.id = ${id} and ${rowReadable(sql, "note", campaign, actor)}
               `;
               if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
               return toNote(rows[0]!);
+            }),
+          ),
+
+        // The player projection: the same `rowReadable` as every read here,
+        // and none of the wide columns. The attachment is kept only when the
+        // encounter it names passes the encounter's own `rowReadable` — Shared
+        // and Ready for a player — so an encounter the DM kept is not named,
+        // not even by id.
+        listAsPlayer: (campaignId, filter) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              const rows = yield* sql<PlayerNoteRow>`
+                select note.id, note.campaign_id, note.title, note.body, note.kind,
+                       note.created_at, note.updated_at,
+                       case when exists (
+                         select 1 from encounter
+                         where encounter.id = note.encounter_id
+                           and ${rowReadable(sql, "encounter", campaignId, actor)}
+                       ) then note.encounter_id end as encounter_id
+                from note
+                where ${sql.and([
+                  rowReadable(sql, "note", campaignId, actor),
+                  ...pageClauses(sql, playerOrdering, filter.cursor),
+                ])}
+                order by ${orderClause(sql, playerOrdering)}
+                limit ${pageLimit(filter.limit)}
+              `;
+              return pageOfRows(rows, filter.limit, playerOrdering, "created", toPlayerNote);
             }),
           ),
 

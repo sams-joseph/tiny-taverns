@@ -691,7 +691,11 @@ const READS: Record<
   // campaign holds is the seat below.
   character: () => Effect.flatMap(Characters, (r) => r.mine),
   campaign_character: (f) => Effect.flatMap(Party, (r) => r.list(f.campaign.id)),
-  note: (f) => items(Effect.flatMap(Notes, (r) => r.list(f.campaign.id, {}))),
+  // Creator-only in its wide read (a player's is `Notes.listAsPlayer`).
+  note: (f) =>
+    Effect.flatMap(dmOf(f.campaign.id), (dm) =>
+      items(Effect.flatMap(Notes, (r) => r.list(dm, {}))),
+    ),
   beat: (f) => items(Effect.flatMap(Beats, (r) => r.list(f.campaign.id, f.session.id, {}))),
   prep_item: (f) => Effect.flatMap(PrepItems, (r) => r.list(f.campaign.id, f.session.id)),
   character_roll: (f) => Effect.flatMap(Rolls, (r) => r.list(f.campaign.id, f.session.id, {})),

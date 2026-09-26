@@ -1,4 +1,4 @@
-import type { CampaignId, Note } from "@taverns/api";
+import type { CampaignId, Note, PlayerNote } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Icon } from "@taverns/ui";
 import { recentNotes } from "./overview";
@@ -19,15 +19,16 @@ import { agoOf, useNow } from "./when";
  *
  * A player has no Notes tab: the shared notes are read in full lower on their
  * own Overview (`play/PlayerCampaignScreen.tsx`), under `SHARED_NOTES`, so
- * that section is where their *All notes* goes. Their `notes` are already only
- * the shared ones — a DM note is never in a player's answer (`repo/visibility.ts`).
+ * that section is where their *All notes* goes. Their `notes` are their own
+ * projection, `PlayerNote`, and only the shared ones — a DM note is never in a
+ * player's answer (`repo/visibility.ts`).
  */
 export function RecentNotes({
   notes,
   campaignId,
   audience,
 }: {
-  readonly notes: ReadonlyArray<Note>;
+  readonly notes: ReadonlyArray<Note | PlayerNote>;
   readonly campaignId: CampaignId;
   readonly audience: Audience;
 }) {

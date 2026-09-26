@@ -19,7 +19,7 @@ import {
   yourCombatantId,
 } from "../characters/characters.fixtures";
 import { apiUrl } from "../api/client";
-import { drawnMapPicture, drawnPortrait } from "../campaign/campaign.fixtures";
+import { drawnMapPicture, drawnPortrait, page } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { HostedSessionScope } from "../auth/AuthProvider";
 import { TEST_SESSION } from "../test/session";
@@ -642,5 +642,54 @@ describe("rolling initiative at your table", () => {
 
     await screen.findByText("Initiative");
     expect(screen.queryByText("Your initiative")).toBeNull();
+  });
+});
+
+describe("the fight's read-aloud", () => {
+  const fightEncounterId = "2b1f2a1e-0000-4000-8000-00000000ec01";
+  const otherEncounterId = "2b1f2a1e-0000-4000-8000-00000000ec02";
+  const shared = (over: Record<string, unknown>) => ({
+    campaignId,
+    body: "",
+    kind: "read_aloud",
+    attachedTo: null,
+    updatedAt: "2026-08-04T19:00:00.000Z",
+    ...over,
+  });
+
+  it("reads the player's own notes and draws the read-aloud hung on this fight's encounter", async () => {
+    server.routes.set(...playing(campaignId, { encounterId: fightEncounterId }));
+    server.routes.set(`GET /campaigns/${campaignId}/player-notes`, {
+      status: 200,
+      body: page([
+        shared({
+          id: "2b1f2a1e-0000-4000-8000-00000000fa01",
+          title: "At the water",
+          body: "The reeds part.",
+          attachedTo: { kind: "encounter", id: fightEncounterId },
+        }),
+        shared({
+          id: "2b1f2a1e-0000-4000-8000-00000000fa02",
+          title: "A plain note on it",
+          kind: "note",
+          attachedTo: { kind: "encounter", id: fightEncounterId },
+        }),
+        shared({
+          id: "2b1f2a1e-0000-4000-8000-00000000fa03",
+          title: "Another fight's",
+          attachedTo: { kind: "encounter", id: otherEncounterId },
+        }),
+      ]),
+    });
+
+    await renderTable();
+
+    expect(await screen.findByText("The reeds part.")).toBeInTheDocument();
+    expect(screen.getByText("At the water")).toBeInTheDocument();
+    expect(screen.queryByText("A plain note on it")).toBeNull();
+    expect(screen.queryByText("Another fight's")).toBeNull();
+    const paths = server.calls.map((call) => call.pathname);
+    expect(paths).toContain(`/campaigns/${campaignId}/player-notes`);
+    expect(paths).not.toContain(`/campaigns/${campaignId}/notes`);
   });
 });

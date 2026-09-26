@@ -350,6 +350,8 @@ export const playing = (
     readonly phase?: "initiative" | "turns";
     readonly mode?: "combat" | "social" | "challenge" | "hazard";
     readonly board?: Record<string, unknown> | null;
+    /** The fight's encounter, when the player may read it. */
+    readonly encounterId?: string | null;
   } | null = {},
 ): [string, Answer] => [
   `GET /campaigns/${of}/table`,
@@ -378,7 +380,7 @@ export const playing = (
                   combatantId: yourCombatantId,
                 },
               ],
-              encounterId: null,
+              encounterId: fight.encounterId ?? null,
               order: fight.order ?? [
                 {
                   kind: "you",

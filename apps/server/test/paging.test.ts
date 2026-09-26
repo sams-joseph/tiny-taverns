@@ -9,6 +9,7 @@ import {
   type Encounter,
   MAX_PAGE_SIZE,
   type Note,
+  type PlayerNote,
   type Page,
   type PageCursor,
   type SessionId,
@@ -300,7 +301,9 @@ describe("visibility on a paged read", () => {
   }, 60_000);
 
   // Not encounters: their paged read is the creator's alone, and a player's
-  // (`Encounters.listAsPlayer`) is unpaged.
+  // (`Encounters.listAsPlayer`) is unpaged. A player's notes are their own
+  // projection, paged the same way, so they carry no `visibility` to check:
+  // the walk is checked against the titles the fixture shared.
   it("holds for notes and beats too", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
@@ -310,8 +313,8 @@ describe("visibility on a paged read", () => {
         const nightId: SessionId = fixture.night.id;
         const player = withActor(fixture.player);
         return {
-          notes: yield* walk<Note, CreatedOrder>((cursor) =>
-            player(notes.list(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
+          notes: yield* walk<PlayerNote, CreatedOrder>((cursor) =>
+            player(notes.listAsPlayer(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
           ),
           beats: yield* walk<Beat, CreatedOrder>((cursor) =>
             player(beats.list(campaignId, nightId, { limit: 2, cursor })).pipe(Effect.orDie),
@@ -323,11 +326,11 @@ describe("visibility on a paged read", () => {
     for (const [name, walked] of Object.entries(seen)) {
       expect(walked.sizes, name).toEqual([2, 2, 2]);
       expect(walked.rows.length, name).toBe(6);
-      expect(
-        walked.rows.every((row) => (row as { visibility: string }).visibility === "shared"),
-        name,
-      ).toBe(true);
     }
+    expect(seen.notes.rows.map((note) => note.title)).toEqual(
+      [0, 2, 4, 6, 8, 10].map((index) => `Note ${String(index)}`),
+    );
+    expect(seen.beats.rows.every((row) => row.visibility === "shared")).toBe(true);
   }, 60_000);
 
   it("pages the creator's encounters, every one of them, oldest first", async () => {
@@ -351,12 +354,10 @@ describe("visibility on a paged read", () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const notes = yield* Notes;
-        const dm = withActor(fixture.dm);
-        const whole = yield* dm(notes.list(fixture.campaign.id, { limit: MAX_PAGE_SIZE })).pipe(
-          Effect.orDie,
-        );
+        const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
+        const whole = yield* notes.list(dm, { limit: MAX_PAGE_SIZE });
         const walked = yield* walk<Note, CreatedOrder>((cursor) =>
-          dm(notes.list(fixture.campaign.id, { limit: 4, cursor })).pipe(Effect.orDie),
+          notes.list(dm, { limit: 4, cursor }),
         );
         return { whole, walked };
       }),

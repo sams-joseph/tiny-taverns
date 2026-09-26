@@ -1248,7 +1248,9 @@ describe("NPC proposals", () => {
 
     const noteRows = await runtime.runPromise(
       Effect.map(
-        Effect.flatMap(Notes, (repo) => repo.list(fixture.campaign.id, {})),
+        Effect.flatMap(asDm(fixture.dm, fixture.campaign.id), (creator) =>
+          Effect.flatMap(Notes, (repo) => repo.list(creator, {})),
+        ),
         (page) => page.items,
       ).pipe(withActor(fixture.dm)),
     );

@@ -15,13 +15,21 @@ import { brannocId } from "./ids";
 import type { Scenario } from "./screens";
 
 // The campaign's reads, with `twoTables`' memberships seating this account as a
-// player — the composition `PlayerCampaignScreen.test.tsx` makes.
-const player = (): Map<string, Answer> =>
-  new Map([
+// player — the composition `PlayerCampaignScreen.test.tsx` makes. The
+// creator's notes read is refused, as the server refuses it, so a player
+// screen that reached for it would record a 404 rather than draw a DM note.
+const player = (): Map<string, Answer> => {
+  const routes = new Map([
     ...fullCampaign(),
     ...twoTables(),
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
   ]);
+  routes.set(`GET /campaigns/${campaignId}/notes`, {
+    status: 404,
+    body: { _tag: "NotFound", resource: "campaign", id: campaignId },
+  });
+  return routes;
+};
 
 /**
  * The wire each screen in `test/screens.ts` is read over.

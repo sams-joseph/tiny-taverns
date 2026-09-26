@@ -439,8 +439,8 @@ describe("the scope, counted", () => {
     // `Recap.readAsPlayer` is what a player gets instead.
     //
     // What is left alone is left alone on purpose: every one of those returns a
-    // `shared` row a player is entitled to see in full, so a player calling
-    // `GET …/notes` and receiving the ordinary `Note` discloses nothing.
+    // `shared` row a player is entitled to see in full, or a narrow projection
+    // whose type is what keeps it narrow.
     const gated = files().reduce(
       (total, name) =>
         total + (code(name).match(/\b(dm|creator): CampaignCreatorActor\b/g) ?? []).length,
@@ -508,7 +508,11 @@ describe("the scope, counted", () => {
     // writes. The player's own-initiative write is `PlayerTable.setInitiative`,
     // which is ungated for the read's reason: it reaches exactly the row
     // `ownSeatedCombatant` allows, and there is no DM projection of it.
-    expect(gated).toBe(107);
+    // A hundred and eight and nine are `Notes.list` and `findById`: `Note` is
+    // the creator's working record, and a player reads `listAsPlayer`, a
+    // `PlayerNote` with no visibility or provenance, ungated for
+    // `listAsPlayer`'s reason on `Encounters`.
+    expect(gated).toBe(109);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -755,7 +759,9 @@ describe("the scope, counted", () => {
     // player's own initiative, whose reach is `ownSeatedCombatant` — their own
     // seated character's row in a fight they can see — for `PlayerTable`'s
     // reason above.
-    expect(ungated).toBe(161);
+    // Gating `Notes.list` and `findById` gave two up and `Notes.listAsPlayer`
+    // took one back, so a hundred and sixty.
+    expect(ungated).toBe(160);
   });
 });
 

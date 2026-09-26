@@ -1,4 +1,4 @@
-import type { CampaignId, Note } from "@taverns/api";
+import type { CampaignId, PlayerNote } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import {
   Button,
@@ -62,7 +62,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * place in the product whose prose is not UI voice — because that is precisely
  * the text this audience is here to read.
  */
-function SharedNote({ note }: { readonly note: Note }) {
+function SharedNote({ note }: { readonly note: PlayerNote }) {
   const readAloud = note.kind === "read_aloud";
 
   return (

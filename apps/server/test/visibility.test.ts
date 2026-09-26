@@ -8,7 +8,7 @@ import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Notes } from "../src/repo/Notes.js";
-import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
+import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 
@@ -28,6 +28,17 @@ const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
+
+/**
+ * A read of the creator's `Note`, reached the shipped way: the proof first,
+ * from this actor, for this campaign. Anybody but the creator fails at the
+ * proof, which is the refusal the notes endpoints answer with.
+ */
+const asCreator = <A, E, R>(
+  actor: Actor,
+  campaignId: Campaign["id"],
+  read: (creator: Effect.Success<ReturnType<typeof asDm>>) => Effect.Effect<A, E, R>,
+) => Effect.flatMap(asDm(actor, campaignId), read);
 
 /**
  * Three campaigns from the same DM — one DM running more than one table:
@@ -137,23 +148,24 @@ describe("visibility defaults to dm", () => {
 });
 
 describe("a player actor", () => {
-  it("cannot read a dm-visibility note", async () => {
-    const error = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(notes.findById(fixture.campaign.id, fixture.secret.id)),
-      ),
-    );
-
-    expect(error._tag).toBe("NotFound");
-    expect(error.resource).toBe("note");
+  it("cannot read the creator's notes at all, not even the shared one", async () => {
+    // `Note` is the creator's working record; a player's read is its own
+    // projection. The refusal is the proof's, before any note row is read.
+    for (const id of [fixture.secret.id, fixture.shared.id]) {
+      const error = await runtime.runPromise(
+        Effect.flip(asCreator(fixture.player, fixture.campaign.id, (dm) => notes.findById(dm, id))),
+      );
+      expect(error._tag).toBe("NotFound");
+      expect(error.resource).toBe("campaign");
+    }
   });
 
   it("sees only the shared note when listing", async () => {
     const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(items(notes.list(fixture.campaign.id, {}))),
+      asCreator(fixture.dm, fixture.campaign.id, (dm) => items(notes.list(dm, {}))),
     );
     const asPlayer = await runtime.runPromise(
-      withActor(fixture.player)(items(notes.list(fixture.campaign.id, {}))),
+      withActor(fixture.player)(items(notes.listAsPlayer(fixture.campaign.id, {}))),
     );
 
     expect(asDm.length).toBeGreaterThan(1);
@@ -177,7 +189,7 @@ describe("a player actor", () => {
     expect(removed._tag).toBe("NotFound");
 
     const stillThere = await runtime.runPromise(
-      withActor(fixture.dm)(notes.findById(fixture.campaign.id, fixture.shared.id)),
+      asCreator(fixture.dm, fixture.campaign.id, (dm) => notes.findById(dm, fixture.shared.id)),
     );
     expect(stillThere.title).toBe("The reeds");
   });
@@ -186,21 +198,15 @@ describe("a player actor", () => {
     // The master toggle. Marking one note `shared` must not open the campaign
     // it sits in — otherwise sharing a single read-aloud silently exposes the
     // campaign's existence and every other shared row in it.
-    const note = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(notes.findById(fixture.closed.id, fixture.sharedInClosed.id)),
-      ),
-    );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(items(notes.list(fixture.closed.id, {})))),
+      Effect.flip(withActor(fixture.player)(items(notes.listAsPlayer(fixture.closed.id, {})))),
     );
 
-    expect(note._tag).toBe("NotFound");
     expect(listed._tag).toBe("NotFound");
 
     // …and the DM still sees it, so the note really is there to be missed.
     const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(items(notes.list(fixture.closed.id, {}))),
+      asCreator(fixture.dm, fixture.closed.id, (dm) => items(notes.list(dm, {}))),
     );
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedInClosed.id]);
   });
@@ -235,25 +241,17 @@ describe("membership and credential scope narrow independently, and both apply",
     const campaign = await runtime.runPromise(
       Effect.flip(withActor(fixture.player)(campaigns.findById(fixture.otherTable.id))),
     );
-    const note = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          notes.findById(fixture.otherTable.id, fixture.sharedElsewhere.id),
-        ),
-      ),
-    );
     const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(items(notes.list(fixture.otherTable.id, {})))),
+      Effect.flip(withActor(fixture.player)(items(notes.listAsPlayer(fixture.otherTable.id, {})))),
     );
 
     expect(campaign._tag).toBe("NotFound");
-    expect(note._tag).toBe("NotFound");
     expect(listed._tag).toBe("NotFound");
 
     // …and the second table's shared note really is there and really is shared,
     // so the assertions above are about reach and not about a missing fixture.
     const asDm = await runtime.runPromise(
-      withActor(fixture.dm)(items(notes.list(fixture.otherTable.id, {}))),
+      asCreator(fixture.dm, fixture.otherTable.id, (dm) => items(notes.list(dm, {}))),
     );
     expect(asDm.map((note) => note.id)).toEqual([fixture.sharedElsewhere.id]);
     expect(asDm[0]!.visibility).toBe("shared");
@@ -268,11 +266,11 @@ describe("membership and credential scope narrow independently, and both apply",
   it("still reaches everything inside the campaign the membership is for", async () => {
     // Membership narrows, it does not replace the rest of the predicate: the
     // shared note in the member's own campaign is still readable.
-    const note = await runtime.runPromise(
-      withActor(fixture.player)(notes.findById(fixture.campaign.id, fixture.shared.id)),
+    const listed = await runtime.runPromise(
+      withActor(fixture.player)(items(notes.listAsPlayer(fixture.campaign.id, {}))),
     );
 
-    expect(note.id).toBe(fixture.shared.id);
+    expect(listed.map((note) => note.id)).toEqual([fixture.shared.id]);
   });
 
   it("is a no-op for a null scope: the DM still sees every campaign they run", async () => {
@@ -324,7 +322,7 @@ describe("another account", () => {
     );
 
     const note = await runtime.runPromise(
-      Effect.flip(withActor(outsider)(notes.findById(fixture.campaign.id, fixture.secret.id))),
+      Effect.flip(withActor(outsider)(items(notes.listAsPlayer(fixture.campaign.id, {})))),
     );
     const campaign = await runtime.runPromise(
       Effect.flip(withActor(outsider)(campaigns.findById(fixture.campaign.id))),
