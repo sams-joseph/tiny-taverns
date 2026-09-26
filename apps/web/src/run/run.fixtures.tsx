@@ -8,6 +8,8 @@ import {
   campaign,
   campaignId,
   cazril,
+  character,
+  characterSeat,
   goblin,
   goblinBoss,
   liveRun,
@@ -114,6 +116,24 @@ export const runBoard = {
   imagePending: false,
 };
 
+/**
+ * Brannoc standing on the board, where the fixture fight has him: the sixth
+ * square across and the fifth down. The Goblin Boss is not on it yet, so the
+ * tray has someone in it.
+ */
+export const brannocPlaced = { ...brannoc, position: { column: 5, row: 4 } };
+
+/**
+ * The party as the runner reads it, for a character's speed: Brannoc's sheet
+ * says 25 ft, which is under the Goblin Boss's 30 and so tells the two apart.
+ */
+export const runParty = [
+  {
+    seat: characterSeat,
+    character: { ...character, sheet: { ...character.sheet, identity: { speed: "25 ft." } } },
+  },
+];
+
 /** Everything a fight on the table answers, before a test re-aims it. */
 export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -124,7 +144,8 @@ export const liveFight = (): Map<string, Answer> =>
     // only the by-id read reaches what a fight's rows point at.
     [`GET ${base}/creatures/${goblin.id}`, { status: 200, body: goblin }],
     [`GET ${runBase}`, { status: 200, body: liveRun }],
-    [`GET ${runBase}/combatants`, { status: 200, body: [brannoc, goblinBoss] }],
+    [`GET ${runBase}/combatants`, { status: 200, body: [brannocPlaced, goblinBoss] }],
+    [`GET ${base}/party`, { status: 200, body: runParty }],
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
     [`GET ${base}/npcs`, { status: 200, body: [cazril] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}`, { status: 200, body: [] }],
@@ -153,6 +174,16 @@ export const liveFight = (): Map<string, Answer> =>
     [`POST ${runBase}/combatants`, { status: 200, body: goblinBoss }],
     [`PATCH ${runBase}/combatants/${goblinBoss.id}`, { status: 200, body: goblinBoss }],
     [`DELETE ${runBase}/combatants/${goblinBoss.id}`, { status: 204, body: null }],
+    // A move answers with the row where it now stands; a test re-aims these
+    // at the square it clicks.
+    [
+      `POST ${runBase}/combatants/${goblinBoss.id}/move`,
+      { status: 200, body: { ...goblinBoss, position: { column: 8, row: 6 } } },
+    ],
+    [
+      `POST ${runBase}/combatants/${brannoc.id}/move`,
+      { status: 200, body: { ...brannocPlaced, position: { column: 6, row: 4 } } },
+    ],
     [`POST ${runBase}/end`, { status: 200, body: { ...liveRun, endedAt: stamps.updatedAt } }],
   ]);
 

@@ -1,4 +1,5 @@
 import type {
+  BoardSquare,
   Combatant,
   CombatantId,
   HobDirectResourceUpdate,
@@ -32,6 +33,7 @@ import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
+import { partyAtom } from "../campaign/load";
 import { CombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { useDmDice } from "./dice";
@@ -52,6 +54,7 @@ import {
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
+import { leadingFeet, tokenLabels } from "./tokens";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -641,6 +644,9 @@ export function RunScreen() {
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
   const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
+  // The party's sheets, for a character's speed on the board. A miss is no
+  // range box, never a guessed one.
+  const [partyResource] = useApiAtom(partyAtom(campaignId));
   const dice = useDmDice();
   const view = resource.state === "ready" ? resource.value : undefined;
   const trayRolls = rollsResource.state === "ready" ? rollsResource.value : [];
@@ -662,6 +668,7 @@ export function RunScreen() {
   const share = useMutation();
   const direct = useMutation();
   const conditions = useMutation();
+  const moves = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -895,6 +902,48 @@ export function RunScreen() {
     });
   };
 
+  /**
+   * Put a token on a square, move it, or take it off. Not optimistic: the token
+   * slides when the server has the square, which on a table's network is the
+   * blink of the slide itself, and a failed move leaves it where it stands.
+   * Nothing outside the fight reads a position, so it names no reads.
+   */
+  const move = async (combatant: Combatant, to: BoardSquare | null): Promise<boolean> => {
+    const moved = await moves.submit(
+      (client) =>
+        client.combatants.move({
+          params: { ...path, combatantId: combatant.id },
+          payload: { position: to, requestId: newRequestId() },
+        }),
+      [],
+    );
+    if (Result.isSuccess(moved)) {
+      controller.applyCombatant(moved.success);
+      return true;
+    }
+    toast.add({
+      type: "destructive",
+      title: `${combatant.displayName} did not move`,
+      description: "That did not reach the server. The token is where the server has it.",
+    });
+    return false;
+  };
+
+  /**
+   * How far someone walks, from the front of their speed: the stat block's for
+   * a creature, the sheet's for a party member, nothing for a row the DM typed.
+   */
+  const party = partyResource.state === "ready" ? partyResource.value : [];
+  const speedOf = (combatant: Combatant): number | undefined => {
+    if (combatant.creatureId !== null) {
+      return leadingFeet(view?.creatures.get(combatant.creatureId)?.statBlock.speed);
+    }
+    if (combatant.characterId === null) return undefined;
+    const character = party.find((seat) => seat.character?.id === combatant.characterId)?.character;
+    return leadingFeet(character?.sheet.identity?.speed);
+  };
+  const labels = useMemo(() => tokenLabels(state?.combatants ?? []), [state?.combatants]);
+
   const saved = useCallback(() => {
     setAdding(false);
     setEditing(undefined);
@@ -1014,7 +1063,22 @@ export function RunScreen() {
             }
             map={
               hasBoard(boardResource) ? (
-                <RunBoardCard resource={boardResource} reload={reloadBoard} />
+                <RunBoardCard
+                  resource={boardResource}
+                  reload={reloadBoard}
+                  over={over}
+                  tokens={{
+                    combatants: state.combatants,
+                    labels,
+                    hpOf: controller.hpOf,
+                    selected,
+                    activeId: state.run.activeCombatantId,
+                    speedOf,
+                    movable: !frozen,
+                    onSelect: (combatant) => setSelectedId(combatant.id),
+                    onMove: move,
+                  }}
+                />
               ) : null
             }
             card={

@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bodyOf,
   brannoc,
+  brannocPlaced,
   campaignId,
   cazril,
   directUpdate,
@@ -933,5 +934,226 @@ describe("rolling initiative", () => {
     await screen.findByText("Rolling initiative · everyone has a number");
     expect(screen.getByRole("button", { name: "Start round 3" })).toBeEnabled();
     expect(within(rowFor("Brannoc")).getByText("21")).toBeInTheDocument();
+  });
+});
+
+describe("the fight's tokens", () => {
+  const card = () => within(screen.getByRole("region", { name: "Battle map" }));
+  const hint = () => card().getByRole("status");
+  const moves = () => server.calls.filter((call) => call.pathname.endsWith("/move"));
+  const brannocMove = () => `POST ${serverRunBase()}/combatants/${brannoc.id}/move`;
+  const bossMove = () => `POST ${serverRunBase()}/combatants/${goblinBoss.id}/move`;
+
+  /**
+   * Click the board at a square. jsdom lays nothing out, so the squares' layer
+   * is given the box a browser would: 240 × 160 for the fixture's 24 × 16
+   * board, ten pixels a square, and the click lands in the middle of one.
+   */
+  const clickSquare = (column: number, row: number) => {
+    const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]");
+    if (squares === null) throw new Error("no board to click");
+    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    );
+    fireEvent.click(squares, { clientX: column * 10 + 5, clientY: row * 10 + 5 });
+  };
+
+  /** The runner, once its board has answered. */
+  const open = async () => {
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+  };
+
+  const token = (name: string) =>
+    card().getByRole("button", { name: new RegExp(`^${name}, column`) });
+
+  it("stands a placed combatant on its square, and trays the one nobody has put down", async () => {
+    await open();
+    await waitFor(() => expect(token("Brannoc")).toBeInTheDocument());
+    expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 6, row 5");
+    // Its square, as a share of the board's plane: 5 × 64 of 1536 across.
+    expect(token("Brannoc").style.left).toMatch(/^20\.8333/);
+    expect(token("Brannoc").style.top).toBe("25%");
+    expect(token("Brannoc")).toHaveTextContent("B");
+    // Nothing guesses the Goblin Boss a square: he waits in the tray.
+    expect(card().queryByRole("button", { name: /^Goblin Boss, column/ })).toBeNull();
+    expect(
+      within(card().getByRole("group", { name: "Not on the board" })).getByRole("button", {
+        name: "Goblin Boss, not on the board",
+      }),
+    ).toBeInTheDocument();
+    // Drawing them is a read.
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("selects from a token, as from the list", async () => {
+    await open();
+    await waitFor(() => expect(token("Brannoc")).toBeInTheDocument());
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+
+    await userEvent.click(token("Brannoc"));
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    expect(token("Brannoc")).toHaveAttribute("aria-pressed", "true");
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-selected", "true");
+    expect(moves()).toEqual([]);
+  });
+
+  it("puts a token from the tray on the square clicked", async () => {
+    server.routes.set(bossMove(), {
+      status: 200,
+      body: { ...goblinBoss, position: { column: 12, row: 3 } },
+    });
+    await open();
+    await userEvent.click(
+      await card().findByRole("button", { name: "Goblin Boss, not on the board" }),
+    );
+    await waitFor(() =>
+      expect(hint()).toHaveTextContent("Click a square to put Goblin Boss on the board."),
+    );
+
+    clickSquare(12, 3);
+
+    await waitFor(() => expect(moves()).toHaveLength(1));
+    expect(bodyOf(server, "POST", "/move")).toMatchObject({
+      position: { column: 12, row: 3 },
+      requestId: expect.any(String),
+    });
+    await waitFor(() =>
+      expect(token("Goblin Boss")).toHaveAccessibleName("Goblin Boss, column 13, row 4"),
+    );
+    expect(hint()).toHaveTextContent("Goblin Boss is on the board");
+    expect(card().queryByRole("group", { name: "Not on the board" })).toBeNull();
+  });
+
+  it("moves the selected token, says how far, and says when it went past their speed", async () => {
+    server.routes.set(brannocMove(), {
+      status: 200,
+      body: { ...brannocPlaced, position: { column: 11, row: 2 } },
+    });
+    await open();
+    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+    // His sheet says 25 ft: five squares every way from where he stands.
+    const reach = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-slot=token-reach]");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(reach.style.left).toBe("0%");
+    expect(reach.style.top).toBe("0%");
+    expect(reach.style.width).toMatch(/^45\.8333/);
+
+    clickSquare(11, 2);
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 11, row: 2 } }),
+    );
+    // Six squares on the diagonal's long side is 30 ft, past his 25.
+    await waitFor(() =>
+      expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
+    );
+    await waitFor(() => expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 12, row 3"));
+  });
+
+  it("reaches as far as a stat block's speed, and draws no range where none is written", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, position: { column: 20, row: 10 } },
+        {
+          ...goblinBoss,
+          id: "2b1f2a1e-0000-4000-8000-000000000c99",
+          creatureId: null,
+          displayName: "Guard",
+          position: { column: 1, row: 1 },
+        },
+      ],
+    });
+    await open();
+    await userEvent.click(await card().findByRole("button", { name: /^Goblin Boss,/ }));
+    // "30 ft." is six squares: from column 14 to the board's last, 23.
+    await waitFor(() =>
+      expect(document.querySelector<HTMLElement>("[data-slot=token-reach]")?.style.left).toMatch(
+        /^58\.3333/,
+      ),
+    );
+
+    await userEvent.click(token("Guard"));
+    await waitFor(() => expect(panel().getByText("Guard")).toBeInTheDocument());
+    expect(document.querySelector("[data-slot=token-reach]")).toBeNull();
+  });
+
+  it("walks a focused token a square with the arrow keys", async () => {
+    await open();
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+    brannocToken.focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 6, row: 4 } }),
+    );
+    // An arrow is not the space bar: the turn stays where it was.
+    expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
+  });
+
+  it("takes a standing token off the board, back into the tray", async () => {
+    server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
+    await open();
+    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+    await userEvent.click(card().getByRole("button", { name: "Take Brannoc off the board" }));
+
+    await waitFor(() => expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: null }));
+    await waitFor(() =>
+      expect(card().getByRole("button", { name: "Brannoc, not on the board" })).toBeInTheDocument(),
+    );
+    expect(hint()).toHaveTextContent("Brannoc is off the board");
+  });
+
+  it("leaves the token where the server has it when a move is refused", async () => {
+    server.routes.set(brannocMove(), {
+      status: 409,
+      body: { _tag: "Conflict", message: "that square is off the board" },
+    });
+    await open();
+    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+    clickSquare(9, 9);
+
+    await screen.findByText("Brannoc did not move");
+    expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 6, row 5");
+    expect(hint()).toHaveTextContent("Click a square to move Brannoc.");
+  });
+
+  it("hides the grid on this screen only, and the squares still take a token", async () => {
+    await open();
+    await waitFor(() => expect(document.querySelectorAll("[data-line=column]")).toHaveLength(25));
+    const grid = card().getByRole("button", { name: "Grid" });
+    expect(grid).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(grid);
+    expect(document.querySelectorAll("[data-line=column]")).toHaveLength(0);
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+
+    await userEvent.click(token("Brannoc"));
+    clickSquare(7, 4);
+    await waitFor(() => expect(moves()).toHaveLength(1));
+  });
+
+  it("moves nothing once the fight is over", async () => {
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
+      }
+    }
+    await open();
+    await screen.findByText(/came off the table/);
+    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+    clickSquare(9, 9);
+    token("Brannoc").focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    expect(hint()).toHaveTextContent("Where everyone stood when it ended.");
+    expect(card().queryByRole("button", { name: /off the board/ })).toBeNull();
+    expect(moves()).toEqual([]);
   });
 });
