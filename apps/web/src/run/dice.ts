@@ -24,8 +24,12 @@ export interface DmRoll extends LocalRoll {
 
 export interface DmDice {
   readonly rolls: ReadonlyArray<DmRoll>;
-  /** Roll a notation under a label; a notation that does not parse rolls nothing. */
-  readonly roll: (label: string, notation: string) => void;
+  /**
+   * Roll a notation under a label, and answer with what it came to — a scene's
+   * *Roll for them* types the total into the check it is making. A notation
+   * that does not parse rolls nothing.
+   */
+  readonly roll: (label: string, notation: string) => LocalRoll | undefined;
 }
 
 export function useDmDice(): DmDice {
@@ -33,9 +37,10 @@ export function useDmDice(): DmDice {
   const next = useRef(0);
   const roll = useCallback((label: string, notation: string) => {
     const rolled = rollDiceExpression(label, notation);
-    if (rolled === undefined) return;
+    if (rolled === undefined) return undefined;
     const id = ++next.current;
     setRolls((current) => [{ ...rolled, id }, ...current].slice(0, KEPT));
+    return rolled;
   }, []);
   return { rolls, roll };
 }

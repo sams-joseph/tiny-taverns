@@ -339,3 +339,95 @@ for (const width of WIDTHS) {
     });
   });
 }
+
+/**
+ * A scene that is not a fight (`run/SceneRunner.tsx`), over the creator's wire
+ * with the run played as each kind (`test/scenarios.ts`): two columns from
+ * `@3xl` — the scene's cards beside the aside, which ends at the layout's edge
+ * with nothing blank beside either — and below it one column in the order the
+ * DM uses it, the scene, *Make a check*, then the log. The redesign's flex wrap
+ * leaves a 380px aside with a blank beside it at 760; this re-deals instead.
+ */
+const SCENES = [
+  { screen: "run-social", lead: "The conversation", checks: true },
+  { screen: "run-challenge", lead: "The challenge", checks: true },
+  { screen: "run-hazard", lead: "The hazard", checks: false },
+] as const;
+
+for (const width of WIDTHS) {
+  for (const scene of SCENES) {
+    test.describe(`${width}px ${scene.screen}`, () => {
+      test.use({ viewport: { width, height: HEIGHT } });
+
+      test("the scene's layout", async ({ app, page }) => {
+        await app.open(screens.find((entry) => entry.name === scene.screen)!);
+        const layout = page.locator('[data-slot="scene-layout"]');
+        const lead = page.getByRole("region", { name: scene.lead });
+        const dice = page.getByRole("region", { name: "Dice", exact: true });
+        await expect(lead).toBeVisible();
+
+        await test.step("nothing scrolls sideways", async () => {
+          const { scrollWidth, clientWidth } = await app.widths();
+          expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+        });
+
+        const whole = await box(layout);
+        type Box = Awaited<ReturnType<typeof box>>;
+        const at: {
+          lead: Box;
+          dice: Box;
+          check?: Box;
+          log?: Box;
+          running?: Box;
+        } = {
+          lead: await box(lead),
+          dice: await box(dice),
+          ...(scene.checks
+            ? {
+                check: await box(page.getByRole("region", { name: "Make a check" })),
+                log: await box(page.getByRole("region", { name: "Checks so far" })),
+              }
+            : { running: await box(page.getByRole("region", { name: "Running it" })) }),
+        };
+        // The aside's first card: *Make a check*, or a hazard's *Running it*.
+        const aside = at.check ?? at.running!;
+
+        if (width >= 1024) {
+          await test.step("the scene beside the aside, both to the layout's edges", async () => {
+            expect.soft(at.lead.x, "scene x").toBeCloseTo(whole.x, 0);
+            expect.soft(aside.x - (at.lead.x + at.lead.width), "scene → aside").toBeCloseTo(GAP, 0);
+            expect.soft(aside.width, "aside width").toBeCloseTo(ASIDE, 0);
+            expect
+              .soft(aside.x + aside.width, "aside's right edge")
+              .toBeCloseTo(whole.x + whole.width, 0);
+            // Both columns start at the top of the layout.
+            expect.soft(aside.y, "aside starts at the top").toBeCloseTo(whole.y, 0);
+            if (at.log !== undefined) {
+              expect.soft(at.log.x, "the log under the scene").toBeCloseTo(at.lead.x, 0);
+            }
+          });
+        } else {
+          await test.step("one column, in the order it is used", async () => {
+            for (const [name, part] of Object.entries(at)) {
+              expect.soft(part.x, `${name} x`).toBeCloseTo(whole.x, 0);
+              expect.soft(part.width, `${name} width`).toBeCloseTo(whole.width, 0);
+            }
+            if (at.check !== undefined && at.log !== undefined) {
+              expect.soft(at.lead.y < at.check.y, "the scene before the check").toBe(true);
+              expect.soft(at.check.y < at.log.y, "the check before the log").toBe(true);
+              expect.soft(at.log.y < at.dice.y, "the log before the dice").toBe(true);
+            } else {
+              expect.soft(at.lead.y < at.dice.y, "the scene before the dice").toBe(true);
+            }
+          });
+        }
+
+        await test.step("the header names the kind, and has no Next turn", async () => {
+          const header = page.locator('main [data-slot="page-heading"]');
+          await expect.soft(header.getByRole("button", { name: /Next turn/ })).toHaveCount(0);
+          await expect.soft(header.locator('[data-slot="badge"]')).toHaveCount(1);
+        });
+      });
+    });
+  }
+}

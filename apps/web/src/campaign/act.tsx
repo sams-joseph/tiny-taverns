@@ -4,6 +4,7 @@ import { useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import type { IconName } from "@taverns/ui";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { sceneNoun } from "../run/scene";
 import { campaignNightAtom, type CampaignNight } from "./load";
 import { StartRun } from "./StartRun";
 import { StartSessionDialog } from "./StartSessionDialog";
@@ -39,7 +40,7 @@ const actFor = (
   onStartSession: () => void,
 ): CampaignAct =>
   night.run !== undefined
-    ? { label: "Back to the fight", icon: "swords", press: onRun }
+    ? { label: `Back to the ${sceneNoun(night.run.mode)}`, icon: "swords", press: onRun }
     : night.session === undefined
       ? { label: "Start session", icon: "play", press: onStartSession }
       : // The night is open. What is left to do is the DM's discretion — an

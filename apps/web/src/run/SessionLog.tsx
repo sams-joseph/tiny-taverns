@@ -19,15 +19,19 @@ import type { LiveStatus } from "./stream";
  * number the DM actually needs is on the initiative row where they are looking.
  */
 
-const SENTENCE: Record<SessionEventKind, (who: string | undefined) => string> = {
-  "run-started": () => "The fight went on the table",
-  "run-updated": () => "The fight changed",
-  "run-ended": () => "The fight came off the table",
+/**
+ * `noun` is what the run is played as now (`sceneNoun`): a conversation that
+ * went on the table is not "the fight" until it turns into one.
+ */
+const SENTENCE: Record<SessionEventKind, (who: string | undefined, noun: string) => string> = {
+  "run-started": (_, noun) => `The ${noun} went on the table`,
+  "run-updated": (_, noun) => `The ${noun} changed`,
+  "run-ended": (_, noun) => `The ${noun} came off the table`,
   // The night finished over this fight, so it came off the table and is waiting
   // for the next one. Distinct from `run-ended` on purpose — a recap that
   // conflated them would report a fight the party is still standing in as over.
-  "run-carried": () => "The night ended — the fight carries over",
-  "run-resumed": () => "The fight was picked up from last time",
+  "run-carried": (_, noun) => `The night ended — the ${noun} carries over`,
+  "run-resumed": (_, noun) => `The ${noun} was picked up from last time`,
   "combatant-added": (who) => `${who ?? "Someone"} joined the order`,
   "combatant-updated": (who) => `${who ?? "A combatant"} changed`,
   // The foreign key is `on delete set null`, so by the time this row is read
@@ -78,11 +82,14 @@ const STATUS_LINE: Record<LiveStatus, string> = {
 export function SessionLog({
   events,
   combatants,
+  noun,
   status,
 }: {
   /** Newest first, and already cut to the last few — `LOG_KEPT` in `RunScreen`. */
   readonly events: ReadonlyArray<SessionEvent>;
   readonly combatants: ReadonlyArray<Combatant>;
+  /** What the run is played as — `"fight"`, `"conversation"`… */
+  readonly noun: string;
   readonly status: LiveStatus;
 }) {
   const names = new Map<CombatantId, string>(
@@ -119,6 +126,7 @@ export function SessionLog({
                 <span className="min-w-0 flex-1 text-caption leading-body text-on-dark-muted">
                   {SENTENCE[event.kind](
                     event.combatantId === null ? undefined : names.get(event.combatantId),
+                    noun,
                   )}
                 </span>
               </li>

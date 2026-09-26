@@ -254,7 +254,7 @@ function EncounterBrowser({
             )}
             group={groupLabel(selected, liveId)}
             live={selected.id === liveId}
-            fightOn={view.run !== undefined}
+            onTable={view.run?.mode}
             onRun={() => onRun(selected)}
           />
         </div>

@@ -402,6 +402,23 @@ describe("the live banner", () => {
     );
   });
 
+  it("tells a scene that is not a fight by what it is, not by a round", async () => {
+    onTheTable(null);
+    server.routes.set(`GET ${base}/sessions/${sessionId}/runs`, {
+      status: 200,
+      body: [{ ...liveRun, mode: "challenge", encounterName: "The dry well" }],
+    });
+    await renderScreen(mintingSession());
+
+    const banner = (await screen.findByText("Session 12 is running")).closest<HTMLElement>(
+      "[data-slot='card']",
+    )!;
+    expect(within(banner).getByText("The dry well, a skill challenge")).toBeInTheDocument();
+    expect(
+      await within(campaignRow()).findByRole("button", { name: "Back to the skill challenge" }),
+    ).toBeInTheDocument();
+  });
+
   it("is absent with no fight on the table", async () => {
     await renderScreen(mintingSession());
     await cardOf("Session 12");

@@ -11,13 +11,13 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * over the cover when there is one (`campaign/CampaignHero.tsx`), so it lands
  * where the cover puts it.
  *
- * The runner is exempt from the `h1`'s y alone. It is no tab, and the redesign
+ * The runner, a fight's and a scene's, is exempt from the `h1`'s y alone. It is no tab, and the redesign
  * draws its header on a card (`PageHeader`'s `framed`), so the title sits inside
  * the card's border and padding; the header's row is still the one height.
  */
 
 const HEROED = new Set(["overview", "player-overview"]);
-const FRAMED = new Set(["run"]);
+const FRAMED = new Set(["run", "run-social", "run-challenge", "run-hazard"]);
 const campaignScreens = screens.filter((screen) => screen.path.startsWith("/campaigns/"));
 
 for (const width of WIDTHS) {

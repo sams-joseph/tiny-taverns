@@ -9,7 +9,7 @@ import { twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
 import { fullParty, fullPartyPrep, fullPartySeats } from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
-import { liveFight } from "../run/run.fixtures";
+import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
 import type { Scenario } from "./screens";
 
 /**
@@ -26,31 +26,40 @@ import type { Scenario } from "./screens";
  * campaign row shows. A request the merged map cannot answer is a 404 the
  * Playwright suite records against the test that made it.
  */
+// `fullParty` and `fullRules` are each `fullCampaign` plus overrides, so the
+// Chronicle's sessions go after them or the campaign's own list wins back.
+// The membership is the campaign's, not the Chronicle's world-less one, so
+// the campaign row carries its Shared World chip; the encounters are the
+// shelf of every kind, one of them played, so the Encounters page draws each
+// group, pill and preview section, and one encounter's page has its own.
+const creator = (): Map<string, Answer> => {
+  const routes = new Map([
+    ...fullParty(),
+    ...fullRules(),
+    ...fullChronicle(),
+    ...liveFight(),
+    ...encounterShelf(),
+  ]);
+  const answer = fullCampaign().get("GET /me/campaigns");
+  if (answer !== undefined) routes.set("GET /me/campaigns", answer);
+  // The seated party, after the Chronicle's empty one, so the Party tab and
+  // a seat's page are measured over characters — four cards, one deleted,
+  // Brannoc's with the whole sheet the seat page draws read-only — and
+  // their prep, so a card's foot draws a hook and a secret.
+  routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
+  routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
+  return routes;
+};
+
+/** The creator's wire, with the run on the table played as this kind of scene. */
+const creatorScene = (mode: SceneMode) => (): Map<string, Answer> =>
+  new Map([...creator(), ...liveScene(mode)]);
+
 export const scenarios = {
-  // `fullParty` and `fullRules` are each `fullCampaign` plus overrides, so the
-  // Chronicle's sessions go after them or the campaign's own list wins back.
-  // The membership is the campaign's, not the Chronicle's world-less one, so
-  // the campaign row carries its Shared World chip; the encounters are the
-  // shelf of every kind, one of them played, so the Encounters page draws each
-  // group, pill and preview section, and one encounter's page has its own.
-  creator: () => {
-    const routes = new Map([
-      ...fullParty(),
-      ...fullRules(),
-      ...fullChronicle(),
-      ...liveFight(),
-      ...encounterShelf(),
-    ]);
-    const answer = fullCampaign().get("GET /me/campaigns");
-    if (answer !== undefined) routes.set("GET /me/campaigns", answer);
-    // The seated party, after the Chronicle's empty one, so the Party tab and
-    // a seat's page are measured over characters — four cards, one deleted,
-    // Brannoc's with the whole sheet the seat page draws read-only — and
-    // their prep, so a card's foot draws a hook and a secret.
-    routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
-    routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
-    return routes;
-  },
+  creator,
+  "creator-social": creatorScene("social"),
+  "creator-challenge": creatorScene("challenge"),
+  "creator-hazard": creatorScene("hazard"),
   // The campaign's reads, with `twoTables`' memberships seating this account
   // as a player — the composition `PlayerCampaignScreen.test.tsx` makes.
   player: () =>

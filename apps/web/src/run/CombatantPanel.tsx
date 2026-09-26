@@ -132,7 +132,7 @@ function HitPoints({
   );
 }
 
-function Conditions({
+export function Conditions({
   combatant,
   disabled,
   onChange,

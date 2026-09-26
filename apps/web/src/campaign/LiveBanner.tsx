@@ -1,5 +1,6 @@
 import type { EncounterRun, Session } from "@taverns/api";
 import { Button, Card, Icon } from "@taverns/ui";
+import { sceneNoun } from "../run/scene";
 import { agoOf, useNow } from "./when";
 
 /**
@@ -28,9 +29,13 @@ export function LiveBanner({
 }) {
   const now = useNow();
   const detail = [
-    run.phase === "initiative"
-      ? `Rolling initiative for ${run.encounterName}`
-      : `Round ${String(run.round)} of ${run.encounterName}`,
+    // A fight is told by its round; a conversation, a skill challenge or a
+    // hazard takes no turns, so it is told by what it is.
+    run.mode !== "combat"
+      ? `${run.encounterName}, a ${sceneNoun(run.mode)}`
+      : run.phase === "initiative"
+        ? `Rolling initiative for ${run.encounterName}`
+        : `Round ${String(run.round)} of ${run.encounterName}`,
     session.startedAt === null ? null : `started ${agoOf(session.startedAt, now).toLowerCase()}`,
   ]
     .filter((part): part is string => part !== null)

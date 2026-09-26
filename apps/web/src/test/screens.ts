@@ -19,8 +19,13 @@ import {
  * outside Vitest.
  */
 
-/** One account's view of the wire; `test/scenarios.ts` holds the maps. */
-export type Scenario = "creator" | "player";
+/**
+ * One account's view of the wire; `test/scenarios.ts` holds the maps. The
+ * three `creator-*` scenes are the creator's wire with the run on the table
+ * played as that kind of scene instead of a fight.
+ */
+export type Scenario =
+  "creator" | "creator-social" | "creator-challenge" | "creator-hazard" | "player";
 
 export interface Screen {
   readonly name: string;
@@ -30,7 +35,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The twenty-one screens. */
+/** The twenty-four screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -48,6 +53,21 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "party", scenario: "creator", path: `${c}/party` },
   { name: "party-seat", scenario: "creator", path: `${c}/party/${seatId}` },
   { name: "run", scenario: "creator", path: `${c}/sessions/${sessionId}/runs/${runId}` },
+  {
+    name: "run-social",
+    scenario: "creator-social",
+    path: `${c}/sessions/${sessionId}/runs/${runId}`,
+  },
+  {
+    name: "run-challenge",
+    scenario: "creator-challenge",
+    path: `${c}/sessions/${sessionId}/runs/${runId}`,
+  },
+  {
+    name: "run-hazard",
+    scenario: "creator-hazard",
+    path: `${c}/sessions/${sessionId}/runs/${runId}`,
+  },
   { name: "spells", scenario: "creator", path: "/library/spells" },
   { name: "characters", scenario: "player", path: "/characters" },
   { name: "sheet", scenario: "player", path: `/characters/${brannocId}` },

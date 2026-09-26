@@ -1,4 +1,4 @@
-import type { Session } from "@taverns/api";
+import type { EncounterKind, Session } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -17,6 +17,7 @@ import { useMutation } from "../api/mutation";
 import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
 import type { RunPath } from "./load";
+import { sceneNoun } from "./scene";
 
 /**
  * Taking the fight off the table — `EncounterRunner.jsx:160-171`.
@@ -38,22 +39,28 @@ import type { RunPath } from "./load";
  * with the campaign view's own way out of the night. This screen is where a DM
  * whose fight is ending can also end the evening; it is not the only place an
  * evening ends.
+ *
+ * A conversation, a skill challenge or a hazard ends the same way, and is
+ * called what it is: there is no initiative order to save, only its log.
  */
 export function EndRunDialog({
   path,
   session,
   encounterName,
+  mode,
   onClose,
   onEnded,
 }: {
   readonly path: RunPath;
   readonly session: Session;
   readonly encounterName: string;
+  readonly mode: EncounterKind;
   readonly onClose: () => void;
   readonly onEnded: () => void;
 }) {
   const [finishNight, setFinishNight] = useState(false);
   const { busy, failure, submit } = useMutation();
+  const noun = sceneNoun(mode);
 
   const end = async () => {
     const ended = await submit(
@@ -89,12 +96,12 @@ export function EndRunDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="End this fight">
+      <DialogContent aria-label={`End this ${noun}`}>
         <DialogHeader>
-          <DialogTitle>End this fight?</DialogTitle>
+          <DialogTitle>End this {noun}?</DialogTitle>
           <DialogDescription>
-            The initiative order and hit points for {encounterName} are saved to Session{" "}
-            {session.number}. Nothing is deleted.
+            {mode === "combat" ? "The initiative order and hit points" : "The checks and saves"} for{" "}
+            {encounterName} are saved to Session {session.number}. Nothing is deleted.
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +127,7 @@ export function EndRunDialog({
             Keep playing
           </Button>
           <Button variant="destructive" size="sm" disabled={busy} onClick={() => void end()}>
-            {busy ? "Ending…" : "End the fight"}
+            {busy ? "Ending…" : `End the ${noun}`}
           </Button>
         </DialogFooter>
       </DialogContent>

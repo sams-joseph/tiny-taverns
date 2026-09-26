@@ -17,6 +17,7 @@ import { describeRoster } from "./encounterList";
 import { encounterPageAtom, type EncounterPage } from "./load";
 import { NoteCard } from "./NotesList";
 import { NoteDialog } from "./NoteDialog";
+import { sceneNoun } from "../run/scene";
 
 /**
  * One encounter: its battle map, its roster and the notes attached to it — the
@@ -93,7 +94,7 @@ export function EncounterScreen() {
                 />
                 <Button size="sm" onClick={() => run(encounter.id)}>
                   <Icon name="swords" size={13} />
-                  {view.run === undefined ? "Run" : "Back to the fight"}
+                  {view.run === undefined ? "Run" : `Back to the ${sceneNoun(view.run.mode)}`}
                 </Button>
               </>
             )}

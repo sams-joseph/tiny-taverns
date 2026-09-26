@@ -3,6 +3,7 @@ import {
   type Encounter,
   type EncounterChallenge,
   type EncounterCreature,
+  type EncounterKind,
   type EncounterPrep,
   type Note,
 } from "@taverns/api";
@@ -17,6 +18,7 @@ import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { describeDifficulty } from "./difficulty";
 import { DifficultyMeter } from "./DifficultyMeter";
 import { BAND_TEXT } from "./encounterList";
+import { sceneNoun } from "../run/scene";
 import { encounterPageAtom } from "./load";
 import { ReadyBadge } from "./ReadyBadge";
 
@@ -55,7 +57,7 @@ export function EncounterPreview({
   readAloud,
   group,
   live,
-  fightOn,
+  onTable,
   onRun,
   paneRef,
   onSettled,
@@ -69,10 +71,11 @@ export function EncounterPreview({
   /** This is the fight on the table. */
   readonly live: boolean;
   /**
-   * A fight is on the table — this one or another — so *Run* goes back to it,
-   * as the campaign's `run` does and the encounter page's *Run* says.
+   * What is on the table — this encounter or another — as the kind it is run
+   * as, so *Run* goes back to it, as the campaign's `run` does and the
+   * encounter page's *Run* says. `undefined` with nothing on the table.
    */
-  readonly fightOn: boolean;
+  readonly onTable: EncounterKind | undefined;
   readonly onRun: () => void;
   readonly paneRef: Ref<HTMLElement>;
   /** Its reads have answered, so it is as tall as it is going to be. */
@@ -174,8 +177,8 @@ export function EncounterPreview({
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={onRun}>
-              <Icon name={fightOn ? "swords" : "play"} size={13} />
-              {fightOn ? "Back to the fight" : "Run encounter"}
+              <Icon name={onTable !== undefined ? "swords" : "play"} size={13} />
+              {onTable !== undefined ? `Back to the ${sceneNoun(onTable)}` : "Run encounter"}
             </Button>
           )}
         </div>
