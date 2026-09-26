@@ -383,12 +383,19 @@ beforeAll(async () => {
     await as(jo.token, (client) => client.runs.end({ params: params(started.id), payload: {} }));
   }
 
-  // The hidden conversation again, turning into a fight.
+  // The hidden conversation again, turning into a fight: its twin, since an
+  // encounter is played once and the first has been.
   const parley = scenes.find((scene) => scene.encounter.name === HIDDEN_PARLEY)!;
+  const twin = await as(jo.token, (client) =>
+    client.encounters.create({
+      params: { campaignId: table },
+      payload: { ...parley.encounter, creatures: [{ creatureId: hag.id, count: 1 }] },
+    }),
+  );
   const talk = await as(jo.token, (client) =>
     client.runs.start({
       params: { campaignId: table, sessionId: night },
-      payload: { encounterId: parley.id!, visibility: "shared" },
+      payload: { encounterId: twin.id, visibility: "shared" },
     }),
   );
   await shareEveryone(talk.id);

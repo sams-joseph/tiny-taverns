@@ -1,4 +1,4 @@
-import type { Encounter, EncounterPrep, Session } from "@taverns/api";
+import type { Encounter, EncounterPlayed, EncounterPrep, Session } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
@@ -37,15 +37,21 @@ function EncounterRow({
   encounter,
   prep,
   running,
+  onTable,
   onRun,
+  onPickUp,
 }: {
   readonly index: number;
   readonly encounter: Encounter;
   readonly prep: EncounterPrep | undefined;
   readonly running: boolean;
+  /** Anything, this encounter or another, is on the table. */
+  readonly onTable: boolean;
   readonly onRun: () => void;
+  readonly onPickUp: (carried: EncounterPlayed) => void;
 }) {
   const played = playedLabel(encounter);
+  const last = encounter.lastPlayed;
   return (
     <li className="relative flex min-h-row items-center gap-3 border-b border-hairline px-card py-2 transition-control hover:bg-surface-raised has-[a[data-card-link]:focus-visible]:ring-focus [&_:is(a,button):not([data-card-link])]:relative">
       <span
@@ -89,17 +95,54 @@ function EncounterRow({
         <Icon name="pencil" size={14} />
       </Button>
       {/* Named for its encounter, or a list of these is a column of identical
-          Run buttons. The visible word leads, verbatim. */}
-      <Button
-        variant={running ? "secondary" : "outline"}
-        size="sm"
-        className="shrink-0"
-        aria-label={running ? `On the table now — ${encounter.name}` : `Run ${encounter.name}`}
-        onClick={onRun}
-      >
-        <Icon name="swords" size={13} />
-        {running ? "On the table now" : "Run"}
-      </Button>
+          Run buttons. The visible word leads, verbatim. A played encounter is
+          never run again (an encounter is played once): its press is its log,
+          or, for one a night finished over while nothing is on the table,
+          picking it up. */}
+      {running || last === null ? (
+        <Button
+          variant={running ? "secondary" : "outline"}
+          size="sm"
+          className="shrink-0"
+          aria-label={running ? `On the table now — ${encounter.name}` : `Run ${encounter.name}`}
+          onClick={onRun}
+        >
+          <Icon name="swords" size={13} />
+          {running ? "On the table now" : "Run"}
+        </Button>
+      ) : last.endedReason === "carried" && !onTable ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          aria-label={`Pick up ${encounter.name}`}
+          onClick={() => onPickUp(last)}
+        >
+          <Icon name="history" size={13} />
+          Pick up
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          aria-label={`View log — ${encounter.name}`}
+          nativeButton={false}
+          render={
+            <Link
+              to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
+              params={{
+                campaignId: encounter.campaignId,
+                sessionId: last.sessionId,
+                runId: last.runId,
+              }}
+            />
+          }
+        >
+          <Icon name="book-open" size={13} />
+          View log
+        </Button>
+      )}
     </li>
   );
 }
@@ -126,18 +169,22 @@ function EncounterRow({
  * **A row opens its encounter on the Encounters tab**, selected in the preview
  * (`?encounter=`), from anywhere on its face — the captain's call on the
  * Encounters redesign, which draws these rows as the way in. Its own *Edit*,
- * which opens the encounter builder, and *Run* stay above that link.
+ * which opens the encounter builder, and *Run* stay above that link. *Run* is
+ * only on an encounter never played; a played one has *View log*, and a carried
+ * one *Pick up* (`playthroughOf` in `encounterList.ts`).
  */
 export function NextSession({
   view,
   prep,
   onRun,
+  onPickUp,
   onFinish,
 }: {
   readonly view: CampaignView;
   /** Every encounter's prep, for each row's *Ready* or *Draft*. */
   readonly prep: ReadonlyArray<EncounterPrep>;
   readonly onRun: (encounter: Encounter) => void;
+  readonly onPickUp: (encounter: Encounter, carried: EncounterPlayed) => void;
   readonly onFinish: () => void;
 }) {
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
@@ -195,7 +242,9 @@ export function NextSession({
                 encounter={encounter}
                 prep={prepOf.get(encounter.id)}
                 running={live?.encounterId === encounter.id}
+                onTable={live !== undefined}
                 onRun={() => onRun(encounter)}
+                onPickUp={(carried) => onPickUp(encounter, carried)}
               />
             ))}
           </ol>

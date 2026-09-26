@@ -3,6 +3,7 @@ import type {
   Encounter,
   EncounterId,
   EncounterKind,
+  EncounterPlayed,
   EncounterPrep,
 } from "@taverns/api";
 import { DateTime } from "effect";
@@ -100,6 +101,39 @@ export const groupLabel = (encounter: Encounter, liveId: EncounterId | undefined
     : group === "unplayed"
       ? "Not yet played"
       : playedLabel(encounter);
+};
+
+/**
+ * What an encounter still offers the DM. **An encounter is played once**
+ * (`playthroughOf` in `repo/EncounterRuns.ts`, which refuses a second start),
+ * so every press that would start one asks this rather than its own question:
+ *
+ * - `unplayed` is the only one that may be run;
+ * - `live` is on the table, and its press goes back to it;
+ * - `carried` came off the table at the end of a night and has not been picked
+ *   up: the same playthrough, continued by `runs.resume` from `played.runId`;
+ * - `played` is over, and its way in is its log.
+ *
+ * A carried fight that was picked up is live, or, once that ends, played by
+ * its successor: `lastPlayed` is the most recent ended run, and the successor
+ * ended after its predecessor.
+ */
+export type Playthrough =
+  | { readonly _tag: "unplayed" }
+  | { readonly _tag: "live" }
+  | { readonly _tag: "carried"; readonly played: EncounterPlayed }
+  | { readonly _tag: "played"; readonly played: EncounterPlayed };
+
+export const playthroughOf = (
+  encounter: Encounter,
+  liveId: EncounterId | undefined,
+): Playthrough => {
+  if (encounter.id === liveId) return { _tag: "live" };
+  const played = encounter.lastPlayed;
+  if (played === null) return { _tag: "unplayed" };
+  return played.endedReason === "carried"
+    ? { _tag: "carried", played }
+    : { _tag: "played", played };
 };
 
 /** `"Played · Session 12"`, or nothing for an encounter never played. */

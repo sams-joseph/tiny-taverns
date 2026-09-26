@@ -69,13 +69,11 @@ const abilities = (dex: string) => [
 /**
  * Two players' characters — one whose sheet writes its initiative (an Alert
  * feat), one that has only its DEX — and a roster of two goblins (DEX +2) and
- * a hag (DEX +1). Plus a social encounter with the same party, to show the
- * other kinds still open on turns.
+ * a hag (DEX +1), for the encounters `startOn` builds. Plus a social encounter
+ * with the same party, to show the other kinds still open on turns.
  */
 const makeFixture = Effect.gen(function* () {
   const creatures = yield* Creatures;
-  const encounters = yield* Encounters;
-  const roster = yield* EncounterCreatures;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -120,20 +118,13 @@ const makeFixture = Effect.gen(function* () {
       statBlock: { ...emptyStatBlock, abilities: abilities("+1") },
     }),
   );
-  const fight = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
-  yield* as(roster.create(campaign.id, fight.id, { creatureId: goblin.id, count: 2 }));
-  yield* as(roster.create(campaign.id, fight.id, { creatureId: hag.id, count: 1 }));
-  const bargain = yield* as(
-    encounters.create(campaign.id, { name: "The hag's bargain", kind: "social" }),
-  );
-  yield* as(roster.create(campaign.id, bargain.id, { creatureId: hag.id, count: 1 }));
 
   return {
     dm,
     asDm: yield* as(asDm(dm, campaign.id)),
     campaign,
-    fight,
-    bargain,
+    goblin,
+    hag,
     brannoc,
     nessa,
   };
@@ -143,12 +134,16 @@ let fixture: Effect.Success<typeof makeFixture>;
 let runs: (typeof EncounterRuns)["Service"];
 let combatants: (typeof Combatants)["Service"];
 let sessions: (typeof Sessions)["Service"];
+let encounters: (typeof Encounters)["Service"];
+let roster: (typeof EncounterCreatures)["Service"];
 
 beforeAll(async () => {
   fixture = await runtime.runPromise(makeFixture);
   runs = await runtime.runPromise(EncounterRuns);
   combatants = await runtime.runPromise(Combatants);
   sessions = await runtime.runPromise(Sessions);
+  encounters = await runtime.runPromise(Encounters);
+  roster = await runtime.runPromise(EncounterCreatures);
 }, 60_000);
 
 const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>) =>
@@ -165,10 +160,23 @@ const night = () => {
   return as(sessions.create(fixture.campaign.id, { number: nightNumber }));
 };
 
+/**
+ * Put a new encounter on the table: the ambush (two goblins and the hag) or the
+ * hag's bargain, a conversation with her in it. New each time, because an
+ * encounter is played once.
+ */
 const startOn = (sessionId: SessionId, encounter: "fight" | "bargain" = "fight") =>
   as(
-    runs.start(fixture.asDm, sessionId, {
-      encounterId: encounter === "fight" ? fixture.fight.id : fixture.bargain.id,
+    Effect.gen(function* () {
+      const campaignId = fixture.campaign.id;
+      const made = yield* encounter === "fight"
+        ? encounters.create(campaignId, { name: "Ambush in the reeds" })
+        : encounters.create(campaignId, { name: "The hag's bargain", kind: "social" });
+      if (encounter === "fight") {
+        yield* roster.create(campaignId, made.id, { creatureId: fixture.goblin.id, count: 2 });
+      }
+      yield* roster.create(campaignId, made.id, { creatureId: fixture.hag.id, count: 1 });
+      return yield* runs.start(fixture.asDm, sessionId, { encounterId: made.id });
     }),
   );
 

@@ -3,6 +3,7 @@ import {
   Actor,
   type CampaignId,
   type Combatant,
+  type CreatureId,
   CurrentActor,
   type EncounterId,
   type EncounterRun,
@@ -157,7 +158,7 @@ let withdrawn: Person;
 let stranger: Person;
 let table: CampaignId;
 let elsewhere: CampaignId;
-let ambush: EncounterId;
+let archerId: CreatureId;
 let secret: EncounterId;
 let talk: EncounterId;
 let nights = 0;
@@ -188,14 +189,37 @@ const endNight = (sessionId: SessionId) =>
   );
 
 /**
- * A shared fight on the ambush with every row shared but one archer, the
- * player's token and both archers' put down, and nothing else set.
+ * The ambush, written afresh for each fight with its map drawn: an encounter is
+ * played once (`playthroughOf` in `repo/EncounterRuns.ts`), so every fight on
+ * it here is a different encounter's one playthrough.
  */
-const fightOn = async (sessionId: SessionId, encounterId: EncounterId = ambush) => {
+const anAmbush = async (): Promise<EncounterId> => {
+  const ambush = await as(jo.token, (client) =>
+    client.encounters.create({
+      params: { campaignId: table },
+      payload: {
+        name: "Ambush in the reeds",
+        setting: SETTING,
+        visibility: "shared",
+        ready: true,
+        creatures: [{ creatureId: archerId, count: 2 }],
+      },
+    }),
+  );
+  await settled();
+  return ambush.id;
+};
+
+/**
+ * A shared fight on the ambush (or `encounterId`) with every row shared but one
+ * archer, the player's token and both archers' put down, and nothing else set.
+ */
+const fightOn = async (sessionId: SessionId, encounterId?: EncounterId) => {
+  const onTable = encounterId ?? (await anAmbush());
   const fight = await as(jo.token, (client) =>
     client.runs.start({
       params: { campaignId: table, sessionId },
-      payload: { encounterId, visibility: "shared" },
+      payload: { encounterId: onTable, visibility: "shared" },
     }),
   );
   const params = { campaignId: table, sessionId, runId: fight.id };
@@ -283,22 +307,10 @@ beforeAll(async () => {
     }),
   );
 
-  const archer = await as(jo.token, (client) =>
-    client.library.create({
-      payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
-    }),
-  );
-  ambush = (
+  archerId = (
     await as(jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: table },
-        payload: {
-          name: "Ambush in the reeds",
-          setting: SETTING,
-          visibility: "shared",
-          ready: true,
-          creatures: [{ creatureId: archer.id, count: 2 }],
-        },
+      client.library.create({
+        payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
       }),
     )
   ).id;
@@ -309,7 +321,7 @@ beforeAll(async () => {
         payload: {
           name: "NAME-THE-DMS-OWN",
           setting: SETTING,
-          creatures: [{ creatureId: archer.id, count: 2 }],
+          creatures: [{ creatureId: archerId, count: 2 }],
         },
       }),
     )
@@ -324,7 +336,7 @@ beforeAll(async () => {
           setting: SETTING,
           visibility: "shared",
           ready: true,
-          creatures: [{ creatureId: archer.id, count: 2 }],
+          creatures: [{ creatureId: archerId, count: 2 }],
         },
       }),
     )

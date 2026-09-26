@@ -103,8 +103,6 @@ const withActor =
 
 const makeFixture = Effect.gen(function* () {
   const creatures = yield* Creatures;
-  const encounters = yield* Encounters;
-  const roster = yield* EncounterCreatures;
 
   const dm = yield* anAccount("Jo");
   const as = withActor(dm);
@@ -129,8 +127,6 @@ const makeFixture = Effect.gen(function* () {
       hp: 7,
     }),
   );
-  const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
-  yield* as(roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 2 }));
 
   /** The second table the continuity tests carry a character to. */
   const otherTable = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
@@ -146,7 +142,7 @@ const makeFixture = Effect.gen(function* () {
     player,
     playerElsewhere,
     campaign,
-    encounter,
+    archer,
     otherTable,
   };
 }).pipe(Effect.orDie);
@@ -160,6 +156,8 @@ let runs: (typeof EncounterRuns)["Service"];
 let sessions: (typeof Sessions)["Service"];
 let events: (typeof SessionEvents)["Service"];
 let live: (typeof LiveEvents)["Service"];
+let encounters: (typeof Encounters)["Service"];
+let roster: (typeof EncounterCreatures)["Service"];
 
 // Every service is resolved once, so an effect written below requires nothing
 // but `CurrentActor` — which is what lets `as` provide the actor and run it.
@@ -173,6 +171,8 @@ beforeAll(async () => {
   sessions = await runtime.runPromise(Sessions);
   events = await runtime.runPromise(SessionEvents);
   live = await runtime.runPromise(LiveEvents);
+  encounters = await runtime.runPromise(Encounters);
+  roster = await runtime.runPromise(EncounterCreatures);
 }, 60_000);
 
 const as = <A, E>(effect: Effect.Effect<A, E, CurrentActor>): Promise<A> =>
@@ -193,6 +193,24 @@ const aCharacter = (hpMax: number, name?: string) => {
     }),
   );
 };
+
+/**
+ * The ambush, two goblin archers, new for each fight: an encounter is played
+ * once, so no two tests can start the same one.
+ */
+const anEncounter = () =>
+  as(
+    Effect.gen(function* () {
+      const encounter = yield* encounters.create(fixture.campaign.id, {
+        name: "Ambush in the reeds",
+      });
+      yield* roster.create(fixture.campaign.id, encounter.id, {
+        creatureId: fixture.archer.id,
+        count: 2,
+      });
+      return encounter.id;
+    }),
+  );
 
 /** A throwaway night, so one test's fight cannot disturb another's. */
 let nights = 200;
@@ -266,7 +284,7 @@ describe("a hit point belongs to the character", () => {
   it("moves both rows when damage lands in a fight", async () => {
     const night = await aNight();
     const { character } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     // A fight seeded from a character who has never been damaged starts at
@@ -293,7 +311,7 @@ describe("a hit point belongs to the character", () => {
   it("clamps once, in the fight, so neither row is a point out", async () => {
     const night = await aNight();
     const { character } = await aCharacter(24);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     const flattened = await as(
@@ -317,7 +335,7 @@ describe("a hit point belongs to the character", () => {
     await as(party.update(fixture.campaign.id, seatId, { conditions: ["Poisoned"] }));
 
     const night = await aNight();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     // A seed from `hp_max` would have healed them at the top of the fight,
@@ -350,7 +368,7 @@ describe("a hit point belongs to the character", () => {
     );
 
     const night = await aNight();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const list = await as(combatants.list(fixture.asDm, night.id, run.id));
     const characterIds = list
       .map((entry) => entry.characterId)
@@ -374,7 +392,7 @@ describe("a hit point belongs to the character", () => {
     );
 
     const night = await aNight();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
     await as(combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 13 }));
 
@@ -390,7 +408,7 @@ describe("a hit point belongs to the character", () => {
     // pointer nulled. Losing the character must not rewrite the night.
     const { character } = await aCharacter(30, "Doomed Mid-Fight");
     const night = await aNight();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
     await as(combatants.damage(fixture.asDm, night.id, run.id, seeded.id, { amount: 8 }));
 
@@ -422,7 +440,7 @@ describe("a hit point belongs to the character", () => {
   it("sends a seat's own delta through the fight it is in", async () => {
     const night = await aNight();
     const { character, seatId } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     // The DM reaches for the party list while a fight is still on the table.
@@ -437,7 +455,7 @@ describe("a hit point belongs to the character", () => {
   it("carries a condition set on the seat into the fight, and back out", async () => {
     const night = await aNight();
     const { character, seatId } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     await as(party.update(fixture.campaign.id, seatId, { conditions: ["Blessed"] }));
@@ -452,7 +470,7 @@ describe("a hit point belongs to the character", () => {
   it("writes back only what a combatant patch named", async () => {
     const night = await aNight();
     const { character, seatId } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
     await seatDamage(seatId, { amount: 4 });
 
@@ -564,7 +582,7 @@ describe("the doorbell, and where it stops", () => {
     const night = await aNight();
     await makeCurrent(night.id);
     const { character, seatId } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     // From the *seat* side, into a fight that is on the table.
@@ -591,7 +609,7 @@ describe("the doorbell, and where it stops", () => {
     const night = await aNight();
     await makeCurrent(night.id);
     const { character } = await aCharacter(30);
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: await anEncounter() }));
     const seeded = await combatantFor(night.id, run.id, character.id);
 
     const { rings } = await doorbellsWhile(

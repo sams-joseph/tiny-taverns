@@ -1,4 +1,4 @@
-import type { CampaignId, EncounterId } from "@taverns/api";
+import type { CampaignId, Encounter, EncounterId, EncounterPlayed } from "@taverns/api";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import type { IconName } from "@taverns/ui";
@@ -6,6 +6,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { sceneNoun } from "../run/scene";
 import { campaignNightAtom, type CampaignNight } from "./load";
+import { PickUpRunDialog } from "./PickUpRunDialog";
 import { StartRun } from "./StartRun";
 import { StartSessionDialog } from "./StartSessionDialog";
 
@@ -64,6 +65,13 @@ export interface CampaignActs {
    * one step on a campaign that has never played.
    */
   readonly run: (encounterId?: EncounterId) => void;
+  /**
+   * Pick a carried encounter back up (`carried` is its `lastPlayed`), or walk
+   * back into the fight already on the table, as `run` would. The one way to
+   * continue a fight a night finished over: an encounter is played once, so
+   * running it again is refused (`encounterList.ts`, `playthroughOf`).
+   */
+  readonly pickUp: (encounter: Encounter, carried: EncounterPlayed) => void;
   /** The dialogs the presses open. The caller renders this wherever it is. */
   readonly dialogs: ReactNode;
 }
@@ -84,6 +92,11 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
   const navigate = useNavigate();
   /** The encounter the DM pressed Run on, while the start dialog is open. */
   const [starting, setStarting] = useState<{ readonly encounterId: EncounterId | undefined }>();
+  /** The carried encounter the DM pressed Pick up on, while its dialog is open. */
+  const [pickingUp, setPickingUp] = useState<{
+    readonly encounter: Encounter;
+    readonly carried: EncounterPlayed;
+  }>();
   /** Whether the "open the night" confirmation is up. */
   const [opening, setOpening] = useState(false);
 
@@ -111,6 +124,16 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
         return;
       }
       setStarting({ encounterId });
+    },
+    [live, navigate],
+  );
+  const pickUp = useCallback(
+    (encounter: Encounter, carried: EncounterPlayed) => {
+      if (live !== undefined) {
+        void navigate(live);
+        return;
+      }
+      setPickingUp({ encounter, carried });
     },
     [live, navigate],
   );
@@ -143,8 +166,24 @@ export function useCampaignAct(campaignId: CampaignId): CampaignActs {
             onClose={stopStarting}
           />
         )}
+        {pickingUp !== undefined && (
+          <PickUpRunDialog
+            campaign={night.campaign}
+            session={night.session}
+            encounter={pickingUp.encounter}
+            carried={pickingUp.carried}
+            onClose={() => setPickingUp(undefined)}
+            onPickedUp={(sessionId, runId) => {
+              setPickingUp(undefined);
+              void navigate({
+                to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
+                params: { campaignId, sessionId, runId },
+              });
+            }}
+          />
+        )}
       </>
     );
 
-  return { act, run, dialogs };
+  return { act, run, pickUp, dialogs };
 }

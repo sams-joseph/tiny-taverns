@@ -134,6 +134,18 @@ const describeError = (error: unknown): string => {
   return seen.join("\n");
 };
 
+/**
+ * An encounter of its own per fight. An encounter is played once
+ * (`playthroughOf` in `repo/EncounterRuns.ts`), so a test that starts one
+ * cannot share it with another.
+ */
+const anEncounter = () =>
+  as(
+    Effect.flatMap(Encounters, (encounters) =>
+      encounters.create(fixture.campaign.id, { name: fixture.encounter.name }),
+    ),
+  );
+
 /** A night of its own per test, so the lists below are about one night. */
 let nextNumber = 100;
 const freshSession = (): Promise<{ readonly id: SessionId }> => {
@@ -191,7 +203,9 @@ describe("jotting one down", () => {
 
   it("puts a marker in the log, with the prose left out of the payload", async () => {
     const night = await freshSession();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(
+      runs.start(fixture.asDm, night.id, { encounterId: (await anEncounter()).id }),
+    );
     await as(
       beats.create(fixture.campaign.id, night.id, {
         body: "The hag begged. Wren let her go.",
@@ -216,7 +230,9 @@ describe("jotting one down", () => {
     // rather than letting a constraint violation become a 500.
     const first = await freshSession();
     const second = await freshSession();
-    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
+    const run = await as(
+      runs.start(fixture.asDm, first.id, { encounterId: (await anEncounter()).id }),
+    );
 
     const failure = await as(
       Effect.flip(
@@ -233,7 +249,9 @@ describe("jotting one down", () => {
   it("is unrepresentable across nights in the schema, not only in the repository", async () => {
     const first = await freshSession();
     const second = await freshSession();
-    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
+    const run = await as(
+      runs.start(fixture.asDm, first.id, { encounterId: (await anEncounter()).id }),
+    );
 
     const error = await as(
       Effect.gen(function* () {
@@ -293,7 +311,9 @@ describe("correcting one — the reason beats are not log lines", () => {
     // `on delete set null (encounter_run_id)` — the Postgres 15+ column list.
     // A bare `set null` would null `session_id` too and hit its not-null.
     const night = await freshSession();
-    const run = await as(runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }));
+    const run = await as(
+      runs.start(fixture.asDm, night.id, { encounterId: (await anEncounter()).id }),
+    );
     const beat = await as(
       beats.create(fixture.campaign.id, night.id, {
         body: "The hag begged. Wren let her go.",

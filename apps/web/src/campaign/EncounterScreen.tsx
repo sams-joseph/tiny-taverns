@@ -13,7 +13,7 @@ import { CampaignChrome } from "./CampaignChrome";
 import { DeleteEncounterDialog } from "./DeleteEncounterDialog";
 import { describeDifficulty } from "./difficulty";
 import { DifficultyBadge } from "./DifficultyBadge";
-import { describeRoster } from "./encounterList";
+import { describeRoster, playthroughOf } from "./encounterList";
 import { encounterPageAtom, type EncounterPage } from "./load";
 import { NoteCard } from "./NotesList";
 import { NoteDialog } from "./NoteDialog";
@@ -35,7 +35,10 @@ import { sceneNoun } from "../run/scene";
  * **Run is the page's one primary**, and the campaign row's own press stands
  * down on this route (`CampaignRow` in `shell/AppShell.tsx`): both are
  * `useCampaignAct`'s `run`, so a fight already on the table is where either
- * would go, and the label says so.
+ * would go, and the label says so. **An encounter is played once**
+ * (`playthroughOf`), so *Run* is only on one never played: a played one has
+ * its *View log* and no primary unless a fight is on the table, and one a
+ * night finished over has *Pick up* as its primary.
  *
  * *Delete encounter* sits in the page's actions menu beside *Edit*, as the
  * campaign's own delete does on its Overview, never on a list card.
@@ -56,8 +59,12 @@ export function EncounterScreen() {
       title="Encounters"
       extra={encounterPageAtom({ campaignId, encounterId })}
       subtitle={({ view }) => find(view.encounters)?.name}
-      actions={({ view, run }) => {
+      actions={({ view, run, pickUp }) => {
         const encounter = find(view.encounters);
+        const playthrough =
+          encounter === undefined
+            ? undefined
+            : playthroughOf(encounter, view.run?.encounterId ?? undefined);
         return (
           <>
             <BackLink
@@ -92,10 +99,42 @@ export function EncounterScreen() {
                     },
                   ]}
                 />
-                <Button size="sm" onClick={() => run(encounter.id)}>
-                  <Icon name="swords" size={13} />
-                  {view.run === undefined ? "Run" : `Back to the ${sceneNoun(view.run.mode)}`}
-                </Button>
+                {(playthrough?._tag === "played" || playthrough?._tag === "carried") && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <Link
+                        to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
+                        params={{
+                          campaignId,
+                          sessionId: playthrough.played.sessionId,
+                          runId: playthrough.played.runId,
+                        }}
+                      />
+                    }
+                  >
+                    <Icon name="book-open" size={14} />
+                    View log
+                  </Button>
+                )}
+                {view.run !== undefined ? (
+                  <Button size="sm" onClick={() => run(encounter.id)}>
+                    <Icon name="swords" size={13} />
+                    Back to the {sceneNoun(view.run.mode)}
+                  </Button>
+                ) : playthrough?._tag === "carried" ? (
+                  <Button size="sm" onClick={() => pickUp(encounter, playthrough.played)}>
+                    <Icon name="history" size={13} />
+                    Pick up the {sceneNoun(encounter.kind)}
+                  </Button>
+                ) : playthrough?._tag === "unplayed" ? (
+                  <Button size="sm" onClick={() => run(encounter.id)}>
+                    <Icon name="swords" size={13} />
+                    Run
+                  </Button>
+                ) : null}
               </>
             )}
           </>

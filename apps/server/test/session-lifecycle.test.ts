@@ -55,7 +55,11 @@ const withActor =
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
-/** A campaign with one encounter and session 12 on the table, as the DM. */
+/**
+ * A campaign with two encounters and session 12 on the table, as the DM. Two,
+ * because an encounter is played once: the night's second fight is another
+ * encounter.
+ */
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const encounters = yield* Encounters;
@@ -66,6 +70,7 @@ const makeFixture = Effect.gen(function* () {
 
   const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
   const encounter = yield* as(encounters.create(campaign.id, { name: "Ambush in the reeds" }));
+  const next = yield* as(encounters.create(campaign.id, { name: "The toll bridge" }));
   const session = yield* as(sessions.create(campaign.id, { number: 12, title: "The ford" }));
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
 
@@ -77,6 +82,7 @@ const makeFixture = Effect.gen(function* () {
     dm: yield* as(asDm(dm, campaign.id)),
     campaignId: campaign.id,
     encounterId: encounter.id,
+    nextEncounterId: next.id,
     sessionId: session.id,
   };
 });
@@ -176,7 +182,8 @@ describe("ending a fight is not finishing the night", () => {
     // to the dialog that documents it.
     await runtime.runPromise(
       Effect.gen(function* () {
-        const { as, dm, sessions, campaignId, encounterId, sessionId } = yield* makeFixture;
+        const { as, dm, sessions, campaignId, encounterId, nextEncounterId, sessionId } =
+          yield* makeFixture;
         const runs = yield* EncounterRuns;
 
         const first = yield* runs.start(dm, sessionId, { encounterId });
@@ -186,9 +193,9 @@ describe("ending a fight is not finishing the night", () => {
         expect(session.endedAt).toBeNull();
         expect(yield* currentSessionId(campaignId)).toEqual(sessionId);
 
-        // And the next fight goes on the same night: the partial unique index
-        // allows it precisely because the first run has ended.
-        const second = yield* runs.start(dm, sessionId, { encounterId });
+        // And the next encounter goes on the same night: the partial unique
+        // index allows it precisely because the first run has ended.
+        const second = yield* runs.start(dm, sessionId, { encounterId: nextEncounterId });
         expect(second.id).not.toEqual(first.id);
         expect(second.endedAt).toBeNull();
       }).pipe(Effect.orDie),

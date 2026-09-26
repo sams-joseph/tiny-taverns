@@ -123,7 +123,9 @@ const makeFixture = Effect.gen(function* () {
       visibility: "shared",
     }),
   );
-  yield* as(roster.create(campaign.id, encounter.id, { creatureId: goblin.id, count: 2 }));
+  const goblins = yield* as(
+    roster.create(campaign.id, encounter.id, { creatureId: goblin.id, count: 2 }),
+  );
 
   // The read-aloud the DM actually read out — attached to the encounter that
   // ran. And one that was not: prep for a night that has not happened.
@@ -211,6 +213,8 @@ const makeFixture = Effect.gen(function* () {
     player: yield* aPlayerAt(campaign.id, "Pim"),
     campaign,
     encounter,
+    /** The campaign instance the goblins' roster line points at. */
+    goblinCreatureId: goblins.creatureId,
     session,
     run,
     round: roll.round,
@@ -268,6 +272,28 @@ const asPlayer = asActor(() => fixture.player);
  */
 const proofOf = (actor: Actor, campaignId: CampaignId) =>
   runtime.runPromise(asDm(actor, campaignId).pipe(Effect.orDie));
+
+/**
+ * Another ambush, two goblins and all, for a fight of its own. An encounter is
+ * played once (`playthroughOf` in `repo/EncounterRuns.ts`), and the fixture's
+ * was played on session 12.
+ */
+const anAmbush = () =>
+  as(
+    Effect.gen(function* () {
+      const encounters = yield* Encounters;
+      const roster = yield* EncounterCreatures;
+      const encounter = yield* encounters.create(fixture.campaign.id, {
+        name: fixture.encounter.name,
+        visibility: "shared",
+      });
+      yield* roster.create(fixture.campaign.id, encounter.id, {
+        creatureId: fixture.goblinCreatureId,
+        count: 2,
+      });
+      return encounter;
+    }),
+  );
 
 describe("a recap of a night that was played", () => {
   it("names the night it is a recap of", async () => {
@@ -336,7 +362,7 @@ describe("a fight that paused and was picked up the following week", () => {
   it("says so from both ends", async () => {
     const first = await as(sessions.create(fixture.campaign.id, { number: 20 }));
     const paused = await as(
-      aFightUnderWay(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
+      aFightUnderWay(fixture.asDm, first.id, { encounterId: (await anAmbush()).id }),
     );
     await as(runs.nextTurn(fixture.asDm, first.id, paused.id, {}));
     // The night ends over the top of it: `Sessions.update` carries the live
@@ -383,7 +409,7 @@ describe("a fight that paused and was picked up the following week", () => {
   it("distinguishes a fight the DM finished from one the night finished around", async () => {
     const night = await as(sessions.create(fixture.campaign.id, { number: 30 }));
     const fight = await as(
-      runs.start(fixture.asDm, night.id, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, night.id, { encounterId: (await anAmbush()).id }),
     );
     await as(runs.end(fixture.asDm, night.id, fight.id));
 
@@ -470,7 +496,7 @@ describe("scoping", () => {
     // fight they may not have.
     const first = await as(sessions.create(fixture.campaign.id, { number: 50 }));
     const paused = await as(
-      runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }),
+      runs.start(fixture.asDm, first.id, { encounterId: (await anAmbush()).id }),
     );
     await as(
       Effect.flatMap(DateTime.now, (endedAt) =>

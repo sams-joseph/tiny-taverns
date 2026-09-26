@@ -1,5 +1,13 @@
-import { type Actor, type CampaignId, CurrentActor, emptyStatBlock, NotFound } from "@taverns/api";
+import {
+  type Actor,
+  type CampaignId,
+  CurrentActor,
+  emptyStatBlock,
+  type EncounterRunId,
+  NotFound,
+} from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
+import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -58,8 +66,9 @@ const withActor =
  * One shared table. The party is four seats: two level-5s (one the player's
  * own, one the DM shared), a level-3 and a character with no level, those two
  * kept `dm`. The ambush holds four archers (shared) and a hag (the DM's
- * secret), and was played twice: once on a shared night in a shared fight, and
- * once in a fight the DM kept hidden.
+ * secret), and has three runs, as an encounter could before it was played
+ * once: on a shared night in a shared fight, in a fight the DM kept hidden, and
+ * in one still on the table.
  */
 const makeFixture = Effect.gen(function* () {
   const creatures = yield* Creatures;
@@ -128,19 +137,23 @@ const makeFixture = Effect.gen(function* () {
     visibility: "shared",
   });
   yield* runs.end(proof, night11.id, played.id);
+  // The two runs after the first stand for runs from before an encounter was
+  // played once: `start` refuses a second one now, and an encounter played
+  // several times back then keeps its runs. Planted as the rows they are, so
+  // what `lastPlayed` makes of such an encounter is still pinned.
+  const sql = yield* SqlClient.SqlClient;
   const night12 = yield* as(sessions.create(campaign.id, { number: 12, visibility: "shared" }));
-  const hidden = yield* runs.start(proof, night12.id, {
-    encounterId: ambush.id,
-    includeParty: false,
-  });
-  yield* runs.end(proof, night12.id, hidden.id);
+  const [hidden] = yield* sql<{ readonly id: EncounterRunId }>`
+    insert into encounter_run (session_id, encounter_id, encounter_name, mode, visibility, ended_at)
+    values (${night12.id}, ${ambush.id}, ${ambush.name}, 'combat', 'dm', now())
+    returning id
+  `;
   // Still on the table: not "played" yet, for anybody.
   const night13 = yield* as(sessions.create(campaign.id, { number: 13, visibility: "shared" }));
-  yield* runs.start(proof, night13.id, {
-    encounterId: ambush.id,
-    includeParty: false,
-    visibility: "shared",
-  });
+  yield* sql`
+    insert into encounter_run (session_id, encounter_id, encounter_name, mode, visibility)
+    values (${night13.id}, ${ambush.id}, ${ambush.name}, 'combat', 'shared')
+  `;
 
   // A table with nobody seated.
   const emptyTable = yield* as(createCampaign({ name: "Nobody yet" }));
@@ -166,7 +179,7 @@ const makeFixture = Effect.gen(function* () {
     night11,
     night12,
     played,
-    hidden,
+    hidden: hidden!,
     emptyTable,
     lonely,
   };

@@ -157,7 +157,9 @@ const makeFixture = Effect.gen(function* () {
   const archerLine = yield* as(
     roster.create(campaign.id, encounter.id, { creatureId: archer.id, count: 6 }),
   );
-  yield* as(roster.create(campaign.id, encounter.id, { creatureId: hag.id, count: 1 }));
+  const hagLine = yield* as(
+    roster.create(campaign.id, encounter.id, { creatureId: hag.id, count: 1 }),
+  );
 
   const session = yield* as(sessions.create(campaign.id, { number: 12, title: "The ford" }));
 
@@ -185,6 +187,8 @@ const makeFixture = Effect.gen(function* () {
     /** The internal instance the archer's roster line points at. */
     archerCreatureId: archerLine.creatureId,
     hag,
+    /** The internal instance the hag's roster line points at. */
+    hagCreatureId: hagLine.creatureId,
     encounter,
     session,
     otherTable,
@@ -213,20 +217,53 @@ const freshSession = (number: number) =>
     withActor(fixture.dm)(sessions.create(fixture.campaign.id, { number })).pipe(Effect.orDie),
   );
 
-const startOn = (sessionId: SessionId) =>
+/**
+ * Another ambush with the fixture's roster: six archers and the hag, added from
+ * the campaign instances the first one minted, so every line points at them.
+ * An encounter is played once (`playthroughOf` in `repo/EncounterRuns.ts`), so
+ * every fight a test starts is an encounter of its own.
+ */
+const anAmbush = () =>
   runtime.runPromise(
     withActor(fixture.dm)(
-      runs.start(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
+      Effect.gen(function* () {
+        const encounters = yield* Encounters;
+        const roster = yield* EncounterCreatures;
+        const encounter = yield* encounters.create(fixture.campaign.id, {
+          name: fixture.encounter.name,
+          tags: fixture.encounter.tags,
+        });
+        yield* roster.create(fixture.campaign.id, encounter.id, {
+          creatureId: fixture.archerCreatureId,
+          count: 6,
+        });
+        yield* roster.create(fixture.campaign.id, encounter.id, {
+          creatureId: fixture.hagCreatureId,
+          count: 1,
+        });
+        return encounter;
+      }),
     ).pipe(Effect.orDie),
   );
 
+const startOn = async (sessionId: SessionId) => {
+  const encounter = await anAmbush();
+  return runtime.runPromise(
+    withActor(fixture.dm)(runs.start(fixture.asDm, sessionId, { encounterId: encounter.id })).pipe(
+      Effect.orDie,
+    ),
+  );
+};
+
 /** Started, every number in, round 1 begun — see `aFightUnderWay`. */
-const underWayOn = (sessionId: SessionId) =>
-  runtime.runPromise(
+const underWayOn = async (sessionId: SessionId) => {
+  const encounter = await anAmbush();
+  return runtime.runPromise(
     withActor(fixture.dm)(
-      aFightUnderWay(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
+      aFightUnderWay(fixture.asDm, sessionId, { encounterId: encounter.id }),
     ).pipe(Effect.orDie),
   );
+};
 
 describe("starting a fight", () => {
   it("seeds one combatant per party member and per creature-instance", async () => {
@@ -342,15 +379,17 @@ describe("exactly one encounter is live", () => {
     const session = await freshSession(110);
     const first = await startOn(session.id);
 
+    // A different encounter, never played, so the refusal is this index's and
+    // not the one-playthrough rule's.
+    const next = await anAmbush();
     const second = await runtime.runPromise(
       Effect.flip(
-        withActor(fixture.dm)(
-          runs.start(fixture.asDm, session.id, { encounterId: fixture.encounter.id }),
-        ),
+        withActor(fixture.dm)(runs.start(fixture.asDm, session.id, { encounterId: next.id })),
       ),
     );
 
     expect(second._tag).toBe("Conflict");
+    expect(second._tag === "Conflict" && second.message).toContain("already has an encounter");
 
     // …and the fight that was already on the table is untouched, which is the
     // reason this is a 409 rather than a silent switch.
@@ -384,7 +423,7 @@ describe("exactly one encounter is live", () => {
     expect(smuggled._tag).toBe("Failure");
   });
 
-  it("frees the session once the fight ends, so next week is a second run", async () => {
+  it("frees the session once the fight ends, so the next encounter can go on", async () => {
     const session = await freshSession(112);
     const first = await startOn(session.id);
     await runtime.runPromise(
@@ -397,8 +436,8 @@ describe("exactly one encounter is live", () => {
     const all = await runtime.runPromise(
       withActor(fixture.dm)(runs.list(fixture.asDm, session.id)),
     );
-    // Both runs are still there. §1.4's "a fight interrupted and resumed" is a
-    // second row, never a reset of the first.
+    // Both runs are still there: ending a fight takes it off the table and
+    // keeps it, never resetting the row for the next one.
     expect(all.map((r) => r.id).sort()).toEqual([first.id, second.id].sort());
   });
 
@@ -741,10 +780,11 @@ describe("the new tables fail closed", () => {
         sessions.update(fixture.campaign.id, session.id, { visibility: "shared" }),
       ).pipe(Effect.orDie),
     );
+    const ambush = await anAmbush();
     const run = await runtime.runPromise(
       withActor(fixture.dm)(
         runs.start(fixture.asDm, session.id, {
-          encounterId: fixture.encounter.id,
+          encounterId: ambush.id,
           visibility: "shared",
         }),
       ).pipe(Effect.orDie),

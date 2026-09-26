@@ -4,6 +4,7 @@ import {
   type EncounterChallenge,
   type EncounterCreature,
   type EncounterKind,
+  type EncounterPlayed,
   type EncounterPrep,
   type Note,
 } from "@taverns/api";
@@ -47,7 +48,9 @@ import { ReadyBadge } from "./ReadyBadge";
  * never did. What happened is the fight's own page, which *View log* opens.
  *
  * **None of its buttons is the peach.** The campaign row's press is this
- * screen's one primary, so *Edit*, *Run encounter* and *View log* are outline.
+ * screen's one primary, so *Edit*, *Run encounter*, *View log* and *Pick up*
+ * are outline. *Run encounter* is offered only on an encounter never played
+ * (`playthroughOf` in `encounterList.ts`).
  * *Edit* and *Add creature* open the encounter builder, the second at its
  * creatures.
  */
@@ -59,6 +62,7 @@ export function EncounterPreview({
   live,
   onTable,
   onRun,
+  onPickUp,
   paneRef,
   onSettled,
 }: {
@@ -77,6 +81,8 @@ export function EncounterPreview({
    */
   readonly onTable: EncounterKind | undefined;
   readonly onRun: () => void;
+  /** Pick up the carried fight this encounter is (`encounterList.ts`, `playthroughOf`). */
+  readonly onPickUp: (carried: EncounterPlayed) => void;
   readonly paneRef: Ref<HTMLElement>;
   /** Its reads have answered, so it is as tall as it is going to be. */
   readonly onSettled: () => void;
@@ -154,27 +160,36 @@ export function EncounterPreview({
             <Icon name="pencil" size={13} />
             Edit
           </Button>
-          {/* A played encounter's way in is its log; one on the table again
-              is the fight, which *Back to the fight* reaches. */}
+          {/* A played encounter's way in is its log, and it is never run
+              again: an encounter is played once. One a night finished over
+              is picked up instead, while nothing else is on the table. */}
           {played !== null && !live ? (
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
-                  params={{
-                    campaignId: encounter.campaignId,
-                    sessionId: played.sessionId,
-                    runId: played.runId,
-                  }}
-                />
-              }
-            >
-              <Icon name="book-open" size={13} />
-              View log
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
+                    params={{
+                      campaignId: encounter.campaignId,
+                      sessionId: played.sessionId,
+                      runId: played.runId,
+                    }}
+                  />
+                }
+              >
+                <Icon name="book-open" size={13} />
+                View log
+              </Button>
+              {played.endedReason === "carried" && onTable === undefined && (
+                <Button variant="outline" size="sm" onClick={() => onPickUp(played)}>
+                  <Icon name="history" size={13} />
+                  Pick up the {sceneNoun(encounter.kind)}
+                </Button>
+              )}
+            </>
           ) : (
             <Button variant="outline" size="sm" onClick={onRun}>
               <Icon name={onTable !== undefined ? "swords" : "play"} size={13} />

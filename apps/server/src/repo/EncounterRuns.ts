@@ -209,6 +209,58 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
     return Effect.fail(error);
   });
 
+/**
+ * **An encounter is played once.** The captain's rule: once an encounter has a
+ * run, live, ended or carried, on any night, `start` refuses it. What happens
+ * next with that playthrough is not a second start: a fight still on the table
+ * is gone back to, a carried one is picked up by `resume` (a second row, the
+ * same playthrough), and a conversation that turns ugly is `escalate` on the
+ * same run. Encounters that were run more than once before the rule are simply
+ * played; nothing on disk had to change for them.
+ *
+ * It is a row lock and an existence check rather than a partial unique index,
+ * and the index is the thing that looks right. There is no column that marks
+ * "the run that opened the playthrough" and stays true: `continued_from` is
+ * `on delete set null`, so deleting the night that holds a carried fight's
+ * middle link turns its successor into an apparent opener. Indexed on it,
+ * that delete would fail on a unique violation; indexed on a new flag
+ * stamped by `start`, deleting the opener's night would free the encounter
+ * while its carried successor still stood. "Any run of it exists" is the rule
+ * as the captain said it, and no deletion bends it.
+ *
+ * The lock is what makes the check hold between two tabs: `start` takes
+ * `for no key update` on the encounter row before this runs, so a second start
+ * waits for the first to commit and then, reading committed, sees its run. It
+ * does not block inserts that merely reference the encounter (its roster, its
+ * notes), which take only a key share.
+ */
+const playthroughOf = (sql: SqlClient.SqlClient, encounterId: EncounterId) =>
+  sql<{
+    readonly ended_at: Date | null;
+    readonly ended_reason: EncounterRunEndedReason;
+    readonly picked_up: boolean;
+  }>`
+    select encounter_run.ended_at, encounter_run.ended_reason,
+           exists (select 1 from encounter_run as successor
+                   where successor.continued_from = encounter_run.id) as picked_up
+    from encounter_run
+    where encounter_run.encounter_id = ${encounterId}
+    order by encounter_run.ended_at desc nulls first, encounter_run.started_at desc
+    limit 1
+  `.pipe(Effect.map((rows) => rows[0]));
+
+/** Why `start` refused, said as what the DM does instead. */
+const playedMessage = (run: {
+  readonly ended_at: Date | null;
+  readonly ended_reason: EncounterRunEndedReason;
+  readonly picked_up: boolean;
+}): string =>
+  run.ended_at === null
+    ? "that encounter is on the table now; go back to it rather than starting it again"
+    : run.ended_reason === "carried" && !run.picked_up
+      ? "that encounter was carried over from an earlier night; pick it up rather than starting it again"
+      : "that encounter has been played, and an encounter is played once";
+
 /** A logged check, copied onto a resumed run's log. */
 interface CarriedCheckRow {
   readonly combatant_id: CombatantId | null;
@@ -473,6 +525,9 @@ export class EncounterRuns extends Context.Service<
                     // The encounter id is a claim like any other. It must be one
                     // this actor can reach *from this campaign* — the same
                     // predicate a read of it would apply.
+                    //
+                    // Locked, because the next statement is a rule about every
+                    // run of it: see `playthroughOf`.
                     const encounters = yield* sql<{
                       readonly id: EncounterId;
                       readonly name: string;
@@ -481,6 +536,7 @@ export class EncounterRuns extends Context.Service<
                       select encounter.id, encounter.name, encounter.kind from encounter
                       where encounter.id = ${payload.encounterId}
                         and ${rowReadable(sql, "encounter", campaignId, actor)}
+                      for no key update of encounter
                     `;
                     if (encounters.length === 0) {
                       return yield* new NotFound({
@@ -489,6 +545,11 @@ export class EncounterRuns extends Context.Service<
                       });
                     }
                     const encounter = encounters[0]!;
+
+                    const played = yield* playthroughOf(sql, encounter.id);
+                    if (played !== undefined) {
+                      return yield* new Conflict({ message: playedMessage(played) });
+                    }
                     // A fight opens on rolling initiative. The other modes take
                     // no turns and so have nothing to roll; `phase` means
                     // nothing to them until one becomes a fight (`escalate`),
@@ -729,8 +790,9 @@ export class EncounterRuns extends Context.Service<
          *   is not missing; it is over, and the DM can see that. Reopening one
          *   would put "resolved" in one night's recap and "resumed" in the
          *   next's — which is exactly the contradiction `ended_reason` exists
-         *   to prevent. Running that encounter again is `start`, and it is
-         *   honestly a new fight.
+         *   to prevent. Nor is it `start`'s: an encounter is played once
+         *   (`playthroughOf`), and a resumed carried fight is that one
+         *   playthrough continuing, which is why this path is not refused by it.
          */
         resume: ({ actor, campaign: campaignId }, sessionId, payload) =>
           dieOnSqlError(
@@ -757,7 +819,7 @@ export class EncounterRuns extends Context.Service<
                         message:
                           from.ended_at === null
                             ? "that fight is still on the table"
-                            : "that fight was ended rather than carried; start it again instead",
+                            : "that fight was ended rather than carried, and an encounter is played once",
                       });
                     }
 

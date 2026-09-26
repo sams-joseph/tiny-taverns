@@ -4,6 +4,7 @@ import {
   type CampaignId,
   type Combatant,
   type CombatantId,
+  type CreatureId,
   CurrentActor,
   type EncounterId,
   type EncounterRun,
@@ -135,7 +136,7 @@ let rook: Person;
 let withdrawn: Person;
 let table: CampaignId;
 let rooksTable: CampaignId;
-let ambush: EncounterId;
+let archerId: CreatureId;
 let nights = 0;
 
 const night = async () => {
@@ -155,11 +156,32 @@ const night = async () => {
   return session.id;
 };
 
+/**
+ * The ambush, written afresh for each fight: an encounter is played once
+ * (`playthroughOf` in `repo/EncounterRuns.ts`), so every fight in this file is
+ * its own encounter's one playthrough.
+ */
+const anAmbush = async (): Promise<EncounterId> =>
+  (
+    await as(jo.token, (client) =>
+      client.encounters.create({
+        params: { campaignId: table },
+        payload: {
+          name: "Ambush in the reeds",
+          visibility: "shared",
+          ready: true,
+          creatures: [{ creatureId: archerId, count: 2 }],
+        },
+      }),
+    )
+  ).id;
+
 const fightOn = async (sessionId: SessionId) => {
+  const encounterId = await anAmbush();
   const fight = await as(jo.token, (client) =>
     client.runs.start({
       params: { campaignId: table, sessionId },
-      payload: { encounterId: ambush, visibility: "shared" },
+      payload: { encounterId, visibility: "shared" },
     }),
   );
   const params = { campaignId: table, sessionId, runId: fight.id };
@@ -224,21 +246,10 @@ beforeAll(async () => {
     }),
   );
 
-  const archer = await as(jo.token, (client) =>
-    client.library.create({
-      payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
-    }),
-  );
-  ambush = (
+  archerId = (
     await as(jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: table },
-        payload: {
-          name: "Ambush in the reeds",
-          visibility: "shared",
-          ready: true,
-          creatures: [{ creatureId: archer.id, count: 2 }],
-        },
+      client.library.create({
+        payload: { name: "Goblin Archer", type: "Humanoid", cr: "1/4", ac: 15, hp: 7 },
       }),
     )
   ).id;
