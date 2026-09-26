@@ -14,7 +14,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { BEATS, type BeatRow, toBeat } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
 import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
@@ -22,7 +22,13 @@ import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
 import { type CheckRow, type SceneRow, toCheck } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
-import { type NoteRow, toNote } from "./Notes.js";
+import {
+  type NoteRow,
+  playerNoteColumns,
+  type PlayerNoteRow,
+  toNote,
+  toPlayerNote,
+} from "./Notes.js";
 import {
   playerCombatantColumns,
   type PlayerCombatantRow,
@@ -61,8 +67,10 @@ const toLink = (row: LinkRow): RecapRunLink =>
   });
 
 /**
- * Everything a recap is made of **except the initiative lists** — which is
- * exactly the part the two projections disagree about.
+ * Everything a recap is made of **except the initiative lists and the notes'
+ * columns** — which are exactly the parts the two projections disagree about.
+ * The notes are here as the `where` that picks them, so both projections read
+ * the same rows.
  *
  * The four other sources are already narrowed row by row by
  * `repo/visibility.ts`, so a player's beats, notes and ticked prep are the
@@ -80,7 +88,12 @@ interface Night {
   readonly successorByPredecessor: ReadonlyMap<EncounterRunId, LinkRow>;
   readonly beats: ReadonlyArray<BeatRow>;
   readonly prepDone: ReadonlyArray<PrepItemRow>;
-  readonly notes: ReadonlyArray<NoteRow>;
+  /**
+   * Which notes were read out tonight, as a `where`: the two projections
+   * select different columns from the same rows — a player's are
+   * `PlayerNote`'s, with no visibility, provenance or pin.
+   */
+  readonly readOut: Statement.Fragment;
 }
 
 /**
@@ -274,19 +287,17 @@ export class Recap extends Context.Service<
           // encounter one of tonight's fights was started from. Structural
           // rather than a timestamp heuristic — see `SessionRecap.notes`.
           // The `exists` re-applies the run predicate rather than trusting
-          // the ids above, so this query is safe read on its own terms.
-          const notes = yield* sql<NoteRow>`
-            select note.* from note
-            where note.encounter_id is not null
-              and exists (
-                select 1 from encounter_run
-                where encounter_run.session_id = ${sessionId}
-                  and encounter_run.encounter_id = note.encounter_id
-                  and ${containedRowReadable(sql, RUN, campaignId, actor)}
-              )
-              and ${rowReadable(sql, "note", campaignId, actor)}
-            order by note.created_at asc, note.id asc
-          `;
+          // the ids above, so this clause is safe read on its own terms.
+          const readOut = sql.and([
+            sql`note.encounter_id is not null`,
+            sql`exists (
+              select 1 from encounter_run
+              where encounter_run.session_id = ${sessionId}
+                and encounter_run.encounter_id = note.encounter_id
+                and ${containedRowReadable(sql, RUN, campaignId, actor)}
+            )`,
+            rowReadable(sql, "note", campaignId, actor),
+          ]);
 
           return {
             session: toSession(sessions[0]!),
@@ -300,7 +311,7 @@ export class Recap extends Context.Service<
             ),
             beats,
             prepDone,
-            notes,
+            readOut,
           };
         });
 
@@ -386,6 +397,11 @@ export class Recap extends Context.Service<
                         and ${containedRowReadable(sql, RUN, campaignId, actor)}
                     `;
 
+              const notes = yield* sql<NoteRow>`
+                select note.* from note where ${state.readOut}
+                order by note.created_at asc, note.id asc
+              `;
+
               return new SessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId) =>
@@ -404,7 +420,7 @@ export class Recap extends Context.Service<
                 ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
-                notes: state.notes.map(toNote),
+                notes: notes.map(toNote),
               });
             }),
           ),
@@ -439,6 +455,12 @@ export class Recap extends Context.Service<
                       ${initiativeOrder(sql)}
                     `;
 
+              const notes = yield* sql<PlayerNoteRow>`
+                select ${playerNoteColumns(sql, campaignId, actor)} from note
+                where ${state.readOut}
+                order by note.created_at asc, note.id asc
+              `;
+
               return new PlayerSessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId): ReadonlyArray<PlayerCombatant> =>
@@ -448,7 +470,7 @@ export class Recap extends Context.Service<
                 ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
-                notes: state.notes.map(toNote),
+                notes: notes.map(toPlayerNote),
               });
             }),
           ),

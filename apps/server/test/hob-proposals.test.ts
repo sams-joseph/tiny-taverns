@@ -495,6 +495,38 @@ describe("accepting one", () => {
     expect(hits.map((hit) => hit.id)).toContain(accepted.success.note.id);
   }, 60_000);
 
+  it("keeps the category Hob named, and leaves a note uncategorised when it named none", async () => {
+    const offerAndAccept = async (title: string, category: string | null) => {
+      const { events } = await ask({
+        text: `Write me a note about ${title}.`,
+        rounds: [
+          // `null` is how a strict-mode endpoint says "not given".
+          toolCallChunks("proposeNote", { title, body: "Written down.", category }),
+          textChunks("There."),
+        ],
+      });
+      const { threadId, turnId } = begunIn(events);
+      const accepted = await accept(threadId, turnId);
+      if (accepted._tag !== "Success" || accepted.success.accepted !== "note") {
+        throw new Error("expected a note");
+      }
+      return { note: accepted.success.note, turnId };
+    };
+
+    const named = await offerAndAccept("the ferryman", "npc");
+    expect(named.note).toMatchObject({
+      category: "npc",
+      kind: "note",
+      visibility: "dm",
+      origin: "assistant",
+      assistantTurnId: named.turnId,
+      pinnedAt: null,
+    });
+
+    const unnamed = await offerAndAccept("the weather", null);
+    expect(unnamed.note.category).toBeNull();
+  }, 60_000);
+
   it("makes a beat that the recap reads back like any other", async () => {
     const { events } = await ask({
       text: "Note what just happened.",

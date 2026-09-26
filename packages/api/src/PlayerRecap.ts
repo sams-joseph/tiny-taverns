@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { EncounterRun } from "./EncounterRun.js";
 import { CombatantId, EncounterRunId } from "./Ids.js";
-import { Note } from "./Note.js";
+import { PlayerNote } from "./PlayerNote.js";
 import { PrepItem } from "./PrepItem.js";
 import { RecapRunLink } from "./Recap.js";
 import { Session } from "./Session.js";
@@ -132,11 +132,11 @@ export type PlayerRecapFight = typeof PlayerRecapFight.Type;
  * one set of queries, so the two cannot drift about what a night contains —
  * only about how much of a combatant each is allowed to say.
  *
- * Every other field is the DM's, unchanged, because every other field is
- * already narrowed by `repo/visibility.ts` at the row level: a player's
- * `beats`, `notes` and `prepDone` are the `shared` ones and nothing else, and
- * that seam has been the answer since `0001`. The combatant was the one place
- * where a `shared` row still said too much.
+ * `beats` and `prepDone` are the DM's types, unchanged, because they are
+ * already narrowed by `repo/visibility.ts` at the row level: a player's are
+ * the `shared` ones and nothing else, and that seam has been the answer since
+ * `0001`. The combatant said too much on a `shared` row, and so did the note
+ * once it carried the DM's pin; both are their player projections here.
  */
 export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("PlayerSessionRecap")({
   session: Session,
@@ -146,6 +146,9 @@ export class PlayerSessionRecap extends Schema.Class<PlayerSessionRecap>("Player
   beats: Schema.Array(Beat),
   /** The ticked lines the DM shared. */
   prepDone: Schema.Array(PrepItem),
-  /** The read-alouds that were actually read out, and were shared. */
-  notes: Schema.Array(Note),
+  /**
+   * The read-alouds that were actually read out, and were shared — as
+   * `PlayerNote`, so the DM's working fields (the pin, provenance) stay theirs.
+   */
+  notes: Schema.Array(PlayerNote),
 }) {}

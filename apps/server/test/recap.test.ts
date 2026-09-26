@@ -1,5 +1,13 @@
-import { Actor, type CampaignId, CurrentActor, NotFound, type PlayerCombatant } from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
+import {
+  Actor,
+  type CampaignId,
+  CurrentActor,
+  NotFound,
+  type PlayerCombatant,
+  PlayerNote,
+  PlayerSessionRecap,
+} from "@taverns/api";
+import { DateTime, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -488,6 +496,27 @@ describe("scoping", () => {
     // shared on purpose, is there.
     expect(night.prepDone).toEqual([]);
     expect(night.notes.map((note) => note.id)).toEqual([fixture.readAloud.id]);
+  });
+
+  it("tells a player the read-aloud as a `PlayerNote`: no pin, and no encounter they may not read", async () => {
+    // The DM's working fields stay the DM's, even on a note they shared: the
+    // pin and the provenance are how the DM keeps their desk.
+    const notes = await runtime.runPromise(Notes);
+    await as(notes.setPinned(fixture.campaign.id, fixture.readAloud.id, true));
+    const dmNight = await as(recap.read(fixture.asDm, fixture.session.id));
+    expect(dmNight.notes[0]?.pinnedAt).not.toBeNull();
+
+    const night = await asPlayer(recap.readAsPlayer(fixture.campaign.id, fixture.session.id));
+    expect(night.notes[0]).toBeInstanceOf(PlayerNote);
+    // The wire, not the class: what the server would send.
+    const [sent] = Schema.encodeSync(PlayerSessionRecap)(night).notes;
+    for (const key of ["pinnedAt", "visibility", "origin", "assistantTurnId", "createdAt"]) {
+      expect(sent).not.toHaveProperty(key);
+    }
+    // The encounter is shared but not Ready, so a player may not read it, and
+    // the note does not name it.
+    expect(sent?.attachedTo).toBeNull();
+    await as(notes.setPinned(fixture.campaign.id, fixture.readAloud.id, false));
   });
 
   it("does not follow a carry-over link out of what the actor can see", async () => {

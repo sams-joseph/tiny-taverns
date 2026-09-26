@@ -760,8 +760,10 @@ describe("the scope, counted", () => {
     // seated character's row in a fight they can see — for `PlayerTable`'s
     // reason above.
     // Gating `Notes.list` and `findById` gave two up and `Notes.listAsPlayer`
-    // took one back, so a hundred and sixty.
-    expect(ungated).toBe(160);
+    // took one back, so a hundred and sixty. `Notes.setPinned` is the one
+    // hundred and sixty-first, for `update`'s reason: a write whose reach is
+    // `rowWritable`, which is already the creator predicate.
+    expect(ungated).toBe(161);
   });
 });
 

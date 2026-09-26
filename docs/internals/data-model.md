@@ -13,6 +13,8 @@ Two absences that look like omissions and are not:
 
 A stored flag is right when no other column answers the question. `encounter_prep.ready` (`0061_encounter_ready.ts`) is the DM's word that an encounter is ready to run: a conversation has no roster and may be ready, and a full roster may still lack its tactics, so nothing computes it. It sits on the creator-only prep row, not on `encounter`, which a player reads when it is shared. It also gates that read: a player reads an encounter only when it is shared and ready (`sharedWithPlayers`, [Visibility](visibility.md)), through an `exists`, so the flag itself never reaches them. Only a person sets it; the column default makes every new encounter a draft, Hob's accepted ones included.
 
+A note answers two questions with two columns (`0068_note_category_pin.ts`). `kind` is the register the text is set in: plain, or read-aloud, which the encounter builder, the runner and the Overview read. `category` is the topic (NPC, place, lore, prep, rules), independent of `kind`, nullable and never backfilled. `note.pinned_at` is written only by `PUT`/`DELETE …/notes/:id/pin`, which bypass `setClause` because it stamps `updated_at`: pinning orders the DM's list and is not an edit.
+
 ## Generated columns
 
 `character.descriptor` (`"Level 3 Hill Dwarf Paladin"`) and every `search` column are `generated always as ... stored`. Postgres refuses an `INSERT` or `UPDATE` naming one, so no payload carries the field and no client computes a preview. Three things the syntax will not tell you:

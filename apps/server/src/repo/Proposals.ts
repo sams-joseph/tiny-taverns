@@ -186,7 +186,12 @@ export class Proposals extends Context.Service<
                 // `visibility` is deliberately not named, so the column default
                 // applies and a proposal lands DM-only. Nothing about a draft
                 // Hob wrote should decide what the players can read.
-                { title: proposal.title, body: proposal.body, kind: proposal.kind },
+                {
+                  title: proposal.title,
+                  body: proposal.body,
+                  kind: proposal.kind,
+                  ...(proposal.category === undefined ? {} : { category: proposal.category }),
+                },
                 from,
               ),
               (note) => ({ accepted: "note" as const, note }),

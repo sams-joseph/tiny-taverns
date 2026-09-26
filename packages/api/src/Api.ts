@@ -1157,6 +1157,22 @@ class NotesGroup extends HttpApiGroup.make("notes")
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
+    /**
+     * Pin and unpin: a reversible pair of their own rather than a `pinned`
+     * field on `NoteUpdate`, because neither touches `updatedAt` — pinning
+     * orders the DM's list, it is not an edit. Both are idempotent; pinning a
+     * pinned note keeps the time it was first pinned.
+     */
+    HttpApiEndpoint.put("pin", "/:noteId/pin", {
+      params: { campaignId: CampaignId, noteId: NoteId },
+      success: Note,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("unpin", "/:noteId/pin", {
+      params: { campaignId: CampaignId, noteId: NoteId },
+      success: Note,
+      error: NotFound,
+    }),
   )
   .prefix("/campaigns/:campaignId/notes")
   .middleware(Authorization) {}
