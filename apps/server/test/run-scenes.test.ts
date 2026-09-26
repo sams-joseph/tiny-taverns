@@ -170,6 +170,18 @@ const startRun = (encounterId: EncounterId, sessionId = night) =>
     }),
   );
 
+/**
+ * Another dry well, written from the same payload. An encounter is played once
+ * (`playthroughOf` in `repo/EncounterRuns.ts`), so each skill challenge a test
+ * starts after the first is an encounter of its own.
+ */
+const aWell = async () =>
+  (
+    await as(jo.token, (client) =>
+      client.encounters.create({ params: { campaignId: table }, payload: WELL }),
+    )
+  ).id;
+
 const endRun = (runId: EncounterRunId, sessionId = night) =>
   as(jo.token, (client) =>
     client.runs.end({ params: { campaignId: table, sessionId, runId }, payload: {} }),
@@ -501,7 +513,7 @@ describe("a conversation", () => {
   });
 
   it("is the only scene that escalates, and no scene rolls initiative until it is a fight", async () => {
-    const challenge = await startRun(well);
+    const challenge = await startRun(await aWell());
     expect(
       await tagOf(jo.token, (client) =>
         client.runs.escalate({ params: params(challenge.id), payload: {} }),
@@ -571,7 +583,7 @@ describe("the scene is the creator's alone", () => {
   let checkId: string;
 
   beforeAll(async () => {
-    scene = await startRun(well);
+    scene = await startRun(await aWell());
     const who = await brannocIn(scene.id);
     checkId = (
       await as(jo.token, (client) =>
@@ -684,7 +696,7 @@ describe("a scene carried to the next night", () => {
         payload: { number: 2, visibility: "shared" },
       }),
     );
-    const scene = await startRun(well, first.id);
+    const scene = await startRun(await aWell(), first.id);
     const who = await brannocIn(scene.id, first.id);
     await as(jo.token, (client) =>
       client.runs.updateScene({

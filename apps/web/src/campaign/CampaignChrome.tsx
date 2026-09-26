@@ -8,7 +8,7 @@ import { asResource, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { TopBar } from "../shell/TopBar";
-import { useCampaignAct } from "./act";
+import { type CampaignActs, useCampaignAct } from "./act";
 import { ArchiveDialog } from "./ArchiveDialog";
 import { CampaignDialog } from "./CampaignDialog";
 import { DeleteCampaignDialog } from "./DeleteCampaignDialog";
@@ -138,6 +138,8 @@ export interface CampaignChromeSlots<Extra = undefined> {
   readonly extra: Extra;
   /** Put an encounter on the table, or walk back into the fight — see `CampaignActs.run`. */
   readonly run: (encounterId?: EncounterId) => void;
+  /** Pick a carried encounter back up — see `CampaignActs.pickUp`. */
+  readonly pickUp: CampaignActs["pickUp"];
   /** Open the confirmation that ends the night. */
   readonly finishSession: () => void;
   /**
@@ -247,7 +249,7 @@ export function CampaignChrome<Extra = undefined>({
     invalidate(campaignViewKeys(campaignId, nightId));
     refreshExtra();
   }, [invalidate, campaignId, nightId, refreshExtra]);
-  const { run, dialogs } = useCampaignAct(campaignId);
+  const { run, pickUp, dialogs } = useCampaignAct(campaignId);
   const [editing, setEditing] = useState<CampaignEditing | undefined>();
   /** Whether the "end the night" confirmation is up. */
   const [finishing, setFinishing] = useState(false);
@@ -278,6 +280,7 @@ export function CampaignChrome<Extra = undefined>({
           // never sees one half of one load.
           extra: extra as Extra,
           run,
+          pickUp,
           finishSession,
           openSettings,
         };

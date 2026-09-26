@@ -780,20 +780,29 @@ describe("a fight keeps its board", () => {
       }),
     );
 
+  /**
+   * The pier with its picture drawn. Written once per fight: an encounter is
+   * played once (`playthroughOf` in `repo/EncounterRuns.ts`).
+   */
+  const aPier = async () => {
+    const encounter = await encounterAt(kit, own, {
+      name: "On the pier",
+      setting: "SETTING-A-ROTTEN-PIER over a grey harbour",
+      visibility: "shared",
+    });
+    await settled();
+    const drawn = await mapOf(kit, own, encounter.id);
+    expect(drawn.image).not.toBeNull();
+    return { pier: encounter, map: drawn };
+  };
+
   beforeAll(async () => {
     kit = await person("Kit");
     own = await campaignOf(kit, "Kit's Table");
     await as(kit.token, (client) =>
       client.campaigns.update({ params: { campaignId: own }, payload: { visibility: "shared" } }),
     );
-    pier = await encounterAt(kit, own, {
-      name: "On the pier",
-      setting: "SETTING-A-ROTTEN-PIER over a grey harbour",
-      visibility: "shared",
-    });
-    await settled();
-    map = await mapOf(kit, own, pier.id);
-    expect(map.image).not.toBeNull();
+    ({ pier, map } = await aPier());
   }, 60_000);
 
   it("copies the encounter's grid and names its map when the fight starts", async () => {
@@ -819,8 +828,11 @@ describe("a fight keeps its board", () => {
     );
   });
 
-  it("keeps its grid when the encounter's grid changes mid-fight; the next fight takes the new one", async () => {
+  it("keeps its grid when the encounter's grid changes mid-fight; a fight started after an edit takes the new one", async () => {
     const encounter = await encounterAt(kit, own, { name: "The loft" });
+    // The same encounter is never started twice, so the fight after the edit
+    // is another encounter's, edited before it starts.
+    const later = await encounterAt(kit, own, { name: "The loft, later" });
     await settled();
     const before = await mapOf(kit, own, encounter.id);
     const session = await night();
@@ -843,7 +855,8 @@ describe("a fight keeps its board", () => {
         payload: {},
       }),
     );
-    const next = await startOn(session.id, encounter.id);
+    await regrid(later.id);
+    const next = await startOn(session.id, later.id);
     const nextBoard = await boardOf(session.id, next.id);
     expect([nextBoard?.columns, nextBoard?.rows, nextBoard?.alignment]).toEqual([
       12,
@@ -983,7 +996,8 @@ describe("a fight keeps its board", () => {
         payload: { currentSessionId: session.id },
       }),
     );
-    const fight = await startOn(session.id, pier.id);
+    const { pier: shownPier, map: shownMap } = await aPier();
+    const fight = await startOn(session.id, shownPier.id);
     const params = { campaignId: own, sessionId: session.id, runId: fight.id };
     for (const who of [player, stranger]) {
       expect(await attempt(who.token, (client) => client.runs.board({ params }))).toEqual({
@@ -1010,6 +1024,6 @@ describe("a fight keeps its board", () => {
     const text = JSON.stringify(read);
     expect(text).not.toContain("battle-map-images");
     expect(text).not.toContain("SETTING-A-ROTTEN-PIER");
-    expect(text).not.toContain(map.id);
+    expect(text).not.toContain(shownMap.id);
   });
 });

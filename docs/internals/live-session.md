@@ -49,7 +49,15 @@ A session can start over roleplay with no encounter in sight, so opening a night
 
 `startSession` is three statements in order, and only the last is best effort: create the session, point `campaign.currentSessionId` at it (fatal, because a session nothing points at is a night the DM cannot find again), then stamp `startedAt` under `Effect.ignore`.
 
-`startedAt` therefore belongs to the night, not the fight: a running session with `activeEncounterRunId` null is the ordinary state of an evening. The campaign's button has three states computed once by `actFor` in `campaign/CampaignChrome.tsx`, asking the session and the run separately: `run` is undefined both with no night and with a night that has nothing on the table.
+`startedAt` therefore belongs to the night, not the fight: a running session with `activeEncounterRunId` null is the ordinary state of an evening. The campaign's button has three states computed once by `actFor` in `campaign/act.tsx`, asking the session and the run separately: `run` is undefined both with no night and with a night that has nothing on the table.
+
+### An encounter is played once
+
+`EncounterRuns.start` refuses an encounter that has any run, live, ended or carried, on any night, with a `Conflict` worded as what to do instead (`playthroughOf`): go back to the fight on the table, pick up the carried one, or read the log. Continuing that one playthrough is not a start and is not refused: `resume` of its own carried run, and `escalate`, which keeps the same run. Encounters started several times before the rule simply count as played; no data changed for them.
+
+It is a row lock and an existence check, not a partial unique index. `start` takes `for no key update` on the encounter row, so a second start of the same encounter (another tab, another night, where `encounter_run_one_live_per_session` cannot settle it) waits for the first to commit and then sees its run. An index needs a column meaning "the run that opened the playthrough", and none stays true: `continued_from` is `on delete set null`, so deleting the night that holds a carried chain's middle link would either fail on the index or reopen an encounter whose successor still stands. Deleting every night an encounter was played on does free it, because it then has no run. `play-once.test.ts` drives each case with real actors, including the race; a player never reaches the rule and is `NotFound` either way.
+
+The browser offers no start that would be refused: see [Web screens](web-screens.md). Its one way to `resume` is `campaign/PickUpRunDialog.tsx`, behind an encounter's _Pick up_.
 
 ## Finishing: one write, and the server owns the rest
 
@@ -66,7 +74,7 @@ Ending a fight is not finishing the night. `EndRunDialog` defaults to the smalle
 A night may finish with a fight on the table, and the fight continues into the next one as a second `encounter_run` row, never a reparented one: the predecessor keeps its night with `ended_reason = 'carried'`, and the successor points back through `continued_from`. The log is the assistant's memory, and a moved row's `run-started` event would stay filed under a night it no longer claims (`0007_run_carryover.ts`).
 
 - `EncounterRuns.resume` (`POST …/sessions/:s/runs/resume { continuedFrom }`) copies the round, mode, phase, visibility, the map's two switches, provenance, the board, the scene with its log of checks, and every combatant. Combatant ids are generated in TypeScript before the insert, the only way the turn marker can carry: `encounter_run_active_combatant_fkey` refuses a marker naming another run's combatant, so `insert … select` could not remap it.
-- Only a `carried` run may be resumed. A `resolved` one is a `Conflict`, not a 404: reopening it would put "resolved" in one recap and "resumed" in the next.
+- Only a `carried` run may be resumed. A `resolved` one is a `Conflict`, not a 404: reopening it would put "resolved" in one recap and "resumed" in the next. Nor can it be started again, since an encounter is played once (above).
 - `continued_from` cannot be a composite key: the only column both runs share is `session_id`, which would force them into the same night. Containment is `resume`'s job against `containedRowReadable`.
 - `encounter_run_one_successor` stops two nights both continuing one fight; `encounter_run_reason_needs_end` keeps a live run from carrying a reason.
 - The order of combatants tied on initiative does not survive a resume (fresh ids, one shared `created_at`). `carryover.test.ts` says so.

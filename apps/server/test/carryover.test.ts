@@ -129,6 +129,7 @@ const makeFixture = Effect.gen(function* () {
     sessions,
     campaign,
     encounter,
+    hag,
   };
 }).pipe(Effect.orDie);
 
@@ -150,6 +151,30 @@ beforeAll(async () => {
 
 const as = <A, E, R extends Services>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
   runtime.runPromise(withActor(fixture.dm)(effect).pipe(Effect.orDie));
+
+/**
+ * An encounter of its own per fight, with the fixture's roster: an encounter
+ * is played once (`playthroughOf` in `repo/EncounterRuns.ts`), so every fight
+ * this file starts is a different encounter's one playthrough.
+ */
+let nextEncounter = 0;
+const freshEncounter = () => {
+  nextEncounter += 1;
+  return as(
+    Effect.gen(function* () {
+      const encounters = yield* Encounters;
+      const roster = yield* EncounterCreatures;
+      const encounter = yield* encounters.create(fixture.campaign.id, {
+        name: `Ambush in the reeds ${String(nextEncounter)}`,
+      });
+      yield* roster.create(fixture.campaign.id, encounter.id, {
+        creatureId: fixture.hag.id,
+        count: 2,
+      });
+      return encounter;
+    }),
+  );
+};
 
 /** A session of its own per test, so no two tests share the live-run index. */
 let nextNumber = 100;
@@ -173,7 +198,7 @@ const finish = (sessionId: SessionId) =>
  */
 const aFightInProgress = async (sessionId: SessionId) => {
   const run = await as(
-    aFightUnderWay(fixture.asDm, sessionId, { encounterId: fixture.encounter.id }),
+    aFightUnderWay(fixture.asDm, sessionId, { encounterId: (await freshEncounter()).id }),
   );
   const order = await as(combatants.list(fixture.asDm, sessionId, run.id));
   const hag = order.find((row) => row.kind === "npc")!;
@@ -417,7 +442,8 @@ describe("resuming a carried fight", () => {
 
   it("keeps a fight that was still rolling initiative rolling, with the numbers it had", async () => {
     const first = await freshSession();
-    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: fixture.encounter.id }));
+    const encounter = await freshEncounter();
+    const run = await as(runs.start(fixture.asDm, first.id, { encounterId: encounter.id }));
     const seeded = await as(combatants.list(fixture.asDm, first.id, run.id));
     const called = seeded.find((row) => row.kind === "pc")!;
     await as(

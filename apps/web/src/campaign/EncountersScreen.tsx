@@ -3,6 +3,7 @@ import {
   type CampaignId,
   type Encounter,
   type EncounterId,
+  type EncounterPlayed,
   type EncounterPrep,
 } from "@taverns/api";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
@@ -81,12 +82,13 @@ export function EncountersScreen() {
         </Button>
       )}
     >
-      {({ view, extra, run }) => (
+      {({ view, extra, run, pickUp }) => (
         <EncounterBrowser
           campaignId={campaignId}
           view={view}
           prep={extra}
           onRun={(encounter) => run(encounter.id)}
+          onPickUp={pickUp}
         />
       )}
     </CampaignChrome>
@@ -110,11 +112,13 @@ function EncounterBrowser({
   view,
   prep,
   onRun,
+  onPickUp,
 }: {
   readonly campaignId: CampaignId;
   readonly view: CampaignView;
   readonly prep: ReadonlyArray<EncounterPrep>;
   readonly onRun: (encounter: Encounter) => void;
+  readonly onPickUp: (encounter: Encounter, carried: EncounterPlayed) => void;
 }) {
   const chosen = useSearch({ strict: false }).encounter;
   const navigate = useNavigate();
@@ -256,6 +260,7 @@ function EncounterBrowser({
             live={selected.id === liveId}
             onTable={view.run?.mode}
             onRun={() => onRun(selected)}
+            onPickUp={(carried) => onPickUp(selected, carried)}
           />
         </div>
       )}

@@ -128,17 +128,14 @@ const makeFixture = Effect.gen(function* () {
       },
     }),
   );
-  const encounter = yield* as(
-    encounters.create(campaign.id, { name: "Ambush in the reeds", visibility: "shared" }),
-  );
-  yield* as(roster.create(campaign.id, encounter.id, { creatureId: goblin.id, count: 1 }));
   const elsewhere = yield* as(createCampaign({ name: "Salt and Sixpence", visibility: "shared" }));
 
   const proof = yield* as(asDm(dm, campaign.id));
   let number = 0;
   /**
-   * Tonight's fight, shared, with every row shared — a fresh night each time,
-   * made the campaign's current one, so no test inherits another's numbers.
+   * Tonight's fight, shared, with every row shared — a fresh night and a fresh
+   * encounter each time, the night made the campaign's current one, so no test
+   * inherits another's numbers (and an encounter is played once).
    */
   const tonight = Effect.gen(function* () {
     number += 1;
@@ -146,6 +143,10 @@ const makeFixture = Effect.gen(function* () {
       sessions.create(campaign.id, { number, title: "The ford", visibility: "shared" }),
     );
     yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
+    const encounter = yield* as(
+      encounters.create(campaign.id, { name: "Ambush in the reeds", visibility: "shared" }),
+    );
+    yield* as(roster.create(campaign.id, encounter.id, { creatureId: goblin.id, count: 1 }));
     const runs = yield* EncounterRuns;
     const combatants = yield* Combatants;
     const run = yield* as(

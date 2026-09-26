@@ -44,7 +44,7 @@ import { RecentNotes } from "./RecentNotes";
  */
 
 function Overview({ slots }: { readonly slots: CampaignChromeSlots<OverviewExtra> }) {
-  const { view, extra, run, finishSession, openSettings } = slots;
+  const { view, extra, run, pickUp, finishSession, openSettings } = slots;
   const { lastNight } = extra;
   const invalidate = useInvalidate();
   const campaignId = view.campaign.id;
@@ -74,6 +74,7 @@ function Overview({ slots }: { readonly slots: CampaignChromeSlots<OverviewExtra
             view={view}
             prep={extra.prep}
             onRun={(encounter) => run(encounter.id)}
+            onPickUp={pickUp}
             onFinish={finishSession}
           />
           {lastNight !== undefined && (

@@ -1,6 +1,5 @@
 import type {
   Campaign,
-  CampaignId,
   Encounter,
   EncounterId,
   EncounterRunId,
@@ -26,15 +25,15 @@ import {
   Loading,
 } from "@taverns/ui";
 import { Effect, Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import { useState } from "react";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { nextSessionNumber, startSession } from "../session/start";
+import { startSession } from "../session/start";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { sceneNoun } from "../run/scene";
+import { runNumberAtom } from "./runNumber";
 
 /**
  * Putting an encounter on the table — the way into the runner.
@@ -66,34 +65,16 @@ import { sceneNoun } from "../run/scene";
  * table: the stamp goes on when the session opens, wherever it was opened from,
  * and this dialog writes it only in the case where it is the thing that opened
  * one.
+ *
+ * **It offers only encounters never played.** An encounter is played once
+ * (`repo/EncounterRuns.ts`, `playthroughOf`): the server refuses a second
+ * start, so offering a played one would be a choice that can only fail. A
+ * carried one is picked up instead (`PickUpRunDialog.tsx`), and a played one's
+ * way in is its log.
  */
 
 /** The one value the encounter select takes that is not an encounter. */
 const NONE = "";
-
-/**
- * The number this fight's night will carry.
- *
- * **Read from the server only when a session has to be invented**, because that
- * is the only thing the answer is for; with one already open it is that
- * session's, and no request. That branch is in the *key* rather than in the
- * component, so "already known" and "must be asked" are two different atoms
- * rather than one atom that changes its mind.
- */
-const runNumberAtom = Atom.family(
-  ({
-    campaignId,
-    known,
-  }: {
-    readonly campaignId: CampaignId;
-    readonly known: number | undefined;
-  }) =>
-    apiAtom(
-      (client) =>
-        known === undefined ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(known),
-      [reads.sessions(campaignId)],
-    ),
-);
 
 export function StartRunDialog({
   campaign,
@@ -117,7 +98,11 @@ export function StartRunDialog({
 
   const [number, reload] = useApiAtom(runNumberAtom({ campaignId, known: session?.number }));
 
-  const [encounterId, setEncounterId] = useState<string>(preselected ?? NONE);
+  const playable = encounters.filter((encounter) => encounter.lastPlayed === null);
+  // A played encounter pressed on elsewhere is not preselected: it is not here.
+  const [encounterId, setEncounterId] = useState<string>(
+    playable.find((encounter) => encounter.id === preselected)?.id ?? NONE,
+  );
   const [includeParty, setIncludeParty] = useState(true);
   // `dm` for a new run: the column default, and the only safe one to fail to.
   // The prototype's switch starts on; fail closed is not negotiable here.
@@ -126,7 +111,7 @@ export function StartRunDialog({
 
   const { busy, failure, submit } = useMutation();
 
-  const chosen = encounters.find((encounter) => encounter.id === encounterId);
+  const chosen = playable.find((encounter) => encounter.id === encounterId);
   // Worded as the kind it will be run as; a fight until one is picked.
   const kind = chosen?.kind ?? "combat";
   const noun = sceneNoun(kind);
@@ -216,7 +201,16 @@ export function StartRunDialog({
           </div>
         )}
 
-        {number.state === "ready" && encounters.length > 0 && (
+        {number.state === "ready" && encounters.length > 0 && playable.length === 0 && (
+          <div className="px-gutter py-3">
+            <p className="text-body-s leading-body text-muted-foreground">
+              Every encounter here has been played, and an encounter is played once. Write a new one
+              with <span className="text-heading">New encounter</span> and it can go on the table.
+            </p>
+          </div>
+        )}
+
+        {number.state === "ready" && playable.length > 0 && (
           <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto px-gutter py-3">
             <Field
               label="Encounter"
@@ -245,13 +239,13 @@ export function StartRunDialog({
                     {(value) =>
                       value === NONE
                         ? "Pick one"
-                        : (encounters.find((encounter) => encounter.id === value)?.name ??
+                        : (playable.find((encounter) => encounter.id === value)?.name ??
                           String(value))
                     }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {encounters.map((encounter) => (
+                  {playable.map((encounter) => (
                     <SelectItem key={encounter.id} value={encounter.id}>
                       {encounter.name}
                     </SelectItem>
@@ -299,7 +293,7 @@ export function StartRunDialog({
           </Button>
           <Button
             size="sm"
-            disabled={busy || number.state !== "ready" || encounters.length === 0}
+            disabled={busy || number.state !== "ready" || playable.length === 0}
             onClick={() => void start()}
           >
             {busy ? "Starting…" : `Start the ${noun}`}
