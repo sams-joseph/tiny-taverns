@@ -183,6 +183,7 @@ export const recap11 = {
       run: carriedRun,
       combatants: [combatant],
       checks: [],
+      scene: null,
       continuedFrom: null,
       // The successor's round at read time — where the fight has got to *since*,
       // and emphatically not the round it paused at.
@@ -210,6 +211,7 @@ export const recap12 = {
       run: resumedRun,
       combatants: [],
       checks: [],
+      scene: null,
       // The predecessor's frozen round — the round the fight paused on.
       continuedFrom: { runId: run11Id, sessionId: session11Id, sessionNumber: 11, round: 4 },
       continuedInto: null,

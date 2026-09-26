@@ -1,8 +1,9 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Combatant } from "./Combatant.js";
+import { EncounterChallenge } from "./Encounter.js";
 import { EncounterRun } from "./EncounterRun.js";
-import { EncounterRunCheck } from "./EncounterRunScene.js";
+import { EncounterRunCheck, SceneAttitude } from "./EncounterRunScene.js";
 import { EncounterRunId, SessionId } from "./Ids.js";
 import { Note } from "./Note.js";
 import { PrepItem } from "./PrepItem.js";
@@ -30,6 +31,21 @@ export class RecapRunLink extends Schema.Class<RecapRunLink>("RecapRunLink")({
   /** The night that run belongs to, as the DM numbers their nights. */
   sessionNumber: Schema.Int,
   round: Schema.Int,
+}) {}
+
+/**
+ * Where a conversation, a skill challenge or a hazard stood when it came off
+ * the table — the part of its scene (`EncounterRunScene`) a recap tells it
+ * by: the challenge's numbers the log is counted against ("they made it"), the
+ * hazard's stage it reached, and the DM's last attitude note. The creator's
+ * alone, like the scene.
+ */
+export class RecapScene extends Schema.Class<RecapScene>("RecapScene")({
+  challenge: Schema.NullOr(EncounterChallenge),
+  attitude: Schema.NullOr(SceneAttitude),
+  /** The hazard's stage when it came off the table; `null` if it never began. */
+  stage: Schema.NullOr(Schema.Int),
+  stages: Schema.NullOr(Schema.Int),
 }) {}
 
 /**
@@ -76,6 +92,8 @@ export class RecapFight extends Schema.Class<RecapFight>("RecapFight")({
    * The creator's alone: a player's recap has no field for them.
    */
   checks: Schema.Array(EncounterRunCheck),
+  /** The scene's state, for a run that was not a fight; `null` for a fight. */
+  scene: Schema.NullOr(RecapScene),
   /** The fight this one continues, when it was picked up from an earlier night. */
   continuedFrom: Schema.NullOr(RecapRunLink),
   /** The night that picked this one up, when a later one did. */

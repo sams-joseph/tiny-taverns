@@ -343,6 +343,12 @@ describe("PlayerTableScreen", () => {
 
     await screen.findByText("Your rolls");
     expect(screen.queryByText("Your turn")).toBeNull();
+    // The scene's kind in place of the order it does not have, and nothing
+    // of it — no round, no initiative, no DC.
+    expect(screen.getByText("A skill challenge")).toBeInTheDocument();
+    expect(screen.getByText("Session 12 · a skill challenge")).toBeInTheDocument();
+    expect(screen.queryByText("Initiative")).toBeNull();
+    expect(screen.queryByText(/round \d|DC/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: /Halberd/ }));
     await waitFor(() => {
       const call = server.calls.find(
@@ -350,6 +356,19 @@ describe("PlayerTableScreen", () => {
       );
       expect(JSON.parse(call!.body)).toMatchObject({ characterId: brannocId });
     });
+  });
+
+  it.each([
+    ["social", "A conversation", /Roll when the DM calls for a check/],
+    ["hazard", "A hazard", /Roll your saving throw when the DM calls for one/],
+  ] as const)("names a %s scene by its kind alone", async (mode, name, asked) => {
+    server.routes.set(...playing(campaignId, { mode, order: [], upNext: null }));
+
+    await renderTable();
+
+    expect(await screen.findByText(name)).toBeInTheDocument();
+    expect(screen.getByText(asked)).toBeInTheDocument();
+    expect(screen.queryByText("Initiative")).toBeNull();
   });
 
   it("re-reads the narrow table when a contentless stream tick arrives", async () => {

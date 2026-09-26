@@ -118,3 +118,158 @@ describe("who was standing, counted from a band", () => {
     expect(playerStanding(wiped)).toEqual({ total: 3, down: 3 });
   });
 });
+
+/**
+ * A scene that was not a fight, told by its kind.
+ *
+ * The DM's recap carries the scene and its log, and the story is counted from
+ * them; the player's carries neither, and the same `fightStory` says only the
+ * kind and that it ended. Built from the fight above with the mode swapped, so
+ * the round (4) is there to be wrongly reported.
+ */
+const ended = { ...recap11.fights[0]!.run, endedReason: "resolved", round: 4 };
+const check = (n: number, outcome: "success" | "failure", extra: Record<string, unknown> = {}) => ({
+  id: `2b1f2a1e-0000-4000-8000-00000000c0${String(n).padStart(2, "0")}`,
+  runId: ended.id,
+  combatantId: null,
+  displayName: "Brannoc",
+  skill: "Athletics",
+  save: null,
+  total: outcome === "success" ? 15 : 8,
+  dc: 13,
+  outcome,
+  stage: null,
+  createdAt: "2026-07-19T22:00:00.000Z",
+  ...extra,
+});
+const scene = (mode: string, sceneState: Record<string, unknown> | null, checks: unknown[] = []) =>
+  decode({
+    ...recap11.fights[0],
+    run: { ...ended, mode },
+    continuedInto: null,
+    checks,
+    scene: sceneState,
+  });
+const challenge = {
+  kind: "challenge",
+  dc: 13,
+  successes: 2,
+  failures: 2,
+  skills: ["Athletics"],
+  onSuccess: "They find the buried cache.",
+  onFailure: "The rope snaps.",
+};
+const quiet = { challenge: null, attitude: null, stage: null, stages: null };
+
+describe("a skill challenge, as the DM's Chronicle tells it", () => {
+  it("says they made it, with the prep's line for it, and counts the log against its numbers", () => {
+    const story = fightStory(
+      scene("challenge", { ...quiet, challenge }, [check(1, "success"), check(2, "success")]),
+    );
+    expect(story.kind).toBe("Skill challenge");
+    expect(story.state).toBe("They made it.");
+    expect(story.outcome).toBe("They find the buried cache.");
+    expect(story.tally).toBe("2 of 2 successes and 0 of 2 failures, at DC 13.");
+    expect(story.state).not.toContain("round");
+  });
+
+  it("says it went wrong with the other line, and nothing borrowed when none was written", () => {
+    const lost = [check(1, "failure"), check(2, "failure")];
+    expect(fightStory(scene("challenge", { ...quiet, challenge }, lost))).toMatchObject({
+      state: "It went wrong.",
+      outcome: "The rope snaps.",
+    });
+    const { onSuccess: _s, onFailure: _f, ...unwritten } = challenge;
+    expect(fightStory(scene("challenge", { ...quiet, challenge: unwritten }, lost))).toMatchObject({
+      state: "It went wrong.",
+      outcome: null,
+    });
+  });
+
+  it("does not claim an ending the log never reached", () => {
+    expect(
+      fightStory(scene("challenge", { ...quiet, challenge }, [check(1, "success")])).state,
+    ).toBe("Ended before it was settled.");
+  });
+});
+
+describe("a hazard, as the DM's Chronicle tells it", () => {
+  const hazard = {
+    kind: "hazard",
+    save: { ability: "CON", dc: 13 },
+    skills: [],
+  };
+  const saves = [
+    check(1, "success", { skill: null, save: "CON", stage: 1 }),
+    check(2, "failure", { skill: null, save: "CON", stage: 2 }),
+  ];
+
+  it("counts the stages it lasted and the saves made in it", () => {
+    const story = fightStory(
+      scene("hazard", { ...quiet, challenge: hazard, stage: 2, stages: 2 }, saves),
+    );
+    expect(story.kind).toBe("Hazard");
+    expect(story.state).toBe("Lasted 2 stages.");
+    expect(story.tally).toBe("CON save DC 13. 2 saves: 1 passed, 1 failed.");
+  });
+
+  it("says where it stopped when the DM ended it early, and when it never began", () => {
+    expect(
+      fightStory(scene("hazard", { ...quiet, challenge: hazard, stage: 2, stages: 4 }, saves))
+        .state,
+    ).toBe("Ended at stage 2 of 4.");
+    expect(fightStory(scene("hazard", { ...quiet, challenge: hazard })).state).toBe(
+      "Ended before it began.",
+    );
+  });
+
+  it("tells a hazard paused by the night's end by its stage, not a round", () => {
+    const paused_ = decode({
+      ...recap11.fights[0],
+      run: { ...recap11.fights[0]!.run, mode: "hazard" },
+      checks: [],
+      scene: { ...quiet, challenge: hazard, stage: 3, stages: 4 },
+    });
+    const story = fightStory(paused_);
+    expect(story.state).toBe("Paused at stage 3 of 4 when the night ended.");
+    expect(story.carriedInto).toBe("Session 12 picked it up.");
+  });
+});
+
+describe("a conversation, as the DM's Chronicle tells it", () => {
+  it("counts its checks and the attitude last noted", () => {
+    const story = fightStory(
+      scene("social", { ...quiet, attitude: "friendly" }, [
+        check(1, "success", { skill: "Persuasion" }),
+        check(2, "failure", { skill: "Deception" }),
+      ]),
+    );
+    expect(story.kind).toBe("Social");
+    expect(story.state).toBe("Talked through to its end.");
+    expect(story.tally).toBe("2 checks: 1 succeeded, 1 failed. Last noted as friendly.");
+  });
+});
+
+describe("a scene, as a player is told it", () => {
+  it("says its kind and that it ended, and nothing it was counted by", () => {
+    const told = decodePlayer({
+      ...playerRecap11.fights[0],
+      run: {
+        ...playerRecap11.fights[0]!.run,
+        mode: "challenge",
+        endedReason: "resolved",
+        encounterName: "A skill challenge",
+      },
+      combatants: [],
+      continuedInto: null,
+    });
+    const story = fightStory(told);
+    expect(story).toMatchObject({
+      name: "A skill challenge",
+      kind: "Skill challenge",
+      state: "Played to its end.",
+      outcome: null,
+      tally: null,
+    });
+  });
+});

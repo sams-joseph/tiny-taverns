@@ -27,7 +27,7 @@ import { defined, dieOnSqlError, setClause } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { containedChildWritable, nestedRowWritable } from "./visibility.js";
 
-interface SceneRow {
+export interface SceneRow {
   readonly run_id: EncounterRunId;
   readonly beats: ReadonlyArray<SceneBeat>;
   readonly challenge: EncounterChallenge | null;

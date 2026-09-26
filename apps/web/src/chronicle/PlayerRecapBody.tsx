@@ -122,6 +122,7 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<PlayerRecapFight> }
                 <span className="text-label leading-snug font-semibold text-heading">
                   {story.name}
                 </span>
+                {story.kind !== null && <Badge variant="outline">{story.kind}</Badge>}
                 {story.live ? (
                   <Badge>On the table</Badge>
                 ) : fight.run.endedReason === "carried" ? (
@@ -131,6 +132,11 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<PlayerRecapFight> }
                 )}
               </div>
               <p className="text-body-s leading-body text-foreground">{story.state}</p>
+              {story.outcome !== null && (
+                <p className="max-w-measure font-serif text-body-s leading-body italic text-foreground">
+                  {story.outcome}
+                </p>
+              )}
               {story.resumedFrom !== null && (
                 <p className="flex items-center gap-1.5 text-caption leading-body text-muted-foreground">
                   <Icon name="git-branch" size={12} className="shrink-0 text-faint" />
@@ -143,7 +149,7 @@ function Fights({ fights }: { readonly fights: ReadonlyArray<PlayerRecapFight> }
                   {story.carriedInto}
                 </p>
               )}
-              {total === 0 ? (
+              {fight.run.mode !== "combat" ? null : total === 0 ? (
                 // The DM may have shared the fight and none of what was in it.
                 // Saying so is honest; drawing an empty list is not.
                 <p className="text-caption leading-body text-faint">

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   campaignId,
   installPlayerChronicleServer,
+  playerRecap12,
   renderPlayerChronicle,
   session11Id,
   session12Id,
@@ -183,5 +184,39 @@ describe("when the load fails", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("a scene, as a player is told it", () => {
+  it("names its kind and that it ended, and asks nothing of who was in it", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap/player`, {
+      status: 200,
+      body: {
+        ...playerRecap12,
+        fights: [
+          {
+            ...playerRecap12.fights[0]!,
+            run: {
+              ...playerRecap12.fights[0]!.run,
+              mode: "hazard",
+              encounterId: null,
+              encounterName: "A hazard",
+              endedAt: "2026-07-26T21:30:00.000Z",
+              endedReason: "resolved",
+            },
+            continuedFrom: null,
+          },
+        ],
+      },
+    });
+    await renderPlayerChronicle();
+
+    expect(await screen.findByText("A hazard")).toBeInTheDocument();
+    expect(screen.getByText("Hazard")).toBeInTheDocument();
+    expect(screen.getByText("Played to its end.")).toBeInTheDocument();
+    // A scene had no order at the table, so its missing roll call is not the
+    // DM withholding one.
+    expect(screen.queryByText("Your DM did not share who was in it.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/round|initiative|stage/i)).not.toBeInTheDocument();
   });
 });
