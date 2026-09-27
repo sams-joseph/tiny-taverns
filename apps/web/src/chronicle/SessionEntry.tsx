@@ -1,126 +1,99 @@
 import type { Session } from "@taverns/api";
-import { Card, CardContent, cn, Icon, SectionHeading } from "@taverns/ui";
+import { Card, Icon, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { dayOf, spanOf } from "./format";
+import { nightAnchor } from "./nights";
 
 /**
- * One night on the spine: a dot, a rule, and a card that opens.
+ * One night on the Chronicle: a card whose whole header opens it.
  *
- * `Chronicle.jsx:29-141` in shipped components. The dot-and-rule is the
- * delivery's own — a bigger accent dot with a soft ring for the newest night, a
- * hairline running on down the column — built from the spacing scale rather than
- * its literal 13/9/21px.
+ * `Campaign Overview.dc.html`'s night card in shipped components: a mono
+ * number tile, the title, the date, a chevron, and the body indented to the
+ * title's edge. It is an accordion rather than a linked card — the night is
+ * read here, not somewhere else — so the header is one `button` carrying
+ * `aria-expanded`, and nothing in the body toggles it.
  *
- * **The collapsed card carries no summary**, and that is the one visible
- * difference from the prototype. `s.summary` there is authored prose on a
- * fixture; nothing stores a recap here by decision (`Recap.ts`), and reading one
- * per collapsed row would be a request per night to draw a list. So the head
- * says what the `session` row itself knows — which night, when it was played,
- * and how long it ran — and the recap arrives when the card is opened.
+ * **The title is only ever what the DM typed.** An untitled night is "Session
+ * N"; it never borrows an encounter's name, because a Shared World is told a
+ * night's title whatever its own switch says (`shared-worlds.md`) and an
+ * encounter's name may be one nobody at that table was shown.
  *
- * **The recap is a child rather than something this reaches for**, which is what
- * lets the DM's Chronicle and the player's share one spine: the two read
- * different endpoints and render different fights (`RecapBody` and
- * `PlayerRecapBody`), and neither difference belongs to the dot, the rule or the
- * heading. Rendered only while the card is open, so a collapsed row still costs
- * no request — the property `load.ts` exists to keep.
+ * **The closed card carries the night's length**, where the drawing clamps two
+ * lines of a written summary. Nothing stores one yet, so the head says what the
+ * `session` row itself knows, and a closed card still costs no request: the
+ * body is a child, rendered only while open, which is what lets the DM's and
+ * the player's Chronicles share this card while reading different endpoints
+ * (`RecapBody`, `PlayerRecapBody`).
  */
 export function SessionEntry({
   session,
-  latest,
   open,
-  readAloud,
   onToggle,
   children,
 }: {
   readonly session: Session;
-  /** The newest night, which the delivery marks with the accent dot. */
-  readonly latest: boolean;
   readonly open: boolean;
-  readonly readAloud: boolean;
   readonly onToggle: () => void;
   /** The night, read back. Mounted only while `open`. */
   readonly children: ReactNode;
 }) {
-  /**
-   * A night is titled or it is not, and the head is arranged around which.
-   *
-   * The delivery gives every night a name and puts *"Session 11"* in the
-   * eyebrow above it (`Chronicle.jsx:46,51`). `session.title` is nullable and in
-   * practice usually null — nothing on the campaign screen asks for one — so an
-   * untitled night takes its number as the heading and the eyebrow drops it
-   * rather than printing *"Session 12"* twice, once in each size.
-   */
-  const titled = session.title !== null;
   const title = session.title ?? `Session ${String(session.number)}`;
-  const played = session.startedAt === null ? null : dayOf(session.startedAt);
+  const span = spanOf(session.startedAt, session.endedAt);
 
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-4">
-      <div className="flex w-4 flex-col items-center">
-        <div
-          className={cn(
-            "mt-5 shrink-0 rounded-circle",
-            latest
-              ? "size-3 bg-accent ring-4 ring-accent-soft"
-              : "size-2 border border-strong bg-slate-700",
-          )}
-        />
-        <div className="mt-2 w-px flex-1 bg-hairline" />
-      </div>
+    <article
+      id={nightAnchor(session)}
+      // A jump lands the card under the sticky chrome rather than behind it.
+      className="@container scroll-mt-(--chrome-height)"
+    >
+      <Card>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex w-full cursor-pointer items-start gap-3.5 rounded-card p-card text-left outline-none focus-visible:ring-focus"
+        >
+          <NumberTile number={session.number} />
+          <div className="min-w-0 flex-1">
+            <SectionHeading as="h3" size="title">
+              {title}
+            </SectionHeading>
+            <p className="mt-0.5 text-label leading-snug text-muted-foreground">
+              {session.startedAt === null ? "Not played yet" : dayOf(session.startedAt)}
+            </p>
+            {!open && (
+              <p className="mt-2 max-w-measure text-body-s leading-body text-foreground">{span}</p>
+            )}
+          </div>
+          <Icon
+            name={open ? "chevron-up" : "chevron-down"}
+            size={16}
+            className="mt-2.5 shrink-0 text-faint"
+          />
+        </button>
 
-      <div className="pb-6">
-        <Card className={latest ? "border-strong" : undefined}>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={open}
-            className="flex w-full cursor-pointer items-start gap-3 p-card text-left"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                {titled && (
-                  <>
-                    <span className="font-mono text-mono leading-none font-medium text-accent-ink">
-                      Session {session.number}
-                    </span>
-                    <span className="text-faint" aria-hidden="true">
-                      &middot;
-                    </span>
-                  </>
-                )}
-                <span className="text-label leading-none text-muted-foreground">
-                  {played ?? "Not played yet"}
-                </span>
-              </div>
-              <SectionHeading as="h3" size="display">
-                {title}
-              </SectionHeading>
-              {!open && (
-                <p className="mt-2 max-w-measure text-body-s leading-body text-muted-foreground">
-                  {spanOf(session.startedAt, session.endedAt)}
-                </p>
-              )}
-            </div>
-            <Icon
-              name={open ? "chevron-up" : "chevron-down"}
-              size={16}
-              className="mt-1 shrink-0 text-faint"
-            />
-          </button>
-
-          {open && (
-            <CardContent className="pt-0">
-              {!readAloud && (
-                <p className="mb-5 text-caption leading-body text-faint">
-                  {spanOf(session.startedAt, session.endedAt)}
-                </p>
-              )}
+        {open && (
+          // The body starts at the title's edge while there is room for the
+          // tile's column, and at the card's own edge on a phone, where that
+          // indent would leave the text a third of the screen.
+          <div className="flex gap-3.5 px-card pb-card">
+            <div aria-hidden="true" className="hidden w-9 shrink-0 @lg:block" />
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              <p className="text-caption leading-body text-faint">{span}</p>
               {children}
-            </CardContent>
-          )}
-        </Card>
-      </div>
-    </div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </article>
+  );
+}
+
+/** The night's number, in the drawing's 36px mono tile. */
+function NumberTile({ number }: { readonly number: number }) {
+  return (
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-hairline bg-surface-sunken font-mono text-mono-l leading-none font-medium text-heading">
+      {number}
+    </span>
   );
 }

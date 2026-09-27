@@ -4,6 +4,7 @@ import { CampaignId } from "@taverns/api";
 import { Schema } from "effect";
 import { vi } from "vitest";
 import { page } from "../campaign/campaign.fixtures";
+import { chronicleNightId } from "../test/ids";
 import { TEST_SESSION } from "../test/session";
 
 /**
@@ -24,13 +25,15 @@ import { TEST_SESSION } from "../test/session";
  */
 
 export const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000-00000000c0de");
-export const session11Id = "2b1f2a1e-0000-4000-8000-000000000511";
+export const session11Id = chronicleNightId;
 export const session12Id = "2b1f2a1e-0000-4000-8000-000000000512";
 export const run11Id = "2b1f2a1e-0000-4000-8000-000000000c11";
 export const run12Id = "2b1f2a1e-0000-4000-8000-000000000c12";
 export const beatId = "2b1f2a1e-0000-4000-8000-000000000e01";
+export const sharedBeatId = "2b1f2a1e-0000-4000-8000-000000000e02";
+export const bridgeRunId = "2b1f2a1e-0000-4000-8000-000000000c13";
+export const bridgeEncounterId = "2b1f2a1e-0000-4000-8000-000000000613";
 export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
-export const creatureId = "2b1f2a1e-0000-4000-8000-000000000a01";
 export const prepItemId = "2b1f2a1e-0000-4000-8000-000000000701";
 
 const stamps = { createdAt: "2026-08-04T13:03:28.070Z", updatedAt: "2026-08-04T13:03:28.070Z" };
@@ -153,6 +156,29 @@ export const beat = {
   ...stamps,
 };
 
+/** A moment the DM shared with the table, so both screens draw it as a bullet. */
+export const sharedBeat = {
+  ...beat,
+  id: sharedBeatId,
+  encounterRunId: null,
+  body: "Tamsin promised the ferryman her true name on the way back.",
+  visibility: "shared",
+};
+
+/**
+ * A conversation played the same night as the fight that paused, with its
+ * encounter still there to open — so session 11 has a chip of each kind, one
+ * the DM can follow and one (the fight's, whose encounter is gone) they cannot.
+ */
+export const bridgeRun = {
+  ...run(bridgeRunId, session11Id, 0),
+  encounterId: bridgeEncounterId,
+  encounterName: "Toll bridge standoff",
+  mode: "social",
+  startedAt: "2026-07-19T18:30:00.000Z",
+  endedAt: "2026-07-19T19:10:00.000Z",
+};
+
 export const readAloudNote = {
   id: noteId,
   campaignId,
@@ -178,10 +204,21 @@ export const prepItem = {
   ...stamps,
 };
 
-/** Session 11's recap: the fight that paused, plus the night's own prose. */
+/**
+ * Session 11's recap: a conversation, then the fight that paused, plus the
+ * night's own prose — one beat kept back and one shared.
+ */
 export const recap11 = {
   session: session11,
   fights: [
+    {
+      run: bridgeRun,
+      combatants: [],
+      checks: [],
+      scene: { challenge: null, attitude: null, stage: null, stages: null },
+      continuedFrom: null,
+      continuedInto: null,
+    },
     {
       run: carriedRun,
       combatants: [combatant],
@@ -193,7 +230,7 @@ export const recap11 = {
       continuedInto: { runId: run12Id, sessionId: session12Id, sessionNumber: 12, round: 7 },
     },
   ],
-  beats: [beat],
+  beats: [beat, sharedBeat],
   prepDone: [
     {
       ...prepItem,
@@ -224,35 +261,6 @@ export const recap12 = {
   prepDone: [],
   notes: [],
 };
-
-export const hits = [
-  {
-    source: "beat",
-    id: beatId,
-    sessionId: session11Id,
-    rank: 0.6,
-    snippet: "The ferryman is called Cazril. He will not take coin",
-    ...stamps,
-  },
-  {
-    source: "note",
-    id: noteId,
-    title: "Read aloud at the water",
-    rank: 0.3,
-    // Deliberately carries characters that would be markup if anything parsed
-    // it: the API promises plain text and this is how the screen proves it.
-    snippet: "the ferryman <b>waits</b> where the reeds stop",
-    ...stamps,
-  },
-  {
-    source: "creature",
-    id: creatureId,
-    title: "Ferryman of the Reeds",
-    rank: 0.1,
-    snippet: "Medium undead, neutral evil",
-    ...stamps,
-  },
-];
 
 export interface Answer {
   readonly status: number;
@@ -306,7 +314,6 @@ export const fullChronicle = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/sessions/${session11Id}/recap`, { status: 200, body: recap11 }],
     [`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, { status: 200, body: recap12 }],
-    [`GET /campaigns/${campaignId}/search`, { status: 200, body: hits }],
   ]);
 
 export interface StubServer {
@@ -350,8 +357,8 @@ export const installChronicleServer = (): StubServer => {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
-export const renderChronicle = async (): Promise<void> => {
-  await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
+export const renderChronicle = async (search = ""): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/chronicle${search}`, (screen) => (
     <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

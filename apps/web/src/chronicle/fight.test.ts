@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { PlayerRecapFight, RecapFight } from "@taverns/api";
-import { fightStory, playerStanding, standing } from "./fight";
+import { fightStory } from "./fight";
 import { recap11, recap12 } from "./chronicle.fixtures";
 import { playerRecap11, playerRecap12 } from "./player.fixtures";
 
@@ -18,7 +18,7 @@ import { playerRecap11, playerRecap12 } from "./player.fixtures";
  * fails here rather than being asserted over an object literal nobody checks.
  */
 const decode = Schema.decodeUnknownSync(RecapFight);
-const paused = decode(recap11.fights[0]);
+const paused = decode(recap11.fights[1]);
 const resumed = decode(recap12.fights[0]);
 
 describe("a fight that paused when the night ended", () => {
@@ -57,22 +57,11 @@ describe("the fight, picked up on the next night", () => {
 describe("a fight the DM finished", () => {
   it("reads as resolved, from endedReason and never from endedAt", () => {
     const finished = decode({
-      ...recap11.fights[0],
-      run: { ...recap11.fights[0]!.run, endedReason: "resolved", round: 5 },
+      ...recap11.fights[1],
+      run: { ...recap11.fights[1]!.run, endedReason: "resolved", round: 5 },
       continuedInto: null,
     });
     expect(fightStory(finished).state).toBe("Fought to a finish, in round 5.");
-  });
-});
-
-describe("who was standing", () => {
-  it("counts a combatant at zero as down, and counts nobody as removed", () => {
-    expect(standing(paused)).toEqual({ total: 1, down: 0 });
-    const dropped = decode({
-      ...recap11.fights[0],
-      combatants: [{ ...recap11.fights[0]!.combatants[0], hpCurrent: 0 }],
-    });
-    expect(standing(dropped)).toEqual({ total: 1, down: 1 });
   });
 });
 
@@ -86,11 +75,11 @@ describe("who was standing", () => {
  * the swap is invisible in every way but this one.
  */
 const decodePlayer = Schema.decodeUnknownSync(PlayerRecapFight);
-const playerPaused = decodePlayer(playerRecap11.fights[0]);
+const playerPaused = decodePlayer(playerRecap11.fights[1]);
 const playerResumed = decodePlayer(playerRecap12.fights[0]);
 
 describe("a carried fight, as a player is told it", () => {
-  it("tells both ends exactly as the DM's Chronicle does", () => {
+  it("tells both ends exactly as the DM's recap does", () => {
     expect(fightStory(playerPaused)).toEqual(fightStory(paused));
     expect(fightStory(playerResumed)).toEqual(fightStory(resumed));
   });
@@ -103,22 +92,6 @@ describe("a carried fight, as a player is told it", () => {
   });
 });
 
-describe("who was standing, counted from a band", () => {
-  it("reads a monster's `down` and a character's zero, and nothing else", () => {
-    // Brannoc at 6/52, a bloodied hag, and a stalker the night finished.
-    expect(playerStanding(playerPaused)).toEqual({ total: 3, down: 1 });
-    expect(playerStanding(playerResumed)).toEqual({ total: 0, down: 0 });
-
-    const wiped = decodePlayer({
-      ...playerRecap11.fights[0],
-      combatants: playerRecap11.fights[0]!.combatants.map((combatant) =>
-        combatant.kind === "pc" ? { ...combatant, hpCurrent: 0 } : { ...combatant, hpBand: "down" },
-      ),
-    });
-    expect(playerStanding(wiped)).toEqual({ total: 3, down: 3 });
-  });
-});
-
 /**
  * A scene that was not a fight, told by its kind.
  *
@@ -127,7 +100,7 @@ describe("who was standing, counted from a band", () => {
  * kind and that it ended. Built from the fight above with the mode swapped, so
  * the round (4) is there to be wrongly reported.
  */
-const ended = { ...recap11.fights[0]!.run, endedReason: "resolved", round: 4 };
+const ended = { ...recap11.fights[1]!.run, endedReason: "resolved", round: 4 };
 const check = (n: number, outcome: "success" | "failure", extra: Record<string, unknown> = {}) => ({
   id: `2b1f2a1e-0000-4000-8000-00000000c0${String(n).padStart(2, "0")}`,
   runId: ended.id,
@@ -144,7 +117,7 @@ const check = (n: number, outcome: "success" | "failure", extra: Record<string, 
 });
 const scene = (mode: string, sceneState: Record<string, unknown> | null, checks: unknown[] = []) =>
   decode({
-    ...recap11.fights[0],
+    ...recap11.fights[1],
     run: { ...ended, mode },
     continuedInto: null,
     checks,
@@ -161,7 +134,7 @@ const challenge = {
 };
 const quiet = { challenge: null, attitude: null, stage: null, stages: null };
 
-describe("a skill challenge, as the DM's Chronicle tells it", () => {
+describe("a skill challenge, as the DM's recap tells it", () => {
   it("says they made it, with the prep's line for it, and counts the log against its numbers", () => {
     const story = fightStory(
       scene("challenge", { ...quiet, challenge }, [check(1, "success"), check(2, "success")]),
@@ -193,7 +166,7 @@ describe("a skill challenge, as the DM's Chronicle tells it", () => {
   });
 });
 
-describe("a hazard, as the DM's Chronicle tells it", () => {
+describe("a hazard, as the DM's recap tells it", () => {
   const hazard = {
     kind: "hazard",
     save: { ability: "CON", dc: 13 },
@@ -225,8 +198,8 @@ describe("a hazard, as the DM's Chronicle tells it", () => {
 
   it("tells a hazard paused by the night's end by its stage, not a round", () => {
     const paused_ = decode({
-      ...recap11.fights[0],
-      run: { ...recap11.fights[0]!.run, mode: "hazard" },
+      ...recap11.fights[1],
+      run: { ...recap11.fights[1]!.run, mode: "hazard" },
       checks: [],
       scene: { ...quiet, challenge: hazard, stage: 3, stages: 4 },
     });
@@ -236,7 +209,7 @@ describe("a hazard, as the DM's Chronicle tells it", () => {
   });
 });
 
-describe("a conversation, as the DM's Chronicle tells it", () => {
+describe("a conversation, as the DM's recap tells it", () => {
   it("counts its checks and the attitude last noted", () => {
     const story = fightStory(
       scene("social", { ...quiet, attitude: "friendly" }, [
@@ -253,9 +226,9 @@ describe("a conversation, as the DM's Chronicle tells it", () => {
 describe("a scene, as a player is told it", () => {
   it("says its kind and that it ended, and nothing it was counted by", () => {
     const told = decodePlayer({
-      ...playerRecap11.fights[0],
+      ...playerRecap11.fights[1],
       run: {
-        ...playerRecap11.fights[0]!.run,
+        ...playerRecap11.fights[1]!.run,
         mode: "challenge",
         endedReason: "resolved",
         encounterName: "A skill challenge",

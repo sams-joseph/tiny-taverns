@@ -83,9 +83,9 @@ A night may finish with a fight on the table, and the fight continues into the n
 
 `repo/Recap.ts` assembles `SessionRecap` from five sources through five existing predicates: the session, every run of the night with its combatants, all beats verbatim, ticked prep only (an unticked line is the next night's), and notes attached to an encounter one of tonight's fights was started from. Nothing is stored and no model is called in the read path. Which notes count is structural, not a timestamp window; a window is wrong whenever the DM preps at lunchtime.
 
-A `RecapFight` is `run` plus two `RecapRunLink`s carrying the other run's session number and round, so a pause and its pickup are expressible from either end. Following `continued_from` grants no reach: the far run goes through `containedRowReadable` and comes back `null` when the actor cannot see it (`recap.test.ts`). Paused-versus-finished is `run.endedReason`, never a guess from `endedAt`; the Chronicle's round trap is in [Web screens](web-screens.md).
+A `RecapFight` is `run` plus two `RecapRunLink`s carrying the other run's session number and round, so a pause and its pickup are expressible from either end. Following `continued_from` grants no reach: the far run goes through `containedRowReadable` and comes back `null` when the actor cannot see it (`recap.test.ts`). Paused-versus-finished is `run.endedReason`, never a guess from `endedAt`; the round trap in telling one is in [Web screens](web-screens.md).
 
-The creator's `RecapFight` also carries the run's checks and saves, oldest first, and for a scene that was not a fight its `scene`: the challenge snapshot, the last attitude and the hazard's stages, which the Chronicle counts the log against. The player's has no field for either.
+The creator's `RecapFight` also carries the run's checks and saves, oldest first, and for a scene that was not a fight its `scene`: the challenge snapshot, the last attitude and the hazard's stages, which `fightStory` counts the log against. The player's has no field for either.
 
 It is a server-side repository because it has two consumers, the Chronicle and Hob's `sessionRecap` tool; composed client-side, the assistant would write a second version.
 
