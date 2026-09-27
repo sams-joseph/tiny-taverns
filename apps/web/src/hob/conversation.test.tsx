@@ -2,6 +2,7 @@ import { HostedSessionScope } from "../auth/AuthProvider";
 import type { CampaignId, HobAccepted, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   campaign as aCampaignRow,
@@ -249,19 +250,33 @@ const installHobServer = (): HobStub => {
 
 const server = installHobServer();
 
-const panelState = (
-  open: boolean,
-  asked?: { readonly text: string; readonly forget: () => void },
-): HobPanelState => ({
+const panelState = (open: boolean): HobPanelState => ({
   open,
   inline: true,
   toggle: () => undefined,
   close: () => undefined,
   show: () => undefined,
   ask: () => undefined,
-  asked: asked?.text,
-  forgetAsked: asked?.forget ?? (() => undefined),
+  asked: undefined,
+  forgetAsked: () => undefined,
 });
+
+/**
+ * An open panel holding a question a screen asked (`hob.ask`), in state as
+ * `useHobPanel` holds it: taking it clears it, so it cannot be sent twice.
+ */
+function AskedHob({ text, forget }: { readonly text: string; readonly forget: () => void }) {
+  const [asked, setAsked] = useState<string | undefined>(text);
+  const hob: HobPanelState = {
+    ...panelState(true),
+    asked,
+    forgetAsked: () => {
+      forget();
+      setAsked(undefined);
+    },
+  };
+  return <ScopedHob hob={hob} scope={campaignScope} />;
+}
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
 const renderHob = (options?: {
@@ -270,10 +285,8 @@ const renderHob = (options?: {
   readonly world?: boolean;
   readonly account?: boolean;
   readonly onKept?: (accepted: HobAccepted) => void;
-  /** A question a screen asked through `hob.ask`, waiting for the panel. */
-  readonly asked?: { readonly text: string; readonly forget: () => void };
 }): void => {
-  const hob = panelState(options?.open ?? true, options?.asked);
+  const hob = panelState(options?.open ?? true);
   render(
     <HostedSessionScope session={TEST_SESSION}>
       <ScopedHob
@@ -924,10 +937,16 @@ describe("the campaign's story so far", () => {
   it("sends the question a screen asked once the panel can hear it, and only once", async () => {
     const forget = vi.fn();
     server.frames = [began(threadId, turnId), proposed(turnId, storyProposal), done()];
-    renderHob({ asked: { text: "Draft the story so far.", forget } });
+    render(
+      <HostedSessionScope session={TEST_SESSION}>
+        <AskedHob text="Draft the story so far." forget={forget} />
+      </HostedSessionScope>,
+    );
 
     expect(await screen.findByText(storyProposal.text)).toBeInTheDocument();
     expect(screen.getByText("Draft the story so far.")).toBeInTheDocument();
+    // Settled: the answer has landed and nothing sent the question again.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Keep/ })).toBeEnabled());
     expect(forget).toHaveBeenCalledTimes(1);
     expect(server.bodies.map((body) => (JSON.parse(body) as { text: string }).text)).toEqual([
       "Draft the story so far.",
@@ -937,7 +956,11 @@ describe("the campaign's story so far", () => {
   it("leaves an asked question unsent while no model answers", async () => {
     server.available = false;
     const forget = vi.fn();
-    renderHob({ asked: { text: "Draft the story so far.", forget } });
+    render(
+      <HostedSessionScope session={TEST_SESSION}>
+        <AskedHob text="Draft the story so far." forget={forget} />
+      </HostedSessionScope>,
+    );
 
     expect(await screen.findByText(/No model is configured/)).toBeInTheDocument();
     expect(forget).not.toHaveBeenCalled();
