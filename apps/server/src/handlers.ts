@@ -873,6 +873,23 @@ const RecapLive = HttpApiBuilder.group(
 );
 
 /**
+ * The campaign's whole record, in one read. The recap's two paths over the
+ * list of nights: the creator's through `asDmOf`, a member's through the
+ * predicates alone. The assembly is `Recap`'s, shared with the recap itself.
+ */
+const ChronicleLive = HttpApiBuilder.group(
+  TavernsApi,
+  "chronicle",
+  Effect.fnUntraced(function* (handlers) {
+    const recap = yield* Recap;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("read", ({ params }) => asDm(params.campaignId, (dm) => recap.chronicle(dm)))
+      .handle("readAsPlayer", ({ params }) => recap.chronicleAsPlayer(params.campaignId));
+  }),
+);
+
+/**
  * What is on this table right now, to a player.
  *
  * The thinnest handler in the file, and deliberately so: everything this read
@@ -1695,6 +1712,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     CombatantsLive,
     LiveLive,
     RecapLive,
+    ChronicleLive,
     PlayerTableLive,
   ]),
 );

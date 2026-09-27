@@ -1413,13 +1413,33 @@ export const nestedRowReadable = (
 ): Statement.Fragment =>
   sql.and([
     sql`${sql(`${nested.table}.${nested.foreignKey}`)} = ${parentId}`,
-    containedRowReadable(
-      sql,
-      under(nested.table, nested.foreignKey, inCampaign(nested.parent)),
-      campaignId,
-      actor,
-    ),
+    containedRowReadable(sql, containmentOf(nested), campaignId, actor),
   ]);
+
+/**
+ * Rows of a nested table this actor may read, under any of several parents —
+ * `nestedRowReadable` for a read that answers many nights at once.
+ *
+ * The ids narrow; they do not authorise. The containment is walked for every
+ * row exactly as it is for one parent, so an id the caller should not have
+ * passed selects nothing. The list must not be empty: `sql.in` of nothing is
+ * not a clause.
+ */
+export const nestedRowsReadable = (
+  sql: SqlClient.SqlClient,
+  nested: NestedTable,
+  parentIds: ReadonlyArray<string>,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql.and([
+    sql.in(`${nested.table}.${nested.foreignKey}`, parentIds),
+    containedRowReadable(sql, containmentOf(nested), campaignId, actor),
+  ]);
+
+/** A nested table's chain up to the campaign, one level above its parent. */
+const containmentOf = (nested: NestedTable): Containment =>
+  under(nested.table, nested.foreignKey, inCampaign(nested.parent));
 
 /**
  * Rows of a nested table this actor may read, correlated to the parent row of

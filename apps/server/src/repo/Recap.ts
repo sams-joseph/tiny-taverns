@@ -1,9 +1,11 @@
 import {
   type Actor,
   type CampaignId,
+  ChronicleNight,
   CurrentActor,
   type EncounterRunId,
   NotFound,
+  PlayerChronicleNight,
   type PlayerCombatant,
   PlayerSessionRecap,
   RecapFight,
@@ -38,7 +40,13 @@ import {
 import { PREP, type PrepItemRow, toPrepItem } from "./PrepItems.js";
 import { dieOnSqlError } from "./rows.js";
 import { type SessionRow, sessionColumns, toSession } from "./Sessions.js";
-import { containedRowReadable, nestedRowReadable, rowReadable } from "./visibility.js";
+import {
+  containedRowReadable,
+  ensureCampaignReadable,
+  nestedRowReadable,
+  nestedRowsReadable,
+  rowReadable,
+} from "./visibility.js";
 
 /**
  * A run at the other end of a `continued_from` pointer, plus the number of the
@@ -67,6 +75,32 @@ const toLink = (row: LinkRow): RecapRunLink =>
     round: row.round,
   });
 
+/** Rows filed under the night they belong to, each night's in the order read. */
+const groupBySession = <Row extends { readonly session_id: SessionId }>(
+  rows: ReadonlyArray<Row>,
+): ReadonlyMap<SessionId, ReadonlyArray<Row>> => {
+  const bySession = new Map<SessionId, Array<Row>>();
+  for (const row of rows) {
+    const filed = bySession.get(row.session_id);
+    if (filed === undefined) bySession.set(row.session_id, [row]);
+    else filed.push(row);
+  }
+  return bySession;
+};
+
+/**
+ * A night as every read of the record starts from: the session, its runs and
+ * its beats. The Chronicle is a list of these; a recap is one of them and
+ * more (`Night`). Read by `nights` in the layer, whichever of the two asked.
+ */
+interface NightRows {
+  readonly session: Session;
+  /** Oldest first, through `runColumns`. */
+  readonly runRows: ReadonlyArray<EncounterRunRow>;
+  /** Oldest first. */
+  readonly beats: ReadonlyArray<BeatRow>;
+}
+
 /**
  * Everything a recap is made of **except the initiative lists and the notes'
  * columns** — which are exactly the parts the two projections disagree about.
@@ -80,13 +114,10 @@ const toLink = (row: LinkRow): RecapRunLink =>
  * to disagree about what a night contains — the same argument that made this
  * a server-side repository in the first place, applied inside the file.
  */
-interface Night {
-  readonly session: Session;
-  readonly runRows: ReadonlyArray<EncounterRunRow>;
+interface Night extends NightRows {
   readonly runIds: ReadonlyArray<EncounterRunId>;
   readonly predecessorById: ReadonlyMap<EncounterRunId, LinkRow>;
   readonly successorByPredecessor: ReadonlyMap<EncounterRunId, LinkRow>;
-  readonly beats: ReadonlyArray<BeatRow>;
   readonly prepDone: ReadonlyArray<PrepItemRow>;
   /**
    * Which notes were read out tonight, as a `where`: the two projections
@@ -131,6 +162,15 @@ interface Night {
  * them no order at the table. The beats and the prep are not narrowed past
  * their rows; a note is told as `PlayerNote`, as on the player's Overview, so
  * the creator's links and provenance stay the creator's.
+ *
+ * ### The whole record, through the same function
+ *
+ * `chronicle` and `chronicleAsPlayer` answer every night at once — its runs
+ * and its beats, the part of a recap a list of nights draws — so the
+ * Chronicle can open them all without one recap read per card. They are not
+ * a second account of a night: `nights` in the layer reads the session, the
+ * runs and the beats for both a recap and the list, and a recap is that one
+ * night plus what only it reads. The same two audiences, gated the same way.
  *
  * ### Why it is a repository and not a client composition
  *
@@ -185,6 +225,27 @@ export class Recap extends Context.Service<
       campaignId: CampaignId,
       sessionId: SessionId,
     ) => Effect.Effect<PlayerSessionRecap, NotFound, CurrentActor>;
+    /**
+     * Every night of the campaign, newest first, each with its runs and its
+     * beats — the Chronicle's list, in one read rather than a recap per card.
+     *
+     * The same rows `read` starts from, through the same function, so a night
+     * here is the night its recap describes. Gated like `read`: it is the
+     * creator's record, and `ChronicleNight` is where a field only the DM may
+     * read would go.
+     */
+    readonly chronicle: (
+      dm: CampaignCreatorActor,
+    ) => Effect.Effect<ReadonlyArray<ChronicleNight>, never>;
+    /**
+     * The nights this member may read, told as `PlayerChronicleNight`.
+     *
+     * An unreadable campaign is `NotFound`, never an empty record: "nothing
+     * happened" and "not yours" must not look alike to somebody outside it.
+     */
+    readonly chronicleAsPlayer: (
+      campaignId: CampaignId,
+    ) => Effect.Effect<ReadonlyArray<PlayerChronicleNight>, NotFound, CurrentActor>;
   }
 >()("Recap") {
   static readonly layer = Layer.effect(this)(
@@ -224,6 +285,61 @@ export class Recap extends Context.Service<
                 and ${containedRowReadable(sql, RUN, campaignId, actor)}
             `.pipe(Effect.orDie);
 
+      /**
+       * The nights this actor may read — one by id for a recap, or every one
+       * for the Chronicle — each with its runs and its beats, newest night
+       * first. **The one implementation of what a night contains**: `night`
+       * below is this for one id plus what only a recap reads.
+       *
+       * Three statements however many nights, each through its predicate;
+       * the only thing done in TypeScript is filing the rows the predicates
+       * allowed under the night they name.
+       */
+      const nights = (
+        campaignId: CampaignId,
+        actor: Actor,
+        which: SessionId | "every",
+      ): Effect.Effect<ReadonlyArray<NightRows>, SqlError.SqlError> =>
+        Effect.gen(function* () {
+          // The nights themselves, and the gate for everything below them.
+          const sessions = yield* sql<SessionRow>`
+            select ${sessionColumns(sql, campaignId, actor)} from session
+            where ${sql.and([
+              ...(which === "every" ? [] : [sql`session.id = ${which}`]),
+              rowReadable(sql, "session", campaignId, actor),
+            ])}
+            order by session.number desc
+          `;
+          if (sessions.length === 0) return [];
+          const sessionIds = sessions.map((row) => row.id);
+
+          // Oldest first: a night is read forwards through the evening. The
+          // columns are `runColumns`, so a fight whose encounter this reader
+          // may not read is not named after it.
+          const runRows = yield* sql<EncounterRunRow>`
+            select ${runColumns(sql, campaignId, actor)} from encounter_run
+            where ${nestedRowsReadable(sql, RUNS, sessionIds, campaignId, actor)}
+            order by encounter_run.started_at asc, encounter_run.id asc
+          `;
+
+          // Verbatim, and in the order the night happened in — the same
+          // order `Beats.list` returns them in, because it is the same
+          // question.
+          const beats = yield* sql<BeatRow>`
+            select beat.* from beat
+            where ${nestedRowsReadable(sql, BEATS, sessionIds, campaignId, actor)}
+            order by beat.created_at asc, beat.id asc
+          `;
+
+          const runsOf = groupBySession(runRows);
+          const beatsOf = groupBySession(beats);
+          return sessions.map((row) => ({
+            session: toSession(row),
+            runRows: runsOf.get(row.id) ?? [],
+            beats: beatsOf.get(row.id) ?? [],
+          }));
+        });
+
       /** The night, minus the initiative lists. Shared by both projections. */
       const night = (
         campaignId: CampaignId,
@@ -231,26 +347,13 @@ export class Recap extends Context.Service<
         sessionId: SessionId,
       ): Effect.Effect<Night, NotFound | SqlError.SqlError> =>
         Effect.gen(function* () {
-          // The night itself, and the gate for everything below it. An
-          // unreachable session is a 404 naming the session rather than an
-          // empty recap, which would read as "nothing happened".
-          const sessions = yield* sql<SessionRow>`
-            select ${sessionColumns(sql, campaignId, actor)} from session
-            where session.id = ${sessionId}
-              and ${rowReadable(sql, "session", campaignId, actor)}
-          `;
-          if (sessions.length === 0) {
+          // An unreachable session is a 404 naming the session rather than
+          // an empty recap, which would read as "nothing happened".
+          const [rows] = yield* nights(campaignId, actor, sessionId);
+          if (rows === undefined) {
             return yield* new NotFound({ resource: "session", id: sessionId });
           }
-
-          // Oldest first: a recap is read forwards through the evening. The
-          // columns are `runColumns`, so a fight whose encounter this reader
-          // may not read is not named after it.
-          const runRows = yield* sql<EncounterRunRow>`
-            select ${runColumns(sql, campaignId, actor)} from encounter_run
-            where ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
-            order by encounter_run.started_at asc, encounter_run.id asc
-          `;
+          const { runRows } = rows;
           const runIds = runRows.map((row) => row.id);
 
           const predecessors = yield* links(
@@ -265,15 +368,6 @@ export class Recap extends Context.Service<
             "encounter_run.continued_from",
             runIds,
           );
-
-          // Verbatim, and in the order the night happened in — the same
-          // order `Beats.list` returns them in, because it is the same
-          // question.
-          const beats = yield* sql<BeatRow>`
-            select beat.* from beat
-            where ${nestedRowReadable(sql, BEATS, sessionId, campaignId, actor)}
-            order by beat.created_at asc, beat.id asc
-          `;
 
           // Only the ticked ones. An unticked line is what the next night
           // inherits, not a fact about this one.
@@ -301,8 +395,7 @@ export class Recap extends Context.Service<
           ]);
 
           return {
-            session: toSession(sessions[0]!),
-            runRows,
+            ...rows,
             runIds,
             predecessorById: new Map(predecessors.map((row) => [row.id, row])),
             successorByPredecessor: new Map(
@@ -310,7 +403,6 @@ export class Recap extends Context.Service<
                 row.continued_from === null ? [] : [[row.continued_from, row] as const],
               ),
             ),
-            beats,
             prepDone,
             readOut,
           };
@@ -473,6 +565,40 @@ export class Recap extends Context.Service<
                 prepDone: state.prepDone.map(toPrepItem),
                 notes: notes.map(toPlayerNote),
               });
+            }),
+          ),
+
+        chronicle: ({ actor, campaign: campaignId }) =>
+          dieOnSqlError(
+            Effect.map(nights(campaignId, actor, "every"), (all) =>
+              all.map(
+                (rows) =>
+                  new ChronicleNight({
+                    session: rows.session,
+                    runs: rows.runRows.map(toEncounterRun),
+                    beats: rows.beats.map(toBeat),
+                  }),
+              ),
+            ),
+          ),
+
+        chronicleAsPlayer: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              yield* ensureCampaignReadable(sql, campaignId, actor);
+              // The same function the creator's list reads through, with a
+              // player's actor: the predicates, not this method, decide which
+              // nights, runs and beats come back.
+              const all = yield* nights(campaignId, actor, "every");
+              return all.map(
+                (rows) =>
+                  new PlayerChronicleNight({
+                    session: rows.session,
+                    runs: rows.runRows.map(toEncounterRun),
+                    beats: rows.beats.map(toBeat),
+                  }),
+              );
             }),
           ),
       };

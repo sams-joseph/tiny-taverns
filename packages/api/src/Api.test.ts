@@ -284,6 +284,9 @@ describe("the API declaration", () => {
       "beats",
       "campaignInvites",
       "campaigns",
+      // Every night of one campaign at once, the recap's two audiences over
+      // the list: the creator's, and a member's on its own path.
+      "chronicle",
       "combatants",
       // The creatures a campaign can *use* — the encounter picker's read, plus
       // the by-id resolution of internal instances. The campaign-copy

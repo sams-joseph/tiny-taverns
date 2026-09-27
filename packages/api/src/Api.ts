@@ -30,6 +30,7 @@ import {
   OptionLibraryUpdate,
   OptionVocabulary,
 } from "./CharacterOption.js";
+import { ChronicleNight, PlayerChronicleNight } from "./Chronicle.js";
 import {
   Combatant,
   CombatantCreate,
@@ -1973,6 +1974,42 @@ class RecapGroup extends HttpApiGroup.make("recap")
   .middleware(Authorization) {}
 
 /**
+ * The campaign's whole record in one read: every night it can see, newest
+ * first, each with its runs and its beats (`ChronicleNight`).
+ *
+ * **The recap's two audiences, on two paths.** `/chronicle` is the creator's
+ * and takes the creator proof, so a player asking for it gets the ordinary
+ * 404; `/chronicle/player` answers `PlayerChronicleNight` to any member — the
+ * nights, runs and beats the DM shared, with an encounter named only when the
+ * player may read it.
+ *
+ * It is a narrower cut of the recap, read by the same function in
+ * `repo/Recap.ts`, so a night listed here is the night its recap describes.
+ * It exists so a list of nights can open all of them at once without a recap
+ * read per card; the per-night detail (initiative lists, checks, carry-over,
+ * ticked prep, read-alouds) stays behind `recap`.
+ *
+ * Its own group because it hangs off the campaign, not off one night.
+ */
+class ChronicleGroup extends HttpApiGroup.make("chronicle")
+  .add(
+    HttpApiEndpoint.get("read", "/chronicle", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(ChronicleNight),
+      error: NotFound,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("readAsPlayer", "/chronicle/player", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(PlayerChronicleNight),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
+  .middleware(Authorization) {}
+
+/**
  * What is on this table **right now**, to somebody sitting at it.
  *
  * The read behind the player's live banner — *"The Salt Road is playing right
@@ -2917,4 +2954,5 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(CombatantsGroup)
   .add(LiveGroup)
   .add(RecapGroup)
+  .add(ChronicleGroup)
   .add(PlayerTableGroup) {}

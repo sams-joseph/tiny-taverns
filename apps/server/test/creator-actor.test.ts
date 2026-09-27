@@ -207,12 +207,19 @@ describe("the compiler carries it", () => {
     // answers the narrow `PlayerSessionRecap` and takes an ordinary actor. So
     // it cannot be a `GatedOn<…>` — a partial gate is exactly the shape that
     // needs saying out loud rather than deriving.
+    // The Chronicle's list is the same split over every night at once.
     const recap: {
       readonly read: ExactlyCampaignCreatorActor<Parameters<(typeof Recap)["Service"]["read"]>[0]>;
       readonly readAsPlayer: ExactlyCampaignCreatorActor<
         Parameters<(typeof Recap)["Service"]["readAsPlayer"]>[0]
       >;
-    } = { read: true, readAsPlayer: false };
+      readonly chronicle: ExactlyCampaignCreatorActor<
+        Parameters<(typeof Recap)["Service"]["chronicle"]>[0]
+      >;
+      readonly chronicleAsPlayer: ExactlyCampaignCreatorActor<
+        Parameters<(typeof Recap)["Service"]["chronicleAsPlayer"]>[0]
+      >;
+    } = { read: true, readAsPlayer: false, chronicle: true, chronicleAsPlayer: false };
 
     // `Memberships` is the fifth, and the second that is gated in part — for a
     // different reason from `Recap`'s. `list` is *who is at this table* and
@@ -256,7 +263,7 @@ describe("the compiler carries it", () => {
       Object.keys(memberships).length,
       Object.keys(direct).length,
       Object.keys(scenes).length,
-    ]).toEqual([7, 10, 3, 2, 2, 4, 4]);
+    ]).toEqual([7, 10, 3, 4, 2, 4, 4]);
   });
 });
 
@@ -517,7 +524,9 @@ describe("the scope, counted", () => {
     // the note's read and the target's check. A link names an encounter or a
     // seat whether or not a player may read it, so it is the creator's from
     // the day it was declared, and `PlayerNote` has none.
-    expect(gated).toBe(113);
+    // A hundred and fourteen is `Recap.chronicle`, every night at once: the
+    // recap's gate over the list, from the day it was declared.
+    expect(gated).toBe(114);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -768,7 +777,9 @@ describe("the scope, counted", () => {
     // took one back, so a hundred and sixty. `Notes.setPinned` is the one
     // hundred and sixty-first, for `update`'s reason: a write whose reach is
     // `rowWritable`, which is already the creator predicate.
-    expect(ungated).toBe(161);
+    // `Recap.chronicleAsPlayer` is the one hundred and sixty-second, the
+    // player's half of the Chronicle's list, for `readAsPlayer`'s reason.
+    expect(ungated).toBe(162);
   });
 });
 
