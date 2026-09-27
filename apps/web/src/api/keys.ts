@@ -233,11 +233,14 @@ export const reads = {
   /**
    * What a night is assembled into.
    *
-   * Its one writer is keeping a night's summary Hob drafted (`hob/conversation.ts`),
-   * which lands on the session the recap carries. The web app writes no beat,
-   * and the three sources a recap is made of — the fights, the ticked prep,
-   * the read-aloud notes — are all written from screens that are not looking
-   * at a recap.
+   * Written from the Chronicle: a night's summary, title, spotlight and share
+   * switch land on the session the recap carries (the composer, `DmNight`,
+   * and keeping Hob's draft from the panel, `hob/conversation.ts`), and
+   * sharing or keeping a moment changes which of its beats a player's recap
+   * holds. Each of those also names `sessions`, which the Chronicle's one read
+   * and the Overview's *Last time* answer. The web app creates no beat, and
+   * the other sources — the fights, the ticked prep, the read-aloud notes —
+   * are written from screens that are not looking at a recap.
    */
   recap: (sessionId: SessionId): ReadKey => key`recap:${sessionId}`,
 

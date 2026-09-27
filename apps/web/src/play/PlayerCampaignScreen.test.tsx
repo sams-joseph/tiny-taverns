@@ -75,8 +75,20 @@ const cardOf = async (title: string): Promise<HTMLElement> => {
 };
 
 /** A table that has finished and shared a night: session 11, as a player is told it. */
+/**
+ * The nights with nothing written about them, for the cards that fall back to
+ * the night's beats and fights: the fixture's session 11 carries a summary,
+ * which *Last time* would lead with instead.
+ */
+const unwritten = sessions.map((row) => ({
+  ...row,
+  summary: null,
+  summaryOrigin: null,
+  summaryAssistantTurnId: null,
+}));
+
 const withLastNight = (over: object = {}) => {
-  server.routes.set(`GET ${base}/sessions`, { status: 200, body: sessions });
+  server.routes.set(`GET ${base}/sessions`, { status: 200, body: unwritten });
   server.routes.set(`GET ${base}/sessions/${session11.id}/recap/player`, {
     status: 200,
     body: { ...playerRecap11, ...over },
@@ -316,6 +328,26 @@ describe("the player Overview's cards", () => {
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveTextContent("Read the chronicle");
     expect(links[0]).toHaveAttribute("href", `${base}/chronicle`);
+  });
+
+  it("leads with the DM's summary of a shared night, when the DM wrote one", async () => {
+    const summary = "You crossed at dusk and paid the ferryman in salt, not coin.";
+    withLastNight();
+    // The player's list holds only shared nights, and the server sends a
+    // night's summary on it only for those.
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: sessions.map((row) =>
+        row.id === session11.id
+          ? { ...row, visibility: "shared", summary, summaryOrigin: "authored" }
+          : row,
+      ),
+    });
+    await renderScreen();
+    const card = await cardOf("Last time");
+
+    expect(within(card).getByText(summary)).toBeInTheDocument();
+    expect(within(card).queryByText(sharedBeat.body)).toBeNull();
   });
 
   it("tells a night with no shared beats by its fights, saying nothing of a monster's numbers", async () => {

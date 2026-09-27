@@ -89,7 +89,8 @@ describe("the nights", () => {
 
   it("draws no Spotlight, even over nights that name a seat", async () => {
     // The pointer is the player's to read on a shared night (the server
-    // nulls it for a seat they cannot see); the counts are the DM's.
+    // nulls it for a seat they cannot see), and their own party read names
+    // it on the night's card; the counts are the DM's.
     recordIs(
       playerChronicle.map((night) => ({
         ...night,
@@ -102,7 +103,6 @@ describe("the nights", () => {
     expect(screen.getByRole("list", { name: "Jump to" })).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
     expect(screen.queryByText(/in the spotlight/)).toBeNull();
-    expect(paths().some((path) => path.endsWith("/party"))).toBe(false);
   });
 
   it("clamps a shared night's summary on its closed card", async () => {

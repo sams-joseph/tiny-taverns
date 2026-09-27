@@ -296,6 +296,14 @@ export interface Call {
   readonly method: string;
   readonly pathname: string;
   readonly search: string;
+  /** The JSON a write sent, decoded; undefined for a read. */
+  readonly body?: unknown;
+}
+
+/** One server-sent event, as `POST …/hob/ask` streams it. */
+export interface Frame {
+  readonly event: string;
+  readonly data: unknown;
 }
 
 /**
@@ -340,10 +348,18 @@ export const fullChronicle = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/sessions/${session11Id}/recap`, { status: 200, body: recap11 }],
     [`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, { status: 200, body: recap12 }],
+    // A model is behind Hob, so the composer offers *Ask Hob to draft*.
+    [
+      `GET /campaigns/${campaignId}/hob`,
+      { status: 200, body: { available: true, model: "scripted", campaign: campaign.name } },
+    ],
   ]);
 
 export interface StubServer {
+  /** Keyed `METHOD /path`. A write with no route answers 404. */
   routes: Map<string, Answer>;
+  /** What `POST …/hob/ask` streams, in order, before closing. */
+  frames: Array<Frame>;
   readonly calls: Array<Call>;
   readonly reset: () => void;
 }
@@ -357,17 +373,46 @@ export interface StubServer {
 export const installChronicleServer = (): StubServer => {
   const server: StubServer = {
     routes: fullChronicle(),
+    frames: [],
     calls: [],
     reset: () => {
       server.routes = fullChronicle();
+      server.frames = [];
       server.calls.length = 0;
     },
   };
+  const encoder = new TextEncoder();
 
-  vi.stubGlobal("fetch", (url: string | URL) => {
+  vi.stubGlobal("fetch", (url: string | URL, init?: RequestInit) => {
     const { pathname, search } = new URL(String(url));
-    server.calls.push({ method: "GET", pathname, search });
-    const answer = server.routes.get(`GET ${pathname}`) ?? {
+    const method = init?.method ?? "GET";
+    const sent =
+      init?.body === undefined || init.body === null
+        ? undefined
+        : JSON.parse(
+            typeof init.body === "string"
+              ? init.body
+              : new TextDecoder().decode(init.body as Uint8Array),
+          );
+    server.calls.push({ method, pathname, search, body: sent });
+
+    if (method === "POST" && pathname.endsWith("/hob/ask")) {
+      const frames = server.frames;
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const frame of frames)
+            controller.enqueue(
+              encoder.encode(`event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`),
+            );
+          controller.close();
+        },
+      });
+      return Promise.resolve(
+        new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }),
+      );
+    }
+
+    const answer = server.routes.get(`${method} ${pathname}`) ?? {
       status: 404,
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     };

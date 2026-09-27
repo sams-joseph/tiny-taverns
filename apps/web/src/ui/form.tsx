@@ -93,11 +93,17 @@ export function VisibilityField({
   id,
   value,
   onChange,
+  label = "Players can see this",
   shared,
   hidden,
   disabled = false,
 }: {
   readonly id: string;
+  /**
+   * The question, when the row has a name at the table for it — a night is
+   * *shared with the table* rather than seen.
+   */
+  readonly label?: string;
   readonly value: Visibility;
   readonly onChange: (next: Visibility) => void;
   /** What being shared means for this row, in one clause. */
@@ -115,7 +121,7 @@ export function VisibilityField({
           disabled={disabled}
           onCheckedChange={(next) => onChange(next ? "shared" : "dm")}
         />
-        <Label htmlFor={id}>Players can see this</Label>
+        <Label htmlFor={id}>{label}</Label>
       </div>
       <span className="text-caption leading-body text-muted-foreground">
         {value === "shared" ? shared : hidden}

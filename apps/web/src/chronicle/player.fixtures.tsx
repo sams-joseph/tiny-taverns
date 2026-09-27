@@ -204,6 +204,8 @@ const sharedRecord = (): Map<string, Answer> =>
         ],
       },
     ],
+    // Nobody this player may see yet, so no night's spotlight has a name.
+    [`GET /campaigns/${campaignId}/party`, { status: 200, body: [] }],
     ...playerRecord(),
   ]);
 

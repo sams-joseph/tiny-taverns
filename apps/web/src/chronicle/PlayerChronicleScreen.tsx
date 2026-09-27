@@ -7,6 +7,7 @@ import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { useMemo } from "react";
 import { ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
+import { spotlightName } from "./entry";
 import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./nights";
 import { loadPlayerChronicle, sessionsOf, type PlayerChronicleView } from "./load";
 import { NightBody } from "./NightBody";
@@ -30,10 +31,19 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * this screen is one a player may make, and widening it would take a change on
  * the server — not a forgotten flag here.
  *
+ * ### What a shared night says
+ *
+ * Its title when the DM typed one, its date, the DM's summary and whose night
+ * it was, then the moments the DM shared and its encounters by kind.
+ * "Spotlight on X" names a seat only when this reader's own party read holds
+ * it; the server answers the pointer `null` for a seat they cannot see.
+ *
  * ### What it deliberately does not carry
  *
- * The DM-only box (its beats are not in this read at all), and a link on an
- * encounter chip: the encounter's page is the creator's.
+ * The DM-only box (its beats are not in this read at all), a link on an
+ * encounter chip (the encounter's page is the creator's), the Spotlight counts
+ * (the DM's balancing tool), and anything that writes: the composer, *Edit*,
+ * *Clear*, the share switches.
  */
 
 /** The campaign and the record a player may read, keyed on the campaign. */
@@ -41,6 +51,7 @@ const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(loadPlayerChronicle(campaignId), [
     reads.campaign(campaignId),
     reads.sessions(campaignId),
+    reads.party(campaignId),
   ]),
 );
 
@@ -111,6 +122,7 @@ function PlayerChronicle({
         <SessionEntry
           key={night.session.id}
           session={night.session}
+          spotlight={spotlightName(night.session, view.party)}
           open={open.isOpen(night.session.id)}
           onToggle={() => open.toggle(night.session.id)}
         >
