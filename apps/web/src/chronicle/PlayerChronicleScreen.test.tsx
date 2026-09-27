@@ -1,7 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { beat, sharedBeat } from "./chronicle.fixtures";
+import { seatId } from "../test/ids";
+import { beat, sessions, sharedBeat } from "./chronicle.fixtures";
 import {
   campaignId,
   installPlayerChronicleServer,
@@ -81,6 +82,22 @@ describe("the nights", () => {
         .getAllByRole("button")
         .map((row) => row.textContent),
     ).toEqual(["12Session 12", "11Session 11"]);
+  });
+
+  it("draws no Spotlight, even over nights that name a seat", async () => {
+    // The pointer is the player's to read on a shared night (the server
+    // nulls it for a seat they cannot see); the counts are the DM's.
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
+      status: 200,
+      body: sessions.map((session) => ({ ...session, spotlightSeatId: seatId })),
+    });
+    await renderPlayerChronicle();
+    await header(12);
+
+    expect(screen.getByRole("list", { name: "Jump to" })).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
+    expect(screen.queryByText(/in the spotlight/)).toBeNull();
+    expect(paths().some((path) => path.endsWith("/party"))).toBe(false);
   });
 
   it("opens the night `?session=` names", async () => {

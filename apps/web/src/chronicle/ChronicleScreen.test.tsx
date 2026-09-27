@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { character, characterSeat } from "../campaign/campaign.fixtures";
 import {
   beat,
   bridgeEncounterId,
@@ -8,7 +9,9 @@ import {
   installChronicleServer,
   recap12,
   renderChronicle,
+  session11,
   session11Id,
+  session12,
   session12Id,
   sharedBeat,
 } from "./chronicle.fixtures";
@@ -205,6 +208,72 @@ describe("jump to", () => {
   });
 });
 
+describe("the spotlight", () => {
+  const brannocSeatId = characterSeat.id;
+  const odoSeatId = "2b1f2a1e-0000-4000-8000-000000000964";
+  const retiredSeatId = "2b1f2a1e-0000-4000-8000-000000000965";
+
+  /** Brannoc and Odo at the table, and a night each for the table to count. */
+  const seatTheParty = (spots: readonly [string | null, string | null]) => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: [
+        { seat: { ...characterSeat, campaignId }, character },
+        {
+          seat: { ...characterSeat, campaignId, id: odoSeatId, displayName: "Odo" },
+          character: null,
+        },
+      ],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
+      status: 200,
+      body: [
+        { ...session12, spotlightSeatId: spots[0] },
+        { ...session11, spotlightSeatId: spots[1] },
+      ],
+    });
+  };
+
+  it("counts each seat's nights and names the one who has had the fewest", async () => {
+    seatTheParty([brannocSeatId, brannocSeatId]);
+    await renderChronicle();
+
+    const counts = await screen.findByRole("list", { name: "Spotlight" });
+    const rows = within(counts).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual(["Brannoc2", "Odo0"]);
+    // The fewest wear the accent and the rest the info colour — the semantic
+    // tokens, never the ramp steps the drawing named.
+    const fill = (row: HTMLElement) => row.querySelector("[data-slot=spotlight-fill]");
+    expect(fill(rows[0]!)).toHaveClass("bg-info");
+    expect(fill(rows[0]!)).toHaveStyle({ width: "100%" });
+    expect(fill(rows[1]!)).toHaveClass("bg-accent");
+    expect(fill(rows[1]!)).toHaveStyle({ width: "0%" });
+    expect(
+      screen.getByText(
+        "Odo has had the fewest sessions in the spotlight. Worth giving them a beat next time.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("marks nobody when the table is level", async () => {
+    seatTheParty([odoSeatId, brannocSeatId]);
+    await renderChronicle();
+
+    const counts = await screen.findByRole("list", { name: "Spotlight" });
+    expect(counts.querySelectorAll(".bg-accent")).toHaveLength(0);
+    expect(screen.queryByText(/fewest sessions in the spotlight/)).toBeNull();
+  });
+
+  it("is not drawn until a night names somebody still at the table", async () => {
+    seatTheParty([null, retiredSeatId]);
+    await renderChronicle();
+    await header(12);
+
+    expect(screen.getByRole("list", { name: "Jump to" })).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
+  });
+});
+
 describe("a campaign with no history at all", () => {
   it("is the state a new DM sees first, and it says what fills it", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [] });
@@ -220,8 +289,9 @@ describe("a campaign with no history at all", () => {
     expect(await screen.findByText("Nothing written down yet")).toBeInTheDocument();
     expect(screen.getByText(/every beat you jot/)).toBeInTheDocument();
     expect(screen.getByText("0 sessions")).toBeInTheDocument();
-    // No index over an empty list.
+    // No index over an empty list, and nothing to count.
     expect(screen.queryByRole("list", { name: "Jump to" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
   });
 });
 

@@ -13,7 +13,7 @@ import {
   type Answer,
 } from "../campaign/campaign.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
-import { fullChronicle } from "../chronicle/chronicle.fixtures";
+import { fullChronicle, session11, session12 } from "../chronicle/chronicle.fixtures";
 import { playerRecord } from "../chronicle/player.fixtures";
 import {
   brannocSheetSeat,
@@ -81,6 +81,15 @@ const creator = (): Map<string, Answer> => {
   // their prep, so a card's foot draws a hook and a secret.
   routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
   routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
+  // Each of the Chronicle's two nights was a different seat's, so its
+  // Spotlight draws four bars and names the two seats left behind.
+  routes.set(`GET /campaigns/${campaignId}/sessions`, {
+    status: 200,
+    body: [
+      { ...session12, spotlightSeatId: brannocSheetSeat.seat.id },
+      { ...session11, spotlightSeatId: sorrelSheetSeat.seat.id },
+    ],
+  });
   // The Notes tab's shelf, after the Chronicle's empty list, so the list and
   // the pane are measured over notes: a read-aloud, two paragraphs, a shared
   // one and an empty one. Grusk is linked to three encounters and three

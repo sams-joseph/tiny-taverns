@@ -10,14 +10,15 @@ import { summaryLine, useOpenNights } from "./nights";
 import { loadChronicleSpine, type ChronicleSpine } from "./load";
 import { RecapBody } from "./RecapBody";
 import { SessionEntry } from "./SessionEntry";
+import { SpotlightCard } from "./SpotlightCard";
 
 /**
  * The Chronicle — `Campaign Overview.dc.html`'s Chronicle tab against the real
  * API, **the DM's projection.**
  *
- * The nights, newest first, each a card that opens; *Jump to* beside them. The
- * page is centred at the Overview's width, like every campaign destination the
- * redesign draws, and scrolls with the window.
+ * The nights, newest first, each a card that opens; *Jump to* and the
+ * Spotlight beside them. The page is centred at the Overview's width, like
+ * every campaign destination the redesign draws, and scrolls with the window.
  *
  * ### What the drawing has that this does not, yet
  *
@@ -27,10 +28,9 @@ import { SessionEntry } from "./SessionEntry";
  * - **A night's written summary and its spotlight**, which the closed card
  *   clamps and the opened card leads with. The closed card carries the night's
  *   length in the summary's place (`SessionEntry`).
- * - **The draft card for writing a night up, *Expand all*, the Spotlight
- *   aside, acts and the story so far.** The draft and the story lead the main
- *   column, above the nights; *Expand all* is the header's action; the
- *   Spotlight goes under *Jump to*; acts group the nights.
+ * - **The draft card for writing a night up, *Expand all*, acts and the story
+ *   so far.** The draft and the story lead the main column, above the nights;
+ *   *Expand all* is the header's action; acts group the nights.
  * - **Level-ups, loot and who was met.** Nothing records any of them, and the
  *   maintainer chose to leave them out.
  *
@@ -111,7 +111,12 @@ function Chronicle({ slots }: { readonly slots: CampaignChromeSlots<ChronicleSpi
           <RecapBody campaignId={campaignId} sessionId={session.id} />
         </SessionEntry>
       ))}
-      aside={<JumpTo sessions={sessions} onJump={nights.jump} />}
+      aside={
+        <>
+          <JumpTo sessions={sessions} onJump={nights.jump} />
+          <SpotlightCard party={view.party} sessions={sessions} />
+        </>
+      }
     />
   );
 }
