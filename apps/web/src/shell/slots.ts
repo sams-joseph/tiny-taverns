@@ -29,3 +29,14 @@ export const TopBarSlot = createContext<HTMLElement | null>(null);
 export const ShowHob = createContext<(() => void) | undefined>(undefined);
 
 export const useShowHob = (): (() => void) | undefined => useContext(ShowHob);
+
+/**
+ * *Open the panel and ask this*, for a screen control that is a whole question
+ * — the Chronicle's *Ask Hob to draft* the story so far. The panel sends it once
+ * it can (`useHobPanel`'s `ask`), and what Hob offers lands in the panel like
+ * any other proposal, where only the reader's *Keep* writes it. `undefined`
+ * outside the persistent layout.
+ */
+export const AskHob = createContext<((text: string) => void) | undefined>(undefined);
+
+export const useAskHob = (): ((text: string) => void) | undefined => useContext(AskHob);

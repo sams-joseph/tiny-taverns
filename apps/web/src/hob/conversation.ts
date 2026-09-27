@@ -88,6 +88,8 @@ export interface HobConversation {
    * pauses to call a tool, which is a real gap with nothing on screen.
    */
   readonly thinking: boolean;
+  /** A question is in flight, and `send` refuses another until it lands. */
+  readonly asking: boolean;
   /**
    * What Hob is doing, while it is doing it — *"Searching the record…"*.
    *
@@ -675,6 +677,7 @@ export function useHobConversation(
   return {
     turns,
     thinking: asking && !writing,
+    asking,
     activity,
     savedArtifactIds: saved,
     context:

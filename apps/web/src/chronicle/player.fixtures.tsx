@@ -11,6 +11,7 @@ import {
   session11Id,
   session12Id,
   sessions,
+  keptStory,
   sharedBeat,
   type Answer,
   type Call,
@@ -149,6 +150,14 @@ export const playerRecap12 = {
   notes: [],
 };
 
+/** The kept story once its DM shared it, as `…/story/player` answers it. */
+export const sharedStory = {
+  text: keptStory.text,
+  previously: keptStory.previously,
+  afterSessionNumber: keptStory.afterSessionNumber,
+  updatedAt: keptStory.updatedAt,
+};
+
 /**
  * The whole record as `GET …/chronicle/player` answers it: the same nights as
  * the recaps above, with the same narrowing — the conversation told by its
@@ -183,6 +192,8 @@ export const playerRecord = (): Map<string, Answer> =>
       `GET /campaigns/${campaignId}/sessions/${session12Id}/recap/player`,
       { status: 200, body: playerRecap12 },
     ],
+    // The DM has shared no story so far, which a player cannot tell from none.
+    [`GET /campaigns/${campaignId}/story/player`, { status: 200, body: null }],
   ]);
 
 /** Two shared nights and the fight across both, as a player's reads answer them. */

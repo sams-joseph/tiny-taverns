@@ -41,6 +41,17 @@ export interface HobPanelState {
   readonly toggle: () => void;
   readonly close: () => void;
   readonly show: () => void;
+  /**
+   * Opens the panel and asks Hob this, for a screen control that is a question
+   * in its own right — the Chronicle's *Ask Hob to draft*. The question waits
+   * in `asked` until the conversation can hear it (`ScopedHob`); closing the
+   * panel first withdraws it.
+   */
+  readonly ask: (text: string) => void;
+  /** A question `ask` left for the conversation, not yet sent. */
+  readonly asked: string | undefined;
+  /** The conversation took `asked`, or it no longer applies. */
+  readonly forgetAsked: () => void;
 }
 
 export function useHobPanel({
@@ -50,6 +61,7 @@ export function useHobPanel({
   initialOpen = true,
 }: { readonly initialOpen?: boolean } = {}): HobPanelState {
   const [open, setOpen] = useState(initialOpen);
+  const [asked, setAsked] = useState<string | undefined>(undefined);
   const inline = !useIsMobile(HOB_INLINE_MIN);
 
   useEffect(() => {
@@ -58,17 +70,32 @@ export function useHobPanel({
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen((current) => !current);
+        setAsked(undefined);
         return;
       }
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setAsked(undefined);
+      }
     };
     globalThis.addEventListener("keydown", onKey);
     return () => globalThis.removeEventListener("keydown", onKey);
   }, []);
 
-  const toggle = useCallback(() => setOpen((current) => !current), []);
-  const close = useCallback(() => setOpen(false), []);
+  const toggle = useCallback(() => {
+    setOpen((current) => !current);
+    setAsked(undefined);
+  }, []);
+  const close = useCallback(() => {
+    setOpen(false);
+    setAsked(undefined);
+  }, []);
   const show = useCallback(() => setOpen(true), []);
+  const ask = useCallback((text: string) => {
+    setOpen(true);
+    setAsked(text);
+  }, []);
+  const forgetAsked = useCallback(() => setAsked(undefined), []);
 
-  return { open, inline, toggle, close, show };
+  return { open, inline, toggle, close, show, ask, asked, forgetAsked };
 }

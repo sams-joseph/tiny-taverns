@@ -210,6 +210,23 @@ describe("useHobPanel", () => {
     expect(result.current.open).toBe(true);
   });
 
+  it("opens on a screen's question and holds it for the conversation, until closed", () => {
+    const { result } = renderHook(() => useHobPanel({ initialOpen: false }));
+
+    act(() => result.current.ask("Draft the story so far."));
+    expect(result.current.open).toBe(true);
+    expect(result.current.asked).toBe("Draft the story so far.");
+
+    act(() => result.current.forgetAsked());
+    expect(result.current.asked).toBeUndefined();
+
+    // Closing before the panel could send it withdraws the question.
+    act(() => result.current.ask("Draft the story so far."));
+    act(() => result.current.close());
+    expect(result.current.open).toBe(false);
+    expect(result.current.asked).toBeUndefined();
+  });
+
   it("leaves an Escape another overlay already claimed alone", () => {
     const { result } = renderHook(() => useHobPanel());
 
