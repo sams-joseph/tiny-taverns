@@ -173,6 +173,8 @@ export const playerRecord = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
     [`GET /campaigns/${campaignId}/chronicle/player`, { status: 200, body: playerChronicle }],
+    // The DM kept their one act back, so a player is answered none.
+    [`GET /campaigns/${campaignId}/acts`, { status: 200, body: [] }],
     [
       `GET /campaigns/${campaignId}/sessions/${session11Id}/recap/player`,
       { status: 200, body: playerRecap11 },

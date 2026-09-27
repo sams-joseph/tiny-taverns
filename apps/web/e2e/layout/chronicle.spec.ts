@@ -15,7 +15,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * session 11 holds a written summary longer than two lines at any width, a kept
  * beat, a shared one, and a conversation and a fight; session 12 is still open
  * with no summary, so the composer card for writing it up leads the main
- * column above the nights, over the seated party.
+ * column above the nights, over the seated party. Session 12 starts the one
+ * act, and session 11 is older than it.
  */
 
 const chronicle = screens.find((screen) => screen.name === "chronicle")!;
@@ -202,6 +203,26 @@ for (const width of WIDTHS) {
         });
       }
 
+      await test.step("an act's heading sits over its nights, its menu inside the frame", async () => {
+        const act = page.getByRole("region", { name: "Act II · The salt road" });
+        const heading = await box(act.getByRole("heading", { level: 2 }));
+        const menu = await box(
+          act.getByRole("button", { name: "Act actions: Act II · The salt road" }),
+        );
+        const nights = await box(newest);
+        expect
+          .soft(heading.y + heading.height, "heading above its night")
+          .toBeLessThanOrEqual(nights.y + 0.5);
+        expect.soft(heading.x, "heading left").toBeGreaterThanOrEqual(nights.x - 0.5);
+        expect
+          .soft(menu.x + menu.width, "menu right")
+          .toBeLessThanOrEqual(nights.x + nights.width + 0.5);
+        // Session 11 is older than every act, so nothing heads it.
+        expect
+          .soft(await page.getByRole("region").filter({ has: older }).count(), "older night's act")
+          .toBe(0);
+      });
+
       await test.step("an opened night's chips wrap inside it without clipping", async () => {
         const header = older.getByRole("button", { name: /Session 11/ });
         if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
@@ -224,6 +245,17 @@ for (const width of WIDTHS) {
           expect.soft(chip.clipped, "a chip clips its name").toBe(false);
           expect.soft(chip.right, "chip right").toBeLessThanOrEqual(chip.edge + 0.5);
         }
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
+
+      await test.step("starting an act inside a night fits the night", async () => {
+        await older.getByRole("button", { name: "Start a new act here" }).click();
+        const field = await box(older.getByLabel("Act title"));
+        const start = await box(older.getByRole("button", { name: "Start act" }));
+        const card = await box(older);
+        expect.soft(field.x + field.width, "field right").toBeLessThanOrEqual(card.x + card.width);
+        expect.soft(start.x + start.width, "button right").toBeLessThanOrEqual(card.x + card.width);
         const { scrollWidth, clientWidth } = await app.widths();
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
       });

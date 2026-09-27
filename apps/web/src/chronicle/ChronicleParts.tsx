@@ -1,11 +1,13 @@
 import type { Session, SessionId } from "@taverns/api";
 import { Button, Card, Icon, SectionHeading } from "@taverns/ui";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import { rangeOf, type ActGroup } from "./acts";
 
 /**
  * What the DM's Chronicle and the player's have in common beyond the night
- * card and its body: the page's two columns, *Jump to* and *Expand all* (and,
- * in `nights.ts`, which nights are open and the header's summary line). Each
+ * card and its body: the page's two columns, the nights under their acts,
+ * *Jump to* and *Expand all* (and, in `nights.ts`, which nights are open and
+ * the header's summary line; in `acts.ts`, which act a night falls in). Each
  * screen supplies its own read of the record; none of the layout is decided
  * twice.
  */
@@ -37,7 +39,7 @@ export function ChronicleColumns({
 }) {
   return (
     <div className="flex flex-wrap items-start gap-6">
-      <div className="flex min-w-0 shrink grow-3 basis-overview-main flex-col gap-3">{main}</div>
+      <div className="flex min-w-0 shrink grow-3 basis-overview-main flex-col gap-6">{main}</div>
       <aside className="hidden max-w-aside min-w-0 shrink grow basis-overview-aside flex-col gap-5 @4xl:flex">
         {aside}
       </aside>
@@ -46,17 +48,67 @@ export function ChronicleColumns({
 }
 
 /**
- * *Jump to*: one row per night, which opens it and brings it under the chrome.
+ * The nights, each act's under its heading: the title as the DM typed it and
+ * the span of nights it holds (`rangeOf`). Nights older than every act have no
+ * heading, so a campaign with no acts reads as one list.
+ *
+ * The heading is an `h2` over the nights' `h3`s. What sits beside it is the
+ * screen's: the DM's commands on the act, and nothing on a player's.
+ */
+export function ActSections({
+  groups,
+  actions,
+  night,
+}: {
+  readonly groups: ReadonlyArray<ActGroup>;
+  /** Drawn at the end of an act's heading. */
+  readonly actions?: (
+    group: ActGroup & { readonly act: NonNullable<ActGroup["act"]> },
+  ) => ReactNode;
+  readonly night: (session: Session) => ReactNode;
+}) {
+  return groups.map((group) => {
+    const act = group.act;
+    return (
+      <section
+        key={act?.id ?? "before-acts"}
+        aria-label={act?.title}
+        className="flex flex-col gap-3"
+      >
+        {act !== undefined && (
+          <div className="flex min-h-control-sm items-center gap-2.5 px-1">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+              <SectionHeading as="h2" size="title" className="min-w-0 break-words">
+                {act.title}
+              </SectionHeading>
+              <span className="text-label leading-snug text-muted-foreground">
+                {rangeOf(group.sessions)}
+              </span>
+            </div>
+            {actions?.({ ...group, act })}
+          </div>
+        )}
+        {group.sessions.map((session) => (
+          <Fragment key={session.id}>{night(session)}</Fragment>
+        ))}
+      </section>
+    );
+  });
+}
+
+/**
+ * *Jump to*: one row per night, under its act's title, which opens it and
+ * brings it under the chrome.
  *
  * **Unbounded.** The drawing caps the list at 360px and scrolls it inside
  * itself; a page here scrolls with the window and nothing else, and a long
  * record makes the aside as long as it needs to be.
  */
 export function JumpTo({
-  sessions,
+  groups,
   onJump,
 }: {
-  readonly sessions: ReadonlyArray<Session>;
+  readonly groups: ReadonlyArray<ActGroup>;
   readonly onJump: (id: SessionId) => void;
 }) {
   return (
@@ -65,24 +117,48 @@ export function JumpTo({
         <SectionHeading size="title">Jump to</SectionHeading>
       </div>
       <ul aria-label="Jump to" className="m-0 flex list-none flex-col p-0 py-1.5">
-        {sessions.map((session) => (
-          <li key={session.id}>
-            <button
-              type="button"
-              onClick={() => onJump(session.id)}
-              className="flex min-h-row w-full cursor-pointer items-center gap-2.5 px-card py-1.5 text-left outline-none transition-control hover:bg-surface-raised focus-visible:ring-focus"
-            >
-              <span className="w-6 shrink-0 font-mono text-mono leading-none font-medium text-faint">
-                {session.number}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-label leading-snug font-medium text-foreground">
-                {session.title ?? `Session ${String(session.number)}`}
-              </span>
-            </button>
-          </li>
+        {groups.map((group) => (
+          <Fragment key={group.act?.id ?? "before-acts"}>
+            {group.act !== undefined && (
+              <li
+                data-slot="jump-act"
+                className="truncate px-card pt-2.5 pb-1 text-caption leading-none font-medium text-muted-foreground"
+              >
+                {group.act.title}
+              </li>
+            )}
+            {group.sessions.map((session) => (
+              <li key={session.id}>
+                <JumpRow session={session} onJump={onJump} />
+              </li>
+            ))}
+          </Fragment>
         ))}
       </ul>
     </Card>
+  );
+}
+
+function JumpRow({
+  session,
+  onJump,
+}: {
+  readonly session: Session;
+  readonly onJump: (id: SessionId) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onJump(session.id)}
+      className="flex min-h-row w-full cursor-pointer items-center gap-2.5 px-card py-1.5 text-left outline-none transition-control hover:bg-surface-raised focus-visible:ring-focus"
+    >
+      <span className="w-6 shrink-0 font-mono text-mono leading-none font-medium text-faint">
+        {session.number}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-label leading-snug font-medium text-foreground">
+        {session.title ?? `Session ${String(session.number)}`}
+      </span>
+    </button>
   );
 }
 

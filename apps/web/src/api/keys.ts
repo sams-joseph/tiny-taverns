@@ -156,6 +156,14 @@ export const reads = {
    */
   story: (campaignId: CampaignId): ReadKey => key`story:${campaignId}`,
 
+  /**
+   * The campaign's acts — the creator's every act and a player's shared ones,
+   * two answers from one path and so one key. Its own key rather than
+   * `sessions`': an act names a night by its number, and starting or renaming
+   * one changes no night.
+   */
+  acts: (campaignId: CampaignId): ReadKey => key`acts:${campaignId}`,
+
   /** Invitations that grant a seat at one campaign. */
   campaignInvites: (campaignId: CampaignId): ReadKey => key`campaign-invites:${campaignId}`,
 
