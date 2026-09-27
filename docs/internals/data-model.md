@@ -83,6 +83,10 @@ The one survivor that pointed back into the campaign is a character a player kep
 
 A night keeps two things beside its detail (`0070_session_entry.ts`). `session.summary` is the DM's few sentences about it, read above the recap and never in place of it: the recap stays a view over retained detail, beats word for word, so the summary cannot become the only record. It carries its own provenance, `summary_origin` and `summary_assistant_turn_id`, because `session.origin` says where the night came from, and a night is not Hob's because its summary was drafted by Hob. The checks tie the three together: origin set exactly when the summary is, `assistant` exactly when the turn is. A DM's first write is `authored`, keeping Hob's draft (`Proposals.accept`, through `Sessions.update`) is `assistant` with the turn, and an edit keeps whichever it had, as an edited note does. `session.spotlight_seat_id` names whose night it was by the composite key `(spotlight_seat_id, campaign_id)`, so only a seat of the same campaign can be named, and a deleted seat clears the pointer alone (`set null (spotlight_seat_id)`).
 
+## Acts
+
+`campaign_act` (`0071_campaign_act.ts`) is a title and the number of the night it starts at; its end is the next act's start and which nights it holds is arithmetic over `session.number`, so nothing stores an end or a membership that could disagree. The start is a number, not a key to a `session` row: a renumbered or deleted night must not move the act or take the DM's title with it, and a start at a gap groups as before. `Acts.create` requires the night to exist at the moment an act is started, because starting one from inside a night is the only way the Chronicle makes one; an act does not move afterwards. It is campaign content with the whole tail: a player lists only shared acts (`rowReadable`), and a shared act tells them its title and a night's number, nothing of that night. No toolkit writes one and search does not index it.
+
 ## The migration ledger
 
 - Forward only. `effect/unstable/sql/Migrator` has no down concept; a mistake is a new migration.

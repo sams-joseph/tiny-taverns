@@ -40,6 +40,7 @@ import { Campaigns } from "./repo/Campaigns.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
 import { SeatPreps } from "./repo/SeatPrep.js";
+import { Acts } from "./repo/Acts.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -494,6 +495,7 @@ export const servicesOver = <E>(
   | Recap
   | Search
   | SeatPreps
+  | Acts
   | SessionEvents
   | Sessions
   | Spells,
@@ -530,6 +532,9 @@ export const servicesOver = <E>(
     // `CampaignCreatorActor` proof, and only the handlers hold it — no toolkit
     // has a prep tool, so a secret never reaches a model.
     SeatPreps.layer,
+    // A campaign's acts on the Chronicle: the list is actor-scoped, the writes
+    // take the creator proof, and no toolkit has an act tool.
+    Acts.layer,
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -792,6 +797,7 @@ export const applicationOver = <E>(
     | Recap
     | Search
     | SeatPreps
+    | Acts
     | SessionEvents
     | Sessions
     | Spells,

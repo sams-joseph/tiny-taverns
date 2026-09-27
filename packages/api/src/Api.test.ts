@@ -4,6 +4,7 @@ import { Authorization } from "./Actor.js";
 import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
+import { CampaignAct, CampaignActCreate } from "./CampaignAct.js";
 import { Character, CharacterOwnCreate } from "./Character.js";
 import { CampaignInvite, InvitePreview, InviteRedeemed } from "./Invite.js";
 import { CampaignCharacter, PartyJoin } from "./Party.js";
@@ -279,6 +280,9 @@ describe("the API declaration", () => {
 
   it("declares the API groups the product has today, and no more", () => {
     expect(groups.map((group) => group.identifier).sort()).toEqual([
+      // A campaign's acts: named runs of its nights on the Chronicle. The
+      // creator's to write; a player lists the shared ones.
+      "acts",
       // An encounter's battle map: the creator's alone, under the encounter.
       "battleMaps",
       "beats",
@@ -367,6 +371,7 @@ describe("every content schema", () => {
     Beat,
     Campaign,
     Session,
+    CampaignAct,
     // The seat, not the character: under the continuity decision the shared
     // `Character` deliberately has no `visibility` — who at a *table* may see
     // it is the seat's question, and the seat carries the whole tail. The
@@ -438,6 +443,7 @@ describe("every content schema", () => {
     const creates = {
       CampaignCreate,
       SessionCreate,
+      CampaignActCreate,
       CharacterOwnCreate,
       // The seat's create: no visibility field at all, so the `dm` default is
       // the only possible answer — the strongest form of this test's property.
@@ -463,6 +469,7 @@ describe("every content schema", () => {
     const minimal: Record<string, Record<string, unknown>> = {
       CampaignCreate: { name: "x" },
       SessionCreate: { number: 1, title: "t" },
+      CampaignActCreate: { title: "The salt road", firstSessionNumber: 7 },
       CharacterOwnCreate: { name: "x" },
       PartyJoin: { characterId: "2b1f2a1e-0000-4000-8000-00000000c0de" },
       NoteCreate: { title: "x" },

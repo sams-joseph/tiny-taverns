@@ -5,6 +5,7 @@ export * from "./Api.js";
 export * from "./BattleMap.js";
 export * from "./Beat.js";
 export * from "./Campaign.js";
+export * from "./CampaignAct.js";
 export * from "./CampaignImage.js";
 export * from "./Character.js";
 export * from "./CharacterOption.js";

@@ -526,7 +526,10 @@ describe("the scope, counted", () => {
     // the day it was declared, and `PlayerNote` has none.
     // A hundred and fourteen is `Recap.chronicle`, every night at once: the
     // recap's gate over the list, from the day it was declared.
-    expect(gated).toBe(114);
+    // A hundred and fifteen to seventeen are `Acts.create`, `update` and
+    // `remove`: starting, renaming, sharing and removing an act on the
+    // Chronicle are the creator's acts, gated from the day declared.
+    expect(gated).toBe(117);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -779,7 +782,10 @@ describe("the scope, counted", () => {
     // `rowWritable`, which is already the creator predicate.
     // `Recap.chronicleAsPlayer` is the one hundred and sixty-second, the
     // player's half of the Chronicle's list, for `readAsPlayer`'s reason.
-    expect(ungated).toBe(162);
+    // `Acts.list` is the one hundred and sixty-third, for `Party`'s reason:
+    // the creator and a player read the same `CampaignAct`, and what narrows a
+    // player's answer is the act's own Share switch through `rowReadable`.
+    expect(ungated).toBe(163);
   });
 });
 

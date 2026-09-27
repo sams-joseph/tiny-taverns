@@ -29,6 +29,7 @@ import { Groups } from "./repo/Groups.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
 import { SeatPreps } from "./repo/SeatPrep.js";
+import { Acts } from "./repo/Acts.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -436,6 +437,31 @@ const SessionsLive = HttpApiBuilder.group(
         sessions.update(params.campaignId, params.sessionId, payload),
       )
       .handle("remove", ({ params }) => sessions.remove(params.campaignId, params.sessionId));
+  }),
+);
+
+/**
+ * A campaign's acts. The list is the actor's own read, so a player gets the
+ * shared ones; starting, renaming, sharing and removing one are the creator's,
+ * behind the proof, so anybody else is `NotFound` before a row is touched.
+ */
+const ActsLive = HttpApiBuilder.group(
+  TavernsApi,
+  "acts",
+  Effect.fnUntraced(function* (handlers) {
+    const acts = yield* Acts;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("list", ({ params }) => acts.list(params.campaignId))
+      .handle("create", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => acts.create(creator, payload)),
+      )
+      .handle("update", ({ params, payload }) =>
+        asDm(params.campaignId, (creator) => acts.update(creator, params.actId, payload)),
+      )
+      .handle("remove", ({ params }) =>
+        asDm(params.campaignId, (creator) => acts.remove(creator, params.actId)),
+      );
   }),
 );
 
@@ -1688,6 +1714,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     MembersLive,
     CampaignInvitesLive,
     SessionsLive,
+    ActsLive,
     PartyLive,
     SeatPrepLive,
     NotesLive,

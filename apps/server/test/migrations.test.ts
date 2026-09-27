@@ -178,6 +178,7 @@ describe("migrations", () => {
       "battle_map_image",
       "beat",
       "campaign",
+      "campaign_act",
       "campaign_character",
       "campaign_character_prep",
       "campaign_image",
@@ -343,6 +344,7 @@ describe("migrations", () => {
       { migration_id: 68, name: "note_category_pin" },
       { migration_id: 69, name: "note_links" },
       { migration_id: 70, name: "session_entry" },
+      { migration_id: 71, name: "campaign_act" },
     ]);
   }, 60_000);
 
@@ -422,6 +424,7 @@ describe("migrations", () => {
       { migration_id: 68, name: "note_category_pin" },
       { migration_id: 69, name: "note_links" },
       { migration_id: 70, name: "session_entry" },
+      { migration_id: 71, name: "campaign_act" },
     ]);
   }, 60_000);
 });

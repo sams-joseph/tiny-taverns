@@ -213,6 +213,9 @@ describe("every content-bearing table", () => {
       "assistant_turn",
       "beat",
       "campaign",
+      // A named run of a campaign's nights on the Chronicle: the DM's prose,
+      // shared with the table only when they say so. See 0071_campaign_act.ts.
+      "campaign_act",
       // The seat: a campaign's join to a shared account-owned character. It
       // is content — the table's word for a character, gated by its own
       // visibility, and a seat can be the assistant's the day a drafted

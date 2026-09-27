@@ -22,6 +22,10 @@ export type CampaignId = typeof CampaignId.Type;
 export const SessionId = id("SessionId");
 export type SessionId = typeof SessionId.Type;
 
+/** A named run of a campaign's nights on the Chronicle (`campaign_act`). */
+export const CampaignActId = id("CampaignActId");
+export type CampaignActId = typeof CampaignActId.Type;
+
 export const CharacterId = id("CharacterId");
 export type CharacterId = typeof CharacterId.Type;
 

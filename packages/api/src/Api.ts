@@ -5,6 +5,7 @@ import { Authorization } from "./Actor.js";
 import { BattleMap, BattleMapUpdate, EncounterRunBoard } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
+import { CampaignAct, CampaignActCreate, CampaignActUpdate } from "./CampaignAct.js";
 import {
   Character,
   CharacterDamage,
@@ -121,6 +122,7 @@ import {
   AssistantThreadId,
   AssistantTurnId,
   BeatId,
+  CampaignActId,
   CampaignCharacterId,
   CampaignId,
   CharacterId,
@@ -1020,6 +1022,44 @@ class SessionsGroup extends HttpApiGroup.make("sessions")
     }),
   )
   .prefix("/campaigns/:campaignId/sessions")
+  .middleware(Authorization) {}
+
+/**
+ * A campaign's acts: named runs of its nights on the Chronicle, each starting
+ * at a night (`CampaignAct.ts`).
+ *
+ * The list answers the creator every act and a player only the shared ones, in
+ * the same shape, oldest start first. Starting, renaming, sharing and removing
+ * an act are the creator's alone: anybody else is the ordinary `NotFound`, an
+ * act at a night that does not exist is `NotFound` for the night, and a second
+ * act at a night that already starts one is `Conflict`.
+ */
+class ActsGroup extends HttpApiGroup.make("acts")
+  .add(
+    HttpApiEndpoint.get("list", "/", {
+      params: { campaignId: CampaignId },
+      success: Schema.Array(CampaignAct),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("create", "/", {
+      params: { campaignId: CampaignId },
+      payload: CampaignActCreate,
+      success: CampaignAct,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.patch("update", "/:actId", {
+      params: { campaignId: CampaignId, actId: CampaignActId },
+      payload: CampaignActUpdate,
+      success: CampaignAct,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/:actId", {
+      params: { campaignId: CampaignId, actId: CampaignActId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId/acts")
   .middleware(Authorization) {}
 
 /**
@@ -2932,6 +2972,7 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(MembersGroup)
   .add(CampaignInvitesGroup)
   .add(SessionsGroup)
+  .add(ActsGroup)
   .add(PartyGroup)
   .add(SeatPrepGroup)
   .add(NotesGroup)

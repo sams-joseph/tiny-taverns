@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
@@ -290,6 +291,7 @@ describe("the reach seam, enforced rather than asserted", () => {
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(
     Accounts.layer,
+    Acts.layer,
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
     Groups.layer,
@@ -542,6 +544,9 @@ const makeFixture = Effect.gen(function* () {
   `;
 
   const asDm = yield* as(dmOf(campaign.id));
+  yield* Effect.flatMap(Acts, (acts) =>
+    acts.create(asDm, { title: "The salt road", firstSessionNumber: 12 }),
+  ).pipe(Effect.orDie);
   const run = yield* as(runs.start(asDm, session.id, { encounterId: encounter.id }));
   const croaker = yield* as(
     combatants.create(asDm, session.id, run.id, { displayName: "Croaker 1" }),
@@ -647,6 +652,7 @@ const READS: Record<
   ) => Effect.Effect<
     ReadonlyArray<unknown>,
     { readonly _tag: string },
+    | Acts
     | BattleMaps
     | Beats
     | Campaigns
@@ -685,6 +691,7 @@ const READS: Record<
 > = {
   campaign: () => Effect.flatMap(Campaigns, (r) => r.list),
   session: (f) => Effect.flatMap(Sessions, (r) => r.list(f.campaign.id)),
+  campaign_act: (f) => Effect.flatMap(Acts, (r) => r.list(f.campaign.id)),
   // `character` left the campaign: it is account-owned and top-level, so its
   // one read is the owner's `mine` and a stranger's honest answer is an empty
   // list rather than a 404 about a campaign the read never names. What a
