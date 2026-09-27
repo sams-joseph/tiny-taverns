@@ -489,7 +489,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
               <div className="flex gap-3">
                 <Icon name="sparkles" size={18} className="mt-0.5 shrink-0 text-accent-ink" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-body-m leading-body text-foreground">
+                  <p className="text-body leading-body text-foreground">
                     Who are they? A few sentences is plenty — where they are from, what they are
                     good at, what they will not do.
                   </p>

@@ -181,7 +181,7 @@ export function DraftCard({
         <SheetSection title="Story">
           <div className="flex flex-col gap-4">
             {sheet.notes !== "" && (
-              <p className="font-display text-body-m leading-body whitespace-pre-wrap text-foreground">
+              <p className="font-display text-body leading-body whitespace-pre-wrap text-foreground">
                 {sheet.notes}
               </p>
             )}

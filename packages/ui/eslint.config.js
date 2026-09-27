@@ -1,9 +1,11 @@
 import designSystem from "@taverns/eslint-config/design-system";
 import react from "@taverns/eslint-config/react";
+import shadcn from "@taverns/eslint-config/shadcn";
 
 export default [
   ...react,
   ...designSystem,
+  ...shadcn,
   {
     files: ["src/components/ui/*.tsx"],
     rules: {

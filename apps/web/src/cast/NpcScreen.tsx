@@ -453,7 +453,7 @@ function AwarenessRow({
   };
 
   return (
-    <div className="rounded-card border border-subtle bg-surface-card p-3">
+    <div className="rounded-card border border-hairline bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
@@ -654,7 +654,7 @@ function ProposalRow({ npc, proposal }: { readonly npc: Npc; readonly proposal: 
   ];
   const content = proposalContent(proposal.content);
   return (
-    <div className="rounded-card border border-subtle bg-surface-card p-3">
+    <div className="rounded-card border border-hairline bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-micro leading-snug font-medium tracking-caps text-faint uppercase">
@@ -827,7 +827,7 @@ function KnowledgePanel({
             <Field label="Source kind" htmlFor="npc-knowledge-source-kind">
               <select
                 id="npc-knowledge-source-kind"
-                className="h-10 rounded-control border border-subtle bg-surface-raised px-3 text-body-s text-foreground"
+                className="h-10 rounded-control border border-hairline bg-surface-raised px-3 text-body-s text-foreground"
                 value={sourceKind}
                 onChange={(event) =>
                   setSourceKind(event.target.value as NpcKnowledgeFact["sourceKind"])
@@ -878,7 +878,7 @@ function KnowledgeRow({ npc, fact }: { readonly npc: Npc; readonly fact: NpcKnow
       [reads.npcKnowledge(npc.id), reads.npcRehearsal(npc.id)],
     );
   return (
-    <div className="rounded-card border border-subtle bg-surface-card p-3">
+    <div className="rounded-card border border-hairline bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
@@ -1039,7 +1039,7 @@ function MemoryRow({ npc, memory }: { readonly npc: Npc; readonly memory: NpcMem
   const params = { campaignId: npc.campaignId, npcId: npc.id, memoryId: memory.id };
   const invalidate = [reads.npcMemories(npc.id), reads.npcRehearsal(npc.id)];
   return (
-    <div className="rounded-card border border-subtle bg-surface-card p-3">
+    <div className="rounded-card border border-hairline bg-surface-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">

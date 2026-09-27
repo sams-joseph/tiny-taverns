@@ -616,7 +616,7 @@ function HobSpendsCard({
                   <p className="text-body-s font-semibold leading-body text-foreground">
                     {update.characterName} spent {spent} {update.resourceName}
                   </p>
-                  <p className="text-body-xs leading-body text-muted-foreground">
+                  <p className="text-caption leading-body text-muted-foreground">
                     {left} of {update.resourceMax} left
                     {update.undoneAt === null ? "" : " · undone"}
                   </p>

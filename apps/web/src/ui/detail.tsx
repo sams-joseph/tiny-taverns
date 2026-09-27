@@ -65,7 +65,7 @@ export interface DetailFact {
 /** The label/value grid every reader draws its numbers with. */
 export function DetailFacts({ facts }: { readonly facts: ReadonlyArray<DetailFact> }) {
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-label leading-label text-muted-foreground">
+    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-label text-muted-foreground">
       {facts.map((fact) => (
         <div key={fact.label} className="col-span-2 grid grid-cols-subgrid">
           <dt>{fact.label}</dt>

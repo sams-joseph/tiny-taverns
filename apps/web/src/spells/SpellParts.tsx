@@ -85,7 +85,7 @@ export function SpellGrid({
             </div>
           </CardHeader>
           <CardContent className="gap-4">
-            <div className="grid grid-cols-2 gap-2 text-label leading-label text-muted-foreground">
+            <div className="grid grid-cols-2 gap-2 text-label text-muted-foreground">
               <span>Casting</span>
               <span className="text-heading">{spell.castingTime}</span>
               <span>Range</span>

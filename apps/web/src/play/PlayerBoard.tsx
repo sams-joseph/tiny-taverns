@@ -76,6 +76,7 @@ export function PlayerBattleMap({
                 "absolute transition-[left,top] duration-(--dur-base) ease-out",
                 down && "opacity-45",
               )}
+              // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
               style={percentOf(cellRect(map, token.position), plane)}
             >
               <TokenFace

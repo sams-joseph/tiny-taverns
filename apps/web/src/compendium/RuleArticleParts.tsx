@@ -90,7 +90,7 @@ export function RuleArticleGrid({
         return (
           <article
             key={article.id}
-            className="flex min-w-0 flex-col gap-3 rounded-card border border-subtle bg-surface-card p-4 shadow-1"
+            className="flex min-w-0 flex-col gap-3 rounded-card border border-hairline bg-surface-card p-4 shadow-1"
           >
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
@@ -189,7 +189,7 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
                 key={index}
                 className={cn(
                   block.depth <= 2
-                    ? "text-title leading-title font-semibold text-heading"
+                    ? "text-title font-semibold text-heading"
                     : "text-body-l leading-body font-semibold text-heading",
                 )}
               >
@@ -216,12 +216,15 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
           }
           case "table":
             return (
-              <div key={index} className="overflow-x-auto rounded-control border border-subtle">
+              <div key={index} className="overflow-x-auto rounded-control border border-hairline">
                 <table className="w-full min-w-max border-collapse text-left text-caption leading-body">
                   <thead className="bg-surface-raised text-heading">
                     <tr>
                       {block.columns.map((column) => (
-                        <th key={column} className="border-b border-subtle px-3 py-2 font-semibold">
+                        <th
+                          key={column}
+                          className="border-b border-hairline px-3 py-2 font-semibold"
+                        >
                           {column}
                         </th>
                       ))}
@@ -231,7 +234,7 @@ export function RuleBlocks({ blocks }: { readonly blocks: ReadonlyArray<RuleBloc
                     {block.rows.map((row, rowIndex) => (
                       <tr key={rowIndex} className="odd:bg-surface-card even:bg-surface-raised/40">
                         {block.columns.map((_, cellIndex) => (
-                          <td key={cellIndex} className="border-t border-subtle px-3 py-2">
+                          <td key={cellIndex} className="border-t border-hairline px-3 py-2">
                             {inline(row[cellIndex] ?? "")}
                           </td>
                         ))}
@@ -305,7 +308,7 @@ function RuleArticleDetailView({
               // `first:` covers the article whose whole intro was the heading
               // the title already said — without it the rule floats under
               // nothing at the top of the body.
-              className="flex flex-col gap-3 border-t border-subtle pt-5 first:border-t-0 first:pt-0"
+              className="flex flex-col gap-3 border-t border-hairline pt-5 first:border-t-0 first:pt-0"
             >
               <SectionHeading as="h3" size="title">
                 {section.title}
@@ -432,7 +435,7 @@ export function RuleArticleForm({
           {sections.map((section, index) => (
             <div
               key={index}
-              className="flex flex-col gap-3 rounded-card border border-subtle bg-surface-raised p-3"
+              className="flex flex-col gap-3 rounded-card border border-hairline bg-surface-raised p-3"
             >
               <div className="flex items-center gap-2">
                 <Input

@@ -161,7 +161,7 @@ export function NpcFollowUpScreen() {
 
 function CountBox({ label, value }: { readonly label: string; readonly value: number }) {
   return (
-    <div className="rounded-card border border-subtle bg-surface-card p-3">
+    <div className="rounded-card border border-hairline bg-surface-card p-3">
       <p className="text-title font-semibold text-heading">{value}</p>
       <p className="text-caption leading-snug text-muted-foreground">{label}</p>
     </div>
@@ -196,7 +196,7 @@ function FollowUpShell({
           </p>
         </div>
       </div>
-      <div className="rounded-card border border-subtle bg-surface-sunken p-3">
+      <div className="rounded-card border border-hairline bg-surface-sunken p-3">
         <p className="text-body-s leading-body font-medium text-heading">{title}</p>
         {body !== "" && (
           <p className="mt-2 text-body-s leading-body whitespace-pre-wrap text-foreground">
