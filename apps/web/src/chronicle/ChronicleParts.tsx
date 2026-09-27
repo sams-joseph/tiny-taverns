@@ -1,11 +1,11 @@
 import type { Session, SessionId } from "@taverns/api";
-import { Card, SectionHeading } from "@taverns/ui";
+import { Button, Card, Icon, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 
 /**
  * What the DM's Chronicle and the player's have in common beyond the night
- * card: the page's two columns and *Jump to* (and, in `nights.ts`, which
- * nights are open and the header's summary line). Each screen supplies its own
+ * card: the page's two columns, *Jump to* and *Expand all* (and, in
+ * `nights.ts`, which nights are open and the header's summary line). Each screen supplies its own
  * reads and its own body (`RecapBody`, `PlayerRecapBody`); none of the layout
  * is decided twice.
  */
@@ -83,5 +83,25 @@ export function JumpTo({
         ))}
       </ul>
     </Card>
+  );
+}
+
+/**
+ * The header's *Expand all*, which reads *Collapse all* once every night is
+ * open — by any route, a card's own toggle included. Ghost, as drawn: the
+ * campaign row's press is the page's one primary.
+ */
+export function ExpandAll({
+  allOpen,
+  onToggle,
+}: {
+  readonly allOpen: boolean;
+  readonly onToggle: () => void;
+}) {
+  return (
+    <Button variant="ghost" size="sm" onClick={onToggle}>
+      <Icon name={allOpen ? "chevrons-down-up" : "chevrons-up-down"} size={14} />
+      {allOpen ? "Collapse all" : "Expand all"}
+    </Button>
   );
 }

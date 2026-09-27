@@ -5,10 +5,11 @@ import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
-import { ChronicleColumns, JumpTo } from "./ChronicleParts";
-import { summaryLine, useOpenNights } from "./nights";
-import { loadPlayerChronicle, type PlayerChronicleView } from "./load";
-import { PlayerRecapBody } from "./PlayerRecapBody";
+import { useMemo } from "react";
+import { ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
+import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./nights";
+import { loadPlayerChronicle, sessionsOf, type PlayerChronicleView } from "./load";
+import { NightBody } from "./NightBody";
 import { SessionEntry } from "./SessionEntry";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -16,16 +17,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * The record of a table you sit at.
  *
  * **The DM's Chronicle, seen through the narrower projection**: the same night
- * card, the same columns and the same *Jump to* (`SessionEntry`,
- * `ChronicleParts.tsx`); what differs is the endpoint each open card reads
- * (`PlayerRecapBody`) and therefore what a night may say.
+ * card, body, columns, *Jump to* and *Expand all* (`SessionEntry`, `NightBody`,
+ * `ChronicleParts.tsx`); what differs is the endpoint the record is read from
+ * (`chronicle.readAsPlayer`) and therefore what a night may say.
  *
  * ### Why this is the safe record screen
  *
  * A mistake here is a blank page, not a disclosure, and that property is bought
- * rather than hoped for: `sessions.list` answers a player only the nights their
- * DM shared, and `recap.readAsPlayer` answers only the beats they shared and a
- * neutral name for any encounter that is not Shared and Ready. So every read on
+ * rather than hoped for: `chronicle.readAsPlayer` answers a player only the
+ * nights their DM shared, on them only the beats they shared, and a neutral
+ * name for any encounter that is not Shared and Ready. So every read on
  * this screen is one a player may make, and widening it would take a change on
  * the server — not a forgotten flag here.
  *
@@ -35,10 +36,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * encounter chip: the encounter's page is the creator's.
  */
 
-/**
- * The spine of nights a player may read, keyed on the campaign. The recaps
- * themselves are `PlayerRecapBody`'s own atoms — one per card that is open.
- */
+/** The campaign and the record a player may read, keyed on the campaign. */
 const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(loadPlayerChronicle(campaignId), [
     reads.campaign(campaignId),
@@ -49,6 +47,12 @@ const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
 export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: CampaignId }) {
   const [resource, reload] = useApiAtom(playerChronicleAtom(campaignId));
   const view = resource.state === "ready" ? resource.value : undefined;
+  const sessions = useMemo(
+    () => (view === undefined ? undefined : sessionsOf(view.nights)),
+    [view],
+  );
+  const target = useSearch({ strict: false }).session;
+  const nights = useOpenNights(sessions, target);
 
   return (
     // The campaign destinations' frame: centred at the Overview's width,
@@ -56,31 +60,35 @@ export function PlayerChronicleScreen({ campaignId }: { readonly campaignId: Cam
     <div className="mx-auto w-full max-w-overview">
       <TopBar
         title="Chronicle"
-        subtitle={view === undefined ? undefined : summaryLine(view.sessions, " shared with you")}
-      />
+        subtitle={sessions === undefined ? undefined : summaryLine(sessions, " shared with you")}
+      >
+        {sessions !== undefined && sessions.length > 0 && (
+          <ExpandAll allOpen={nights.allOpen} onToggle={nights.toggleAll} />
+        )}
+      </TopBar>
       {resource.state === "loading" && <Loading label="Opening the chronicle…" />}
       {resource.state === "failed" && (
         <div className="max-w-3xl">
           <ApiFailureNotice failure={resource.failure} onRetry={reload} />
         </div>
       )}
-      {view !== undefined && <PlayerChronicle campaignId={campaignId} view={view} />}
+      {view !== undefined && <PlayerChronicle view={view} nights={nights} />}
     </div>
   );
 }
 
 function PlayerChronicle({
-  campaignId,
   view,
+  nights: open,
 }: {
-  readonly campaignId: CampaignId;
   readonly view: PlayerChronicleView;
+  readonly nights: OpenNights;
 }) {
-  const sessions = view.sessions;
-  const target = useSearch({ strict: false }).session;
-  const nights = useOpenNights(sessions, target);
+  const nights = view.nights;
+  const sessions = useMemo(() => sessionsOf(nights), [nights]);
+  useLanding(open, sessions);
 
-  if (sessions.length === 0) {
+  if (nights.length === 0) {
     return (
       // What somebody who joined last night sees, and the ordinary outcome
       // rather than an error: sessions start `dm`, so a table with a record
@@ -99,17 +107,17 @@ function PlayerChronicle({
 
   return (
     <ChronicleColumns
-      main={sessions.map((session) => (
+      main={nights.map((night) => (
         <SessionEntry
-          key={session.id}
-          session={session}
-          open={nights.isOpen(session.id)}
-          onToggle={() => nights.toggle(session.id)}
+          key={night.session.id}
+          session={night.session}
+          open={open.isOpen(night.session.id)}
+          onToggle={() => open.toggle(night.session.id)}
         >
-          <PlayerRecapBody campaignId={campaignId} sessionId={session.id} />
+          <NightBody audience={{ kind: "player" }} night={night} />
         </SessionEntry>
       ))}
-      aside={<JumpTo sessions={sessions} onJump={nights.jump} />}
+      aside={<JumpTo sessions={sessions} onJump={open.jump} />}
     />
   );
 }

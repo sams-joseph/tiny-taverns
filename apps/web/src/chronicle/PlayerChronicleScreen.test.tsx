@@ -2,14 +2,13 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { seatId } from "../test/ids";
-import { beat, sessions, sharedBeat } from "./chronicle.fixtures";
+import { beat, sharedBeat, summary11 } from "./chronicle.fixtures";
 import {
   campaignId,
   installPlayerChronicleServer,
-  playerRecap12,
+  playerChronicle,
   renderPlayerChronicle,
   session11Id,
-  session12Id,
 } from "./player.fixtures";
 
 /**
@@ -38,36 +37,40 @@ const night = (n: number): Promise<HTMLElement> =>
 const header = async (n: number): Promise<HTMLElement> =>
   within(await night(n)).getByRole("button", { name: new RegExp(`Session ${String(n)}`) });
 
+const recordPath = `/campaigns/${campaignId}/chronicle/player`;
+
+/** Answers `GET …/chronicle/player` with these nights instead of the fixture's. */
+const recordIs = (nights: ReadonlyArray<unknown>): void => {
+  server.routes.set(`GET ${recordPath}`, { status: 200, body: nights });
+};
+
 describe("what it reads", () => {
-  it("asks for the player's recap and never for the DM's", async () => {
+  it("asks for the player's record and never for the DM's", async () => {
     await renderPlayerChronicle();
     await header(12);
 
-    await waitFor(() => {
-      expect(paths()).toContain(`/campaigns/${campaignId}/sessions/${session12Id}/recap/player`);
-    });
-
-    // The DM's is `…/recap` exactly, and it is behind the creator gate. A
-    // suffix test rather than a substring one: `…/recap/player` contains it.
+    expect(paths()).toContain(recordPath);
+    // The DM's is `…/chronicle` exactly, and it is behind the creator gate. A
+    // suffix test rather than a substring one: `…/chronicle/player` contains it.
+    expect(paths().some((path) => path.endsWith("/chronicle"))).toBe(false);
     expect(paths().some((path) => path.endsWith("/recap"))).toBe(false);
     expect(paths().some((path) => path.endsWith("/prep"))).toBe(false);
     expect(paths().some((path) => path.endsWith("/search"))).toBe(false);
   });
 
-  it("costs one recap, not one per night", async () => {
+  it("reads the record once, and opening a night reads nothing more", async () => {
     await renderPlayerChronicle();
     const older = await header(11);
-
-    await waitFor(() => {
-      expect(paths()).toContain(`/campaigns/${campaignId}/sessions/${session12Id}/recap/player`);
-    });
-    // A closed card reads nothing, on this screen as on the DM's.
-    expect(paths()).not.toContain(`/campaigns/${campaignId}/sessions/${session11Id}/recap/player`);
+    const before = server.calls.length;
 
     await userEvent.click(older);
-    await waitFor(() => {
-      expect(paths()).toContain(`/campaigns/${campaignId}/sessions/${session11Id}/recap/player`);
-    });
+    await within(await night(11)).findByText(sharedBeat.body);
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
+    expect(server.calls.length).toBe(before);
+    expect(paths().filter((path) => path === recordPath)).toHaveLength(1);
+    expect(paths().some((path) => path.includes("/recap"))).toBe(false);
   });
 });
 
@@ -87,10 +90,12 @@ describe("the nights", () => {
   it("draws no Spotlight, even over nights that name a seat", async () => {
     // The pointer is the player's to read on a shared night (the server
     // nulls it for a seat they cannot see); the counts are the DM's.
-    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
-      status: 200,
-      body: sessions.map((session) => ({ ...session, spotlightSeatId: seatId })),
-    });
+    recordIs(
+      playerChronicle.map((night) => ({
+        ...night,
+        session: { ...night.session, spotlightSeatId: seatId },
+      })),
+    );
     await renderPlayerChronicle();
     await header(12);
 
@@ -98,6 +103,28 @@ describe("the nights", () => {
     expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
     expect(screen.queryByText(/in the spotlight/)).toBeNull();
     expect(paths().some((path) => path.endsWith("/party"))).toBe(false);
+  });
+
+  it("clamps a shared night's summary on its closed card", async () => {
+    await renderPlayerChronicle();
+    const preview = (await night(11)).querySelector("[data-slot=night-preview]")!;
+
+    expect(preview).toHaveTextContent(summary11);
+    expect(preview).toHaveClass("line-clamp-2");
+  });
+
+  it("expands and collapses every night", async () => {
+    await renderPlayerChronicle();
+    const newest = await header(12);
+    const older = await header(11);
+
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(newest).toHaveAttribute("aria-expanded", "true");
+    expect(older).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(newest).toHaveAttribute("aria-expanded", "false");
+    expect(older).toHaveAttribute("aria-expanded", "false");
   });
 
   it("opens the night `?session=` names", async () => {
@@ -152,10 +179,7 @@ describe("an opened night, as a player is told it", () => {
   });
 
   it("says so when the DM shared the night and nothing in it", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap/player`, {
-      status: 200,
-      body: { ...playerRecap12, fights: [], beats: [] },
-    });
+    recordIs([{ ...playerChronicle[0], runs: [], beats: [] }, playerChronicle[1]]);
     await renderPlayerChronicle();
 
     expect(
@@ -166,13 +190,14 @@ describe("an opened night, as a player is told it", () => {
 
 describe("a table that has shared nothing", () => {
   it("is what a player who joined last night sees, and it names who decides", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [] });
+    recordIs([]);
     await renderPlayerChronicle();
 
     expect(await screen.findByText("No nights shared yet")).toBeInTheDocument();
     expect(screen.getByText(/Your DM decides which nights/)).toBeInTheDocument();
     expect(screen.getByText("0 sessions shared with you")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Jump to" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand all" })).toBeNull();
   });
 });
 

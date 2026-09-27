@@ -1,16 +1,21 @@
-import type { Beat, CampaignId, EncounterRun } from "@taverns/api";
+import type { CampaignId, EncounterRun } from "@taverns/api";
 import { Badge, cn, Icon } from "@taverns/ui";
 import { Link } from "@tanstack/react-router";
 import { KIND_ICON } from "../campaign/encounterList";
+import type { AnyChronicleNight } from "./load";
 
 /**
- * An opened night, as the drawing lays it out: its moments, the encounters
- * played in it, and — for the DM — what the table was not told.
+ * An opened night, as the drawing lays it out: the DM's summary, its moments,
+ * the encounters played in it, and — for the DM — what the table was not told.
  *
- * **One body for both audiences**, handed rows the server already narrowed.
- * `recap.read` and `recap.readAsPlayer` differ in what a run and a combatant
- * may say, but both answer beats and runs, and nothing here reads past those:
+ * **One body for both audiences**, handed a night the server already narrowed.
+ * `chronicle.read` and `chronicle.readAsPlayer` differ in which nights, beats
+ * and encounter names they answer, not in shape, and nothing here reads past
+ * the night's session, beats and runs:
  *
+ * - **The summary leads, whole**, where the closed card clamped it. It sits
+ *   above the moments and the encounters, never in place of them: they stay
+ *   word for word underneath.
  * - **Moments are beats, word for word.** For the DM, a beat shared with the
  *   table is a bullet and one kept back goes in the *DM only* box. A player's
  *   recap holds only the beats the DM shared, by row predicate, so on their
@@ -24,21 +29,20 @@ import { KIND_ICON } from "../campaign/encounterList";
  */
 export function NightBody({
   audience,
-  beats,
-  runs,
+  night,
 }: {
   readonly audience: NightAudience;
-  /** Oldest first, verbatim. */
-  readonly beats: ReadonlyArray<Beat>;
-  /** Oldest first — the order the night was played in. */
-  readonly runs: ReadonlyArray<EncounterRun>;
+  /** Its beats verbatim and its runs in the order played, both oldest first. */
+  readonly night: AnyChronicleNight;
 }) {
+  const { beats, runs } = night;
+  const summary = night.session.summary;
   const told =
     audience.kind === "player" ? beats : beats.filter((beat) => beat.visibility === "shared");
   const kept =
     audience.kind === "player" ? [] : beats.filter((beat) => beat.visibility !== "shared");
 
-  if (told.length === 0 && kept.length === 0 && runs.length === 0) {
+  if (summary === null && told.length === 0 && kept.length === 0 && runs.length === 0) {
     return (
       <p className="max-w-measure text-body-s leading-body text-faint">
         {audience.kind === "player"
@@ -50,6 +54,12 @@ export function NightBody({
 
   return (
     <>
+      {summary !== null && (
+        <p className="max-w-measure text-body leading-body whitespace-pre-line text-foreground">
+          {summary}
+        </p>
+      )}
+
       {told.length > 0 && (
         <ul aria-label="Moments" className="m-0 flex list-none flex-col gap-2 p-0">
           {told.map((beat) => (

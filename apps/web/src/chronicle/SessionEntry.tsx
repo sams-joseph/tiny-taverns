@@ -18,12 +18,13 @@ import { nightAnchor } from "./nights";
  * night's title whatever its own switch says (`shared-worlds.md`) and an
  * encounter's name may be one nobody at that table was shown.
  *
- * **The closed card carries the night's length**, where the drawing clamps two
- * lines of a written summary. Nothing stores one yet, so the head says what the
- * `session` row itself knows, and a closed card still costs no request: the
- * body is a child, rendered only while open, which is what lets the DM's and
- * the player's Chronicles share this card while reading different endpoints
- * (`RecapBody`, `PlayerRecapBody`).
+ * **The closed card clamps the night's summary to two lines**, as drawn, and
+ * carries the night's length in its place when the DM has written none — what
+ * the `session` row itself knows, rather than a stubbed line pretending to be
+ * prose. The summary is on the row (`Session.summary`), so a closed card needs
+ * nothing the Chronicle's one read did not already answer. The body is a child,
+ * which is what lets the DM's and the player's Chronicles share this card while
+ * reading different endpoints.
  */
 export function SessionEntry({
   session,
@@ -34,7 +35,7 @@ export function SessionEntry({
   readonly session: Session;
   readonly open: boolean;
   readonly onToggle: () => void;
-  /** The night, read back. Mounted only while `open`. */
+  /** The night, read back (`NightBody`). Mounted only while `open`. */
   readonly children: ReactNode;
 }) {
   const title = session.title ?? `Session ${String(session.number)}`;
@@ -62,7 +63,12 @@ export function SessionEntry({
               {session.startedAt === null ? "Not played yet" : dayOf(session.startedAt)}
             </p>
             {!open && (
-              <p className="mt-2 max-w-measure text-body-s leading-body text-foreground">{span}</p>
+              <p
+                data-slot="night-preview"
+                className="mt-2 line-clamp-2 max-w-measure text-body-s leading-body text-foreground"
+              >
+                {session.summary ?? span}
+              </p>
             )}
           </div>
           <Icon

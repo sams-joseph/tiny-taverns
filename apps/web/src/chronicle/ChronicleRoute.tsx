@@ -10,8 +10,8 @@ import { Loading } from "@taverns/ui";
 /**
  * One Chronicle URL, two projections — the same chooser `CampaignRoute.tsx`
  * is, over the same membership read, for the same reason: the wide screen
- * reads `recap.read`, which is behind the creator gate and answers a player a
- * 404, and the narrow one reads `recap.readAsPlayer`. Which record you get is
+ * reads `chronicle.read`, which is behind the creator gate and answers a player
+ * a 404, and the narrow one reads `chronicle.readAsPlayer`. Which record you get is
  * what you are at the table, per pair, with no mode anywhere.
  */
 export function ChronicleRouteScreen() {
