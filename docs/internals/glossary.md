@@ -33,6 +33,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 - **act**: a named run of a campaign's nights on the Chronicle (`campaign_act`, `CampaignAct` on the wire): a title and the number of the night it starts at, running to the night before the next act. The creator's to write; a player sees it once shared.
 - **beat**: one line of prose the DM files against a night (`beat`). The non-combat half of the record.
 - **recap**: a per-read assembly of a night from its runs, beats, notes and ticked prep. It has a DM shape and a narrower player shape on separate paths. The Chronicle reads every night at once through the same function (`GET …/chronicle`, `…/chronicle/player`). The one stored account of a night is the DM's own **summary** on the session (`Session.summary`), which Hob may draft and only the DM keeps; it is read above the recap, never instead of it.
+- **story so far** (a campaign's): one `campaign_story` row per campaign, the story and the _Previously_ read to open the next night (`CampaignStory` on the wire). Hob drafts it (`proposeCampaignStory`) and the creator keeps it, or writes it by hand; it is the creator's until they share it. `afterSessionNumber` is the newest ended night it was written after, stamped by the server. Not the Shared World's **Story So Far**.
 - **live table**: the player's projection of the fight in progress (`GET /campaigns/:c/table`), null when there is nothing a player may know.
 
 ## Characters and corpora

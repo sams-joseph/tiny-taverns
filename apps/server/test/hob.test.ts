@@ -27,6 +27,7 @@ import {
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { Characters } from "../src/repo/Characters.js";
 import { Combatants } from "../src/repo/Combatants.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
@@ -85,6 +86,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
   Creatures.layer,
@@ -435,10 +437,14 @@ describe("answering", () => {
       "listCreatures",
       "listSessions",
       "proposeBeat",
+      // The campaign's own story so far: drafted from the one reader below,
+      // kept only by the creator's accept. No other toolkit has either.
+      "proposeCampaignStory",
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      "readCampaignStorySources",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
@@ -1339,6 +1345,7 @@ describe("with no model configured", () => {
           assistantFromConfig.pipe(
             Layer.provide([
               Campaigns.layer,
+              CampaignStories.layer,
               Creatures.layer,
               CampaignCreatorActors.layer,
               HobThreads.layer,
@@ -1696,6 +1703,7 @@ describe("what counts as asking for a build", () => {
     const player = Object.keys(playerToolkitListing(NO_VOCABULARY).tools);
     expect(dm.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
       "proposeBeat",
+      "proposeCampaignStory",
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
@@ -1768,10 +1776,14 @@ describe("the assistant seam", () => {
       "listCreatures",
       "listSessions",
       "proposeBeat",
+      // The campaign's own story so far: drafted from the one reader below,
+      // kept only by the creator's accept. No other toolkit has either.
+      "proposeCampaignStory",
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      "readCampaignStorySources",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).

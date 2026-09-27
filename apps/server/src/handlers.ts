@@ -23,6 +23,7 @@ import { Health } from "./Health.js";
 import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
+import { CampaignStories } from "./repo/CampaignStories.js";
 import { GroupHistory } from "./repo/GroupHistory.js";
 import { LibraryShares } from "./repo/LibraryShares.js";
 import { Groups } from "./repo/Groups.js";
@@ -916,6 +917,25 @@ const ChronicleLive = HttpApiBuilder.group(
 );
 
 /**
+ * A campaign's story so far. The wide read goes through the proof, like the
+ * recap's; the writes compose `campaignWritable` in the repository, as a
+ * note's do; the player's read answers a shared story or `null`.
+ */
+const StoryLive = HttpApiBuilder.group(
+  TavernsApi,
+  "story",
+  Effect.fnUntraced(function* (handlers) {
+    const stories = yield* CampaignStories;
+    const asDm = yield* asDmOf;
+    return handlers
+      .handle("read", ({ params }) => asDm(params.campaignId, (creator) => stories.read(creator)))
+      .handle("put", ({ params, payload }) => stories.put(params.campaignId, payload))
+      .handle("remove", ({ params }) => stories.remove(params.campaignId))
+      .handle("readAsPlayer", ({ params }) => stories.readAsPlayer(params.campaignId));
+  }),
+);
+
+/**
  * What is on this table right now, to a player.
  *
  * The thinnest handler in the file, and deliberately so: everything this read
@@ -1740,6 +1760,7 @@ export const ApiLive = HttpApiBuilder.layer(TavernsApi).pipe(
     LiveLive,
     RecapLive,
     ChronicleLive,
+    StoryLive,
     PlayerTableLive,
   ]),
 );

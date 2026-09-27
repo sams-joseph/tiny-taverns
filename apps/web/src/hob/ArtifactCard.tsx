@@ -132,6 +132,33 @@ function ProseBody({
   );
 }
 
+/**
+ * A campaign's story so far: the record, set like any other prose, and the
+ * *Previously* under it in the read-aloud register, because it is spoken to the
+ * players to open the next night.
+ */
+function CampaignStoryBody({
+  artifact,
+}: {
+  readonly artifact: HobArtifact & { kind: "campaignStory" };
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+        {artifact.text}
+      </p>
+      {artifact.previously !== undefined && (
+        <blockquote className="flex flex-col gap-1 rounded-r-sm border-l-2 border-accent bg-surface-sunken px-3.5 py-2.5">
+          <span className="text-caption leading-snug text-muted-foreground">Previously</span>
+          <p className="font-serif text-body-s leading-loose whitespace-pre-wrap text-foreground italic">
+            {artifact.previously}
+          </p>
+        </blockquote>
+      )}
+    </div>
+  );
+}
+
 function NpcBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npc" } }) {
   return (
     <div className="flex flex-col gap-2">
@@ -247,6 +274,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
     case "chronicle":
     case "story":
       return <ProseBody artifact={artifact} />;
+    case "campaignStory":
+      return <CampaignStoryBody artifact={artifact} />;
     case "npc":
       return <NpcBody artifact={artifact} />;
     case "checklist":
@@ -284,6 +313,7 @@ export function ArtifactCard({
   const chronicle = artifact.kind === "chronicle";
   const story = artifact.kind === "story";
   const summary = artifact.kind === "summary";
+  const campaignStory = artifact.kind === "campaignStory";
   const campaign = artifact.kind === "campaign";
   const character = artifact.kind === "character";
   const [editing, setEditing] = useState(false);
@@ -387,13 +417,15 @@ export function ArtifactCard({
                 ? "Current for this Shared World"
                 : summary
                   ? "On the night in the Chronicle"
-                  : chronicle
-                    ? "In the Shared World Chronicle"
-                    : campaign
-                      ? "In your campaigns"
-                      : character
-                        ? "On your roster"
-                        : "In tonight’s session"}
+                  : campaignStory
+                    ? "Kept in the Chronicle"
+                    : chronicle
+                      ? "In the Shared World Chronicle"
+                      : campaign
+                        ? "In your campaigns"
+                        : character
+                          ? "On your roster"
+                          : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -404,11 +436,13 @@ export function ArtifactCard({
                   ? "Keep as Story So Far"
                   : summary
                     ? "Keep as the night's summary"
-                    : chronicle
-                      ? "Add to Chronicle"
-                      : campaign || character
-                        ? "Keep it"
-                        : "Save to session"}
+                    : campaignStory
+                      ? "Keep as the story so far"
+                      : chronicle
+                        ? "Add to Chronicle"
+                        : campaign || character
+                          ? "Keep it"
+                          : "Save to session"}
               </Button>
             )}
             <Button

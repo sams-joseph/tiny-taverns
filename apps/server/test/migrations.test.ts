@@ -183,6 +183,7 @@ describe("migrations", () => {
       "campaign_character_prep",
       "campaign_image",
       "campaign_member",
+      "campaign_story",
       "character",
       "character_option",
       "character_option_ability_bonus",
@@ -345,6 +346,7 @@ describe("migrations", () => {
       { migration_id: 69, name: "note_links" },
       { migration_id: 70, name: "session_entry" },
       { migration_id: 71, name: "campaign_act" },
+      { migration_id: 72, name: "campaign_story" },
     ]);
   }, 60_000);
 
@@ -425,6 +427,7 @@ describe("migrations", () => {
       { migration_id: 69, name: "note_links" },
       { migration_id: 70, name: "session_entry" },
       { migration_id: 71, name: "campaign_act" },
+      { migration_id: 72, name: "campaign_story" },
     ]);
   }, 60_000);
 });

@@ -6,6 +6,7 @@ import { BattleMap, BattleMapUpdate, EncounterRunBoard } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { CampaignAct, CampaignActCreate, CampaignActUpdate } from "./CampaignAct.js";
+import { CampaignStory, CampaignStoryPut, PlayerCampaignStory } from "./CampaignStory.js";
 import {
   Character,
   CharacterDamage,
@@ -2051,6 +2052,43 @@ class ChronicleGroup extends HttpApiGroup.make("chronicle")
   .middleware(Authorization) {}
 
 /**
+ * A campaign's story so far and its *Previously* (`CampaignStory.ts`).
+ *
+ * **Two paths, and the wide one is the creator's.** `read`, `put` and
+ * `remove` go through the creator proof, so anybody else is `NotFound`;
+ * `readAsPlayer` answers the narrow `PlayerCampaignStory` to any member, and
+ * only once the creator has shared it. `null` is the ordinary answer on both —
+ * no story yet, or (to a player) none shared — so an unshared story and an
+ * absent one read the same.
+ */
+class CampaignStoryGroup extends HttpApiGroup.make("story")
+  .add(
+    HttpApiEndpoint.get("read", "/story", {
+      params: { campaignId: CampaignId },
+      success: Schema.NullOr(CampaignStory),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("put", "/story", {
+      params: { campaignId: CampaignId },
+      payload: CampaignStoryPut,
+      success: CampaignStory,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("remove", "/story", {
+      params: { campaignId: CampaignId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.get("readAsPlayer", "/story/player", {
+      params: { campaignId: CampaignId },
+      success: Schema.NullOr(PlayerCampaignStory),
+      error: NotFound,
+    }),
+  )
+  .prefix("/campaigns/:campaignId")
+  .middleware(Authorization) {}
+
+/**
  * What is on this table **right now**, to somebody sitting at it.
  *
  * The read behind the player's live banner — *"The Salt Road is playing right
@@ -2997,4 +3035,5 @@ export class TavernsApi extends HttpApi.make("taverns")
   .add(LiveGroup)
   .add(RecapGroup)
   .add(ChronicleGroup)
+  .add(CampaignStoryGroup)
   .add(PlayerTableGroup) {}

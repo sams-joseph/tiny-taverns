@@ -221,6 +221,9 @@ describe("every content-bearing table", () => {
       // visibility, and a seat can be the assistant's the day a drafted
       // character is kept.
       "campaign_character",
+      // A campaign's story so far: the creator's until shared, and the
+      // assistant's when kept from a Hob draft. See 0072_campaign_story.ts.
+      "campaign_story",
       "character",
       // A class or a race — the pieces a character is built from, in the
       // same three-owner shape a `creature` has. Content, and it carries the

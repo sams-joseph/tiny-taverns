@@ -14,6 +14,7 @@ import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { CampaignCreatorActors, type CampaignCreatorActor } from "../src/repo/CreatorActor.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
@@ -56,6 +57,7 @@ const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
+  CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
   Creatures.layer,

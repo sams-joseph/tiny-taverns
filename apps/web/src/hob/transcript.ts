@@ -49,6 +49,7 @@ export const ARTIFACT_KINDS = {
   summary: { icon: "history", label: "Night summary", variant: "info" },
   chronicle: { icon: "history", label: "Chronicle", variant: "default" },
   story: { icon: "book-open", label: "Story So Far", variant: "info" },
+  campaignStory: { icon: "book-open", label: "Story so far", variant: "info" },
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
@@ -124,6 +125,12 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "summary"; readonly text: string })
   | (ArtifactBase & { readonly kind: "chronicle"; readonly text: string })
   | (ArtifactBase & { readonly kind: "story"; readonly text: string })
+  | (ArtifactBase & {
+      readonly kind: "campaignStory";
+      readonly text: string;
+      /** Read to the players to open the next night, when Hob wrote one. */
+      readonly previously?: string;
+    })
   | (ArtifactBase & {
       readonly kind: "npc";
       readonly race: string;
@@ -246,6 +253,19 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         meta: `Through Chronicle entry ${String(proposal.lastWorldSeq)}`,
         chips: [],
         text: proposal.text,
+      };
+    case "campaignStory":
+      return {
+        id: turnId,
+        kind: "campaignStory",
+        title: "The story so far",
+        meta:
+          proposal.afterSessionNumber === 0
+            ? "Before any session has ended"
+            : `Through session ${String(proposal.afterSessionNumber)}`,
+        chips: [],
+        text: proposal.text,
+        ...(proposal.previously === null ? {} : { previously: proposal.previously }),
       };
     case "campaign":
       return {

@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
+import { CampaignStory } from "./CampaignStory.js";
 import { Character, CharacterSheet } from "./Character.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
@@ -147,17 +148,19 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * prose or read-aloud), a `beat` (the DM's line about what happened), a
  * `nightSummary` (a played night's summary, kept on the night), an
  * `encounter` (a template and its roster), a `character` (the asker's own,
- * drafted for them), the Shared World's Chronicle entry and Story So Far, and a
- * `campaign` (the asker's new table). The union is discriminated on `target`
- * for the reason `SearchHit` is discriminated on `source` — `roster` exists
- * only on an encounter and `title` only on the thing that has one, and a
- * nullable field the client renders anyway is the failure this schema style
- * exists to prevent.
+ * drafted for them), the Shared World's Chronicle entry and Story So Far, a
+ * campaign's own story so far (`campaignStory`), and a `campaign` (the asker's
+ * new table). The union is discriminated on `target` for the reason
+ * `SearchHit` is discriminated on `source` — `roster` exists only on an
+ * encounter and `title` only on the thing that has one, and a nullable field
+ * the client renders anyway is the failure this schema style exists to
+ * prevent.
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
- * `proposeNightSummary` and `proposeEncounter`; the drafting composer's has `proposeCharacter` and
- * nothing else (`HobAsk.intent` and `HobDraftAsk.intent` pick it); the
+ * `proposeNightSummary`, `proposeEncounter` and `proposeCampaignStory`; the drafting
+ * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
+ * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
  * halves of this union are reachable from disjoint conversations: a character
  * or a campaign proposal only ever lives in the asker's *own* thread and
@@ -328,6 +331,20 @@ export const HobProposal = Schema.Union([
     target: Schema.Literal("sharedWorldSummary"),
     text: Schema.String,
     lastWorldSeq: Schema.Int,
+  }),
+  /**
+   * A campaign's story so far and its *Previously*, offered to the creator by
+   * the campaign's own Hob. `afterSessionNumber` is the newest ended night in
+   * the batch Hob read (`readCampaignStorySources`), captured by the server
+   * the way `lastWorldSeq` is; neither the model nor the accepting client
+   * supplies it. Accepting it replaces the campaign's story, `dm` until the
+   * creator shares it.
+   */
+  Schema.Struct({
+    target: Schema.Literal("campaignStory"),
+    text: Schema.String,
+    previously: Schema.NullOr(Schema.String),
+    afterSessionNumber: Schema.Int,
   }),
   /**
    * A new campaign, drafted in the account's own conversation (`/me/hob`) —
@@ -626,6 +643,8 @@ export const HobAccepted = Schema.Union([
     accepted: Schema.Literal("sharedWorldSummary"),
     summary: SharedWorldHistorySummary,
   }),
+  /** The story so far a campaign's creator kept from their Hob. */
+  Schema.Struct({ accepted: Schema.Literal("campaignStory"), story: CampaignStory }),
   /**
    * The campaign an account kept from its own conversation, created by the
    * same insert `POST /campaigns` (or a Shared World's create) uses, with its

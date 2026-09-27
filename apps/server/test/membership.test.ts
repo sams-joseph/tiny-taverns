@@ -17,6 +17,7 @@ import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Groups } from "../src/repo/Groups.js";
@@ -294,6 +295,7 @@ const runtime = ManagedRuntime.make(
     Acts.layer,
     Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
     Campaigns.layer,
+    CampaignStories.layer,
     Groups.layer,
     GroupHistory.layer,
     LibraryShares.layer,
@@ -388,6 +390,15 @@ const makeFixture = Effect.gen(function* () {
   const campaign = yield* as(createCampaign({ name: "The Salt Road" }));
   const session = yield* as(sessions.create(campaign.id, { number: 12 }));
   yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
+  yield* as(
+    Effect.flatMap(CampaignStories, (stories) =>
+      stories.put(campaign.id, {
+        text: "The party took the salt road.",
+        previously: null,
+        visibility: "dm",
+      }),
+    ),
+  );
 
   // The creator's own character, seated here — a creator is a player too, and
   // this is what gives both `character` and `campaign_character` a row for the
@@ -656,6 +667,7 @@ const READS: Record<
     | BattleMaps
     | Beats
     | Campaigns
+    | CampaignStories
     | Characters
     | ClassProgression
     | Combatants
@@ -698,6 +710,13 @@ const READS: Record<
   // campaign holds is the seat below.
   character: () => Effect.flatMap(Characters, (r) => r.mine),
   campaign_character: (f) => Effect.flatMap(Party, (r) => r.list(f.campaign.id)),
+  // The story's ungated read is the player's; its creator reads the row too,
+  // through the same `rowReadable`.
+  campaign_story: (f) =>
+    Effect.map(
+      Effect.flatMap(CampaignStories, (r) => r.readAsPlayer(f.campaign.id)),
+      (story) => (story === null ? [] : [story]),
+    ),
   // Creator-only in its wide read (a player's is `Notes.listAsPlayer`).
   note: (f) =>
     Effect.flatMap(dmOf(f.campaign.id), (dm) =>
