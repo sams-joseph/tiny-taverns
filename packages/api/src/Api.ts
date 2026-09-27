@@ -68,6 +68,7 @@ import {
 import {
   HobAccepted,
   HobAsk,
+  HobCampaignAsk,
   HobDraftAsk,
   HobDraftStatus,
   HobEvent,
@@ -2163,7 +2164,7 @@ class HobGroup extends HttpApiGroup.make("hob")
     }),
     HttpApiEndpoint.post("ask", "/ask", {
       params: { campaignId: CampaignId },
-      payload: HobAsk,
+      payload: HobCampaignAsk,
       success: HttpApiSchema.StreamSse({ events: HobEvent }),
       error: [NotFound, HobUnavailable],
     }),

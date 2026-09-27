@@ -102,6 +102,7 @@ const services = Layer.mergeAll(
       Encounters.layer,
       GroupHistory.layer,
       Notes.layer,
+      Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     ]),
   ),
   Recap.layer,

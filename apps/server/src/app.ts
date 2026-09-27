@@ -668,6 +668,8 @@ export const servicesOver = <E>(
         // `GroupHistory.create` a member's own hand does.
         GroupHistory.layer,
         Notes.layer,
+        // A night's summary Hob drafted is kept through the DM's own update.
+        Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`

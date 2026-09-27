@@ -266,8 +266,9 @@ function Hero(): ReactNode {
           <p className="mt-5 flex items-start gap-2 text-caption leading-snug text-on-dark-muted">
             <Icon name="check" size={14} className="mt-0.5 shrink-0 text-success" />
             {/* True of the product as built: a recap is assembled per read from
-                the record, and nothing stores a summary. See AGENTS.md, "The
-                recap: what it draws from". */}
+                the record, and the one stored summary of a night is the DM's,
+                kept above that detail rather than in place of it
+                (`Session.summary`). */}
             Your notes stay yours. Nothing is summarised away and thrown out.
           </p>
         </div>

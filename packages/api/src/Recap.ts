@@ -104,11 +104,13 @@ export class RecapFight extends Schema.Class<RecapFight>("RecapFight")({
  * What happened on the night of session N.
  *
  * **Assembled per read from retained detail, and never written down.** No
- * stored summary, no model call in the read path, nothing that discards the
- * detail it was made from — the captain's standing constraint, because the
- * first time a one-line summary exists is the last time anyone reads the
- * material under it, and this is the assistant's memory. The recap is a *view*
- * over the sources; the sources stay the truth.
+ * model call in the read path, nothing that discards the detail it was made
+ * from — the captain's standing constraint, because a summary that replaces
+ * the material under it is the last time anyone reads that material, and this
+ * is the assistant's memory. The recap is a *view* over the sources; the
+ * sources stay the truth. The one stored account of a night is the DM's own
+ * summary on `session` (`Session.summary`), kept above this detail and never
+ * in place of it.
  *
  * It draws on **three sources plus one**, which is the captain's decision on
  * where the story comes from:

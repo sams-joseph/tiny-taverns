@@ -34,17 +34,19 @@ import type { IconName } from "@taverns/ui";
  * cannot express them is better than a card that renders a badge over an empty
  * body. They come back when the designers draw them.
  *
- * **`note`, `beat`, `campaign` and `character` are ours.** The delivery has
- * no entry for any of them, and each is something Hob can actually offer to
- * keep. All four take glyphs the delivery already asked for (`pencil`, `flag`,
- * `layers` — the Campaigns item on the global row — and `user-round`), so the
- * icon table did not grow.
+ * **`note`, `beat`, `summary`, `campaign` and `character` are ours.** The
+ * delivery has no entry for any of them, and each is something Hob can
+ * actually offer to keep. All five take glyphs the delivery already asked for
+ * (`pencil`, `flag`, `history` — the Chronicle's own —, `layers` — the
+ * Campaigns item on the global row — and `user-round`), so the icon table did
+ * not grow.
  */
 export const ARTIFACT_KINDS = {
   encounter: { icon: "swords", label: "Encounter", variant: "default" },
   readaloud: { icon: "scroll-text", label: "Read-aloud", variant: "info" },
   note: { icon: "pencil", label: "Note", variant: "secondary" },
   beat: { icon: "flag", label: "Beat", variant: "default" },
+  summary: { icon: "history", label: "Night summary", variant: "info" },
   chronicle: { icon: "history", label: "Chronicle", variant: "default" },
   story: { icon: "book-open", label: "Story So Far", variant: "info" },
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
@@ -119,6 +121,7 @@ export type HobArtifact =
   | (ArtifactBase & { readonly kind: "readaloud"; readonly text: string })
   | (ArtifactBase & { readonly kind: "note"; readonly text: string })
   | (ArtifactBase & { readonly kind: "beat"; readonly text: string })
+  | (ArtifactBase & { readonly kind: "summary"; readonly text: string })
   | (ArtifactBase & { readonly kind: "chronicle"; readonly text: string })
   | (ArtifactBase & { readonly kind: "story"; readonly text: string })
   | (ArtifactBase & {
@@ -218,6 +221,15 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
       };
     case "beat":
       return { id: turnId, kind: "beat", chips: [], text: proposal.body };
+    case "nightSummary":
+      return {
+        id: turnId,
+        kind: "summary",
+        title: `Session ${String(proposal.sessionNumber)}`,
+        meta: "For the Chronicle",
+        chips: [],
+        text: proposal.text,
+      };
     case "sharedWorldHistory":
       return {
         id: turnId,

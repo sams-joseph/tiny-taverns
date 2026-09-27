@@ -788,7 +788,8 @@ export const ListPlayedNights = Tool.make("listPlayedNights", {
 export const NightStory = Tool.make("nightStory", {
   description:
     "What happened on one played night, anywhere in the Shared World, as far " +
-    "as its DM shared it: the shared story beats verbatim and each shared, " +
+    "as its DM shared it: the DM's summary if the night itself is shared, the " +
+    "shared story beats verbatim and each shared, " +
     "finished fight or scene by name, kind and outcome; a conversation, a " +
     "skill challenge or a hazard has no round. No numbers and no stat blocks — " +
     "outcomes, not mechanics. Take the ids from listPlayedNights.",
@@ -800,6 +801,8 @@ export const NightStory = Tool.make("nightStory", {
     campaign: Schema.String,
     number: Schema.Int,
     title: Schema.NullOr(Schema.String),
+    /** The DM's summary of the night, when they shared the night itself. */
+    summary: Schema.NullOr(Schema.String),
     beats: Schema.Array(Schema.String),
     fights: Schema.Array(
       Schema.Struct({
@@ -891,6 +894,31 @@ export const ProposeBeat = Tool.make("proposeBeat", {
     "DM accepts it.",
   parameters: Schema.Struct({
     body: Schema.String.check(Schema.isLengthBetween(1, 1000)),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+/**
+ * A summary of one played night, kept on the night once the DM accepts it.
+ *
+ * The creator's toolkit alone has it: the player's and the drafting ones write
+ * a character, the account's a campaign, Shared World Hob the world's own
+ * record, and an NPC speaks as a character. The session is a parameter because
+ * the panel may be asked about any night; the handler binds it to this
+ * campaign through the creator's own read.
+ */
+export const ProposeNightSummary = Tool.make("proposeNightSummary", {
+  description:
+    "Offer the DM a summary of one played night for the Chronicle: a few sentences " +
+    "about what happened, in the order it happened, drawn only from what sessionRecap " +
+    "returns for that night. Take the session id from listSessions. Only a suggestion: " +
+    "nothing is kept unless the DM accepts it. Write the whole summary in `summary`; do " +
+    "not repeat it in your reply.",
+  parameters: Schema.Struct({
+    sessionId: SessionId,
+    summary: Schema.String.check(Schema.isLengthBetween(1, 4000)),
   }),
   success: Schema.String,
   failure: proposalFailure,
@@ -1461,6 +1489,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ReadSharedWorldSummary,
     ProposeNote,
     ProposeBeat,
+    ProposeNightSummary,
     ProposeEncounter,
     SpendCharacterResource,
   );
@@ -1482,6 +1511,7 @@ export const HobToolkit = Toolkit.make(
   ReadSharedWorldSummary,
   ProposeNote,
   ProposeBeat,
+  ProposeNightSummary,
   ProposeEncounter,
 );
 
@@ -2005,6 +2035,32 @@ export const dmHandlersFor = (
           "it; say one short line about it and stop.",
       ),
 
+    proposeNightSummary: ({ sessionId, summary }) =>
+      Effect.gen(function* () {
+        const text = summary.trim();
+        if (text === "") {
+          return yield* new Conflict({
+            message: "a summary needs words — write a few sentences about the night",
+          });
+        }
+        // The creator's own read, so a night of another campaign, or one
+        // that is gone, is the `NotFound` the model can correct from
+        // listSessions.
+        const night = yield* as(repositories.sessions.findById(campaignId, sessionId));
+        if (night.startedAt === null) {
+          return yield* new Conflict({
+            message:
+              `session ${String(night.number)} has not been played yet, so there is ` +
+              "nothing to summarise — pick a night from listSessions that has started",
+          });
+        }
+        return yield* offer(
+          { target: "nightSummary", sessionId: night.id, sessionNumber: night.number, text },
+          `Offered the DM a summary of session ${String(night.number)} for the Chronicle. ` +
+            "They can keep it or discard it; say one short line about it and stop.",
+        );
+      }),
+
     proposeEncounter: ({
       name,
       kind: given,
@@ -2160,6 +2216,7 @@ export const groupHandlersFor = (
         campaign: story.campaignName,
         number: story.number,
         title: story.title,
+        summary: story.summary,
         beats: story.beats,
         fights: story.fights.map((fight) => ({
           name: fight.name,

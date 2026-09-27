@@ -342,6 +342,7 @@ describe("migrations", () => {
       { migration_id: 67, name: "run_map_sharing" },
       { migration_id: 68, name: "note_category_pin" },
       { migration_id: 69, name: "note_links" },
+      { migration_id: 70, name: "session_entry" },
     ]);
   }, 60_000);
 
@@ -420,6 +421,7 @@ describe("migrations", () => {
       { migration_id: 67, name: "run_map_sharing" },
       { migration_id: 68, name: "note_category_pin" },
       { migration_id: 69, name: "note_links" },
+      { migration_id: 70, name: "session_entry" },
     ]);
   }, 60_000);
 });

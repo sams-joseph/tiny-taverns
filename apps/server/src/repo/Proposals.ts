@@ -20,6 +20,7 @@ import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
+import { Sessions } from "./Sessions.js";
 import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
 import type { ConversationReach } from "./visibility.js";
@@ -47,9 +48,10 @@ import type { ConversationReach } from "./visibility.js";
  * ### It writes through the ordinary repositories
  *
  * `Notes.create`, `Beats.create`, `Encounters.create` (whose roster goes
- * through `EncounterCreatures.create`, as a builder's does) and
- * `Characters.createOwn`, with one extra argument. No SQL for those tables is written here, so an accepted row is
- * produced by *literally the same statement* that produces an authored one —
+ * through `EncounterCreatures.create`, as a builder's does),
+ * `Characters.createOwn` and, for a night's summary, `Sessions.update`, with
+ * one extra argument. No SQL for those tables is written here, so an accepted
+ * row is produced by *literally the same statement* that produces an authored one —
  * which is what makes it indistinguishable in usefulness (search finds it, the
  * recap includes it, the screens render it) and completely distinguishable in
  * origin.
@@ -172,6 +174,7 @@ export class Proposals extends Context.Service<
       const encounters = yield* Encounters;
       const characters = yield* Characters;
       const sharedWorldHistory = yield* GroupHistory;
+      const sessions = yield* Sessions;
 
       const materialise = (
         campaignId: CampaignId,
@@ -209,6 +212,16 @@ export class Proposals extends Context.Service<
               );
               return { accepted: "beat" as const, beat };
             });
+
+          case "nightSummary":
+            // Through the DM's own `PATCH` statement, with the turn on it. The
+            // night was bound when Hob offered the draft; `update` asks again
+            // whether this actor may write it, so a night deleted since is the
+            // ordinary `NotFound`. Keeping it replaces the night's summary.
+            return Effect.map(
+              sessions.update(campaignId, proposal.sessionId, { summary: proposal.text }, from),
+              (session) => ({ accepted: "nightSummary" as const, session }),
+            );
 
           case "encounter":
             return Effect.map(

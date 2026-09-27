@@ -81,6 +81,7 @@ const runtime = ManagedRuntime.make(
         Encounters.layer,
         GroupHistory.layer,
         Notes.layer,
+        Sessions.layer.pipe(Layer.provide(live)),
       ]),
     ),
     Sessions.layer.pipe(Layer.provide(live)),

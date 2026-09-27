@@ -9,9 +9,11 @@ import {
   AssistantTurnId,
   CampaignId,
   CreatureId,
+  SessionId,
   SharedWorldId,
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
+import { Session } from "./Session.js";
 
 /**
  * Hob: the assistant, on the wire.
@@ -142,7 +144,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * What Hob is offering to add, if the person who asked says yes.
  *
  * **One member per accept target**, each one a shipped table: a `note` (prep
- * prose or read-aloud), a `beat` (the DM's line about what happened), an
+ * prose or read-aloud), a `beat` (the DM's line about what happened), a
+ * `nightSummary` (a played night's summary, kept on the night), an
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, and a
  * `campaign` (the asker's new table). The union is discriminated on `target`
@@ -152,8 +155,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * exists to prevent.
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
- * anything here.** A campaign's panel has `proposeNote`, `proposeBeat` and
- * `proposeEncounter`; the drafting composer's has `proposeCharacter` and
+ * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
+ * `proposeNightSummary` and `proposeEncounter`; the drafting composer's has `proposeCharacter` and
  * nothing else (`HobAsk.intent` and `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
  * halves of this union are reachable from disjoint conversations: a character
@@ -183,6 +186,20 @@ export const HobProposal = Schema.Union([
   Schema.Struct({
     target: Schema.Literal("beat"),
     body: Schema.String,
+  }),
+  /**
+   * A summary of one night for the Chronicle, drafted for the DM who keeps it
+   * (the captain's Q1 c: Hob drafts, the DM keeps). `sessionId` is resolved
+   * when the proposal is made, against a night the DM may write and that has
+   * been played, and is where the accept writes; `sessionNumber` is the
+   * card's display half, a snapshot exactly as a roster line's name is.
+   * Accepting replaces whatever summary the night held.
+   */
+  Schema.Struct({
+    target: Schema.Literal("nightSummary"),
+    sessionId: SessionId,
+    sessionNumber: Schema.Int,
+    text: Schema.String,
   }),
   Schema.Struct({
     target: Schema.Literal("encounter"),
@@ -422,6 +439,28 @@ export const HobAsk = Schema.Struct({
 export type HobAsk = typeof HobAsk.Type;
 
 /**
+ * A question to a campaign's Hob (`/campaigns/:c/hob/ask`): `HobAsk`, or the
+ * Chronicle composer asking for a draft of one night's summary.
+ *
+ * `intent: "nightSummary"` is the composer saying which night it is writing
+ * up, so the server can bind that night before the model is called: the
+ * creator's toolkit and the campaign's own conversation, as the panel's, and
+ * a night the creator cannot write is the ordinary `NotFound`. It is not a
+ * second path to a summary: Hob offers the draft with `proposeNightSummary`
+ * and the DM keeps it through the same accept every proposal takes.
+ */
+export const HobCampaignAsk = Schema.Union([
+  HobAsk,
+  Schema.Struct({
+    threadId: Schema.optional(AssistantThreadId),
+    text: turnText,
+    intent: Schema.Literal("nightSummary"),
+    sessionId: SessionId,
+  }),
+]);
+export type HobCampaignAsk = typeof HobCampaignAsk.Type;
+
+/**
  * A question to the account's own Hob, with no campaign (`/me/hob/ask`).
  *
  * Two surfaces share this endpoint, as two share `HobAsk`'s: the character
@@ -567,6 +606,8 @@ export type HobEvent = typeof HobEvent.Type;
 export const HobAccepted = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("note"), note: Note }),
   Schema.Struct({ accepted: Schema.Literal("beat"), beat: Beat }),
+  /** The night whose summary the DM kept, carrying the summary's provenance. */
+  Schema.Struct({ accepted: Schema.Literal("nightSummary"), session: Session }),
   Schema.Struct({ accepted: Schema.Literal("encounter"), encounter: Encounter }),
   /**
    * The character a player accepted, owned by them and carrying

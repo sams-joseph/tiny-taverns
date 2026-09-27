@@ -79,6 +79,10 @@ The one survivor that pointed back into the campaign is a character a player kep
 
 `beat` is one line of prose under `session`: no title, no attachment, no reuse. It is not a `note` kind because `notes.list` has no filters, `NoteCreate.title` is non-empty and `note` would need a second container column; it is not a `session_event` kind because that log has no update or delete path and a beat jotted at a dark table will need correcting. The discipline: if a beat ever grows a title or an attachment, merge it into `note`. Creating one appends `beat-added` and rings the doorbell so a recap can order beats against combat from the log alone; the prose is not in the payload, and a correction appends nothing.
 
+## A night's entry
+
+A night keeps two things beside its detail (`0070_session_entry.ts`). `session.summary` is the DM's few sentences about it, read above the recap and never in place of it: the recap stays a view over retained detail, beats word for word, so the summary cannot become the only record. It carries its own provenance, `summary_origin` and `summary_assistant_turn_id`, because `session.origin` says where the night came from, and a night is not Hob's because its summary was drafted by Hob. The checks tie the three together: origin set exactly when the summary is, `assistant` exactly when the turn is. A DM's first write is `authored`, keeping Hob's draft (`Proposals.accept`, through `Sessions.update`) is `assistant` with the turn, and an edit keeps whichever it had, as an edited note does. `session.spotlight_seat_id` names whose night it was by the composite key `(spotlight_seat_id, campaign_id)`, so only a seat of the same campaign can be named, and a deleted seat clears the pointer alone (`set null (spotlight_seat_id)`).
+
 ## The migration ledger
 
 - Forward only. `effect/unstable/sql/Migrator` has no down concept; a mistake is a new migration.

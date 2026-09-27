@@ -225,11 +225,11 @@ export const reads = {
   /**
    * What a night is assembled into.
    *
-   * The one key with a reader and no writer, and that is honest rather than
-   * dead: the web app writes no beat, and the three sources a recap is made of
-   * — the fights, the ticked prep, the read-aloud notes — are all written from
-   * screens that are not looking at a recap. When something does write one, the
-   * key it names is already here.
+   * Its one writer is keeping a night's summary Hob drafted (`hob/conversation.ts`),
+   * which lands on the session the recap carries. The web app writes no beat,
+   * and the three sources a recap is made of — the fights, the ticked prep,
+   * the read-aloud notes — are all written from screens that are not looking
+   * at a recap.
    */
   recap: (sessionId: SessionId): ReadKey => key`recap:${sessionId}`,
 

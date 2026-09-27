@@ -16,7 +16,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
 import { fightName } from "./EncounterRuns.js";
 import { initiativeOrder } from "./liveTables.js";
@@ -122,6 +122,14 @@ const toSummary = (row: SummaryRow): SharedWorldHistorySummary =>
     createdAt: DateTime.fromDateUnsafe(row.created_at),
   });
 
+/**
+ * A night's summary as its Shared World may be told it: only when the session
+ * itself is shared with its table, by the same predicate every other part of
+ * a told night composes.
+ */
+const toldSummary = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`case when ${toldTheWorld(sql, "session")} then session.summary end`;
+
 /** Bounded, newest-admitted first. Not paged: a chronicle is read, not mined. */
 const ENTRY_LIMIT = 500;
 
@@ -134,6 +142,12 @@ export interface ToldNight {
   readonly number: number;
   readonly title: string | null;
   readonly startedAt: DateTime.Utc;
+  /**
+   * The DM's summary of the night, only when the night itself is shared with
+   * its table (`toldTheWorld` over the session); null otherwise. The title is
+   * told whatever the switch says, the summary never.
+   */
+  readonly summary: string | null;
   /** Shared beats, verbatim, oldest first. */
   readonly beats: ReadonlyArray<string>;
   /** Shared fights that have ended, in the order they started. */
@@ -158,7 +172,8 @@ export interface ToldNight {
  * once**. Pure, so the copy rule is testable without a database: whatever this
  * returns is what the group remembers, however the campaign changes later.
  *
- * Beats verbatim (they are already the DM's words at the right length), fights
+ * The night's summary first when its DM shared the night, then beats verbatim
+ * (they are already the DM's words at the right length), fights
  * by name and outcome, the ticked prep as what the night settled. Exact
  * monster numbers are deliberately not written into the body — an outcome is
  * *what happened*, and a stat block is precisely what the product keeps to the
@@ -192,6 +207,7 @@ export const renderNightEntry = (
   });
 
   const body = [
+    ...(night.summary === null ? [] : [night.summary]),
     ...night.beats,
     ...fightLines,
     ...(night.settled.length === 0
@@ -233,6 +249,8 @@ export interface NightStory {
   readonly number: number;
   readonly title: string | null;
   readonly startedAt: DateTime.Utc;
+  /** The DM's summary, when the night is shared with its table. */
+  readonly summary: string | null;
   /** The DM's shared words, oldest first, verbatim. */
   readonly beats: ReadonlyArray<string>;
   /** Shared, ended fights: name and outcome only — no roster, no numbers, no stat blocks. */
@@ -365,6 +383,7 @@ export class GroupHistory extends Context.Service<
         readonly title: string | null;
         readonly startedAt: Date;
         readonly campaignName: string;
+        readonly summary: string | null;
       }) =>
         Effect.gen(function* () {
           const beats = yield* sql<{ readonly body: string }>`
@@ -409,6 +428,7 @@ export class GroupHistory extends Context.Service<
             number: night.number,
             title: night.title,
             startedAt: DateTime.fromDateUnsafe(night.startedAt),
+            summary: night.summary,
             beats: beats.map((row) => row.body),
             fights: fights.map((row) => ({
               name: row.encounter_name,
@@ -506,9 +526,11 @@ export class GroupHistory extends Context.Service<
                 readonly title: string | null;
                 readonly started_at: Date | null;
                 readonly campaign_name: string;
+                readonly summary: string | null;
               }>`
                 select session.number, session.title, session.started_at,
-                       campaign.name as campaign_name
+                       campaign.name as campaign_name,
+                       ${toldSummary(sql)} as summary
                 from session
                 join campaign on campaign.id = session.campaign_id
                 where session.id = ${sessionId}
@@ -531,6 +553,7 @@ export class GroupHistory extends Context.Service<
                   title: night.title,
                   startedAt: night.started_at,
                   campaignName: night.campaign_name,
+                  summary: night.summary,
                 }),
               );
               const rows = yield* sql<EntryRow>`
@@ -694,9 +717,11 @@ export class GroupHistory extends Context.Service<
                 readonly title: string | null;
                 readonly started_at: Date;
                 readonly campaign_name: string;
+                readonly summary: string | null;
               }>`
                 select session.number, session.title, session.started_at,
-                       campaign.name as campaign_name
+                       campaign.name as campaign_name,
+                       ${toldSummary(sql)} as summary
                 from session
                 join campaign on campaign.id = session.campaign_id
                 where session.id = ${sessionId}
@@ -713,12 +738,14 @@ export class GroupHistory extends Context.Service<
                 title: nights[0]!.title,
                 startedAt: nights[0]!.started_at,
                 campaignName: nights[0]!.campaign_name,
+                summary: nights[0]!.summary,
               });
               return {
                 campaignName: night.campaignName,
                 number: night.number,
                 title: night.title,
                 startedAt: night.startedAt,
+                summary: night.summary,
                 beats: night.beats,
                 fights: night.fights.map((fight) => ({
                   name: fight.name,

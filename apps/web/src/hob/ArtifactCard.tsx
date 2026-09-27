@@ -113,7 +113,8 @@ function ReadAloudBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
 }
 
 /**
- * A note, beat or Chronicle entry: prose Hob wrote, in the app's own voice.
+ * A note, beat, night summary or Chronicle entry: prose Hob wrote, in the
+ * app's own voice.
  *
  * Not the read-aloud blockquote, and the difference is the point of having two.
  * Read-aloud is serif and italic because it is meant to be *spoken at the
@@ -124,7 +125,7 @@ function ReadAloudBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
 function ProseBody({
   artifact,
 }: {
-  readonly artifact: HobArtifact & { kind: "note" | "beat" | "chronicle" | "story" };
+  readonly artifact: HobArtifact & { kind: "note" | "beat" | "summary" | "chronicle" | "story" };
 }) {
   return (
     <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">{artifact.text}</p>
@@ -242,6 +243,7 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <ReadAloudBody artifact={artifact} />;
     case "note":
     case "beat":
+    case "summary":
     case "chronicle":
     case "story":
       return <ProseBody artifact={artifact} />;
@@ -281,6 +283,7 @@ export function ArtifactCard({
   const meta = ARTIFACT_KINDS[artifact.kind];
   const chronicle = artifact.kind === "chronicle";
   const story = artifact.kind === "story";
+  const summary = artifact.kind === "summary";
   const campaign = artifact.kind === "campaign";
   const character = artifact.kind === "character";
   const [editing, setEditing] = useState(false);
@@ -382,13 +385,15 @@ export function ArtifactCard({
             <span className="ml-auto text-caption leading-none text-faint">
               {story
                 ? "Current for this Shared World"
-                : chronicle
-                  ? "In the Shared World Chronicle"
-                  : campaign
-                    ? "In your campaigns"
-                    : character
-                      ? "On your roster"
-                      : "In tonight’s session"}
+                : summary
+                  ? "On the night in the Chronicle"
+                  : chronicle
+                    ? "In the Shared World Chronicle"
+                    : campaign
+                      ? "In your campaigns"
+                      : character
+                        ? "On your roster"
+                        : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -397,11 +402,13 @@ export function ArtifactCard({
               <Button size="sm" disabled={onSave === undefined} onClick={() => onSave?.(artifact)}>
                 {story
                   ? "Keep as Story So Far"
-                  : chronicle
-                    ? "Add to Chronicle"
-                    : campaign || character
-                      ? "Keep it"
-                      : "Save to session"}
+                  : summary
+                    ? "Keep as the night's summary"
+                    : chronicle
+                      ? "Add to Chronicle"
+                      : campaign || character
+                        ? "Keep it"
+                        : "Save to session"}
               </Button>
             )}
             <Button

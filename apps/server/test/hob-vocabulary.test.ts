@@ -482,6 +482,7 @@ describe("the boundary — one table's words are in no other table's schema", ()
       "listSessions",
       "proposeBeat",
       "proposeEncounter",
+      "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,

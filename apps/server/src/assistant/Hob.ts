@@ -8,6 +8,7 @@ import {
   type SharedWorldId,
   type HobAsk,
   HobBegun,
+  type HobCampaignAsk,
   HobDelta,
   HobDone,
   type HobDraftAsk,
@@ -20,7 +21,8 @@ import {
   HobToolStep,
   type HobTurn,
   HobUnavailable,
-  type NotFound,
+  NotFound,
+  type Session,
 } from "@taverns/api";
 import { Cause, Context, Effect, Layer, Option, Ref, Result, Schema, Stream } from "effect";
 import {
@@ -135,7 +137,7 @@ export class Hob extends Context.Service<
      */
     readonly ask: (
       campaignId: CampaignId,
-      ask: HobAsk,
+      ask: HobCampaignAsk,
     ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
     /** `status`, for the group surface — gated on live group membership. */
     readonly sharedWorldStatus: (
@@ -329,6 +331,19 @@ export class Hob extends Context.Service<
                 Result.isSuccess(dm) && ask.intent !== "character" ? dm.success : undefined;
               const reach = creator !== undefined ? ("dm" as const) : ("own" as const);
 
+              /**
+               * The night the Chronicle composer is writing up, bound before
+               * the model is called: only the creator writes a night, so for
+               * anybody else it is not there, and a night of another campaign
+               * is the ordinary `NotFound` from the creator's own read.
+               */
+              const night =
+                ask.intent !== "nightSummary"
+                  ? undefined
+                  : creator === undefined
+                    ? yield* new NotFound({ resource: "session", id: ask.sessionId })
+                    : yield* repositories.sessions.findById(campaignId, ask.sessionId);
+
               // The conversation, resolved before a byte of stream exists — so
               // a thread this credential may not reach is a 404 exactly as an
               // unreachable campaign is, and the model is never called. The
@@ -448,7 +463,7 @@ export class Hob extends Context.Service<
                           ),
                           (bound) => Effect.provideContext(HobToolkit, bound),
                         ),
-                        dmPrompt(campaign),
+                        dmPrompt(campaign, undefined, night),
                       )
                     : asked(
                         dmBindWithDirect(
@@ -461,7 +476,7 @@ export class Hob extends Context.Service<
                           answerId,
                           touchedDirect,
                         ),
-                        dmPrompt(campaign, directContext),
+                        dmPrompt(campaign, directContext, night),
                       )
                   : vocabulary.listed
                     ? asked(
@@ -563,7 +578,7 @@ export class Hob extends Context.Service<
                           : offered === undefined &&
                               candidates.length === 0 &&
                               !reached &&
-                              wouldNotBuild(reach, ask.text, text)
+                              wouldNotBuild(reach, ask.text, text, night !== undefined)
                             ? [unbuilt(reach)]
                             : [{ event: "done" as const, data: new HobDone({ reason }) }]),
                     ]),
@@ -881,7 +896,7 @@ const deliver = (options: {
                 ? [silence]
                 : offered === undefined &&
                     !reached &&
-                    wouldNotBuild(options.surface, options.asked, text)
+                    wouldNotBuild(options.surface, options.asked, text, false)
                   ? [unbuilt(options.surface)]
                   : [{ event: "done" as const, data: new HobDone({ reason }) }]),
           ]),
@@ -924,7 +939,7 @@ const conversation = <Tools extends AnyTools>(
   bind: Effect.Effect<Toolkit.WithHandler<Tools>>,
   system: string,
   history: ReadonlyArray<HobTurn>,
-  ask: HobAsk,
+  ask: Pick<HobAsk, "text">,
   finished: Ref.Ref<string>,
   outputs: OutputSlots,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> =>
@@ -1654,8 +1669,15 @@ export const aQuestionAboutIt = (asked: string): boolean => {
 export type BuildSurface = "dm" | "own" | "account";
 
 /** The judgement, once. See the block comment above for all four gates. */
-const wouldNotBuild = (surface: BuildSurface, asked: string, said: string): boolean =>
+const wouldNotBuild = (
+  surface: BuildSurface,
+  asked: string,
+  said: string,
+  /** The Chronicle composer asked for a night's summary, which is a build by definition. */
+  draftingASummary: boolean,
+): boolean =>
   printedTheCall(said) ||
+  draftingASummary ||
   (surface === "dm"
     ? askedForABuild(asked)
     : surface === "account"
@@ -1733,7 +1755,12 @@ const note = (
  * material: it lets Hob say "the Salt Road" instead of "this campaign", and it
  * is already in the request path.
  */
-const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string =>
+const dmPrompt = (
+  campaign: Campaign,
+  direct: HobDirectResourceContext | undefined,
+  /** The night the Chronicle composer is writing up, when it asked for a draft. */
+  night: Session | undefined,
+): string =>
   [
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for the person",
     `running a tabletop roleplaying game. You are helping them run "${campaign.name}".`,
@@ -1744,9 +1771,10 @@ const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string
     "a session you have not read: if the record does not say, say that it does not.",
     "",
     "When the DM asks you to make something new — an encounter, a note, read-aloud text,",
-    "a line about what just happened — write it and offer it with proposeEncounter,",
-    "proposeNote or proposeBeat. When your research shows an existing campaign NPC should",
-    "explicitly know or remember something, offer a Cast review row with proposeNpcAwareness.",
+    "a line about what just happened, a night's summary for the Chronicle — write it and",
+    "offer it with proposeEncounter, proposeNote, proposeBeat or proposeNightSummary.",
+    "When your research shows an existing campaign NPC should explicitly know or remember",
+    "something, offer a Cast review row with proposeNpcAwareness.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
     "offer it rather than asking permission first. Offer one thing at a time, and say",
     "one short line about it: the DM is already looking at it.",
@@ -1764,6 +1792,15 @@ const dmPrompt = (campaign: Campaign, direct?: HobDirectResourceContext): string
           "The DM has turned on Hob direct resource spending for the live fight. Only spend",
           "an existing character resource when the DM asks you to; never use it for hit points,",
           "new content or guesses, and say plainly what counter moved.",
+        ]),
+    ...(night === undefined
+      ? []
+      : [
+          "",
+          `The DM is writing up session ${String(night.number)} for the Chronicle`,
+          `(sessionId ${night.id}). Read it with sessionRecap, then offer a summary of a few`,
+          "sentences with proposeNightSummary: what happened, in the order it happened, from",
+          "the record alone.",
         ]),
   ].join("\n");
 
@@ -2038,6 +2075,8 @@ const offered = (turn: HobTurn): string | undefined => {
         turn.acceptedAt === null ? "not yet kept" : "kept"
       }: ${parts.join("; ")}]`;
     }
+    case "nightSummary":
+      return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;
     case "sharedWorldHistory":
       return `[You offered the Shared World a Chronicle entry — ${kept}: ${proposal.body}]`;
     case "sharedWorldSummary":
@@ -2048,7 +2087,7 @@ const offered = (turn: HobTurn): string | undefined => {
 const promptFor = (
   system: string,
   history: ReadonlyArray<HobTurn>,
-  ask: HobAsk,
+  ask: Pick<HobAsk, "text">,
 ): Prompt.RawInput => [
   { role: "system" as const, content: system },
   ...history.slice(-RECENT_TURNS).flatMap((turn) => {

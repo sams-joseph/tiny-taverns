@@ -3,7 +3,12 @@ import type { CampaignId, HobAccepted, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { campaign as aCampaignRow, campaignId, worldId } from "../campaign/campaign.fixtures";
+import {
+  campaign as aCampaignRow,
+  campaignId,
+  session as aSessionRow,
+  worldId,
+} from "../campaign/campaign.fixtures";
 import { characterProposal } from "../characters/characters.fixtures";
 import type { HobScope } from "./conversation";
 import { ScopedHob } from "./Hob";
@@ -811,6 +816,48 @@ describe("what Hob offers, and the one thing that writes", () => {
     );
     // And the card does not claim to be saved.
     expect(screen.queryByText("Saved")).toBeNull();
+  });
+
+  it("draws a night's summary for the Chronicle and keeps it with ids alone", async () => {
+    const drafted = "They crossed the ford at dusk and paid the ferryman in salt.";
+    server.acceptBody = {
+      accepted: "nightSummary",
+      session: {
+        ...aSessionRow,
+        summary: drafted,
+        summaryOrigin: "assistant",
+        summaryAssistantTurnId: turnId,
+      },
+    };
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, {
+        target: "nightSummary",
+        sessionId: aSessionRow.id,
+        sessionNumber: 12,
+        text: drafted,
+      }),
+      done(),
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Write up session 12 for the Chronicle.{Enter}");
+
+    expect(await screen.findByText(drafted)).toBeInTheDocument();
+    expect(screen.getByText("Session 12")).toBeInTheDocument();
+    expect(screen.getByText("Night summary")).toBeInTheDocument();
+    expect(screen.getByText("For the Chronicle")).toBeInTheDocument();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep as the night's summary" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("On the night in the Chronicle")).toBeInTheDocument();
   });
 });
 
