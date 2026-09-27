@@ -1,6 +1,19 @@
 import { Schema } from "effect";
-import { CampaignId, EncounterRunId, SessionId } from "./Ids.js";
+import {
+  AssistantTurnId,
+  CampaignCharacterId,
+  CampaignId,
+  EncounterRunId,
+  SessionId,
+} from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
+
+/** Where a night's summary came from — the two ways it can be kept. */
+export const SummaryOrigin = Schema.Literals(["authored", "assistant"]);
+export type SummaryOrigin = typeof SummaryOrigin.Type;
+
+/** A night's summary as written: a few sentences, bounded as the column is. */
+export const SessionSummaryText = Schema.String.check(Schema.isLengthBetween(1, 8000));
 
 /**
  * One night at the table. `startedAt`/`endedAt` are the whole lifecycle:
@@ -34,6 +47,28 @@ export class Session extends Schema.Class<Session>("Session")({
    * Share switch is off, reads the night as though nothing were on the table.
    */
   activeEncounterRunId: Schema.NullOr(EncounterRunId),
+  /**
+   * The DM's few sentences about the night, kept on the night **above** the
+   * detail the recap assembles, never in place of it: the beats, fights and
+   * read-alouds stay word for word underneath. Written by the DM
+   * (`SessionUpdate.summary`) or by accepting a draft Hob offered
+   * (`proposeNightSummary`); nothing else writes it.
+   */
+  summary: Schema.NullOr(Schema.String),
+  /**
+   * Where the summary came from, apart from where the night did: `assistant`
+   * with the turn that drafted it when a Hob draft was accepted, `authored`
+   * when the DM wrote it first. An edit keeps it, as an edited note keeps
+   * its own. Both are null exactly when `summary` is.
+   */
+  summaryOrigin: Schema.NullOr(SummaryOrigin),
+  summaryAssistantTurnId: Schema.NullOr(AssistantTurnId),
+  /**
+   * The seat whose night it was (a `campaign_character`), or null. Null too
+   * for a reader who cannot read that seat, exactly as
+   * `activeEncounterRunId` is for a fight they cannot see.
+   */
+  spotlightSeatId: Schema.NullOr(CampaignCharacterId),
   visibility: Visibility,
   ...provenanceFields,
   createdAt: Schema.DateTimeUtcFromString,
@@ -53,5 +88,13 @@ export const SessionUpdate = Schema.Struct({
   startedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   endedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   visibility: Schema.optional(Visibility),
+  /**
+   * The DM's summary; null (or blank) clears it. There is no field for its
+   * origin: a summary written here is the DM's, and only accepting Hob's
+   * draft (`repo/Proposals.ts`) stamps `assistant`.
+   */
+  summary: Schema.optional(Schema.NullOr(SessionSummaryText)),
+  /** A live seat of this campaign, or null for nobody. */
+  spotlightSeatId: Schema.optional(Schema.NullOr(CampaignCharacterId)),
 });
 export type SessionUpdate = typeof SessionUpdate.Type;

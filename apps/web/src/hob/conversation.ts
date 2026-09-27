@@ -278,8 +278,14 @@ const callsFor = (scope: HobScope): ScopeCalls => {
          * session is resolved server-side from `campaign.current_session_id`.
          * So a recap card left open on the Chronicle while a beat is accepted
          * stays as it was until it is reopened.
+         *
+         * A night's summary is the exception with a known night: it lands on
+         * the session row, which the nights list and that night's recap read.
          */
-        keeps: () => [reads.notes(campaignId), reads.encounters(campaignId)],
+        keeps: (accepted) =>
+          accepted.accepted === "nightSummary"
+            ? [reads.sessions(campaignId), reads.recap(accepted.session.id)]
+            : [reads.notes(campaignId), reads.encounters(campaignId)],
       };
     }
     case "sharedWorld": {

@@ -1,5 +1,7 @@
 import {
   type Actor,
+  type AssistantTurnId,
+  type CampaignCharacterId,
   type CampaignId,
   Conflict,
   CurrentActor,
@@ -9,17 +11,27 @@ import {
   type SessionCreate,
   type SessionId,
   type SessionUpdate,
+  type SummaryOrigin,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { RUN } from "./liveTables.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  proseColumn,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
   containedRowReadable,
   ensureCampaignReadable,
   ensureCampaignWritable,
+  ownedRowReadable,
   rowReadable,
   rowWritable,
 } from "./visibility.js";
@@ -32,6 +44,10 @@ export interface SessionRow extends ProvenanceColumns {
   readonly started_at: Date | null;
   readonly ended_at: Date | null;
   readonly active_encounter_run_id: EncounterRunId | null;
+  readonly summary: string | null;
+  readonly summary_origin: SummaryOrigin | null;
+  readonly summary_assistant_turn_id: AssistantTurnId | null;
+  readonly spotlight_seat_id: CampaignCharacterId | null;
 }
 
 export const toSession = (row: SessionRow): Session =>
@@ -45,19 +61,25 @@ export const toSession = (row: SessionRow): Session =>
     // Read-only on the wire. It is written by starting and ending a run, and
     // by nothing else — see `SessionUpdate`, which has no field for it.
     activeEncounterRunId: row.active_encounter_run_id,
+    summary: row.summary,
+    summaryOrigin: row.summary_origin,
+    summaryAssistantTurnId: row.summary_assistant_turn_id,
+    spotlightSeatId: row.spotlight_seat_id,
     ...provenanceOf(row),
   });
 
 /**
- * A session row as this actor may read it: every column, with the live-fight
- * pointer narrowed to runs they can read.
+ * A session row as this actor may read it: every column, with the two
+ * pointers narrowed to rows they can read.
  *
  * `active_encounter_run_id` is a pointer into `encounter_run`, and a run has
  * its own Share switch. Selected raw, it tells a player that a hidden fight is
  * on the table, when it started and ended, and its id, while every run read
  * answers them `NotFound`. So the pointer goes through the run predicate and
  * comes back null for a fight they cannot see, as though none were running.
- * Every read that serialises a `Session` for a caller selects through this.
+ * `spotlight_seat_id` goes through the seat's own predicate the party list
+ * reads with, for the same reason. Every read that serialises a `Session` for
+ * a caller selects through this.
  */
 export const sessionColumns = (
   sql: SqlClient.SqlClient,
@@ -72,7 +94,13 @@ export const sessionColumns = (
     select 1 from encounter_run
     where encounter_run.id = session.active_encounter_run_id
       and ${containedRowReadable(sql, RUN, campaignId, actor)}
-  ) then session.active_encounter_run_id end as active_encounter_run_id
+  ) then session.active_encounter_run_id end as active_encounter_run_id,
+  session.summary, session.summary_origin, session.summary_assistant_turn_id,
+  case when exists (
+    select 1 from campaign_character
+    where campaign_character.id = session.spotlight_seat_id
+      and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+  ) then session.spotlight_seat_id end as spotlight_seat_id
 `;
 
 /**
@@ -101,10 +129,17 @@ export class Sessions extends Context.Service<
       campaignId: CampaignId,
       payload: SessionCreate,
     ) => Effect.Effect<Session, NotFound | Conflict, CurrentActor>;
+    /**
+     * `from` is set only by `repo/Proposals.ts`, when the DM keeps a summary
+     * Hob drafted: the same statement then stamps the summary `assistant`
+     * with that turn. Without it a new summary is `authored`, and an edit
+     * keeps whichever it had.
+     */
     readonly update: (
       campaignId: CampaignId,
       id: SessionId,
       patch: SessionUpdate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Session, NotFound | Conflict, CurrentActor>;
     readonly remove: (
       campaignId: CampaignId,
@@ -204,6 +239,57 @@ export class Sessions extends Context.Service<
               return true;
             });
 
+      /**
+       * The summary's three columns, written together so they cannot disagree
+       * (`0070_session_entry.ts` refuses it if they do). Cleared, all three go.
+       * Kept from Hob's draft, the turn is on it. Written by the DM, a night
+       * with no summary gets an `authored` one, and an edit keeps whichever
+       * origin the summary had, as an edited note keeps its own.
+       */
+      const summarySet = (
+        summary: string | null | undefined,
+        from: AssistantOrigin | undefined,
+      ): Statement.Fragment =>
+        summary === undefined
+          ? sql``
+          : summary === null
+            ? sql`, summary = null, summary_origin = null, summary_assistant_turn_id = null`
+            : from !== undefined
+              ? sql`, summary = ${summary}, summary_origin = 'assistant',
+                    summary_assistant_turn_id = ${from.assistantTurnId}`
+              : sql`, summary = ${summary},
+                    summary_origin = coalesce(session.summary_origin, 'authored')`;
+
+      /**
+       * A spotlight names a live seat of this campaign that the creator reads,
+       * as a note's seat link does (`Notes.ensureLinkTarget`). The night is
+       * asked about first, so somebody who may not write it is told the
+       * session is not there, never anything about a seat; the composite key
+       * refuses another campaign's seat anyway, and this turns that into a
+       * `NotFound` rather than a failed statement.
+       */
+      const ensureSpotlightSeat = (
+        id: SessionId,
+        campaignId: CampaignId,
+        actor: Actor,
+        seat: CampaignCharacterId,
+      ) =>
+        Effect.gen(function* () {
+          const nights = yield* sql<{ readonly id: SessionId }>`
+            select session.id from session
+            where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+          `;
+          if (nights.length === 0) return yield* new NotFound({ resource: "session", id });
+          const seats = yield* sql<{ readonly id: CampaignCharacterId }>`
+            select campaign_character.id from campaign_character
+            where campaign_character.id = ${seat}
+              and campaign_character.campaign_id = ${campaignId}
+              and campaign_character.left_at is null
+              and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+          `;
+          if (seats.length === 0) return yield* new NotFound({ resource: "seat", id: seat });
+        });
+
       return {
         list: (campaignId) =>
           dieOnSqlError(
@@ -256,22 +342,30 @@ export class Sessions extends Context.Service<
             ),
           ),
 
-        update: (campaignId, id, patch) =>
+        update: (campaignId, id, patch, from) =>
           dieOnSqlError(
             asConflict(
               sql
                 .withTransaction(
                   Effect.gen(function* () {
                     const actor = yield* CurrentActor;
+                    const spotlight = patch.spotlightSeatId;
+                    if (spotlight !== undefined && spotlight !== null) {
+                      yield* ensureSpotlightSeat(id, campaignId, actor, spotlight);
+                    }
                     const columns = defined({
                       number: patch.number,
                       title: patch.title,
                       started_at: patch.startedAt && DateTime.toDateUtc(patch.startedAt),
                       ended_at: patch.endedAt && DateTime.toDateUtc(patch.endedAt),
                       visibility: patch.visibility,
+                      spotlight_seat_id: spotlight,
                     });
                     const rows = yield* sql<SessionRow>`
-                      update session set ${setClause(sql, columns)}
+                      update session set ${setClause(sql, columns)}${summarySet(
+                        proseColumn(patch.summary),
+                        from,
+                      )}
                       where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
                       returning *
                     `;

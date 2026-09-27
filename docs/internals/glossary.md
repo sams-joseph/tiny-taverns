@@ -31,7 +31,7 @@ Shared vocabulary for the product and the code. Public contracts and the web use
 - **combatant**: a row in a run's initiative order, a snapshot of a character or creature at seed time. Hit points on a player character write through to the character.
 - **doorbell**: the contentless fan-out `{ sessionId }` in `apps/server/src/live/LiveEvents.ts`. Clients re-read through the ordinary API when it rings; they never apply an event payload.
 - **beat**: one line of prose the DM files against a night (`beat`). The non-combat half of the record.
-- **recap**: a per-read assembly of a night from its runs, beats, notes and ticked prep. Nothing stores a summary. It has a DM shape and a narrower player shape on separate paths. The Chronicle reads every night at once through the same function (`GET …/chronicle`, `…/chronicle/player`).
+- **recap**: a per-read assembly of a night from its runs, beats, notes and ticked prep. It has a DM shape and a narrower player shape on separate paths. The Chronicle reads every night at once through the same function (`GET …/chronicle`, `…/chronicle/player`). The one stored account of a night is the DM's own **summary** on the session (`Session.summary`), which Hob may draft and only the DM keeps; it is read above the recap, never instead of it.
 - **live table**: the player's projection of the fight in progress (`GET /campaigns/:c/table`), null when there is nothing a player may know.
 
 ## Characters and corpora

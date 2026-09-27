@@ -436,6 +436,7 @@ describe("answering", () => {
       "listSessions",
       "proposeBeat",
       "proposeEncounter",
+      "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,
@@ -1696,6 +1697,7 @@ describe("what counts as asking for a build", () => {
     expect(dm.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
       "proposeBeat",
       "proposeEncounter",
+      "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
     ]);
@@ -1767,6 +1769,7 @@ describe("the assistant seam", () => {
       "listSessions",
       "proposeBeat",
       "proposeEncounter",
+      "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
       // The two group-context reads — the chronicle and the accepted summary,

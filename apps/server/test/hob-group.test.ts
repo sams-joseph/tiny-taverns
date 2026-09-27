@@ -88,6 +88,7 @@ const services = Layer.mergeAll(
       Encounters.layer,
       GroupHistory.layer,
       Notes.layer,
+      Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     ]),
   ),
   Recap.layer,
@@ -196,6 +197,13 @@ const makeFixture = Effect.gen(function* () {
   yield* asWren(
     prep.create(hagsBargain.id, played.id, { label: "DMSETTLED the ferryman lied", done: true }),
   );
+  // The DM's summary of the night, which they have not shared with their
+  // table: the world is told the night's title, never this.
+  yield* asWren(
+    sessions.update(hagsBargain.id, played.id, {
+      summary: "DMSUMMARY the hag's bargain was sealed in blood.",
+    }),
+  );
 
   // ── Unplayed prep at Wren's table: every kind the decision keeps private. ──
   yield* asWren(
@@ -290,7 +298,7 @@ const askSharedWorld = (
 const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify(requests);
 
 /** What Wren kept to the table inside the played night — see the fixture. */
-const TABLE_SECRETS = ["HIDDENFIGHT", "RUNNINGFIGHT", "DMBEAT", "DMSETTLED"] as const;
+const TABLE_SECRETS = ["HIDDENFIGHT", "RUNNINGFIGHT", "DMBEAT", "DMSETTLED", "DMSUMMARY"] as const;
 
 describe("what the model is shown", () => {
   it("carries the other table's canonical night and not one byte of its prep", async () => {

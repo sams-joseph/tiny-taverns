@@ -133,10 +133,12 @@ interface Night extends NightRows {
  * **A view, assembled per read. Nothing here is stored and nothing is
  * summarised.** The recap is five reads over retained detail — see
  * `SessionRecap` for which five and why those — and the constraint that keeps
- * it useful is the captain's standing one: the moment a stored one-line summary
- * exists, it is the only thing anyone reads, and the detail underneath it stops
- * being the campaign's memory. There is deliberately no write path in this
- * file and no model call anywhere near it.
+ * it useful is the captain's standing one: a summary that replaces the detail
+ * becomes the only thing anyone reads, and the detail stops being the
+ * campaign's memory. The DM's own summary of the night rides on the session
+ * row (`Session.summary`), above this detail rather than instead of it. There
+ * is deliberately no write path in this file and no model call anywhere near
+ * it.
  *
  * ### Two projections, two methods, two schemas
  *

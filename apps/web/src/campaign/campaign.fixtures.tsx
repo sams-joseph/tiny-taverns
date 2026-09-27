@@ -141,6 +141,11 @@ export const session = {
   // decoding rather than rendering nothing, which is the property this file
   // exists for. No screen reads it yet; the runner will.
   activeEncounterRunId: null,
+  // Nothing written about the night yet, and nobody's night in particular.
+  summary: null,
+  summaryOrigin: null,
+  summaryAssistantTurnId: null,
+  spotlightSeatId: null,
   visibility: "dm",
   ...provenance,
   ...stamps,
