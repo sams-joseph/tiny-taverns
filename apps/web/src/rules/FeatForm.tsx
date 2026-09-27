@@ -166,7 +166,7 @@ export function FeatForm({
               <div key={String(index)} className="grid grid-cols-[1fr_6rem_auto] gap-2">
                 <select
                   aria-label={`Prerequisite ${String(index + 1)} ability`}
-                  className="rounded-control border border-strong bg-surface-card px-3 py-2 text-body-s leading-body text-foreground"
+                  className="rounded-control border border-strong bg-surface-sunken px-3 py-2 text-body-s leading-body text-foreground"
                   value={row.abilityScoreId}
                   onChange={(event) =>
                     setPrerequisites(
