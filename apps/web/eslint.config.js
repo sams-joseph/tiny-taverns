@@ -1,9 +1,11 @@
 import designSystem from "@taverns/eslint-config/design-system";
 import react from "@taverns/eslint-config/react";
+import shadcn from "@taverns/eslint-config/shadcn";
 
 export default [
   ...react,
   ...designSystem,
+  ...shadcn,
   {
     // The Playwright suite runs in Node and measures pixels: a `2000px`
     // spacer is a probe rather than styling, and a fixture's `use` is

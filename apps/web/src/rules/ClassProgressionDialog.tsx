@@ -54,7 +54,7 @@ export function ClassProgressionDialog({
               {/* One line, not three tiles: the three counts are one sentence
                   about the same rows drawn below, and tiles the width of the
                   dialog read as content rather than a summary. */}
-              <p className="text-label leading-label text-muted-foreground">
+              <p className="text-label text-muted-foreground">
                 {countLine(resource.value.subclasses.length, "subclass", "subclasses")} ·{" "}
                 {countLine(resource.value.levels.length, "level", "levels")} ·{" "}
                 {countLine(resource.value.features.length, "feature", "features")}
@@ -77,7 +77,7 @@ export function ClassProgressionDialog({
                   {resource.value.levels.map((level) => (
                     <div
                       key={level.id}
-                      className="rounded-control border border-subtle bg-surface-card px-3 py-2"
+                      className="rounded-control border border-hairline bg-surface-card px-3 py-2"
                     >
                       <p className="text-body-s leading-body font-semibold text-heading">
                         {levelLabel(level)}
@@ -98,7 +98,7 @@ export function ClassProgressionDialog({
               </DetailSection>
 
               <DetailSection title="Features">
-                <div className="flex flex-col divide-y divide-subtle rounded-card border border-subtle bg-surface-card">
+                <div className="flex flex-col divide-y divide-hairline rounded-card border border-hairline bg-surface-card">
                   {resource.value.features.map((feature) => (
                     <div key={feature.id} className="px-3 py-2">
                       <p className="text-body-s leading-body font-semibold text-heading">

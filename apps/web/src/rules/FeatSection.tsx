@@ -40,7 +40,7 @@ function FeatCard({
   readonly onEdit: (() => void) | undefined;
 }) {
   return (
-    <article className="flex min-w-0 flex-col gap-3 rounded-card border border-subtle bg-surface-card p-4 shadow-1">
+    <article className="flex min-w-0 flex-col gap-3 rounded-card border border-hairline bg-surface-card p-4 shadow-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <SectionHeading as="h3" size="title" className="truncate">

@@ -101,7 +101,7 @@ export function MagicItemGrid({
             </div>
           </CardHeader>
           <CardContent className="gap-4">
-            <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-label leading-label text-muted-foreground">
+            <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-label text-muted-foreground">
               <span>Rarity</span>
               <span className="text-heading">{item.rarityName}</span>
               <span>Attunement</span>
@@ -338,7 +338,7 @@ export function MagicItemFormDialog({
               aria-label="Rarity name"
             />
           </div>
-          <label className="flex items-center gap-2 text-label leading-label text-muted-foreground">
+          <label className="flex items-center gap-2 text-label text-muted-foreground">
             <input
               type="checkbox"
               checked={requiresAttunement}
@@ -361,7 +361,7 @@ export function MagicItemFormDialog({
             aria-label="Description"
           />
           {magicItem !== undefined && (
-            <p className="text-label leading-label text-faint">
+            <p className="text-label text-faint">
               Variant links are source data; your own item is saved as a standalone original.
             </p>
           )}

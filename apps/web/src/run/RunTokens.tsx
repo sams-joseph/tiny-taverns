@@ -137,6 +137,7 @@ function Reach({ props }: { readonly props: TokenProps }) {
       data-slot="token-reach"
       aria-hidden
       className="pointer-events-none absolute rounded-xs border border-dashed border-accent bg-accent/5"
+      // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
       style={percentOf(rect, plane)}
     />
   );
@@ -238,6 +239,7 @@ export function RunTokens(props: TokenProps) {
               "transition-[left,top] duration-(--dur-base) ease-out",
               fade(combatant),
             )}
+            // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
             style={at(combatant.position)}
           >
             {face(combatant)}
@@ -256,6 +258,7 @@ export function RunTokens(props: TokenProps) {
           <span
             key={combatant.id}
             className={cn("absolute", fade(combatant))}
+            // eslint-disable-next-line shadcn/no-inline-styles -- a box on the battle-map plane, computed from the board; no class can carry it.
             style={at(combatant.position)}
           >
             {face(combatant)}

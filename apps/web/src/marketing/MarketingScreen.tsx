@@ -240,6 +240,7 @@ function Hero(): ReactNode {
           semantic slot rather than the ramp step it happens to resolve to. */}
       <div
         aria-hidden="true"
+        // eslint-disable-next-line shadcn/no-arbitrary-values -- the gradient's shape is the drawing's; its colour is the accent token.
         className="absolute inset-0 bg-[radial-gradient(60%_90%_at_22%_15%,color-mix(in_oklab,var(--color-accent)_14%,transparent),transparent_70%)]"
       />
       <div className="relative mx-auto grid max-w-275 items-center gap-10 @4xl:grid-cols-[1.05fr_0.95fr] @4xl:gap-18">
