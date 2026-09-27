@@ -32,6 +32,7 @@ pnpm -F web e2e -g "760px party"               # one title: "<width>px <screen>"
   - `player-table.spec.ts`: a seated player's shared battle map filling its column at the picture's shape, each token on its square, on top, and pressing nothing.
   - `hob.spec.ts`: the Hob panel walked across navigation, inline and as the overlay.
   - `global-nav.spec.ts`: the global row's panels, opened with a pointer and shut with Escape.
+  - `fields.spec.ts`: a text field in the New campaign dialog and in the _Make a check_ card computes a darker fill than the surface behind it.
   - `menu-highlight.spec.ts`: a hovered or keyboard-highlighted row in a top-nav popup (a global panel, the campaign row's _More_) computes a fill that is neither the popup's nor its own at rest.
   - `hero.spec.ts`: the Overview heroes with a cover picture, while Hob draws one, and when the picture fails to load.
   - `loading.spec.ts`: the page skeleton held open in the Overview's centred frame, its edges on the Overview content's.

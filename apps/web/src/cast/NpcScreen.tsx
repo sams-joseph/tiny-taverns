@@ -827,7 +827,7 @@ function KnowledgePanel({
             <Field label="Source kind" htmlFor="npc-knowledge-source-kind">
               <select
                 id="npc-knowledge-source-kind"
-                className="h-10 rounded-control border border-hairline bg-surface-raised px-3 text-body-s text-foreground"
+                className="h-10 rounded-control border border-hairline bg-surface-sunken px-3 text-body-s text-foreground"
                 value={sourceKind}
                 onChange={(event) =>
                   setSourceKind(event.target.value as NpcKnowledgeFact["sourceKind"])

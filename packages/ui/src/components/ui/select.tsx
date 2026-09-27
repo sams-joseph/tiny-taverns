@@ -38,7 +38,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
       data-slot="select-trigger"
       className={cn(
         "flex h-control w-full items-center justify-between gap-2 px-3",
-        "rounded-control border border-strong bg-surface-card",
+        "rounded-control border border-strong bg-surface-sunken",
         "font-sans text-body-s text-foreground whitespace-nowrap",
         "cursor-pointer transition-control outline-none select-none",
         "data-placeholder:text-faint",

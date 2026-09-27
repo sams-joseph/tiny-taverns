@@ -27,7 +27,7 @@ function ComboboxInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
     <ComboboxPrimitive.Input
       data-slot="combobox-input"
       className={cn(
-        "block h-control w-full min-w-0 rounded-control border border-strong bg-surface-card px-3",
+        "block h-control w-full min-w-0 rounded-control border border-strong bg-surface-sunken px-3",
         "font-sans text-body-s text-foreground transition-control outline-none placeholder:text-faint",
         "focus-visible:border-accent focus-visible:ring-focus",
         "disabled:cursor-not-allowed disabled:opacity-50",
@@ -178,7 +178,7 @@ function ComboboxChips({ className, ...props }: ComboboxPrimitive.Chips.Props) {
       data-slot="combobox-chips"
       className={cn(
         "flex min-h-control w-full min-w-0 flex-wrap items-center gap-1.5 rounded-control",
-        "border border-strong bg-surface-card px-2 py-1 transition-control",
+        "border border-strong bg-surface-sunken px-2 py-1 transition-control",
         "focus-within:border-accent focus-within:ring-focus",
         className,
       )}

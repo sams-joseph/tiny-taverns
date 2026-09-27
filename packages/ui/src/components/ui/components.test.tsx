@@ -9,6 +9,7 @@ import { Badge } from "./badge";
 import { Button } from "./button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./card";
 import { Checkbox } from "./checkbox";
+import { Combobox, ComboboxChips, ComboboxChipsInput, ComboboxInput } from "./combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,7 @@ import { Kbd } from "./kbd";
 import { Label } from "./label";
 import { SectionHeading } from "./section-heading";
 import { PageHeader } from "./page-header";
+import { Select, SelectTrigger, SelectValue } from "./select";
 import { EmptyState, FailureNotice, Loading } from "./states";
 import { Switch } from "./switch";
 import { navPillVariants, Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
@@ -123,6 +125,41 @@ describe("Label and Input", () => {
     const input = screen.getByLabelText("Damage");
     expect(input).toHaveValue("2d6+3");
     expect(input).toHaveClass("font-mono");
+  });
+});
+
+describe("field controls", () => {
+  // The delivery's readme: "Wells (inputs, footers) are `--surface-sunken`". A
+  // field one step darker than the card or dialog it sits in is what tells it
+  // apart from the surface; drawn in `--surface-card` it vanished into both.
+  it("fill every text-entry box with the sunken surface", () => {
+    render(
+      <>
+        <Input aria-label="Name" />
+        <Select>
+          <SelectTrigger aria-label="Size">
+            <SelectValue placeholder="Size" />
+          </SelectTrigger>
+        </Select>
+        <Combobox items={["Goblin"]}>
+          <ComboboxInput aria-label="Creature" />
+        </Combobox>
+        <Combobox items={["Goblin"]} multiple>
+          <ComboboxChips data-testid="chips">
+            <ComboboxChipsInput aria-label="Creatures" />
+          </ComboboxChips>
+        </Combobox>
+      </>,
+    );
+    for (const field of [
+      screen.getByRole("textbox", { name: "Name" }),
+      screen.getByRole("combobox", { name: "Size" }),
+      screen.getByRole("combobox", { name: "Creature" }),
+      screen.getByTestId("chips"),
+    ]) {
+      expect(field).toHaveClass("bg-surface-sunken");
+      expect(field).not.toHaveClass("bg-surface-card");
+    }
   });
 });
 
