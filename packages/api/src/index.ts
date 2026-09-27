@@ -8,6 +8,7 @@ export * from "./Campaign.js";
 export * from "./CampaignImage.js";
 export * from "./Character.js";
 export * from "./CharacterOption.js";
+export * from "./Chronicle.js";
 export * from "./Combatant.js";
 export * from "./Creature.js";
 export * from "./Encounter.js";
