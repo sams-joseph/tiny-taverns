@@ -9,6 +9,8 @@ import {
   chronicle,
   installChronicleServer,
   renderChronicle,
+  saltRoad,
+  saltRoadActId,
   session11,
   session11Id,
   session12,
@@ -396,5 +398,162 @@ describe("when the load fails", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("acts", () => {
+  const actsPath = `/campaigns/${campaignId}/acts`;
+  const actReads = (): number =>
+    server.calls.filter((call) => call.method === "GET" && call.pathname === actsPath).length;
+  const writes = (method: string) => server.calls.filter((call) => call.method === method);
+
+  it("heads the nights of an act with its title and span, and leaves older nights headless", async () => {
+    await renderChronicle();
+    const newest = await night(12);
+
+    const act = screen.getByRole("region", { name: "Act II · The salt road" });
+    expect(within(act).getByRole("heading", { level: 2 })).toHaveTextContent(
+      "Act II · The salt road",
+    );
+    expect(within(act).getByRole("heading", { level: 2 }).parentElement).toHaveTextContent(
+      /^Act II · The salt roadSession 12$/,
+    );
+    expect(act).toContainElement(newest);
+    expect(act).not.toContainElement(await night(11));
+    // Kept to the DM, so no *Shared* mark on it.
+    expect(within(act).queryByText("Shared")).toBeNull();
+  });
+
+  it("indexes Jump to by act", async () => {
+    await renderChronicle();
+    const index = await screen.findByRole("list", { name: "Jump to" });
+    const rows = within(index)
+      .getAllByRole("listitem")
+      .map((item) => item.textContent);
+    expect(rows).toEqual(["Act II · The salt road", "12Session 12", "11Session 11"]);
+  });
+
+  it("starts a new act at an opened night, and re-reads the acts", async () => {
+    const brine = {
+      ...saltRoad,
+      id: "2b1f2a1e-0000-4000-8000-000000000a11",
+      title: "Act I · Out of Vell",
+      firstSessionNumber: 11,
+    };
+    server.routes.set(`POST ${actsPath}`, { status: 200, body: brine });
+    await renderChronicle();
+    await userEvent.click(await header(11));
+    const card = await night(11);
+
+    // A night that already starts an act offers nothing: its heading has the commands.
+    expect(
+      within(await night(12)).queryByRole("button", { name: "Start a new act here" }),
+    ).toBeNull();
+
+    await userEvent.click(within(card).getByRole("button", { name: "Start a new act here" }));
+    // Nothing is sent for a title that is only space.
+    await userEvent.type(within(card).getByLabelText("Act title"), "   ");
+    await userEvent.click(within(card).getByRole("button", { name: "Start act" }));
+    expect(within(card).getByRole("alert")).toHaveTextContent("An act needs a title.");
+    expect(writes("POST")).toHaveLength(0);
+
+    const before = actReads();
+    server.routes.set(`GET ${actsPath}`, { status: 200, body: [brine, saltRoad] });
+    await userEvent.clear(within(card).getByLabelText("Act title"));
+    await userEvent.type(within(card).getByLabelText("Act title"), "  Act I · Out of Vell ");
+    await userEvent.click(within(card).getByRole("button", { name: "Start act" }));
+
+    await waitFor(() => expect(writes("POST")).toHaveLength(1));
+    expect(writes("POST")[0]!.body).toEqual({
+      title: "Act I · Out of Vell",
+      firstSessionNumber: 11,
+    });
+    await waitFor(() => expect(actReads()).toBeGreaterThan(before));
+    const act = await screen.findByRole("region", { name: "Act I · Out of Vell" });
+    expect(act).toContainElement(await night(11));
+    expect(within(card).queryByRole("button", { name: "Start a new act here" })).toBeNull();
+  });
+
+  it("renames and shares an act from its heading", async () => {
+    server.routes.set(`PATCH ${actsPath}/${saltRoadActId}`, {
+      status: 200,
+      body: { ...saltRoad, title: "Act II · Salt and glass", visibility: "shared" },
+    });
+    await renderChronicle();
+    await night(12);
+    const before = actReads();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Act actions: Act II · The salt road" }),
+    );
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename or share" }));
+    const dialog = await screen.findByRole("dialog", { name: "Rename or share the act" });
+    await userEvent.clear(within(dialog).getByLabelText("Title"));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Act II · Salt and glass");
+    await userEvent.click(within(dialog).getByRole("switch"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save act" }));
+
+    await waitFor(() => expect(writes("PATCH")).toHaveLength(1));
+    expect(writes("PATCH")[0]!.pathname).toBe(`${actsPath}/${saltRoadActId}`);
+    expect(writes("PATCH")[0]!.body).toEqual({
+      title: "Act II · Salt and glass",
+      visibility: "shared",
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(actReads()).toBeGreaterThan(before);
+  });
+
+  it("marks a shared act for the DM, and unshares it the same way", async () => {
+    const shared = { ...saltRoad, visibility: "shared" };
+    server.routes.set(`GET ${actsPath}`, { status: 200, body: [shared] });
+    server.routes.set(`PATCH ${actsPath}/${saltRoadActId}`, { status: 200, body: saltRoad });
+    await renderChronicle();
+    await night(12);
+    const act = screen.getByRole("region", { name: "Act II · The salt road" });
+    expect(within(act).getByText("Shared")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Act actions: Act II · The salt road" }),
+    );
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename or share" }));
+    const dialog = await screen.findByRole("dialog", { name: "Rename or share the act" });
+    expect(within(dialog).getByRole("switch")).toBeChecked();
+    await userEvent.click(within(dialog).getByRole("switch"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save act" }));
+
+    await waitFor(() => expect(writes("PATCH")).toHaveLength(1));
+    expect(writes("PATCH")[0]!.body).toMatchObject({ visibility: "dm" });
+  });
+
+  it("asks before removing an act, and keeps it when told to", async () => {
+    server.routes.set(`DELETE ${actsPath}/${saltRoadActId}`, { status: 204, body: null });
+    await renderChronicle();
+    await night(12);
+    const open = async () => {
+      await userEvent.click(
+        screen.getByRole("button", { name: "Act actions: Act II · The salt road" }),
+      );
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Remove act" }));
+      return screen.findByRole("dialog", { name: "Remove Act II · The salt road?" });
+    };
+
+    await userEvent.click(within(await open()).getByRole("button", { name: "Keep it" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(writes("DELETE")).toHaveLength(0);
+
+    const before = actReads();
+    server.routes.set(`GET ${actsPath}`, { status: 200, body: [] });
+    const dialog = await open();
+    expect(within(dialog).getByText(/Its nights stay in the Chronicle/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove act" }));
+
+    await waitFor(() => expect(writes("DELETE")).toHaveLength(1));
+    expect(writes("DELETE")[0]!.pathname).toBe(`${actsPath}/${saltRoadActId}`);
+    await waitFor(() => expect(actReads()).toBeGreaterThan(before));
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Act II · The salt road" })).toBeNull(),
+    );
+    // The night stays.
+    expect(await night(12)).toBeInTheDocument();
   });
 });

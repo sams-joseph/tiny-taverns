@@ -6,7 +6,8 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { useMemo } from "react";
-import { ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
+import { groupByAct } from "./acts";
+import { ActSections, ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
 import { spotlightName } from "./entry";
 import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./nights";
 import { loadPlayerChronicle, sessionsOf, type PlayerChronicleView } from "./load";
@@ -42,8 +43,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * The DM-only box (its beats are not in this read at all), a link on an
  * encounter chip (the encounter's page is the creator's), the Spotlight counts
- * (the DM's balancing tool), and anything that writes: the composer, *Edit*,
- * *Clear*, the share switches.
+ * (the DM's balancing tool), anything that writes (the composer, *Edit*,
+ * *Clear*, the share switches) and any command on an act: a player reads the
+ * shared acts' titles and nothing else of them.
  */
 
 /** The campaign and the record a player may read, keyed on the campaign. */
@@ -52,6 +54,7 @@ const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
     reads.campaign(campaignId),
     reads.sessions(campaignId),
     reads.party(campaignId),
+    reads.acts(campaignId),
   ]),
 );
 
@@ -116,20 +119,27 @@ function PlayerChronicle({
     );
   }
 
+  const groups = groupByAct(sessions, view.acts);
+  const byId = new Map(nights.map((night) => [night.session.id, night]));
+
   return (
     <ChronicleColumns
-      main={nights.map((night) => (
-        <SessionEntry
-          key={night.session.id}
-          session={night.session}
-          spotlight={spotlightName(night.session, view.party)}
-          open={open.isOpen(night.session.id)}
-          onToggle={() => open.toggle(night.session.id)}
-        >
-          <NightBody audience={{ kind: "player" }} night={night} />
-        </SessionEntry>
-      ))}
-      aside={<JumpTo sessions={sessions} onJump={open.jump} />}
+      main={
+        <ActSections
+          groups={groups}
+          night={(session) => (
+            <SessionEntry
+              session={session}
+              spotlight={spotlightName(session, view.party)}
+              open={open.isOpen(session.id)}
+              onToggle={() => open.toggle(session.id)}
+            >
+              <NightBody audience={{ kind: "player" }} night={byId.get(session.id)!} />
+            </SessionEntry>
+          )}
+        />
+      }
+      aside={<JumpTo groups={groups} onJump={open.jump} />}
     />
   );
 }

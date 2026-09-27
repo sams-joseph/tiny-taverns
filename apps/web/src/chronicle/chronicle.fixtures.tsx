@@ -287,6 +287,23 @@ export const chronicle = [
   { session: session11, runs: [bridgeRun, carriedRun], beats: [beat, sharedBeat] },
 ];
 
+export const saltRoadActId = "2b1f2a1e-0000-4000-8000-000000000a12";
+
+/**
+ * The act session 12 starts, kept to the DM — so the newest night reads under
+ * a heading and session 11, older than every act, reads under none and can
+ * start one.
+ */
+export const saltRoad = {
+  id: saltRoadActId,
+  campaignId,
+  title: "Act II · The salt road",
+  firstSessionNumber: 12,
+  visibility: "dm",
+  ...provenance,
+  ...stamps,
+};
+
 export interface Answer {
   readonly status: number;
   readonly body: unknown;
@@ -342,6 +359,7 @@ export const fullChronicle = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
     [`GET /campaigns/${campaignId}/chronicle`, { status: 200, body: chronicle }],
+    [`GET /campaigns/${campaignId}/acts`, { status: 200, body: [saltRoad] }],
     [
       `GET /campaigns/${campaignId}/sessions/${session12Id}/prep`,
       { status: 200, body: [prepItem] },
@@ -417,7 +435,7 @@ export const installChronicleServer = (): StubServer => {
       body: { _tag: "NotFound", resource: "campaign", id: campaignId },
     };
     return Promise.resolve(
-      new Response(JSON.stringify(answer.body), {
+      new Response(answer.status === 204 ? null : JSON.stringify(answer.body), {
         status: answer.status,
         headers: { "content-type": "application/json" },
       }),

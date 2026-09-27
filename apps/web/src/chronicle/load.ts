@@ -1,5 +1,6 @@
 import type {
   Campaign,
+  CampaignAct,
   CampaignId,
   ChronicleNight,
   PartySeat,
@@ -41,6 +42,8 @@ export interface ChronicleSpine {
    * honest *no*: the DM writes by hand.
    */
   readonly hobAvailable: boolean;
+  /** Every act, which groups the nights (`acts.ts`). */
+  readonly acts: ReadonlyArray<CampaignAct>;
 }
 
 export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsClient) =>
@@ -52,10 +55,11 @@ export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsCl
           Effect.map((status) => status.available),
           Effect.orElseSucceed(() => false),
         ),
+        client.acts.list({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     ),
-    ([nights, hobAvailable]) => ({ nights, hobAvailable }) satisfies ChronicleSpine,
+    ([nights, hobAvailable, acts]) => ({ nights, hobAvailable, acts }) satisfies ChronicleSpine,
   );
 
 /**
@@ -68,21 +72,23 @@ export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsCl
  * shared beats, and a run named only when its encounter is Shared and Ready.
  * The DM's `chronicle.read` is behind the creator gate and would answer a
  * player a 404 — but the point of the narrow endpoint is that the screen never
- * has to depend on that. Nothing is filtered afterwards; a night the DM kept to
- * themselves is not in the answer at all.
+ * has to depend on that. `acts.list` is `rowReadable` and answers a player only
+ * the acts the DM shared. Nothing is filtered afterwards; a night or an act
+ * the DM kept to themselves is not in the answer at all.
  */
 export const loadPlayerChronicle = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [campaign, nights, party] = yield* Effect.all(
+    const [campaign, nights, party, acts] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.chronicle.readAsPlayer({ params: { campaignId } }),
         client.party.list({ params: { campaignId } }),
+        client.acts.list({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     );
 
-    return { campaign, nights, party } satisfies PlayerChronicleView;
+    return { campaign, nights, party, acts } satisfies PlayerChronicleView;
   });
 
 export interface PlayerChronicleView {
@@ -95,6 +101,8 @@ export interface PlayerChronicleView {
    * and the server has already answered its pointer `null`.
    */
   readonly party: ReadonlyArray<PartySeat>;
+  /** Only the acts the DM shared: the same list, answered by `rowReadable`. */
+  readonly acts: ReadonlyArray<CampaignAct>;
 }
 
 /** Either audience's night: the card and its body read nothing past these. */

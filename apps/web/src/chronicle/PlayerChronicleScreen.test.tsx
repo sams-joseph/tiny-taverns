@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { seatId } from "../test/ids";
-import { beat, sharedBeat, summary11 } from "./chronicle.fixtures";
+import { beat, saltRoad, sharedBeat, summary11 } from "./chronicle.fixtures";
 import {
   campaignId,
   installPlayerChronicleServer,
@@ -208,5 +208,47 @@ describe("when the load fails", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("acts", () => {
+  it("draws no heading and no act command when the DM shared no act", async () => {
+    await renderPlayerChronicle();
+    await userEvent.click(await header(11));
+    const card = await night(11);
+    await within(card).findByText(sharedBeat.body);
+
+    // No act heads the nights: no named region holds them.
+    expect(screen.queryAllByRole("region").filter((region) => region.contains(card))).toEqual([]);
+    expect(screen.queryByRole("button", { name: /Act actions/ })).toBeNull();
+    expect(within(card).queryByRole("button", { name: "Start a new act here" })).toBeNull();
+  });
+
+  it("heads the nights with a shared act's title, and offers nothing to do with it", async () => {
+    // The DM shared an act starting at 11, and nothing past it: both of this
+    // player's nights read under it.
+    server.routes.set(`GET /campaigns/${campaignId}/acts`, {
+      status: 200,
+      body: [
+        {
+          ...saltRoad,
+          id: "2b1f2a1e-0000-4000-8000-000000000a11",
+          title: "Act I · Out of Vell",
+          firstSessionNumber: 11,
+          visibility: "shared",
+        },
+      ],
+    });
+    await renderPlayerChronicle();
+    const act = await screen.findByRole("region", { name: "Act I · Out of Vell" });
+
+    expect(within(act).getByText("Sessions 11–12")).toBeInTheDocument();
+    expect(act).toContainElement(await night(11));
+    expect(act).toContainElement(await night(12));
+    expect(within(act).queryByRole("button", { name: /Act actions/ })).toBeNull();
+    expect(within(act).queryByText("Shared")).toBeNull();
+    const index = screen.getByRole("list", { name: "Jump to" });
+    expect(within(index).getByText("Act I · Out of Vell")).toBeInTheDocument();
+    expect(server.calls.every((call) => call.method === "GET")).toBe(true);
   });
 });

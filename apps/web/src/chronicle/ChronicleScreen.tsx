@@ -6,7 +6,9 @@ import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { useMemo } from "react";
-import { ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
+import { ActActions, StartActHere } from "./ActParts";
+import { groupByAct } from "./acts";
+import { ActSections, ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
 import { nightToWriteUp, spotlightName } from "./entry";
 import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./nights";
 import { loadChronicleSpine, sessionsOf, type ChronicleSpine } from "./load";
@@ -19,8 +21,10 @@ import { SpotlightCard } from "./SpotlightCard";
  * The Chronicle — `Campaign Overview.dc.html`'s Chronicle tab against the real
  * API, **the DM's projection.**
  *
- * The nights, newest first, each a card that opens; *Jump to* and the
- * Spotlight beside them and *Expand all* in the header. The page is centred at
+ * The nights, newest first under their acts, each a card that opens; *Jump to*
+ * and the Spotlight beside them and *Expand all* in the header. An opened
+ * night can start a new act, and an act's heading carries its rename, share
+ * and remove (`ActParts.tsx`). The page is centred at
  * the Overview's width, like every campaign destination the redesign draws,
  * and scrolls with the window. It reads the whole record once
  * (`loadChronicleSpine`), so a closed card can clamp its night's summary and
@@ -36,8 +40,7 @@ import { SpotlightCard } from "./SpotlightCard";
  *
  * ### What the drawing has that this does not, yet
  *
- * - **Acts and the story so far.** The story leads the main column, above the
- *   composer; acts group the nights.
+ * - **The story so far.** It leads the main column, above the composer.
  * - **Level-ups, loot and who was met.** Nothing records any of them, and the
  *   maintainer chose to leave them out.
  *
@@ -58,15 +61,16 @@ import { SpotlightCard } from "./SpotlightCard";
  */
 
 /**
- * The record, keyed on the campaign. It answers `sessions` (opening or
- * finishing a night, keeping its summary or a beat) and `encounters`, which
- * starting or ending a fight names and which deleting an encounter names when
- * it leaves that encounter's runs with nothing to open.
+ * The record and its acts, keyed on the campaign. It answers `sessions`
+ * (opening or finishing a night, keeping its summary or a beat), `encounters`,
+ * which starting or ending a fight names and which deleting an encounter names
+ * when it leaves that encounter's runs with nothing to open, and `acts`.
  */
 const spineAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(loadChronicleSpine(campaignId), [
     reads.sessions(campaignId),
     reads.encounters(campaignId),
+    reads.acts(campaignId),
   ]),
 );
 
@@ -131,6 +135,9 @@ function Chronicle({
     );
   }
 
+  const groups = groupByAct(sessions, extra.acts);
+  const byId = new Map(nights.map((night) => [night.session.id, night]));
+
   return (
     <ChronicleColumns
       main={
@@ -149,28 +156,32 @@ function Chronicle({
               onCancel={undefined}
             />
           )}
-          {nights.map((night) => (
-            <SessionEntry
-              key={night.session.id}
-              session={night.session}
-              spotlight={spotlightName(night.session, view.party)}
-              open={open.isOpen(night.session.id)}
-              onToggle={() => open.toggle(night.session.id)}
-            >
-              <DmNight
-                campaign={view.campaign}
-                night={night}
-                party={view.party}
-                hobAvailable={extra.hobAvailable}
-                writtenAbove={night.session.id === writeUp?.session.id}
-              />
-            </SessionEntry>
-          ))}
+          <ActSections
+            groups={groups}
+            actions={({ act }) => <ActActions campaignId={campaignId} act={act} />}
+            night={(session) => (
+              <SessionEntry
+                session={session}
+                spotlight={spotlightName(session, view.party)}
+                open={open.isOpen(session.id)}
+                onToggle={() => open.toggle(session.id)}
+              >
+                <DmNight
+                  campaign={view.campaign}
+                  night={byId.get(session.id)!}
+                  party={view.party}
+                  hobAvailable={extra.hobAvailable}
+                  writtenAbove={session.id === writeUp?.session.id}
+                />
+                <StartActHere campaignId={campaignId} session={session} acts={extra.acts} />
+              </SessionEntry>
+            )}
+          />
         </>
       }
       aside={
         <>
-          <JumpTo sessions={sessions} onJump={open.jump} />
+          <JumpTo groups={groups} onJump={open.jump} />
           <SpotlightCard party={view.party} sessions={sessions} />
         </>
       }
