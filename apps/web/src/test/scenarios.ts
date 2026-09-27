@@ -13,8 +13,14 @@ import {
   type Answer,
 } from "../campaign/campaign.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
-import { chronicle, fullChronicle, session11, session12 } from "../chronicle/chronicle.fixtures";
-import { playerRecord } from "../chronicle/player.fixtures";
+import {
+  chronicle,
+  fullChronicle,
+  keptStory,
+  session11,
+  session12,
+} from "../chronicle/chronicle.fixtures";
+import { playerRecord, sharedStory } from "../chronicle/player.fixtures";
 import {
   brannocSheetSeat,
   fullParty,
@@ -92,6 +98,9 @@ const creator = (): Map<string, Answer> => {
     status: 200,
     body: chronicle.map((night, i) => ({ ...night, session: spotlit[i] })),
   });
+  // A kept story so far, so the Chronicle's head is measured over prose and a
+  // Previously rather than the empty card's one line.
+  routes.set(`GET /campaigns/${campaignId}/story`, { status: 200, body: keptStory });
   // The Notes tab's shelf, after the Chronicle's empty list, so the list and
   // the pane are measured over notes: a read-aloud, two paragraphs, a shared
   // one and an empty one. Grusk is linked to three encounters and three
@@ -131,7 +140,12 @@ export const scenarios = {
   player,
   // The same player with two nights their DM shared, and each one's narrow
   // recap: a conversation told by its kind, and a moment the DM shared.
-  "player-chronicle": () => new Map([...player(), ...playerRecord()]),
+  "player-chronicle": () =>
+    new Map([
+      ...player(),
+      ...playerRecord(),
+      [`GET /campaigns/${campaignId}/story/player`, { status: 200, body: sharedStory }],
+    ]),
   // The same player with a fight on the table and its map shared: themselves,
   // an ally and a monster in the order, and the board with two of them on it.
   // The doorbell is refused, as `PlayerTableScreen.test.tsx` refuses it: a

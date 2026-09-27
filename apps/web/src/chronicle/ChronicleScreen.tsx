@@ -16,6 +16,7 @@ import { NightComposer } from "./NightComposer";
 import { DmNight } from "./NightEntry";
 import { SessionEntry } from "./SessionEntry";
 import { SpotlightCard } from "./SpotlightCard";
+import { StoryCard } from "./StoryCard";
 
 /**
  * The Chronicle — `Campaign Overview.dc.html`'s Chronicle tab against the real
@@ -40,7 +41,6 @@ import { SpotlightCard } from "./SpotlightCard";
  *
  * ### What the drawing has that this does not, yet
  *
- * - **The story so far.** It leads the main column, above the composer.
  * - **Level-ups, loot and who was met.** Nothing records any of them, and the
  *   maintainer chose to leave them out.
  *
@@ -64,13 +64,15 @@ import { SpotlightCard } from "./SpotlightCard";
  * The record and its acts, keyed on the campaign. It answers `sessions`
  * (opening or finishing a night, keeping its summary or a beat), `encounters`,
  * which starting or ending a fight names and which deleting an encounter names
- * when it leaves that encounter's runs with nothing to open, and `acts`.
+ * when it leaves that encounter's runs with nothing to open, `acts`, and
+ * `story`, which keeping, editing, sharing or clearing the story names.
  */
 const spineAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(loadChronicleSpine(campaignId), [
     reads.sessions(campaignId),
     reads.encounters(campaignId),
     reads.acts(campaignId),
+    reads.story(campaignId),
   ]),
 );
 
@@ -142,6 +144,12 @@ function Chronicle({
     <ChronicleColumns
       main={
         <>
+          <StoryCard
+            campaignId={campaignId}
+            story={extra.story}
+            sessions={sessions}
+            hobAvailable={extra.hobAvailable}
+          />
           {writeUp !== undefined && (
             <NightComposer
               // Another night is another draft, with fields of its own.

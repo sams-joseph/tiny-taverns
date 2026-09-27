@@ -8,14 +8,16 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * *Jump to* with no scroller of its own, the Spotlight's rows in one line, a
  * jump and a `?session=` link landing a night under the chrome, a closed
  * night's summary clamped to two lines, every night expanded still scrolling
- * with the window, and an opened night's encounter chips wrapping on a phone
- * without clipping. All of it is layout, which jsdom does not compute.
+ * with the window, an opened night's encounter chips wrapping on a phone
+ * without clipping, and the story so far at the head of the nights, growing
+ * the page rather than scrolling inside itself. All of it is layout, which
+ * jsdom does not compute.
  *
  * Read over the creator scenario's two nights (`chronicle.fixtures.tsx`):
  * session 11 holds a written summary longer than two lines at any width, a kept
  * beat, a shared one, and a conversation and a fight; session 12 is still open
- * with no summary, so the composer card for writing it up leads the main
- * column above the nights, over the seated party. Session 12 starts the one
+ * with no summary, so the composer card for writing it up sits under the
+ * story so far and above the nights, over the seated party. Session 12 starts the one
  * act, and session 11 is older than it.
  */
 
@@ -27,6 +29,41 @@ const playerChronicle = screens.find((screen) => screen.name === "player-chronic
  * above where the Overview's two columns — 560 + 24 + 300 — would wrap.
  */
 const ASIDE_FROM = 896;
+
+/**
+ * The story so far heads the nights, as wide as they are, and grows the page:
+ * nothing in it scrolls or clips, whatever the width.
+ */
+const storyHeadsTheNights = async (page: Page, newest: Locator) => {
+  const story = page.getByRole("region", { name: "The story so far" });
+  await expect(story.getByText("Previously, to open session 12")).toBeVisible();
+  const head = await box(story);
+  const nights = await box(newest);
+  expect.soft(head.x, "story left").toBeCloseTo(nights.x, 0);
+  expect.soft(head.width, "story width").toBeCloseTo(nights.width, 0);
+  expect.soft(head.y + head.height, "story above the nights").toBeLessThanOrEqual(nights.y);
+  const inner = await story.evaluate((el) =>
+    [el, ...el.querySelectorAll("*")].map((node) => {
+      const style = getComputedStyle(node);
+      // Only a box that hides its overflow can clip what it holds.
+      const hides = style.overflowX !== "visible" || style.overflowY !== "visible";
+      return {
+        overflow: style.overflowY,
+        clipped:
+          hides &&
+          (node.scrollHeight > node.clientHeight + 0.5 ||
+            node.scrollWidth > node.clientWidth + 0.5),
+        tag: `${node.tagName}.${node.className}`,
+      };
+    }),
+  );
+  for (const node of inner) {
+    expect
+      .soft(node.overflow === "auto" || node.overflow === "scroll", `${node.tag} scrolls`)
+      .toBe(false);
+    expect.soft(node.clipped, `${node.tag} clips`).toBe(false);
+  }
+};
 
 /** Where a night's card rests once the window stops moving, and where it could be. */
 const restingPlace = async (page: Page, card: Locator) => {
@@ -90,7 +127,10 @@ for (const width of WIDTHS) {
           if (beside) {
             await expect(index).toBeVisible();
             const side = await box(aside);
-            expect.soft(side.y, "aside top").toBeCloseTo(first.y, 0);
+            // The main column opens on the story so far, above the composer.
+            const head = await box(page.getByRole("region", { name: "The story so far" }));
+            expect.soft(head.y, "story above the composer").toBeLessThan(first.y);
+            expect.soft(side.y, "aside top").toBeCloseTo(head.y, 0);
             expect.soft(side.x, "aside left").toBeGreaterThan(nights.x + nights.width);
             expect.soft(side.width, "aside width").toBeLessThanOrEqual(340.5);
             expect.soft(nights.width, "nights width").toBeGreaterThanOrEqual(559.5);
@@ -140,6 +180,10 @@ for (const width of WIDTHS) {
             .soft(control.right, `${control.name} right`)
             .toBeLessThanOrEqual(control.edge.right + 0.5);
         }
+      });
+
+      await test.step("the story so far heads the nights and grows the page", async () => {
+        await storyHeadsTheNights(page, newest);
       });
 
       await test.step("the header's left edge is the nights'", async () => {
@@ -323,6 +367,10 @@ for (const width of WIDTHS) {
 
     test("the player's chronicle draws the same nights", async ({ app, page }) => {
       await app.open(playerChronicle);
+      await storyHeadsTheNights(page, page.locator("#session-12"));
+      const story = page.getByRole("region", { name: "The story so far" });
+      await expect(story.getByRole("button")).toHaveCount(0);
+      await expect(story.getByRole("switch")).toHaveCount(0);
       const older = page.locator("#session-11");
       await older.getByRole("button", { name: /Session 11/ }).click();
       const chips = older.locator('[data-slot="encounter-chip"]');

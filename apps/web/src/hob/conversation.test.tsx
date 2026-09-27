@@ -249,12 +249,18 @@ const installHobServer = (): HobStub => {
 
 const server = installHobServer();
 
-const panelState = (open: boolean): HobPanelState => ({
+const panelState = (
+  open: boolean,
+  asked?: { readonly text: string; readonly forget: () => void },
+): HobPanelState => ({
   open,
   inline: true,
   toggle: () => undefined,
   close: () => undefined,
   show: () => undefined,
+  ask: () => undefined,
+  asked: asked?.text,
+  forgetAsked: asked?.forget ?? (() => undefined),
 });
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here. */
@@ -264,8 +270,10 @@ const renderHob = (options?: {
   readonly world?: boolean;
   readonly account?: boolean;
   readonly onKept?: (accepted: HobAccepted) => void;
+  /** A question a screen asked through `hob.ask`, waiting for the panel. */
+  readonly asked?: { readonly text: string; readonly forget: () => void };
 }): void => {
-  const hob = panelState(options?.open ?? true);
+  const hob = panelState(options?.open ?? true, options?.asked);
   render(
     <HostedSessionScope session={TEST_SESSION}>
       <ScopedHob
@@ -911,6 +919,29 @@ describe("the campaign's story so far", () => {
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(screen.getByText("Kept in the Chronicle")).toBeInTheDocument();
+  });
+
+  it("sends the question a screen asked once the panel can hear it, and only once", async () => {
+    const forget = vi.fn();
+    server.frames = [began(threadId, turnId), proposed(turnId, storyProposal), done()];
+    renderHob({ asked: { text: "Draft the story so far.", forget } });
+
+    expect(await screen.findByText(storyProposal.text)).toBeInTheDocument();
+    expect(screen.getByText("Draft the story so far.")).toBeInTheDocument();
+    expect(forget).toHaveBeenCalledTimes(1);
+    expect(server.bodies.map((body) => (JSON.parse(body) as { text: string }).text)).toEqual([
+      "Draft the story so far.",
+    ]);
+  });
+
+  it("leaves an asked question unsent while no model answers", async () => {
+    server.available = false;
+    const forget = vi.fn();
+    renderHob({ asked: { text: "Draft the story so far.", forget } });
+
+    expect(await screen.findByText(/No model is configured/)).toBeInTheDocument();
+    expect(forget).not.toHaveBeenCalled();
+    expect(server.bodies).toEqual([]);
   });
 
   it("draws no Previously when Hob wrote none", async () => {

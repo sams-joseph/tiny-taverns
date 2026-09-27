@@ -304,6 +304,28 @@ export const saltRoad = {
   ...stamps,
 };
 
+/**
+ * The story so far, kept from Hob after session 11 and not yet shared — current,
+ * since session 12 is still running. Long enough to wrap on a phone.
+ */
+export const keptStory = {
+  id: "2b1f2a1e-0000-4000-8000-000000000f01",
+  campaignId,
+  text:
+    "Master Hollis hired four strangers to walk his salt caravan from Vell to the coast, at " +
+    "triple the going rate. Bandits paid to hit this caravan and no other, and waymarkers moved " +
+    "in the night, say someone wants it stopped. Now past the toll bridge, Wren knows the crates " +
+    "aren't only salt.",
+  previously:
+    "Last time, you crossed the troll's bridge without paying, and he watched you go. Now the " +
+    "road gives out, and the salt flats begin.",
+  afterSessionNumber: 11,
+  visibility: "dm",
+  origin: "assistant",
+  assistantTurnId: "2b1f2a1e-0000-4000-8000-000000000f02",
+  ...stamps,
+};
+
 export interface Answer {
   readonly status: number;
   readonly body: unknown;
@@ -371,6 +393,8 @@ export const fullChronicle = (): Map<string, Answer> =>
       `GET /campaigns/${campaignId}/hob`,
       { status: 200, body: { available: true, model: "scripted", campaign: campaign.name } },
     ],
+    // No story so far kept yet: the card offers Hob's draft.
+    [`GET /campaigns/${campaignId}/story`, { status: 200, body: null }],
   ]);
 
 export interface StubServer {

@@ -1,7 +1,7 @@
 import type { HobAccepted } from "@taverns/api";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
 import { myCharactersAtom } from "../characters/load";
@@ -167,6 +167,16 @@ export function ScopedHob({
   readonly onKept?: (accepted: HobAccepted) => void;
 }) {
   const conversation = useHobConversation(scope, hob.open, onKept);
+  const { asked, forgetAsked } = hob;
+  const { send, asking } = conversation;
+  // A question a screen asked (`hob.ask`) goes as soon as the conversation can
+  // hear it: once the panel's status has answered, and not over an answer
+  // still arriving. Taken first, so a re-render cannot send it twice.
+  useEffect(() => {
+    if (asked === undefined || send === undefined || asking) return;
+    forgetAsked();
+    send(asked);
+  }, [asked, send, asking, forgetAsked]);
   const opening = hobOpeningFor(
     place ??
       (scope?.type === "account"

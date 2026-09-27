@@ -13,6 +13,7 @@ import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./night
 import { loadPlayerChronicle, sessionsOf, type PlayerChronicleView } from "./load";
 import { NightBody } from "./NightBody";
 import { SessionEntry } from "./SessionEntry";
+import { PlayerStoryCard } from "./StoryCard";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -45,7 +46,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * encounter chip (the encounter's page is the creator's), the Spotlight counts
  * (the DM's balancing tool), anything that writes (the composer, *Edit*,
  * *Clear*, the share switches) and any command on an act: a player reads the
- * shared acts' titles and nothing else of them.
+ * shared acts' titles and nothing else of them. The story so far is here only
+ * once the DM shared it, read through its own narrow path (`PlayerStoryCard`),
+ * without the DM's controls or *Update needed*.
  */
 
 /** The campaign and the record a player may read, keyed on the campaign. */
@@ -55,6 +58,7 @@ const playerChronicleAtom = Atom.family((campaignId: CampaignId) =>
     reads.sessions(campaignId),
     reads.party(campaignId),
     reads.acts(campaignId),
+    reads.story(campaignId),
   ]),
 );
 
@@ -108,7 +112,8 @@ function PlayerChronicle({
       // rather than an error: sessions start `dm`, so a table with a record
       // ten nights long has nothing here until its DM shares one. It names the
       // person who decides, because otherwise the page reads as broken.
-      <div className="max-w-3xl">
+      <div className="flex max-w-3xl flex-col gap-3">
+        <PlayerStoryCard story={view.story} sessions={sessions} />
         <EmptyState icon="scroll-text" title="No nights shared yet">
           Your DM decides which nights the table can read back. When they share one, it appears here
           — the moments they kept and the encounters you played. Nothing is missing from{" "}
@@ -125,19 +130,22 @@ function PlayerChronicle({
   return (
     <ChronicleColumns
       main={
-        <ActSections
-          groups={groups}
-          night={(session) => (
-            <SessionEntry
-              session={session}
-              spotlight={spotlightName(session, view.party)}
-              open={open.isOpen(session.id)}
-              onToggle={() => open.toggle(session.id)}
-            >
-              <NightBody audience={{ kind: "player" }} night={byId.get(session.id)!} />
-            </SessionEntry>
-          )}
-        />
+        <>
+          <PlayerStoryCard story={view.story} sessions={sessions} />
+          <ActSections
+            groups={groups}
+            night={(session) => (
+              <SessionEntry
+                session={session}
+                spotlight={spotlightName(session, view.party)}
+                open={open.isOpen(session.id)}
+                onToggle={() => open.toggle(session.id)}
+              >
+                <NightBody audience={{ kind: "player" }} night={byId.get(session.id)!} />
+              </SessionEntry>
+            )}
+          />
+        </>
       }
       aside={<JumpTo groups={groups} onJump={open.jump} />}
     />

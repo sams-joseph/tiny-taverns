@@ -2,8 +2,10 @@ import type {
   Campaign,
   CampaignAct,
   CampaignId,
+  CampaignStory,
   ChronicleNight,
   PartySeat,
+  PlayerCampaignStory,
   PlayerChronicleNight,
   Session,
 } from "@taverns/api";
@@ -25,6 +27,10 @@ import type { TavernsClient } from "../api/client";
  * The screen sits on `CampaignChrome`, which already answers the campaign and
  * the night being prepared; this is the one thing the frame has no reason to
  * know, since it is about the whole record rather than about tonight.
+ *
+ * **The story so far is read with it**, not after: it heads the nights, and a
+ * card that arrived late above them would push down the night a `?session=`
+ * link or *Jump to* had just brought under the chrome.
  */
 
 export interface ChronicleSpine {
@@ -44,6 +50,8 @@ export interface ChronicleSpine {
   readonly hobAvailable: boolean;
   /** Every act, which groups the nights (`acts.ts`). */
   readonly acts: ReadonlyArray<CampaignAct>;
+  /** The story so far, or `null` before one is kept. */
+  readonly story: CampaignStory | null;
 }
 
 export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsClient) =>
@@ -56,10 +64,12 @@ export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsCl
           Effect.orElseSucceed(() => false),
         ),
         client.acts.list({ params: { campaignId } }),
+        client.story.read({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     ),
-    ([nights, hobAvailable, acts]) => ({ nights, hobAvailable, acts }) satisfies ChronicleSpine,
+    ([nights, hobAvailable, acts, story]) =>
+      ({ nights, hobAvailable, acts, story }) satisfies ChronicleSpine,
   );
 
 /**
@@ -78,17 +88,19 @@ export const loadChronicleSpine = (campaignId: CampaignId) => (client: TavernsCl
  */
 export const loadPlayerChronicle = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {
-    const [campaign, nights, party, acts] = yield* Effect.all(
+    const [campaign, nights, party, acts, story] = yield* Effect.all(
       [
         client.campaigns.findById({ params: { campaignId } }),
         client.chronicle.readAsPlayer({ params: { campaignId } }),
         client.party.list({ params: { campaignId } }),
         client.acts.list({ params: { campaignId } }),
+        // The story so far, only once shared — its own narrow path.
+        client.story.readAsPlayer({ params: { campaignId } }),
       ],
       { concurrency: "unbounded" },
     );
 
-    return { campaign, nights, party, acts } satisfies PlayerChronicleView;
+    return { campaign, nights, party, acts, story } satisfies PlayerChronicleView;
   });
 
 export interface PlayerChronicleView {
@@ -103,6 +115,8 @@ export interface PlayerChronicleView {
   readonly party: ReadonlyArray<PartySeat>;
   /** Only the acts the DM shared: the same list, answered by `rowReadable`. */
   readonly acts: ReadonlyArray<CampaignAct>;
+  /** The story so far once the DM shared it; `null` for none and for unshared alike. */
+  readonly story: PlayerCampaignStory | null;
 }
 
 /** Either audience's night: the card and its body read nothing past these. */

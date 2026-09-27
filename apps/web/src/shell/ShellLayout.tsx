@@ -1,7 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import { Hob, useHobPanel, type HobPanelState } from "../hob";
 import { AppShell } from "./AppShell";
-import { ShowHob } from "./slots";
+import { AskHob, ShowHob } from "./slots";
 
 /**
  * The persistent layout: the one place `AppShell` is mounted.
@@ -30,13 +30,15 @@ export function StandaloneLayout() {
 function Frame({ hob }: { readonly hob: HobPanelState | undefined }) {
   return (
     <ShowHob.Provider value={hob?.show}>
-      <AppShell
-        hobOpen={hob?.open ?? false}
-        onAskHob={hob?.toggle}
-        panel={hob === undefined ? undefined : <Hob hob={hob} />}
-      >
-        <Outlet />
-      </AppShell>
+      <AskHob.Provider value={hob?.ask}>
+        <AppShell
+          hobOpen={hob?.open ?? false}
+          onAskHob={hob?.toggle}
+          panel={hob === undefined ? undefined : <Hob hob={hob} />}
+        >
+          <Outlet />
+        </AppShell>
+      </AskHob.Provider>
     </ShowHob.Provider>
   );
 }
