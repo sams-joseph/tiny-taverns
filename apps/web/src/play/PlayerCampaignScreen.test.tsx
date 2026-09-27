@@ -18,7 +18,7 @@ import {
   page,
   playerReadAloud,
 } from "../campaign/campaign.fixtures";
-import { beat, session11, sessions } from "../chronicle/chronicle.fixtures";
+import { session11, sessions, sharedBeat } from "../chronicle/chronicle.fixtures";
 import { marshHag, playerRecap11 } from "../chronicle/player.fixtures";
 
 /**
@@ -311,7 +311,7 @@ describe("the player Overview's cards", () => {
     const card = await cardOf("Last time");
 
     expect(within(card).getByText(/^Session 11 · /)).toBeInTheDocument();
-    expect(within(card).getByText(beat.body)).toBeInTheDocument();
+    expect(within(card).getByText(sharedBeat.body)).toBeInTheDocument();
     const links = within(card).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveTextContent("Read the chronicle");

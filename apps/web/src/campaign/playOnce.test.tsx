@@ -67,13 +67,13 @@ beforeEach(() => {
 const preview = () => screen.getByRole("article");
 
 describe("the Encounters preview", () => {
-  it("offers a played encounter its log and never Run", async () => {
+  it("offers a played encounter the night it was played and never Run", async () => {
     await renderAt(`${base}/encounters?encounter=${bridgeId}`);
     await waitFor(() => expect(preview()).toHaveAccessibleName("Toll bridge standoff"));
 
     expect(within(preview()).getByRole("button", { name: "View log" })).toHaveAttribute(
       "href",
-      logPath,
+      `${base}/chronicle?session=${playedSessionId}`,
     );
     expect(within(preview()).queryByRole("button", { name: /^Run/ })).toBeNull();
     expect(within(preview()).queryByRole("button", { name: /^Pick up/ })).toBeNull();

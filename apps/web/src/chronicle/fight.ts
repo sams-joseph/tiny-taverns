@@ -1,17 +1,10 @@
-import type {
-  EncounterRun,
-  EncounterRunCheck,
-  PlayerRecapFight,
-  RecapFight,
-  RecapRunLink,
-  RecapScene,
-} from "@taverns/api";
+import type { EncounterRun, EncounterRunCheck, RecapRunLink, RecapScene } from "@taverns/api";
 import { challengeTally } from "@taverns/api";
 import { saveLabel, sceneBadge } from "../run/scene";
 
 /**
- * How a fight is told, and the one number in this screen that is easy to get
- * wrong.
+ * How a fight is told — the Overview's *Last time* reads the newest night's
+ * fights through this — and the one number in it that is easy to get wrong.
  *
  * ### A carried fight is two runs, and each end reads a different round
  *
@@ -47,7 +40,7 @@ import { saveLabel, sceneBadge } from "../run/scene";
  * scene's log — the run and both links are the same values on both, by
  * `PlayerRecap.ts`'s own decision ("nothing on a run is a number the DM was
  * keeping"). So `fightStory` takes the fields it actually reads, the scene and
- * its checks only where the reader's recap has them, and **the DM's Chronicle
+ * its checks only where the reader's recap has them, and **the DM's *Last time*
  * and the player's tell a carried fight with the same code**. A second copy narrowed for the player
  * would be a second chance to swap the two rounds, and the swap is invisible:
  * both are `Int`s, both render, and only a fixture whose numbers differ can tell
@@ -244,36 +237,3 @@ export const fightStory = (fight: CarriedFight): FightStory => {
         : `Session ${String(continuedInto.sessionNumber)} picked it up, and it has reached ${rounds(continuedInto.round)} there.`,
   };
 };
-
-/**
- * Who was left standing, as the recap counts it.
- *
- * A combatant at zero hit points is one who ended the fight down — `hpCurrent`
- * says that without a derived flag beside it to disagree with (`Recap.ts`).
- * Nobody is counted as removed: those rows are really deleted, and the recap
- * deliberately does not reconstruct them.
- */
-export const standing = (fight: RecapFight): { readonly total: number; readonly down: number } => ({
-  total: fight.combatants.length,
-  down: fight.combatants.filter((combatant) => combatant.hpCurrent === 0).length,
-});
-
-/**
- * The same count, from what a player is told.
- *
- * **Not the DM's `standing` with a cast.** A player's monster carries an
- * `hpBand` and no number at all (`PlayerRecap.ts` — armour class and exact hit
- * points are absent from the type, not optional), so "how many ended the night
- * down" is a different expression over a different shape: `down` for a monster,
- * zero for one of the party. Writing it as one function over a widened type is
- * how a screen ends up reaching for a field the player projection refuses to
- * carry.
- */
-export const playerStanding = (
-  fight: PlayerRecapFight,
-): { readonly total: number; readonly down: number } => ({
-  total: fight.combatants.length,
-  down: fight.combatants.filter((combatant) =>
-    combatant.kind === "pc" ? combatant.hpCurrent === 0 : combatant.hpBand === "down",
-  ).length,
-});

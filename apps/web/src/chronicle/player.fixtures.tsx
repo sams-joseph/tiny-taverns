@@ -2,7 +2,7 @@ import { HostedSessionScope } from "../auth/AuthProvider";
 import { renderAt } from "../test/renderRoute";
 import { vi } from "vitest";
 import {
-  beat,
+  bridgeRun,
   campaign,
   campaignId,
   carriedRun,
@@ -11,6 +11,7 @@ import {
   session11Id,
   session12Id,
   sessions,
+  sharedBeat,
   type Answer,
   type Call,
 } from "./chronicle.fixtures";
@@ -99,6 +100,14 @@ export const playerRecap11 = {
   session: sessions[1],
   fights: [
     {
+      // The conversation's encounter is not Shared and Ready, so a player is
+      // told its kind and not its name, and not which encounter it was.
+      run: { ...bridgeRun, encounterId: null, encounterName: "A conversation" },
+      combatants: [],
+      continuedFrom: null,
+      continuedInto: null,
+    },
+    {
       run: carriedRun,
       combatants: [brannoc, marshHag, reedStalker],
       continuedFrom: null,
@@ -112,7 +121,8 @@ export const playerRecap11 = {
       },
     },
   ],
-  beats: [beat],
+  // Only the beat the DM shared: the one they kept back is not in this read.
+  beats: [sharedBeat],
   prepDone: [],
   notes: [playerReadAloudNote],
 };
@@ -139,6 +149,24 @@ export const playerRecap12 = {
   notes: [],
 };
 
+/**
+ * The record itself — two shared nights and each one's `recap/player` — which
+ * the test harness's `player-chronicle` scenario lays over the player's own
+ * campaign reads (`test/scenarios.ts`).
+ */
+export const playerRecord = (): Map<string, Answer> =>
+  new Map<string, Answer>([
+    [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
+    [
+      `GET /campaigns/${campaignId}/sessions/${session11Id}/recap/player`,
+      { status: 200, body: playerRecap11 },
+    ],
+    [
+      `GET /campaigns/${campaignId}/sessions/${session12Id}/recap/player`,
+      { status: 200, body: playerRecap12 },
+    ],
+  ]);
+
 /** Two shared nights and the fight across both, as `recap/player` answers them. */
 const sharedRecord = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -160,15 +188,7 @@ const sharedRecord = (): Map<string, Answer> =>
         ],
       },
     ],
-    [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
-    [
-      `GET /campaigns/${campaignId}/sessions/${session11Id}/recap/player`,
-      { status: 200, body: playerRecap11 },
-    ],
-    [
-      `GET /campaigns/${campaignId}/sessions/${session12Id}/recap/player`,
-      { status: 200, body: playerRecap12 },
-    ],
+    ...playerRecord(),
   ]);
 
 export interface StubServer {
@@ -211,8 +231,8 @@ export const installPlayerChronicleServer = (): StubServer => {
 };
 
 /** Annotated `void` — Testing Library's `RenderResult` is not nameable here (TS2742). */
-export const renderPlayerChronicle = async (): Promise<void> => {
-  await renderAt(`/campaigns/${campaignId}/chronicle`, (screen) => (
+export const renderPlayerChronicle = async (search = ""): Promise<void> => {
+  await renderAt(`/campaigns/${campaignId}/chronicle${search}`, (screen) => (
     <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
   ));
 };

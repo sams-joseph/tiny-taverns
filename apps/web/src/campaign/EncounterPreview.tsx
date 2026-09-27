@@ -45,7 +45,8 @@ import { ReadyBadge } from "./ReadyBadge";
  * **Its tactics are always "Running it".** The drawing retitles them *What
  * happened* once the encounter is played, but they are the DM's plan, written
  * before the night, and calling a plan a record would say something the table
- * never did. What happened is the fight's own page, which *View log* opens.
+ * never did. What happened is the night it was played, which *View log* opens
+ * on the Chronicle (`?session=`); the fight's own log is on the encounter's page.
  *
  * **None of its buttons is the peach.** The campaign row's press is this
  * screen's one primary, so *Edit*, *Run encounter*, *View log* and *Pick up*
@@ -160,9 +161,11 @@ export function EncounterPreview({
             <Icon name="pencil" size={13} />
             Edit
           </Button>
-          {/* A played encounter's way in is its log, and it is never run
-              again: an encounter is played once. One a night finished over
-              is picked up instead, while nothing else is on the table. */}
+          {/* A played encounter's way in is the night it was played, opened
+              on the Chronicle, and it is never run again: an encounter is
+              played once. The fight's own log is on the encounter's page.
+              One a night finished over is picked up instead, while nothing
+              else is on the table. */}
           {played !== null && !live ? (
             <>
               <Button
@@ -171,12 +174,9 @@ export function EncounterPreview({
                 nativeButton={false}
                 render={
                   <Link
-                    to="/campaigns/$campaignId/sessions/$sessionId/runs/$runId"
-                    params={{
-                      campaignId: encounter.campaignId,
-                      sessionId: played.sessionId,
-                      runId: played.runId,
-                    }}
+                    to="/campaigns/$campaignId/chronicle"
+                    params={{ campaignId: encounter.campaignId }}
+                    search={{ session: played.sessionId }}
                   />
                 }
               >

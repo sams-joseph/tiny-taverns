@@ -521,16 +521,26 @@ const libraryNpcsRoute = createRoute({
 
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
- * source it reads — `sessions.list`, `recap.read`, `search.search` — hangs off
- * `/campaigns/:campaignId`, and on the search endpoint that path is a security
- * property rather than a routing one (see `Api.ts`).
+ * source it reads — `sessions.list`, `recap.read` — hangs off
+ * `/campaigns/:campaignId`.
  *
- * Remounted per campaign: which night is open and what has been searched for
- * belong to the record being read.
+ * Remounted per campaign: which nights are open belongs to the record being
+ * read.
  */
 const chronicleRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "chronicle",
+  /**
+   * Which night to open and scroll to, so the Encounters preview's *View log*
+   * lands on the night an encounter was played. A bad or missing id is no
+   * choice, and the page opens on the newest night — see `useOpenNights`.
+   */
+  validateSearch: (search: Record<string, unknown>): { session?: SessionId } => {
+    const session = asSessionId(
+      typeof search["session"] === "string" ? search["session"] : undefined,
+    );
+    return session === undefined ? {} : { session };
+  },
   component: ChronicleRouteScreen,
   remountDeps: ({ params }) => params.campaignId,
 });

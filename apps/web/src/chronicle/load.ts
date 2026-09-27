@@ -10,37 +10,24 @@ import type { TavernsClient } from "../api/client";
  * This is the one place the screen departs from "one `Effect` per screen, and
  * six calls inside it" — and it is the rule holding rather than an exception to
  * it. `campaign/load.ts` composes six calls because a campaign view renders all
- * six at once. A chronicle renders one **row per night**, and a night's recap
+ * six at once. A chronicle renders one **card per night**, and a night's recap
  * reaches five tables; a campaign twenty nights old would fire twenty of those
- * to draw a timeline of which nothing but the newest is expanded. So what loads
- * with the screen is what the *timeline* is — the spine of nights — and a recap
- * is loaded by the card that shows it (`RecapBody`), which is the only component
- * that needs it.
+ * to draw a list of which only the newest is open. So what loads with the
+ * screen is the spine of nights, and a recap is loaded by the card that shows it
+ * (`RecapBody`), which is the only component that needs it.
  *
- * The prototype opens the newest card and keeps exactly one open
- * (`Chronicle.jsx:146,164`), so in practice this is one recap in flight, loaded
- * on mount, and the shape a DM opening the screen sees is the shape the
- * designers drew.
- *
- * **The cost is stated rather than hidden: a collapsed card cannot show a
- * summary**, because a summary is a recap and this has not read one. The
- * prototype clamps two lines of `s.summary` there (`Chronicle.jsx:52-55`). We
- * have no such column — nothing stores a recap, by decision (`Recap.ts`) — so
- * the collapsed card carries what the `session` row itself answers, and no
- * stubbed line pretending to be prose.
+ * **The cost is stated rather than hidden: a closed card cannot show a
+ * summary**, because a summary would be a recap and this has not read one. We
+ * have no stored summary either — nothing stores a recap, by decision
+ * (`Recap.ts`) — so the closed card carries what the `session` row itself
+ * answers, and no stubbed line pretending to be prose.
  *
  * ### The spine is all that is left here
  *
- * The screen sits on `CampaignChrome` — which is what carries the session badge
- * and the campaign action it used to be missing — and the frame already answers
- * the campaign, the night being prepared (`CampaignView.session`) and that
- * night's checklist (`CampaignView.prep`). This read used to make all three
- * itself. Asking again would be two answers to one question in one round, so
- * what is left is `sessions.list`, which is the one thing the frame has no
- * reason to know: it is about the whole record rather than about tonight.
- *
- * `current` and `openThreads` are derived from the frame in
- * `ChronicleScreen.tsx`, from exactly the rows this loader used to fetch.
+ * The screen sits on `CampaignChrome`, which already answers the campaign and
+ * the night being prepared. What is left is `sessions.list`, the one thing the
+ * frame has no reason to know: it is about the whole record rather than about
+ * tonight.
  */
 
 export interface ChronicleSpine {
@@ -66,24 +53,12 @@ export const loadRecap =
 /**
  * What a player's Chronicle reads, which is the spine and nothing else.
  *
- * Two of the DM's three reads survive, and the third is dropped rather than
- * narrowed:
- *
- * - **`campaigns.findById` and `sessions.list`** are `rowReadable` and already
- *   answer a player exactly the nights their DM shared. There is no gate here to
- *   fall foul of and nothing to filter afterwards — a night a DM kept to
- *   themselves is not in the list at all.
- * - **The checklist is not read.** *"Threads still open"* is the unticked half of
- *   the DM's own prep, and its aside is drawn as the DM's loose ends —
- *   questions they went into the night with. Rendered to a player it would
- *   attribute the DM's planning to the table, which is the same lie as a stubbed
- *   field wearing somebody else's voice. The **ticked** lines are a different
- *   matter and are in the recap already: they are facts about the night that
- *   happened, and `PlayerRecapBody` renders them under a heading that names who
- *   settled them.
- *
- * So the player's load is one round of two calls, and there is no shape of
- * failure in it that the DM's screen does not also have.
+ * `campaigns.findById` and `sessions.list` are `rowReadable` and already
+ * answer a player exactly the nights their DM shared. There is no gate here to
+ * fall foul of and nothing to filter afterwards — a night a DM kept to
+ * themselves is not in the list at all. So the player's load is one round of
+ * two calls, and there is no shape of failure in it that the DM's screen does
+ * not also have.
  */
 export const loadPlayerChronicle = (campaignId: CampaignId) => (client: TavernsClient) =>
   Effect.gen(function* () {

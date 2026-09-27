@@ -16,7 +16,6 @@ import {
   liveRun,
   mintingSession,
   page,
-  playedRunId,
   playedSessionId,
   readAloud,
   renderEncounters,
@@ -309,7 +308,7 @@ describe("the preview", () => {
     expect(within(hazard).getByText("Animal Handling")).toBeInTheDocument();
   });
 
-  it("offers a played encounter's log, and keeps its tactics the DM's plan", async () => {
+  it("opens a played encounter's night, and keeps its tactics the DM's plan", async () => {
     await renderAt(`${encountersPath}?encounter=${bridgeId}`);
     await waitFor(() => expect(preview()).toHaveAccessibleName("Toll bridge standoff"));
     const pane = preview();
@@ -317,9 +316,11 @@ describe("the preview", () => {
     expect(within(pane).queryByText(/^(Ready|Draft)$/)).toBeNull();
 
     expect(within(pane).getByText("Social · Played · Session 11")).toBeInTheDocument();
+    // The night it was played, opened on the Chronicle — the drawing's *View
+    // log*. The fight's own log stays on the encounter's page.
     expect(within(pane).getByRole("button", { name: "View log" })).toHaveAttribute(
       "href",
-      `${base}/sessions/${playedSessionId}/runs/${playedRunId}`,
+      `${base}/chronicle?session=${playedSessionId}`,
     );
     expect(within(pane).queryByRole("button", { name: "Run encounter" })).toBeNull();
     expect(within(pane).getByRole("region", { name: "Running it" })).toBeInTheDocument();

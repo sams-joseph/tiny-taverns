@@ -1,19 +1,22 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  beat,
+  bridgeEncounterId,
   campaignId,
   installChronicleServer,
-  recap11,
   recap12,
   renderChronicle,
   session11Id,
   session12Id,
+  sharedBeat,
 } from "./chronicle.fixtures";
 
 /**
- * The Chronicle against a stub server: the spine, one night open, the search,
- * and the states a real campaign puts it in.
+ * The DM's Chronicle against a stub server: the nights, what an opened one
+ * says, *Jump to*, the `?session=` link, and the states a real campaign puts
+ * it in.
  *
  * Installed once at module scope for the `Context.Reference` reason
  * `api/client.test.ts` records — a per-test `vi.stubGlobal("fetch")` would keep
@@ -28,241 +31,177 @@ beforeEach(() => {
 const requested = (fragment: string): boolean =>
   server.calls.some((call) => call.pathname.includes(fragment));
 
-describe("the spine", () => {
-  it("lists every night, newest first, and opens the newest", async () => {
+/**
+ * A night's card, and the button that opens it. By the card rather than by the
+ * whole screen: *Jump to* has a "Session 11" button too, and the campaign row's
+ * badge says "Session 12".
+ */
+const night = (n: number): Promise<HTMLElement> =>
+  waitFor(() => {
+    const card = document.getElementById(`session-${String(n)}`);
+    if (card === null) throw new Error(`no card for session ${String(n)}`);
+    return card;
+  });
+const header = async (n: number): Promise<HTMLElement> =>
+  within(await night(n)).getByRole("button", { name: new RegExp(`Session ${String(n)}`) });
+
+describe("the nights", () => {
+  it("lists every night, newest first, opens the newest, and says how long the record runs", async () => {
     await renderChronicle();
 
-    // By role, not by text: the campaign row's own badge says "Session 12"
-    // too, because the Chronicle wears `CampaignChrome` like every other
-    // campaign destination. The spine's nights are the buttons.
-    await screen.findByRole("button", { name: /Session 12/ });
-    expect(screen.getByRole("button", { name: /Session 11/ })).toBeInTheDocument();
-    expect(await screen.findByText("2 nights on the record")).toBeInTheDocument();
+    const newest = await header(12);
+    const older = await header(11);
+    expect(newest.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(newest).toHaveAttribute("aria-expanded", "true");
+    expect(older).toHaveAttribute("aria-expanded", "false");
+    expect(await screen.findByText("2 sessions · since July 2026")).toBeInTheDocument();
 
-    // Only the open card's recap is read. A collapsed row costs no request —
-    // which is the whole reason a recap is loaded by the card that shows it.
+    // Only the open card's recap is read. A closed card costs no request.
     await waitFor(() => {
       expect(requested(`${session12Id}/recap`)).toBe(true);
     });
     expect(requested(`${session11Id}/recap`)).toBe(false);
   });
 
-  it("reads a night's recap when its card is opened", async () => {
+  it("names an untitled night by its number, and a closed one by how long it ran", async () => {
     await renderChronicle();
-    await screen.findByText("Session 11");
+    const card = await night(11);
 
-    await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
+    expect(within(card).getByRole("heading", { name: "Session 11" })).toBeInTheDocument();
+    expect(within(card).getByText("19 July 2026")).toBeInTheDocument();
+    expect(within(card).getByText("18:00–22:30 · 4 hr 30 min")).toBeInTheDocument();
+  });
 
-    expect(await screen.findByText(/The ferryman is called Cazril/)).toBeInTheDocument();
+  it("keeps any number of nights open at once, each its own toggle", async () => {
+    await renderChronicle();
+    const older = await header(11);
+
+    await userEvent.click(older);
+    expect(older).toHaveAttribute("aria-expanded", "true");
+    expect(await header(12)).toHaveAttribute("aria-expanded", "true");
     expect(requested(`${session11Id}/recap`)).toBe(true);
-  });
 
-  it("says where the record begins, without offering to import what is missing", async () => {
-    await renderChronicle();
-    expect(
-      await screen.findByText(/The record starts at session 11\. Sessions 1–10 are not in it\./),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Import/)).not.toBeInTheDocument();
+    await userEvent.click(older);
+    expect(older).toHaveAttribute("aria-expanded", "false");
   });
 });
 
-/**
- * The assertion this screen exists to get right. `fight.test.ts` pins the
- * sentences; this pins that the screen renders the right one at each end.
- */
-describe("a fight that carried across two nights", () => {
-  it("names the round it paused on, on the night it paused", async () => {
+describe("an opened night", () => {
+  const openEleven = async (): Promise<HTMLElement> => {
     await renderChronicle();
-    await screen.findByText("Session 11");
-    await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
+    await userEvent.click(await header(11));
+    const card = await night(11);
+    await within(card).findByText(sharedBeat.body);
+    return card;
+  };
 
-    expect(await screen.findByText("Paused at round 4 when the night ended.")).toBeInTheDocument();
-    expect(
-      screen.getByText("Session 12 picked it up, and it has reached round 7 there."),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Paused at round 7/)).not.toBeInTheDocument();
+  it("bullets the moments the table was told, and boxes the one the DM kept back", async () => {
+    const card = await openEleven();
+
+    const moments = within(card).getByRole("list", { name: "Moments" });
+    expect(within(moments).getByText(sharedBeat.body)).toBeInTheDocument();
+    expect(within(moments).queryByText(beat.body)).toBeNull();
+
+    const kept = within(card).getByText(beat.body).parentElement!.parentElement!;
+    expect(within(kept).getByText("DM only")).toBeInTheDocument();
+    expect(within(kept).queryByText(sharedBeat.body)).toBeNull();
   });
 
-  it("names the same round, from the night that picked it up", async () => {
-    await renderChronicle();
+  it("chips each encounter with its kind's glyph, and opens the ones still there", async () => {
+    const card = await openEleven();
+    const chips = card.querySelectorAll("[data-slot=encounter-chip]");
+    expect([...chips].map((chip) => chip.textContent)).toEqual([
+      "Toll bridge standoff",
+      "Ambush in the reeds",
+    ]);
 
-    expect(await screen.findByText("Resumed from round 4 of session 11.")).toBeInTheDocument();
-    expect(screen.getByText("On the table now, at round 7.")).toBeInTheDocument();
-    expect(screen.queryByText(/Resumed from round 7/)).not.toBeInTheDocument();
-  });
-});
-
-/**
- * A skill challenge on the same night, told as the DM's recap counts it: made
- * or lost against its own numbers, with the prep's line, and never by a round
- * or an initiative count its seated party never had.
- */
-describe("a scene that was not a fight", () => {
-  it("says they made it, with the prep's line and the log counted", async () => {
-    const fight = recap12.fights[0]!;
-    const run = {
-      ...fight.run,
-      id: "2b1f2a1e-0000-4000-8000-000000000e01",
-      continuedFrom: null,
-      encounterName: "The dry well",
-      mode: "challenge",
-      endedAt: "2026-07-26T21:30:00.000Z",
-    };
-    const made = (n: number) => ({
-      id: `2b1f2a1e-0000-4000-8000-00000000c1${String(n).padStart(2, "0")}`,
-      runId: run.id,
-      combatantId: null,
-      displayName: "Brannoc",
-      skill: "Athletics",
-      save: null,
-      total: 16,
-      dc: 13,
-      outcome: "success",
-      stage: null,
-      createdAt: "2026-07-26T21:00:00.000Z",
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, {
-      status: 200,
-      body: {
-        ...recap12,
-        fights: [
-          ...recap12.fights,
-          {
-            run,
-            // The seated party a scene seeds: never an initiative count.
-            combatants: recap11.fights[0]!.combatants,
-            checks: [made(1), made(2)],
-            scene: {
-              challenge: {
-                kind: "challenge",
-                dc: 13,
-                successes: 2,
-                failures: 3,
-                skills: ["Athletics"],
-                onSuccess: "They haul the bucket up, and the cache with it.",
-              },
-              attitude: null,
-              stage: null,
-              stages: null,
-            },
-            continuedFrom: null,
-            continuedInto: null,
-          },
-        ],
-      },
-    });
-    await renderChronicle();
-
-    const name = await screen.findByText("The dry well");
-    const card = name.closest("[data-slot=card]") as HTMLElement;
-    expect(within(card).getByText("Skill challenge")).toBeInTheDocument();
-    expect(within(card).getByText("They made it.")).toBeInTheDocument();
-    expect(
-      within(card).getByText("They haul the bucket up, and the cache with it."),
-    ).toBeInTheDocument();
-    expect(
-      within(card).getByText("2 of 2 successes and 0 of 3 failures, at DC 13."),
-    ).toBeInTheDocument();
-    expect(within(card).queryByText(/round|initiative/)).not.toBeInTheDocument();
-  });
-});
-
-describe("read aloud", () => {
-  it("drops the DM-only half rather than restyling it", async () => {
-    await renderChronicle();
-    await screen.findByText("Session 11");
-    await userEvent.click(screen.getByRole("button", { name: /Session 11/ }));
-    await screen.findByText(/The ferryman is called Cazril/);
-    expect(screen.getByText("At the table")).toBeInTheDocument();
-    expect(screen.getByText("Threads still open")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /Read aloud/ }));
-
-    // The night's own prose stays; everything the DM alone needs is gone.
-    expect(screen.getByText(/The ferryman is called Cazril/)).toBeInTheDocument();
-    expect(screen.queryByText("At the table")).not.toBeInTheDocument();
-    expect(screen.queryByText("Questions you answered")).not.toBeInTheDocument();
-    expect(screen.queryByText("Threads still open")).not.toBeInTheDocument();
-  });
-});
-
-describe("searching the record", () => {
-  it("asks the server, and shows hits from more than one source", async () => {
-    await renderChronicle();
-    await screen.findByRole("button", { name: /Session 12/ });
-
-    await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
-
-    // The subtitle settles last, so waiting on it is waiting for the answer to
-    // the whole query rather than to a prefix of it.
-    await screen.findByText(/3 results for .*ferryman/);
-    expect(screen.getByText("Beat")).toBeInTheDocument();
-    expect(screen.getByText("Note")).toBeInTheDocument();
-    expect(screen.getByText("Ferryman of the Reeds")).toBeInTheDocument();
-
-    const call = server.calls.find((entry) => entry.pathname.endsWith("/search"));
-    expect(call?.search).toContain("q=ferryman");
-    // No `source` unless one is chosen: absence is what "everything" means.
-    expect(call?.search).not.toContain("source=");
-  });
-
-  it("sends source as one scalar value, never as a list", async () => {
-    await renderChronicle();
-    await screen.findByRole("button", { name: /Session 12/ });
-    await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
-    await screen.findByText("Beat");
-
-    // The scope is the unified box's one facet — composed as a token.
-    await userEvent.type(screen.getByLabelText("Search the record"), " in:beats{Enter}");
-
-    await waitFor(() => {
-      const scoped = server.calls.filter(
-        (entry) => entry.pathname.endsWith("/search") && entry.search.includes("source="),
-      );
-      expect(scoped.length).toBeGreaterThan(0);
-      // One occurrence, one value. A `Schema.Array` here would encode
-      // `?source=beat` too and then refuse to decode it — see `search.ts`.
-      expect(scoped.at(-1)?.search.match(/source=/g)).toHaveLength(1);
-      expect(scoped.at(-1)?.search).toContain("source=beat");
-    });
-  });
-
-  it("renders an excerpt as text, never as markup", async () => {
-    await renderChronicle();
-    await screen.findByRole("button", { name: /Session 12/ });
-    await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
-
-    // The note hit's snippet carries `<b>…</b>`. The API promises plain text, so
-    // those characters must be on screen and no element may have been made.
-    const excerpt = await screen.findByText(/waits/);
-    expect(excerpt.textContent).toContain("<b>waits</b>");
-    expect(excerpt.querySelector("b")).toBeNull();
-  });
-
-  it("says nothing matches, and says what to do about it", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/search`, { status: 200, body: [] });
-    await renderChronicle();
-    await screen.findByRole("button", { name: /Session 12/ });
-
-    await userEvent.type(screen.getByLabelText("Search the record"), "quokka");
-
-    await screen.findByText(/0 results for .*quokka/);
-    expect(screen.getByText("Nothing matches")).toBeInTheDocument();
-    expect(screen.getByText(/notes, beats, cast or bestiary/)).toBeInTheDocument();
-  });
-
-  it("opens the night a beat came from", async () => {
-    await renderChronicle();
-    await screen.findByRole("button", { name: /Session 12/ });
-    await userEvent.type(screen.getByLabelText("Search the record"), "ferryman");
-
-    const beatHit = (await screen.findByText("Beat")).closest("li");
-    expect(beatHit).not.toBeNull();
-    await userEvent.click(
-      within(beatHit as HTMLElement).getByRole("button", { name: /Read that night/ }),
+    // A conversation wears the conversation glyph, not the fight's swords.
+    const bridge = within(card).getByRole("link", { name: "Toll bridge standoff" });
+    expect(bridge).toHaveAttribute("data-kind", "social");
+    expect(bridge.querySelector("svg")).toHaveClass("lucide-users");
+    expect(bridge).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/encounters?encounter=${bridgeEncounterId}`,
     );
 
-    expect(await screen.findByText(/The ferryman is called Cazril/)).toBeInTheDocument();
+    // The fight's encounter is gone (`encounterId` is null), so its chip is
+    // text: there is nothing left to open.
+    const ambush = [...chips].find((chip) => chip.textContent === "Ambush in the reeds")!;
+    expect(ambush.tagName).toBe("SPAN");
+    expect(ambush.querySelector("svg")).toHaveClass("lucide-swords");
+  });
+
+  it("does not tell a fight's story, its read-alouds or its ticked prep", async () => {
+    const card = await openEleven();
+
+    expect(within(card).queryByText(/Paused at round/)).toBeNull();
+    expect(within(card).queryByText("Read aloud at the water")).toBeNull();
+    expect(within(card).queryByText("Pick a name for the ferryman")).toBeNull();
+  });
+
+  it("says so when nothing was kept for the night", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, {
+      status: 200,
+      body: { ...recap12, fights: [], beats: [] },
+    });
+    await renderChronicle();
+
+    expect(await screen.findByText(/Nothing was written down for this night/)).toBeInTheDocument();
+  });
+});
+
+describe("what the drawing left off", () => {
+  it("has no search, no Read aloud and no Threads still open", async () => {
+    await renderChronicle();
+    await header(12);
+
+    expect(screen.queryByLabelText("Search the record")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Read aloud/ })).toBeNull();
+    expect(screen.queryByText("Threads still open")).toBeNull();
+    expect(requested("/search")).toBe(false);
+  });
+});
+
+describe("jump to", () => {
+  const scrolled = vi.fn();
+  beforeEach(() => {
+    // jsdom has no `scrollIntoView`; the screen skips it when it is missing.
+    Element.prototype.scrollIntoView = scrolled;
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+    scrolled.mockReset();
+  });
+
+  it("opens the night it names and brings its card into view", async () => {
+    await renderChronicle();
+    const index = await screen.findByRole("list", { name: "Jump to" });
+    const older = await header(11);
+    expect(older).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(within(index).getByRole("button", { name: /Session 11/ }));
+
+    expect(older).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(scrolled).toHaveBeenCalled());
+    expect(scrolled.mock.contexts.at(-1)).toHaveAttribute("id", "session-11");
+  });
+
+  it("opens and scrolls to the night `?session=` names, and only that night", async () => {
+    await renderChronicle(`?session=${session11Id}`);
+
+    const older = await header(11);
+    expect(older).toHaveAttribute("aria-expanded", "true");
+    expect(await header(12)).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(scrolled).toHaveBeenCalled());
+    expect(scrolled.mock.contexts.at(-1)).toHaveAttribute("id", "session-11");
+  });
+
+  it("opens the newest when `?session=` names a night it does not hold", async () => {
+    await renderChronicle("?session=2b1f2a1e-0000-4000-8000-000000000599");
+
+    expect(await header(12)).toHaveAttribute("aria-expanded", "true");
+    expect(await header(11)).toHaveAttribute("aria-expanded", "false");
+    expect(scrolled).not.toHaveBeenCalled();
   });
 });
 
@@ -280,11 +219,9 @@ describe("a campaign with no history at all", () => {
 
     expect(await screen.findByText("Nothing written down yet")).toBeInTheDocument();
     expect(screen.getByText(/every beat you jot/)).toBeInTheDocument();
-    expect(screen.getByText("0 nights on the record")).toBeInTheDocument();
-    // No spine terminus over an empty spine, and no aside reading a night that
-    // does not exist.
-    expect(screen.queryByText(/The record starts at/)).not.toBeInTheDocument();
-    expect(screen.queryByText("Threads still open")).not.toBeInTheDocument();
+    expect(screen.getByText("0 sessions")).toBeInTheDocument();
+    // No index over an empty list.
+    expect(screen.queryByRole("list", { name: "Jump to" })).toBeNull();
   });
 });
 
@@ -295,15 +232,5 @@ describe("when the load fails", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not here");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-  });
-});
-
-describe("threads still open", () => {
-  it("reads the unticked half of the current night's checklist, and names the night", async () => {
-    await renderChronicle();
-
-    expect(await screen.findByText("Threads still open")).toBeInTheDocument();
-    expect(screen.getByText("Decide what Ovid thinks is in the crate")).toBeInTheDocument();
-    expect(screen.getByText(/Unticked on session 12/)).toBeInTheDocument();
   });
 });

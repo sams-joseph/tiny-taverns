@@ -1,90 +1,25 @@
-import type { CampaignId, RecapFight, SessionId } from "@taverns/api";
-import { Badge, Card, Icon, Loading } from "@taverns/ui";
+import type { CampaignId, SessionId } from "@taverns/api";
+import { Loading } from "@taverns/ui";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { fightStory, standing } from "./fight";
 import { loadRecap } from "./load";
-import { Drafted, Facet, RecapDocument } from "./recapParts";
+import { NightBody } from "./NightBody";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
- * One night, read back from the five sources `SessionRecap` assembles — **the
- * DM's projection.**
+ * One night, read back — **the DM's projection.**
  *
  * **Mounted only while its card is open**, which is what makes the recap a
- * per-card read rather than one of twenty fired to draw a timeline — see
+ * per-card read rather than one of twenty fired to draw the list — see
  * `load.ts`. Closing the card unmounts this and the next open re-reads, which is
  * correct rather than wasteful: a recap is a view assembled per read and has no
- * stored version to go stale against, so a cached one is the only thing here
- * that could be out of date.
+ * stored version to go stale against.
  *
- * Everything but the fights is in `recapParts.tsx`, shared with
- * `PlayerRecapBody` — see that file for why the read-aloud rule has one
- * implementation. What is not shared is `Fights`: `recap.read` is behind the
- * `DmActor` gate and answers whole `Combatant` rows, so this is the projection
- * that may say a monster's exact hit points and does not have to think about it.
+ * `recap.read` is behind the creator gate and answers every beat of the night,
+ * shared or not, which is what lets `NightBody` put the kept ones in the DM's
+ * box. The layout is `NightBody`'s, shared with `PlayerRecapBody`.
  */
-
-function Fights({ fights }: { readonly fights: ReadonlyArray<RecapFight> }) {
-  return (
-    <Facet icon="swords" label="At the table">
-      <div className="flex flex-col gap-2">
-        {fights.map((fight) => {
-          const story = fightStory(fight);
-          const { total, down } = standing(fight);
-          return (
-            <Card key={fight.run.id} tone="sunken" className="gap-1.5 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-label leading-snug font-semibold text-heading">
-                  {story.name}
-                </span>
-                {story.kind !== null && <Badge variant="outline">{story.kind}</Badge>}
-                {story.live ? (
-                  <Badge>On the table</Badge>
-                ) : fight.run.endedReason === "carried" ? (
-                  <Badge variant="info">Carried</Badge>
-                ) : (
-                  <Badge variant="secondary">Resolved</Badge>
-                )}
-                <Drafted origin={fight.run.origin} />
-              </div>
-              <p className="text-body-s leading-body text-foreground">{story.state}</p>
-              {story.outcome !== null && (
-                <p className="max-w-measure font-serif text-body-s leading-body italic text-foreground">
-                  {story.outcome}
-                </p>
-              )}
-              {/* The two directions of a carried fight, each naming the round
-                  that end actually means. See `fight.ts` — they are different
-                  numbers and swapping them is invisible. */}
-              {story.resumedFrom !== null && (
-                <p className="flex items-center gap-1.5 text-caption leading-body text-muted-foreground">
-                  <Icon name="git-branch" size={12} className="shrink-0 text-faint" />
-                  {story.resumedFrom}
-                </p>
-              )}
-              {story.carriedInto !== null && (
-                <p className="flex items-center gap-1.5 text-caption leading-body text-muted-foreground">
-                  <Icon name="arrow-right" size={12} className="shrink-0 text-faint" />
-                  {story.carriedInto}
-                </p>
-              )}
-              <p className="text-caption leading-body text-faint">
-                {/* A scene is told by its log; its seated party was never an
-                    initiative order. */}
-                {story.tally ??
-                  (total === 0
-                    ? "Nobody left in initiative."
-                    : `${String(total)} in initiative${down === 0 ? "" : `, ${String(down)} at zero`}.`)}
-              </p>
-            </Card>
-          );
-        })}
-      </div>
-    </Facet>
-  );
-}
 
 /**
  * One night, read back — the DM's projection, keyed on the pair that names it.
@@ -101,29 +36,23 @@ const recapAtom = Atom.family(
 export function RecapBody({
   campaignId,
   sessionId,
-  readAloud,
 }: {
   readonly campaignId: CampaignId;
   readonly sessionId: SessionId;
-  readonly readAloud: boolean;
 }) {
   const [resource, reload] = useApiAtom(recapAtom({ campaignId, sessionId }));
 
-  if (resource.state === "loading") return <Loading label="Reading the night back…" />;
+  if (resource.state === "loading") return <Loading label="Reading the night back…" inline />;
   if (resource.state === "failed") {
     return <ApiFailureNotice failure={resource.failure} onRetry={reload} />;
   }
 
   const recap = resource.value;
-
   return (
-    <RecapDocument
+    <NightBody
+      audience={{ kind: "dm", campaignId }}
       beats={recap.beats}
-      notes={recap.notes}
-      prepDone={recap.prepDone}
-      ticked="Questions you answered"
-      fights={recap.fights.length > 0 ? <Fights fights={recap.fights} /> : null}
-      readAloud={readAloud}
+      runs={recap.fights.map((fight) => fight.run)}
     />
   );
 }

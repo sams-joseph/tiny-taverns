@@ -14,6 +14,7 @@ import {
 } from "../campaign/campaign.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
 import { fullChronicle } from "../chronicle/chronicle.fixtures";
+import { playerRecord } from "../chronicle/player.fixtures";
 import {
   brannocSheetSeat,
   fullParty,
@@ -117,6 +118,9 @@ export const scenarios = {
   "creator-challenge": creatorScene("challenge"),
   "creator-hazard": creatorScene("hazard"),
   player,
+  // The same player with two nights their DM shared, and each one's narrow
+  // recap: a conversation told by its kind, and a moment the DM shared.
+  "player-chronicle": () => new Map([...player(), ...playerRecord()]),
   // The same player with a fight on the table and its map shared: themselves,
   // an ally and a monster in the order, and the board with two of them on it.
   // The doorbell is refused, as `PlayerTableScreen.test.tsx` refuses it: a
