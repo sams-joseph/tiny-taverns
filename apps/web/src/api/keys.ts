@@ -148,6 +148,13 @@ export const reads = {
    */
   sessions: (campaignId: CampaignId): ReadKey => key`sessions:${campaignId}`,
 
+  /**
+   * The campaign's story so far — the creator's `story.read` and a player's
+   * `story.readAsPlayer`, two paths to one row and so one key. Kept from Hob
+   * or written by hand; either write names it.
+   */
+  story: (campaignId: CampaignId): ReadKey => key`story:${campaignId}`,
+
   /** Invitations that grant a seat at one campaign. */
   campaignInvites: (campaignId: CampaignId): ReadKey => key`campaign-invites:${campaignId}`,
 

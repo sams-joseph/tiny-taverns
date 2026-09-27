@@ -11,6 +11,8 @@ import {
   asClassOption,
   asRaceOption,
   CAMPAIGN_DESCRIPTION_MAX,
+  CAMPAIGN_PREVIOUSLY_MAX,
+  CAMPAIGN_STORY_MAX,
   CampaignId,
   type CharacterOption,
   type CharacterSheet,
@@ -70,6 +72,7 @@ import {
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
+import type { CampaignStories } from "../repo/CampaignStories.js";
 import type { Creatures } from "../repo/Creatures.js";
 import type { GroupHistory, PlayedNight } from "../repo/GroupHistory.js";
 import type { Groups } from "../repo/Groups.js";
@@ -173,6 +176,14 @@ const LOG_LIMIT = 100;
  * searching rather than reciting, which is what the tool's description says.
  */
 const CREATURE_LIMIT = 50;
+
+/**
+ * How many ended nights `readCampaignStorySources` reads out at once, oldest
+ * first after the story's own night. A campaign further behind than this is
+ * brought up to date by the next refresh, from where the kept story stops —
+ * the Shared World's `ENTRY_LIMIT` rule, at a size a local model can hold.
+ */
+const STORY_NIGHT_LIMIT = 12;
 
 /**
  * How many names of one kind may go into the tool's own grammar before
@@ -847,6 +858,71 @@ export const ProposeStorySoFar = Tool.make("proposeStorySoFar", {
 });
 
 /**
+ * The campaign's own story so far — the creator's toolkit's pair to the Shared
+ * World's two above. The reader is the only source for a proposal: it hands
+ * back the kept story and the ended nights after it, and the handler remembers
+ * the newest night it showed, so the proposal cannot claim to cover a night
+ * Hob never read. Beats are the DM's, flagged by whether the players were
+ * shown them, because the *Previously* is read to the players.
+ */
+export const ReadCampaignStorySources = Tool.make("readCampaignStorySources", {
+  description:
+    "Read this campaign's current story so far and Previously, and every night " +
+    "that has ended since it was written, oldest first: the DM's own summary of " +
+    "the night when they kept one, its beats in the DM's words, each marked " +
+    "whether the players were shown it, and how its fights and scenes ended. " +
+    "Call this immediately before proposeCampaignStory.",
+  success: Schema.Struct({
+    current: Schema.NullOr(
+      Schema.Struct({
+        text: Schema.String,
+        previously: Schema.NullOr(Schema.String),
+        afterSession: Schema.Int,
+      }),
+    ),
+    nights: Schema.Array(
+      Schema.Struct({
+        number: Schema.Int,
+        title: Schema.NullOr(Schema.String),
+        played: Schema.String,
+        summary: Schema.NullOr(
+          Schema.Struct({ text: Schema.String, shownToPlayers: Schema.Boolean }),
+        ),
+        beats: Schema.Array(Schema.Struct({ text: Schema.String, shownToPlayers: Schema.Boolean })),
+        fights: Schema.Array(
+          Schema.Struct({
+            name: Schema.String,
+            kind: EncounterKind,
+            round: Schema.NullOr(Schema.Int),
+            outcome: Schema.Literals(["resolved", "carried", "unfinished"]),
+          }),
+        ),
+      }),
+    ),
+  }),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+export const ProposeCampaignStory = Tool.make("proposeCampaignStory", {
+  description:
+    "Offer the DM a replacement for this campaign's story so far, and a short " +
+    "Previously for them to read aloud to the players to open the next night. Call " +
+    "readCampaignStorySources first and use only its current story and nights. Write " +
+    "the Previously to the players, and leave out anything the players were not " +
+    "shown. Nothing is saved unless the DM accepts it.",
+  parameters: Schema.Struct({
+    text: Schema.String.check(Schema.isLengthBetween(1, CAMPAIGN_STORY_MAX)),
+    // `optionalText`, not `optional`: it is prose, and the sentinel that
+    // rescues an unset enum would eat a Previously that said "None".
+    previously: optionalText(CAMPAIGN_PREVIOUSLY_MAX),
+  }),
+  success: Schema.String,
+  failure: toolFailure,
+  failureMode: "return",
+});
+
+/**
  * The four things Hob may offer to add — three to the DM's campaign, one to
  * the player who asked — and *offer* is the whole of what these do.
  *
@@ -1487,10 +1563,12 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ReadSessionLog,
     SearchSharedWorldHistory,
     ReadSharedWorldSummary,
+    ReadCampaignStorySources,
     ProposeNote,
     ProposeBeat,
     ProposeNightSummary,
     ProposeEncounter,
+    ProposeCampaignStory,
     SpendCharacterResource,
   );
 };
@@ -1509,10 +1587,15 @@ export const HobToolkit = Toolkit.make(
   // far as that table's creator shared it — and no further.
   SearchSharedWorldHistory,
   ReadSharedWorldSummary,
+  // The campaign's own story so far: one source reader and one proposal, the
+  // Shared World's Story So Far pattern kept to this table's nights. The
+  // creator's alone — no other toolkit reads or drafts it.
+  ReadCampaignStorySources,
   ProposeNote,
   ProposeBeat,
   ProposeNightSummary,
   ProposeEncounter,
+  ProposeCampaignStory,
 );
 
 /**
@@ -1704,6 +1787,8 @@ export interface HobRepositories {
   readonly npcMemories: (typeof NpcMemories)["Service"];
   readonly npcAwareness: (typeof NpcAwareness)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
+  /** The campaign's kept story so far, which a refresh starts from. */
+  readonly stories: (typeof CampaignStories)["Service"];
   /** Slice 6's audited direct counter write, reached only by the conditional DM toolkit. */
   readonly directWrites?: (typeof HobDirectWrites)["Service"] | undefined;
   /**
@@ -1755,6 +1840,11 @@ export interface SharedWorldHobRepositories {
  */
 export type ProposalSlot = Ref.Ref<HobProposal | undefined>;
 export type SummaryCoverageSlot = Ref.Ref<number | undefined>;
+/**
+ * The newest ended night `readCampaignStorySources` showed this turn — what a
+ * `proposeCampaignStory` covers. Unset until the sources are read.
+ */
+export type StoryCoverageSlot = Ref.Ref<number | undefined>;
 
 const alreadyProposed = new Conflict({
   message:
@@ -1896,6 +1986,7 @@ export const dmHandlersFor = (
   dm: CampaignCreatorActor,
   proposal: ProposalSlot,
   awareness: AwarenessSlot,
+  storyCoverage: StoryCoverageSlot,
 ) => {
   const { actor, campaign: campaignId } = dm;
   const { as, offer } = bind(actor, proposal);
@@ -2013,6 +2104,79 @@ export const dmHandlersFor = (
     searchSharedWorldHistory: searchHistoryWith(repositories.history, dm.group, as),
     readSharedWorldSummary: summaryWith(repositories.history, dm.group, as),
 
+    // The kept story and the nights ended after it, each told from the DM's
+    // own recap: the same read `sessionRecap` makes, reduced to what a story
+    // is made of. The newest night shown is what a proposal will cover.
+    readCampaignStorySources: () =>
+      Effect.gen(function* () {
+        const story = yield* repositories.stories.read(dm);
+        const after = story?.afterSessionNumber ?? 0;
+        const sessions = yield* as(repositories.sessions.list(campaignId));
+        const ended = sessions
+          .filter((session) => session.endedAt !== null && session.number > after)
+          .sort((a, b) => a.number - b.number)
+          .slice(0, STORY_NIGHT_LIMIT);
+        const nights = [];
+        for (const session of ended) {
+          const recap = yield* repositories.recap.read(dm, session.id);
+          // A player is shown a night only while it is shared, and then its
+          // summary and whichever of its beats are shared too.
+          const nightShown = session.visibility === "shared";
+          nights.push({
+            number: session.number,
+            title: session.title,
+            played: (session.startedAt ?? session.endedAt ?? session.createdAt).toString(),
+            summary:
+              session.summary === null
+                ? null
+                : { text: session.summary, shownToPlayers: nightShown },
+            beats: recap.beats.map((beat) => ({
+              text: beat.body,
+              shownToPlayers: nightShown && beat.visibility === "shared",
+            })),
+            fights: recap.fights.map(({ run }) => ({
+              name: run.encounterName,
+              kind: run.mode,
+              round: run.mode === "combat" ? run.round : null,
+              outcome: run.endedAt === null ? ("unfinished" as const) : run.endedReason,
+            })),
+          });
+        }
+        yield* Ref.set(storyCoverage, ended.at(-1)?.number ?? after);
+        return {
+          current:
+            story === null
+              ? null
+              : {
+                  text: story.text,
+                  previously: story.previously,
+                  afterSession: story.afterSessionNumber,
+                },
+          nights,
+        };
+      }),
+
+    proposeCampaignStory: ({ text, previously }) =>
+      Effect.flatMap(Ref.get(storyCoverage), (afterSessionNumber) => {
+        if (afterSessionNumber === undefined) {
+          return Effect.fail(
+            new Conflict({
+              message: "readCampaignStorySources before proposing the story so far",
+            }),
+          );
+        }
+        const story = blank(text);
+        if (story === undefined) {
+          return Effect.fail(new Conflict({ message: "the story so far needs some words" }));
+        }
+        const opening = blank(previously) ?? null;
+        return offer(
+          { target: "campaignStory", text: story, previously: opening, afterSessionNumber },
+          `Offered the DM a story so far${opening === null ? "" : " and a Previously"}. ` +
+            "Nothing is saved unless they accept it; say one short line about it and stop.",
+        );
+      }),
+
     proposeNote: ({ title, body, readAloud, category }) => {
       const topic = absent(category);
       return offer(
@@ -2122,6 +2286,7 @@ export const dmBindWithDirect = (
   dm: CampaignCreatorActor,
   proposal: ProposalSlot,
   awareness: AwarenessSlot,
+  storyCoverage: StoryCoverageSlot,
   context: HobDirectResourceContext,
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
@@ -2136,7 +2301,7 @@ export const dmBindWithDirect = (
   return Effect.flatMap(
     toolkit.toHandlers(
       toolkit.of({
-        ...dmHandlersFor(repositories, dm, proposal, awareness),
+        ...dmHandlersFor(repositories, dm, proposal, awareness, storyCoverage),
         spendCharacterResource: (params, call) => {
           const { target, amount } = params as { readonly target: string; readonly amount: number };
           const resolved = targetByKey.get(target);

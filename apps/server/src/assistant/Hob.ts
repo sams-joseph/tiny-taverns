@@ -35,6 +35,7 @@ import {
   type Toolkit,
 } from "effect/unstable/ai";
 import { Campaigns } from "../repo/Campaigns.js";
+import { CampaignStories } from "../repo/CampaignStories.js";
 import { GroupHistory } from "../repo/GroupHistory.js";
 import { Groups } from "../repo/Groups.js";
 import { Creatures } from "../repo/Creatures.js";
@@ -68,6 +69,7 @@ import {
   playerBindListing,
   playerBindOver,
   type ProposalSlot,
+  type StoryCoverageSlot,
   vocabularyOf,
 } from "./toolkit.js";
 
@@ -224,6 +226,7 @@ export class Hob extends Context.Service<
     Hob,
     never,
     | Campaigns
+    | CampaignStories
     | Creatures
     | CampaignCreatorActors
     | EquipmentRepo
@@ -259,6 +262,9 @@ export class Hob extends Context.Service<
           npcMemories: yield* NpcMemories,
           npcAwareness: yield* NpcAwareness,
           events: yield* SessionEvents,
+          // The campaign's kept story so far, which the creator's Hob reads
+          // before drafting a replacement.
+          stories: yield* CampaignStories,
           directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
           // The seventh, and the one no tool handler calls: a campaign's
           // classes, races and backgrounds decide the *shape* of
@@ -387,6 +393,9 @@ export class Hob extends Context.Service<
               const awareness: AwarenessSlot = yield* Ref.make<ReadonlyArray<NpcAwarenessDraft>>(
                 [],
               );
+              const storyCoverage: StoryCoverageSlot = yield* Ref.make<number | undefined>(
+                undefined,
+              );
               const finished = yield* Ref.make("stop");
 
               /**
@@ -459,7 +468,13 @@ export class Hob extends Context.Service<
                     ? asked(
                         Effect.flatMap(
                           HobToolkit.toHandlers(
-                            dmHandlersFor(repositories, creator, proposal, awareness),
+                            dmHandlersFor(
+                              repositories,
+                              creator,
+                              proposal,
+                              awareness,
+                              storyCoverage,
+                            ),
                           ),
                           (bound) => Effect.provideContext(HobToolkit, bound),
                         ),
@@ -471,6 +486,7 @@ export class Hob extends Context.Service<
                           creator,
                           proposal,
                           awareness,
+                          storyCoverage,
                           directContext,
                           thread.id,
                           answerId,
@@ -1773,6 +1789,8 @@ const dmPrompt = (
     "When the DM asks you to make something new — an encounter, a note, read-aloud text,",
     "a line about what just happened, a night's summary for the Chronicle — write it and",
     "offer it with proposeEncounter, proposeNote, proposeBeat or proposeNightSummary.",
+    "When the DM asks for the story so far or a Previously, call readCampaignStorySources,",
+    "write both from that result alone, and offer them with proposeCampaignStory.",
     "When your research shows an existing campaign NPC should explicitly know or remember",
     "something, offer a Cast review row with proposeNpcAwareness.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",

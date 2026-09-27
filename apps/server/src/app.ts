@@ -37,6 +37,7 @@ import { IdentityProvider } from "./IdentityProvider.js";
 import { LiveEvents } from "./live/LiveEvents.js";
 import { Beats } from "./repo/Beats.js";
 import { Campaigns } from "./repo/Campaigns.js";
+import { CampaignStories } from "./repo/CampaignStories.js";
 import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
 import { SeatPreps } from "./repo/SeatPrep.js";
@@ -183,6 +184,7 @@ export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
   | Campaigns
+  | CampaignStories
   | Creatures
   | CampaignCreatorActors
   | EquipmentRepo
@@ -414,6 +416,7 @@ export const servicesOver = <E>(
     Hob,
     E | Config.ConfigError,
     | Campaigns
+    | CampaignStories
     | Creatures
     | CampaignCreatorActors
     | EquipmentRepo
@@ -448,6 +451,7 @@ export const servicesOver = <E>(
   | Authorization
   | Beats
   | Campaigns
+  | CampaignStories
   | Groups
   | GroupHistory
   | LibraryShares
@@ -535,6 +539,10 @@ export const servicesOver = <E>(
     // A campaign's acts on the Chronicle: the list is actor-scoped, the writes
     // take the creator proof, and no toolkit has an act tool.
     Acts.layer,
+    // A campaign's story so far: the creator's wide read behind the proof, a
+    // player's narrow one when shared. Hob reads it and drafts a replacement;
+    // only the accept below writes one with `origin = 'assistant'`.
+    CampaignStories.layer,
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
@@ -675,6 +683,8 @@ export const servicesOver = <E>(
         Notes.layer,
         // A night's summary Hob drafted is kept through the DM's own update.
         Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+        // A kept story so far replaces the campaign's through `accept`.
+        CampaignStories.layer,
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
@@ -702,6 +712,8 @@ export const servicesOver = <E>(
     assistant.pipe(
       Layer.provide([
         Campaigns.layer,
+        // The story so far, which the creator's Hob reads before it drafts one.
+        CampaignStories.layer,
         Creatures.layer,
         CampaignCreatorActors.layer,
         // The group surface: the directory and the chronicle. Same memoised
@@ -754,6 +766,7 @@ export const applicationOver = <E>(
     | Authorization
     | Beats
     | Campaigns
+    | CampaignStories
     | Groups
     | GroupHistory
     | LibraryShares

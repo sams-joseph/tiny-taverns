@@ -7,6 +7,7 @@ export * from "./Beat.js";
 export * from "./Campaign.js";
 export * from "./CampaignAct.js";
 export * from "./CampaignImage.js";
+export * from "./CampaignStory.js";
 export * from "./Character.js";
 export * from "./CharacterOption.js";
 export * from "./Chronicle.js";

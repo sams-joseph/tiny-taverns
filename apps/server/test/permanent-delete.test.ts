@@ -16,6 +16,7 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { Characters } from "../src/repo/Characters.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Creatures } from "../src/repo/Creatures.js";
@@ -59,6 +60,7 @@ const runtime = ManagedRuntime.make(
     Beats.layer.pipe(Layer.provide(live)),
     CampaignCreatorActors.layer,
     Campaigns.layer,
+    CampaignStories.layer,
     Characters.layer.pipe(Layer.provide(live)),
     Creatures.layer,
     EncounterCreatures.layer,
@@ -76,6 +78,7 @@ const runtime = ManagedRuntime.make(
       Layer.provide([
         Beats.layer.pipe(Layer.provide(live)),
         Campaigns.layer,
+        CampaignStories.layer,
         Characters.layer.pipe(Layer.provide(live)),
         EncounterCreatures.layer,
         Encounters.layer,

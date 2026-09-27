@@ -268,8 +268,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         accept: (client, threadId, turnId) =>
           client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
         /**
-         * Both named, because the artifact's kind is the model's and this write
-         * does not branch on it. Over-naming costs a request nobody was going
+         * All three named, because the artifact's kind is the model's and this
+         * write does not branch on it. Over-naming costs a request nobody was going
          * to make; under-naming costs a card that quietly says the wrong number.
          *
          * **A beat is deliberately not named**, and the residue is small and
@@ -285,7 +285,7 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         keeps: (accepted) =>
           accepted.accepted === "nightSummary"
             ? [reads.sessions(campaignId), reads.recap(accepted.session.id)]
-            : [reads.notes(campaignId), reads.encounters(campaignId)],
+            : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
       };
     }
     case "sharedWorld": {

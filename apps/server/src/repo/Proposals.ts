@@ -15,6 +15,7 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
+import { CampaignStories } from "./CampaignStories.js";
 import { Characters } from "./Characters.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
@@ -49,9 +50,11 @@ import type { ConversationReach } from "./visibility.js";
  *
  * `Notes.create`, `Beats.create`, `Encounters.create` (whose roster goes
  * through `EncounterCreatures.create`, as a builder's does),
- * `Characters.createOwn` and, for a night's summary, `Sessions.update`, with
- * one extra argument. No SQL for those tables is written here, so an accepted
- * row is produced by *literally the same statement* that produces an authored one —
+ * `Characters.createOwn`, for a night's summary `Sessions.update`, and for a
+ * campaign's story so far `CampaignStories.accept` (which shares the creator's
+ * own write's upsert), each with one extra argument. No SQL for those tables
+ * is written here, so an accepted row is produced by *literally the same
+ * statement* that produces an authored one —
  * which is what makes it indistinguishable in usefulness (search finds it, the
  * recap includes it, the screens render it) and completely distinguishable in
  * origin.
@@ -175,6 +178,7 @@ export class Proposals extends Context.Service<
       const characters = yield* Characters;
       const sharedWorldHistory = yield* GroupHistory;
       const sessions = yield* Sessions;
+      const stories = yield* CampaignStories;
 
       const materialise = (
         campaignId: CampaignId,
@@ -259,6 +263,23 @@ export class Proposals extends Context.Service<
               // there is nowhere in a proposal to name anybody else.
               characters.createOwn(campaignId, ownCreateFrom(proposal), from),
               (character) => ({ accepted: "character" as const, character }),
+            );
+
+          case "campaignStory":
+            // Replaces the campaign's story through the same upsert the
+            // creator's own write uses; `accept` composes `campaignWritable`,
+            // so nobody but the creator keeps one.
+            return Effect.map(
+              stories.accept(
+                campaignId,
+                {
+                  text: proposal.text,
+                  previously: proposal.previously,
+                  afterSessionNumber: proposal.afterSessionNumber,
+                },
+                from,
+              ),
+              (story) => ({ accepted: "campaignStory" as const, story }),
             );
 
           case "campaign":

@@ -13,6 +13,7 @@ import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
+import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Creatures } from "../src/repo/Creatures.js";
@@ -68,6 +69,7 @@ import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./s
 const services = Layer.mergeAll(
   Accounts.layer,
   Campaigns.layer,
+  CampaignStories.layer,
   Groups.layer,
   GroupHistory.layer,
   Creatures.layer,
@@ -481,10 +483,12 @@ describe("the boundary — one table's words are in no other table's schema", ()
       "listCreatures",
       "listSessions",
       "proposeBeat",
+      "proposeCampaignStory",
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      "readCampaignStorySources",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
       // bounded by what the group admitted (the group-Hob boundary decision).
@@ -636,6 +640,7 @@ describe("a campaign with nothing written down", () => {
   const bare = Layer.mergeAll(
     Accounts.layer,
     Campaigns.layer,
+    CampaignStories.layer,
     Groups.layer,
     GroupHistory.layer,
     Creatures.layer,

@@ -861,6 +861,75 @@ describe("what Hob offers, and the one thing that writes", () => {
   });
 });
 
+describe("the campaign's story so far", () => {
+  const storyProposal = {
+    target: "campaignStory",
+    text: "The party crossed the toll bridge and reached the salt flats.",
+    previously: "Last time, the bridge fell behind you.",
+    afterSessionNumber: 12,
+  };
+
+  it("draws the story and its Previously, and keeps it with ids alone", async () => {
+    server.acceptBody = {
+      accepted: "campaignStory",
+      story: {
+        id: "0b9d3d1e-71ba-48e5-b2f1-f2cdd6ca893e",
+        campaignId,
+        text: storyProposal.text,
+        previously: storyProposal.previously,
+        afterSessionNumber: 12,
+        visibility: "dm",
+        origin: "assistant",
+        assistantTurnId: turnId,
+        createdAt: stamp,
+        updatedAt: stamp,
+      },
+    };
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, storyProposal),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Write up the story so far.{Enter}");
+
+    expect(await screen.findByText(storyProposal.text)).toBeInTheDocument();
+    expect(screen.getByText("The story so far")).toBeInTheDocument();
+    expect(screen.getByText("Through session 12")).toBeInTheDocument();
+    expect(screen.getByText("Previously")).toBeInTheDocument();
+    expect(screen.getByText(storyProposal.previously)).toBeInTheDocument();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep as the story so far" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("Kept in the Chronicle")).toBeInTheDocument();
+  });
+
+  it("draws no Previously when Hob wrote none", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, { ...storyProposal, previously: null, afterSessionNumber: 0 }),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Write up the story so far.{Enter}");
+
+    expect(await screen.findByText(storyProposal.text)).toBeInTheDocument();
+    expect(screen.getByText("Before any session has ended")).toBeInTheDocument();
+    expect(screen.queryByText("Previously")).toBeNull();
+  });
+});
+
 describe("a change of scope under an open panel", () => {
   /**
    * The persistent layout keeps one panel mounted while the reader moves, so

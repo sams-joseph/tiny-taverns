@@ -5,6 +5,7 @@ import { TavernsApi } from "./Api.js";
 import { Beat, BeatCreate } from "./Beat.js";
 import { Campaign, CampaignCreate } from "./Campaign.js";
 import { CampaignAct, CampaignActCreate } from "./CampaignAct.js";
+import { CampaignStory, CampaignStoryPut, PlayerCampaignStory } from "./CampaignStory.js";
 import { Character, CharacterOwnCreate } from "./Character.js";
 import { CampaignInvite, InvitePreview, InviteRedeemed } from "./Invite.js";
 import { CampaignCharacter, PartyJoin } from "./Party.js";
@@ -358,6 +359,9 @@ describe("the API declaration", () => {
       "sharedWorldLibrary",
       "sharedWorldMembers",
       "sharedWorlds",
+      // A campaign's story so far: the creator's read and writes, and a
+      // player's narrow read of it once shared.
+      "story",
       // What is live at one table, to a player: the read behind the character
       // sheet's banner. Its own group for the reason `recap` is one — it is
       // neither a session nor a run, and its answer is narrower than either.
@@ -395,6 +399,7 @@ describe("every content schema", () => {
     // deliberately no `SessionEventCreate` — the log has no create payload
     // because nothing outside a mutation's own transaction may write to it.
     SessionEvent,
+    CampaignStory,
   };
 
   it("carries visibility and provenance", () => {
@@ -437,6 +442,15 @@ describe("every content schema", () => {
     ]);
   });
 
+  it("gives a player's story so far no visibility and no provenance", () => {
+    expect(Object.keys(PlayerCampaignStory.fields).sort()).toEqual([
+      "afterSessionNumber",
+      "previously",
+      "text",
+      "updatedAt",
+    ]);
+  });
+
   it("leaves visibility optional on create, so the column default decides", () => {
     // The `dm` default is stated once, in the migration. A create payload that
     // required a visibility would move that decision to every caller.
@@ -462,12 +476,15 @@ describe("every content schema", () => {
       CombatantCreate,
       RollCreate,
       BeatCreate,
+      // The story's one write is both its create and its replacement.
+      CampaignStoryPut,
     };
     // The minimum a create needs, per schema. Spelled out rather than merged
     // into one wide object, so a payload that stopped requiring a field would
     // show up here rather than being silently over-supplied.
     const minimal: Record<string, Record<string, unknown>> = {
       CampaignCreate: { name: "x" },
+      CampaignStoryPut: { text: "x", previously: null },
       SessionCreate: { number: 1, title: "t" },
       CampaignActCreate: { title: "The salt road", firstSessionNumber: 7 },
       CharacterOwnCreate: { name: "x" },

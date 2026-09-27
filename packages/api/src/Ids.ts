@@ -256,3 +256,7 @@ export type NpcProposalId = typeof NpcProposalId.Type;
 /** One Hob-researched candidate fact or memory awaiting a campaign creator's review. */
 export const NpcAwarenessCandidateId = id("NpcAwarenessCandidateId");
 export type NpcAwarenessCandidateId = typeof NpcAwarenessCandidateId.Type;
+
+/** A campaign's story so far, with the *Previously* that opens the next night. */
+export const CampaignStoryId = id("CampaignStoryId");
+export type CampaignStoryId = typeof CampaignStoryId.Type;
