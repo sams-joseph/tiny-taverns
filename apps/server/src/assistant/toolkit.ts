@@ -868,9 +868,10 @@ export const ProposeStorySoFar = Tool.make("proposeStorySoFar", {
 export const ReadCampaignStorySources = Tool.make("readCampaignStorySources", {
   description:
     "Read this campaign's current story so far and Previously, and every night " +
-    "that has ended since it was written, oldest first: each night's beats in the " +
-    "DM's words (marked whether the players were shown them) and how its fights " +
-    "and scenes ended. Call this immediately before proposeCampaignStory.",
+    "that has ended since it was written, oldest first: the DM's own summary of " +
+    "the night when they kept one, its beats in the DM's words, each marked " +
+    "whether the players were shown it, and how its fights and scenes ended. " +
+    "Call this immediately before proposeCampaignStory.",
   success: Schema.Struct({
     current: Schema.NullOr(
       Schema.Struct({
@@ -884,6 +885,9 @@ export const ReadCampaignStorySources = Tool.make("readCampaignStorySources", {
         number: Schema.Int,
         title: Schema.NullOr(Schema.String),
         played: Schema.String,
+        summary: Schema.NullOr(
+          Schema.Struct({ text: Schema.String, shownToPlayers: Schema.Boolean }),
+        ),
         beats: Schema.Array(Schema.Struct({ text: Schema.String, shownToPlayers: Schema.Boolean })),
         fights: Schema.Array(
           Schema.Struct({
@@ -2115,13 +2119,20 @@ export const dmHandlersFor = (
         const nights = [];
         for (const session of ended) {
           const recap = yield* repositories.recap.read(dm, session.id);
+          // A player is shown a night only while it is shared, and then its
+          // summary and whichever of its beats are shared too.
+          const nightShown = session.visibility === "shared";
           nights.push({
             number: session.number,
             title: session.title,
             played: (session.startedAt ?? session.endedAt ?? session.createdAt).toString(),
+            summary:
+              session.summary === null
+                ? null
+                : { text: session.summary, shownToPlayers: nightShown },
             beats: recap.beats.map((beat) => ({
               text: beat.body,
-              shownToPlayers: beat.visibility === "shared",
+              shownToPlayers: nightShown && beat.visibility === "shared",
             })),
             fights: recap.fights.map(({ run }) => ({
               name: run.encounterName,

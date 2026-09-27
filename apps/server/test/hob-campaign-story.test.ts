@@ -85,6 +85,7 @@ const services = Layer.mergeAll(
       Encounters.layer,
       GroupHistory.layer,
       Notes.layer,
+      Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
     ]),
   ),
   Recap.layer,
@@ -130,6 +131,14 @@ const makeFixture = Effect.gen(function* () {
     });
 
   const first = yield* played(1, "ended");
+  // Night 1 is shared with the table and carries the DM's own summary; night 2
+  // is not shared, so nothing of it — even a beat marked shared — was shown.
+  yield* as(
+    sessions.update(campaign.id, first, {
+      visibility: "shared",
+      summary: "NIGHTSUMMARY the troll's bridge fell behind them.",
+    }),
+  );
   yield* as(
     beats.create(campaign.id, first, {
       body: "SHOWNBEAT the toll bridge fell into the river.",
@@ -194,6 +203,23 @@ const proposedIn = (events: ReadonlyArray<HobEvent>) => {
   return proposal?.event === "proposal" ? proposal.data.proposal : undefined;
 };
 
+/** The sources the reader answered, parsed, as the model was shown them. */
+interface ShownNight {
+  readonly number: number;
+  readonly summary: { readonly text: string; readonly shownToPlayers: boolean } | null;
+  readonly beats: ReadonlyArray<{ readonly text: string; readonly shownToPlayers: boolean }>;
+}
+const sourcesShown = (requests: ReadonlyArray<ChatRequest>): ReadonlyArray<ShownNight> => {
+  for (const message of requests.at(-1)?.messages ?? []) {
+    if (message["role"] !== "tool" || typeof message["content"] !== "string") continue;
+    const parsed = JSON.parse(message["content"]) as {
+      readonly nights?: ReadonlyArray<ShownNight>;
+    };
+    if (parsed.nights !== undefined) return parsed.nights;
+  }
+  throw new Error("the model was not shown the story's sources");
+};
+
 /** What each tool answered, as the model was shown it in the last round. */
 const toolResults = (requests: ReadonlyArray<ChatRequest>): string =>
   JSON.stringify((requests.at(-1)?.messages ?? []).filter((message) => message["role"] === "tool"));
@@ -241,6 +267,23 @@ describe("a story drafted by the creator's Hob", () => {
     expect(shown).toContain("shownToPlayers");
     // A night still on the table is not a night the story can follow.
     expect(shown).not.toContain("TONIGHTBEAT");
+
+    // The DM's kept summary of a night rides with it, and "shown" is what a
+    // player was really told: a shared beat on an unshared night was not.
+    const nights = sourcesShown(requests);
+    expect(nights.map((night) => night.number)).toEqual([1, 2]);
+    expect(nights[0]?.summary).toEqual({
+      text: "NIGHTSUMMARY the troll's bridge fell behind them.",
+      shownToPlayers: true,
+    });
+    expect(nights[0]?.beats).toEqual([
+      { text: "SHOWNBEAT the toll bridge fell into the river.", shownToPlayers: true },
+      { text: "HIDDENBEAT the troll is Odo's father.", shownToPlayers: false },
+    ]);
+    expect(nights[1]?.summary).toBeNull();
+    expect(nights[1]?.beats).toEqual([
+      { text: "SECONDBEAT the party reached the salt flats.", shownToPlayers: false },
+    ]);
 
     expect(proposedIn(events)).toEqual({
       target: "campaignStory",
