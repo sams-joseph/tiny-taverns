@@ -4,10 +4,11 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
 /**
  * The Chronicle (`chronicle/ChronicleScreen.tsx`), at every width: the nights
- * beside *Jump to* or alone once the columns would stack, *Jump to* with no
- * scroller of its own, a jump and a `?session=` link landing a night under the
- * chrome, and an opened night's encounter chips wrapping on a phone without
- * clipping. All of it is layout, which jsdom does not compute.
+ * beside *Jump to* and the Spotlight or alone once the columns would stack,
+ * *Jump to* with no scroller of its own, the Spotlight's rows in one line, a
+ * jump and a `?session=` link landing a night under the chrome, and an opened
+ * night's encounter chips wrapping on a phone without clipping. All of it is
+ * layout, which jsdom does not compute.
  *
  * Read over the creator scenario's two nights (`chronicle.fixtures.tsx`):
  * session 11 holds a kept beat, a shared one, and a conversation and a fight.
@@ -109,6 +110,34 @@ for (const width of WIDTHS) {
           }
           const position = await aside.evaluate((el) => getComputedStyle(el).position);
           expect.soft(position, "aside position").not.toBe("sticky");
+        });
+
+        await test.step("the Spotlight sits under Jump to, its rows inside it", async () => {
+          const counts = page.getByRole("list", { name: "Spotlight" });
+          await expect(counts).toBeVisible();
+          const card = await box(counts.locator(".."));
+          expect.soft(card.y, "spotlight below jump to").toBeGreaterThan((await box(index)).y);
+          const rows = await counts.evaluate((list) => {
+            const edge = list.getBoundingClientRect();
+            return [...list.querySelectorAll("li")].map((row) => {
+              const [name, bar, count] = [...row.children].map((el) => el.getBoundingClientRect());
+              return {
+                inside: row.getBoundingClientRect().right <= edge.right + 0.5,
+                bar: bar!.width,
+                ordered: name!.right <= bar!.left && bar!.right <= count!.left,
+              };
+            });
+          });
+          expect.soft(rows, "four seats").toHaveLength(4);
+          for (const row of rows) {
+            expect.soft(row.inside, "row inside the card").toBe(true);
+            expect.soft(row.ordered, "name, bar, count in a line").toBe(true);
+            expect.soft(row.bar, "bar width").toBeGreaterThan(40);
+          }
+          const hint = page.getByText(/have had the fewest sessions in the spotlight/);
+          await expect(hint).toBeVisible();
+          const text = await box(hint);
+          expect.soft(text.x + text.width, "hint right").toBeLessThanOrEqual(card.x + card.width);
         });
 
         await test.step("a jump opens the night and lands it under the chrome", async () => {
