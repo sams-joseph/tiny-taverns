@@ -242,9 +242,8 @@ describe("the route table", () => {
   });
 
   it("hangs the chronicle off a campaign too, for the same reason", () => {
-    // Every source it reads — `sessions.list`, `recap.read`, `search.search` —
-    // is under `/campaigns/:campaignId`, and on the search endpoint that path is
-    // a security property rather than a routing one.
+    // Every source it reads — `chronicle.read`, `chronicle.readAsPlayer` — is
+    // under `/campaigns/:campaignId`, where the path is what scopes the record.
     expect(landsOn(`/campaigns/${CAMPAIGN_ID}/chronicle`)).toEqual({
       at: "/campaigns/$campaignId/chronicle",
       params: { campaignId: CAMPAIGN_ID },

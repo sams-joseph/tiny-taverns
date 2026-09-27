@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 
 /**
  * What the DM's Chronicle and the player's have in common beyond the night
- * card: the page's two columns, *Jump to* and *Expand all* (and, in
- * `nights.ts`, which nights are open and the header's summary line). Each screen supplies its own
- * reads and its own body (`RecapBody`, `PlayerRecapBody`); none of the layout
- * is decided twice.
+ * card and its body: the page's two columns, *Jump to* and *Expand all* (and,
+ * in `nights.ts`, which nights are open and the header's summary line). Each
+ * screen supplies its own read of the record; none of the layout is decided
+ * twice.
  */
 
 /**
