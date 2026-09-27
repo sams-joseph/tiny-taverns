@@ -82,15 +82,27 @@ const night = (
   ...stamps,
 });
 
-/** The night the fight paused on: finished, with the run carried out of it. */
-export const session11 = night(
-  session11Id,
-  11,
-  "2026-07-19T18:00:00.000Z",
-  "2026-07-19T22:30:00.000Z",
-  null,
-);
-/** The night that picked it up, and is still being prepared. */
+/**
+ * The DM's few sentences about session 11 — long enough that a closed card
+ * clamps it to two lines at every width, which is what the layout checks
+ * measure.
+ */
+export const summary11 =
+  "The party crossed Grusk's toll bridge without paying, which the troll has not forgotten. " +
+  "At the water the ferryman asked for a name instead of coin, and Tamsin gave him one. " +
+  "The reeds closed in before anybody had a light going, and the ambush was still being " +
+  "fought when the night ended — Brannoc on six hit points, holding the bank.";
+
+/**
+ * The night the fight paused on: finished, with the run carried out of it, and
+ * written up by the DM.
+ */
+export const session11 = {
+  ...night(session11Id, 11, "2026-07-19T18:00:00.000Z", "2026-07-19T22:30:00.000Z", null),
+  summary: summary11,
+  summaryOrigin: "authored",
+};
+/** The night that picked it up, and is still being prepared — nothing written up yet. */
 export const session12 = night(session12Id, 12, "2026-08-02T18:00:00.000Z", null, run12Id);
 
 /** `sessions.list` answers newest first — `session.number desc`. */
@@ -266,6 +278,15 @@ export const recap12 = {
   notes: [],
 };
 
+/**
+ * The whole record, as `GET …/chronicle` answers it: newest first, each night's
+ * runs and beats oldest first — the same rows its recap carries.
+ */
+export const chronicle = [
+  { session: session12, runs: [resumedRun], beats: [] },
+  { session: session11, runs: [bridgeRun, carriedRun], beats: [beat, sharedBeat] },
+];
+
 export interface Answer {
   readonly status: number;
   readonly body: unknown;
@@ -312,6 +333,7 @@ export const fullChronicle = (): Map<string, Answer> =>
       { status: 200, body: [resumedRun] },
     ],
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
+    [`GET /campaigns/${campaignId}/chronicle`, { status: 200, body: chronicle }],
     [
       `GET /campaigns/${campaignId}/sessions/${session12Id}/prep`,
       { status: 200, body: [prepItem] },

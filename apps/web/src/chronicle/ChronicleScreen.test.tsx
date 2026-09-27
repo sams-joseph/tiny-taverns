@@ -6,20 +6,20 @@ import {
   beat,
   bridgeEncounterId,
   campaignId,
+  chronicle,
   installChronicleServer,
-  recap12,
   renderChronicle,
   session11,
   session11Id,
   session12,
-  session12Id,
   sharedBeat,
+  summary11,
 } from "./chronicle.fixtures";
 
 /**
- * The DM's Chronicle against a stub server: the nights, what an opened one
- * says, *Jump to*, the `?session=` link, and the states a real campaign puts
- * it in.
+ * The DM's Chronicle against a stub server: the one read of the record, the
+ * nights, what a closed and an opened one say, *Expand all*, *Jump to*, the
+ * `?session=` link, and the states a real campaign puts it in.
  *
  * Installed once at module scope for the `Context.Reference` reason
  * `api/client.test.ts` records — a per-test `vi.stubGlobal("fetch")` would keep
@@ -33,6 +33,13 @@ beforeEach(() => {
 
 const requested = (fragment: string): boolean =>
   server.calls.some((call) => call.pathname.includes(fragment));
+
+const chroniclePath = `/campaigns/${campaignId}/chronicle`;
+
+/** Answers `GET …/chronicle` with these nights instead of the fixture's. */
+const recordIs = (nights: ReadonlyArray<unknown>): void => {
+  server.routes.set(`GET ${chroniclePath}`, { status: 200, body: nights });
+};
 
 /**
  * A night's card, and the button that opens it. By the card rather than by the
@@ -58,21 +65,42 @@ describe("the nights", () => {
     expect(newest).toHaveAttribute("aria-expanded", "true");
     expect(older).toHaveAttribute("aria-expanded", "false");
     expect(await screen.findByText("2 sessions · since July 2026")).toBeInTheDocument();
-
-    // Only the open card's recap is read. A closed card costs no request.
-    await waitFor(() => {
-      expect(requested(`${session12Id}/recap`)).toBe(true);
-    });
-    expect(requested(`${session11Id}/recap`)).toBe(false);
   });
 
-  it("names an untitled night by its number, and a closed one by how long it ran", async () => {
+  it("reads the whole record once, and no night's recap", async () => {
+    await renderChronicle();
+    await userEvent.click(await header(11));
+    await within(await night(11)).findByText(sharedBeat.body);
+
+    expect(server.calls.filter((call) => call.pathname === chroniclePath)).toHaveLength(1);
+    expect(requested("/recap")).toBe(false);
+    expect(server.calls.some((call) => call.pathname.endsWith("/sessions"))).toBe(false);
+  });
+
+  it("clamps a closed night's summary to two lines", async () => {
     await renderChronicle();
     const card = await night(11);
 
     expect(within(card).getByRole("heading", { name: "Session 11" })).toBeInTheDocument();
     expect(within(card).getByText("19 July 2026")).toBeInTheDocument();
-    expect(within(card).getByText("18:00–22:30 · 4 hr 30 min")).toBeInTheDocument();
+    const preview = card.querySelector("[data-slot=night-preview]")!;
+    expect(preview).toHaveTextContent(summary11);
+    expect(preview).toHaveClass("line-clamp-2");
+    // The length of the night is not the preview once there is prose to show.
+    expect(within(card).queryByText("18:00–22:30 · 4 hr 30 min")).toBeNull();
+  });
+
+  it("says how long a closed night ran when nobody has written it up", async () => {
+    recordIs([
+      chronicle[0],
+      { ...chronicle[1], session: { ...session11, summary: null, summaryOrigin: null } },
+    ]);
+    await renderChronicle();
+    const card = await night(11);
+
+    expect(card.querySelector("[data-slot=night-preview]")).toHaveTextContent(
+      "18:00–22:30 · 4 hr 30 min",
+    );
   });
 
   it("keeps any number of nights open at once, each its own toggle", async () => {
@@ -82,10 +110,41 @@ describe("the nights", () => {
     await userEvent.click(older);
     expect(older).toHaveAttribute("aria-expanded", "true");
     expect(await header(12)).toHaveAttribute("aria-expanded", "true");
-    expect(requested(`${session11Id}/recap`)).toBe(true);
 
     await userEvent.click(older);
     expect(older).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("expand all", () => {
+  it("opens every night and then closes every one, reading nothing more", async () => {
+    await renderChronicle();
+    const newest = await header(12);
+    const older = await header(11);
+    const reads = server.calls.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(newest).toHaveAttribute("aria-expanded", "true");
+    expect(older).toHaveAttribute("aria-expanded", "true");
+    expect(within(await night(11)).getByText(sharedBeat.body)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(newest).toHaveAttribute("aria-expanded", "false");
+    expect(older).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
+    expect(server.calls.length).toBe(reads);
+  });
+
+  it("reads Collapse all once every night is open, whichever way they were opened", async () => {
+    await renderChronicle();
+    await header(12);
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
+
+    await userEvent.click(await header(11));
+    expect(screen.getByRole("button", { name: "Collapse all" })).toBeInTheDocument();
+
+    await userEvent.click(await header(12));
+    expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
   });
 });
 
@@ -97,6 +156,16 @@ describe("an opened night", () => {
     await within(card).findByText(sharedBeat.body);
     return card;
   };
+
+  it("leads with the DM's summary, whole, above the moments", async () => {
+    const card = await openEleven();
+
+    const whole = within(card).getByText(summary11);
+    expect(whole).not.toHaveClass("line-clamp-2");
+    expect(card.querySelector("[data-slot=night-preview]")).toBeNull();
+    const moments = within(card).getByRole("list", { name: "Moments" });
+    expect(whole.compareDocumentPosition(moments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 
   it("bullets the moments the table was told, and boxes the one the DM kept back", async () => {
     const card = await openEleven();
@@ -143,13 +212,19 @@ describe("an opened night", () => {
   });
 
   it("says so when nothing was kept for the night", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/sessions/${session12Id}/recap`, {
-      status: 200,
-      body: { ...recap12, fights: [], beats: [] },
-    });
+    recordIs([{ session: session12, runs: [], beats: [] }, chronicle[1]]);
     await renderChronicle();
 
     expect(await screen.findByText(/Nothing was written down for this night/)).toBeInTheDocument();
+  });
+
+  it("does not call a night with only a summary empty", async () => {
+    recordIs([chronicle[0], { session: session11, runs: [], beats: [] }]);
+    await renderChronicle(`?session=${session11Id}`);
+    const card = await night(11);
+
+    expect(await within(card).findByText(summary11)).toBeInTheDocument();
+    expect(within(card).queryByText(/Nothing was written down/)).toBeNull();
   });
 });
 
@@ -225,13 +300,10 @@ describe("the spotlight", () => {
         },
       ],
     });
-    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
-      status: 200,
-      body: [
-        { ...session12, spotlightSeatId: spots[0] },
-        { ...session11, spotlightSeatId: spots[1] },
-      ],
-    });
+    recordIs([
+      { ...chronicle[0], session: { ...session12, spotlightSeatId: spots[0] } },
+      { ...chronicle[1], session: { ...session11, spotlightSeatId: spots[1] } },
+    ]);
   };
 
   it("counts each seat's nights and names the one who has had the fewest", async () => {
@@ -276,7 +348,7 @@ describe("the spotlight", () => {
 
 describe("a campaign with no history at all", () => {
   it("is the state a new DM sees first, and it says what fills it", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [] });
+    recordIs([]);
     server.routes.set(`GET /campaigns/${campaignId}`, {
       status: 200,
       body: {
@@ -289,9 +361,10 @@ describe("a campaign with no history at all", () => {
     expect(await screen.findByText("Nothing written down yet")).toBeInTheDocument();
     expect(screen.getByText(/every beat you jot/)).toBeInTheDocument();
     expect(screen.getByText("0 sessions")).toBeInTheDocument();
-    // No index over an empty list, and nothing to count.
+    // No index over an empty list, nothing to count and nothing to expand.
     expect(screen.queryByRole("list", { name: "Jump to" })).toBeNull();
     expect(screen.queryByRole("list", { name: "Spotlight" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand all" })).toBeNull();
   });
 });
 

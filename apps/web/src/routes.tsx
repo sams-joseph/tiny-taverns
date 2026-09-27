@@ -521,7 +521,7 @@ const libraryNpcsRoute = createRoute({
 
 /**
  * The Chronicle names a campaign for the same reason the bestiary does: every
- * source it reads — `sessions.list`, `recap.read` — hangs off
+ * source it reads — `chronicle.read`, `chronicle.readAsPlayer` — hangs off
  * `/campaigns/:campaignId`.
  *
  * Remounted per campaign: which nights are open belongs to the record being

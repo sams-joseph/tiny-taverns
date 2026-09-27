@@ -268,24 +268,23 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         accept: (client, threadId, turnId) =>
           client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
         /**
-         * All three named, because the artifact's kind is the model's and this
-         * write does not branch on it. Over-naming costs a request nobody was going
+         * Named by what was kept. Over-naming costs a request nobody was going
          * to make; under-naming costs a card that quietly says the wrong number.
          *
-         * **A beat is deliberately not named**, and the residue is small and
-         * stated: a beat is assembled into a *recap*, whose key is the night's
-         * session id — which this panel does not have, because the beat's
-         * session is resolved server-side from `campaign.current_session_id`.
-         * So a recap card left open on the Chronicle while a beat is accepted
-         * stays as it was until it is reopened.
-         *
-         * A night's summary is the exception with a known night: it lands on
-         * the session row, which the nights list and that night's recap read.
+         * A night's summary and a beat both land in the Chronicle, whose one
+         * read answers `sessions`: the summary on the session row (which that
+         * night's recap, read by the Overview's *Last time*, carries too), and
+         * the beat under whichever night is current — resolved server-side, so
+         * the campaign-wide key is the one this panel can name. Anything else
+         * Hob keeps here is a note, an encounter or the story so far, all three
+         * named because the model decides which.
          */
         keeps: (accepted) =>
           accepted.accepted === "nightSummary"
             ? [reads.sessions(campaignId), reads.recap(accepted.session.id)]
-            : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
+            : accepted.accepted === "beat"
+              ? [reads.sessions(campaignId)]
+              : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
       };
     }
     case "sharedWorld": {

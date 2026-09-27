@@ -140,11 +140,12 @@ export const reads = {
   partyPrep: (campaignId: CampaignId): ReadKey => key`party-prep:${campaignId}`,
 
   /**
-   * The nights of this campaign — **the spine the Chronicle draws and the one
-   * row the campaign view reads**, deliberately one key.
+   * The nights of this campaign — **the Chronicle's one read of the whole
+   * record and the one row the campaign view reads**, deliberately one key.
    *
    * Starting or finishing a night changes both, and they are on screen
-   * together; splitting them would be two names for one act.
+   * together; splitting them would be two names for one act. The Chronicle's
+   * nights carry their summaries and beats too, so keeping either names this.
    */
   sessions: (campaignId: CampaignId): ReadKey => key`sessions:${campaignId}`,
 

@@ -6,12 +6,14 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The Chronicle (`chronicle/ChronicleScreen.tsx`), at every width: the nights
  * beside *Jump to* and the Spotlight or alone once the columns would stack,
  * *Jump to* with no scroller of its own, the Spotlight's rows in one line, a
- * jump and a `?session=` link landing a night under the chrome, and an opened
- * night's encounter chips wrapping on a phone without clipping. All of it is
- * layout, which jsdom does not compute.
+ * jump and a `?session=` link landing a night under the chrome, a closed
+ * night's summary clamped to two lines, every night expanded still scrolling
+ * with the window, and an opened night's encounter chips wrapping on a phone
+ * without clipping. All of it is layout, which jsdom does not compute.
  *
  * Read over the creator scenario's two nights (`chronicle.fixtures.tsx`):
- * session 11 holds a kept beat, a shared one, and a conversation and a fight.
+ * session 11 holds a written summary longer than two lines at any width, a kept
+ * beat, a shared one, and a conversation and a fight.
  */
 
 const chronicle = screens.find((screen) => screen.name === "chronicle")!;
@@ -92,6 +94,19 @@ for (const width of WIDTHS) {
           }
         },
       );
+
+      await test.step("a closed night clamps its summary to two lines", async () => {
+        // `line-clamp` is a computed height and a hidden overflow; jsdom has
+        // the class and neither of those.
+        const preview = await older.locator('[data-slot="night-preview"]').evaluate((el) => ({
+          height: el.getBoundingClientRect().height,
+          line: Number.parseFloat(getComputedStyle(el).lineHeight),
+          clamped: el.scrollHeight > el.clientHeight + 0.5,
+        }));
+        expect.soft(preview.height, "preview height").toBeLessThanOrEqual(2 * preview.line + 1);
+        expect.soft(preview.height, "preview height").toBeGreaterThan(1.5 * preview.line);
+        expect.soft(preview.clamped, "the summary runs past two lines").toBe(true);
+      });
 
       await test.step("the header's left edge is the nights'", async () => {
         const h1 = await box(page.locator('main [data-slot="page-heading"] h1'));
@@ -179,6 +194,49 @@ for (const width of WIDTHS) {
         const { scrollWidth, clientWidth } = await app.widths();
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
       });
+    });
+
+    test("expand all opens every night, and the page still scrolls with the window", async ({
+      app,
+      page,
+    }) => {
+      await app.open(chronicle);
+      await page.getByRole("button", { name: "Expand all" }).click();
+      for (const n of [12, 11]) {
+        await expect(
+          page
+            .locator(`#session-${String(n)}`)
+            .getByRole("button", { name: `Session ${String(n)}` }),
+        ).toHaveAttribute("aria-expanded", "true");
+      }
+      await expect(page.getByRole("button", { name: "Collapse all" })).toBeVisible();
+      await app.settle();
+
+      // Every night open is the longest this page gets. It grows the document;
+      // nothing inside it becomes a scroller of its own.
+      const scrollers = await page.locator("main").evaluate((main) =>
+        [...main.querySelectorAll("*")]
+          .filter((el) => {
+            const overflow = getComputedStyle(el).overflowY;
+            return (
+              (overflow === "auto" || overflow === "scroll") && el.scrollHeight > el.clientHeight
+            );
+          })
+          .map((el) => el.outerHTML.slice(0, 80)),
+      );
+      expect.soft(scrollers, "inner scrollers").toEqual([]);
+
+      const scrolled = await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return {
+          y: window.scrollY,
+          end: document.documentElement.scrollHeight - window.innerHeight,
+        };
+      });
+      expect.soft(scrolled.end, "the document is taller than the window").toBeGreaterThan(0);
+      expect.soft(scrolled.y, "the window scrolled to the end").toBeCloseTo(scrolled.end, 0);
+      const { scrollWidth, clientWidth } = await app.widths();
+      expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
     });
 
     test("a ?session= link opens that night under the chrome", async ({ app, page }) => {

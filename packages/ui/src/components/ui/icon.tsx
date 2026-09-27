@@ -14,7 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsDownUp,
   ChevronsUp,
+  ChevronsUpDown,
   CircleCheck,
   CircleHelp,
   Clock,
@@ -144,7 +146,8 @@ import {
  * The Overview redesign (`Campaign Overview.dc.html`) adds `settings`, on the
  * hero's *Settings* button beside *Invite player*, and its runner adds `grid-3x3`,
  * on the battle map's *Grid* toggle. Its Notes screen adds `pin`, on a pinned
- * row and the pane's *Pin*.
+ * row and the pane's *Pin*. Its Chronicle adds `chevrons-up-down` and
+ * `chevrons-down-up`, on the header's *Expand all* and *Collapse all*.
  */
 export const icons = {
   archive: Archive,
@@ -161,7 +164,9 @@ export const icons = {
   "chevron-left": ChevronLeft,
   "chevron-right": ChevronRight,
   "chevron-up": ChevronUp,
+  "chevrons-down-up": ChevronsDownUp,
   "chevrons-up": ChevronsUp,
+  "chevrons-up-down": ChevronsUpDown,
   "circle-check": CircleCheck,
   clock: Clock,
   coins: Coins,

@@ -150,13 +150,29 @@ export const playerRecap12 = {
 };
 
 /**
- * The record itself — two shared nights and each one's `recap/player` — which
+ * The whole record as `GET …/chronicle/player` answers it: the same nights as
+ * the recaps above, with the same narrowing — the conversation told by its
+ * kind, and only the beat the DM shared.
+ */
+export const playerChronicle = [
+  { session: sessions[0], runs: [resumedRun], beats: [] },
+  {
+    session: sessions[1],
+    runs: playerRecap11.fights.map((fight) => fight.run),
+    beats: [sharedBeat],
+  },
+];
+
+/**
+ * The record itself — two shared nights, the whole-record read and each
+ * night's `recap/player` — which
  * the test harness's `player-chronicle` scenario lays over the player's own
  * campaign reads (`test/scenarios.ts`).
  */
 export const playerRecord = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}/sessions`, { status: 200, body: sessions }],
+    [`GET /campaigns/${campaignId}/chronicle/player`, { status: 200, body: playerChronicle }],
     [
       `GET /campaigns/${campaignId}/sessions/${session11Id}/recap/player`,
       { status: 200, body: playerRecap11 },
@@ -167,7 +183,7 @@ export const playerRecord = (): Map<string, Answer> =>
     ],
   ]);
 
-/** Two shared nights and the fight across both, as `recap/player` answers them. */
+/** Two shared nights and the fight across both, as a player's reads answer them. */
 const sharedRecord = (): Map<string, Answer> =>
   new Map<string, Answer>([
     [`GET /campaigns/${campaignId}`, { status: 200, body: campaign }],
