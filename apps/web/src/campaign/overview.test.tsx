@@ -28,6 +28,18 @@ import { partyLevel } from "./overview";
 import { agoOf } from "./when";
 
 /**
+ * The nights with nothing written about them, for the cards that fall back to
+ * the night's beats and fights: the fixture's session 11 carries a summary,
+ * which *Last time* would lead with instead.
+ */
+const unwritten = sessions.map((row) => ({
+  ...row,
+  summary: null,
+  summaryOrigin: null,
+  summaryAssistantTurnId: null,
+}));
+
+/**
  * The Overview's cards, one describe each, against the stubbed wire.
  *
  * The redesign's rule for these cards is that **the rows open nothing** — the
@@ -439,7 +451,7 @@ describe("the last time card", () => {
   });
 
   it("quotes the last finished night's beats verbatim, with the way to the chronicle", async () => {
-    server.routes.set(`GET ${base}/sessions`, { status: 200, body: sessions });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: unwritten });
     server.routes.set(`GET ${base}/sessions/${session11.id}/recap`, {
       status: 200,
       body: recap11,
@@ -459,8 +471,28 @@ describe("the last time card", () => {
     expect(links[0]).toHaveAttribute("href", `${base}/chronicle`);
   });
 
+  it("leads with the DM's summary when one is written, and quotes no beat under it", async () => {
+    const summary = "They crossed at dusk and paid the ferryman in salt, not coin.";
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: sessions.map((row) =>
+        row.id === session11.id ? { ...row, summary, summaryOrigin: "authored" } : row,
+      ),
+    });
+    server.routes.set(`GET ${base}/sessions/${session11.id}/recap`, {
+      status: 200,
+      body: recap11,
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("Last time");
+
+    expect(within(card).getByText(summary)).toBeInTheDocument();
+    expect(within(card).queryByText(recap11.beats[0]!.body)).toBeNull();
+    expect(within(card).getByRole("link", { name: "Read the chronicle" })).toBeInTheDocument();
+  });
+
   it("tells a night with no beats by its fights, and one with neither says so", async () => {
-    server.routes.set(`GET ${base}/sessions`, { status: 200, body: sessions });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: unwritten });
     server.routes.set(`GET ${base}/sessions/${session11.id}/recap`, {
       status: 200,
       body: { ...recap11, beats: [] },
@@ -473,7 +505,7 @@ describe("the last time card", () => {
   });
 
   it("says so when nothing was written down", async () => {
-    server.routes.set(`GET ${base}/sessions`, { status: 200, body: sessions });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: unwritten });
     server.routes.set(`GET ${base}/sessions/${session11.id}/recap`, {
       status: 200,
       body: { ...recap11, beats: [], fights: [] },

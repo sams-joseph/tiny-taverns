@@ -174,7 +174,7 @@ describe("an opened night", () => {
     expect(within(moments).getByText(sharedBeat.body)).toBeInTheDocument();
     expect(within(moments).queryByText(beat.body)).toBeNull();
 
-    const kept = within(card).getByText(beat.body).parentElement!.parentElement!;
+    const kept = within(card).getByRole("list", { name: "Kept from the table" }).parentElement!;
     expect(within(kept).getByText("DM only")).toBeInTheDocument();
     expect(within(kept).queryByText(sharedBeat.body)).toBeNull();
   });
@@ -272,6 +272,27 @@ describe("jump to", () => {
     expect(await header(12)).toHaveAttribute("aria-expanded", "false");
     await waitFor(() => expect(scrolled).toHaveBeenCalled());
     expect(scrolled.mock.contexts.at(-1)).toHaveAttribute("id", "session-11");
+  });
+
+  it("does not pull the page back to that night when a later write re-reads the list", async () => {
+    server.routes.set(`PATCH /campaigns/${campaignId}/sessions/${session11Id}`, {
+      status: 200,
+      body: { ...session11, visibility: "shared" },
+    });
+    await renderChronicle(`?session=${session11Id}`);
+    await waitFor(() => expect(scrolled).toHaveBeenCalled());
+    const share = await within(await night(11)).findByRole("switch", {
+      name: "Share with the table",
+    });
+    const listReads = () =>
+      server.calls.filter((call) => call.method === "GET" && call.pathname === chroniclePath)
+        .length;
+    const before = listReads();
+    scrolled.mockClear();
+
+    await userEvent.click(share);
+    await waitFor(() => expect(listReads()).toBeGreaterThan(before));
+    expect(scrolled).not.toHaveBeenCalled();
   });
 
   it("opens the newest when `?session=` names a night it does not hold", async () => {

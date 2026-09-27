@@ -13,7 +13,9 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  *
  * Read over the creator scenario's two nights (`chronicle.fixtures.tsx`):
  * session 11 holds a written summary longer than two lines at any width, a kept
- * beat, a shared one, and a conversation and a fight.
+ * beat, a shared one, and a conversation and a fight; session 12 is still open
+ * with no summary, so the composer card for writing it up leads the main
+ * column above the nights, over the seated party.
  */
 
 const chronicle = screens.find((screen) => screen.name === "chronicle")!;
@@ -73,16 +75,21 @@ for (const width of WIDTHS) {
       });
       const beside = room >= ASIDE_FROM;
       const aside = page.locator("main aside");
+      const composer = page.getByRole("region", { name: "Write up session 12" });
       const index = page.getByRole("list", { name: "Jump to" });
 
       await test.step(
         beside ? "the nights and Jump to side by side" : "the nights alone, no Jump to",
         async () => {
           const nights = await box(newest);
+          // The main column opens with the composer card, above the nights.
+          const first = await box(composer);
+          expect.soft(first.y, "composer above the nights").toBeLessThan(nights.y);
+          expect.soft(first.width, "composer as wide as the nights").toBeCloseTo(nights.width, 0);
           if (beside) {
             await expect(index).toBeVisible();
             const side = await box(aside);
-            expect.soft(side.y, "aside top").toBeCloseTo(nights.y, 0);
+            expect.soft(side.y, "aside top").toBeCloseTo(first.y, 0);
             expect.soft(side.x, "aside left").toBeGreaterThan(nights.x + nights.width);
             expect.soft(side.width, "aside width").toBeLessThanOrEqual(340.5);
             expect.soft(nights.width, "nights width").toBeGreaterThanOrEqual(559.5);
@@ -106,6 +113,32 @@ for (const width of WIDTHS) {
         expect.soft(preview.height, "preview height").toBeLessThanOrEqual(2 * preview.line + 1);
         expect.soft(preview.height, "preview height").toBeGreaterThan(1.5 * preview.line);
         expect.soft(preview.clamped, "the summary runs past two lines").toBe(true);
+      });
+
+      await test.step("the composer's controls wrap inside its card", async () => {
+        const fit = await composer.evaluate((card) => {
+          const edge = card.getBoundingClientRect();
+          return [...card.querySelectorAll("button, input, textarea")].map((control) => {
+            const r = control.getBoundingClientRect();
+            return {
+              name: control.textContent ?? control.tagName,
+              left: r.left,
+              right: r.right,
+              edge: { left: edge.left, right: edge.right },
+              clipped: control.scrollWidth > control.clientWidth + 0.5,
+            };
+          });
+        });
+        expect(fit.length).toBeGreaterThan(0);
+        for (const control of fit) {
+          expect.soft(control.clipped, `${control.name} clips`).toBe(false);
+          expect
+            .soft(control.left, `${control.name} left`)
+            .toBeGreaterThanOrEqual(control.edge.left);
+          expect
+            .soft(control.right, `${control.name} right`)
+            .toBeLessThanOrEqual(control.edge.right + 0.5);
+        }
       });
 
       await test.step("the header's left edge is the nights'", async () => {

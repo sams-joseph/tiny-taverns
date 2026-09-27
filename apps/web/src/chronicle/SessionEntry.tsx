@@ -1,5 +1,5 @@
 import type { Session } from "@taverns/api";
-import { Card, Icon, SectionHeading } from "@taverns/ui";
+import { Card, cn, Icon, SectionHeading } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { dayOf, spanOf } from "./format";
 import { nightAnchor } from "./nights";
@@ -25,14 +25,20 @@ import { nightAnchor } from "./nights";
  * nothing the Chronicle's one read did not already answer. The body is a child,
  * which is what lets the DM's and the player's Chronicles share this card while
  * reading different endpoints.
+ *
+ * **"Spotlight on X"** follows the date when the night names a seat the reader
+ * can put a name to (`spotlightName`); otherwise the line is the date alone.
  */
 export function SessionEntry({
   session,
+  spotlight,
   open,
   onToggle,
   children,
 }: {
   readonly session: Session;
+  /** Whose night it was, by name, when there is one to give. */
+  readonly spotlight: string | undefined;
   readonly open: boolean;
   readonly onToggle: () => void;
   /** The night, read back (`NightBody`). Mounted only while `open`. */
@@ -54,13 +60,21 @@ export function SessionEntry({
           aria-expanded={open}
           className="flex w-full cursor-pointer items-start gap-3.5 rounded-card p-card text-left outline-none focus-visible:ring-focus"
         >
-          <NumberTile number={session.number} />
+          <NumberTile number={session.number} muted={false} />
           <div className="min-w-0 flex-1">
             <SectionHeading as="h3" size="title">
               {title}
             </SectionHeading>
             <p className="mt-0.5 text-label leading-snug text-muted-foreground">
               {session.startedAt === null ? "Not played yet" : dayOf(session.startedAt)}
+              {spotlight !== undefined && (
+                <>
+                  <span aria-hidden="true" className="px-2 text-faint">
+                    ·
+                  </span>
+                  Spotlight on {spotlight}
+                </>
+              )}
             </p>
             {!open && (
               <p
@@ -95,10 +109,24 @@ export function SessionEntry({
   );
 }
 
-/** The night's number, in the drawing's 36px mono tile. */
-function NumberTile({ number }: { readonly number: number }) {
+/**
+ * The night's number, in the drawing's 36px mono tile. The composer's is
+ * muted, as the drawing's draft tile is: a night not yet written up.
+ */
+export function NumberTile({
+  number,
+  muted,
+}: {
+  readonly number: number;
+  readonly muted: boolean;
+}) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-hairline bg-surface-sunken font-mono text-mono-l leading-none font-medium text-heading">
+    <span
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center rounded-md border border-hairline bg-surface-sunken font-mono text-mono-l leading-none font-medium",
+        muted ? "text-muted-foreground" : "text-heading",
+      )}
+    >
       {number}
     </span>
   );

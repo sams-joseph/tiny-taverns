@@ -35,8 +35,11 @@ export interface SpotlightTally {
   readonly hint: string | undefined;
 }
 
-/** What the table calls a seat — the name the Party's card leads with. */
-const seatName = (row: PartySeat): string => row.character?.name ?? row.seat.displayName;
+/**
+ * What the table calls a seat — the name the Party's card leads with, and the
+ * one a night's "Spotlight on" line and the composer's toggles carry.
+ */
+export const seatName = (row: PartySeat): string => row.character?.name ?? row.seat.displayName;
 
 export const spotlightTally = (
   party: ReadonlyArray<PartySeat>,

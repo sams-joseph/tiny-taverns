@@ -7,9 +7,11 @@ import { reads } from "../api/keys";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";
 import { useMemo } from "react";
 import { ChronicleColumns, ExpandAll, JumpTo } from "./ChronicleParts";
+import { nightToWriteUp, spotlightName } from "./entry";
 import { summaryLine, useLanding, useOpenNights, type OpenNights } from "./nights";
 import { loadChronicleSpine, sessionsOf, type ChronicleSpine } from "./load";
-import { NightBody } from "./NightBody";
+import { NightComposer } from "./NightComposer";
+import { DmNight } from "./NightEntry";
 import { SessionEntry } from "./SessionEntry";
 import { SpotlightCard } from "./SpotlightCard";
 
@@ -24,11 +26,18 @@ import { SpotlightCard } from "./SpotlightCard";
  * (`loadChronicleSpine`), so a closed card can clamp its night's summary and
  * *Expand all* opens every night without a request per card.
  *
+ * ### Writing a night up
+ *
+ * The composer card (`NightComposer`) leads the main column while the newest
+ * played night has no summary (`nightToWriteUp`): Hob drafts, the DM edits and
+ * keeps. Inside an opened night (`DmNight`) the DM edits or clears the summary,
+ * shares the night with the table, and shares or keeps each moment. The
+ * header of a night names whose night it was.
+ *
  * ### What the drawing has that this does not, yet
  *
- * - **The draft card for writing a night up, acts and the story so far.** The
- *   draft and the story lead the main column, above the nights; acts group the
- *   nights.
+ * - **Acts and the story so far.** The story leads the main column, above the
+ *   composer; acts group the nights.
  * - **Level-ups, loot and who was met.** Nothing records any of them, and the
  *   maintainer chose to leave them out.
  *
@@ -102,6 +111,9 @@ function Chronicle({
   const nights = extra.nights;
   const sessions = useMemo(() => sessionsOf(nights), [nights]);
   useLanding(open, sessions);
+  const writing = nightToWriteUp(sessions);
+  const writeUp =
+    writing === undefined ? undefined : nights.find((night) => night.session.id === writing.id);
 
   if (nights.length === 0) {
     return (
@@ -121,16 +133,41 @@ function Chronicle({
 
   return (
     <ChronicleColumns
-      main={nights.map((night) => (
-        <SessionEntry
-          key={night.session.id}
-          session={night.session}
-          open={open.isOpen(night.session.id)}
-          onToggle={() => open.toggle(night.session.id)}
-        >
-          <NightBody audience={{ kind: "dm", campaignId }} night={night} />
-        </SessionEntry>
-      ))}
+      main={
+        <>
+          {writeUp !== undefined && (
+            <NightComposer
+              // Another night is another draft, with fields of its own.
+              key={writeUp.session.id}
+              campaignId={campaignId}
+              session={writeUp.session}
+              party={view.party}
+              hobAvailable={extra.hobAvailable}
+              mode={{ kind: "draft", runs: writeUp.runs }}
+              // As the drawing does: the night just written opens, in view.
+              onSaved={() => open.jump(writeUp.session.id)}
+              onCancel={undefined}
+            />
+          )}
+          {nights.map((night) => (
+            <SessionEntry
+              key={night.session.id}
+              session={night.session}
+              spotlight={spotlightName(night.session, view.party)}
+              open={open.isOpen(night.session.id)}
+              onToggle={() => open.toggle(night.session.id)}
+            >
+              <DmNight
+                campaign={view.campaign}
+                night={night}
+                party={view.party}
+                hobAvailable={extra.hobAvailable}
+                writtenAbove={night.session.id === writeUp?.session.id}
+              />
+            </SessionEntry>
+          ))}
+        </>
+      }
       aside={
         <>
           <JumpTo sessions={sessions} onJump={open.jump} />

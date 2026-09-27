@@ -11,18 +11,19 @@ const QUOTED = 3;
 /**
  * *Last time*: what the record says about the previous night, in its own words.
  *
- * **The drawing's paragraph is prose nobody wrote.** Nothing stores a summary of
- * a night — `Recap.ts` is assembled per read, by decision, and a model call in
- * a read path is ruled out — so the captain's answer is the night's recorded
- * events: its first few beats **verbatim**, which are already the DM's words at
- * the right length. A night with no beats is told by its fights, in the
- * Chronicle's own sentences (`chronicle/fight.ts`), and a night with neither
- * says so. The rest is one press away.
+ * **The DM's summary first, when one is written** (`Session.summary`, written
+ * up on the Chronicle — the drawing's paragraph is exactly that). A night with
+ * none is told by its recorded events, the captain's earlier answer: its first
+ * few beats **verbatim**, which are already the DM's words at the right length.
+ * A night with no beats is told by its fights, in the Chronicle's own
+ * sentences (`chronicle/fight.ts`), and a night with none of these says so.
+ * The rest is one press away. No model is called in this read path.
  *
- * A player's is the same card over `recap.readAsPlayer`: their beats are the
- * shared ones and their fights carry no monster's numbers, and `fightStory`
- * reads neither. A night with nothing shared is not a night where nothing was
- * written, so the last sentence is theirs.
+ * A player's is the same card over their own reads: the session row carries a
+ * summary only for a night the DM shared, which is the only night their list
+ * holds; their beats are the shared ones and their fights carry no monster's
+ * numbers, and `fightStory` reads neither. A night with nothing shared is not
+ * a night where nothing was written, so the last sentence is theirs.
  */
 export function LastTime({
   lastNight,
@@ -55,7 +56,11 @@ export function LastTime({
       }
     >
       <div className="flex flex-col gap-2.5 px-card py-4">
-        {quoted.length > 0 ? (
+        {session.summary !== null ? (
+          <p className="mb-0 max-w-measure text-body leading-body whitespace-pre-wrap text-foreground">
+            {session.summary}
+          </p>
+        ) : quoted.length > 0 ? (
           <>
             {quoted.map((beat) => (
               <p
