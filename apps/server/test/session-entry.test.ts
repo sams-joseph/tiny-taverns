@@ -284,6 +284,29 @@ describe("what a player reads of it", () => {
     ]);
   });
 
+  it("flows through the Chronicle's one read of every night, for each audience", async () => {
+    const [dmNights, playerNights] = await run(
+      Effect.gen(function* () {
+        const recap = yield* Recap;
+        const dmOf = yield* asDm(f.dm, f.campaign.id);
+        return [
+          yield* recap.chronicle(dmOf),
+          yield* as(f.player, recap.chronicleAsPlayer(f.campaign.id)),
+        ] as const;
+      }),
+    );
+    const told = (nights: ReadonlyArray<{ readonly session: Session }>) =>
+      nights.map((night) => [night.session.number, night.session.summary]);
+    expect(told(dmNights)).toEqual(
+      expect.arrayContaining([
+        [1, "SHAREDSUMMARY the ford."],
+        [2, UNSHARED],
+      ]),
+    );
+    expect(told(playerNights)).toEqual([[1, "SHAREDSUMMARY the ford."]]);
+    expect(JSON.stringify(playerNights)).not.toContain("DMONLYSUMMARY");
+  });
+
   it("names the spotlight only through a seat the player can read", async () => {
     // Brannoc's seat is shared: the player is told whose night it was.
     expect((await run(read(f.player, f.shared.id))).spotlightSeatId).toBe(f.brannoc);
