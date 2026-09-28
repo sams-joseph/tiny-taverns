@@ -1,6 +1,7 @@
 import {
   type CampaignId,
   type ChallengeRating,
+  type CharacterOption,
   creatureXp,
   type NpcId,
   type NpcSheet,
@@ -8,12 +9,27 @@ import {
   type NpcSheetSummary,
   type NpcSheetUpdate,
   type SheetBody,
+  asRaceOption,
+  optionNamed,
+  startingSheetBody,
+  subraceNamed,
 } from "@taverns/api";
 import type { Effect } from "effect";
+import type { AsyncResult, Atom } from "effect/unstable/reactivity";
 import type { HttpClient } from "effect/unstable/http";
 import { reads, type Invalidation } from "../api/keys";
 import type { TavernsClient } from "../api/client";
-import { parseOptional } from "../characters/create";
+import { badScores } from "../characters/abilities";
+import {
+  type CharacterDraft,
+  emptyDraft,
+  identityNumberProblems,
+  parseOptional,
+  seededDraft,
+  startingSourcesOf,
+  withKitDefaults,
+} from "../characters/create";
+import { campaignOptionsAtom, coreOptionsAtom } from "../rules/load";
 
 /**
  * An NPC's sheet as the Cast draws and writes it — the drawer's one line, the
@@ -137,6 +153,102 @@ export const identityPatch = (
   };
 };
 
+/**
+ * What *Start from class and level* holds: the new-character form's own draft
+ * (`CharacterDraft`), so the pickers, the race's bonuses, the kit picks and the
+ * seeded armour class and hit points are the form's helpers over the form's
+ * state, and the document is composed by the same `startingSourcesOf` →
+ * `startingSheetBody`. The name, player, link, notes and appearance boxes stay
+ * blank and unread: an NPC's persona is its own.
+ */
+export type QuickStartDraft = CharacterDraft;
+
+/**
+ * The draft a quick start opens on: the form's blank one, or — rebuilding a
+ * sheet — its level and the labels that still name an option here, the kits
+ * at side (a), and the armour class and hit points seeded from those. **Not
+ * its scores**: the document's are after the race's
+ * bonuses, and seeding from them would add the bonuses a second time.
+ */
+export const quickStartDraft = (
+  sheet: NpcSheet | null,
+  options: ReadonlyArray<CharacterOption>,
+): QuickStartDraft => {
+  if (sheet === null) return emptyDraft;
+  const known = (kind: CharacterOption["kind"], name: string | null | undefined) =>
+    optionNamed(options, kind, name)?.name ?? "";
+  const raceOption = asRaceOption(optionNamed(options, "race", sheet.race));
+  const draft: QuickStartDraft = {
+    ...emptyDraft,
+    level: sheet.level === null ? "" : String(sheet.level),
+    race: raceOption?.name ?? "",
+    subrace: subraceNamed(raceOption?.body, sheet.subrace)?.name ?? "",
+    className: known("class", sheet.className),
+    background: known("background", sheet.sheet.identity?.background),
+  };
+  const kits = withKitDefaults(withKitDefaults(draft, options), options, "backgroundKitChoices");
+  return seededDraft(kits, new Set(), options);
+};
+
+/** What stops a quick start: it needs a class and a level, and the form's own bounds. */
+export interface QuickStartProblems {
+  readonly className?: string;
+  readonly level?: string;
+  readonly ac?: string;
+  readonly hpMax?: string;
+  readonly abilities?: string;
+}
+
+export const quickStartProblems = (draft: QuickStartDraft): QuickStartProblems => {
+  const problems: {
+    className?: string;
+    level?: string;
+    ac?: string;
+    hpMax?: string;
+    abilities?: string;
+  } = { ...identityNumberProblems(draft) };
+  if (draft.className === "") problems.className = "Pick a class.";
+  if (problems.level === undefined && draft.level.trim() === "") {
+    problems.level = "Give them a level.";
+  }
+  if (badScores(draft.abilities).length > 0) {
+    problems.abilities = "An ability score is a whole number, 1 to 30.";
+  }
+  return problems;
+};
+
+/**
+ * *Start from class and level*: the PUT of **a whole sheet composed by the
+ * character form's own assembly** (`startingSheetBody`, through the form's
+ * `startingSourcesOf`) — every class feature to that level, its proficiency
+ * bonus, slots and hit dice, the kits as picked, the race's traits and the
+ * background's proficiencies — with the seeded armour class and hit points as
+ * the boxes now say them.
+ *
+ * Over a sheet it is a rebuild: it names the version it read, so a sheet edited
+ * meanwhile is a `Conflict` rather than lost, and it keeps the challenge
+ * rating, which is the DM's call and nothing a class decides. Call only once
+ * `quickStartProblems` has passed the draft.
+ */
+export const quickStartPayload = (
+  draft: QuickStartDraft,
+  options: ReadonlyArray<CharacterOption>,
+  sheet: NpcSheet | null,
+): NpcSheetPut => {
+  const { body } = startingSheetBody(startingSourcesOf(draft, options));
+  return {
+    ...(sheet === null ? {} : { expectedVersion: sheet.version }),
+    level: parseOptional(draft.level) ?? null,
+    race: label(draft.race),
+    subrace: label(draft.subrace),
+    className: label(draft.className),
+    ac: parseOptional(draft.ac) ?? null,
+    hpMax: parseOptional(draft.hpMax) ?? null,
+    cr: sheet?.cr ?? null,
+    sheet: body,
+  };
+};
+
 type SheetWrite<A> = Effect.Effect<A, unknown, HttpClient.HttpClient>;
 
 /**
@@ -155,6 +267,13 @@ export interface NpcSheetTarget {
   readonly update: (client: TavernsClient, patch: NpcSheetUpdate) => SheetWrite<NpcSheet>;
   readonly remove: (client: TavernsClient) => SheetWrite<void>;
   /**
+   * The classes, races and backgrounds a quick start picks from — the rules
+   * the NPC's sheet is written against: its campaign's for a campaign NPC,
+   * the core rules for a Library original (the rules the server checks it
+   * against).
+   */
+  readonly options: Atom.Atom<AsyncResult.AsyncResult<ReadonlyArray<CharacterOption>, unknown>>;
+  /**
    * What every write of the sheet changed: the sheet, and the shelf the
    * one-line summaries read (the drawer's, a Library card's).
    */
@@ -168,6 +287,7 @@ export const campaignSheetTarget = (campaignId: CampaignId, npcId: NpcId): NpcSh
     put: (client, payload) => client.npcs.putSheet({ params, payload }),
     update: (client, patch) => client.npcs.updateSheet({ params, payload: patch }),
     remove: (client) => client.npcs.removeSheet({ params }),
+    options: campaignOptionsAtom(campaignId),
     writes: [reads.npcSheet(npcId), reads.npcSheets(campaignId)],
   };
 };
@@ -184,6 +304,7 @@ export const librarySheetTarget = (npcId: NpcId): NpcSheetTarget => {
     put: (client, payload) => client.library.putNpcSheet({ params, payload }),
     update: (client, patch) => client.library.updateNpcSheet({ params, payload: patch }),
     remove: (client) => client.library.removeNpcSheet({ params }),
+    options: coreOptionsAtom,
     writes: [reads.npcSheet(npcId), reads.libraryNpcSheets],
   };
 };

@@ -331,9 +331,10 @@ export const pickKitRow = (
  * The draft as `startingSheetBody` reads it: the picked options, the cells as
  * placed, the race's chosen bonuses, the kit picks and the Level box. The seed
  * the form shows and the sheet it sends are both composed from this, so the
- * hit points in the box are the ones the sheet was written at.
+ * hit points in the box are the ones the sheet was written at — and an NPC's
+ * quick start (`cast/npcSheet.ts`) composes from the same draft through here.
  */
-const startingSourcesOf = (
+export const startingSourcesOf = (
   draft: CharacterDraft,
   options: ReadonlyArray<CharacterOption>,
 ): StartingSheetSources => {
@@ -369,6 +370,57 @@ export const seededDraft = (
     ...(edited.has("hpMax") || seed.hpMax === undefined ? {} : { hpMax: String(seed.hpMax) }),
   };
 };
+
+/** The four pickers a starting sheet is chosen with. */
+export type SheetPick = "race" | "subrace" | "className" | "background";
+
+/**
+ * A pick, and what it moves: a race clears its subrace and its chosen bonuses,
+ * and a class or background pick resets that kit to side (a) throughout — the
+ * choices are its own, and a pick made against another's list would point at a
+ * side that no longer exists. Then it re-seeds, sparing a box typed over. The
+ * new-character form's and an NPC quick start's one rule for a pick.
+ */
+export const withPick = (
+  draft: CharacterDraft,
+  key: SheetPick,
+  value: string,
+  edited: ReadonlySet<SeededField>,
+  options: ReadonlyArray<CharacterOption>,
+): CharacterDraft => {
+  const next =
+    key === "race"
+      ? { ...draft, race: value, subrace: "", raceBonusChoices: [] }
+      : { ...draft, [key]: value };
+  return seededDraft(
+    key === "className"
+      ? withKitDefaults(next, options)
+      : key === "background"
+        ? withKitDefaults(next, options, "backgroundKitChoices")
+        : next,
+    edited,
+    options,
+  );
+};
+
+/** A race bonus ticked or cleared, and the re-seed it causes. */
+export const withRaceBonus = (
+  draft: CharacterDraft,
+  ability: AbilityKey,
+  on: boolean,
+  edited: ReadonlySet<SeededField>,
+  options: ReadonlyArray<CharacterOption>,
+): CharacterDraft =>
+  seededDraft(
+    {
+      ...draft,
+      raceBonusChoices: on
+        ? [...draft.raceBonusChoices, ability]
+        : draft.raceBonusChoices.filter((item) => item !== ability),
+    },
+    edited,
+    options,
+  );
 
 export const payloadFrom = (
   draft: CharacterDraft,

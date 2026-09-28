@@ -5,6 +5,7 @@ import {
   cazrilSheet,
   cazrilSheetSummary,
   cazrilSource,
+  coreOptions,
   installStubServer,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
@@ -82,6 +83,30 @@ describe("LibraryNpcScreen", () => {
     expect(
       await screen.findByRole("heading", { name: "Level 5 Human Fighter" }),
     ).toBeInTheDocument();
+  });
+
+  it("starts one from a class and level over the core rules, through the owner's endpoint", async () => {
+    server.routes.set("GET /library/options/core", { status: 200, body: coreOptions });
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: sourceSheet });
+    await renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Start from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Start Cazril from a class" });
+    await userEvent.click(await within(dialog).findByRole("combobox", { name: "Class" }));
+    // The core rules: the bundle's classes, and no campaign's own.
+    expect(screen.queryByRole("option", { name: "Bloodsworn" })).toBeNull();
+    await userEvent.click(await screen.findByRole("option", { name: "Fighter" }));
+    const level = within(dialog).getByRole("spinbutton", { name: "Level" });
+    await userEvent.clear(level);
+    await userEvent.type(level, "3");
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: sourceSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Write stats" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [put] = sheetCalls("PUT");
+    expect(JSON.parse(put!.body)).toMatchObject({ level: 3, className: "Fighter", hpMax: 22 });
+    expect(server.calls.some((call) => call.pathname.startsWith("/campaigns/"))).toBe(false);
   });
 
   it("draws a written sheet read-only and edits it with the version it read", async () => {

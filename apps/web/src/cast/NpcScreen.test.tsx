@@ -5,6 +5,7 @@ import { HostedSessionScope } from "../auth/AuthProvider";
 import {
   bodyOf,
   campaignId,
+  campaignOptions,
   cazril,
   cazrilSheet,
   installStubServer,
@@ -657,10 +658,11 @@ describe("the Stats tab", () => {
 
     expect(screen.getByText("No stats yet")).toBeInTheDocument();
     expect(screen.getByText(/Only you see them/)).toBeInTheDocument();
-    // Nothing to edit or remove until there is a sheet, and no quick start it cannot run.
+    // Nothing to edit, rebuild or remove until there is a sheet.
     expect(screen.queryByRole("button", { name: "Edit stats" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-    expect(screen.queryByText(/class and level/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rebuild from class and level" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Start from class and level" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Write one" })).toBeInTheDocument();
   });
 
@@ -820,5 +822,227 @@ describe("the Stats tab", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(sheetCalls("DELETE")).toHaveLength(1);
     expect(await screen.findByText("No stats yet")).toBeInTheDocument();
+  });
+});
+
+describe("the Stats tab's quick start", () => {
+  const sheetPath = `/campaigns/${campaignId}/npcs/${npcId}/sheet`;
+  const optionsPath = `/campaigns/${campaignId}/options`;
+
+  /**
+   * The table's Fighter with its class table written out to 5th level, so a
+   * level-5 start has features past the first to write and a +3 to read.
+   */
+  const feature = (at: number, index: string, name: string) => ({
+    id: `2b1f2a1e-0000-4000-8000-0000000f00${String(10 + at)}`,
+    index,
+    name,
+  });
+  const optionsToFifth = campaignOptions.map((option) =>
+    option.kind === "class" && option.name === "Fighter" && "details" in option
+      ? {
+          ...option,
+          details: {
+            ...option.details,
+            classLevels: [
+              // The fixture's own first level, written out: its details are a union.
+              {
+                level: 1,
+                proficiencyBonus: 2,
+                features: [feature(0, "second-wind", "Second Wind")],
+              },
+              {
+                level: 2,
+                proficiencyBonus: 2,
+                features: [feature(1, "action-surge", "Action Surge")],
+              },
+              {
+                level: 3,
+                proficiencyBonus: 2,
+                features: [feature(2, "martial-archetype", "Martial Archetype")],
+              },
+              { level: 4, proficiencyBonus: 2, features: [] },
+              {
+                level: 5,
+                proficiencyBonus: 3,
+                features: [feature(3, "extra-attack", "Extra Attack")],
+              },
+            ],
+          },
+        }
+      : option,
+  );
+
+  beforeEach(() => {
+    server.routes.set(`GET ${optionsPath}`, { status: 200, body: optionsToFifth });
+  });
+
+  const renderStats = async () => {
+    await renderAt(`/campaigns/${campaignId}/cast/${npcId}#stats`, (screen) => (
+      <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
+    ));
+    return await screen.findByText(/No stats yet|Level 5 Human Fighter/);
+  };
+
+  const sheetCalls = (method: string) =>
+    server.calls.filter((call) => call.method === method && call.pathname === sheetPath);
+
+  const choose = async (dialog: HTMLElement, box: string, option: string) => {
+    await userEvent.click(within(dialog).getByRole("combobox", { name: box }));
+    await userEvent.click(await screen.findByRole("option", { name: option }));
+  };
+
+  it("starts a Fighter 5 from the character form's composer, at level 5 throughout", async () => {
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Start from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Start Cazril from a class" });
+    // The campaign's rules: the target's options read.
+    await within(dialog).findByRole("combobox", { name: "Class" });
+    expect(
+      server.calls.some((call) => call.method === "GET" && call.pathname === optionsPath),
+    ).toBe(true);
+
+    await choose(dialog, "Class", "Fighter");
+    const level = within(dialog).getByRole("spinbutton", { name: "Level" });
+    await userEvent.clear(level);
+    await userEvent.type(level, "5");
+    await choose(dialog, "Race", "Human");
+    await choose(dialog, "Any martial weapon", "Longsword");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Standard array" }));
+
+    // STR 15 … CHA 8, each +1 from Human: CON 14 is +2, DEX 15 is +2.
+    // Hit points are 10 + 2, then four levels of 6 + 2; the armour class is unarmoured.
+    expect(within(dialog).getByRole("spinbutton", { name: "Hit points" })).toHaveValue(44);
+    expect(within(dialog).getByRole("spinbutton", { name: "AC" })).toHaveValue(12);
+    expect(within(dialog).getByText(/unarmoured/)).toBeInTheDocument();
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Write stats" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [put] = sheetCalls("PUT");
+    const payload = JSON.parse(put!.body);
+    // A new sheet names no version, and has no rating until the DM sets one.
+    expect(payload).toMatchObject({
+      level: 5,
+      race: "Human",
+      subrace: null,
+      className: "Fighter",
+      ac: 12,
+      hpMax: 44,
+      cr: null,
+    });
+    expect(payload).not.toHaveProperty("expectedVersion");
+    expect(payload.sheet.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+    expect(payload.sheet.traits.map((trait: { name: string }) => trait.name)).toEqual(
+      expect.arrayContaining(["Second Wind", "Action Surge", "Martial Archetype", "Extra Attack"]),
+    );
+    // The class's saves, marked on the moved cells at +3.
+    expect(payload.sheet.abilities).toContainEqual(
+      expect.objectContaining({ label: "STR", score: "16", proficient: true, save: "+6" }),
+    );
+    // The kit as picked: the longsword carried, and its attack line.
+    expect(payload.sheet.inventory.map((item: { name: string }) => item.name)).toEqual(
+      expect.arrayContaining(["Longsword", "Shield"]),
+    );
+    expect(payload.sheet.actions).toContainEqual(
+      expect.objectContaining({ name: "Longsword", hit: "+6", dice: "1d8+3" }),
+    );
+    // None of the player's half.
+    expect(payload.sheet).not.toHaveProperty("notes");
+    expect(payload.sheet).not.toHaveProperty("story");
+  });
+
+  it("keeps a typed number when a later pick re-seeds", async () => {
+    await renderStats();
+    await userEvent.click(screen.getByRole("button", { name: "Start from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Start Cazril from a class" });
+    await choose(dialog, "Class", "Fighter");
+    const ac = within(dialog).getByRole("spinbutton", { name: "AC" });
+    await userEvent.clear(ac);
+    await userEvent.type(ac, "18");
+    const level = within(dialog).getByRole("spinbutton", { name: "Level" });
+    await userEvent.clear(level);
+    await userEvent.type(level, "3");
+    expect(ac).toHaveValue(18);
+    // 10, then two levels of 6.
+    expect(within(dialog).getByRole("spinbutton", { name: "Hit points" })).toHaveValue(22);
+  });
+
+  it("needs a class before it writes anything", async () => {
+    await renderStats();
+    await userEvent.click(screen.getByRole("button", { name: "Start from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Start Cazril from a class" });
+    await within(dialog).findByRole("combobox", { name: "Class" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Write stats" }));
+    expect(within(dialog).getByText("Pick a class.")).toBeInTheDocument();
+    expect(sheetCalls("PUT")).toHaveLength(0);
+  });
+
+  it("rebuilds a sheet only once confirmed, naming the version it read and keeping the rating", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: { ...cazrilSheet, version: 4 } });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Rebuild from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Rebuild Cazril’s stats" });
+    // Prefilled from the sheet's own labels.
+    expect(await within(dialog).findByRole("combobox", { name: "Class" })).toHaveTextContent(
+      "Fighter",
+    );
+    expect(within(dialog).getByRole("combobox", { name: "Race" })).toHaveTextContent("Human");
+    expect(within(dialog).getByRole("spinbutton", { name: "Level" })).toHaveValue(5);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Rebuild stats" }));
+    expect(
+      within(dialog).getByText("Replace Cazril’s whole sheet with a level 5 Fighter’s?"),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+    expect(sheetCalls("PUT")).toHaveLength(0);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Rebuild stats" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Replace sheet" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [put] = sheetCalls("PUT");
+    expect(JSON.parse(put!.body)).toMatchObject({
+      expectedVersion: 3,
+      level: 5,
+      race: "Human",
+      className: "Fighter",
+      cr: "3",
+    });
+  });
+
+  it("says when the sheet moved on under a rebuild, and offers a reload", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    server.routes.set(`PUT ${sheetPath}`, {
+      status: 409,
+      body: {
+        _tag: "Conflict",
+        message: "the NPC's sheet moved on while you were editing (version 4, you read 3).",
+      },
+    });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Rebuild from class and level" }));
+    const dialog = await screen.findByRole("dialog", { name: "Rebuild Cazril’s stats" });
+    await within(dialog).findByRole("combobox", { name: "Class" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Rebuild stats" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Replace sheet" }));
+    expect(await within(dialog).findByText(/moved on while you were editing/)).toBeInTheDocument();
+
+    const before = server.calls.filter(
+      (call) => call.method === "GET" && call.pathname === sheetPath,
+    ).length;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "GET" && call.pathname === sheetPath).length,
+      ).toBeGreaterThan(before),
+    );
   });
 });

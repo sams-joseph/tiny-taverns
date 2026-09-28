@@ -12,7 +12,9 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * closing it, the window not scrolling under it — that its *Tied to* toggles
  * and *Shows up in* chips wrap inside it, that its stats line wraps beside
  * its button, and that its footer fits. Last the NPC page's *Stats* tab
- * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways.
+ * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways, and
+ * its quick start's dialog (`cast/NpcQuickStartDialog.tsx`) inside the window
+ * with a body that scrolls and a footer that shows.
  * All of it is layout, hit-testing or focus across real events, which jsdom
  * does not compute.
  *
@@ -211,14 +213,77 @@ for (const width of WIDTHS) {
             .soft(part.x + part.w, `${part.name} right`)
             .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
         }
-        const edit = await box(panel.getByRole("button", { name: "Edit stats" }));
-        const remove = await box(panel.getByRole("button", { name: "Remove" }));
-        const apart =
-          edit.x + edit.width <= remove.x ||
-          remove.x + remove.width <= edit.x ||
-          edit.y + edit.height <= remove.y ||
-          remove.y + remove.height <= edit.y;
-        expect.soft(apart, "Edit stats clear of Remove").toBe(true);
+        const names = ["Edit stats", "Rebuild from class and level", "Remove"];
+        const buttons = await Promise.all(
+          names.map((name) => box(panel.getByRole("button", { name }))),
+        );
+        for (const [i, a] of buttons.entries())
+          for (const [j, b] of buttons.entries()) {
+            if (j <= i) continue;
+            const apart =
+              a.x + a.width <= b.x ||
+              b.x + b.width <= a.x ||
+              a.y + a.height <= b.y ||
+              b.y + b.height <= a.y;
+            expect.soft(apart, `${names[i]!} clear of ${names[j]!}`).toBe(true);
+          }
+      });
+
+      await test.step("the rebuild dialog fits the window, its body scrolls and its footer shows", async () => {
+        await panel.getByRole("button", { name: "Rebuild from class and level" }).click();
+        const dialog = page.getByRole("dialog", { name: "Rebuild Cazril’s stats" });
+        // Prefilled from the sheet: a Fighter, so the class's kit is drawn too.
+        await expect(dialog.getByRole("combobox", { name: "Class" })).toContainText("Fighter");
+        await expect(dialog.getByRole("group", { name: "Starting kit" })).toBeVisible();
+        await app.settle();
+
+        const frame = await box(dialog);
+        expect.soft(frame.x, "dialog left").toBeGreaterThanOrEqual(0);
+        expect.soft(frame.x + frame.width, "dialog right").toBeLessThanOrEqual(width);
+        expect.soft(frame.y, "dialog top").toBeGreaterThanOrEqual(0);
+        expect.soft(frame.y + frame.height, "dialog bottom").toBeLessThanOrEqual(HEIGHT);
+
+        const body = dialog.locator('[data-slot="npc-quick-start-body"]');
+        const scroll = await body.evaluate((el) => ({
+          sideways: el.scrollWidth - el.clientWidth,
+          overflowY: getComputedStyle(el).overflowY,
+          more: el.scrollHeight > el.clientHeight,
+        }));
+        expect.soft(scroll.sideways, "the body does not scroll sideways").toBe(0);
+        expect.soft(scroll.overflowY, "the body scrolls itself").toBe("auto");
+        expect.soft(scroll.more, "six ability rows are more than the body shows").toBe(true);
+
+        const inner = await box(body);
+        const controls = await body.locator("input, button, [role=combobox]").evaluateAll((els) =>
+          els.flatMap((el) => {
+            const rect = el.getBoundingClientRect();
+            // Base UI's form-value inputs and a switch's are visually hidden: nothing drawn.
+            if (rect.width <= 1 || rect.height <= 1) return [];
+            return [
+              {
+                name: el.getAttribute("aria-label") ?? (el.id || el.textContent) ?? "",
+                x: rect.x,
+                w: rect.width,
+              },
+            ];
+          }),
+        );
+        for (const control of controls) {
+          expect.soft(control.x, `${control.name} left`).toBeGreaterThanOrEqual(inner.x - 0.5);
+          expect
+            .soft(control.x + control.w, `${control.name} right`)
+            .toBeLessThanOrEqual(inner.x + inner.width + 0.5);
+        }
+
+        const rebuild = await box(dialog.getByRole("button", { name: "Rebuild stats" }));
+        expect
+          .soft(rebuild.y + rebuild.height, "Rebuild stats above the dialog's foot")
+          .toBeLessThanOrEqual(frame.y + frame.height);
+        const hit = await page.evaluate(
+          ({ x, y }) => document.elementFromPoint(x, y)?.closest("button")?.textContent ?? null,
+          { x: rebuild.x + rebuild.width / 2, y: rebuild.y + rebuild.height / 2 },
+        );
+        expect.soft(hit, "Rebuild stats is what is under its own centre").toBe("Rebuild stats");
       });
     });
 
