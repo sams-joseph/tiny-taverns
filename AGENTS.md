@@ -26,6 +26,13 @@ Do not render a field the API does not have, invent a control the wire cannot ca
 
 Any object a person can create, Hob can also create through the creator toolkit's `propose*` tool and the accept path, unless the maintainer has said otherwise for that object. Every object has a way to be deleted; archive, unshare or disconnect alone is not a delete, and a destructive delete asks for confirmation. The proposal pattern is `docs/internals/hob.md`; what a delete cascades or detaches is `docs/internals/data-model.md`.
 
+The maintainer's standing exceptions:
+
+- Hob does not create live-play records (fights, scenes, combatants, checks, saves, rolls) or access acts (invites, seats, memberships, Library shares, Shared World connect, move and promote).
+- Rolls and ended fights are deleted only with their night.
+- Shared campaign and Shared World conversation threads may be hidden rather than hard-deleted.
+- Retiring is the delete for NPC knowledge and memory.
+
 ## How we work
 
 Measure, do not reason: this project has repeatedly been wrong about a symptom until somebody looked at the wire, the request body or the rendered pixel. jsdom computes no layout, no stacking and no motion, so a real browser is the only place those are visible. Check the same commit twice under different load before believing a flaky test is yours.
