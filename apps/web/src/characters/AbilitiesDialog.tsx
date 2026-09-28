@@ -1,4 +1,3 @@
-import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -14,7 +13,7 @@ import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
 import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 import { AbilityFields } from "./AbilityFields";
-import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
+import { type SheetTarget, whose } from "./sheetTarget";
 
 /**
  * The two dialogs over the six cells — **one editor, two things to do with what
@@ -26,7 +25,7 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  *
  * | shell                     | on save                                          |
  * | ------------------------- | ------------------------------------------------ |
- * | {@link AbilitiesDialog}   | `PATCH /me/characters/:id`, with busy and failure |
+ * | {@link AbilitiesDialog}   | the sheet's own write, with busy and failure      |
  * | {@link AbilityScoresDialog} | hands the drafts back; nothing has been sent    |
  *
  * They are not one component with an optional mutation because the mutation is
@@ -36,7 +35,9 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  */
 
 /**
- * The six cells — `sheet.abilities`, behind the Stats tab's *Edit*.
+ * The six cells — `sheet.abilities`, behind the Stats tab's *Edit*: a
+ * character's own sheet, or an NPC's, through the target that holds it
+ * (`sheetTarget.ts`).
  *
  * **The gap this closes was a shipped one and was not Hob's.** `AGENTS.md`
  * records the matching absence on the creature side (*"ability cells are
@@ -47,7 +48,7 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  *
  * ### One key of the document, sent as the whole document
  *
- * `sheetWith` is where that rule and the race it accepts are written down. What
+ * `SheetTarget.save` is where that rule and the race it accepts are written down. What
  * matters here is the half it prevents: a form sending only `abilities` would
  * erase the skills, the spells, the inventory and the backstory it was never
  * shown. What `abilityDrafts` prevents is the same loss one level in — a
@@ -65,25 +66,20 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * mistake apart.
  */
 export function AbilitiesDialog({
-  owned,
+  target,
   onClose,
   onSaved,
   onReload,
 }: {
-  /**
-   * The character with its seats — the seats are the write's blast radius
-   * (`ownCharacterWrites` names one party per seat), and the character no
-   * longer names a campaign on its own.
-   */
-  readonly owned: OwnedCharacter;
+  /** The sheet, and where it is written. */
+  readonly target: SheetTarget;
   readonly onClose: () => void;
   readonly onSaved: () => void;
   /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
   readonly onReload?: () => void;
 }) {
-  const character = owned.character;
   const [drafts, setDrafts] = useState<ReadonlyArray<AbilityDraft>>(() =>
-    abilityDrafts(character.sheet.abilities),
+    abilityDrafts(target.sheet.abilities),
   );
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
@@ -93,18 +89,15 @@ export function AbilitiesDialog({
     if (badScores(drafts).length > 0) return;
 
     const saved = await submit(
-      (client) =>
-        saveOwnCharacter(client, character, {
-          sheet: sheetWith(character, { abilities: abilitiesFrom(drafts) }),
-        }),
-      ownCharacterWrites(owned),
+      (client) => target.save(client, { ...target.sheet, abilities: abilitiesFrom(drafts) }),
+      target.writes,
     );
     if (Result.isSuccess(saved)) onSaved();
   };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Edit your abilities">
+      <DialogContent aria-label={`Edit ${whose(target)} abilities`}>
         <DialogHeader>
           <DialogTitle>Abilities</DialogTitle>
           <DialogDescription>

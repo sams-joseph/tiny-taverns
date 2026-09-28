@@ -1,4 +1,4 @@
-import type { CharacterSheet, InventoryItem, SheetAction } from "./Character.js";
+import type { InventoryItem, SheetAction, SheetBody } from "./Character.js";
 import type { KitEquipment } from "./CharacterOption.js";
 import type { Equipment } from "./Equipment.js";
 import type { EquipmentId } from "./Ids.js";
@@ -108,7 +108,7 @@ export const gearLinesNamed = (
 };
 
 /** Every row the sheet's gear names — what the sheet reads back to draw the row's facts. */
-export const linkedEquipmentIds = (sheet: CharacterSheet): ReadonlyArray<EquipmentId> => {
+export const linkedEquipmentIds = (sheet: SheetBody): ReadonlyArray<EquipmentId> => {
   const ids = new Set<EquipmentId>();
   for (const item of sheet.inventory ?? []) {
     if (item.equipmentId !== undefined && item.equipmentId !== null) ids.add(item.equipmentId);
@@ -117,7 +117,7 @@ export const linkedEquipmentIds = (sheet: CharacterSheet): ReadonlyArray<Equipme
 };
 
 /** `"+2"` on the identity card, as the number the attack rule adds. */
-const proficiencyBonusOf = (sheet: CharacterSheet): number | undefined => {
+const proficiencyBonusOf = (sheet: SheetBody): number | undefined => {
   const raw = sheet.identity?.proficiency?.trim();
   if (raw === undefined || raw === "") return undefined;
   const value = Number(raw.replace(/^\+/, ""));
@@ -129,7 +129,7 @@ const proficiencyBonusOf = (sheet: CharacterSheet): number | undefined => {
  * already wrote — *Extra Attack* is a feature this module cannot see, and the
  * kit line's `"Attack ×2"` is the corpus's own statement of it.
  */
-const attacksPerActionOf = (sheet: CharacterSheet): number => {
+const attacksPerActionOf = (sheet: SheetBody): number => {
   let attacks = 1;
   for (const action of sheet.actions ?? []) {
     if (action.source !== "weapon" || action.derived !== true) continue;
@@ -149,12 +149,14 @@ const isDerivedWeapon = (action: SheetAction): boolean =>
  * picked, plus the ones the sheet's existing links name — keyed by id inside.
  * A linked line whose row is not in hand keeps whatever attack it already had
  * and gets no new one, which is the honest answer for a row out of reach.
+ * Any sheet's rules half — a character's, an NPC's — comes back as the same
+ * kind of sheet it went in as.
  */
-export const sheetWithGear = (
-  sheet: CharacterSheet,
+export const sheetWithGear = <Sheet extends SheetBody>(
+  sheet: Sheet,
   inventory: ReadonlyArray<InventoryItem>,
   rows: ReadonlyArray<KitEquipment>,
-): CharacterSheet => {
+): Sheet => {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const linked = (items: ReadonlyArray<InventoryItem>): Set<EquipmentId> => {
     const ids = new Set<EquipmentId>();

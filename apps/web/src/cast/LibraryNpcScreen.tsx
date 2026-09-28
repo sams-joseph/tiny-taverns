@@ -49,7 +49,8 @@ export function LibraryNpcScreen() {
         {resource.state === "ready" && (
           <NpcSheetPanel
             name={resource.value.source.name}
-            sheet={resource.value.sheet}
+            sheet={resource.value.stats.sheet}
+            gear={resource.value.stats.gear}
             target={librarySheetTarget(npcId)}
           />
         )}

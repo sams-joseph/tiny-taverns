@@ -209,7 +209,8 @@ function NpcBody({
       <div className="@container">
         <NpcSheetPanel
           name={npc.name}
-          sheet={detail.sheet}
+          sheet={detail.stats.sheet}
+          gear={detail.stats.gear}
           target={campaignSheetTarget(npc.campaignId, npc.id)}
         />
       </div>

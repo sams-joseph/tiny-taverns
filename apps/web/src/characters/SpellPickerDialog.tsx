@@ -1,4 +1,4 @@
-import type { CharacterSpellbook, OwnedCharacter, SpellKnown } from "@taverns/api";
+import type { SpellKnown } from "@taverns/api";
 import {
   eligibleKnownSpells,
   selectedSpellCounts,
@@ -26,12 +26,11 @@ import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
-import { characterSpellsAtom } from "./load";
-import { ownCharacterWrites, saveOwnCharacter } from "./write";
+import { type SheetTarget, type Spellbook, whose } from "./sheetTarget";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 const initialKnown = (
-  book: CharacterSpellbook,
+  book: Spellbook,
   current: ReadonlyArray<SpellKnown>,
 ): ReadonlyArray<SpellKnown> => {
   const byId = new Map(book.spells.map((option) => [option.spell.id, option]));
@@ -53,7 +52,7 @@ const initialKnown = (
 
 const replace = (
   selected: ReadonlyArray<SpellKnown>,
-  option: CharacterSpellbook["spells"][number],
+  option: Spellbook["spells"][number],
   patch: { readonly known?: boolean; readonly prepared?: boolean },
 ): ReadonlyArray<SpellKnown> => {
   const existing = selected.find((row) => row.spellId === option.spell.id);
@@ -65,22 +64,21 @@ const replace = (
 };
 
 function SpellPickerBody({
-  owned,
+  target,
   book,
   onClose,
   onSaved,
   onReload,
 }: {
-  readonly owned: OwnedCharacter;
-  readonly book: CharacterSpellbook;
+  readonly target: SheetTarget;
+  readonly book: Spellbook;
   readonly onClose: () => void;
   readonly onSaved: () => void;
   readonly onReload?: () => void;
 }) {
-  const character = owned.character;
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ReadonlyArray<SpellKnown>>(() =>
-    initialKnown(book, character.sheet.spellcasting?.known ?? []),
+    initialKnown(book, target.sheet.spellcasting?.known ?? []),
   );
   const { busy, failure, submit } = useMutation();
   const problems = spellSelectionProblems(book, selected);
@@ -110,11 +108,8 @@ function SpellPickerBody({
   const save = async () => {
     if (problems.length > 0) return;
     const saved = await submit(
-      (client) =>
-        saveOwnCharacter(client, character, {
-          sheet: sheetWithSpellSelection(character.sheet, book, selected),
-        }),
-      ownCharacterWrites(owned),
+      (client) => target.save(client, sheetWithSpellSelection(target.sheet, book, selected)),
+      target.writes,
     );
     if (Result.isSuccess(saved)) onSaved();
   };
@@ -138,11 +133,17 @@ function SpellPickerBody({
       <DialogHeader>
         <DialogTitle>Choose spells</DialogTitle>
         <DialogDescription>
-          {book.mode === "spellbook"
-            ? "Pick the spells in your book, then mark the ones prepared. Cantrips are always ready."
-            : book.mode === "prepared"
-              ? "Mark cantrips you know and leveled spells you have prepared."
-              : "Pick the spells you know. They are ready to cast from your slots."}
+          {target.name === null
+            ? book.mode === "spellbook"
+              ? "Pick the spells in your book, then mark the ones prepared. Cantrips are always ready."
+              : book.mode === "prepared"
+                ? "Mark cantrips you know and leveled spells you have prepared."
+                : "Pick the spells you know. They are ready to cast from your slots."
+            : book.mode === "spellbook"
+              ? "Pick the spells in their book, then mark the ones prepared. Cantrips are always ready."
+              : book.mode === "prepared"
+                ? "Mark cantrips they know and leveled spells they have prepared."
+                : "Pick the spells they know. They are ready to cast from their slots."}
         </DialogDescription>
       </DialogHeader>
 
@@ -163,11 +164,7 @@ function SpellPickerBody({
           </div>
         )}
         {book.spells.length === 0 ? (
-          <p className="text-caption leading-body text-muted-foreground">
-            {owned.seats.length === 0
-              ? "No spells are available for this class and level in the core rules."
-              : "No spells are available for this class and level from any table this character is at."}
-          </p>
+          <p className="text-caption leading-body text-muted-foreground">{target.noSpells}</p>
         ) : filtered.length === 0 ? (
           <p className="text-caption leading-body text-muted-foreground">
             No spell matches that search.
@@ -266,30 +263,37 @@ function SpellPickerBody({
   );
 }
 
+/**
+ * The spell picker — `sheet.spellcasting.known` and the spell action lines
+ * that follow, behind the Magic section's *Edit spells*: a character's own
+ * sheet, or an NPC's, against the spell list the target's rules offer at its
+ * class and level (`SheetTarget.spellbook`).
+ */
 export function SpellPickerDialog({
-  owned,
+  target,
   onClose,
   onSaved,
   onReload,
 }: {
-  readonly owned: OwnedCharacter;
+  /** The sheet, where it is written, and the spell list it may pick from. */
+  readonly target: SheetTarget;
   readonly onClose: () => void;
   readonly onSaved: () => void;
   readonly onReload?: () => void;
 }) {
-  const [resource, reload] = useApiAtom(characterSpellsAtom(owned.character.id));
+  const [resource, reload] = useApiAtom(target.spellbook);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-label="Choose spells" className="@container">
         {resource.state === "loading" ? (
-          <Loading label="Reading your spell list…" inline />
+          <Loading label={`Reading ${whose(target)} spell list…`} inline />
         ) : resource.state === "failed" ? (
           <div className="p-gutter">
             <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           </div>
         ) : (
           <SpellPickerBody
-            owned={owned}
+            target={target}
             book={resource.value}
             onClose={onClose}
             onSaved={onSaved}

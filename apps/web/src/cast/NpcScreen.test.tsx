@@ -711,7 +711,7 @@ describe("the Stats tab", () => {
     expect(sheetCalls("PUT")).toHaveLength(0);
   });
 
-  it("draws the sheet read-only: the identity, the challenge line and the character's document", async () => {
+  it("draws the sheet: the identity, the challenge line and the character's document", async () => {
     server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
     await renderStats();
 
@@ -726,8 +726,12 @@ describe("the Stats tab", () => {
     expect(within(document).getByText("STR")).toBeInTheDocument();
     expect(within(document).getByText("Second Wind")).toBeInTheDocument();
     expect(within(document).getByText("Boathook")).toBeInTheDocument();
-    // Read-only: nothing rolls, nothing spends, no section is drawn to hold an edit.
-    expect(within(document).queryByRole("button")).toBeNull();
+    // The section editors, and nothing that rolls or spends (`NpcSheetEditors.test.tsx`).
+    expect(
+      within(document)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Abilities", "Skills", "Add"]);
     // The player's half has no key here, so Story and Level ups are not drawn.
     expect(within(document).queryByText("Story")).toBeNull();
     expect(within(document).queryByText("Level ups")).toBeNull();

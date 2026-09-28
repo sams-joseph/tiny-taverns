@@ -26,6 +26,7 @@ import { BackstoryDialog } from "./BackstoryDialog";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { GearDialog } from "./GearDialog";
 import { IdentityDialog } from "./IdentityDialog";
+import { characterSheetTarget } from "./sheetTarget";
 import { SkillsDialog } from "./SkillsDialog";
 import { SpellPickerDialog } from "./SpellPickerDialog";
 import { type LiveBanner, liveBanner } from "./live";
@@ -651,15 +652,15 @@ function SheetLayout({
           gearRows={gearRows}
           sections={sections}
           register={register}
-          writes={{
-            owned,
+          edits={{
+            reader: "owner",
             onEditAbilities: () => onEdit("abilities"),
             onEditBackstory: () => onEdit("backstory"),
             onEditGear: () => onEdit("gear"),
             onEditSkills: () => onEdit("skills"),
             onEditSpells: () => onEdit("spells"),
-            rollCampaignId,
           }}
+          play={{ owned, rollCampaignId }}
         />
       </div>
     </div>
@@ -884,14 +885,24 @@ export function CharacterSheetScreen() {
         <IdentityDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
       )}
       {owned !== undefined && editing === "abilities" && (
-        <AbilitiesDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
+        <AbilitiesDialog
+          target={characterSheetTarget(owned)}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
       )}
       {owned !== undefined && editing === "skills" && (
-        <SkillsDialog owned={owned} onClose={close} onSaved={close} onReload={reloadAndClose} />
+        <SkillsDialog
+          target={characterSheetTarget(owned)}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
       )}
       {owned !== undefined && editing === "spells" && (
         <SpellPickerDialog
-          owned={owned}
+          target={characterSheetTarget(owned)}
           onClose={close}
           onSaved={close}
           onReload={reloadAndClose}
@@ -902,7 +913,7 @@ export function CharacterSheetScreen() {
       )}
       {owned !== undefined && editing === "gear" && (
         <GearDialog
-          owned={owned}
+          target={characterSheetTarget(owned)}
           rows={view?.gear ?? []}
           onClose={close}
           onSaved={close}

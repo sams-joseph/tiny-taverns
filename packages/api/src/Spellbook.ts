@@ -1,5 +1,11 @@
 import { Schema } from "effect";
-import type { CharacterSheet, SheetAction, SheetResource, SpellKnown } from "./Character.js";
+import type {
+  CharacterSheet,
+  SheetAction,
+  SheetBody,
+  SheetResource,
+  SpellKnown,
+} from "./Character.js";
 import { Spell } from "./Spell.js";
 import { CharacterId, NpcId, type SpellId } from "./Ids.js";
 
@@ -202,7 +208,7 @@ export const eligibleKnownSpells = (
 const spellActionsFromKnown = (
   book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
-  sheet: CharacterSheet,
+  sheet: SheetBody,
 ): ReadonlyArray<SheetAction> => {
   const options = spellById(book);
   return known.flatMap((knownSpell) => {
@@ -271,11 +277,16 @@ export const sheetWithRecomputedDerived = (
   };
 };
 
-export const sheetWithSpellSelection = (
-  sheet: CharacterSheet,
+/**
+ * The sheet with its picked spells replaced, and the spell action lines that
+ * follow. Any sheet's rules half — a character's, an NPC's — comes back as the
+ * same kind of sheet it went in as.
+ */
+export const sheetWithSpellSelection = <Sheet extends SheetBody>(
+  sheet: Sheet,
   book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
-): CharacterSheet => ({
+): Sheet => ({
   ...sheet,
   actions: [
     ...(sheet.actions ?? []).filter(
