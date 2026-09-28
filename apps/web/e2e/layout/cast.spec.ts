@@ -12,9 +12,10 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * closing it, the window not scrolling under it — that its *Tied to* toggles
  * and *Shows up in* chips wrap inside it, that its stats line wraps beside
  * its button, and that its footer fits. Last the NPC page's *Stats* tab
- * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways, and
- * its quick start's dialog (`cast/NpcQuickStartDialog.tsx`) inside the window
- * with a body that scrolls and a footer that shows.
+ * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways, its
+ * section editors clear of their headings with one opened inside the window,
+ * and its quick start's dialog (`cast/NpcQuickStartDialog.tsx`) inside the
+ * window with a body that scrolls and a footer that shows.
  * All of it is layout, hit-testing or focus across real events, which jsdom
  * does not compute.
  *
@@ -284,6 +285,36 @@ for (const width of WIDTHS) {
           { x: rebuild.x + rebuild.width / 2, y: rebuild.y + rebuild.height / 2 },
         );
         expect.soft(hit, "Rebuild stats is what is under its own centre").toBe("Rebuild stats");
+      });
+
+      await test.step("the section editors sit clear of their heading", async () => {
+        // The rebuild dialog above is still open, and a modal leaves the page inert.
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+        const heading = await box(panel.getByRole("heading", { name: "Abilities & skills" }));
+        for (const name of ["Edit abilities", "Edit skills"]) {
+          const button = await box(panel.getByRole("button", { name }));
+          const apart =
+            heading.x + heading.width <= button.x ||
+            heading.y + heading.height <= button.y ||
+            button.y + button.height <= heading.y;
+          expect.soft(apart, `${name} clear of its heading`).toBe(true);
+        }
+      });
+
+      await test.step("an editor opens over the page, inside the window", async () => {
+        await panel.getByRole("button", { name: "Edit abilities" }).click();
+        const dialog = page.getByRole("dialog", { name: "Abilities" });
+        await expect(dialog).toBeVisible();
+        const frame = await box(dialog);
+        expect.soft(frame.x, "dialog left").toBeGreaterThanOrEqual(0);
+        expect.soft(frame.x + frame.width, "dialog right").toBeLessThanOrEqual(width);
+        const save = await box(dialog.getByRole("button", { name: "Save abilities" }));
+        expect.soft(save.y + save.height, "Save inside the window").toBeLessThanOrEqual(HEIGHT);
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+        await page.keyboard.press("Escape");
+        await expect(dialog).toBeHidden();
       });
     });
 

@@ -8,6 +8,7 @@ import {
   type NpcSheetPut,
   type NpcSheetSummary,
   type NpcSheetUpdate,
+  type NpcSpellbook,
   type SheetBody,
   asRaceOption,
   optionNamed,
@@ -30,6 +31,9 @@ import {
   withKitDefaults,
 } from "../characters/create";
 import { campaignOptionsAtom, coreOptionsAtom } from "../rules/load";
+import type { SheetTarget } from "../characters/sheetTarget";
+import { librarySheetSpellsAtom } from "./libraryLoad";
+import { npcSheetSpellsAtom } from "./load";
 
 /**
  * An NPC's sheet as the Cast draws and writes it — the drawer's one line, the
@@ -278,6 +282,10 @@ export interface NpcSheetTarget {
    * one-line summaries read (the drawer's, a Library card's).
    */
   readonly writes: Invalidation;
+  /** The spell picker's rules for this sheet, against the rules it is written in. */
+  readonly spellbook: Atom.Atom<AsyncResult.AsyncResult<NpcSpellbook, unknown>>;
+  /** What the spell picker says when those rules offer no spell. */
+  readonly noSpells: string;
 }
 
 export const campaignSheetTarget = (campaignId: CampaignId, npcId: NpcId): NpcSheetTarget => {
@@ -289,6 +297,8 @@ export const campaignSheetTarget = (campaignId: CampaignId, npcId: NpcId): NpcSh
     remove: (client) => client.npcs.removeSheet({ params }),
     options: campaignOptionsAtom(campaignId),
     writes: [reads.npcSheet(npcId), reads.npcSheets(campaignId)],
+    spellbook: npcSheetSpellsAtom(params),
+    noSpells: "No spells are available for this class and level in this campaign’s rules.",
   };
 };
 
@@ -306,5 +316,28 @@ export const librarySheetTarget = (npcId: NpcId): NpcSheetTarget => {
     remove: (client) => client.library.removeNpcSheet({ params }),
     options: coreOptionsAtom,
     writes: [reads.npcSheet(npcId), reads.libraryNpcSheets],
+    spellbook: librarySheetSpellsAtom(npcId),
+    noSpells: "No spells are available for this class and level in the core rules.",
   };
 };
+
+/**
+ * The character sheet's section editors over an NPC's sheet: the same
+ * abilities, skills, spells and gear dialogs, each saving the whole document
+ * as a PATCH with the version it was read at, so an edit made elsewhere
+ * meanwhile is a `Conflict` offered *Reload* rather than lost. A document in
+ * the PATCH is kept as sent: the server recomputes derived lines only for a
+ * level or class change with no document, which is the identity dialog's.
+ */
+export const npcSheetEditor = (
+  name: string,
+  sheet: NpcSheet,
+  target: NpcSheetTarget,
+): SheetTarget => ({
+  name,
+  sheet: sheet.sheet,
+  save: (client, body) => target.update(client, { expectedVersion: sheet.version, sheet: body }),
+  writes: target.writes,
+  spellbook: target.spellbook,
+  noSpells: target.noSpells,
+});

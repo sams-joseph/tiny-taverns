@@ -1,4 +1,4 @@
-import type { Equipment, EquipmentId, InventoryItem, OwnedCharacter } from "@taverns/api";
+import type { Equipment, EquipmentId, InventoryItem } from "@taverns/api";
 import { gearLineFor, kitEquipmentOf, sheetWithGear } from "@taverns/api";
 import {
   Badge,
@@ -19,10 +19,11 @@ import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
 import { EquipmentPicker } from "./EquipmentPicker";
-import { ownCharacterWrites, saveOwnCharacter } from "./write";
+import { type SheetTarget, whose } from "./sheetTarget";
 
 /**
- * What they are carrying — `sheet.inventory`, behind the Gear section's *Add*.
+ * What they are carrying — `sheet.inventory`, behind the Gear section's *Add*:
+ * a character's own sheet, or an NPC's, through the target that holds it.
  *
  * **It opens with a blank line ready to type, and it edits the whole list.**
  * The button that opens it says *Add*, which is the drawing's word and the
@@ -110,18 +111,14 @@ const isBlank = (item: DraftItem): boolean =>
   item.name.trim() === "" && item.equipmentId === undefined;
 
 export function GearDialog({
-  owned,
+  target,
   rows,
   onClose,
   onSaved,
   onReload,
 }: {
-  /**
-   * The character with its seats — the seats are the write's blast radius
-   * (`ownCharacterWrites` names one party per seat), and the character no
-   * longer names a campaign on its own.
-   */
-  readonly owned: OwnedCharacter;
+  /** The sheet, and where it is written. */
+  readonly target: SheetTarget;
   /**
    * The equipment rows the sheet's linked lines name, as the sheet already
    * loaded them — what a weapon on the list derives its attack from if it has
@@ -133,11 +130,10 @@ export function GearDialog({
   /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
   readonly onReload?: () => void;
 }) {
-  const character = owned.character;
   // The blank line the *Add* button promises, appended on open rather than
   // waiting for a second press inside the dialog.
   const [items, setItems] = useState<ReadonlyArray<DraftItem>>([
-    ...draftsOf(character.sheet.inventory ?? []),
+    ...draftsOf(target.sheet.inventory ?? []),
     blank("new-0"),
   ]);
   const [nextKey, setNextKey] = useState(1);
@@ -212,19 +208,22 @@ export function GearDialog({
 
     const saved = await submit(
       (client) =>
-        saveOwnCharacter(client, character, {
-          sheet: sheetWithGear(character.sheet, inventory, [...known.values()].map(kitEquipmentOf)),
-        }),
-      ownCharacterWrites(owned),
+        target.save(
+          client,
+          sheetWithGear(target.sheet, inventory, [...known.values()].map(kitEquipmentOf)),
+        ),
+      target.writes,
     );
     if (Result.isSuccess(saved)) onSaved();
   };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Edit your gear" className="@container">
+      <DialogContent aria-label={`Edit ${whose(target)} gear`} className="@container">
         <DialogHeader>
-          <DialogTitle>What you are carrying</DialogTitle>
+          <DialogTitle>
+            {target.name === null ? "What you are carrying" : `What ${target.name} is carrying`}
+          </DialogTitle>
           <DialogDescription>
             Pick from the catalogue, or type a line. Leave one blank and it is not saved.
           </DialogDescription>

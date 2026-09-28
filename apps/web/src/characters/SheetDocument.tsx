@@ -502,45 +502,61 @@ const EditButton = ({
 );
 
 /**
- * What the owner's sheet can do on top of drawing the document: the section
- * edits, the dice and the spends. The creator's seat page passes none of it
- * (`party/SeatScreen.tsx`), and the same document draws read-only — every
- * number, no control — because nobody writes another account's sheet.
+ * The section edits a writable sheet draws in its headers: a character's
+ * owner's, and the DM's over an NPC's sheet (`cast/NpcSheetPanel.tsx`). The
+ * creator's seat page passes none (`party/SeatScreen.tsx`), and the same
+ * document draws read-only, because nobody writes another account's sheet.
  */
-export interface SheetWrites {
-  readonly owned: OwnedCharacter;
+export interface SheetEdits {
+  /**
+   * Who an empty section's prompt addresses: the owner, about their own
+   * character (*what you are proficient in*), or the DM, about an NPC.
+   */
+  readonly reader: "owner" | "dm";
   readonly onEditAbilities: () => void;
-  readonly onEditBackstory: () => void;
-  readonly onEditGear: () => void;
   readonly onEditSkills: () => void;
   readonly onEditSpells: () => void;
+  readonly onEditGear: () => void;
+  /** The player's half of the document; an NPC's sheet has none. */
+  readonly onEditBackstory?: () => void;
+}
+
+/**
+ * What only the owner's own sheet does: the dice and the spends. An NPC's
+ * sheet edits but does not play — nothing rolls for it or spends its slots
+ * until it can take part in a fight — so its counters draw read-only.
+ */
+export interface SheetPlay {
+  readonly owned: OwnedCharacter;
   readonly rollCampaignId: CampaignId | undefined;
 }
 
 /**
  * The sheet's continuous document: its sections in order, each drawn by
- * `drawnSections`. Read-only when `writes` is undefined — pass
+ * `drawnSections`. Read-only when `edits` is undefined — pass
  * `drawnSections(sheet, false)` then, so no section is drawn only to hold the
  * affordance that would fill it.
  *
  * It draws a document, not a character: a character's sheet, and an NPC's
  * (`cast/NpcSheetPanel.tsx`), which is the same rules half with no player's
- * half and is always read-only. What rolls and spends is the owner's
- * character, and `writes` alone carries it.
+ * half. What edits is `edits`; what rolls and spends is the owner's
+ * character, and `play` alone carries it.
  */
 export function SheetDocument({
   sheet,
   gearRows,
   sections,
   register,
-  writes,
+  edits,
+  play,
 }: {
   readonly sheet: DrawnSheet;
   /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
   readonly gearRows: ReadonlyArray<Equipment>;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
   readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
-  readonly writes: SheetWrites | undefined;
+  readonly edits: SheetEdits | undefined;
+  readonly play: SheetPlay | undefined;
 }) {
   const spellcasting = sheet.spellcasting;
   const slots = slotRows(sheet);
@@ -565,12 +581,12 @@ export function SheetDocument({
     used: Math.max(0, Math.min(resource.max, resource.used + (pending[resource.id] ?? 0))),
   });
   const spend = (resource: SheetResource, amount: number) => {
-    // Only a writable sheet draws a spend control, so there is always an owner here.
-    if (writes === undefined) return;
+    // Only a played sheet draws a spend control, so there is always an owner here.
+    if (play === undefined) return;
     setPending((current) => ({ ...current, [resource.id]: (current[resource.id] ?? 0) + amount }));
     void submit(
-      (client) => spendResource(client, writes.owned.character, resource.id, amount),
-      ownCharacterWrites(writes.owned),
+      (client) => spendResource(client, play.owned.character, resource.id, amount),
+      ownCharacterWrites(play.owned),
     ).finally(() => {
       setPending((current) => ({
         ...current,
@@ -589,8 +605,8 @@ export function SheetDocument({
   const recordRoll = (roll: LocalRoll | undefined) => {
     if (roll === undefined) return;
     const requestId = newRollRequestId();
-    const target = writes?.rollCampaignId;
-    const characterId = writes?.owned.character.id;
+    const target = play?.rollCampaignId;
+    const characterId = play?.owned.character.id;
     const logged: LoggedRoll = {
       ...roll,
       localId: requestId,
@@ -677,7 +693,7 @@ export function SheetDocument({
        beside an open Hob panel is 400 less — rather than on the shell's. The
        `@md`/`@lg` steps below are the column's, never `main`'s. */
     <div className="@container order-3 flex min-w-0 flex-1 flex-col gap-gutter @3xl:order-2">
-      {writes !== undefined && <RollLog rolls={rolls} mode={rollMode} onMode={setRollMode} />}
+      {play !== undefined && <RollLog rolls={rolls} mode={rollMode} onMode={setRollMode} />}
       {failure !== undefined && (
         <Card className="border-danger">
           <CardContent className="pt-card">
@@ -693,16 +709,16 @@ export function SheetDocument({
           section={abilities}
           register={register}
           action={
-            writes !== undefined && (
+            edits !== undefined && (
               <>
-                <EditButton what="abilities" onClick={writes.onEditAbilities} />
-                <EditButton what="skills" onClick={writes.onEditSkills} />
+                <EditButton what="abilities" onClick={edits.onEditAbilities} />
+                <EditButton what="skills" onClick={edits.onEditSkills} />
               </>
             )
           }
         >
           {sheet.abilities.length === 0 ? (
-            writes !== undefined && (
+            edits !== undefined && (
               <p className="text-caption leading-body text-muted-foreground">
                 Six scores. Take the standard array, or roll for them.
               </p>
@@ -716,7 +732,7 @@ export function SheetDocument({
                 <AbilityCell
                   key={ability.label}
                   ability={ability}
-                  onRoll={writes === undefined ? undefined : rollAbility}
+                  onRoll={play === undefined ? undefined : rollAbility}
                 />
               ))}
             </div>
@@ -724,11 +740,13 @@ export function SheetDocument({
 
           {/* A read-only sheet with no skills draws no rule and no prompt: the
               prompt is the owner's, addressed to whoever can fill it. */}
-          {(writes !== undefined || (sheet.skills ?? []).length > 0) && (
+          {(edits !== undefined || (sheet.skills ?? []).length > 0) && (
             <Ruled>
               {sheet.skills === undefined || sheet.skills.length === 0 ? (
                 <p className="text-caption leading-body text-muted-foreground">
-                  What you are proficient in, and what you add.
+                  {edits?.reader === "dm"
+                    ? "What they are proficient in, and what they add."
+                    : "What you are proficient in, and what you add."}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-x-gutter @sm:grid-cols-2 @2xl:grid-cols-3">
@@ -782,7 +800,7 @@ export function SheetDocument({
               <ActionLine
                 key={action.id}
                 action={action}
-                onRoll={writes === undefined ? undefined : rollNotation}
+                onRoll={play === undefined ? undefined : rollNotation}
               />
             ))}
           </div>
@@ -793,9 +811,7 @@ export function SheetDocument({
         <DocumentSection
           section={magic}
           register={register}
-          action={
-            writes !== undefined && <EditButton what="spells" onClick={writes.onEditSpells} />
-          }
+          action={edits !== undefined && <EditButton what="spells" onClick={edits.onEditSpells} />}
           aside={
             <span className="text-micro leading-none text-faint">
               {[
@@ -834,7 +850,7 @@ export function SheetDocument({
                     <span className="flex gap-1">
                       {Array.from({ length: Math.max(0, shown.total) }, (_, index) => {
                         const spent = index < used;
-                        return resource === undefined || writes === undefined ? (
+                        return resource === undefined || play === undefined ? (
                           <span
                             key={index}
                             aria-hidden="true"
@@ -896,7 +912,7 @@ export function SheetDocument({
                   trait={trait}
                   resource={resource}
                   busy={busy}
-                  onSpend={writes === undefined ? undefined : spend}
+                  onSpend={play === undefined ? undefined : spend}
                   note={trait.note ?? usesNote(trait, sheet.resources)}
                 />
               );
@@ -910,8 +926,8 @@ export function SheetDocument({
           section={gear}
           register={register}
           action={
-            writes !== undefined && (
-              <Button variant="outline" size="sm" onClick={writes.onEditGear}>
+            edits !== undefined && (
+              <Button variant="outline" size="sm" onClick={edits.onEditGear}>
                 <Icon name="plus" size={13} />
                 Add
               </Button>
@@ -921,9 +937,11 @@ export function SheetDocument({
           <div className="flex flex-col gap-gutter @md:flex-row @md:items-start">
             <div className="min-w-0 flex-1">
               {sheet.inventory === undefined || sheet.inventory.length === 0
-                ? writes !== undefined && (
+                ? edits !== undefined && (
                     <p className="text-caption leading-body text-muted-foreground">
-                      A rope, a lantern, the thing you were given last session.
+                      {edits.reader === "dm"
+                        ? "A rope, a lantern, what they carry into a fight."
+                        : "A rope, a lantern, the thing you were given last session."}
                     </p>
                   )
                 : sheet.inventory.map((item, index) => (
@@ -965,15 +983,15 @@ export function SheetDocument({
           section={storySection}
           register={register}
           action={
-            writes !== undefined && (
-              <EditButton what="backstory" onClick={writes.onEditBackstory} bare />
+            edits?.onEditBackstory !== undefined && (
+              <EditButton what="backstory" onClick={edits.onEditBackstory} bare />
             )
           }
         >
           <div className="flex flex-col gap-gutter @lg:flex-row @lg:items-start">
             <div className="min-w-0 flex-1">
               {notes.trim() === ""
-                ? writes !== undefined && (
+                ? edits?.onEditBackstory !== undefined && (
                     <p className="text-caption leading-body text-muted-foreground">
                       Where they came from, and what they are still carrying about it.
                     </p>

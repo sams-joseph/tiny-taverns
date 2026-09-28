@@ -1,4 +1,3 @@
-import type { OwnedCharacter } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -15,10 +14,11 @@ import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
 import { skillDrafts, skillsFrom, type SkillDraft } from "./skills";
-import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
+import { type SheetTarget, whose } from "./sheetTarget";
 
 /**
- * The skill list — `sheet.skills`, behind the Stats tab's *Edit skills*.
+ * The skill list — `sheet.skills`, behind the Stats tab's *Edit skills*: a
+ * character's own sheet, or an NPC's, through the target that holds it.
  *
  * **The eighteen, always drawn, with a switch and a number against each.** The
  * drawing (`CharacterCreate.jsx:162`) is a chip grid over ten of them with a
@@ -45,25 +45,20 @@ import { ownCharacterWrites, saveOwnCharacter, sheetWith } from "./write";
  * *not* good at, which is the same call the coin piles already make.
  */
 export function SkillsDialog({
-  owned,
+  target,
   onClose,
   onSaved,
   onReload,
 }: {
-  /**
-   * The character with its seats — the seats are the write's blast radius
-   * (`ownCharacterWrites` names one party per seat), and the character no
-   * longer names a campaign on its own.
-   */
-  readonly owned: OwnedCharacter;
+  /** The sheet, and where it is written. */
+  readonly target: SheetTarget;
   readonly onClose: () => void;
   readonly onSaved: () => void;
   /** Re-read the sheet after a stale-version refusal; see `SaveFailure`. */
   readonly onReload?: () => void;
 }) {
-  const character = owned.character;
   const [drafts, setDrafts] = useState<ReadonlyArray<SkillDraft>>(() =>
-    skillDrafts(character.sheet.skills ?? []),
+    skillDrafts(target.sheet.skills ?? []),
   );
   const { busy, failure, submit } = useMutation();
 
@@ -86,23 +81,22 @@ export function SkillsDialog({
 
   const save = async () => {
     const saved = await submit(
-      (client) =>
-        saveOwnCharacter(client, character, {
-          sheet: sheetWith(character, { skills: skillsFrom(drafts) }),
-        }),
-      ownCharacterWrites(owned),
+      (client) => target.save(client, { ...target.sheet, skills: skillsFrom(drafts) }),
+      target.writes,
     );
     if (Result.isSuccess(saved)) onSaved();
   };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Edit your skills">
+      <DialogContent aria-label={`Edit ${whose(target)} skills`}>
         <DialogHeader>
           <DialogTitle>Skills</DialogTitle>
           <DialogDescription>
-            Mark what you are proficient in, and write the bonus you add. A skill with neither is
-            not saved.
+            {target.name === null
+              ? "Mark what you are proficient in, and write the bonus you add."
+              : "Mark what they are proficient in, and write the bonus they add."}{" "}
+            A skill with neither is not saved.
           </DialogDescription>
         </DialogHeader>
 

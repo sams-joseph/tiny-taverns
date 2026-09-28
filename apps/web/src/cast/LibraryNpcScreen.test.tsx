@@ -109,7 +109,7 @@ describe("LibraryNpcScreen", () => {
     expect(server.calls.some((call) => call.pathname.startsWith("/campaigns/"))).toBe(false);
   });
 
-  it("draws a written sheet read-only and edits it with the version it read", async () => {
+  it("draws a written sheet and edits its identity with the version it read", async () => {
     server.routes.set(`GET ${sheetPath}`, { status: 200, body: sourceSheet });
     server.routes.set(`PATCH ${sheetPath}`, {
       status: 200,
@@ -120,7 +120,12 @@ describe("LibraryNpcScreen", () => {
     expect(screen.getByText("CR 3 · 700 XP")).toBeInTheDocument();
     const document = screen.getByRole("region", { name: "Cazril's sheet" });
     expect(within(document).getByText("Second Wind")).toBeInTheDocument();
-    expect(within(document).queryByRole("button")).toBeNull();
+    // The section editors, and nothing that rolls or spends.
+    expect(
+      within(document)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Abilities", "Skills", "Add"]);
 
     await userEvent.click(screen.getByRole("button", { name: "Edit stats" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit Cazril’s stats" });
@@ -132,6 +137,78 @@ describe("LibraryNpcScreen", () => {
 
     const [patch] = sheetCalls("PATCH");
     expect(JSON.parse(patch!.body)).toEqual({ expectedVersion: 3, ac: 18 });
+  });
+
+  it("edits the document through the owner's Library endpoint, and picks spells from the core rules", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: sourceSheet });
+    server.routes.set(`PATCH ${sheetPath}`, {
+      status: 200,
+      body: { ...sourceSheet, version: 4 },
+    });
+    const document = await (async () => {
+      await renderPage();
+      return screen.getByRole("region", { name: "Cazril's sheet" });
+    })();
+
+    await userEvent.click(within(document).getByRole("button", { name: "Edit skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Skills" });
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Athletics" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save skills" }));
+    await waitFor(() => expect(sheetCalls("PATCH")).toHaveLength(1));
+    expect(JSON.parse(sheetCalls("PATCH")[0]!.body)).toEqual({
+      expectedVersion: 3,
+      sheet: {
+        ...sourceSheet.sheet,
+        skills: [{ name: "Athletics", ability: "STR", proficient: true }],
+      },
+    });
+    // Nothing under a campaign's path.
+    expect(server.calls.some((call) => call.pathname.startsWith("/campaigns"))).toBe(false);
+  });
+
+  it("reads an original's spell list from the core rules, under /library", async () => {
+    server.routes.set(`GET ${sheetPath}`, {
+      status: 200,
+      body: {
+        ...sourceSheet,
+        sheet: {
+          ...sourceSheet.sheet,
+          spellcasting: { ability: "CHA", save: "13", attack: "+5", known: [] },
+          resources: [
+            {
+              id: "slot:1",
+              name: "Level 1 slots",
+              max: 2,
+              used: 0,
+              recharge: "long",
+              derived: true,
+            },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${sheetPath}/spells`, {
+      status: 200,
+      body: {
+        npcId: cazrilSource.id,
+        className: "Fighter",
+        level: 5,
+        highestSlotLevel: 1,
+        mode: "none",
+        limits: {},
+        spells: [],
+      },
+    });
+    await renderPage();
+    const document = screen.getByRole("region", { name: "Cazril's sheet" });
+    await userEvent.click(within(document).getByRole("button", { name: "Edit spells" }));
+    const dialog = await screen.findByRole("dialog", { name: "Choose spells" });
+    expect(
+      await within(dialog).findByText(
+        "No spells are available for this class and level in the core rules.",
+      ),
+    ).toBeInTheDocument();
+    expect(server.calls.some((call) => call.pathname === `${sheetPath}/spells`)).toBe(true);
   });
 
   it("removes the original's sheet once asked, and says a campaign copy keeps its own", async () => {

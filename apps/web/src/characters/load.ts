@@ -7,6 +7,7 @@ import type {
   Equipment,
   OwnedCharacter,
   PlayerLiveTable,
+  SheetBody,
 } from "@taverns/api";
 import { linkedEquipmentIds, MAX_PAGE_SIZE } from "@taverns/api";
 import { Effect } from "effect";
@@ -166,6 +167,26 @@ export interface CharacterSheetView extends MyCharactersView {
   readonly gear: ReadonlyArray<Equipment>;
 }
 
+/**
+ * The equipment rows a sheet's gear lines name, as many as this account can
+ * read (`CharacterSheetView.gear` says which), and no request when nothing is
+ * linked. Any sheet's: a character's, and an NPC's on the Stats tab.
+ */
+export const linkedGear = (
+  client: TavernsClient,
+  sheet: SheetBody,
+): Effect.Effect<ReadonlyArray<Equipment>, unknown> => {
+  const ids = linkedEquipmentIds(sheet);
+  return ids.length === 0
+    ? Effect.succeed([])
+    : Effect.map(
+        client.library.equipment({
+          query: { ids: ids.slice(0, MAX_PAGE_SIZE), limit: MAX_PAGE_SIZE },
+        }),
+        (page) => page.items,
+      );
+};
+
 export const loadCharacterSheet = (characterId: CharacterId) => (client: TavernsClient) =>
   Effect.gen(function* () {
     const view = yield* loadMyCharacters(client);
@@ -179,20 +200,14 @@ export const loadCharacterSheet = (characterId: CharacterId) => (client: Taverns
     // The second round is two reads side by side: the live table, and the rows
     // the gear names. Both hang off the first round's answer and neither
     // depends on the other.
-    const ids = owned === undefined ? [] : linkedEquipmentIds(owned.character.sheet);
     const [live, gear] = yield* Effect.all(
       [
         seat === undefined
           ? Effect.succeed(null)
           : client.table.read({ params: { campaignId: seat.campaignId } }),
-        ids.length === 0
+        owned === undefined
           ? Effect.succeed([] as ReadonlyArray<Equipment>)
-          : Effect.map(
-              client.library.equipment({
-                query: { ids: ids.slice(0, MAX_PAGE_SIZE), limit: MAX_PAGE_SIZE },
-              }),
-              (page) => page.items,
-            ),
+          : linkedGear(client, owned.character.sheet),
       ],
       { concurrency: "unbounded" },
     );

@@ -198,7 +198,8 @@ export const coins = (
  * (`SheetBody`), and the player's own half when the sheet is a character's.
  * A `CharacterSheet` is one, and so is an NPC's sheet (`NpcSheet.sheet`), which
  * has no player's half — so an NPC's sheet never draws *Story* or *Level ups*,
- * because it has nothing to put in them.
+ * because it has nothing to put in them, even where it is writable: *Story*
+ * is drawn empty for writing only on a document that carries `notes`.
  */
 export type DrawnSheet = SheetBody &
   Partial<Pick<CharacterSheet, "notes" | "journal" | "story" | "levelUps">>;
@@ -381,7 +382,7 @@ export const sheetSections = (sheet: DrawnSheet, writable = false): SheetSection
       some(sheet.inventory) ||
       (sheet.currency !== undefined && coins(sheet.currency).length > 0),
     story:
-      writable ||
+      (writable && sheet.notes !== undefined) ||
       written(sheet.notes) ||
       some(sheet.journal) ||
       (story !== undefined &&

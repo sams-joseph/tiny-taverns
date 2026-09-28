@@ -1,5 +1,6 @@
 import type {
   CampaignId,
+  Equipment,
   Npc,
   NpcId,
   NpcAwarenessCandidate,
@@ -17,6 +18,7 @@ import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
+import { linkedGear } from "../characters/load";
 
 /**
  * The cast's reads, as atoms — `Atom.family` at module scope, keyed on what
@@ -133,8 +135,20 @@ export interface NpcDetail {
   readonly memories: ReadonlyArray<NpcMemory>;
   readonly proposals: ReadonlyArray<NpcProposal>;
   readonly awarenessCandidates: ReadonlyArray<NpcAwarenessCandidate>;
-  /** The Stats tab's sheet, or `null` when the DM has not written one. */
+  /** The Stats tab's sheet and the gear rows it names. */
+  readonly stats: NpcStats;
+}
+
+/** One NPC's sheet as the Stats tab draws and edits it. */
+export interface NpcStats {
+  /** `null` when the DM has not written one. */
   readonly sheet: NpcSheet | null;
+  /**
+   * The equipment rows the sheet's gear lines name — what a linked line draws
+   * its facts from, and what the gear editor derives a weapon's attack from.
+   * The character sheet's read of the same thing (`linkedGear`).
+   */
+  readonly gear: ReadonlyArray<Equipment>;
 }
 
 const npcRowAtom = Atom.family((at: OneNpc) =>
@@ -156,9 +170,32 @@ export const npcLinksAtom = Atom.family((at: OneNpc) =>
   ),
 );
 
-/** One NPC's sheet, or `null`: the Stats tab's read, folded into `npcAtom`. */
+/**
+ * One NPC's sheet, or `null`, and the gear rows it names: the Stats tab's
+ * read, folded into `npcAtom`. The second round hangs off the first's
+ * answer, and is no request when nothing on the sheet is linked.
+ */
 export const npcSheetAtom = Atom.family((at: OneNpc) =>
-  apiAtom((client) => client.npcs.sheet({ params: at }), [reads.npcSheet(at.npcId)]),
+  apiAtom(
+    (client): Effect.Effect<NpcStats, unknown> =>
+      Effect.flatMap(
+        client.npcs.sheet({ params: at }),
+        (sheet): Effect.Effect<NpcStats, unknown> =>
+          sheet === null
+            ? Effect.succeed({ sheet, gear: [] })
+            : Effect.map(linkedGear(client, sheet.sheet), (gear) => ({ sheet, gear })),
+      ),
+    [reads.npcSheet(at.npcId), reads.libraryEquipment],
+  ),
+);
+
+/**
+ * The spell picker's rules for one NPC's sheet, against its campaign's rules
+ * (`sheetSpells`). It moves with the sheet — a class or level edit is a
+ * different list — so it answers the sheet's key.
+ */
+export const npcSheetSpellsAtom = Atom.family((at: OneNpc) =>
+  apiAtom((client) => client.npcs.sheetSpells({ params: at }), [reads.npcSheet(at.npcId)]),
 );
 
 const npcKnowledgeAtom = Atom.family((at: OneNpc) =>
@@ -238,7 +275,7 @@ export const npcAtom = Atom.family((at: OneNpc) =>
         memories: get(npcMemoriesAtom(at)),
         proposals: get(npcProposalsAtom(at)),
         awarenessCandidates: get(npcAwarenessCandidatesAtom(at)),
-        sheet: get(npcSheetAtom(at)),
+        stats: get(npcSheetAtom(at)),
       }),
     ),
   ),

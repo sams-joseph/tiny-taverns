@@ -1,7 +1,10 @@
-import type { NpcId, NpcSheet, NpcSheetSummary, NpcSource } from "@taverns/api";
+import type { NpcId, NpcSheetSummary, NpcSource } from "@taverns/api";
+import { Effect } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
+import { linkedGear } from "../characters/load";
+import type { NpcStats } from "./load";
 
 /**
  * The Library NPC shelf's reads, as atoms, the way `cast/load.ts` holds the
@@ -61,15 +64,39 @@ const librarySourceRowAtom = Atom.family((npcId: NpcId) =>
   ),
 );
 
-/** One original's sheet, or `null`: the stats page's read. */
+/**
+ * One original's sheet, or `null`, and the gear rows it names: the stats
+ * page's read, as the Cast's `npcSheetAtom` is a campaign NPC's.
+ */
 const librarySheetAtom = Atom.family((npcId: NpcId) =>
-  apiAtom((client) => client.library.npcSheet({ params: { npcId } }), [reads.npcSheet(npcId)]),
+  apiAtom(
+    (client): Effect.Effect<NpcStats, unknown> =>
+      Effect.flatMap(
+        client.library.npcSheet({ params: { npcId } }),
+        (sheet): Effect.Effect<NpcStats, unknown> =>
+          sheet === null
+            ? Effect.succeed({ sheet, gear: [] })
+            : Effect.map(linkedGear(client, sheet.sheet), (gear) => ({ sheet, gear })),
+      ),
+    [reads.npcSheet(npcId), reads.libraryEquipment],
+  ),
+);
+
+/**
+ * The spell picker's rules for one original's sheet, against the core rules
+ * (`npcSheetSpells`). It moves with the sheet, so it answers the sheet's key.
+ */
+export const librarySheetSpellsAtom = Atom.family((npcId: NpcId) =>
+  apiAtom(
+    (client) => client.library.npcSheetSpells({ params: { npcId } }),
+    [reads.npcSheet(npcId)],
+  ),
 );
 
 export interface LibraryNpcDetail {
   readonly source: NpcSource;
-  /** `null` when the owner has not written one. */
-  readonly sheet: NpcSheet | null;
+  /** The sheet (`null` when the owner has not written one) and the gear rows it names. */
+  readonly stats: NpcStats;
 }
 
 /** One original and its sheet: the Library NPC page's read. */
@@ -80,7 +107,7 @@ export const libraryNpcAtom = Atom.family((npcId: NpcId) =>
         get,
         AsyncResult.all({
           source: get(librarySourceRowAtom(npcId)),
-          sheet: get(librarySheetAtom(npcId)),
+          stats: get(librarySheetAtom(npcId)),
         }),
       ),
     (refresh) => {

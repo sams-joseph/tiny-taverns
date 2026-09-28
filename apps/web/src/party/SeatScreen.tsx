@@ -63,7 +63,7 @@ import { RetireSeatDialog } from "./RetireSeatDialog";
  * DM's own hook and secret for it (`SeatPrep`, never a player's to read), and
  * retiring it. The
  * sheet under them is the owner's document drawn read-only — the same
- * `SheetDocument` the owner writes, with no `writes`, so nothing on it presses:
+ * `SheetDocument` the owner writes, with no `edits` or `play`, so nothing on it presses:
  * nobody writes another account's sheet. Gear lines draw by name alone, since
  * the equipment rows they point at are the owner's Library.
  */
@@ -181,7 +181,8 @@ function SeatBody({
             gearRows={[]}
             sections={drawnSections(character.sheet, false)}
             register={ignoreSection}
-            writes={undefined}
+            edits={undefined}
+            play={undefined}
           />
         </section>
       )}

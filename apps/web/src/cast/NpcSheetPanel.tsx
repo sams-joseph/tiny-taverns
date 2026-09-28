@@ -1,4 +1,4 @@
-import type { NpcSheet } from "@taverns/api";
+import type { Equipment, NpcSheet } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -15,29 +15,39 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import { useInvalidate } from "../api/atoms";
 import { useMutation } from "../api/mutation";
+import { AbilitiesDialog } from "../characters/AbilitiesDialog";
+import { GearDialog } from "../characters/GearDialog";
 import { drawnSections } from "../characters/sheet";
 import { SheetDocument } from "../characters/SheetDocument";
 import { StatPill } from "../characters/SheetParts";
+import { SkillsDialog } from "../characters/SkillsDialog";
+import { SpellPickerDialog } from "../characters/SpellPickerDialog";
 import { SaveFailure } from "../ui/form";
-import { challengeLine, type NpcSheetTarget } from "./npcSheet";
+import { challengeLine, npcSheetEditor, type NpcSheetTarget } from "./npcSheet";
 import { NpcQuickStartDialog } from "./NpcQuickStartDialog";
 import { NpcSheetDialog } from "./NpcSheetDialog";
 
 /** The NPC sheet has no spine to scroll to its sections, so nothing registers. */
 const ignoreSection = () => undefined;
 
+/** Which of the sheet's dialogs is open. */
+type Editing = "identity" | "start" | "abilities" | "skills" | "spells" | "gear" | "remove";
+
 /**
- * An NPC's stats: **the character sheet's own document, drawn read-only**, under
- * a header of the identity columns — what the NPC page's *Stats* tab draws.
+ * An NPC's stats: **the character sheet's own document and its own section
+ * editors**, under a header of the identity columns — what the NPC page's
+ * *Stats* tab draws.
  *
- * It takes a target rather than a campaign, so any NPC's sheet draws the same
- * way whoever's endpoints hold it (`NpcSheetTarget`).
+ * It takes a target rather than a campaign, so any NPC's sheet draws and
+ * writes the same way whoever's endpoints hold it (`NpcSheetTarget`).
  *
  * **The document is the character's renderer** (`SheetDocument`) over the
- * sheet's rules half, with no `writes`: nothing on it rolls or spends, and a
- * section with nothing in it is not drawn (`drawnSections(sheet, false)`).
- * What writes here is the identity (*Write one*, *Edit stats*), the quick
+ * sheet's rules half, with the character's abilities, skills, spells and gear
+ * dialogs in its section headers (`npcSheetEditor`). It edits but does not
+ * play: nothing on it rolls or spends until an NPC can take part in a fight.
+ * The identity is the header's (*Write one*, *Edit stats*), beside the quick
  * start (*Start from class and level*, and *Rebuild* over a sheet, which asks
  * first) and *Remove*, which asks first — the document goes with it.
  *
@@ -47,40 +57,71 @@ const ignoreSection = () => undefined;
 export function NpcSheetPanel({
   name,
   sheet,
+  gear,
   target,
 }: {
   /** The NPC's name, for the copy. */
   readonly name: string;
   /** `null`: the DM has not written one. */
   readonly sheet: NpcSheet | null;
+  /** The equipment rows the sheet's gear lines name (`NpcStats.gear`). */
+  readonly gear: ReadonlyArray<Equipment>;
   readonly target: NpcSheetTarget;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const invalidate = useInvalidate();
+  const close = () => setEditing(null);
+  // A refusal for a sheet that moved on: read it again and start over from it.
+  const reloadAndClose = () => {
+    invalidate(target.writes);
+    close();
+  };
+  const editor = sheet === null ? undefined : npcSheetEditor(name, sheet, target);
 
   const dialogs = (
     <>
-      {editing && (
-        <NpcSheetDialog
-          name={name}
-          sheet={sheet}
-          target={target}
-          onClose={() => setEditing(false)}
-          onSaved={() => setEditing(false)}
-        />
+      {editing === "identity" && (
+        <NpcSheetDialog name={name} sheet={sheet} target={target} onClose={close} onSaved={close} />
       )}
-      {starting && (
+      {editing === "start" && (
         <NpcQuickStartDialog
           name={name}
           sheet={sheet}
           target={target}
-          onClose={() => setStarting(false)}
-          onSaved={() => setStarting(false)}
+          onClose={close}
+          onSaved={close}
         />
       )}
-      {removing && sheet !== null && (
-        <RemoveSheetDialog name={name} target={target} onClose={() => setRemoving(false)} />
+      {editor !== undefined && editing === "abilities" && (
+        <AbilitiesDialog
+          target={editor}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
+      )}
+      {editor !== undefined && editing === "skills" && (
+        <SkillsDialog target={editor} onClose={close} onSaved={close} onReload={reloadAndClose} />
+      )}
+      {editor !== undefined && editing === "spells" && (
+        <SpellPickerDialog
+          target={editor}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
+      )}
+      {editor !== undefined && editing === "gear" && (
+        <GearDialog
+          target={editor}
+          rows={gear}
+          onClose={close}
+          onSaved={close}
+          onReload={reloadAndClose}
+        />
+      )}
+      {editing === "remove" && sheet !== null && (
+        <RemoveSheetDialog name={name} target={target} onClose={close} />
       )}
     </>
   );
@@ -93,11 +134,11 @@ export function NpcSheetPanel({
           title="No stats yet"
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button size="sm" onClick={() => setStarting(true)}>
+              <Button size="sm" onClick={() => setEditing("start")}>
                 <Icon name="wand-sparkles" size={14} />
                 Start from class and level
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+              <Button variant="secondary" size="sm" onClick={() => setEditing("identity")}>
                 <Icon name="plus" size={14} />
                 Write one
               </Button>
@@ -113,7 +154,9 @@ export function NpcSheetPanel({
     );
   }
 
-  const sections = drawnSections(sheet.sheet, false);
+  // Writable, so the abilities and the gear draw empty to be filled in; the
+  // player's half is not on an NPC's document, so there is no story to write.
+  const sections = drawnSections(sheet.sheet, true);
 
   return (
     <div data-slot="npc-sheet" className="flex flex-col gap-gutter">
@@ -138,15 +181,15 @@ export function NpcSheetPanel({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+            <Button variant="secondary" size="sm" onClick={() => setEditing("identity")}>
               <Icon name="pencil" size={14} />
               Edit stats
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setStarting(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setEditing("start")}>
               <Icon name="wand-sparkles" size={14} />
               Rebuild from class and level
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setRemoving(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setEditing("remove")}>
               <Icon name="trash-2" size={14} />
               Remove
             </Button>
@@ -161,21 +204,22 @@ export function NpcSheetPanel({
         )}
       </Card>
 
-      {sections.length === 0 ? (
-        <p className="text-body-s leading-body text-muted-foreground">
-          No abilities, features or actions on this sheet.
-        </p>
-      ) : (
-        <section aria-label={`${name}'s sheet`} className="flex min-w-0">
-          <SheetDocument
-            sheet={sheet.sheet}
-            gearRows={[]}
-            sections={sections}
-            register={ignoreSection}
-            writes={undefined}
-          />
-        </section>
-      )}
+      <section aria-label={`${name}'s sheet`} className="flex min-w-0">
+        <SheetDocument
+          sheet={sheet.sheet}
+          gearRows={gear}
+          sections={sections}
+          register={ignoreSection}
+          edits={{
+            reader: "dm",
+            onEditAbilities: () => setEditing("abilities"),
+            onEditSkills: () => setEditing("skills"),
+            onEditSpells: () => setEditing("spells"),
+            onEditGear: () => setEditing("gear"),
+          }}
+          play={undefined}
+        />
+      </section>
       {dialogs}
     </div>
   );
