@@ -345,6 +345,7 @@ export const cazril = {
   origin: "authored",
   assistantTurnId: null,
   image: null,
+  banner: null,
   imagePending: false,
   createdAt: stamps.createdAt,
   updatedAt: stamps.updatedAt,
@@ -373,6 +374,7 @@ export const playerCazril = {
   role: "the ferryman at the crossing",
   persona: cazril.persona,
   image: null,
+  banner: null,
   imagePending: false,
 };
 
@@ -422,6 +424,7 @@ export const character = {
   // No portrait was drawn: the lettered plate, the state every character is
   // in on a server with portraits off.
   portrait: null,
+  banner: null,
   portraitPending: false,
   ...provenance,
   ...stamps,
@@ -451,9 +454,15 @@ export const drawnNpcPortrait = {
   fullUrl: "/npc-images/2b1f2a1e-0000-4000-8000-00000000d001/full?e=1&s=f",
 };
 
+/** A cast NPC's banner as the server signs it: `Npc.banner` and `PlayerNpc.banner`. */
+export const drawnNpcBanner = {
+  cardUrl: "/npc-banners/2b1f2a1e-0000-4000-8000-00000000d002/card?e=1&s=c",
+  fullUrl: "/npc-banners/2b1f2a1e-0000-4000-8000-00000000d002/full?e=1&s=f",
+};
+
 /**
  * A cast of several, for the screens measured over a full shelf
- * (`test/scenarios.ts`): the ferryman, a shared NPC with Hob's portrait, one
+ * (`test/scenarios.ts`): the ferryman, a shared NPC with Hob's portrait and banner, one
  * whose portrait Hob is still drawing, one whose role is long enough to wrap
  * on a card, and one with no role at all.
  */
@@ -468,6 +477,7 @@ export const castShelf = [
     privateMaterial: {},
     visibility: "shared",
     image: drawnNpcPortrait,
+    banner: drawnNpcBanner,
   },
   {
     ...cazril,
@@ -545,6 +555,12 @@ export const drawnPortrait = {
   thumbUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/thumb?e=1&s=t",
   cardUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/card?e=1&s=c",
   fullUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/full?e=1&s=f",
+};
+
+/** A character's banner as the server signs it: `Character.banner`. */
+export const drawnBanner = {
+  cardUrl: "/portrait-banners/2b1f2a1e-0000-4000-8000-00000000b002/card?e=1&s=c",
+  fullUrl: "/portrait-banners/2b1f2a1e-0000-4000-8000-00000000b002/full?e=1&s=f",
 };
 
 /** Brannoc's seat at this table — `campaign_character`, the campaign's half. */

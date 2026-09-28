@@ -155,6 +155,19 @@ export class NpcImages extends Schema.Class<NpcImages>("NpcImages")({
   fullUrl: Schema.String,
 }) {}
 
+/**
+ * Where an NPC's banner loads from: two sizes of one 2:1 WebP
+ * (`/npc-banners/:imageId/:variant?e=…&s=…`), for the Cast card's portrait
+ * band and the NPC drawer's header. Minted by exactly the reads that mint
+ * {@link NpcImages}.
+ */
+export class NpcBannerImages extends Schema.Class<NpcBannerImages>("NpcBannerImages")({
+  /** 768 × 384, a card's portrait band at 2x. */
+  cardUrl: Schema.String,
+  /** 1536 × 768. */
+  fullUrl: Schema.String,
+}) {}
+
 /** The portrait fields every read of a campaign NPC carries, the creator's and a player's alike. */
 const npcImageFields = {
   /**
@@ -166,9 +179,15 @@ const npcImageFields = {
    */
   image: Schema.NullOr(NpcImages),
   /**
-   * The portrait is being drawn right now. A screen shows a quiet drawing state
-   * and re-reads until it clears; it never becomes true again, because a
-   * portrait is drawn once.
+   * The wide banner Hob drew beside the portrait, for a band — or `null` for
+   * every reason `image` can be, and also when the NPC was drawn before
+   * banners existed. A band shows `image` then.
+   */
+  banner: Schema.NullOr(NpcBannerImages),
+  /**
+   * The portrait or its banner is being drawn right now. A screen shows a
+   * quiet drawing state and re-reads until it clears; it never becomes true
+   * again, because each is drawn once.
    */
   imagePending: Schema.Boolean,
 };

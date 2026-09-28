@@ -8,8 +8,8 @@ import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./vi
 
 /**
  * Every statement about Hob-drawn images' records — one table per kind
- * (`character_portrait`, `campaign_image`, `shared_world_image`, `npc_image`,
- * `battle_map_image`;
+ * (`character_portrait`, `character_banner`, `campaign_image`,
+ * `shared_world_image`, `npc_image`, `npc_banner`, `battle_map_image`;
  * `images/kinds.ts`) — and the `storage_deletion` outbox they share. The
  * worker that draws and stores is `images/HobImages.ts`; this file is only rows.
  *
@@ -85,7 +85,7 @@ export const imageObjectKey = (prefix: StorageKey, file: string): StorageKey =>
  * is the point: whose picture it is must be decided before it can be drawn.
  *
  * A kind whose row is also keyed by its subject's campaign (`npc_image`,
- * `battle_map_image`) answers `campaign_id` as well, and the insert writes it.
+ * `npc_banner`, `battle_map_image`) answers `campaign_id` as well, and the insert writes it.
  */
 const OWNED_SUBJECT: {
   readonly [K in ImageKind]: (
@@ -103,6 +103,9 @@ const OWNED_SUBJECT: {
     where character.id = ${subjectId} and ${ownCharacter(sql, actor)}
     for update
   `,
+  // The banner is the portrait's second picture, started beside it
+  // (`HobImages.drawCharacter`), so it has the portrait's owner and its bill.
+  characterBanner: (sql, subjectId, actor) => OWNED_SUBJECT.character(sql, subjectId, actor),
   // `campaignWritable` matches only for the campaign's creator, so the actor
   // is the one account that may start its cover and the one it is billed to —
   // and `campaign_image_owner_fkey` refuses any other at insert.
@@ -130,6 +133,8 @@ const OWNED_SUBJECT: {
       and ${campaignWritable(sql, actor, rowCampaign(sql, "npc"))}
     for update of npc
   `,
+  // The NPC's banner, beside its portrait: the same creator, the same bill.
+  npcBanner: (sql, subjectId, actor) => OWNED_SUBJECT.npc(sql, subjectId, actor),
   // An encounter's battle map, through its campaign's `campaignWritable`: only
   // the creator starts its picture, and it is billed to them.
   battleMap: (sql, subjectId, actor) => sql`

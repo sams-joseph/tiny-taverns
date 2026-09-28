@@ -4,6 +4,7 @@ import {
   type CampaignId,
   Character,
   type CharacterId,
+  CharacterBannerImages,
   CharacterPortraitImages,
   type CharacterOwnCreate,
   type CharacterOwnUpdate,
@@ -103,12 +104,16 @@ interface CharacterRow extends ProvenanceColumns {
   /** From {@link portraitColumns}; `null` when the character has no portrait record. */
   readonly portrait_id: string | null;
   readonly portrait_state: "generating" | "ready" | "failed" | null;
+  /** From {@link portraitColumns}; `null` when the character has no banner record. */
+  readonly banner_id: string | null;
+  readonly banner_state: "generating" | "ready" | "failed" | null;
 }
 
 /**
- * The portrait's two facts beside a character row: `portrait_id` and
- * `portrait_state`, as scalar subqueries so they fit a `select`, a `returning`
- * and a column list alike. **Every read that becomes a `Character` names this
+ * The portrait's two facts beside a character row, `portrait_id` and
+ * `portrait_state`, and its banner's, `banner_id` and `banner_state`, as
+ * scalar subqueries so they fit a `select`, a `returning` and a column list
+ * alike. **Every read that becomes a `Character` names this
  * fragment** — `toCharacter` dies on a row without it, so a path that forgot is
  * a failed test rather than a character whose portrait silently vanished.
  *
@@ -118,7 +123,11 @@ export const portraitColumns = (sql: SqlClient.SqlClient, prefix = "") => sql`
   (select character_portrait.id from character_portrait
    where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_id`)},
   (select character_portrait.state from character_portrait
-   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_state`)}
+   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_state`)},
+  (select character_banner.id from character_banner
+   where character_banner.character_id = character.id) as ${sql(`${prefix}banner_id`)},
+  (select character_banner.state from character_banner
+   where character_banner.character_id = character.id) as ${sql(`${prefix}banner_state`)}
 `;
 
 /**
@@ -153,20 +162,33 @@ export const seatedPortraitColumn = (
  * (most repository tests), which mints nothing — the same answer a server with
  * no URL secret gives.
  */
-export type PortraitSigner = (portraitId: string) => Character["portrait"];
+export interface PortraitSigner {
+  (portraitId: string): Character["portrait"];
+  /** The banner's paths, beside the portrait's and minted by the same reads. */
+  readonly banner: (bannerId: string) => Character["banner"];
+}
 
-const portraitSignerOf =
-  (sign: ImageSigner): PortraitSigner =>
-  (portraitId) => {
-    const paths = sign("character", portraitId);
-    return paths === null
-      ? null
-      : new CharacterPortraitImages({
-          thumbUrl: paths.thumb,
-          cardUrl: paths.card,
-          fullUrl: paths.full,
-        });
-  };
+const portraitSignerOf = (sign: ImageSigner): PortraitSigner =>
+  Object.assign(
+    (portraitId: string) => {
+      const paths = sign("character", portraitId);
+      return paths === null
+        ? null
+        : new CharacterPortraitImages({
+            thumbUrl: paths.thumb,
+            cardUrl: paths.card,
+            fullUrl: paths.full,
+          });
+    },
+    {
+      banner: (bannerId: string) => {
+        const paths = sign("characterBanner", bannerId);
+        return paths === null
+          ? null
+          : new CharacterBannerImages({ cardUrl: paths.card, fullUrl: paths.full });
+      },
+    },
+  );
 
 /** The signer a repository layer was built with, or `undefined`; see {@link PortraitSigner}. */
 export const portraitSigner: Effect.Effect<PortraitSigner | undefined> = Effect.map(
@@ -193,7 +215,7 @@ export const portraitImages = (
  * else gets a URL.
  */
 export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character => {
-  if (row.portrait_state === undefined) {
+  if (row.portrait_state === undefined || row.banner_state === undefined) {
     throw new Error("a character read did not select portraitColumns");
   }
   return new Character({
@@ -216,7 +238,11 @@ export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character
     sheet: row.body,
     version: row.version,
     portrait: portraitImages(row.portrait_state === "ready" ? row.portrait_id : null, sign),
-    portraitPending: row.portrait_state === "generating",
+    banner:
+      row.banner_state === "ready" && row.banner_id !== null && sign !== undefined
+        ? sign.banner(row.banner_id)
+        : null,
+    portraitPending: row.portrait_state === "generating" || row.banner_state === "generating",
     // Not `provenanceOf`: the shared character carries no `visibility` — who
     // at a table may see it is the seat's question now — so the row's inert
     // column must not reach the wire.

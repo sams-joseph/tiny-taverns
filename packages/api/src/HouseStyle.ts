@@ -2,11 +2,11 @@
  * The one house style every Hob-drawn image is made in, from the design
  * delivery's imagery direction (`packages/design-system/readme.md`, *Imagery*).
  *
- * **One style, three framings.** The palette and the rules are the same words for
+ * **One style, four framings.** The palette and the rules are the same words for
  * every kind of image; what differs is only the framing the place it shows
- * needs — a bust on a plate for a character or an NPC, a wide scene under a
- * card for a campaign or a Shared World, a board seen from above for an
- * encounter's battle map. Each framing is a whole style string, so a prompt builder appends
+ * needs — a bust on a plate for a character or an NPC, the same figure across a
+ * card's wide band, a wide scene under a card for a campaign or a Shared World,
+ * a board seen from above for an encounter's battle map. Each framing is a whole style string, so a prompt builder appends
  * one constant and never assembles the style itself.
  */
 
@@ -20,6 +20,14 @@ const HOUSE_RULES = "No text, no lettering, no frame, no watermark. Tasteful and
 
 /** A character's or an NPC's portrait: one figure on a plate that crops to the head. */
 export const HOUSE_PORTRAIT_STYLE = `${HOUSE_PALETTE} Single subject, centred bust, plain dark background. ${HOUSE_RULES}`;
+
+/**
+ * A character's or an NPC's banner: the same figure as the portrait, framed
+ * for a card's wide portrait band rather than a square plate. The picture is
+ * drawn at 3:2 and cut to 2:1 through its middle (`kinds.ts`), so the head is
+ * asked for inside the middle band and the setting carries the width.
+ */
+export const HOUSE_BANNER_STYLE = `${HOUSE_PALETTE} Single subject, a wide banner composition: the figure from the chest up in the centre of a wide frame, the whole head well inside the middle band of the picture with room above it, and a quiet, dim setting that suits them running out to the left and right edges instead of a plain background. Nothing important near the top or bottom edge. ${HOUSE_RULES}`;
 
 /**
  * A cover: a wide scene that reads behind a card's title, so nobody's face is

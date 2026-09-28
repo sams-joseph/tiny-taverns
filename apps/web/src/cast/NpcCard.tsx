@@ -49,7 +49,7 @@ export function NpcCard({
       className={cn("h-full overflow-hidden", chosen && "border-accent")}
     >
       <div className="relative h-portrait-band shrink-0 overflow-hidden border-b border-hairline bg-surface-sunken">
-        <NpcAvatar name={npc.name} image={npc.image} size="card" />
+        <NpcAvatar name={npc.name} image={npc.image} banner={npc.banner} size="band" />
         {npc.imagePending && (
           <Badge variant="outline" role="status" className="absolute bottom-2.5 left-card">
             Hob is drawing…

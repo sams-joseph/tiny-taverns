@@ -104,6 +104,23 @@ export function stubApi(): Plugin {
             "image/svg+xml",
           );
         }
+        // A character's or an NPC's pictures a fixture signs (`drawnPortrait`,
+        // `drawnBanner`, `drawnNpcPortrait`, `drawnNpcBanner`): the square at
+        // the size a portrait is drawn, the banner at the 2:1 it is cut to,
+        // each with a disc where the head is, so a crop or a stretch shows.
+        const picture = /^\/(portraits|npc-images|portrait-banners|npc-banners)\//.exec(
+          url.pathname,
+        );
+        if (picture !== null) {
+          const [width, height, cy] = picture[1]!.endsWith("banners")
+            ? [1536, 768, 384]
+            : [1024, 1024, 400];
+          return send(
+            200,
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}"><rect width="${String(width)}" height="${String(height)}" fill="darkslateblue"/><circle cx="${String(width / 2)}" cy="${String(cy)}" r="200" fill="lightsteelblue"/></svg>`,
+            "image/svg+xml",
+          );
+        }
         if (typeof scenario !== "string") {
           return send(400, { _tag: "BadRequest", message: `no ${SCENARIO_HEADER} header` });
         }

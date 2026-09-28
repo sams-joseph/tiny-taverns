@@ -385,8 +385,8 @@ export const hobImagesFromConfig: Layer.Layer<
     const concurrency = yield* portraitConcurrency;
     const apiKey = yield* portraitApiKey;
     yield* Effect.logInfo(
-      "Hob-drawn images are ON (character portraits, campaign and Shared World covers, NPC portraits, " +
-        "battle maps): " +
+      "Hob-drawn images are ON (character and NPC portraits with their banners, campaign and " +
+        "Shared World covers, battle maps): " +
         `model ${model.value} at ${apiUrl.value}, quality ${quality}, ${String(limits.perAccountPerDay)} per account ` +
         `and ${String(limits.perDay)} in all per day, across every kind.`,
     );

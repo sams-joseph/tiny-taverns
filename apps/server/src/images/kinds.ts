@@ -6,7 +6,8 @@
  * What a kind decides:
  *
  * - **`table` / `subjectColumn`** — its record (`character_portrait`,
- *   `campaign_image`, `shared_world_image`, `npc_image`, `battle_map_image`), one row per subject, bound to the subject and its owner
+ *   `character_banner`, `campaign_image`, `shared_world_image`, `npc_image`,
+ *   `npc_banner`, `battle_map_image`), one row per subject, bound to the subject and its owner
  *   by a composite key (see `0049_campaign_images.ts` for why a table per kind).
  * - **`root`** — the first segment of its storage keys:
  *   `{root}/{accountId}/{subjectId}/{imageId}/`.
@@ -51,8 +52,9 @@ export interface ImageKindSpec<Variant extends string> {
 
 export const IMAGE_KINDS = {
   /**
-   * A character's portrait: a square bust. `full` 1024, `card` 640 (the 4:3
-   * card at 2x), `thumb` 160 (the 28, 40 and 64 px plates at 2x). Its `tag`,
+   * A character's portrait: a square bust. `full` 1024, `card` 640 (the *My
+   * characters* 4:3 card at 2x, and a band's picture while it has no banner),
+   * `thumb` 160 (the 28, 40 and 64 px plates at 2x). Its `tag`,
    * `root` and `route` are the names portraits had before there was a second
    * kind, so every URL and stored key already issued stays good.
    */
@@ -71,6 +73,31 @@ export const IMAGE_KINDS = {
     position: "top",
     fit: "cover",
   } satisfies ImageKindSpec<"thumb" | "card" | "full">,
+  /**
+   * A character's banner: the wide picture a card's portrait band shows, drawn
+   * as its own image beside the square (`HOUSE_BANNER_STYLE`), never cut from
+   * it. Asked for at 3:2, the widest size OpenAI's image models take, and cut
+   * to 2:1: the bands it fills run from about 1.8:1 (the NPC drawer at a
+   * phone's width) to about 2.5:1 (a Party or Cast card at its widest), and
+   * 2:1 sits between them, so a band's own `object-cover` trims a sliver
+   * rather than half the picture. The crop is centred, because the banner
+   * framing keeps the head in the middle band. `card` 768 × 384 is a card band
+   * at 2x; `full` 1536 × 768 the NPC drawer's and a wide screen's.
+   */
+  characterBanner: {
+    table: "character_banner",
+    subjectColumn: "character_id",
+    root: "portrait-banners",
+    tag: "portrait-banner",
+    route: "/portrait-banners",
+    size: "1536x1024",
+    variants: {
+      card: { width: 768, height: 384 },
+      full: { width: 1536, height: 768 },
+    },
+    position: "centre",
+    fit: "cover",
+  } satisfies ImageKindSpec<"card" | "full">,
   /**
    * A campaign's cover: a 3:2 landscape scene. `full` is the drawn 1536 × 1024,
    * for the Overview's cover band at up to 2x; `card` 768 × 512, for the
@@ -114,7 +141,7 @@ export const IMAGE_KINDS = {
   /**
    * A campaign NPC's portrait: a square bust, drawn and cut exactly as a
    * character's is, so a cast and a party sit on the same plates. The cast's
-   * plates are 28 and 44 px, so every screen loads `thumb` today.
+   * plates are 28 and 44 px, so they load `thumb`; a band shows the banner.
    */
   npc: {
     table: "npc_image",
@@ -131,6 +158,24 @@ export const IMAGE_KINDS = {
     position: "top",
     fit: "cover",
   } satisfies ImageKindSpec<"thumb" | "card" | "full">,
+  /**
+   * A campaign NPC's banner: the character banner's shape exactly, for the
+   * Cast card's portrait band and the NPC drawer's header.
+   */
+  npcBanner: {
+    table: "npc_banner",
+    subjectColumn: "npc_id",
+    root: "npc-banners",
+    tag: "npc-banner",
+    route: "/npc-banners",
+    size: "1536x1024",
+    variants: {
+      card: { width: 768, height: 384 },
+      full: { width: 1536, height: 768 },
+    },
+    position: "centre",
+    fit: "cover",
+  } satisfies ImageKindSpec<"card" | "full">,
   /**
    * An encounter's battle map: the cover's size and cost (the captain's
    * decision), drawn top-down with no grid. **Never cropped** (`fit:

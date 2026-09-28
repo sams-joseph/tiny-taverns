@@ -189,6 +189,7 @@ describe("migrations", () => {
       "campaign_member",
       "campaign_story",
       "character",
+      "character_banner",
       "character_option",
       "character_option_ability_bonus",
       "character_option_equipment_reference",
@@ -243,6 +244,7 @@ describe("migrations", () => {
       "note_link",
       "npc",
       "npc_awareness_candidate",
+      "npc_banner",
       "npc_image",
       "npc_knowledge_fact",
       "npc_link",
@@ -355,6 +357,7 @@ describe("migrations", () => {
       { migration_id: 72, name: "campaign_story" },
       { migration_id: 73, name: "npc_prep" },
       { migration_id: 74, name: "npc_links" },
+      { migration_id: 75, name: "portrait_banners" },
     ]);
   }, 60_000);
 
@@ -438,6 +441,7 @@ describe("migrations", () => {
       { migration_id: 72, name: "campaign_story" },
       { migration_id: 73, name: "npc_prep" },
       { migration_id: 74, name: "npc_links" },
+      { migration_id: 75, name: "portrait_banners" },
     ]);
   }, 60_000);
 });

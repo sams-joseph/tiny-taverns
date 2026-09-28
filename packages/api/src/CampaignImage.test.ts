@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { campaignImageHasSubject, campaignImagePromptFor } from "./CampaignImage.js";
-import { HOUSE_COVER_STYLE, HOUSE_PORTRAIT_STYLE } from "./HouseStyle.js";
+import { HOUSE_BANNER_STYLE, HOUSE_COVER_STYLE, HOUSE_PORTRAIT_STYLE } from "./HouseStyle.js";
 
 const style = { style: HOUSE_COVER_STYLE };
 
@@ -104,6 +104,18 @@ describe("the house style", () => {
         "than firelight. Single subject, centred bust, plain dark background. No text, no " +
         "lettering, no frame, no watermark. Tasteful and non-graphic.",
     );
+  });
+
+  it("frames a banner in the same palette and under the same rules", () => {
+    expect(HOUSE_BANNER_STYLE.startsWith(HOUSE_PORTRAIT_STYLE.split(" Single subject")[0]!)).toBe(
+      true,
+    );
+    expect(
+      HOUSE_BANNER_STYLE.endsWith(
+        "No text, no lettering, no frame, no watermark. Tasteful and non-graphic.",
+      ),
+    ).toBe(true);
+    expect(HOUSE_BANNER_STYLE).toContain("wide banner composition");
   });
 
   it("frames a cover in the same palette and under the same rules", () => {

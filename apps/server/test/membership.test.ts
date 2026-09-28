@@ -1035,6 +1035,9 @@ describe("a stranger reads nothing", () => {
               -- campaign's own shipped reads; it has no read of its own.
               'campaign_image',
               'campaign_member',
+              -- A banner is read only as a field of the character, beside its
+              -- portrait, through the character's own shipped reads.
+              'character_banner',
               -- A portrait is read only as a field of the character, through
               -- the character's own shipped reads; it has no read of its own.
               'character_portrait',
@@ -1044,6 +1047,9 @@ describe("a stranger reads nothing", () => {
               'hob_direct_resource_update',
               -- The daily image budget's ledger: read only by the cap.
               'image_spend',
+              -- A banner is read only as a field of the NPC, beside its
+              -- portrait, through the NPC's own shipped reads.
+              'npc_banner',
               -- A portrait is read only as a field of the NPC, through the
               -- NPC's own shipped reads; it has no read of its own.
               'npc_image',

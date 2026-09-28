@@ -39,6 +39,7 @@ const sharedNpc = {
   role: "the ferryman",
   persona: { identity: { summary: "Takes names, not coin." } },
   image: null,
+  banner: null,
   imagePending: false,
 };
 

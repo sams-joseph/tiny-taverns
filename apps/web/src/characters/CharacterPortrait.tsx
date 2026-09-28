@@ -1,7 +1,8 @@
-import type { CharacterPortraitImages } from "@taverns/api";
+import type { CharacterBannerImages, CharacterPortraitImages } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import type { ReactNode } from "react";
 import { apiUrl } from "../api/client";
+import { bandSource } from "../hob/bandSource";
 import { DrawnImage } from "../hob/DrawnImage";
 import { initialsOf } from "./sheet";
 
@@ -19,18 +20,24 @@ import { initialsOf } from "./sheet";
 export function CharacterPortrait({
   name,
   portrait,
+  banner = null,
   size = "sm",
   fallback,
 }: {
   readonly name: string;
   readonly portrait: CharacterPortraitImages | null;
+  /** The wide picture a `band` shows; read by no other size. */
+  readonly banner?: CharacterBannerImages | null;
   /**
    * `row` is a list row's 28px mark (the party list, the initiative order, the
    * player table), `xs` the narrow sheet's 40px summary plate, `lg` the wide
    * sheet's 64px one; all three load the 160px thumb. `card` fills the *My
-   * characters* card's 4:3 header and loads the 640px card size.
+   * characters* card's 4:3 header, near enough square that the square's 640px
+   * card size crops least there. `band` fills a Party card's wide portrait
+   * band with the banner, or the square's card size without one
+   * (`bandSource`).
    */
-  readonly size?: "row" | "xs" | "sm" | "lg" | "card";
+  readonly size?: "row" | "xs" | "sm" | "lg" | "card" | "band";
   /**
    * For `row`: drawn in the plate's place, in a slot the plate's size, when
    * there is no portrait at all — the row's existing icon, so a list with
@@ -39,9 +46,20 @@ export function CharacterPortrait({
    */
   readonly fallback?: ReactNode;
 }) {
-  const src =
-    portrait === null ? undefined : apiUrl(size === "card" ? portrait.cardUrl : portrait.thumbUrl);
-  const image = <DrawnImage src={src} className="object-top" />;
+  const band = size === "band" ? bandSource(portrait, banner) : undefined;
+  const image =
+    size === "band" ? (
+      <DrawnImage src={band?.src} srcSet={band?.srcSet} className={band?.className} />
+    ) : (
+      <DrawnImage
+        src={
+          portrait === null
+            ? undefined
+            : apiUrl(size === "card" ? portrait.cardUrl : portrait.thumbUrl)
+        }
+        className="object-top"
+      />
+    );
 
   if (portrait === null && fallback !== undefined) {
     return (
@@ -51,7 +69,7 @@ export function CharacterPortrait({
     );
   }
 
-  if (size === "card") {
+  if (size === "card" || size === "band") {
     return (
       <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
         <span className="font-display text-display-xl leading-none font-semibold text-faint">

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
-import { drawnPortrait } from "../campaign/campaign.fixtures";
+import { drawnBanner, drawnPortrait } from "../campaign/campaign.fixtures";
 import {
   brannocPrep,
   brannocSeat,
@@ -14,6 +14,7 @@ import {
   ilse,
   installPartyServer,
   liveInvite,
+  pellSheetSeat,
   renderParty,
   sorrelSeatId,
   sorrelSheetSeat,
@@ -156,7 +157,7 @@ describe("the cards", () => {
     expect(await screen.findByRole("region", { name: "Hit points" })).toBeVisible();
   });
 
-  it("lays a character's portrait over its initials, on that card only", async () => {
+  it("lays a character's portrait over its initials, on that card only, with no banner", async () => {
     await renderParty();
     await card("Pell");
     const portraits = Array.from(document.querySelectorAll("img")).filter((img) =>
@@ -167,6 +168,29 @@ describe("the cards", () => {
     ]);
     // The initials stay under the picture, for its loading and failed states.
     expect(portraits[0]?.parentElement?.textContent).toBe("P");
+  });
+
+  it("fills a card's band with the character's banner when there is one", async () => {
+    server.routes.set(`GET ${base}/party`, {
+      status: 200,
+      body: [
+        brannocSeat,
+        { ...pellSheetSeat, character: { ...pellSheetSeat.character, banner: drawnBanner } },
+      ],
+    });
+    await renderParty();
+    await card("Pell");
+    const drawn = Array.from(document.querySelectorAll("img")).filter((img) =>
+      img.getAttribute("src")?.includes("/portrait"),
+    );
+    // The wide picture, both sizes offered, and never the square in the band.
+    expect(drawn.map((img) => img.getAttribute("src"))).toEqual([apiUrl(drawnBanner.cardUrl)]);
+    expect(drawn[0]?.getAttribute("srcset")).toBe(
+      `${apiUrl(drawnBanner.cardUrl)} 768w, ${apiUrl(drawnBanner.fullUrl)} 1536w`,
+    );
+    expect(drawn[0]?.className).toContain("object-cover");
+    expect(drawn[0]?.className).toContain("object-center");
+    expect(drawn[0]?.parentElement?.textContent).toBe("P");
   });
 
   it("offers nothing on a card that manages the seat: that is the seat's page", async () => {
