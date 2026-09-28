@@ -141,9 +141,9 @@ type SheetWrite<A> = Effect.Effect<A, unknown, HttpClient.HttpClient>;
 
 /**
  * Where an NPC's sheet is read and written, so the Stats panel draws one sheet
- * whichever NPC it is: a campaign NPC's through the creator's endpoints. (A
- * Library NPC's is the owner's, under `/library`; that target arrives with its
- * endpoints.)
+ * whichever NPC it is: a campaign NPC's through the creator's endpoints. A
+ * Library original's is its owner's, under `/library`, and gets a target of
+ * its own where a page draws it.
  */
 export interface NpcSheetTarget {
   readonly put: (client: TavernsClient, payload: NpcSheetPut) => SheetWrite<NpcSheet>;

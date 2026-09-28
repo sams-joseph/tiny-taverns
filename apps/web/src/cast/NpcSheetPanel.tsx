@@ -99,7 +99,9 @@ export function NpcSheetPanel({
   return (
     <div data-slot="npc-sheet" className="flex flex-col gap-gutter">
       <Card className="gap-4 p-card">
-        <div className="flex flex-wrap items-start gap-3">
+        {/* The actions beside the heading where the column allows, under it on
+            a phone, where beside it they squeezed the descriptor to a word a line. */}
+        <div className="flex flex-col gap-3 @md:flex-row @md:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <SectionHeading size="title">
