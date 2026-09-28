@@ -177,7 +177,7 @@ function SeatBody({
       {character !== null && (
         <section aria-label={`${character.name}'s sheet`} className="min-w-0 flex-1">
           <SheetDocument
-            character={character}
+            sheet={character.sheet}
             gearRows={[]}
             sections={drawnSections(character.sheet, false)}
             register={ignoreSection}

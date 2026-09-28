@@ -1,7 +1,6 @@
 import type {
   Ability,
   CampaignId,
-  Character,
   Equipment,
   InventoryItem,
   OwnedCharacter,
@@ -29,6 +28,7 @@ import {
   actionRows,
   coins,
   costLabel,
+  type DrawnSheet,
   type SheetSectionId,
   type SheetSectionSpec,
   slotRows,
@@ -522,25 +522,30 @@ export interface SheetWrites {
  * `drawnSections`. Read-only when `writes` is undefined — pass
  * `drawnSections(sheet, false)` then, so no section is drawn only to hold the
  * affordance that would fill it.
+ *
+ * It draws a document, not a character: a character's sheet, and an NPC's
+ * (`cast/NpcSheetPanel.tsx`), which is the same rules half with no player's
+ * half and is always read-only. What rolls and spends is the owner's
+ * character, and `writes` alone carries it.
  */
 export function SheetDocument({
-  character,
+  sheet,
   gearRows,
   sections,
   register,
   writes,
 }: {
-  readonly character: Character;
+  readonly sheet: DrawnSheet;
   /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
   readonly gearRows: ReadonlyArray<Equipment>;
   readonly sections: ReadonlyArray<SheetSectionSpec>;
   readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly writes: SheetWrites | undefined;
 }) {
-  const sheet = character.sheet;
   const spellcasting = sheet.spellcasting;
   const slots = slotRows(sheet);
   const story = sheet.story;
+  const notes = sheet.notes ?? "";
   const storyLines: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
     { label: "Appearance", value: story?.appearance },
     { label: "Personality", value: story?.personality },
@@ -560,10 +565,12 @@ export function SheetDocument({
     used: Math.max(0, Math.min(resource.max, resource.used + (pending[resource.id] ?? 0))),
   });
   const spend = (resource: SheetResource, amount: number) => {
+    // Only a writable sheet draws a spend control, so there is always an owner here.
+    if (writes === undefined) return;
     setPending((current) => ({ ...current, [resource.id]: (current[resource.id] ?? 0) + amount }));
     void submit(
-      (client) => spendResource(client, character, resource.id, amount),
-      writes === undefined ? [] : ownCharacterWrites(writes.owned),
+      (client) => spendResource(client, writes.owned.character, resource.id, amount),
+      ownCharacterWrites(writes.owned),
     ).finally(() => {
       setPending((current) => ({
         ...current,
@@ -583,6 +590,7 @@ export function SheetDocument({
     if (roll === undefined) return;
     const requestId = newRollRequestId();
     const target = writes?.rollCampaignId;
+    const characterId = writes?.owned.character.id;
     const logged: LoggedRoll = {
       ...roll,
       localId: requestId,
@@ -593,14 +601,14 @@ export function SheetDocument({
           : "Sending to the table…",
     };
     setRolls((current) => [logged, ...current].slice(0, 12));
-    if (target === undefined) return;
+    if (target === undefined || characterId === undefined) return;
 
     void submit(
       (client) =>
         client.rolls.create({
           params: { campaignId: target },
           payload: {
-            characterId: character.id,
+            characterId,
             label: roll.label,
             notation: roll.notation,
             dice: roll.dice,
@@ -964,13 +972,13 @@ export function SheetDocument({
         >
           <div className="flex flex-col gap-gutter @lg:flex-row @lg:items-start">
             <div className="min-w-0 flex-1">
-              {sheet.notes.trim() === ""
+              {notes.trim() === ""
                 ? writes !== undefined && (
                     <p className="text-caption leading-body text-muted-foreground">
                       Where they came from, and what they are still carrying about it.
                     </p>
                   )
-                : sheet.notes.split(/\n{2,}/).map((paragraph, index) => (
+                : notes.split(/\n{2,}/).map((paragraph, index) => (
                     <p
                       key={paragraph.slice(0, 32) + String(index)}
                       className={cn(

@@ -42,7 +42,8 @@ export class App {
       window.history.pushState(null, "", to);
       window.dispatchEvent(new PopStateEvent("popstate"));
     }, path);
-    await expect(this.page).toHaveURL((url) => url.pathname === path);
+    // The hash too: a screen may be one tab of a page (`npc-stats`'s `#stats`).
+    await expect(this.page).toHaveURL((url) => url.pathname + url.hash === path);
     await this.settle();
   }
 

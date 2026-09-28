@@ -251,6 +251,7 @@ export function CastScreen() {
                   encounters={view.encounters}
                   notes={view.notes}
                   party={view.party}
+                  sheet={extra.sheets.find((row) => row.npcId === npc.id)}
                   saver={saverFor({ npc, prep: prep.get(npc.id) })}
                   focusName={fresh === npc.id}
                   onClose={() => choose(undefined)}

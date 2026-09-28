@@ -7,6 +7,7 @@ import {
   blankPrep,
   campaignId,
   cazril,
+  cazrilSheetSummary,
   encounter,
   installStubServer,
   noteId,
@@ -88,7 +89,8 @@ describe("the NPC drawer", () => {
     expect(within(drawer).getByRole("textbox", { name: "Secret" })).toHaveValue(
       cazril.privateMaterial.secrets,
     );
-    expect(within(drawer).getByText("DM only")).toBeInTheDocument();
+    // The secret's badge, and the stats line's.
+    expect(within(drawer).getAllByText("DM only")).toHaveLength(2);
     expect(within(drawer).getByRole("switch", { name: "Players can see this" })).not.toBeChecked();
 
     await userEvent.keyboard("{Escape}");
@@ -321,6 +323,28 @@ describe("the NPC drawer", () => {
     // presses are all quieter.
     for (const button of within(drawer).getAllByRole("button"))
       expect(button).not.toHaveClass("bg-accent");
+  });
+
+  it("draws their stats as one line, DM only, that opens the Stats tab", async () => {
+    let drawer = await open();
+    const line = within(drawer).getByText("No stats");
+    expect(line.closest('[data-slot="npc-drawer-stats"]')).toHaveTextContent("DM only");
+    const add = within(drawer).getByRole("button", { name: "Add stats for Cazril" });
+    expect(add).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#stats`);
+    cleanup();
+
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sheets`, {
+      status: 200,
+      body: [cazrilSheetSummary],
+    });
+    drawer = await open();
+    expect(
+      within(drawer).getByText("Level 5 Human Fighter · AC 17 · HP 44 · CR 3"),
+    ).toBeInTheDocument();
+    const stats = within(drawer).getByRole("button", { name: "Open Cazril’s stats" });
+    expect(stats).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#stats`);
+    // The drawer writes none of the sheet: nothing was sent to it.
+    expect(server.calls.some((call) => call.pathname.endsWith("/sheet"))).toBe(false);
   });
 });
 

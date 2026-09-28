@@ -3,6 +3,7 @@ import type {
   Currency,
   OwnedCharacter,
   SheetAction,
+  SheetBody,
   SheetResource,
   SpellSlot,
   Trait,
@@ -192,6 +193,16 @@ export const coins = (
  * is the narrow rail's, the long one the wide spine's, and the icon is by name so
  * `packages/ui`'s table is the one place a glyph is bound.
  */
+/**
+ * The document the sheet draws: **the rules half every sheet has**
+ * (`SheetBody`), and the player's own half when the sheet is a character's.
+ * A `CharacterSheet` is one, and so is an NPC's sheet (`NpcSheet.sheet`), which
+ * has no player's half — so an NPC's sheet never draws *Story* or *Level ups*,
+ * because it has nothing to put in them.
+ */
+export type DrawnSheet = SheetBody &
+  Partial<Pick<CharacterSheet, "notes" | "journal" | "story" | "levelUps">>;
+
 export type SheetSectionId =
   "abilities" | "actions" | "magic" | "features" | "gear" | "story" | "log";
 
@@ -269,7 +280,7 @@ const written = (text: string | undefined): boolean => text !== undefined && tex
  * reader for both, so the pips and the section rule cannot disagree about
  * whether there is anything to draw.
  */
-export const slotRows = (sheet: CharacterSheet): ReadonlyArray<SpellSlot> => {
+export const slotRows = (sheet: SheetBody): ReadonlyArray<SpellSlot> => {
   const fromResources = (sheet.resources ?? []).flatMap((resource) => {
     const match = /^slot:(\d+)$/.exec(resource.id);
     return match?.[1] === undefined
@@ -285,7 +296,7 @@ export const slotRows = (sheet: CharacterSheet): ReadonlyArray<SpellSlot> => {
  * row written before the key exists reads exactly as it did — the note as the
  * range line, and no cost, because a `Trait` never carried one.
  */
-export const actionRows = (sheet: CharacterSheet): ReadonlyArray<SheetAction> =>
+export const actionRows = (sheet: SheetBody): ReadonlyArray<SheetAction> =>
   sheet.actions !== undefined && sheet.actions.length > 0
     ? sheet.actions
     : (sheet.attacks ?? []).map((attack: Trait): SheetAction => ({
@@ -348,7 +359,7 @@ export const usesNote = (
   return recharge === undefined ? count : `${count} · ${recharge}`;
 };
 
-export const sheetSections = (sheet: CharacterSheet, writable = false): SheetSections => {
+export const sheetSections = (sheet: DrawnSheet, writable = false): SheetSections => {
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
 
@@ -383,7 +394,7 @@ export const sheetSections = (sheet: CharacterSheet, writable = false): SheetSec
 
 /** The drawn sections, in the delivery's order — what the spine lists. */
 export const drawnSections = (
-  sheet: CharacterSheet,
+  sheet: DrawnSheet,
   writable = false,
 ): ReadonlyArray<SheetSectionSpec> => {
   const drawn = sheetSections(sheet, writable);

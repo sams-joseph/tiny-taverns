@@ -647,7 +647,7 @@ function SheetLayout({
         />
         <SectionSpine ref={spine} sections={sections} active={active} onGo={go} />
         <SheetDocument
-          character={owned.character}
+          sheet={owned.character.sheet}
           gearRows={gearRows}
           sections={sections}
           register={register}

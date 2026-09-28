@@ -13,6 +13,7 @@ import { Result } from "effect";
 import { useState } from "react";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure } from "../ui/form";
+import { identityNumberProblems, MAX_AC, MAX_HP, MAX_LEVEL, parseOptional } from "./create";
 import { ownCharacterWrites, saveOwnCharacter } from "./write";
 
 /**
@@ -45,15 +46,6 @@ import { ownCharacterWrites, saveOwnCharacter } from "./write";
  * lands, which is why every write on this screen re-reads rather than patching
  * what it has.
  */
-
-/** `Character.ts`'s own checks, said as a sentence before the schema says it as a type. */
-const MAX_AC = 40;
-const MAX_HP = 10_000;
-const MAX_LEVEL = 100;
-
-/** `""` ⇄ `null`. A blank number box is *I have not filled this in*, not a zero. */
-const parseOptional = (raw: string): number | null | undefined =>
-  raw.trim() === "" ? null : Number.isInteger(Number(raw)) ? Number(raw) : undefined;
 
 const isWebUrl = (raw: string): boolean => /^https?:\/\//i.test(raw);
 
@@ -104,18 +96,10 @@ export function IdentityDialog({
    * ["ac"]` is a sentence for whoever wrote the schema. `SaveFailure` is the
    * backstop.
    */
-  const problems: { name?: string; level?: string; ac?: string; hpMax?: string; url?: string } = {};
+  const problems: { name?: string; level?: string; ac?: string; hpMax?: string; url?: string } = {
+    ...identityNumberProblems({ level: levelText, ac: acText, hpMax: hpText }),
+  };
   if (name.trim() === "") problems.name = "Give them a name.";
-  if (level === undefined) problems.level = "A level is a whole number.";
-  else if (level !== null && (level < 1 || level > MAX_LEVEL)) {
-    problems.level = `Between 1 and ${String(MAX_LEVEL)}.`;
-  }
-  if (ac === undefined) problems.ac = "An armour class is a whole number.";
-  else if (ac !== null && (ac < 0 || ac > MAX_AC)) problems.ac = `Between 0 and ${String(MAX_AC)}.`;
-  if (hpMax === undefined) problems.hpMax = "Hit points are a whole number.";
-  else if (hpMax !== null && (hpMax < 0 || hpMax > MAX_HP)) {
-    problems.hpMax = `Between 0 and ${MAX_HP.toLocaleString("en")}.`;
-  }
   if (sheetUrl.trim() !== "" && !isWebUrl(sheetUrl.trim())) {
     // The schema refuses anything else, and this is why: the link is rendered
     // as an `href`, and a `javascript:` URL in one is how a text column becomes

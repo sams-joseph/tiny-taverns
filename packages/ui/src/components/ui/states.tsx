@@ -100,18 +100,23 @@ function StateCard({
   );
 }
 
-/** Nothing here yet: what it is, and what to do next. */
+/**
+ * Nothing here yet: what it is, and what to do next — and, when the next step
+ * is one press, the `action` that takes it, under the sentence.
+ */
 function EmptyState({
   icon,
   title,
   children,
+  action,
 }: {
   readonly icon: IconName;
   readonly title: string;
   readonly children: ReactNode;
+  readonly action?: ReactNode;
 }) {
   return (
-    <StateCard slot="empty-state" icon={icon} title={title}>
+    <StateCard slot="empty-state" icon={icon} title={title} footer={action}>
       {children}
     </StateCard>
   );

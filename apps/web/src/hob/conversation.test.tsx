@@ -1,5 +1,5 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
-import type { CampaignId, HobAccepted, SharedWorldId } from "@taverns/api";
+import type { CampaignId, HobAccepted, NpcId, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -11,7 +11,9 @@ import {
   session as aSessionRow,
   worldId,
 } from "../campaign/campaign.fixtures";
+import { npcSheetAtom, npcSheetsAtom } from "../cast/load";
 import { characterProposal } from "../characters/characters.fixtures";
+import { useApiAtom } from "../api/atoms";
 import type { HobScope } from "./conversation";
 import { ScopedHob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
@@ -242,6 +244,10 @@ const installHobServer = (): HobStub => {
               campaign: "The Salt Road",
             }),
       );
+
+    // The Cast's shelf of sheets and one NPC's sheet: none yet, until a test keeps one.
+    if (pathname.endsWith("/npcs/-/sheets")) return Promise.resolve(json([]));
+    if (pathname.endsWith("/sheet")) return Promise.resolve(json(null));
 
     return Promise.resolve(new Response("{}", { status: 404 }));
   });
@@ -1148,6 +1154,59 @@ describe("an NPC's sheet", () => {
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(screen.getByText("On the NPC’s sheet")).toBeInTheDocument();
+  });
+
+  it("re-reads the Stats tab's sheet and the Cast's shelf once it is kept", async () => {
+    const at = { campaignId: campaignId as CampaignId, npcId: npcId as NpcId };
+    /** What the NPC page's Stats tab and the Cast drawer read, mounted beside the panel. */
+    function SheetReaders() {
+      const [shelf] = useApiAtom(npcSheetsAtom(at.campaignId));
+      const [one] = useApiAtom(npcSheetAtom(at));
+      return <p>{`${shelf.state} ${one.state}`}</p>;
+    }
+    const sheetReads = () =>
+      server.paths.filter(
+        (path) =>
+          path === `/campaigns/${campaignId}/npcs/-/sheets` ||
+          path === `/campaigns/${campaignId}/npcs/${npcId}/sheet`,
+      ).length;
+    server.acceptBody = {
+      accepted: "npcSheet",
+      sheet: {
+        npcId,
+        level: 5,
+        race: "Dwarf",
+        subrace: "Hill Dwarf",
+        className: "Fighter",
+        descriptor: "Level 5 Hill Dwarf Fighter",
+        ac: 10,
+        hpMax: 49,
+        cr: "3",
+        version: 1,
+        updatedAt: stamp,
+        sheet,
+        origin: "assistant",
+        assistantTurnId: turnId,
+      },
+    };
+    server.frames = [began(threadId, turnId), proposed(turnId, sheetProposal), done()];
+    render(
+      <HostedSessionScope session={TEST_SESSION}>
+        <SheetReaders />
+        <ScopedHob hob={panelState(true)} scope={campaignScope} />
+      </HostedSessionScope>,
+    );
+    expect(await screen.findByText("ready ready")).toBeInTheDocument();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Give Grusk a level 5 fighter sheet.{Enter}");
+    await screen.findByText("Grusk");
+    const before = sheetReads();
+    expect(before).toBe(2);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    // Both reads go back to the wire: the Stats tab and the drawer's line show the kept draft.
+    await waitFor(() => expect(sheetReads()).toBe(before + 2));
   });
 
   it("says what keeping it replaces, and draws no rating or number Hob did not give", async () => {
