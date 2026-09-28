@@ -80,6 +80,7 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/campaigns/$campaignId/notes": `/campaigns/${campaignId}/notes`,
   "/_shell/campaigns/$campaignId/cast": `/campaigns/${campaignId}/cast`,
   "/_shell/campaigns/$campaignId/cast/follow-up": `/campaigns/${campaignId}/cast/follow-up`,
+  "/_shell/campaigns/$campaignId/cast/archived": `/campaigns/${campaignId}/cast/archived`,
   "/_shell/campaigns/$campaignId/cast/$npcId/talk": `/campaigns/${campaignId}/cast/${npcId}/talk`,
   "/_shell/campaigns/$campaignId/cast/$npcId": `/campaigns/${campaignId}/cast/${npcId}`,
   "/_shell/campaigns/$campaignId/cast/$": `/campaigns/${campaignId}/cast/not-a-uuid`,
