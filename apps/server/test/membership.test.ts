@@ -248,6 +248,10 @@ describe("the reach seam, enforced rather than asserted", () => {
       "repo/Rolls.ts",
       "repo/RuleArticles.ts",
       "repo/Spells.ts",
+      // The level-up recompute's class lookup prefers the bundle's row by
+      // `account_id is null` inside a vocabulary its caller already narrowed.
+      // An ordering, never a reach.
+      "repo/sheetLevel.ts",
       "repo/visibility.ts",
       "ruleset/import.ts",
       "ruleset/progression.ts",

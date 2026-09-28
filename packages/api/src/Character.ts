@@ -346,6 +346,56 @@ export const SheetStory = Schema.Struct({
 export type SheetStory = typeof SheetStory.Type;
 
 /**
+ * **The rules half of the sheet**: every key that answers what the creature on
+ * it can do — the six cells, features, identity numbers, skills, actions,
+ * counters, spellcasting and gear. `CharacterSheet` is this plus the player's
+ * own half (notes, story, journal, the level-up log, death saves).
+ *
+ * It is its own schema because an NPC carries a character-style sheet too, and
+ * the keys it leaves out would be wire fields with no reader. A
+ * `CharacterSheet` *is* a `SheetBody`, so a renderer or a pure rule that needs
+ * only the rules half takes this type and a character passes its own sheet
+ * unchanged. Splitting it changed no wire and no row.
+ */
+export const SheetBody = Schema.Struct({
+  /** `STR 10 (+0)` — the same cell a stat block has. */
+  abilities: Schema.Array(Ability),
+  /** Named blocks: features, spells known, equipment. The sheet's Features list. */
+  traits: Schema.Array(Trait),
+  /** The tagline's unowned half, and the identity card's numbers. */
+  identity: Schema.optional(SheetIdentity),
+  skills: Schema.optional(Schema.Array(Skill)),
+  /** `"All armour"`, `"Orcish"` — badges, an open vocabulary. */
+  proficiencies: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * The Actions tab. `Trait`s, not an `Attack` shape — see `Trait`, which grew
+   * `hit` and `note` for exactly this and for the Features list beside it.
+   *
+   * Its own key rather than more `traits` because the sheet draws the two in
+   * different tabs with different affordances, and a reader cannot tell an
+   * attack from a feature by inspecting the fields.
+   */
+  attacks: Schema.optional(Schema.Array(Trait)),
+  /**
+   * What the character can do, derived from the corpus at creation — weapon
+   * attacks from the starting kit, features with a cost — and typed by the
+   * player after. **The Actions section reads this first and `attacks` as the
+   * fallback**, so a row that already holds `attacks` draws exactly as it did.
+   */
+  actions: Schema.optional(Schema.Array(SheetAction)),
+  /**
+   * The counters: slots per level, feature uses, hit dice, a pool. Read-only on
+   * this slice — see `SheetResource`. The Spellcasting section reads its
+   * `"slot:N"` rows first and `spellcasting.slots` as the fallback.
+   */
+  resources: Schema.optional(Schema.Array(SheetResource)),
+  spellcasting: Schema.optional(Spellcasting),
+  inventory: Schema.optional(Schema.Array(InventoryItem)),
+  currency: Schema.optional(Currency),
+});
+export type SheetBody = typeof SheetBody.Type;
+
+/**
  * The document half: whatever the player pasted or the DM typed.
  *
  * `Ability` and `Trait` are the bestiary's own shapes rather than a second pair
@@ -390,40 +440,7 @@ export const CharacterSheet = Schema.Struct({
    * rather than guessing at its parts.
    */
   notes: Schema.String,
-  /** `STR 10 (+0)` — the same cell a stat block has. */
-  abilities: Schema.Array(Ability),
-  /** Named blocks: features, spells known, equipment. The sheet's Features list. */
-  traits: Schema.Array(Trait),
-  /** The tagline's unowned half, and the identity card's numbers. */
-  identity: Schema.optional(SheetIdentity),
-  skills: Schema.optional(Schema.Array(Skill)),
-  /** `"All armour"`, `"Orcish"` — badges, an open vocabulary. */
-  proficiencies: Schema.optional(Schema.Array(Schema.String)),
-  /**
-   * The Actions tab. `Trait`s, not an `Attack` shape — see `Trait`, which grew
-   * `hit` and `note` for exactly this and for the Features list beside it.
-   *
-   * Its own key rather than more `traits` because the sheet draws the two in
-   * different tabs with different affordances, and a reader cannot tell an
-   * attack from a feature by inspecting the fields.
-   */
-  attacks: Schema.optional(Schema.Array(Trait)),
-  /**
-   * What the character can do, derived from the corpus at creation — weapon
-   * attacks from the starting kit, features with a cost — and typed by the
-   * player after. **The Actions section reads this first and `attacks` as the
-   * fallback**, so a row that already holds `attacks` draws exactly as it did.
-   */
-  actions: Schema.optional(Schema.Array(SheetAction)),
-  /**
-   * The counters: slots per level, feature uses, hit dice, a pool. Read-only on
-   * this slice — see `SheetResource`. The Spellcasting section reads its
-   * `"slot:N"` rows first and `spellcasting.slots` as the fallback.
-   */
-  resources: Schema.optional(Schema.Array(SheetResource)),
-  spellcasting: Schema.optional(Spellcasting),
-  inventory: Schema.optional(Schema.Array(InventoryItem)),
-  currency: Schema.optional(Currency),
+  ...SheetBody.fields,
   deathSaves: Schema.optional(DeathSaves),
   levelUps: Schema.optional(Schema.Array(LevelUp)),
   journal: Schema.optional(Schema.Array(JournalEntry)),

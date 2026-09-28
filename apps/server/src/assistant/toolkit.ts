@@ -17,7 +17,6 @@ import {
   type CharacterOption,
   type CharacterSheet,
   type CharacterSpellRules,
-  type ClassEntry,
   Conflict,
   Creature,
   CreatureId,
@@ -38,7 +37,6 @@ import {
   type HobRosterLine,
   NoteCategory,
   NpcKnowledgeSourceKind,
-  isClassOption,
   isRaceOption,
   modifierFor,
   NotFound,
@@ -50,17 +48,15 @@ import {
   optionNamed,
   SearchHit,
   SearchSource,
-  seedFor,
-  sheetGrantsFor,
   sheetWithSpellSelection,
-  identityGrants,
+  startingSheetBody,
   spellById,
   spellKnownFor,
   spellNoteFor,
   spellSelectionProblems,
   SpellId,
+  STARTING_LEVEL,
   type SpellKnown,
-  withSavingThrows,
   Session,
   SessionEvent,
   SessionId,
@@ -2529,18 +2525,9 @@ type SpellsForDraft = (draft: {
 }) => Effect.Effect<CharacterSpellRules, NotFound, CurrentActor>;
 
 /**
- * The numbers `seedFor` reads, out of a row `optionNamed` returned.
- *
- * The narrowing is the union's own (`isClassOption`), and a `ClassBody` is a
- * `ClassEntry` structurally — `Ruleset.ts` says so on purpose, which is what
- * keeps the arithmetic free of the wire schemas. `undefined` in, `undefined`
- * out: an unresolved label is a seed with no hit die, which is the shipped
- * degrade rather than a new one.
+ * The race's numbers, out of a row `optionNamed` returned — what the ability
+ * ranking's bonus choice is read against. `undefined` in, `undefined` out.
  */
-const classEntryOf = (option: CharacterOption | undefined): ClassEntry | undefined =>
-  option !== undefined && isClassOption(option) ? option.body : undefined;
-
-/** {@link classEntryOf}'s twin. */
 const raceEntryOf = (option: CharacterOption | undefined): RaceEntry | undefined =>
   option !== undefined && isRaceOption(option) ? option.body : undefined;
 
@@ -2845,59 +2832,36 @@ const draftingHandlersFor = (
       }
 
       /**
-       * The three numbers a character starts on — worked out **before** the
-       * document is assembled, because race and subrace bonuses move the six
-       * cells first.
+       * The rules half of the sheet, through `startingSheetBody` — **the one
+       * assembly the manual form's `payloadFrom` and an NPC's quick start
+       * share**, so the paths cannot disagree about what a Hill Dwarf Fighter
+       * starts with. See `@taverns/api`'s `SheetGrants`.
        *
-       * `seedFor` applies those bonuses to the ranking's standard array and
-       * hands the moved cells back on `seed.abilities`, which is what goes into
-       * `sheet` below. A draft whose race raises constitution really does come
-       * back with more hit points *and* a sheet whose constitution cell says so,
-       * and there is no way to take one without the other.
-       *
-       * `sheetGrantsFor` is the other half of the corpus and is **shared with
-       * the manual form's `payloadFrom`** — level-1 class features, racial
-       * traits, the three sources' proficiencies, the background's kit — so
-       * the two creation paths cannot disagree about what a Hill Dwarf
-       * Fighter starts with. See `@taverns/api`'s `SheetGrants`.
+       * The seed inside it applies the race and subrace bonuses to the
+       * ranking's standard array first, and every number after is read off the
+       * moved cells: a draft whose race raises constitution really does come
+       * back with more hit points *and* a sheet whose constitution cell says so.
+       * The level is `STARTING_LEVEL`: the captain fixes Hob's drafts at 1. No kit
+       * side is picked here — the tool takes no picks, so side (a) of every
+       * choice is what a draft carries, exactly as the form does before the
+       * player touches the picker — and the model's own `kit` names are
+       * appended as plain lines below.
        */
       const raceEntry = raceEntryOf(raceOption);
-      const seed = seedFor({
-        classEntry: classEntryOf(classOption),
-        raceEntry,
-        subraceEntry: subraceOption,
-        raceBonusChoices: raceChoiceBonuses(raceEntry, abilityOrder),
-        abilities: abilitiesFrom(abilityOrder),
-      });
-      // The seed's cells go in, because a weapon's to-hit and a spell save DC
-      // are read off them; the level is the seed's, which the captain fixes at
-      // 1. No kit side is picked here — the tool takes no picks, so side (a)
-      // of every choice is what a draft carries, exactly as the form does
-      // before the player touches the picker — and the model's own `kit`
-      // names are appended as plain lines below.
-      const grants = sheetGrantsFor({
+      const { body, seed } = startingSheetBody({
         classOption: asClassOption(classOption),
         raceOption: asRaceOption(raceOption),
-        subraceName: subraceOption?.name ?? namedSubrace,
+        subrace: namedSubrace,
         backgroundOption: asBackgroundOption(backgroundOption),
-        level: seed.level,
-        abilities: seed.abilities,
-      });
-      const abilities = withSavingThrows(
-        seed.abilities,
-        grants.savingThrows,
-        grants.proficiencyBonus,
-      );
-
-      const identity = {
-        ...identityGrants(grants),
-        ...(blank(subclass) === undefined ? {} : { subclass: blank(subclass)! }),
         // The campaign's own spelling where it resolved, the model's where it
         // did not — the same rule the race and the class labels follow.
-        ...(blank(backgroundOption?.name ?? background) === undefined
-          ? {}
-          : { background: blank(backgroundOption?.name ?? background)! }),
-      };
+        background: backgroundOption?.name ?? background,
+        subclass: blank(subclass),
+        level: STARTING_LEVEL,
+        abilities: abilitiesFrom(abilityOrder),
+        raceBonusChoices: raceChoiceBonuses(raceEntry, abilityOrder),
+      });
+
       const story = {
         ...(blank(bond) === undefined ? {} : { bond: blank(bond)! }),
         ...(blank(ideal) === undefined ? {} : { ideal: blank(ideal)! }),
@@ -2917,35 +2881,21 @@ const draftingHandlersFor = (
          */
         const bundled =
           modelKit.length === 0 ? [] : yield* as(repositories.equipment.bundledNamed(modelKit));
-        const carried = [...grants.inventory, ...gearLinesNamed(modelKit, bundled)];
+        const carried = [...(body.inventory ?? []), ...gearLinesNamed(modelKit, bundled)];
         /**
-         * The document, assembled here so the card and the row cannot disagree.
-         *
-         * Every optional key is omitted rather than written empty, for the reason
-         * `emptyCharacterSheet` names only its three required keys: a sheet with
-         * `skills: []` on it draws a Skills section that says nothing, where a
-         * sheet without the key draws the section's own invitation to fill it in.
+         * The document, assembled here so the card and the row cannot disagree:
+         * the rules half above, with what only this caller knows — the backstory,
+         * the story lines, the model's skills and its own kit lines. Every
+         * optional key is omitted rather than written empty, for the reason
+         * `startingSheetBody` gives.
          */
         const baseSheet: CharacterSheet = {
           notes: blank(backstory) ?? "",
-          // The seed's, not the ranking's: these are the cells with the race and
-          // subrace bonuses applied, and they are the cells its armour class and
-          // hit points were read from — with the class's saving throws marked on
-          // them, numbers only where the progression corpus supplied the bonus.
-          abilities,
-          traits: grants.traits,
-          ...(Object.keys(identity).length === 0 ? {} : { identity }),
+          ...body,
           ...(Object.keys(story).length === 0 ? {} : { story }),
           ...((skills ?? []).length === 0 ? {} : { skills: skillsFrom(skills ?? []) }),
-          ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
-          // The corpus's half of the Actions and Spellcasting sections, through
-          // the same `sheetGrantsFor` the form composes — so a drafted Fighter
-          // and a hand-filled one carry the same Longsword line.
-          ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
-          ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
-          ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
+          // The kit's lines, then the model's: empty only when the body had none.
           ...(carried.length === 0 ? {} : { inventory: carried }),
-          ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
         };
 
         const spellBook = yield* as(

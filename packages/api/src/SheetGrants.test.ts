@@ -9,11 +9,14 @@ import {
 import type { Ability } from "./Creature.js";
 import type { KitEquipment, OptionClassLevel } from "./CharacterOption.js";
 import { FEATURE_OVERLAY, RACIAL_TRAIT_OVERLAY } from "./ActionOverlay.js";
+import { seedFor } from "./Ruleset.js";
 import {
   defaultKitPicks,
   identityGrants,
   kitLinesFor,
   sheetGrantsFor,
+  startingSeed,
+  startingSheetBody,
   withSavingThrows,
 } from "./SheetGrants.js";
 
@@ -1196,5 +1199,116 @@ describe("the overlay", () => {
         expect(entry.counter !== undefined || entry.max !== undefined).toBe(true);
       }
     }
+  });
+});
+
+describe("startingSheetBody", () => {
+  /**
+   * The assembly both composers wrote out by hand before it was shared: the
+   * seed, the grants at the seed's level, the saves marked, and every optional
+   * key omitted when empty. Pinned here so the shared one is shown to be the
+   * same document, not a new one.
+   */
+  const handAssembly = (input: {
+    readonly abilities: ReadonlyArray<Ability>;
+    readonly background: string;
+    readonly subclass?: string;
+  }) => {
+    const seed = seedFor({
+      classEntry: DRUID.body,
+      raceEntry: DWARF.body,
+      subraceEntry: DWARF.body.subraces[0],
+      abilities: input.abilities,
+    });
+    const grants = sheetGrantsFor({
+      classOption: DRUID,
+      raceOption: DWARF,
+      subraceName: "Hill Dwarf",
+      backgroundOption: ACOLYTE,
+      level: seed.level,
+      abilities: seed.abilities,
+    });
+    const identity = {
+      ...identityGrants(grants),
+      ...(input.subclass === undefined ? {} : { subclass: input.subclass }),
+      background: input.background,
+    };
+    return {
+      abilities: withSavingThrows(seed.abilities, grants.savingThrows, grants.proficiencyBonus),
+      traits: grants.traits,
+      identity,
+      ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
+      ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
+      ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
+      ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
+      ...(grants.inventory.length === 0 ? {} : { inventory: grants.inventory }),
+      ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
+    };
+  };
+
+  it("composes the same document the hand assembly did at level 1", () => {
+    const abilities = cells([10, 12, 14, 8, 15, 13]);
+    const { body, seed } = startingSheetBody({
+      classOption: DRUID,
+      raceOption: DWARF,
+      subrace: "hill dwarf",
+      backgroundOption: ACOLYTE,
+      background: "Acolyte",
+      subclass: "Circle of the Land",
+      abilities,
+    });
+    expect(body).toEqual(
+      handAssembly({ abilities, background: "Acolyte", subclass: "Circle of the Land" }),
+    );
+    expect(seed).toEqual(
+      seedFor({
+        classEntry: DRUID.body,
+        raceEntry: DWARF.body,
+        subraceEntry: DWARF.body.subraces[0],
+        abilities,
+      }),
+    );
+  });
+
+  it("omits a blank subclass and background rather than writing them empty", () => {
+    const { body } = startingSheetBody({
+      classOption: DRUID,
+      abilities: cells([10, 12, 14, 8, 15, 13]),
+      background: "  ",
+      subclass: "",
+    });
+    expect(body.identity?.subclass).toBeUndefined();
+    expect(body.identity?.background).toBeUndefined();
+  });
+
+  it("writes nothing but the two required keys when nothing resolved", () => {
+    expect(startingSheetBody({ abilities: [] }).body).toEqual({ abilities: [], traits: [] });
+  });
+
+  it("writes the grants and the hit points at one level, so a Paladin 5 is level 5 throughout", () => {
+    // CON 14, and the Half-Orc's +1 makes 15: still +2.
+    const abilities = cells([16, 10, 14, 8, 12, 16]);
+    const { body, seed } = startingSheetBody({
+      classOption: PALADIN,
+      raceOption: HALF_ORC,
+      abilities,
+      level: 5,
+    });
+    expect(seed.level).toBe(5);
+    // 10 + 2, then four levels of 6 + 2.
+    expect(seed.hpMax).toBe(44);
+    expect(body.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+    expect(body.resources?.find((resource) => resource.id === "hit-dice")?.max).toBe(5);
+    expect(body.resources?.find((resource) => resource.id === "slot:2")?.max).toBe(2);
+  });
+
+  it("shows the same seed a form reads before anything is composed", () => {
+    const sources = {
+      classOption: PALADIN,
+      raceOption: HALF_ORC,
+      abilities: cells([16, 10, 14, 8, 12, 16]),
+      level: 7,
+    };
+    expect(startingSeed(sources)).toEqual(startingSheetBody(sources).seed);
   });
 });

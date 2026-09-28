@@ -37,7 +37,7 @@ The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characte
 - Which rows: `ownCharacter` in `repo/visibility.ts`, `character.account_id = <actor>`, compared to nothing a caller supplied. Credential scope is deliberately not applied, because a top-level character is in no campaign for a scope to be about.
 - Which columns: `CharacterOwnUpdate`, a second schema rather than a field filter over a DM type. It carries the durable columns and the whole `sheet`. `hpCurrent`, `tempHp`, `conditions`, `inspiration`, `visibility` and `accountId` have no field, so a control for them does not compile. Excess keys are dropped on encode and on decode, so a payload naming only live keys is an empty patch answering `200` unchanged.
 
-`Characters.updateOwn` runs outside a transaction: a select for the version check and subrace validation, then the guarded UPDATE. It rings no bell, because nothing live moved. A level or class change with no `sheet` in the patch triggers `recomputeForLevel`, which rewrites derived spell lines and slot resources and leaves custom lines standing. `player-write.test.ts` pins the refusals and that a payload of live keys leaves the row untouched.
+`Characters.updateOwn` runs outside a transaction: a select for the version check and subrace validation, then the guarded UPDATE. It rings no bell, because nothing live moved. A level or class change with no `sheet` in the patch triggers `recomputeForLevel` (`repo/sheetLevel.ts`, the one level-up rule for any sheet's rules half, run against the vocabulary its caller names). It rewrites derived spell lines, slots and hit dice and leaves custom lines standing; it adds no features and moves neither the proficiency bonus nor HP. `player-write.test.ts` pins the refusals and that a payload of live keys leaves the row untouched.
 
 Whole-document writes race and that is accepted: two edits from two tabs do not merge, and `expectedVersion` turns the loss into a `Conflict` instead of a silent overwrite.
 
@@ -80,13 +80,23 @@ A character's portrait is the first kind of Hob-drawn image. [Images](images.md)
   - `portraits.test.ts` covers the owner, the creator, a seat-mate before and after the seat is shared, and a stranger. `portrait-plates.test.ts` covers the runner, the recap and the player table, including a hidden seat and a combatant row whose character has no seat here.
 - **The screens** use `CharacterPortrait` (`apps/web/src/characters/CharacterPortrait.tsx`) on the _My characters_ card, the Party card's band (its `band` size, the banner or else the square) and both sheet plates. The _My characters_ card is 4:3, near enough square that it keeps the square's card size: initials always, the image over them when there is one, initials again on any error. While `portraitPending`, the card and sheet say Hob is drawing and re-read through `useHobDrawingPolling`. The list rows (both party lists, the runner's PC rows, the player table's `you` and `ally`) use its 28px `row` size. With no portrait, a row keeps its existing icon (`fallback`) or, on the player table, draws nothing, so a server with images off looks as it did. Only the card and the sheet show the pending state; a list row shows a portrait from the first read after it is ready.
 
-## `sheetGrantsFor`: the corpora build the starting sheet
+## `startingSheetBody`: the corpora build the starting sheet
 
-`sheetGrantsFor` in `packages/api/src/SheetGrants.ts` is the one implementation of the starting sheet. Both composers call it, the form's `payloadFrom` (`apps/web/src/characters/create.ts`) and Hob's `proposeCharacter` handler (`apps/server/src/assistant/toolkit.ts`), so the two paths cannot disagree (`create.test.ts`, `hob-character.test.ts`, `SheetGrants.test.ts`).
+`startingSheetBody` in `packages/api/src/SheetGrants.ts` is the one assembly of a starting sheet's rules half. The form's `payloadFrom` (`apps/web/src/characters/create.ts`) and Hob's `proposeCharacter` handler (`apps/server/src/assistant/toolkit.ts`) both call it so the two paths cannot disagree (`create.test.ts`, `hob-character.test.ts`, `SheetGrants.test.ts`). Each caller adds only what it alone knows: the notes and story, Hob's skills and the model's own kit lines.
 
-It reads only resolved `CharacterOption`s: level-1 class features (top-level grants only; a `parent_feature_id` is a pick made later), race and subrace trait grants, proficiencies from three sources (a `"Saving Throw: …"` line becomes the mark on the ability cell via `withSavingThrows`, `"Choose …"` lines are dropped), both starting kits and gold, and the identity keys the corpora answer (`identityGrants`: speed, proficiency, hit dice). Weapon attacks come off the kit's equipment rows with the 2014 ability rule; slots and casting numbers off `class_level.body.spellcasting` and the class's `spellcastingAbility`; the popular counters off `classSpecific`. The save number is written only when the level-1 `class_level` row supplied a proficiency bonus; a homebrew class without progression rows still gets the mark. Feats are deliberately not consulted: no 2014 SRD feat applies at level 1.
+It runs `seedFor` first, then `sheetGrantsFor` at the seed's level on the moved cells, then marks the class's saves with `withSavingThrows`. `startingSeed` is the seed half alone, which the form reads to fill its two boxes before anything is composed.
 
-`seedFor` in `packages/api/src/Ruleset.ts` is the arithmetic beside it: race and subrace bonuses applied to the cells, then AC and HP derived from those same cells. It is seed-only; nothing calls it once a row exists. Backgrounds seed no scores in 2014.
+`sheetGrantsFor` reads only resolved `CharacterOption`s:
+
+- top-level class features up to the level (a `parent_feature_id` is a pick made later), with prose only at level 1;
+- race and subrace trait grants;
+- proficiencies from three sources: a `"Saving Throw: …"` line becomes the mark on the ability cell, and `"Choose …"` lines are dropped;
+- both starting kits and gold;
+- the identity keys the corpora answer (`identityGrants`: speed, proficiency, hit dice).
+
+Weapon attacks come off the kit's equipment rows with the 2014 ability rule; slots and casting numbers off `class_level.body.spellcasting` and the class's `spellcastingAbility`; the popular counters off `classSpecific`. The save number is written only when a `class_level` row supplied a proficiency bonus; a homebrew class without progression rows still gets the mark. Feats are deliberately not consulted.
+
+`seedFor` in `packages/api/src/Ruleset.ts` is the arithmetic beside it: race and subrace bonuses applied to the cells, then AC and HP derived from those same cells. HP is the 2014 fixed value at the sheet's level: the whole hit die at level 1, then the die's average rounded up at each level after, CON each time, plus the race's per-level bonus once per level. AC is the unarmoured rule only, so an armoured class seeds low and the box stays editable. The form seeds at its Level box and re-seeds when it changes; Hob always drafts at `STARTING_LEVEL`, by the maintainer's call. It is seed-only; nothing calls it once a row exists. Backgrounds seed no scores in 2014.
 
 Corpus import order matters on a fresh database: `equipment:import` before `ruleset:import`, and `ruleset:import` before `spell:import`. Wrong order fails loudly.
 
@@ -110,7 +120,7 @@ The server never nulls a dead `equipmentId`; a line whose row is absent draws as
 
 ## The sheet document and its editors
 
-A field earns a column when something in the product reads it (a filter, a predicate, the seed); everything else is an optional key on `body`, which is why the drawn sheet cost no migration. `Ability` and `Trait` are the bestiary's shapes extended, not a second pair.
+A field earns a column when something in the product reads it (a filter, a predicate, the seed); everything else is an optional key on `body`, which is why the drawn sheet cost no migration. The document is `CharacterSheet`: `SheetBody` (`packages/api/src/Character.ts`), the rules half, plus the player's own half (notes, story, journal, level-up log, death saves). A rule that needs only the rules half, such as `recomputeForLevel`, takes `SheetBody`, so a sheet that is not a character's can share it. `Ability` and `Trait` are the bestiary's shapes extended, not a second pair.
 
 `sheet.story.appearance` (at most `APPEARANCE_MAX`, 400 characters, the bound an NPC's `persona.identity.appearance` shares) is the one story line both composers write: the form's _Appearance_ box and `proposeCharacter`'s `appearance`, and the Story editor (`BackstoryDialog`) corrects it after. It is its own key rather than more `notes` because it is what a portrait is drawn from. `portraitPromptFor` in `packages/api/src/Portrait.ts` is the one implementation of that prompt, for the server and any screen that says what a portrait reads; it takes subject, appearance, up to two carried lines and the background, and never the name, backstory, bond/ideal/flaw or scores. `portraitHasSubject` is the guard a caller skips generation on.
 

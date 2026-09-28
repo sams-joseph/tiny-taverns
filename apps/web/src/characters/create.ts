@@ -12,8 +12,8 @@ import type {
   KitEquipment,
   KitPick,
   RaceBody,
-  SheetIdentity,
   StartingKit,
+  StartingSheetSources,
   SubraceBody,
 } from "@taverns/api";
 import {
@@ -23,15 +23,13 @@ import {
   asRaceOption,
   bonusesLine,
   defaultKitPicks,
-  emptyCharacterSheet,
-  identityGrants,
   inCategory,
   optionNamed,
   seedFor,
-  sheetGrantsFor,
   STARTING_LEVEL,
+  startingSeed,
+  startingSheetBody,
   subraceNamed,
-  withSavingThrows,
 } from "@taverns/api";
 import { abilitiesFrom, abilityDrafts, badScores, type AbilityDraft } from "./abilities";
 
@@ -306,22 +304,35 @@ export const pickKitRow = (
   }),
 });
 
+/**
+ * The draft as `startingSheetBody` reads it: the picked options, the cells as
+ * placed, the race's chosen bonuses, the kit picks and the Level box. The seed
+ * the form shows and the sheet it sends are both composed from this, so the
+ * hit points in the box are the ones the sheet was written at.
+ */
+const startingSourcesOf = (
+  draft: CharacterDraft,
+  options: ReadonlyArray<CharacterOption>,
+): StartingSheetSources => {
+  const raceOption = asRaceOption(raceIn(draft, options));
+  return {
+    classOption: classIn(draft, options),
+    raceOption,
+    subrace: draft.subrace,
+    backgroundOption: backgroundIn(draft, options),
+    background: draft.background,
+    level: parseOptional(draft.level) ?? undefined,
+    abilities: abilitiesFrom(draft.abilities),
+    raceBonusChoices: choiceFrom(raceOption?.body, draft.raceBonusChoices),
+    kitChoices: draft.kitChoices,
+    backgroundKitChoices: draft.backgroundKitChoices,
+  };
+};
+
 export const seedOf = (
   draft: CharacterDraft,
   options: ReadonlyArray<CharacterOption>,
-): CharacterSeed => {
-  const classOption = optionNamed(options, "class", draft.className);
-  const raceOption = raceIn(draft, options);
-  const subraceOption = subraceIn(draft, options);
-  return seedFor({
-    classEntry: classOption?.kind === "class" ? classOption.body : undefined,
-    raceEntry: raceOption?.kind === "race" ? raceOption.body : undefined,
-    subraceEntry: subraceOption,
-    raceBonusChoices:
-      raceOption?.kind === "race" ? choiceFrom(raceOption.body, draft.raceBonusChoices) : [],
-    abilities: abilitiesFrom(draft.abilities),
-  });
-};
+): CharacterSeed => startingSeed(startingSourcesOf(draft, options));
 
 export const seededDraft = (
   draft: CharacterDraft,
@@ -347,52 +358,24 @@ export const payloadFrom = (
   const race = draft.race.trim();
   const subrace = draft.subrace.trim();
   const className = draft.className.trim();
-  const background = draft.background.trim();
   const sheetUrl = draft.sheetUrl.trim();
   const notes = draft.notes.trim();
   const appearance = draft.appearance.trim().slice(0, APPEARANCE_MAX);
-  // The corpora's half of the sheet, through the same `sheetGrantsFor` Hob's
-  // `proposeCharacter` composes — level-1 class features, racial traits, the
-  // three sources' proficiencies, the background's kit — so a hand-filled Hill
-  // Dwarf Fighter and a drafted one start on the same document.
-  const raceOption = raceIn(draft, options);
-  const subraceOption = subraceIn(draft, options);
-  // The seed's cells go in, because a weapon's to-hit and a spell save DC are
-  // read off them; the level is the box's, so a Paladin 5 typed here gets the
-  // level-5 slots; the kit is as picked, side (a) where it was not.
-  const seed = seedOf(draft, options);
-  const grants = sheetGrantsFor({
-    classOption: classIn(draft, options),
-    raceOption: asRaceOption(raceOption),
-    subraceName: subraceOption?.name ?? (subrace === "" ? undefined : subrace),
-    backgroundOption: backgroundIn(draft, options),
-    level: level ?? undefined,
-    abilities: seed.abilities,
-    kitChoices: draft.kitChoices,
-    backgroundKitChoices: draft.backgroundKitChoices,
-  });
-  const abilities = withSavingThrows(seed.abilities, grants.savingThrows, grants.proficiencyBonus);
-  const identity: SheetIdentity = {
-    ...identityGrants(grants),
-    ...(background === "" ? {} : { background }),
-  };
+  // The rules half, through the same `startingSheetBody` Hob's
+  // `proposeCharacter` composes — class features to the Level box's level,
+  // racial traits, the three sources' proficiencies, the kits as picked, side
+  // (a) where they were not — so a hand-filled Hill Dwarf Fighter and a drafted
+  // one start on the same document, and a Paladin 5 typed here gets the level-5
+  // slots.
+  const { body } = startingSheetBody(startingSourcesOf(draft, options));
   const sheet: CharacterSheet = {
-    ...emptyCharacterSheet,
+    ...body,
     notes,
-    abilities,
-    traits: grants.traits,
-    ...(Object.keys(identity).length === 0 ? {} : { identity }),
     // The same key Hob's `proposeCharacter` writes its appearance line to.
     ...(appearance === "" ? {} : { story: { appearance } }),
-    ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
-    // The corpus's half of the Actions and Spellcasting sections, through the
-    // same call Hob's `proposeCharacter` makes.
-    ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
-    ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
-    ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
-    ...(grants.inventory.length === 0 ? {} : { inventory: grants.inventory }),
-    ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
   };
+  const bodyEmpty =
+    body.abilities.length === 0 && body.traits.length === 0 && Object.keys(body).length === 2;
 
   return {
     name: draft.name.trim(),
@@ -404,18 +387,6 @@ export const payloadFrom = (
     ...(ac === null || ac === undefined ? {} : { ac }),
     ...(hpMax === null || hpMax === undefined ? {} : { hpMax }),
     ...(sheetUrl === "" ? {} : { sheetUrl }),
-    ...(notes === "" &&
-    appearance === "" &&
-    abilities.length === 0 &&
-    Object.keys(identity).length === 0 &&
-    grants.proficiencies.length === 0 &&
-    grants.traits.length === 0 &&
-    grants.actions.length === 0 &&
-    grants.resources.length === 0 &&
-    grants.spellcasting === undefined &&
-    grants.inventory.length === 0 &&
-    grants.gold === undefined
-      ? {}
-      : { sheet }),
+    ...(notes === "" && appearance === "" && bodyEmpty ? {} : { sheet }),
   };
 };
