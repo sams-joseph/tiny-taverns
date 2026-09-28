@@ -54,6 +54,7 @@ import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
+import { NpcPreps } from "./repo/NpcPrep.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -1239,6 +1240,7 @@ const NpcsLive = HttpApiBuilder.group(
     const proposals = yield* NpcProposals;
     const awareness = yield* NpcAwareness;
     const followUps = yield* NpcFollowUps;
+    const preps = yield* NpcPreps;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
@@ -1276,6 +1278,15 @@ const NpcsLive = HttpApiBuilder.group(
         )
         .handle("followUp", ({ params }) =>
           asCreator(params.campaignId, (creator) => followUps.pending(creator)),
+        )
+        // An NPC's prep is the creator's alone, behind the proof exactly as a
+        // seat's is, so anybody else is the ordinary `NotFound` before a prep
+        // row is read or written.
+        .handle("prepList", ({ params, query }) =>
+          asCreator(params.campaignId, (creator) => preps.list(creator, query)),
+        )
+        .handle("updatePrep", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => preps.update(creator, params.npcId, payload)),
         )
         .handle("findById", ({ params }) =>
           asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),

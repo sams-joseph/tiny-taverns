@@ -25,6 +25,7 @@ import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcAwareness } from "../src/repo/NpcAwareness.js";
+import { NpcPreps } from "../src/repo/NpcPrep.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -82,6 +83,7 @@ const services = Layer.mergeAll(
   NpcKnowledge.layer,
   NpcMemories.layer,
   NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+  NpcPreps.layer,
   Options.layer,
   Recap.layer,
   Search.layer,
@@ -652,6 +654,7 @@ describe("a campaign with nothing written down", () => {
     NpcKnowledge.layer,
     NpcMemories.layer,
     NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+    NpcPreps.layer,
     Options.layer,
     Recap.layer,
     Search.layer,

@@ -242,6 +242,7 @@ describe("migrations", () => {
       "npc_image",
       "npc_knowledge_fact",
       "npc_memory",
+      "npc_prep",
       "npc_proposal",
       "npc_thread",
       "npc_turn",
@@ -347,6 +348,7 @@ describe("migrations", () => {
       { migration_id: 70, name: "session_entry" },
       { migration_id: 71, name: "campaign_act" },
       { migration_id: 72, name: "campaign_story" },
+      { migration_id: 73, name: "npc_prep" },
     ]);
   }, 60_000);
 
@@ -428,6 +430,7 @@ describe("migrations", () => {
       { migration_id: 70, name: "session_entry" },
       { migration_id: 71, name: "campaign_act" },
       { migration_id: 72, name: "campaign_story" },
+      { migration_id: 73, name: "npc_prep" },
     ]);
   }, 60_000);
 });

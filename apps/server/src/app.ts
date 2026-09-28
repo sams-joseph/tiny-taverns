@@ -67,6 +67,7 @@ import { NpcMemories } from "./repo/NpcMemories.js";
 import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
+import { NpcPreps } from "./repo/NpcPrep.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -194,6 +195,7 @@ export const assistantFromConfig: Layer.Layer<
   | NpcKnowledge
   | NpcMemories
   | NpcAwareness
+  | NpcPreps
   | Npcs
   | Options
   | Recap
@@ -426,6 +428,7 @@ export const servicesOver = <E>(
     | NpcKnowledge
     | NpcMemories
     | NpcAwareness
+    | NpcPreps
     | Npcs
     | Options
     | Recap
@@ -482,6 +485,7 @@ export const servicesOver = <E>(
   | NpcProposals
   | NpcAwareness
   | NpcFollowUps
+  | NpcPreps
   | Npcs
   | NpcThreads
   | ObjectStorage
@@ -597,6 +601,11 @@ export const servicesOver = <E>(
     // The follow-up queue names each NPC with its portrait. Only the handlers
     // hold it.
     NpcFollowUps.layer.pipe(Layer.provide(imageUrls)),
+    // Each NPC's attitude, status, whereabouts and first meeting: creator-only,
+    // every method behind the `CampaignCreatorActor` proof. The handlers write
+    // it; Hob's creator toolkit reads it through `getNpc` and nothing writes it
+    // for a model.
+    NpcPreps.layer,
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -725,6 +734,7 @@ export const servicesOver = <E>(
         NpcKnowledge.layer,
         NpcMemories.layer,
         NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+        NpcPreps.layer,
         HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of
@@ -797,6 +807,7 @@ export const applicationOver = <E>(
     | NpcProposals
     | NpcAwareness
     | NpcFollowUps
+    | NpcPreps
     | Npcs
     | NpcThreads
     | Options

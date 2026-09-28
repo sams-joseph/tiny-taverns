@@ -26,6 +26,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcAwareness } from "../src/repo/NpcAwareness.js";
+import { NpcPreps } from "../src/repo/NpcPrep.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Recap } from "../src/repo/Recap.js";
@@ -70,6 +71,7 @@ const services = Layer.mergeAll(
   NpcKnowledge.layer,
   NpcMemories.layer,
   NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+  NpcPreps.layer,
   Options.layer,
   Recap.layer,
   Search.layer,
@@ -103,6 +105,7 @@ const makeFixture = Effect.gen(function* () {
   const npcs = yield* Npcs;
   const knowledge = yield* NpcKnowledge;
   const memories = yield* NpcMemories;
+  const preps = yield* NpcPreps;
   const creators = yield* CampaignCreatorActors;
   const invites = yield* Invites;
   const sql = yield* SqlClient.SqlClient;
@@ -138,6 +141,11 @@ const makeFixture = Effect.gen(function* () {
     body: "Brannoc threatened Cazril at the ford and Cazril backed down.",
   });
   yield* memories.approve(creator, direct.id, draft.id);
+  yield* preps.update(creator, direct.id, {
+    attitude: "hostile",
+    status: "captive",
+    whereabouts: "PREP_WHEREABOUTS_SENTINEL in the bell tower",
+  });
 
   yield* npcs.create(otherCreator, {
     name: "Cazril Sixpence",
@@ -265,6 +273,12 @@ describe("campaign NPC context", () => {
     expect(npcContext).toContain("glass queen");
     expect(npcContext).toContain("glass river");
     expect(npcContext).toContain("Brannoc threatened Cazril");
+    // The DM's own prep, beside the persona: the creator's toolkit is the one
+    // with `getNpc`, and searching never reached it.
+    expect(npcContext).toContain("PREP_WHEREABOUTS_SENTINEL");
+    expect(npcContext).toContain('\\"attitude\\":\\"hostile\\"');
+    expect(npcContext).toContain('\\"status\\":\\"captive\\"');
+    expect(searchResult).not.toContain("PREP_WHEREABOUTS_SENTINEL");
     expect(npcContext).not.toContain("PLAYER_DIRECT_TRANSCRIPT_SENTINEL");
   }, 60_000);
 
