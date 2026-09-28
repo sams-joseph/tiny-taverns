@@ -2,6 +2,7 @@ import {
   campaign,
   campaignId,
   castShelf,
+  castShelfPrep,
   sessionId,
   encounterShelf,
   fullCampaign,
@@ -92,6 +93,12 @@ const creator = (): Map<string, Answer> => {
   // of cards: a drawn portrait, one still being drawn, a role that wraps and
   // one with none.
   routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
+  // Their prep, so the cards draw every badge and line and the filter row's
+  // pills have something to narrow: first met on the Chronicle's night 12.
+  routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
+    status: 200,
+    body: castShelfPrep(session12.id),
+  });
   // Each of the Chronicle's two nights was a different seat's, so its
   // Spotlight draws four bars and names the two seats left behind.
   const spotlit = [

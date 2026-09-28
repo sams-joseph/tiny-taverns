@@ -5,8 +5,10 @@ import type {
   NpcAwarenessCandidate,
   NpcKnowledgeFact,
   NpcMemory,
+  NpcPrep,
   NpcProposal,
   PlayerNpc,
+  Session,
   SessionId,
 } from "@taverns/api";
 import { Effect } from "effect";
@@ -18,8 +20,9 @@ import { reads } from "../api/keys";
  * The cast's reads, as atoms — `Atom.family` at module scope, keyed on what
  * each read closes over, exactly as `campaign/load.ts` does.
  *
- * No combinations: each list is its screen's `extra` (the Cast's, the archived
- * shelf's) and one row is the NPC screen's, and none needs another. The rehearsal
+ * One combination, the Cast's (`castAtom`): its cards need the rows, their prep
+ * and the nights together. Otherwise each list is its screen's `extra` (the
+ * archived shelf's) and one row is the NPC screen's. The rehearsal
  * transcript is deliberately *not* an atom — like Hob's it is read by the hook
  * that streams into it (`cast/rehearsal.ts`), because a refresh would replace
  * the reply the creator is watching arrive.
@@ -41,6 +44,59 @@ export const archivedNpcsAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.npcs.list({ params: { campaignId }, query: { archived: true } }),
     [reads.npcs(campaignId)],
+  ),
+);
+
+/**
+ * The DM's prep for every live NPC (`prepList`), in the list's order — the
+ * creator's alone, on a table no player read touches. Beside the rows rather
+ * than on them, as the seats' prep is (`party/load.ts`).
+ *
+ * It answers `npcs` as well as its own key, because which NPCs it lists moves
+ * whenever an NPC is made, archived or restored, and `sessions`, because
+ * deleting a night clears the *first met* that named it.
+ */
+export const npcPrepAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.npcs.prepList({ params: { campaignId }, query: {} }),
+    [reads.npcPrep(campaignId), reads.npcs(campaignId), reads.sessions(campaignId)],
+  ),
+);
+
+/** The campaign's nights, newest first: what *First met* picks from and names. */
+export const castNightsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.sessions.list({ params: { campaignId } }),
+    [reads.sessions(campaignId)],
+  ),
+);
+
+/** What the Cast reads beyond the campaign view. */
+export interface CastShelf {
+  readonly npcs: ReadonlyArray<Npc>;
+  /** Each live NPC's prep; one the list has not caught up with has none yet. */
+  readonly prep: ReadonlyArray<NpcPrep>;
+  readonly nights: ReadonlyArray<Session>;
+}
+
+/**
+ * The Cast's `extra`: the rows, their prep and the nights, one value with
+ * three states, as the Party tab's roster is. Told how to refresh, for the
+ * reason `rosterAtom` gives.
+ */
+export const castAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable(
+    (get): AsyncResult.AsyncResult<CastShelf, unknown> =>
+      AsyncResult.all({
+        npcs: get(npcsAtom(campaignId)),
+        prep: get(npcPrepAtom(campaignId)),
+        nights: get(castNightsAtom(campaignId)),
+      }),
+    (refresh) => {
+      refresh(npcsAtom(campaignId));
+      refresh(npcPrepAtom(campaignId));
+      refresh(castNightsAtom(campaignId));
+    },
   ),
 );
 

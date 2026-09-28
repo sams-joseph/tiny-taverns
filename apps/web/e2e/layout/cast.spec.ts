@@ -5,13 +5,18 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * columns, a row of cards lining up, the header, the filter row and the grid
  * sharing one left edge inside the Overview's centred frame, and each card
  * opening its NPC's drawer from anywhere on its face, the portrait band
- * included. Then the drawer (`cast/NpcDrawer.tsx`): where it hangs, that it
- * is modal — focus inside, Esc closing it, the window not scrolling under it
- * — and that its footer fits. All of it is layout, hit-testing or focus
- * across real events, which jsdom does not compute.
+ * included; the filter row's search and two pill groups wrapping without
+ * touching; and each card's *where* and met lines at its foot. Then the
+ * drawer (`cast/NpcDrawer.tsx`): that it covers the whole app, top to bottom,
+ * with its scrim over the nav rows; that it is modal — focus inside, Esc
+ * closing it, the window not scrolling under it — and that its footer fits.
+ * All of it is layout, hit-testing or focus across real events, which jsdom
+ * does not compute.
  *
  * Read over the creator scenario's `castShelf`: five NPCs, one with Hob's
- * portrait, one Hob is still drawing, one whose role wraps and one with none.
+ * portrait, one Hob is still drawing, one whose role wraps and one with none,
+ * with their prep (`castShelfPrep`): every attitude, a long *where*, and one
+ * NPC with nothing set.
  */
 
 const cast = screens.find((screen) => screen.name === "cast")!;
@@ -90,6 +95,55 @@ for (const width of WIDTHS) {
         if (width === 1440) expect.soft(grid.x).toBeCloseTo(width - (grid.x + grid.width), 0);
       });
 
+      await test.step("the search and the two pill groups wrap without touching", async () => {
+        // The search box and the two groups; the search's screen-reader line is none of them.
+        const filters = page.locator('[data-slot="cast-filters"]');
+        const parts = await filters
+          .locator(':scope > :first-child, :scope > [role="group"]')
+          .evaluateAll((els) =>
+            els.map((el) => {
+              const rect = el.getBoundingClientRect();
+              return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+            }),
+          );
+        expect.soft(parts, "search, met pills, attitude pills").toHaveLength(3);
+        const grid = await box(page.locator('[data-slot="cast-grid"]'));
+        for (const [i, a] of parts.entries()) {
+          expect.soft(a.x, `filter part ${String(i)} left`).toBeGreaterThanOrEqual(grid.x - 0.5);
+          expect
+            .soft(a.x + a.w, `filter part ${String(i)} right`)
+            .toBeLessThanOrEqual(grid.x + grid.width + 0.5);
+          for (const [j, b] of parts.slice(i + 1).entries()) {
+            const apart =
+              a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+            expect.soft(apart, `filter part ${String(i)} clear of ${String(i + j + 1)}`).toBe(true);
+          }
+        }
+        // Every pill whole, none wrapped inside itself.
+        const pills = await page
+          .locator('[data-slot="cast-filters"] [role="group"] button')
+          .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+        expect.soft(pills).toHaveLength(6);
+        for (const height of pills) expect.soft(height, "pill height").toBeCloseTo(pills[0]!, 0);
+      });
+
+      await test.step("each card's where and met lines sit at its foot", async () => {
+        const feet = await cards.evaluateAll((els) =>
+          els.map((el) => {
+            const lines = el.querySelector('[data-slot="npc-card-lines"]')!.getBoundingClientRect();
+            const card = el.getBoundingClientRect();
+            return { name: el.querySelector("[data-card-link]")?.textContent ?? "", lines, card };
+          }),
+        );
+        for (const { name, lines, card } of feet) {
+          expect
+            .soft(lines.bottom, `${name} lines inside the card`)
+            .toBeLessThanOrEqual(card.bottom);
+          // The card's own bottom padding, whatever the lines hold.
+          expect.soft(card.bottom - lines.bottom, `${name} lines at the foot`).toBeLessThan(24);
+        }
+      });
+
       await test.step("Hob is drawing sits inside its card's portrait band", async () => {
         const grusk = cards.filter({ has: page.getByRole("link", { name: "Grusk" }) });
         const band = await box(grusk.locator(":scope > div").first());
@@ -132,7 +186,7 @@ for (const width of WIDTHS) {
       await expect(drawer).toBeVisible();
       await app.settle();
 
-      await test.step("it hangs under the chrome, against the right edge, 480 wide or the whole width", async () => {
+      await test.step("it covers the whole app, top to bottom, against the right edge, 480 wide or the whole width", async () => {
         const placed = await drawer.evaluate((el) => {
           const rect = el.getBoundingClientRect();
           return {
@@ -140,17 +194,38 @@ for (const width of WIDTHS) {
             right: rect.right,
             bottom: rect.bottom,
             width: rect.width,
-            chrome: Number.parseFloat(
-              getComputedStyle(document.documentElement).getPropertyValue("--chrome-height"),
-            ),
             viewport: document.documentElement.clientWidth,
           };
         });
-        expect.soft(placed.chrome, "the chrome's height").toBeGreaterThan(0);
-        expect.soft(placed.top, "drawer top").toBeCloseTo(placed.chrome, 0);
+        expect.soft(placed.top, "drawer top").toBeCloseTo(0, 0);
         expect.soft(placed.right, "drawer right").toBeCloseTo(placed.viewport, 0);
         expect.soft(placed.bottom, "drawer bottom").toBeCloseTo(HEIGHT, 0);
         expect.soft(placed.width, "drawer width").toBeCloseTo(Math.min(480, placed.viewport), 0);
+      });
+
+      await test.step("its scrim covers the nav rows as well as the page", async () => {
+        const frame = await box(drawer);
+        if (frame.x < 40) return; // The drawer is the width: no scrim shows.
+        // The global row's top-left corner, where the app's name sits.
+        const hit = await page.evaluate(
+          () =>
+            document.elementFromPoint(8, 8)?.closest("[data-slot]")?.getAttribute("data-slot") ??
+            null,
+        );
+        expect.soft(hit, "what is under the top-left corner").toBe("sheet-overlay");
+      });
+
+      await test.step("its body scrolls inside it, and the footer stays in view", async () => {
+        const inner = await drawer.evaluate((el) => {
+          const body = el.querySelector(".overflow-y-auto")!;
+          const footer = el.querySelector('[data-slot="sheet-footer"]')!.getBoundingClientRect();
+          return {
+            scrolls: body.scrollHeight > body.clientHeight,
+            footerBottom: footer.bottom,
+          };
+        });
+        expect.soft(inner.scrolls, "the fields are taller than the drawer").toBe(true);
+        expect.soft(inner.footerBottom, "footer bottom").toBeLessThanOrEqual(HEIGHT + 0.5);
       });
 
       await test.step("focus is inside it", async () => {

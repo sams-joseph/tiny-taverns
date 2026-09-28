@@ -859,8 +859,8 @@ export function AppShell({
   // The sticky stack's height, measured and published as `--chrome-height` on
   // the document's root, so a screen's own `sticky` can pin just under it — the
   // window is every screen's scroller, and the stack is what covers its top —
-  // and so can an overlay portalled to the body, like the Cast's NPC drawer,
-  // which inherits nothing from the column. Measured rather than summed from
+  // and so can anything portalled to the body, which inherits nothing from the
+  // column. Measured rather than summed from
   // the rows, because which rows there are is the route's (a campaign row, a
   // tab strip) and a sum kept by hand drifts.
   useLayoutEffect(() => {
