@@ -14,6 +14,7 @@ import {
   CAMPAIGN_PREVIOUSLY_MAX,
   CAMPAIGN_STORY_MAX,
   CampaignId,
+  ChallengeRating,
   type CharacterOption,
   type CharacterSheet,
   type CharacterSpellRules,
@@ -44,6 +45,7 @@ import {
   NpcPersona,
   NpcPrep,
   NpcPrivateMaterial,
+  NpcSheet,
   OptionKind,
   optionNamed,
   SearchHit,
@@ -62,6 +64,7 @@ import {
   SessionId,
   SessionRecap,
   type SharedWorldId,
+  SheetLabel,
   type Skill,
   type RaceEntry,
   type SubraceEntry,
@@ -82,6 +85,7 @@ import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import type { NpcMemories } from "../repo/NpcMemories.js";
 import type { NpcPreps } from "../repo/NpcPrep.js";
+import type { NpcSheets } from "../repo/NpcSheets.js";
 import type { Npcs } from "../repo/Npcs.js";
 import type { NpcAwareness, NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import type { Options } from "../repo/Options.js";
@@ -638,6 +642,13 @@ const NpcContext = Schema.Struct({
    * toolkit has `getNpc`, and the NPC agent's prompt never reads it.
    */
   prep: NpcPrep,
+  /**
+   * The NPC's stat sheet — level, class, armour class, hit points, challenge
+   * rating and the rules half of a character's document — or `null` when it
+   * has none. The creator's toolkit only, as prep is: no other toolkit has
+   * `getNpc`, and the NPC agent's prompt never reads the sheet.
+   */
+  sheet: Schema.NullOr(NpcSheet),
 });
 
 export const GetNpc = Tool.make("getNpc", {
@@ -646,7 +657,8 @@ export const GetNpc = Tool.make("getNpc", {
     "instance's public persona, creator-only private material, active knowledge " +
     "facts, approved memories and the DM's prep (attitude toward the party, " +
     "status, whereabouts, the night the party first met them and the nights " +
-    "they were at the table, as session ids listSessions names). Take the id " +
+    "they were at the table, as session ids listSessions names) and their stat " +
+    "sheet when they have one (null when not). Take the id " +
     "from a searchCampaign hit whose " +
     "source is 'npc'. This reads the campaign snapshot, not the Library source, " +
     "and never includes NPC chat transcripts.",
@@ -1480,6 +1492,73 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
     failureMode: "return",
   });
 
+/**
+ * What Hob offers a **creator**: a sheet for one of their NPCs, built the way
+ * a character's is.
+ *
+ * `proposeCharacter`'s design one row over. It takes labels, a level and a
+ * ranking — never a score, a hit point or a feature — and the handler composes
+ * the document through `startingSheetBody`, the one assembly the character
+ * form and `proposeCharacter` share, at the level the model named rather than
+ * `STARTING_LEVEL`: an NPC is met already made.
+ *
+ * ### Free text, refused in words, because the creator's toolkit is static
+ *
+ * The labels are bounded free text rather than {@link nameSchema}'s enum. The
+ * creator's toolkit is module-level so a DM's question costs no vocabulary
+ * read; building it per request for one tool would spend that read on every
+ * question. The handler reads the campaign's options instead and refuses a
+ * name it does not have with the list to pick from ({@link notAnOption}), the
+ * round it costs being paid only by a draft that missed. With nothing of a
+ * kind written down the label stays as written, as a character's does.
+ *
+ * ### One sheet per NPC, replaced only when asked
+ *
+ * An NPC with a sheet is refused unless `replace` is set, and the model is
+ * told to set it only when the DM asked for a replacement. The card then says
+ * what it replaces, and the accept is the creator's PUT with the version the
+ * draft read, so a sheet edited by hand since the offer refuses the keep.
+ */
+export const ProposeNpcSheet = Tool.make("proposeNpcSheet", {
+  description:
+    "Offer the DM a stat sheet for one of this campaign's NPCs, built like a " +
+    "character's. Take npcId from a searchCampaign hit whose source is 'npc'. Name " +
+    "the class and the level (1 to 20), and a race, subrace, subclass, background " +
+    "and challenge rating when they fit; use this campaign's own class, race and " +
+    "background names — a name it does not have is refused with the list to pick " +
+    "from. Rank the six abilities most important first. Do not give scores, " +
+    "modifiers, hit points, armour class or features: the standard array is " +
+    "applied and everything else is worked out from the class, race and level. " +
+    "An NPC that already has a sheet is refused unless the DM asked you to replace " +
+    "it; only then set replace to true. Only a suggestion: nothing is saved unless " +
+    "the DM accepts it. Say one short line about it and stop.",
+  parameters: Schema.Struct({
+    npcId: NpcId,
+    className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
+    level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })),
+    race: optionalText(OPTION_NAME_MAX),
+    /** Optional, and must be one of the subraces contained by the race. */
+    subrace: optionalText(OPTION_NAME_MAX),
+    subclass: optionalText(80),
+    background: optionalText(OPTION_NAME_MAX),
+    /** `"1/4"` — the ratings the XP table knows, as the sheet's column does. */
+    cr: optional(ChallengeRating),
+    /** Six ability keys, most important first; repaired as `proposeCharacter`'s is. */
+    abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
+    /** Only when the DM asked to replace the sheet the NPC already has. */
+    replace: optional(Schema.Boolean),
+    /** Why these choices, one short line each. */
+    rationale: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
+        Schema.isLengthBetween(0, 8),
+      ),
+    ),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
 /** One line of a campaign's vocabulary, as {@link ListOptions} reads it out. */
 const OptionLine = Schema.Struct({
   kind: OptionKind,
@@ -1649,6 +1728,7 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeNightSummary,
     ProposeEncounter,
     ProposeCampaignStory,
+    ProposeNpcSheet,
     SpendCharacterResource,
   );
 };
@@ -1676,6 +1756,9 @@ export const HobToolkit = Toolkit.make(
   ProposeNightSummary,
   ProposeEncounter,
   ProposeCampaignStory,
+  // An NPC's stat sheet, built like a character's: the creator's alone, as
+  // `getNpc`, which reads the sheet back, is.
+  ProposeNpcSheet,
 );
 
 /**
@@ -1868,6 +1951,11 @@ export interface HobRepositories {
   readonly npcAwareness: (typeof NpcAwareness)["Service"];
   /** Each NPC's DM prep, which `getNpc` returns beside the persona. */
   readonly npcPreps: (typeof NpcPreps)["Service"];
+  /**
+   * Each NPC's stat sheet, which `getNpc` returns beside the prep and
+   * `proposeNpcSheet` reads to know whether it would replace one.
+   */
+  readonly npcSheets: (typeof NpcSheets)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
   /** The campaign's kept story so far, which a refresh starts from. */
   readonly stories: (typeof CampaignStories)["Service"];
@@ -1876,12 +1964,13 @@ export interface HobRepositories {
   /**
    * The campaign's classes, races and backgrounds.
    *
-   * **Read once per question rather than inside a tool**, unlike every other
-   * entry here: the vocabulary decides the *shape* of `proposeCharacter`, so it
-   * has to be known before the toolkit exists. `Hob.ask` makes that read where
+   * **For a player, read once per question rather than inside a tool**: the
+   * vocabulary decides the *shape* of `proposeCharacter`, so it has to be
+   * known before the toolkit exists. `Hob.ask` makes that read where
    * `CurrentActor` is still ambient and where a `NotFound` is still a 404, and
-   * hands the result down as a {@link CharacterVocabulary} — which is why this
-   * is the one repository no handler below calls.
+   * hands the result down as a {@link CharacterVocabulary}. The creator's
+   * toolkit is static, so `proposeNpcSheet` reads it inside its handler
+   * instead, and only when a sheet is drafted.
    *
    * It is `Options.list`, the same method and the same `usableInCampaign` the
    * create form's own pickers read through, so an option Hob may offer is
@@ -2140,10 +2229,11 @@ export const dmHandlersFor = (
       Effect.gen(function* () {
         const npc = yield* repositories.npcs.findById(dm, npcId);
         if (npc.archivedAt !== null) return yield* new NotFound({ resource: "npc", id: npcId });
-        const [knowledge, memories, prep] = yield* Effect.all([
+        const [knowledge, memories, prep, sheet] = yield* Effect.all([
           repositories.npcKnowledge.activeForPrompt(dm, npcId),
           repositories.npcMemories.approvedForPrompt(dm, npcId),
           repositories.npcPreps.find(dm, npcId),
+          repositories.npcSheets.find(dm, npcId),
         ]);
         return {
           npcId: npc.id,
@@ -2160,6 +2250,7 @@ export const dmHandlersFor = (
           })),
           memories: memories.slice(0, NPC_CONTEXT_LIMIT).map((memory) => ({ body: memory.body })),
           prep,
+          sheet,
         };
       }),
     sessionLog: ({ sessionId, since }) =>
@@ -2275,6 +2366,132 @@ export const dmHandlersFor = (
           "say one short line about it and stop.",
       );
     },
+
+    proposeNpcSheet: ({
+      npcId,
+      className,
+      level,
+      race,
+      subrace,
+      subclass,
+      background,
+      cr,
+      abilityOrder,
+      replace,
+      rationale,
+    }) =>
+      Effect.gen(function* () {
+        // The creator's own read, and `getNpc`'s rule: an archived NPC is not
+        // one Hob drafts for.
+        const npc = yield* repositories.npcs.findById(dm, npcId);
+        if (npc.archivedAt !== null) return yield* new NotFound({ resource: "npc", id: npcId });
+        const existing = yield* repositories.npcSheets.find(dm, npcId);
+        if (existing !== null && replace !== true) {
+          return yield* new Conflict({
+            message:
+              `${npc.name} already has a sheet (${existing.descriptor ?? "no class or level on it"}). ` +
+              "Offer a new one only if the DM asked you to replace it, and then set replace " +
+              "to true. Nothing reached the DM.",
+          });
+        }
+
+        /**
+         * The labels, read back as the rows they name through `optionNamed`,
+         * against the same `Options.list` a player's draft and the sheet's
+         * own pickers read. A kind the campaign has nothing of keeps the
+         * label as written; a kind it has refuses a miss with the list.
+         */
+        const options = yield* as(repositories.options.list(campaignId, {}));
+        const vocabulary = vocabularyOf(options);
+        const namedRace = blank(race);
+        const namedSubrace = blank(subrace);
+        const namedBackground = blank(background);
+        const classOption = optionNamed(options, "class", className);
+        const raceOption =
+          namedRace === undefined ? undefined : optionNamed(options, "race", namedRace);
+        const backgroundOption =
+          namedBackground === undefined
+            ? undefined
+            : optionNamed(options, "background", namedBackground);
+        const subraceOption = subraceEntryOf(raceOption, namedSubrace);
+        if (classOption === undefined && vocabulary.classes.length > 0) {
+          return yield* notAnOption("class", className, vocabulary.classes);
+        }
+        if (namedRace !== undefined && raceOption === undefined && vocabulary.race.length > 0) {
+          return yield* notAnOption("race", namedRace, vocabulary.race);
+        }
+        if (
+          namedBackground !== undefined &&
+          backgroundOption === undefined &&
+          vocabulary.backgrounds.length > 0
+        ) {
+          return yield* notAnOption("background", namedBackground, vocabulary.backgrounds);
+        }
+        if (namedSubrace !== undefined && namedRace === undefined) {
+          return yield* new Conflict({
+            message: `a subrace needs its race: name the race "${namedSubrace}" belongs to, or leave subrace out.`,
+          });
+        }
+        if (namedSubrace !== undefined && raceOption !== undefined && subraceOption === undefined) {
+          return yield* notASubrace("campaign", raceOption.name, namedSubrace);
+        }
+
+        // The campaign's own spelling where a label resolved, the model's
+        // where it did not — the rule a character's labels follow.
+        const labels = {
+          className: classOption?.name ?? className,
+          race: namedRace === undefined ? null : (raceOption?.name ?? namedRace),
+          subrace: namedSubrace === undefined ? null : (subraceOption?.name ?? namedSubrace),
+        };
+        for (const label of Object.values(labels)) {
+          if (label !== null && !Schema.is(SheetLabel)(label)) {
+            return yield* new Conflict({
+              message: `"${label}" is too long for a sheet, which takes names of up to 40 characters.`,
+            });
+          }
+        }
+
+        /**
+         * The document, through `startingSheetBody` — the character form's
+         * and `proposeCharacter`'s one assembly — at the level the model
+         * named: every feature to that level, its slots and hit dice, the
+         * kit's side (a), and the seed's armour class and hit points at that
+         * level.
+         */
+        const { body, seed } = startingSheetBody({
+          classOption: asClassOption(classOption),
+          raceOption: asRaceOption(raceOption),
+          subrace: namedSubrace,
+          backgroundOption: asBackgroundOption(backgroundOption),
+          background: backgroundOption?.name ?? namedBackground,
+          subclass: blank(subclass),
+          level,
+          abilities: abilitiesFrom(abilityOrder),
+          raceBonusChoices: raceChoiceBonuses(raceEntryOf(raceOption), abilityOrder),
+        });
+
+        return yield* offer(
+          {
+            target: "npcSheet",
+            npcId,
+            npcName: npc.name,
+            level: seed.level,
+            ...labels,
+            ac: seed.ac,
+            hpMax: seed.hpMax ?? null,
+            cr: absent(cr) ?? null,
+            sheet: body,
+            replaces:
+              existing === null
+                ? null
+                : { version: existing.version, descriptor: existing.descriptor },
+            rationale: (rationale ?? []).map((line) => line.trim()).filter((line) => line !== ""),
+          },
+          `Offered the DM a level ${String(seed.level)} ${labels.className} sheet for ${npc.name}` +
+            `${existing === null ? "" : ", replacing the one they have"}. Nothing is saved unless ` +
+            "they accept it; say one short line about it and stop.",
+        );
+      }),
 
     proposeBeat: ({ body }) =>
       offer(
@@ -2577,6 +2794,20 @@ const notInVocabulary = (rules: DraftRules, kind: OptionKind, label: string) =>
     message:
       `"${label}" is not a ${kind} ${rulesPlace(rules)}. Call listOptions and copy a ` +
       "name back exactly as it comes, spelling and all.",
+  });
+
+/**
+ * A label the creator's campaign does not have, refused with the names it
+ * does — `proposeNpcSheet`'s own recovery, since its labels are free text
+ * (see {@link ProposeNpcSheet}). Every name is listed, escaped as the
+ * grammar would escape it ({@link quoted}): the creator's toolkit has no
+ * `listOptions`, so this refusal is the one place the model reads them.
+ */
+const notAnOption = (kind: OptionKind, label: string, names: ReadonlyArray<string>) =>
+  new Conflict({
+    message:
+      `"${label}" is not a ${kind} in this campaign. Pick one of ` +
+      `${names.map(quoted).join(", ")}, spelled exactly like that.`,
   });
 
 const notASubrace = (rules: DraftRules, race: string, subrace: string) =>

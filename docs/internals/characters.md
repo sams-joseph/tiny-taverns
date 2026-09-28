@@ -82,7 +82,7 @@ A character's portrait is the first kind of Hob-drawn image. [Images](images.md)
 
 ## `startingSheetBody`: the corpora build the starting sheet
 
-`startingSheetBody` in `packages/api/src/SheetGrants.ts` is the one assembly of a starting sheet's rules half. The form's `payloadFrom` (`apps/web/src/characters/create.ts`) and Hob's `proposeCharacter` handler (`apps/server/src/assistant/toolkit.ts`) both call it so the two paths cannot disagree (`create.test.ts`, `hob-character.test.ts`, `SheetGrants.test.ts`). Each caller adds only what it alone knows: the notes and story, Hob's skills and the model's own kit lines.
+`startingSheetBody` in `packages/api/src/SheetGrants.ts` is the one assembly of a starting sheet's rules half. The form's `payloadFrom` (`apps/web/src/characters/create.ts`), Hob's `proposeCharacter` handler and the creator's Hob's `proposeNpcSheet` handler (both `apps/server/src/assistant/toolkit.ts`) all call it so the paths cannot disagree (`create.test.ts`, `hob-character.test.ts`, `hob-npc-sheet.test.ts`, `SheetGrants.test.ts`). Each caller adds only what it alone knows: the notes and story, Hob's skills and the model's own kit lines; an NPC sheet is the rules half alone, at the level the model named.
 
 It runs `seedFor` first, then `sheetGrantsFor` at the seed's level on the moved cells, then marks the class's saves with `withSavingThrows`. `startingSeed` is the seed half alone, which the form reads to fill its two boxes before anything is composed.
 

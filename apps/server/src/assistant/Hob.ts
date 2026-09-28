@@ -47,6 +47,7 @@ import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import { NpcPreps } from "../repo/NpcPrep.js";
+import { NpcSheets } from "../repo/NpcSheets.js";
 import { Npcs } from "../repo/Npcs.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
@@ -238,6 +239,7 @@ export class Hob extends Context.Service<
     | NpcMemories
     | NpcAwareness
     | NpcPreps
+    | NpcSheets
     | Npcs
     | LanguageModel.LanguageModel
     | Options
@@ -266,15 +268,18 @@ export class Hob extends Context.Service<
           // The DM's prep beside each NPC, which `getNpc` returns to the
           // creator's toolkits alone.
           npcPreps: yield* NpcPreps,
+          // Each NPC's stat sheet, which `getNpc` returns and
+          // `proposeNpcSheet` checks before offering a replacement — the
+          // creator's toolkits alone.
+          npcSheets: yield* NpcSheets,
           events: yield* SessionEvents,
           // The campaign's kept story so far, which the creator's Hob reads
           // before drafting a replacement.
           stories: yield* CampaignStories,
           directWrites: Option.getOrUndefined(yield* Effect.serviceOption(HobDirectWrites)),
-          // The seventh, and the one no tool handler calls: a campaign's
-          // classes, races and backgrounds decide the *shape* of
-          // `proposeCharacter`, so they are read before the toolkit exists
-          // rather than from inside it.
+          // A campaign's classes, races and backgrounds decide the *shape* of
+          // `proposeCharacter`, so for a player they are read before the
+          // toolkit exists; `proposeNpcSheet` reads them from its handler.
           options: yield* Options,
           // The spell picker rules are shared with Hob's draft through this repository.
           spells: yield* Spells,
@@ -1563,6 +1568,11 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "boxed text",
   "beat",
   "beats",
+  // An NPC's stat sheet, which `proposeNpcSheet` drafts.
+  "sheet",
+  "stat sheet",
+  "stats",
+  "stat block",
 ];
 
 /**
@@ -1858,6 +1868,8 @@ const dmPrompt = (
     "offer it with proposeEncounter, proposeNote, proposeBeat or proposeNightSummary.",
     "When the DM asks for the story so far or a Previously, call readCampaignStorySources,",
     "write both from that result alone, and offer them with proposeCampaignStory.",
+    "When the DM asks you to give an NPC stats or a sheet, find the NPC with searchCampaign",
+    "and offer one with proposeNpcSheet; getNpc reads the sheet an NPC already has.",
     "When your research shows an existing campaign NPC should explicitly know or remember",
     "something, offer a Cast review row with proposeNpcAwareness.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
@@ -2162,6 +2174,27 @@ const offered = (turn: HobTurn): string | undefined => {
       return `[You offered a campaign called "${proposal.name}" — ${
         turn.acceptedAt === null ? "not yet kept" : "kept"
       }: ${parts.join("; ")}]`;
+    }
+    // Read back in the tool's own words, so "make him a level higher" or "a
+    // paladin instead" redrafts from what was offered, with the NPC's id.
+    case "npcSheet": {
+      const ranked = [...proposal.sheet.abilities]
+        .sort((a, b) => Number(b.score) - Number(a.score))
+        .map((ability) => ability.label)
+        .join(" > ");
+      const identity = proposal.sheet.identity;
+      const parts = [
+        `npcId ${proposal.npcId}`,
+        `level ${String(proposal.level)} ${[proposal.subrace ?? proposal.race, proposal.className]
+          .filter((part) => part !== null)
+          .join(" ")}`,
+        identity?.subclass === undefined ? undefined : `subclass ${identity.subclass}`,
+        identity?.background === undefined ? undefined : `background ${identity.background}`,
+        proposal.cr === null ? undefined : `cr ${proposal.cr}`,
+        ranked === "" ? undefined : `abilities ranked ${ranked}`,
+        proposal.replaces === null ? undefined : "replacing the sheet they had",
+      ].filter((part) => part !== undefined);
+      return `[You offered the DM a sheet for ${proposal.npcName} — ${kept}: ${parts.join("; ")}]`;
     }
     case "nightSummary":
       return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;

@@ -134,9 +134,10 @@ const NOT_CONTENT = [
   // prep read and written by the campaign's creator alone. See 0074_npc_links.ts.
   "npc_link",
   // An NPC's character-style sheet: DM prep, the creator's alone through the
-  // creator proof, reached only by walking its NPC, and written by nobody but
-  // the creator. Who may read it and where it came from are its NPC's. See
-  // 0076_npc_sheets.ts.
+  // creator proof, reached only by walking its NPC. Who may read it is its
+  // NPC's, so it has no visibility; it carries the provenance pair because a
+  // creator may keep a Hob draft of one. See 0076_npc_sheets.ts and
+  // 0077_npc_sheet_origin.ts.
   "npc_sheet",
   "play_group",
   "proficiency",

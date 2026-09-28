@@ -2,18 +2,21 @@ import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { CampaignStory } from "./CampaignStory.js";
-import { Character, CharacterSheet } from "./Character.js";
+import { Character, CharacterSheet, SheetBody } from "./Character.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
+import { ChallengeRating } from "./EncounterDifficulty.js";
 import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorldHistory.js";
 import {
   AssistantThreadId,
   AssistantTurnId,
   CampaignId,
   CreatureId,
+  NpcId,
   SessionId,
   SharedWorldId,
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
+import { NpcSheet } from "./Npc.js";
 import { Session } from "./Session.js";
 
 /**
@@ -149,8 +152,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `nightSummary` (a played night's summary, kept on the night), an
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
- * campaign's own story so far (`campaignStory`), and a `campaign` (the asker's
- * new table). The union is discriminated on `target` for the reason
+ * campaign's own story so far (`campaignStory`), an NPC's sheet (`npcSheet`),
+ * and a `campaign` (the asker's new table). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
  * the client renders anyway is the failure this schema style exists to
@@ -158,7 +161,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
- * `proposeNightSummary`, `proposeEncounter` and `proposeCampaignStory`; the drafting
+ * `proposeNightSummary`, `proposeEncounter`, `proposeCampaignStory` and
+ * `proposeNpcSheet`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
@@ -345,6 +349,44 @@ export const HobProposal = Schema.Union([
     text: Schema.String,
     previously: Schema.NullOr(Schema.String),
     afterSessionNumber: Schema.Int,
+  }),
+  /**
+   * A sheet for one of the campaign's NPCs, offered to its creator by the
+   * campaign's own Hob — the creator's toolkit alone has `proposeNpcSheet`.
+   *
+   * It is `character`'s shape one row over, and for `character`'s reasons:
+   * the model names a class, a level and optionally a race, a background and
+   * a challenge rating; the server ranks nothing it was not told, composes the
+   * document through `startingSheetBody` (the form's and `proposeCharacter`'s
+   * one assembly) and seeds `ac` and `hpMax` at that level, so the card and
+   * the row it becomes cannot disagree. `npcName` is the card's display half,
+   * a snapshot as a roster line's creature name is.
+   *
+   * `replaces` is the sheet the NPC already had when Hob offered this one,
+   * which the creator asked it to replace: its `version` is what the accept
+   * sends as the PUT's `expectedVersion`, so a sheet edited by hand since the
+   * offer refuses the keep rather than being overwritten, and `descriptor` is
+   * the card's line saying what goes. Null is an NPC with no sheet, and the
+   * accept is then refused if one has appeared since. Accepting writes the
+   * sheet with `origin = 'assistant'` and the turn (`0077_npc_sheet_origin.ts`).
+   */
+  Schema.Struct({
+    target: Schema.Literal("npcSheet"),
+    npcId: NpcId,
+    npcName: Schema.String,
+    level: Schema.Int,
+    race: Schema.NullOr(Schema.String),
+    subrace: Schema.NullOr(Schema.String),
+    className: Schema.String,
+    ac: Schema.NullOr(Schema.Int),
+    hpMax: Schema.NullOr(Schema.Int),
+    cr: Schema.NullOr(ChallengeRating),
+    sheet: SheetBody,
+    replaces: Schema.NullOr(
+      Schema.Struct({ version: Schema.Int, descriptor: Schema.NullOr(Schema.String) }),
+    ),
+    /** Short lines, in the order Hob wrote them — `character`'s *What Hob did*. */
+    rationale: Schema.Array(Schema.String),
   }),
   /**
    * A new campaign, drafted in the account's own conversation (`/me/hob`) —
@@ -645,6 +687,8 @@ export const HobAccepted = Schema.Union([
   }),
   /** The story so far a campaign's creator kept from their Hob. */
   Schema.Struct({ accepted: Schema.Literal("campaignStory"), story: CampaignStory }),
+  /** The NPC sheet a campaign's creator kept from their Hob. */
+  Schema.Struct({ accepted: Schema.Literal("npcSheet"), sheet: NpcSheet }),
   /**
    * The campaign an account kept from its own conversation, created by the
    * same insert `POST /campaigns` (or a Shared World's create) uses, with its

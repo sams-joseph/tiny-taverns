@@ -268,6 +268,46 @@ function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
   );
 }
 
+/**
+ * An NPC's sheet Hob drafted: the seeded numbers, what keeping it replaces,
+ * and Hob's reasons. The class and level are the card's meta line.
+ */
+function NpcSheetBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npcSheet" } }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {artifact.stats.length > 0 && (
+        <dl className="flex gap-4 font-mono text-mono leading-snug font-medium">
+          {artifact.stats.map(([label, value]) => (
+            <div key={label} className="flex gap-1.5">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="text-foreground">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {artifact.replaces !== undefined && (
+        <p className="flex items-center gap-2 rounded-sm bg-surface-sunken px-2.5 py-1.5 text-caption leading-body text-muted-foreground">
+          <Icon name="refresh-cw" size={12} className="shrink-0 text-faint" />
+          <span>Replaces {artifact.replaces}</span>
+        </p>
+      )}
+      {artifact.rationale.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {artifact.rationale.map((line) => (
+            <li
+              key={line}
+              className="flex items-start gap-2 text-caption leading-body text-muted-foreground"
+            >
+              <Icon name="wand-sparkles" size={12} className="mt-0.5 shrink-0 text-faint" />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
   switch (artifact.kind) {
     case "encounter":
@@ -290,6 +330,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <CampaignBody artifact={artifact} />;
     case "character":
       return <CharacterBody artifact={artifact} />;
+    case "npcSheet":
+      return <NpcSheetBody artifact={artifact} />;
     default:
       return <RulesBody artifact={artifact} />;
   }
@@ -322,6 +364,7 @@ export function ArtifactCard({
   const campaignStory = artifact.kind === "campaignStory";
   const campaign = artifact.kind === "campaign";
   const character = artifact.kind === "character";
+  const npcSheet = artifact.kind === "npcSheet";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -431,7 +474,9 @@ export function ArtifactCard({
                         ? "In your campaigns"
                         : character
                           ? "On your roster"
-                          : "In tonight’s session"}
+                          : npcSheet
+                            ? "On the NPC’s sheet"
+                            : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -446,7 +491,7 @@ export function ArtifactCard({
                       ? "Keep as the story so far"
                       : chronicle
                         ? "Add to Chronicle"
-                        : campaign || character
+                        : campaign || character || npcSheet
                           ? "Keep it"
                           : "Save to session"}
               </Button>

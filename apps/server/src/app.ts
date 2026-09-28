@@ -198,6 +198,7 @@ export const assistantFromConfig: Layer.Layer<
   | NpcMemories
   | NpcAwareness
   | NpcPreps
+  | NpcSheets
   | Npcs
   | Options
   | Recap
@@ -431,6 +432,7 @@ export const servicesOver = <E>(
     | NpcMemories
     | NpcAwareness
     | NpcPreps
+    | NpcSheets
     | Npcs
     | Options
     | Recap
@@ -704,6 +706,10 @@ export const servicesOver = <E>(
         Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
         // A kept story so far replaces the campaign's through `accept`.
         CampaignStories.layer,
+        // A kept NPC sheet goes through the creator's own PUT, behind the
+        // creator proof the accept asks for again.
+        CampaignCreatorActors.layer,
+        NpcSheets.layer,
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`
@@ -745,6 +751,8 @@ export const servicesOver = <E>(
         NpcMemories.layer,
         NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
         NpcPreps.layer,
+        // Each NPC's sheet: `getNpc` returns it and `proposeNpcSheet` checks it.
+        NpcSheets.layer,
         HobDirectWrites.layer.pipe(Layer.provide(LiveEvents.layer)),
         // `Options` is the newest, and it is the one Hob reads *outside* a
         // tool: a campaign's classes, races and backgrounds decide the shape of

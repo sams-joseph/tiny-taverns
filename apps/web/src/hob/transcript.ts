@@ -9,8 +9,8 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Seven kinds of artifact are produced here.** `encounter`, `note`
- * (and read-aloud) and `beat` are what campaign Hob can materialise; `chronicle`
+ * **Eight kinds of artifact are produced here.** `encounter`, `note`
+ * (and read-aloud), `beat` and `npcSheet` are what campaign Hob can materialise; `chronicle`
  * and `story` are Shared World Hob's; `campaign` and `character` are what the
  * account's own panel drafts outside any campaign. The rest of the union is the
  * delivered specimen set, held by `hob.fixtures.ts` for the tests: nothing
@@ -34,12 +34,12 @@ import type { IconName } from "@taverns/ui";
  * cannot express them is better than a card that renders a badge over an empty
  * body. They come back when the designers draw them.
  *
- * **`note`, `beat`, `summary`, `campaign` and `character` are ours.** The
- * delivery has no entry for any of them, and each is something Hob can
- * actually offer to keep. All five take glyphs the delivery already asked for
- * (`pencil`, `flag`, `history` — the Chronicle's own —, `layers` — the
- * Campaigns item on the global row — and `user-round`), so the icon table did
- * not grow.
+ * **`note`, `beat`, `summary`, `campaign`, `character` and `npcSheet` are
+ * ours.** The delivery has no entry for any of them, and each is something Hob
+ * can actually offer to keep. All six take glyphs the delivery already asked
+ * for (`pencil`, `flag`, `history` — the Chronicle's own —, `layers` — the
+ * Campaigns item on the global row —, `user-round` and `shield-half`, the
+ * sheet's armour class), so the icon table did not grow.
  */
 export const ARTIFACT_KINDS = {
   encounter: { icon: "swords", label: "Encounter", variant: "default" },
@@ -55,6 +55,7 @@ export const ARTIFACT_KINDS = {
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
   campaign: { icon: "layers", label: "Campaign", variant: "default" },
   character: { icon: "user-round", label: "Character", variant: "magic" },
+  npcSheet: { icon: "shield-half", label: "NPC sheet", variant: "magic" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -160,6 +161,15 @@ export type HobArtifact =
       readonly rationale: ReadonlyArray<string>;
       /** The line the portrait is drawn from, when Hob wrote one. */
       readonly appearance?: string;
+    })
+  | (ArtifactBase & {
+      readonly kind: "npcSheet";
+      /** The seeded numbers as label and value — `["AC", "16"]`, `["HP", "44"]`. */
+      readonly stats: ReadonlyArray<readonly [string, string]>;
+      /** The sheet the NPC has now, which keeping this one replaces. */
+      readonly replaces?: string;
+      /** Hob's reasons, one line each. */
+      readonly rationale: ReadonlyArray<string>;
     })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
@@ -303,6 +313,37 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         ...(proposal.partyName === null ? {} : { partyName: proposal.partyName }),
         ...(proposal.description === null ? {} : { pitch: proposal.description }),
       };
+    /**
+     * An NPC's sheet the creator's Hob drafted: the NPC by name, the line its
+     * sheet will read, and the numbers the seed worked out, and what keeping
+     * it replaces. The document itself is not drawn here: it is the sheet.
+     */
+    case "npcSheet": {
+      const descriptor = [
+        `Level ${String(proposal.level)}`,
+        proposal.subrace ?? proposal.race,
+        proposal.className,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" ");
+      return {
+        id: turnId,
+        kind: "npcSheet",
+        title: proposal.npcName,
+        meta: [descriptor, proposal.cr === null ? undefined : `CR ${proposal.cr}`]
+          .filter((part) => part !== undefined)
+          .join(" · "),
+        chips: [],
+        stats: [
+          ...(proposal.ac === null ? [] : [["AC", String(proposal.ac)] as const]),
+          ...(proposal.hpMax === null ? [] : [["HP", String(proposal.hpMax)] as const]),
+        ],
+        ...(proposal.replaces === null
+          ? {}
+          : { replaces: proposal.replaces.descriptor ?? "The sheet it has now" }),
+        rationale: proposal.rationale,
+      };
+    }
     /**
      * A character the account's panel drafted. The create screen's composer
      * draws its own, fuller card (`characters/DraftCard.tsx`) beside the form

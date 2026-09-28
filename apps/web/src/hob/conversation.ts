@@ -277,7 +277,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
          * read answers `sessions`: the summary on the session row (which that
          * night's recap, read by the Overview's *Last time*, carries too), and
          * the beat under whichever night is current — resolved server-side, so
-         * the campaign-wide key is the one this panel can name. Anything else
+         * the campaign-wide key is the one this panel can name. An NPC's sheet
+         * is read by no screen yet, so keeping one names nothing. Anything else
          * Hob keeps here is a note, an encounter or the story so far, all three
          * named because the model decides which.
          */
@@ -286,7 +287,9 @@ const callsFor = (scope: HobScope): ScopeCalls => {
             ? [reads.sessions(campaignId), reads.recap(accepted.session.id)]
             : accepted.accepted === "beat"
               ? [reads.sessions(campaignId)]
-              : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
+              : accepted.accepted === "npcSheet"
+                ? []
+                : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
       };
     }
     case "sharedWorld": {

@@ -45,6 +45,7 @@ import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { NpcPreps } from "../src/repo/NpcPrep.js";
+import { NpcSheets } from "../src/repo/NpcSheets.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Party } from "../src/repo/Party.js";
@@ -106,6 +107,7 @@ const services = Layer.mergeAll(
   NpcMemories.layer,
   NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
   NpcPreps.layer,
+  NpcSheets.layer,
   Options.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Recap.layer,
@@ -446,6 +448,9 @@ describe("answering", () => {
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      // An NPC's stat sheet, built like a character's and kept only by the
+      // creator's accept; `getNpc` above reads it back. No other toolkit has it.
+      "proposeNpcSheet",
       "readCampaignStorySources",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is
@@ -1735,6 +1740,7 @@ describe("what counts as asking for a build", () => {
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      "proposeNpcSheet",
     ]);
     expect(player.filter((name) => /^propose[A-Z]/.test(name))).toEqual(["proposeCharacter"]);
     const account = Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools);
@@ -1810,6 +1816,9 @@ describe("the assistant seam", () => {
       "proposeNightSummary",
       "proposeNote",
       "proposeNpcAwareness",
+      // An NPC's stat sheet, built like a character's and kept only by the
+      // creator's accept; `getNpc` above reads it back. No other toolkit has it.
+      "proposeNpcSheet",
       "readCampaignStorySources",
       // The two group-context reads — the chronicle and the accepted summary,
       // keyed on the proof's own group. Read-only; what they can answer is

@@ -30,6 +30,7 @@ import { NpcAwareness } from "../src/repo/NpcAwareness.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcPreps } from "../src/repo/NpcPrep.js";
+import { NpcSheets } from "../src/repo/NpcSheets.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
@@ -76,9 +77,12 @@ const services = Layer.mergeAll(
   NpcMemories.layer,
   NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
   NpcPreps.layer,
+  NpcSheets.layer,
   Options.layer,
   Proposals.layer.pipe(
     Layer.provide([
+      CampaignCreatorActors.layer,
+      NpcSheets.layer,
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
       CampaignStories.layer,
