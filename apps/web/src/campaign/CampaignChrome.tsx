@@ -307,12 +307,7 @@ export function CampaignChrome<Extra = undefined>({
       {slots !== undefined && children(slots)}
 
       {editing?.what === "campaign" && view !== undefined && (
-        <CampaignDialog
-          campaign={view.campaign}
-          onClose={close}
-          onSaved={close}
-          onOpen={openSettings}
-        />
+        <CampaignDialog campaign={view.campaign} onClose={close} onSaved={close} />
       )}
       {editing?.what === "shared-world" && view !== undefined && (
         <CampaignSharedWorldDialog campaignId={view.campaign.id} onClose={close} />

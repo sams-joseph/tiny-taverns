@@ -7,16 +7,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Icon,
   Input,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
-import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
-import { membershipsAtom } from "./load";
 
 /**
  * The campaign's own settings — and the one control the whole player half of
@@ -54,9 +51,8 @@ import { membershipsAtom } from "./load";
  * `session/finish.ts`, and a text field pointing at a session is a second
  * answer to a question the server settles with a constraint.
  *
- * Its foot names the campaign's Shared World and hands a change to its own
- * dialog in `CampaignChrome`. Archiving and deleting are not here at all: they
- * live in the Overview's *Campaign actions* menu, each behind a confirmation
+ * Its Shared World, archiving and deleting are not here at all: they live in
+ * the Overview's *Campaign actions* menu, each behind a confirmation
  * that names the campaign, so a delete is never one press away from
  * *Save changes*.
  */
@@ -68,22 +64,12 @@ export function CampaignDialog({
   campaign,
   onClose,
   onSaved,
-  onOpen,
 }: {
   readonly campaign: Campaign;
   readonly onClose: () => void;
   /** Re-reads the view: the name, the subtitle and the badge all move. */
   readonly onSaved: () => void;
-  /** Swap this dialog for the Shared World one. */
-  readonly onOpen: (what: "shared-world") => void;
 }) {
-  // Which Shared World, if any: the membership row names an explicit world and
-  // is null for a standalone campaign, whose hidden context is not a world.
-  const [memberships] = useApiAtom(membershipsAtom);
-  const world =
-    memberships.state === "ready"
-      ? (memberships.value.find((row) => row.campaign.id === campaign.id)?.sharedWorld ?? null)
-      : undefined;
   const [name, setName] = useState(campaign.name);
   const [partyName, setPartyName] = useState(campaign.partyName ?? "");
   const [description, setDescription] = useState(campaign.description ?? "");
@@ -217,29 +203,6 @@ export function CampaignDialog({
             shared="Your players can reach this campaign — and then see whatever inside it you have shared, and nothing else."
             hidden="This campaign is yours alone. Nothing in it reaches a player, however you have set a single note or encounter."
           />
-
-          {world !== undefined && (
-            <div className="flex flex-col gap-1.5 border-t border-hairline pt-4">
-              <span className="text-body-s leading-body font-semibold text-heading">
-                Shared World
-              </span>
-              <span className="text-caption leading-body text-muted-foreground">
-                {world === null
-                  ? "Standalone. Connect it to a Shared World to share a history with other campaigns."
-                  : `Part of ${world.name}.`}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="self-start"
-                disabled={busy}
-                onClick={() => onOpen("shared-world")}
-              >
-                <Icon name="map" size={14} />
-                {world === null ? "Connect to Shared World" : "Change Shared World"}
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* In the footer, beside the button that failed: the body scrolls, and a
