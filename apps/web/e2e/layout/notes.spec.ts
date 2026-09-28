@@ -157,8 +157,8 @@ for (const width of WIDTHS) {
       });
 
       await test.step("the Linked chips wrap inside the pane", async () => {
-        const chips = pane.locator('[data-slot="note-link-chip"]');
-        await expect(chips).toHaveCount(6);
+        const chips = pane.locator('[data-slot="link-chip"]');
+        await expect(chips).toHaveCount(7);
         const inner = await box(pane.locator('[data-slot="note-links"] ul'));
         const boxes = await chips.evaluateAll((els) =>
           els.map((el) => {
@@ -186,7 +186,7 @@ for (const width of WIDTHS) {
       await test.step("the × removes without leaving the note", async () => {
         const url = page.url();
         const unlink = page.waitForRequest(
-          (request) => request.method() === "DELETE" && request.url().includes("/links/seat/"),
+          (request) => request.method() === "DELETE" && request.url().includes("/links/npc/"),
         );
         await pane
           .getByRole("button", { name: /^Unlink / })

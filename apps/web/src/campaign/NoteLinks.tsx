@@ -4,49 +4,43 @@ import type {
   Note,
   NoteAttachment,
   NoteLink,
+  Npc,
   PartySeat,
 } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-  Icon,
-  type IconName,
-} from "@taverns/ui";
-import type { ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
+import { LinkChip, LinkChipFace, linkChipClassName, LinkMenu } from "../ui/links";
 
 /**
  * The pane's *Linked* footer, as the drawing draws it: a chip for each thing
  * the note is about, and each chip opens it — an encounter selected on the
- * Encounters tab, a seat on its own page.
+ * Encounters tab, a seat on its own page, an NPC in its drawer on the Cast.
  *
  * **The attachment is the first chip.** It is the read-aloud's one encounter
  * (`attachedTo`), not a link: it is chosen and cleared under *Attached to*, so
  * its chip opens the encounter and has no remove ×. Every other chip is a
  * `note_link`, removed by its own × (`notes.removeLink`) and added from the
- * *Link…* menu (`notes.addLink`), which offers the campaign's encounters and
- * seats the note is not already on. Neither write is an edit of the note: they
- * go at once, not through the pane's autosave, and name `reads.notes`, the only
- * read that carries links.
+ * *Link…* menu (`notes.addLink`), which offers the campaign's encounters,
+ * seats and NPCs the note is not already on. Neither write is an edit of the
+ * note: they go at once, not through the pane's autosave, and name
+ * `reads.notes`, the only read that carries links — the Cast's *Shows up in*
+ * reads an NPC's notes from the same list.
  *
  * **A chip is drawn only while its target is in what the frame read.** A
  * deleted encounter's link is gone with it (the key cascades), but a retired
- * seat's link stays in the record, and its page would answer *not found*.
+ * seat's link and an archived NPC's stay in the record, and neither could be
+ * opened from here.
  */
+
 export function NoteLinks({
   campaignId,
   note,
   attachedTo,
   encounters,
   party,
+  npcs,
 }: {
   readonly campaignId: CampaignId;
   /** The note as the server last answered it: its links. */
@@ -55,17 +49,22 @@ export function NoteLinks({
   readonly attachedTo: NoteAttachment | null;
   readonly encounters: ReadonlyArray<Encounter>;
   readonly party: ReadonlyArray<PartySeat>;
+  /** The cast: every NPC not archived. */
+  readonly npcs: ReadonlyArray<Npc>;
 }) {
   const { busy, failure, submit } = useMutation();
   const encounterOf = (id: string) => encounters.find((encounter) => encounter.id === id);
   const seatOf = (id: string) => party.find((row) => row.seat.id === id)?.seat;
+  const npcOf = (id: string) => npcs.find((npc) => npc.id === id);
 
   const attached = attachedTo === null ? undefined : encounterOf(attachedTo.id);
   const linked = note.links.flatMap((link) => {
-    // A link to an NPC draws no chip here yet: this frame reads no cast.
-    if (link.kind === "npc") return [];
     const label =
-      link.kind === "encounter" ? encounterOf(link.id)?.name : seatOf(link.id)?.displayName;
+      link.kind === "encounter"
+        ? encounterOf(link.id)?.name
+        : link.kind === "seat"
+          ? seatOf(link.id)?.displayName
+          : npcOf(link.id)?.name;
     return label === undefined ? [] : [{ link, label }];
   });
 
@@ -75,8 +74,9 @@ export function NoteLinks({
     (encounter) => encounter.id !== attached?.id && !has("encounter", encounter.id),
   );
   const linkableSeats = party.filter((row) => !has("seat", row.seat.id));
+  const linkableNpcs = npcs.filter((npc) => !has("npc", npc.id));
 
-  const add = (link: Extract<NoteLink, { readonly kind: "encounter" | "seat" }>) => {
+  const add = (link: NoteLink) => {
     const params = { campaignId, noteId: note.id };
     void submit(
       (client) =>
@@ -84,7 +84,9 @@ export function NoteLinks({
         // its own, not the union itself.
         link.kind === "encounter"
           ? client.notes.addLink({ params, payload: link })
-          : client.notes.addLink({ params, payload: link }),
+          : link.kind === "seat"
+            ? client.notes.addLink({ params, payload: link })
+            : client.notes.addLink({ params, payload: link }),
       [reads.notes(campaignId)],
     );
   };
@@ -114,144 +116,91 @@ export function NoteLinks({
       >
         {attached !== undefined && (
           <li>
-            <Chip label={attached.name} title="Attached — change it under Attached to">
+            <LinkChip label={attached.name} title="Attached — change it under Attached to">
               <Link
                 to="/campaigns/$campaignId/encounters"
                 params={{ campaignId }}
                 search={{ encounter: attached.id }}
                 aria-label={`Attached to ${attached.name}`}
-                className={chipLink}
+                className={linkChipClassName}
               >
-                <ChipFace icon="swords" label={attached.name} />
+                <LinkChipFace icon="swords" label={attached.name} />
               </Link>
-            </Chip>
+            </LinkChip>
           </li>
         )}
         {linked.map(({ link, label }) => (
           <li key={`${link.kind}:${link.id}`}>
-            <Chip label={label} onRemove={() => remove(link)} busy={busy}>
+            <LinkChip label={label} onRemove={() => remove(link)} busy={busy}>
               {link.kind === "encounter" ? (
                 <Link
                   to="/campaigns/$campaignId/encounters"
                   params={{ campaignId }}
                   search={{ encounter: link.id }}
-                  className={chipLink}
+                  className={linkChipClassName}
                 >
-                  <ChipFace icon="swords" label={label} />
+                  <LinkChipFace icon="swords" label={label} />
                 </Link>
-              ) : (
+              ) : link.kind === "seat" ? (
                 <Link
                   to="/campaigns/$campaignId/party/$seatId"
                   params={{ campaignId, seatId: link.id }}
-                  className={chipLink}
+                  className={linkChipClassName}
                 >
-                  <ChipFace icon="shield" label={label} />
+                  <LinkChipFace icon="shield" label={label} />
+                </Link>
+              ) : (
+                <Link
+                  to="/campaigns/$campaignId/cast"
+                  params={{ campaignId }}
+                  search={{ npc: link.id }}
+                  className={linkChipClassName}
+                >
+                  <LinkChipFace icon="user-round" label={label} />
                 </Link>
               )}
-            </Chip>
+            </LinkChip>
           </li>
         ))}
         {attached === undefined && linked.length === 0 && (
           <li className="text-body-s leading-snug text-faint">Not linked to anything yet.</li>
         )}
         <li>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              disabled={busy || (linkableEncounters.length === 0 && linkableSeats.length === 0)}
-              render={<Button variant="outline" size="sm" className="h-control-sm" />}
-            >
-              <Icon name="link" size={13} className="pointer-events-none" />
-              Link…
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {linkableEncounters.length > 0 && (
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Encounters</DropdownMenuLabel>
-                  {linkableEncounters.map((encounter) => (
-                    <DropdownMenuItem
-                      key={encounter.id}
-                      onClick={() => add({ kind: "encounter", id: encounter.id })}
-                    >
-                      <Icon name="swords" size={14} className="pointer-events-none" />
-                      {encounter.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              )}
-              {linkableSeats.length > 0 && (
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Party</DropdownMenuLabel>
-                  {linkableSeats.map(({ seat }) => (
-                    <DropdownMenuItem
-                      key={seat.id}
-                      onClick={() => add({ kind: "seat", id: seat.id })}
-                    >
-                      <Icon name="shield" size={14} className="pointer-events-none" />
-                      {seat.displayName}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <LinkMenu
+            busy={busy}
+            groups={[
+              {
+                label: "Encounters",
+                icon: "swords",
+                items: linkableEncounters.map((encounter) => ({
+                  key: encounter.id,
+                  label: encounter.name,
+                  onSelect: () => add({ kind: "encounter", id: encounter.id }),
+                })),
+              },
+              {
+                label: "Party",
+                icon: "shield",
+                items: linkableSeats.map(({ seat }) => ({
+                  key: seat.id,
+                  label: seat.displayName,
+                  onSelect: () => add({ kind: "seat", id: seat.id }),
+                })),
+              },
+              {
+                label: "Cast",
+                icon: "user-round",
+                items: linkableNpcs.map((npc) => ({
+                  key: npc.id,
+                  label: npc.name,
+                  onSelect: () => add({ kind: "npc", id: npc.id }),
+                })),
+              },
+            ]}
+          />
         </li>
       </ul>
       {failure !== undefined && <SaveFailure failure={failure} />}
     </div>
-  );
-}
-
-/**
- * One chip: the drawing's 30px outline tag. Its name is a link to what it
- * names (`children`, the router `Link` wearing `chipLink` around `ChipFace`);
- * the × is a separate button beside it, never inside the link, so pressing it
- * removes and does not navigate.
- */
-function Chip({
-  title,
-  label,
-  onRemove,
-  busy = false,
-  children,
-}: {
-  readonly title?: string;
-  /** What the × says it removes. */
-  readonly label: string;
-  /** Absent for the attachment, which *Attached to* clears. */
-  readonly onRemove?: () => void;
-  readonly busy?: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <span
-      data-slot="note-link-chip"
-      title={title}
-      className="inline-flex h-control-sm max-w-full items-stretch rounded-sm border border-strong text-label leading-none font-medium text-foreground"
-    >
-      {children}
-      {onRemove !== undefined && (
-        <button
-          type="button"
-          aria-label={`Unlink ${label}`}
-          disabled={busy}
-          onClick={onRemove}
-          className="flex cursor-pointer items-center rounded-sm border-0 bg-transparent px-1.5 text-muted-foreground transition-control outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-focus disabled:cursor-default disabled:opacity-50"
-        >
-          <Icon name="x" size={13} className="pointer-events-none" />
-        </button>
-      )}
-    </span>
-  );
-}
-
-const chipLink =
-  "flex min-w-0 items-center gap-1.5 rounded-sm px-2.5 text-inherit no-underline transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus";
-
-function ChipFace({ icon, label }: { readonly icon: IconName; readonly label: string }) {
-  return (
-    <>
-      <Icon name={icon} size={13} className="pointer-events-none shrink-0 text-muted-foreground" />
-      <span className="truncate">{label}</span>
-    </>
   );
 }

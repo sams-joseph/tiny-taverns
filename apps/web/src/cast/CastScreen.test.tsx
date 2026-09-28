@@ -237,6 +237,10 @@ describe("CastScreen", () => {
   it("adds a blank NPC at once and opens its drawer with the name focused", async () => {
     const created = { ...blank, id: "2b1f2a1e-0000-4000-8000-00000000d0c2" };
     server.routes.set(`POST /campaigns/${campaignId}/npcs`, { status: 200, body: created });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/links`, {
+      status: 200,
+      body: { npcId: created.id, links: [] },
+    });
     await renderCast();
     await userEvent.type(
       await screen.findByRole("combobox", { name: "Search the cast" }),

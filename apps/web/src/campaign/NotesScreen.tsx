@@ -1,4 +1,12 @@
-import type { CampaignId, Encounter, Note, NoteCategory, NoteId, PartySeat } from "@taverns/api";
+import type {
+  CampaignId,
+  Encounter,
+  Note,
+  NoteCategory,
+  NoteId,
+  Npc,
+  PartySeat,
+} from "@taverns/api";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import {
   Button,
@@ -14,6 +22,7 @@ import { useRef, useState } from "react";
 import { reads } from "../api/keys";
 import type { ApiFailure } from "../api/failure";
 import { useMutation } from "../api/mutation";
+import { npcsAtom } from "../cast/load";
 import { SaveFailure } from "../ui/form";
 import { CampaignChrome } from "./CampaignChrome";
 import { DeleteNoteDialog } from "./DeleteNoteDialog";
@@ -96,6 +105,7 @@ export function NotesScreen() {
       campaignId={campaignId}
       title="Notes"
       centred
+      extra={npcsAtom(campaignId)}
       subtitle={({ view }) => countOf(pins.over(withCreated(created, view.notes)))}
       actions={() => (
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void newNote()}>
@@ -104,12 +114,13 @@ export function NotesScreen() {
         </Button>
       )}
     >
-      {({ view }) => (
+      {({ view, extra }) => (
         <NoteBrowser
           campaignId={campaignId}
           notes={pins.over(withCreated(created, view.notes))}
           encounters={view.encounters}
           party={view.party}
+          npcs={extra}
           fresh={fresh}
           onFreshFocused={() => setFresh(undefined)}
           onForget={(noteId) => setCreated((note) => (note?.id === noteId ? undefined : note))}
@@ -220,6 +231,7 @@ function NoteBrowser({
   notes,
   encounters,
   party,
+  npcs,
   fresh,
   onFreshFocused,
   onForget,
@@ -235,6 +247,8 @@ function NoteBrowser({
   readonly notes: ReadonlyArray<Note>;
   readonly encounters: ReadonlyArray<Encounter>;
   readonly party: ReadonlyArray<PartySeat>;
+  /** The cast, for the pane's *Link…* menu and its NPC chips. */
+  readonly npcs: ReadonlyArray<Npc>;
   /** The note *New note* made, whose title the pane selects. */
   readonly fresh: NoteId | undefined;
   readonly onFreshFocused: () => void;
@@ -382,6 +396,7 @@ function NoteBrowser({
             saver={saverFor(selected)}
             encounters={encounters}
             party={party}
+            npcs={npcs}
             focusTitle={selected.id === fresh}
             onShown={() => {
               if (selected.id === fresh) onFreshFocused();

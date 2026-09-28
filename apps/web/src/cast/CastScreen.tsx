@@ -47,7 +47,9 @@ import { ATTITUDES, castMatches, castSummary, MET_PILLS, type MetFilter, prepByI
  * an empty cast, where there is nothing to filter.
  *
  * **The DM's prep** (`NpcPrep`) is read beside the rows (`castAtom`), with the
- * nights *first met* names, and drawn on each card and in the drawer.
+ * nights *first met* names, and drawn on each card and in the drawer. The
+ * drawer's *Tied to* and *Shows up in* read the NPC's links there, and the
+ * seats, encounters and notes they name from the campaign frame.
  *
  * **The grid is the drawing's `auto-fill` over a `--cast-card-min` floor**, so
  * its columns follow the room the page has, a docked Hob panel included, and
@@ -163,7 +165,7 @@ export function CastScreen() {
         </>
       )}
     >
-      {({ extra }) => {
+      {({ view, extra }) => {
         const npcs = withCreated(created, extra.npcs);
         const prep = prepById(extra.prep);
         return (
@@ -245,6 +247,10 @@ export function CastScreen() {
                   key={`${npc.id}:${String(reloads)}`}
                   npc={npc}
                   nights={extra.nights}
+                  tableNights={prep.get(npc.id)?.tableNights ?? []}
+                  encounters={view.encounters}
+                  notes={view.notes}
+                  party={view.party}
                   saver={saverFor({ npc, prep: prep.get(npc.id) })}
                   focusName={fresh === npc.id}
                   onClose={() => choose(undefined)}

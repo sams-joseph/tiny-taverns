@@ -95,10 +95,20 @@ const creator = (): Map<string, Answer> => {
   routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
   // Their prep, so the cards draw every badge and line and the filter row's
   // pills have something to narrow: first met on the Chronicle's night 12.
+  // Master Hollis was at the table on both nights, and is tied to two seats
+  // and two encounters, with Grusk's note naming him too, so the drawer's
+  // *Tied to* and *Shows up in* are measured over several of each.
   routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
     status: 200,
-    body: castShelfPrep(session12.id),
+    body: castShelfPrep(session12.id).map((prep) =>
+      prep.npcId === hollis.id ? { ...prep, tableNights: [session11.id, session12.id] } : prep,
+    ),
   });
+  for (const npc of castShelf)
+    routes.set(`GET /campaigns/${campaignId}/npcs/${npc.id}/links`, {
+      status: 200,
+      body: { npcId: npc.id, links: npc.id === hollis.id ? hollisLinks : [] },
+    });
   // Each of the Chronicle's two nights was a different seat's, so its
   // Spotlight draws four bars and names the two seats left behind.
   const spotlit = [
@@ -115,8 +125,8 @@ const creator = (): Map<string, Answer> => {
   routes.set(`GET /campaigns/${campaignId}/story`, { status: 200, body: keptStory });
   // The Notes tab's shelf, after the Chronicle's empty list, so the list and
   // the pane are measured over notes: a read-aloud, two paragraphs, a shared
-  // one and an empty one. Grusk is linked to three encounters and three
-  // seats, so the pane's *Linked* chips wrap where the pane is narrow.
+  // one and an empty one. Grusk is linked to three encounters, three seats
+  // and an NPC, so the pane's *Linked* chips wrap where the pane is narrow.
   const shelf = noteShelf.map((note) => (note.id === grusk.id ? linkedGrusk : note));
   routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page(shelf) });
   for (const note of shelf)
@@ -129,6 +139,13 @@ const creator = (): Map<string, Answer> => {
   return routes;
 };
 
+const hollis = castShelf[1]!;
+
+const hollisLinks = [
+  ...[brannocSheetSeat, sorrelSheetSeat].map(({ seat }) => ({ kind: "seat", id: seat.id })),
+  ...[hagsBargain, tollBridge].map(({ id }) => ({ kind: "encounter", id })),
+];
+
 const linkedGrusk = {
   ...grusk,
   links: [
@@ -137,6 +154,7 @@ const linkedGrusk = {
       kind: "seat",
       id: seat.id,
     })),
+    { kind: "npc", id: hollis.id },
   ],
 };
 

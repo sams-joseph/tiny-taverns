@@ -185,6 +185,15 @@ export const reads = {
   /** One NPC's row: the detail screen's read, refreshed by its own edits. */
   npc: (npcId: NpcId): ReadKey => key`npc:${npcId}`,
 
+  /**
+   * What the creator tied one NPC to — the seats under *Tied to* and the
+   * encounters under *Shows up in* (`npcs.links`). Its own key, not `npc`'s: a
+   * link is not an edit of the row and moves neither its version nor the
+   * cast's cards. The notes that name an NPC are the notes' links, under
+   * `notes`.
+   */
+  npcLinks: (npcId: NpcId): ReadKey => key`npc-links:${npcId}`,
+
   /** One NPC's rehearsal threads, and whether a model is behind them. */
   npcRehearsal: (npcId: NpcId): ReadKey => key`npc-rehearsal:${npcId}`,
 
