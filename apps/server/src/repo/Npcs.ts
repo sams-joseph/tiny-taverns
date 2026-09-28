@@ -174,6 +174,18 @@ export interface PlayerNpcRow extends NpcImageRow {
   readonly session_state?: NpcSessionState;
 }
 
+/**
+ * The columns a `PlayerNpc` is built from, and no others. **Every read typed
+ * `PlayerNpcRow` selects this fragment instead of `npc.*`**, so the wide
+ * columns — `private_material` first among them — never leave Postgres on a
+ * player's path, even though `toPlayerNpc` would drop them. A table chat adds
+ * `npc_thread.session_state` beside it. The seam block in `npcs.test.ts` greps
+ * for the rule.
+ */
+export const playerNpcColumns = (sql: SqlClient.SqlClient) => sql`
+  npc.id, npc.campaign_id, npc.name, npc.role, npc.persona, ${npcImageColumns(sql)}
+`;
+
 export const toPlayerNpc = (row: PlayerNpcRow, sign: NpcImageSigner | undefined): PlayerNpc =>
   new PlayerNpc({
     id: row.id,
@@ -577,8 +589,7 @@ export class Npcs extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<PlayerNpcRow>`
-                select npc.id, npc.campaign_id, npc.name, npc.role, npc.persona,
-                       ${npcImageColumns(sql)}
+                select ${playerNpcColumns(sql)}
                 from npc
                 where ${playerNpcReadable(sql, campaignId, actor)}
                 order by lower(npc.name) asc, npc.id asc
@@ -592,8 +603,7 @@ export class Npcs extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<PlayerNpcRow>`
-                select npc.id, npc.campaign_id, npc.name, npc.role, npc.persona,
-                       ${npcImageColumns(sql)}
+                select ${playerNpcColumns(sql)}
                 from npc
                 where npc.id = ${id} and ${playerNpcReadable(sql, campaignId, actor)}
               `;

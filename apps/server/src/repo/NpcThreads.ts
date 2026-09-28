@@ -24,9 +24,9 @@ import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { initiativeOrder } from "./liveTables.js";
 import {
-  npcImageColumns,
   npcImageSigner,
   type PlayerNpcRow,
+  playerNpcColumns,
   playerNpcReadable,
   toPlayerNpc,
 } from "./Npcs.js";
@@ -768,7 +768,7 @@ export class NpcThreads extends Context.Service<
                 threadRows.map((threadRow) =>
                   Effect.gen(function* () {
                     const npcRows = yield* sql<PlayerNpcRow>`
-                      select npc.*, npc_thread.session_state, ${npcImageColumns(sql)}
+                      select ${playerNpcColumns(sql)}, npc_thread.session_state
                       from npc
                       join npc_thread on npc_thread.npc_id = npc.id
                       where npc_thread.id = ${threadRow.id}
@@ -823,7 +823,8 @@ export class NpcThreads extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* ensureSessionParticipant(campaignId, sessionId);
               const rows = yield* sql<PlayerNpcRow>`
-                select npc.*, npc_thread.session_state, ${npcImageColumns(sql)} from npc
+                select ${playerNpcColumns(sql)}, npc_thread.session_state
+                from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc_thread.channel = 'session_shared'
                   and npc_thread.session_id = ${sessionId}
@@ -842,7 +843,8 @@ export class NpcThreads extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const rows = yield* sql<PlayerNpcRow>`
-                select npc.*, npc_thread.session_state, ${npcImageColumns(sql)} from npc
+                select ${playerNpcColumns(sql)}, npc_thread.session_state
+                from npc
                 join npc_thread on npc_thread.npc_id = npc.id
                 where npc.id = ${npcId}
                   and ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}

@@ -632,6 +632,9 @@ describe("shared live-session NPC chat", () => {
         const playerList = yield* withActor(fixture.player)(
           threads.sessionList(fixture.campaign.id, session.id),
         );
+        const playerFound = yield* withActor(fixture.player)(
+          threads.sessionFind(fixture.campaign.id, session.id, fixture.cazril.id),
+        );
         const stranger = yield* withActor(fixture.stranger)(
           threads.sessionList(fixture.campaign.id, session.id),
         ).pipe(Effect.result);
@@ -671,6 +674,7 @@ describe("shared live-session NPC chat", () => {
           opened,
           openedAgain,
           playerList,
+          playerFound,
           stranger,
           revoked,
           first,
@@ -683,6 +687,14 @@ describe("shared live-session NPC chat", () => {
 
     expect(seen.openedAgain.id).toBe(seen.opened.id);
     expect(seen.playerList.map((npc) => npc.name)).toContain("Cazril");
+    expect(seen.playerFound).toMatchObject({ name: "Cazril", sessionState: "open" });
+    // The player's reads carry the public persona and never the secrets.
+    for (const read of [seen.playerList, seen.playerFound]) {
+      const wire = JSON.stringify(read);
+      expect(wire).toContain("Takes names, not coin.");
+      expect(wire).not.toContain(PRIVATE);
+      expect(wire).not.toContain("privateMaterial");
+    }
     expect(Result.isFailure(seen.stranger) && seen.stranger.failure._tag).toBe("NotFound");
     expect(Result.isFailure(seen.revoked) && seen.revoked.failure._tag).toBe("NotFound");
     expect(seen.first.inserted).toBe(true);
@@ -1383,6 +1395,35 @@ describe("the seam", () => {
         expect(source).not.toContain("npc_thread.account_id");
       }
       expect(source).not.toContain("creator_account_id");
+    }
+  });
+
+  it("builds every player NPC from the narrow column list, never `npc.*`", () => {
+    // `toPlayerNpc` drops the wide columns, so a `select npc.*` behind it is
+    // invisible on the wire and in every runtime test. The rule is that the
+    // wide columns are not selected on a player's path at all, so it is
+    // checked here, over every statement that decodes to a `PlayerNpcRow`.
+    const sourceDirectory = fileURLToPath(new URL("../src", import.meta.url));
+    const files = readdirSync(sourceDirectory, { recursive: true, encoding: "utf8" }).filter(
+      (name) => name.endsWith(".ts"),
+    );
+    const statements = files.flatMap((name) =>
+      code(`${sourceDirectory}/${name}`)
+        .split("sql<PlayerNpcRow>`")
+        .slice(1)
+        .map((rest) => [name, rest.slice(0, rest.indexOf("`"))] as const),
+    );
+    expect(statements.map(([name]) => name).sort()).toEqual([
+      "repo/NpcThreads.ts",
+      "repo/NpcThreads.ts",
+      "repo/NpcThreads.ts",
+      "repo/Npcs.ts",
+      "repo/Npcs.ts",
+    ]);
+    for (const [name, statement] of statements) {
+      expect(statement, name).toContain("${playerNpcColumns(sql)}");
+      expect(statement, name).not.toMatch(/\bnpc\.\*/);
+      expect(statement, name).not.toContain("private_material");
     }
   });
 
