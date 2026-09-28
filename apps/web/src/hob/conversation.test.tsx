@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   campaign as aCampaignRow,
   campaignId,
+  encounter as anEncounterRow,
   session as aSessionRow,
   worldId,
 } from "../campaign/campaign.fixtures";
@@ -823,6 +824,96 @@ describe("what Hob offers, and the one thing that writes", () => {
       `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
     );
     await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+  });
+
+  /**
+   * Every kind Hob can offer, through the live answer: the card draws what the
+   * accept will write, and Save sends the ids alone. A kind that failed to draw
+   * would be a proposal the DM was told about and could not keep.
+   */
+  it.each([
+    {
+      kind: "combat",
+      proposal: anEncounter,
+      shows: ["Bullywug Croaker", "3 creatures"],
+    },
+    {
+      kind: "social",
+      proposal: {
+        ...anEncounter,
+        name: "Tolls at the salt quay",
+        kind: "social",
+        roster: [],
+        tactics: ["He wants the toll in coin.", "DC 14 Persuasion: he waves them through."],
+      },
+      shows: ["Social", "DC 14 Persuasion: he waves them through."],
+    },
+    {
+      kind: "challenge",
+      proposal: {
+        ...anEncounter,
+        name: "The dry well",
+        kind: "challenge",
+        roster: [],
+        challenge: {
+          kind: "challenge",
+          dc: 14,
+          successes: 3,
+          failures: 2,
+          onSuccess: "They find the buried cache.",
+          onFailure: "The caravan turns back.",
+          skills: ["Survival"],
+        },
+      },
+      shows: [
+        "Challenge",
+        "14",
+        "On success",
+        "They find the buried cache.",
+        "On failure",
+        "The caravan turns back.",
+        "Survival",
+      ],
+    },
+    {
+      kind: "hazard",
+      proposal: {
+        ...anEncounter,
+        name: "Salt-flat sandstorm",
+        kind: "hazard",
+        roster: [],
+        challenge: {
+          kind: "hazard",
+          save: { ability: "CON", dc: 13 },
+          onFail: "1 level of exhaustion",
+          skills: [],
+        },
+      },
+      shows: ["Hazard", "CON 13", "1 level of exhaustion"],
+    },
+  ])("draws a $kind encounter Hob offered, and saves it", async ({ kind, proposal, shows }) => {
+    server.acceptBody = {
+      accepted: "encounter",
+      encounter: { ...anEncounterRow, name: proposal.name, kind, assistantTurnId: turnId },
+    };
+    server.frames = [
+      began(threadId, turnId),
+      delta("Here you are."),
+      proposed(turnId, proposal),
+      { event: "done", data: { reason: "stop" } },
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, `Make me a ${kind} encounter.{Enter}`);
+
+    await waitFor(() => expect(screen.getByText(proposal.name)).toBeInTheDocument());
+    for (const text of shows) expect(screen.getByText(text)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save to session" }));
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+    expect(server.accepts).toEqual([
+      `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+    ]);
   });
 
   it("says so in the thread when the accept was refused", async () => {

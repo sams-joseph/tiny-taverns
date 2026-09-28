@@ -1015,19 +1015,25 @@ export const ProposeNightSummary = Tool.make("proposeNightSummary", {
 
 export const ProposeEncounter = Tool.make("proposeEncounter", {
   description:
-    "Offer the DM an encounter to save. Its kind is combat (the default), " +
-    "social, challenge or hazard. A fight is built from creatures this " +
-    "campaign can use — see listCreatures; the other kinds may have creatures " +
-    "too. Find each creature with searchCampaign (source 'creature') and use " +
-    "the id from the hit — do not invent one, and do not propose a creature you " +
-    "have not found. Give a setting when you can: one line on what the place " +
-    "looks like from above, with no creatures in it; the encounter's battle map " +
-    "is drawn from it. Give tactics — a few short lines on how to run it — and " +
-    "treasure when there is any. A challenge needs dc, successes and " +
-    "failures, and may say onSuccess and onFailure (what happens when the party " +
-    "makes it, and when it goes wrong); a hazard needs saveAbility and dc, and " +
-    "may give onFail and duration; either may name skills. Only a suggestion; nothing is saved " +
-    "unless the DM accepts it.",
+    "Offer the DM an encounter to save. Set kind to the one the DM asked for: " +
+    "combat (a fight, the default), social (a conversation), challenge (a skill " +
+    "challenge) or hazard. A fight is built from creatures this campaign can use " +
+    "— see listCreatures; the other kinds may have creatures too, or none. Find " +
+    "each creature with searchCampaign (source 'creature') and use the id from " +
+    "the hit — do not invent one, and do not propose a creature you have not " +
+    "found. Give a setting when you can: one line on what the place looks like " +
+    "from above, with no creatures in it; the encounter's battle map is drawn " +
+    "from it. Give tactics — a few short lines on how to run it — and treasure " +
+    "when there is any. Only a challenge and a hazard take numbers: a challenge " +
+    "needs dc, successes and failures, and may say onSuccess and onFailure (what " +
+    "happens when the party makes it, and when it goes wrong); a hazard needs " +
+    "saveAbility and dc, and may give onFail and duration; either may name " +
+    "skills. For combat and social leave dc, successes, failures, onSuccess, " +
+    "onFailure, saveAbility, onFail, duration and skills out: a social " +
+    "encounter's checks and what they lead to go in tactics, one line each " +
+    '("DC 14 Persuasion: he waves them through"). Only a suggestion; nothing ' +
+    "is saved unless the DM accepts it, and nothing is offered unless this tool " +
+    "says it offered it.",
   parameters: Schema.Struct({
     name: Schema.String.check(Schema.isLengthBetween(1, 120)),
     kind: optional(EncounterKind),
@@ -1089,24 +1095,77 @@ interface ChallengeParameters {
   readonly skills?: ReadonlyArray<string> | null | undefined;
 }
 
+/**
+ * A `proposeEncounter` refusal, ending in what the model has to hear most:
+ * nothing reached the DM. A model told only what was wrong went on to tell the
+ * DM a social encounter was ready to view, over a card that never came.
+ */
+const notOffered = (why: string) =>
+  new Conflict({
+    message:
+      `${why}. Nothing was offered to the DM — call proposeEncounter again with that ` +
+      "fixed, and do not say an encounter is ready until it says it offered one.",
+  });
+
+/**
+ * An encounter's free text, with the words that mean "nothing here" read as
+ * nothing.
+ *
+ * {@link optionalText} keeps "None" because a character's background may
+ * really be called that; nothing an encounter says in prose can be. Treasure
+ * "None" is no treasure, and an outcome "null" is the string an XML tool-call
+ * template sends for a string parameter it was told may be null (see
+ * {@link ABSENT_WORDS}). Read as a value, it made every such call a challenge
+ * the kind could not take, and refused a social encounter that said nothing
+ * of the sort.
+ */
+const proseOf = (value: string | null | undefined): string | undefined => {
+  const text = blank(value);
+  return text === undefined || (ABSENT_WORDS as ReadonlyArray<string>).includes(text)
+    ? undefined
+    : text;
+};
+
 /** Lines a model wrote, trimmed, with the blanks and the repeats taken out. */
 const linesOf = (lines: ReadonlyArray<string> | null | undefined): ReadonlyArray<string> => {
   const kept: Array<string> = [];
   for (const raw of lines ?? []) {
-    const line = blank(raw);
+    const line = proseOf(raw);
     if (line !== undefined && !kept.includes(line)) kept.push(line);
   }
   return kept;
 };
 
 /**
+ * The parameters in `fields` a call gave, or left out, by name, as a sentence
+ * lists them: what a refusal tells the model to change.
+ */
+const named = (fields: Readonly<Record<string, unknown>>, which: "given" | "missing"): string =>
+  listed(
+    Object.entries(fields)
+      .filter(([, value]) => (value !== undefined) === (which === "given"))
+      .map(([name]) => name),
+  );
+
+const listed = (names: ReadonlyArray<string>): string =>
+  names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+
+/**
  * The challenge a `proposeEncounter` call describes, or the sentence that
- * tells the model what is missing.
+ * tells the model what to change.
  *
  * A refusal rather than a guess: a skill challenge with no DC is one the DM
- * would have to finish before running, and numbers sent with a fight belong to
- * no field the fight has — dropping them would lose what the model said.
- * Nothing sent at all is a challenge not yet set out, which the DM can write.
+ * would have to finish before running, and numbers sent with a fight or a
+ * conversation belong to no field it has — dropping them would lose what the
+ * model said. Nothing sent at all is a challenge not yet set out, which the DM
+ * can write.
+ *
+ * **Each refusal names the parameters that were wrong and what to do instead**,
+ * because the model is the only reader and it acts on the words. A social
+ * encounter is the one a model most often gets wrong this way — a conversation
+ * naturally has a Persuasion DC — and a refusal that only said what the kind
+ * lacks left it with nothing to do but tell the DM a card was ready that never
+ * came.
  */
 const challengeFrom = (
   kind: EncounterKind,
@@ -1116,29 +1175,31 @@ const challengeFrom = (
   const dc = absent(given.dc);
   const successes = absent(given.successes);
   const failures = absent(given.failures);
-  const onSuccess = blank(given.onSuccess);
-  const onFailure = blank(given.onFailure);
+  const onSuccess = proseOf(given.onSuccess);
+  const onFailure = proseOf(given.onFailure);
   const saveAbility = absent(given.saveAbility);
-  const onFail = blank(given.onFail);
-  const duration = blank(given.duration);
+  const onFail = proseOf(given.onFail);
+  const duration = proseOf(given.duration);
   const said = [dc, successes, failures, onSuccess, onFailure, saveAbility, onFail, duration].some(
     (value) => value !== undefined,
   );
   if (!said && skills.length === 0) return { challenge: undefined };
   switch (kind) {
-    case "challenge":
+    case "challenge": {
+      const misplaced = named({ saveAbility, onFail, duration }, "given");
       if (
-        saveAbility !== undefined ||
-        onFail !== undefined ||
-        duration !== undefined ||
         dc === undefined ||
         successes === undefined ||
-        failures === undefined
+        failures === undefined ||
+        misplaced !== ""
       ) {
+        const missing = named({ dc, successes, failures }, "missing");
         return {
           refused:
             "a challenge takes dc, successes and failures, and may give onSuccess, " +
-            "onFailure and skills; saveAbility, onFail and duration are a hazard's",
+            "onFailure and skills" +
+            (missing === "" ? "" : `; give ${missing}`) +
+            (misplaced === "" ? "" : `; leave out ${misplaced}, which are a hazard's`),
         };
       }
       return {
@@ -1152,19 +1213,16 @@ const challengeFrom = (
           ...(onFailure === undefined ? {} : { onFailure }),
         },
       };
-    case "hazard":
-      if (
-        successes !== undefined ||
-        failures !== undefined ||
-        onSuccess !== undefined ||
-        onFailure !== undefined ||
-        saveAbility === undefined ||
-        dc === undefined
-      ) {
+    }
+    case "hazard": {
+      const misplaced = named({ successes, failures, onSuccess, onFailure }, "given");
+      if (saveAbility === undefined || dc === undefined || misplaced !== "") {
+        const missing = named({ saveAbility, dc }, "missing");
         return {
           refused:
-            "a hazard takes saveAbility and dc, and may give onFail, duration and skills; " +
-            "successes, failures, onSuccess and onFailure are a challenge's",
+            "a hazard takes saveAbility and dc, and may give onFail, duration and skills" +
+            (missing === "" ? "" : `; give ${missing}`) +
+            (misplaced === "" ? "" : `; leave out ${misplaced}, which are a challenge's`),
         };
       }
       return {
@@ -1176,13 +1234,27 @@ const challengeFrom = (
           skills,
         },
       };
+    }
     default:
       return {
         refused:
-          `a ${encounterKindLabel(kind).toLowerCase()} encounter has no challenge; dc, ` +
-          "successes, failures, onSuccess, onFailure, saveAbility, onFail, duration and " +
-          "skills are for a " +
-          "challenge or a hazard",
+          `a ${encounterKindLabel(kind).toLowerCase()} encounter has no challenge, so leave ` +
+          `out ${named(
+            {
+              dc,
+              successes,
+              failures,
+              onSuccess,
+              onFailure,
+              saveAbility,
+              onFail,
+              duration,
+              skills: skills.length === 0 ? undefined : skills,
+            },
+            "given",
+          )}. Put its checks and what they lead to in tactics, one line each ` +
+          '("DC 14 Persuasion: he waves them through") — or, if it is really a skill ' +
+          "challenge or a hazard, set kind to challenge or hazard",
       };
   }
 };
@@ -2254,19 +2326,22 @@ export const dmHandlersFor = (
       Effect.gen(function* () {
         const kind = given ?? "combat";
         if (kind === "combat" && (creatures ?? []).length === 0) {
-          return yield* new Conflict({
-            message: "a fight needs at least one creature — find them with searchCampaign",
-          });
+          return yield* notOffered(
+            "a fight needs at least one creature — find them with searchCampaign; if " +
+              "this is not a fight, set kind to social, challenge or hazard",
+          );
         }
         const sorted = challengeFrom(kind, challengeParameters);
-        if ("refused" in sorted) return yield* new Conflict({ message: sorted.refused });
+        if ("refused" in sorted) return yield* notOffered(sorted.refused);
         const lines = yield* roster(creatures ?? []);
-        const settingLine = blank(setting);
+        const settingLine = proseOf(setting);
         const tacticLines = linesOf(tactics);
-        const treasureLine = blank(treasure);
+        const treasureLine = proseOf(treasure);
         const count = lines.reduce((total, line) => total + line.count, 0);
         const what =
-          kind === "combat" ? "an encounter" : `a ${encounterKindLabel(kind).toLowerCase()}`;
+          kind === "combat"
+            ? "an encounter"
+            : `a ${encounterKindLabel(kind).toLowerCase()} encounter`;
         return yield* offer(
           {
             target: "encounter",

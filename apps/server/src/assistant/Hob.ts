@@ -394,6 +394,8 @@ export class Hob extends Context.Service<
                * the time it passes `note`.
                */
               const reachedForOne = yield* Ref.make(false);
+              /** A build tool refused a call. See {@link unoffered}. */
+              const refusedOne = yield* Ref.make(false);
               const proposal: ProposalSlot = yield* Ref.make<HobProposal | undefined>(undefined);
               const awareness: AwarenessSlot = yield* Ref.make<ReadonlyArray<NpcAwarenessDraft>>(
                 [],
@@ -578,8 +580,9 @@ export class Hob extends Context.Service<
                     Ref.get(reachedForOne),
                     Ref.get(touchedDirect),
                     Ref.get(awareness),
+                    Ref.get(refusedOne),
                   ]),
-                  ([offered, reason, failed, text, reached, touched, candidates]) =>
+                  ([offered, reason, failed, text, reached, touched, candidates, refused]) =>
                     Stream.fromIterable<HobEvent>([
                       ...(offered === undefined
                         ? []
@@ -591,17 +594,19 @@ export class Hob extends Context.Service<
                           ]),
                       ...(failed
                         ? []
-                        : text === "" &&
-                            offered === undefined &&
-                            !touched &&
-                            candidates.length === 0
-                          ? [silence]
-                          : offered === undefined &&
-                              candidates.length === 0 &&
-                              !reached &&
-                              wouldNotBuild(reach, ask.text, text, night !== undefined)
-                            ? [unbuilt(reach)]
-                            : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+                        : refused && offered === undefined && candidates.length === 0
+                          ? [unoffered]
+                          : text === "" &&
+                              offered === undefined &&
+                              !touched &&
+                              candidates.length === 0
+                            ? [silence]
+                            : offered === undefined &&
+                                candidates.length === 0 &&
+                                !reached &&
+                                wouldNotBuild(reach, ask.text, text, night !== undefined)
+                              ? [unbuilt(reach)]
+                              : [{ event: "done" as const, data: new HobDone({ reason }) }]),
                     ]),
                 ),
               );
@@ -613,7 +618,9 @@ export class Hob extends Context.Service<
                 },
               ]).pipe(
                 Stream.concat(
-                  answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
+                  answering.pipe(
+                    Stream.tap((event) => note(written, broke, reachedForOne, refusedOne, event)),
+                  ),
                 ),
                 Stream.concat(tail),
                 Stream.provideService(LanguageModel.LanguageModel, languageModel),
@@ -884,6 +891,7 @@ const deliver = (options: {
     const written = yield* Ref.make("");
     const broke = yield* Ref.make(false);
     const reachedForOne = yield* Ref.make(false);
+    const refusedOne = yield* Ref.make(false);
 
     const save = Effect.gen(function* () {
       const text = yield* Ref.get(written);
@@ -900,8 +908,9 @@ const deliver = (options: {
           Ref.get(broke),
           Ref.get(written),
           Ref.get(reachedForOne),
+          Ref.get(refusedOne),
         ]),
-        ([offered, reason, failed, text, reached]) =>
+        ([offered, reason, failed, text, reached, refused]) =>
           Stream.fromIterable<HobEvent>([
             ...(offered === undefined
               ? []
@@ -913,13 +922,15 @@ const deliver = (options: {
                 ]),
             ...(failed
               ? []
-              : text === "" && offered === undefined
-                ? [silence]
-                : offered === undefined &&
-                    !reached &&
-                    wouldNotBuild(options.surface, options.asked, text, false)
-                  ? [unbuilt(options.surface)]
-                  : [{ event: "done" as const, data: new HobDone({ reason }) }]),
+              : refused && offered === undefined
+                ? [unoffered]
+                : text === "" && offered === undefined
+                  ? [silence]
+                  : offered === undefined &&
+                      !reached &&
+                      wouldNotBuild(options.surface, options.asked, text, false)
+                    ? [unbuilt(options.surface)]
+                    : [{ event: "done" as const, data: new HobDone({ reason }) }]),
           ]),
       ),
     );
@@ -931,7 +942,9 @@ const deliver = (options: {
       },
     ]).pipe(
       Stream.concat(
-        options.answering.pipe(Stream.tap((event) => note(written, broke, reachedForOne, event))),
+        options.answering.pipe(
+          Stream.tap((event) => note(written, broke, reachedForOne, refusedOne, event)),
+        ),
       ),
       Stream.concat(tail),
       Stream.provideService(LanguageModel.LanguageModel, options.languageModel),
@@ -1400,7 +1413,7 @@ const silence: HobEvent = {
  * - **no build tool call arrived.** A model that called `proposeEncounter` and
  *   had it *refused* — an invented creature id, a second offer in one turn —
  *   made a usable call and got an answer it could read, so this stays quiet
- *   there: the refusal went back to the model, which usually explains itself. A
+ *   there: if nothing was offered in the end, {@link unoffered} says so. A
  *   call the framework could not *decode* is the other way round — nothing
  *   reached a handler, `recover` handed the complaint back, and if the model
  *   then answers in prose the person is in exactly the state this reports. Which
@@ -1733,6 +1746,35 @@ const unbuilt = (surface: BuildSurface): HobEvent => ({
   }),
 });
 
+/**
+ * A tool step's line when the tool refused the call, and how {@link note}
+ * tells a refused build from an answered one.
+ */
+const REFUSED = "nothing it could read";
+
+/**
+ * A build tool refused, and nothing reached the person — **whatever the reply
+ * says.**
+ *
+ * The refusal went back to the model in words it can act on, and the model is
+ * free to answer with a sentence that is not true: asked for a social
+ * encounter, one whose call was refused told the DM it was ready to view, and
+ * the panel closed the turn with `done` under a card that never came. So a turn
+ * whose build was refused and that offered nothing ends in this instead. A
+ * refusal the model recovered from by calling again is a turn that offered
+ * something, and is quiet. It takes precedence over `silence` and `unbuilt`,
+ * which would each name a cause that is not this one.
+ */
+const unoffered: HobEvent = {
+  event: "failed",
+  data: new HobFailure({
+    message:
+      "Hob tried to offer something and the offer was turned back, so nothing reached " +
+      "you: there is nothing here to keep, whatever the reply says. Ask again, or make " +
+      "it yourself.",
+  }),
+};
+
 /** A turn id, minted before the row that carries it. See `HobThreads`. */
 const freshTurnId: Effect.Effect<AssistantTurnId> = Effect.sync(
   () => crypto.randomUUID() as AssistantTurnId,
@@ -1750,17 +1792,37 @@ const freshTurnId: Effect.Effect<AssistantTurnId> = Effect.sync(
 const note = (
   written: Ref.Ref<string>,
   broke: Ref.Ref<boolean>,
-  /** See the `reachedForOne` ref in `ask`, which is the only thing this fills. */
+  /** See the `reachedForOne` ref in `ask`. */
   reachedForOne: Ref.Ref<boolean>,
+  /** Whether a build tool refused a call. See {@link unoffered}. */
+  refusedOne: Ref.Ref<boolean>,
   event: HobEvent,
 ): Effect.Effect<void> => {
   if (event.event === "delta") return Ref.update(written, (text) => text + event.data.text);
   if (event.event === "failed") return Ref.set(broke, true);
-  if (event.event === "tool" && event.data.phase === "called" && isBuildTool(event.data.name)) {
-    return Ref.set(reachedForOne, true);
+  if (event.event === "tool" && isBuildTool(event.data.name)) {
+    if (event.data.phase === "called") return Ref.set(reachedForOne, true);
+    if (event.data.detail === REFUSED) return Ref.set(refusedOne, true);
   }
   return Effect.void;
 };
+
+/**
+ * What a refused offer means, said on every surface that offers anything.
+ *
+ * A `propose*` tool that refuses answers the model in words (`failureMode:
+ * "return"`), and the model is free to ignore them: asked for a social
+ * encounter, one told "a social encounter has no challenge" went on to say the
+ * encounter was ready to view. The instruction to say one short line about an
+ * offer read, to it, as licence to say so whatever the tool answered. The panel
+ * says so too when it happens anyway — see {@link unoffered} — but the reply
+ * is the model's, and only the prompt reaches that.
+ */
+const REFUSED_OFFERS: ReadonlyArray<string> = [
+  "Something is offered only when its propose tool says it offered it. If the tool refuses,",
+  "nothing was offered: fix what it said and call it again, or say plainly that you could",
+  "not make it. Never say something is ready, saved or on screen that the tool did not offer.",
+];
 
 /**
  * What Hob is told about itself when a **DM** is asking, and what it is not.
@@ -1799,8 +1861,9 @@ const dmPrompt = (
     "When your research shows an existing campaign NPC should explicitly know or remember",
     "something, offer a Cast review row with proposeNpcAwareness.",
     "Nothing you offer becomes campaign content or NPC context until the DM accepts it, so",
-    "offer it rather than asking permission first. Offer one thing at a time, and say",
-    "one short line about it: the DM is already looking at it.",
+    "offer it rather than asking permission first. Offer one thing at a time, and once",
+    "the tool says it offered it, say one short line about it: the DM is already looking at it.",
+    ...REFUSED_OFFERS,
     "",
     "Quote the DM's own words when they answer the question — they wrote them and they",
     "are already the right length. Keep replies to a sentence or two unless asked for",
@@ -1856,6 +1919,7 @@ const groupPrompt = (groupName: string): string =>
     "event or connection the world should remember, use proposeSharedWorldEntry instead.",
     "Nothing you offer becomes world memory unless a member accepts it. Offer one thing",
     "at a time, and say one short line about it.",
+    ...REFUSED_OFFERS,
     "",
     "Keep replies to a sentence or two unless asked for more.",
   ].join("\n");
@@ -1910,6 +1974,7 @@ const DRAFTING: ReadonlyArray<string> = [
   "a line on how they look and a short backstory in their register rather than yours. Do not",
   "ask clarifying questions first: draft something, and let them correct it. Nothing you",
   "offer is saved until they keep it.",
+  ...REFUSED_OFFERS,
   "",
   "Do not write ability scores or modifiers. Rank the six and the standard array is",
   "applied for you. For a caster, call listStartingSpells first and choose spellId",
@@ -2238,7 +2303,7 @@ const toHobEvent = <Tools extends AnyTools>(
         data: new HobToolStep({
           name: part.name,
           phase: "answered",
-          detail: part.isFailure ? "nothing it could read" : detailOf(part.encodedResult),
+          detail: part.isFailure ? REFUSED : detailOf(part.encodedResult),
         }),
       });
     case "error":

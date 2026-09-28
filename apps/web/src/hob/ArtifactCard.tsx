@@ -69,6 +69,12 @@ function EncounterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
           ))}
         </div>
       )}
+      {artifact.outcomes?.map(([label, text]) => (
+        <p key={label} className="flex flex-col gap-0.5">
+          <span className="text-caption leading-snug text-muted-foreground">{label}</span>
+          <span className="text-body-s leading-body text-foreground">{text}</span>
+        </p>
+      ))}
       {artifact.skills !== undefined && artifact.skills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {artifact.skills.map((skill) => (

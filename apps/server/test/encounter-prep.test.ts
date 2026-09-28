@@ -2,6 +2,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type AssistantThreadId,
+  type AssistantTurnId,
   type CampaignId,
   CurrentActor,
   type EncounterCreate,
@@ -382,9 +383,13 @@ describe("the prep is the creator's alone", () => {
 describe("Hob's accepted encounter", () => {
   const REPLY = textChunks("There you are.");
 
-  /** Ask once; a tool call is followed by the round that answers its result. */
-  const offer = async (text: string, round: Round, threadId?: AssistantThreadId) => {
-    rounds.push(...(round === REPLY ? [round] : [round, REPLY]));
+  /** Ask once, over exactly these rounds. */
+  const converse = async (
+    text: string,
+    script: ReadonlyArray<Round>,
+    threadId?: AssistantThreadId,
+  ) => {
+    rounds.push(...script);
     const events = await run(
       Effect.gen(function* () {
         const hob = yield* Hob;
@@ -396,10 +401,51 @@ describe("Hob's accepted encounter", () => {
     if (began?.event !== "began") throw new Error("no began event");
     const proposed = events.find((event) => event.event === "proposal");
     return {
+      events,
       began: began.data,
       proposal: proposed?.event === "proposal" ? proposed.data.proposal : undefined,
     };
   };
+
+  /** Ask once; a tool call is followed by the round that answers its result. */
+  const offer = (text: string, round: Round, threadId?: AssistantThreadId) =>
+    converse(text, round === REPLY ? [round] : [round, REPLY], threadId);
+
+  /** Accept what Hob offered on that turn, as the DM's Save does. */
+  const accept = async (began: { threadId: AssistantThreadId; turnId: AssistantTurnId }) => {
+    const accepted = await as(jo.token, (client) =>
+      client.hob.accept({
+        params: { campaignId: table, threadId: began.threadId, turnId: began.turnId },
+        payload: {},
+      }),
+    );
+    if (accepted.accepted !== "encounter") throw new Error("accepted something else");
+    return accepted.encounter;
+  };
+
+  /**
+   * Every optional parameter, as an endpoint with an XML tool-call template
+   * sends the ones it was told may be null: an integer or an array as a real
+   * `null`, a string as the word. Before the word was read as absence, every
+   * such call carried a challenge's outcome lines, and a social encounter —
+   * which has none — was refused over text nobody meant.
+   */
+  const UNSET = {
+    tags: null,
+    setting: "null",
+    creatures: null,
+    tactics: null,
+    treasure: "null",
+    dc: null,
+    successes: null,
+    failures: null,
+    onSuccess: "null",
+    onFailure: "null",
+    saveAbility: "null",
+    onFail: "null",
+    duration: "null",
+    skills: null,
+  } as const;
 
   it("carries the kind, tactics, treasure and challenge Hob offered into the record", async () => {
     const { began, proposal } = await offer(
@@ -492,6 +538,133 @@ describe("Hob's accepted encounter", () => {
     });
   });
 
+  it("offers a social encounter with its people and prep, and the accept writes it social", async () => {
+    const harbourmaster = await libraryCreature(jo, "Harbourmaster", "1/8");
+    const { began, proposal } = await offer(
+      "Make me a social encounter with the harbourmaster.",
+      toolCallChunks("proposeEncounter", {
+        ...UNSET,
+        name: "Tolls at the salt quay",
+        kind: "social",
+        setting: "A timber quay stacked with salt barrels",
+        creatures: [{ creatureId: harbourmaster.id, count: 1 }],
+        tactics: [
+          "He wants the toll in coin, not scrip.",
+          "DC 14 Persuasion: he waves them through.",
+        ],
+        treasure: "None",
+      }),
+    );
+    expect(proposal).toMatchObject({
+      target: "encounter",
+      kind: "social",
+      setting: "A timber quay stacked with salt barrels",
+      tactics: [
+        "He wants the toll in coin, not scrip.",
+        "DC 14 Persuasion: he waves them through.",
+      ],
+      roster: [{ creatureId: harbourmaster.id, count: 1, name: "Harbourmaster" }],
+    });
+    // "None" is no treasure, and "null" no outcome: neither is a value.
+    expect(proposal).not.toHaveProperty("treasure");
+    expect(proposal).not.toHaveProperty("challenge");
+
+    const encounter = await accept(began);
+    expect(encounter.kind).toBe("social");
+    expect(encounter.origin).toBe("assistant");
+    expect(encounter.creatureCount).toBe(1);
+    expect(await prepOf(jo, table, encounter.id)).toMatchObject({
+      tactics: [
+        "He wants the toll in coin, not scrip.",
+        "DC 14 Persuasion: he waves them through.",
+      ],
+      treasure: null,
+      challenge: null,
+    });
+  });
+
+  it("offers a skill challenge with its outcome lines, and the accept writes them", async () => {
+    const { began, proposal } = await offer(
+      "Build a skill challenge for crossing the flats.",
+      toolCallChunks("proposeEncounter", {
+        ...UNSET,
+        name: "The dry well",
+        kind: "challenge",
+        tactics: ["Each failure costs a day's water."],
+        dc: 14,
+        successes: 3,
+        failures: 2,
+        onSuccess: "They find the buried cache.",
+        onFailure: "The caravan turns back.",
+        skills: ["Athletics", "Survival"],
+      }),
+    );
+    const challenge = {
+      kind: "challenge",
+      dc: 14,
+      successes: 3,
+      failures: 2,
+      onSuccess: "They find the buried cache.",
+      onFailure: "The caravan turns back.",
+      skills: ["Athletics", "Survival"],
+    };
+    expect(proposal).toMatchObject({
+      target: "encounter",
+      kind: "challenge",
+      challenge,
+      roster: [],
+    });
+
+    const encounter = await accept(began);
+    expect(encounter.kind).toBe("challenge");
+    expect(await prepOf(jo, table, encounter.id)).toMatchObject({
+      tactics: ["Each failure costs a day's water."],
+      challenge,
+    });
+  });
+
+  it("tells Hob what to change on a social encounter with a challenge's numbers, and offers the fix", async () => {
+    const before = chat.requests().length;
+    const { events, began, proposal } = await converse("A tense talk with the toll-keeper.", [
+      toolCallChunks("proposeEncounter", {
+        name: "The toll-keeper",
+        kind: "social",
+        dc: 14,
+        skills: ["Persuasion", "Insight"],
+        onSuccess: "He waves them through",
+      }),
+      toolCallChunks("proposeEncounter", {
+        name: "The toll-keeper",
+        kind: "social",
+        tactics: ["DC 14 Persuasion or Insight: he waves them through."],
+      }),
+      REPLY,
+    ]);
+    // The refusal the model read names what it sent, where the checks go, and
+    // that nothing reached the DM — the words a retry is made from.
+    const refusal = JSON.stringify(chat.requests()[before + 1]?.messages?.at(-1));
+    expect(refusal).toContain("leave out dc, onSuccess and skills");
+    expect(refusal).toContain("in tactics");
+    expect(refusal).toContain("Nothing was offered to the DM");
+    expect(proposal).toMatchObject({ kind: "social", name: "The toll-keeper" });
+    expect(events.at(-1)?.event).toBe("done");
+
+    const encounter = await accept(began);
+    expect(encounter.kind).toBe("social");
+  });
+
+  it("never closes a refused turn as done, whatever the reply claims", async () => {
+    const { events, proposal } = await converse("Make me a social encounter at the gate.", [
+      toolCallChunks("proposeEncounter", { name: "At the gate", kind: "social", dc: 12 }),
+      textChunks("Your social encounter is ready to view."),
+    ]);
+    expect(proposal).toBeUndefined();
+    expect(events.some((event) => event.event === "done")).toBe(false);
+    const last = events.at(-1);
+    expect(last?.event).toBe("failed");
+    expect(last?.event === "failed" ? last.data.message : "").toContain("nothing reached you");
+  });
+
   it("refuses, in words Hob can act on, a fight with nobody in it and numbers for the wrong kind", async () => {
     for (const call of [
       { name: "Empty fight" },
@@ -504,8 +677,10 @@ describe("Hob's accepted encounter", () => {
     // What the model was told, the round after its call.
     const said = JSON.stringify(chat.requests().slice(-6));
     expect(said).toContain("a fight needs at least one creature");
-    expect(said).toContain("a social encounter has no challenge");
+    expect(said).toContain("set kind to social, challenge or hazard");
+    expect(said).toContain("a social encounter has no challenge, so leave out dc");
     expect(said).toContain("a challenge takes dc, successes and failures");
+    expect(said).toContain("give successes and failures");
   });
 });
 

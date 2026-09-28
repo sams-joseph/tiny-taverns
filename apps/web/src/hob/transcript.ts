@@ -108,6 +108,12 @@ export type HobArtifact =
        */
       readonly challenge?: ReadonlyArray<readonly [string, string]>;
       readonly skills?: ReadonlyArray<string>;
+      /**
+       * What a skill challenge leads to, as label and sentence — `["On
+       * success", "They find the cache."]`. Prose rather than a number, so
+       * drawn as a line rather than beside the DC; only what was written.
+       */
+      readonly outcomes?: ReadonlyArray<readonly [string, string]>;
       /** How to run it, in order, as the accept will write it. */
       readonly tactics?: ReadonlyArray<string>;
       readonly treasure?: string;
@@ -176,6 +182,21 @@ export const challengeFacts = (
         ...(challenge.duration === undefined ? [] : [["Duration", challenge.duration] as const]),
       ];
 
+/** A skill challenge's outcome lines, as {@link challengeFacts} sets out its numbers. */
+const challengeOutcomes = (
+  challenge: EncounterChallenge,
+): ReadonlyArray<readonly [string, string]> =>
+  challenge.kind === "challenge"
+    ? [
+        ...(challenge.onSuccess === undefined
+          ? []
+          : [["On success", challenge.onSuccess] as const]),
+        ...(challenge.onFailure === undefined
+          ? []
+          : [["On failure", challenge.onFailure] as const]),
+      ]
+    : [];
+
 /**
  * A proposal from the wire, as the card the designers drew.
  *
@@ -213,7 +234,11 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         ...(proposal.setting === undefined ? {} : { setting: proposal.setting }),
         ...(challenge === undefined
           ? {}
-          : { challenge: challengeFacts(challenge), skills: challenge.skills }),
+          : {
+              challenge: challengeFacts(challenge),
+              outcomes: challengeOutcomes(challenge),
+              skills: challenge.skills,
+            }),
         ...(proposal.tactics === undefined ? {} : { tactics: proposal.tactics }),
         ...(proposal.treasure === undefined ? {} : { treasure: proposal.treasure }),
       };
