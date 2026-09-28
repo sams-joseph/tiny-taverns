@@ -11,6 +11,7 @@ import {
   houseRule,
   installStubServer,
   noteShelf,
+  npcId,
   page,
   readAloud,
   seatId,
@@ -441,7 +442,8 @@ describe("the Linked chips", () => {
       { kind: "seat", id: seatId },
       // A retired seat keeps its link, but its page is gone: no chip.
       { kind: "seat", id: retiredSeat },
-      // The pane reads no cast, so a link to an NPC draws no chip here yet.
+      { kind: "npc", id: npcId },
+      // An archived NPC keeps its link, but the cast no longer lists them: no chip.
       { kind: "npc", id: "2b1f2a1e-0000-4000-8000-000000000899" },
     ],
   };
@@ -474,7 +476,7 @@ describe("the Linked chips", () => {
     expect(screen.queryByText("Not linked to anything yet.")).toBeNull();
   });
 
-  it("opens each link's object, and draws no chip for a retired seat or an NPC", async () => {
+  it("opens each link's object, and draws no chip for a retired seat or an archived NPC", async () => {
     withGrusk(linkedGrusk);
     await open(`?note=${grusk.id}`);
 
@@ -486,10 +488,16 @@ describe("the Linked chips", () => {
       "href",
       `/campaigns/${campaignId}/party/${seatId}`,
     );
-    // Two chips and the menu: the retired seat and the NPC are not drawn.
-    expect(linked()).toHaveLength(3);
+    // An NPC opens in its drawer on the Cast.
+    expect(screen.getByRole("link", { name: "Cazril" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/cast?npc=${npcId}`,
+    );
+    // Three chips and the menu: the retired seat and the archived NPC are not drawn.
+    expect(linked()).toHaveLength(4);
     expect(screen.getByRole("button", { name: `Unlink ${sketch.name}` })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlink Brannoc" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlink Cazril" })).toBeInTheDocument();
   });
 
   it("says so when there is nothing", async () => {
@@ -505,8 +513,8 @@ describe("the Linked chips", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Link…" }));
     const items = await screen.findAllByRole("menuitem");
-    // The sketch is already linked; the ambush and Brannoc are offered.
-    expect(items.map((item) => item.textContent)).toEqual([encounter.name, "Brannoc"]);
+    // The sketch is already linked; the ambush, Brannoc and Cazril are offered.
+    expect(items.map((item) => item.textContent)).toEqual([encounter.name, "Brannoc", "Cazril"]);
     await userEvent.click(screen.getByRole("menuitem", { name: "Brannoc" }));
 
     await waitFor(() => expect(posts()).toEqual([{ kind: "seat", id: seatId }]));
@@ -519,7 +527,28 @@ describe("the Linked chips", () => {
     await open(`?note=${readAloud.id}`);
     await userEvent.click(screen.getByRole("button", { name: "Link…" }));
     const items = await screen.findAllByRole("menuitem");
-    expect(items.map((item) => item.textContent)).toEqual([sketch.name, "Brannoc"]);
+    expect(items.map((item) => item.textContent)).toEqual([sketch.name, "Brannoc", "Cazril"]);
+  });
+
+  it("links an NPC from the menu, and no longer offers them", async () => {
+    server.routes.set(`POST ${notesPath}/${grusk.id}/links`, {
+      status: 200,
+      body: { ...grusk, links: [{ kind: "npc", id: npcId }] },
+    });
+    await open(`?note=${grusk.id}`);
+
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    const cazrilItem = await screen.findByRole("menuitem", { name: "Cazril" });
+    // What the notes read answers once the link is made.
+    withGrusk({ ...grusk, links: [{ kind: "npc", id: npcId }] });
+    await userEvent.click(cazrilItem);
+    await waitFor(() => expect(posts()).toEqual([{ kind: "npc", id: npcId }]));
+
+    const chip = await screen.findByRole("link", { name: "Cazril" });
+    expect(chip).toHaveAttribute("href", `/campaigns/${campaignId}/cast?npc=${npcId}`);
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((item) => item.textContent)).not.toContain("Cazril");
   });
 
   it("unlinks with the ×, without leaving the note", async () => {

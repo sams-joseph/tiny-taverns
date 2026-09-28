@@ -120,6 +120,18 @@ const npcRowAtom = Atom.family((at: OneNpc) =>
   ),
 );
 
+/**
+ * What the creator tied one NPC to (`npcs.links`): the drawer's *Tied to*
+ * seats and *Shows up in* encounters. It answers `encounters` too, because
+ * deleting an encounter takes its links with it.
+ */
+export const npcLinksAtom = Atom.family((at: OneNpc) =>
+  apiAtom(
+    (client) => client.npcs.links({ params: at }),
+    [reads.npcLinks(at.npcId), reads.encounters(at.campaignId)],
+  ),
+);
+
 const npcKnowledgeAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.knowledge({ params: at }), [reads.npcKnowledge(at.npcId)]),
 );

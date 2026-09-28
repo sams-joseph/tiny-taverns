@@ -1,6 +1,9 @@
 import {
+  type Encounter,
+  type Note,
   type Npc,
   NPC_WHEREABOUTS_MAX,
+  type PartySeat,
   type Session,
   type SessionId,
   UNNAMED_NPC,
@@ -32,6 +35,7 @@ import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import { SaveState } from "../ui/SaveState";
 import { NpcAvatar } from "./NpcAvatar";
+import { NpcLinks } from "./NpcLinks";
 import type { NpcFields, NpcSaver } from "./npcAutosave";
 import { ATTITUDES, metLine, nightLabel, STATUSES } from "./prep";
 
@@ -71,12 +75,21 @@ const NOT_MET = "";
  * and never a guess. *First met* is a control the drawing lacks — there it is
  * fixture data — and picks one of the campaign's nights, or *Not met yet*.
  *
+ * **What they are tied to and where they show up** (`NpcLinks`) close the
+ * body, as drawn: a toggle per seat, and chips for the nights they were at the
+ * table, the encounters and the notes, each written at once rather than
+ * through the autosave, since a link is not an edit of the NPC.
+ *
  * *Archive* is the drawn *Remove from cast*, made reversible: the NPC moves to
  * the archived shelf, where *Restore* brings them back.
  */
 export function NpcDrawer({
   npc,
   nights,
+  tableNights,
+  encounters,
+  notes,
+  party,
   saver,
   focusName,
   onClose,
@@ -87,6 +100,12 @@ export function NpcDrawer({
   readonly npc: Npc;
   /** The campaign's nights, newest first, for *First met*. */
   readonly nights: ReadonlyArray<Session>;
+  /** The nights the NPC was opened at the table (`NpcPrep.tableNights`). */
+  readonly tableNights: ReadonlyArray<SessionId>;
+  /** What *Shows up in* links and names, and the seats *Tied to* offers: the campaign frame's. */
+  readonly encounters: ReadonlyArray<Encounter>;
+  readonly notes: ReadonlyArray<Note>;
+  readonly party: ReadonlyArray<PartySeat>;
   readonly saver: NpcSaver;
   /** Just made by *Add NPC*: the name is focused, ready to type. */
   readonly focusName: boolean;
@@ -294,6 +313,16 @@ export function NpcDrawer({
             onChange={(visibility) => set({ visibility })}
             shared="Players can see and talk to them: their whole persona, the manner and wants included, but never the secret, which stays with you."
             hidden="Only you see them. Share them when the table should meet them."
+          />
+
+          <NpcLinks
+            campaignId={campaignId}
+            npcId={npc.id}
+            tableNights={tableNights}
+            nights={nights}
+            encounters={encounters}
+            notes={notes}
+            party={party}
           />
         </div>
 

@@ -1834,6 +1834,11 @@ export const fullCampaign = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/npcs/-/prep`, { status: 200, body: [blankPrep(npcId)] }],
     [`PATCH /campaigns/${campaignId}/npcs/${npcId}/prep`, { status: 200, body: blankPrep(npcId) }],
+    // Tied to nothing and linked to nothing, as a new NPC is.
+    [
+      `GET /campaigns/${campaignId}/npcs/${npcId}/links`,
+      { status: 200, body: { npcId, links: [] } },
+    ],
     [`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [playerCazril] }],
     [`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],

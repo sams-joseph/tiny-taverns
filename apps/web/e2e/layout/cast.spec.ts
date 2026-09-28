@@ -9,7 +9,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * touching; and each card's *where* and met lines at its foot. Then the
  * drawer (`cast/NpcDrawer.tsx`): that it covers the whole app, top to bottom,
  * with its scrim over the nav rows; that it is modal — focus inside, Esc
- * closing it, the window not scrolling under it — and that its footer fits.
+ * closing it, the window not scrolling under it — that its *Tied to* toggles
+ * and *Shows up in* chips wrap inside it, and that its footer fits.
  * All of it is layout, hit-testing or focus across real events, which jsdom
  * does not compute.
  *
@@ -226,6 +227,36 @@ for (const width of WIDTHS) {
         });
         expect.soft(inner.scrolls, "the fields are taller than the drawer").toBe(true);
         expect.soft(inner.footerBottom, "footer bottom").toBeLessThanOrEqual(HEIGHT + 0.5);
+      });
+
+      await test.step("Tied to and Shows up in wrap inside it", async () => {
+        const frame = await box(drawer);
+        const ties = drawer.getByRole("group", { name: "Tied to" }).getByRole("button");
+        await expect(ties).toHaveCount(4);
+        const chips = drawer.locator('[data-slot="npc-links"] [data-slot="link-chip"]');
+        // Both nights at the table, two encounters and Grusk's note.
+        await expect(chips).toHaveCount(5);
+        const placed = [
+          ...(await ties.evaluateAll((els) =>
+            els.map((el) => ({ kind: "tie", ...el.getBoundingClientRect().toJSON() })),
+          )),
+          ...(await chips.evaluateAll((els) =>
+            els.map((el) => ({ kind: "chip", ...el.getBoundingClientRect().toJSON() })),
+          )),
+        ] as ReadonlyArray<{ kind: string; x: number; width: number; height: number }>;
+        for (const part of placed) {
+          expect.soft(part.x, `${part.kind} left`).toBeGreaterThanOrEqual(frame.x);
+          expect
+            .soft(part.x + part.width, `${part.kind} right`)
+            .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+          expect.soft(part.height, `${part.kind} height`).toBeCloseTo(30, 0);
+        }
+        // Every × is a target of at least 24px square.
+        for (const remove of await drawer.getByRole("button", { name: /^Unlink / }).all()) {
+          const target = await box(remove);
+          expect.soft(target.width, "× width").toBeGreaterThanOrEqual(24);
+          expect.soft(target.height, "× height").toBeGreaterThanOrEqual(24);
+        }
       });
 
       await test.step("focus is inside it", async () => {

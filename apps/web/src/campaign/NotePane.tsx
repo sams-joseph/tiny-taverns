@@ -1,4 +1,4 @@
-import type { Encounter, EncounterId, Note, PartySeat } from "@taverns/api";
+import type { Encounter, EncounterId, Note, Npc, PartySeat } from "@taverns/api";
 import {
   Button,
   Icon,
@@ -66,6 +66,7 @@ export function NotePane({
   saver,
   encounters,
   party,
+  npcs,
   focusTitle,
   onShown,
   paneRef,
@@ -80,6 +81,8 @@ export function NotePane({
   readonly encounters: ReadonlyArray<Encounter>;
   /** The seats a note can be linked to, already loaded by the screen. */
   readonly party: ReadonlyArray<PartySeat>;
+  /** The cast a note can be linked to, already loaded by the screen. */
+  readonly npcs: ReadonlyArray<Npc>;
   /** Just made by *New note*: the title is focused and selected, ready to type over. */
   readonly focusTitle: boolean;
   /** Drawn: the screen may bring it into view. */
@@ -286,6 +289,7 @@ export function NotePane({
         attachedTo={draft.attachedTo}
         encounters={encounters}
         party={party}
+        npcs={npcs}
       />
     </article>
   );

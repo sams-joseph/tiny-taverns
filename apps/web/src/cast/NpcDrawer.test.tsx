@@ -7,9 +7,16 @@ import {
   blankPrep,
   campaignId,
   cazril,
+  encounter,
   installStubServer,
+  noteId,
   npcId,
+  page,
+  readAloud,
+  seatId,
   sessionId,
+  sketch,
+  sketchId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
@@ -314,5 +321,180 @@ describe("the NPC drawer", () => {
     // presses are all quieter.
     for (const button of within(drawer).getAllByRole("button"))
       expect(button).not.toHaveClass("bg-accent");
+  });
+});
+
+describe("Tied to and Shows up in", () => {
+  const linksPath = `${npcPath}/links`;
+  const notesPath = `/campaigns/${campaignId}/notes`;
+  /** What the NPC is linked to, as the stub server holds it. */
+  let links: Array<{ readonly kind: string; readonly id: string }> = [];
+
+  beforeEach(() => {
+    links = [];
+    server.routes.set(`GET ${linksPath}`, { status: 200, body: () => ({ npcId, links }) });
+  });
+
+  const sent = (method: string, pathname: string) =>
+    server.calls
+      .filter((call) => call.method === method && call.pathname === pathname)
+      .map((call) => (call.body === "" ? null : (JSON.parse(call.body) as unknown)));
+
+  it("ties the NPC to a seat with its toggle, and unties it again", async () => {
+    server.routes.set(`POST ${linksPath}`, {
+      status: 200,
+      body: () => {
+        links = [{ kind: "seat", id: seatId }];
+        return { npcId, links };
+      },
+    });
+    server.routes.set(`DELETE ${linksPath}/seat/${seatId}`, {
+      status: 200,
+      body: () => {
+        links = [];
+        return { npcId, links };
+      },
+    });
+    const drawer = await open();
+    const ties = await within(drawer).findByRole("group", { name: "Tied to" });
+    const brannoc = within(ties).getByRole("button", { name: "Brannoc" });
+    // Nobody is tied until the DM says so.
+    expect(brannoc).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(brannoc);
+    await waitFor(() => expect(sent("POST", linksPath)).toEqual([{ kind: "seat", id: seatId }]));
+    // The links are read again, and the toggle is lit from what they answer.
+    await waitFor(() =>
+      expect(within(ties).getByRole("button", { name: "Brannoc" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+
+    await userEvent.click(within(ties).getByRole("button", { name: "Brannoc" }));
+    await waitFor(() => expect(sent("DELETE", `${linksPath}/seat/${seatId}`)).toHaveLength(1));
+    await waitFor(() =>
+      expect(within(ties).getByRole("button", { name: "Brannoc" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      ),
+    );
+    // A tie is not an edit of the NPC.
+    expect(patches()).toEqual([]);
+    expect(prepPatches()).toEqual([]);
+  });
+
+  it("shows the nights at the table, the linked encounters and the notes naming them, each opening its own", async () => {
+    links = [{ kind: "encounter", id: sketchId }];
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
+      status: 200,
+      body: [{ ...blankPrep(npcId), tableNights: [sessionId] }],
+    });
+    server.routes.set(`GET ${notesPath}`, {
+      status: 200,
+      body: page([{ ...readAloud, links: [{ kind: "npc", id: npcId }] }]),
+    });
+    const drawer = await open();
+    const appears = await within(drawer).findByRole("list", { name: "Shows up in" });
+
+    // A night is derived from the table chats: it opens the Chronicle, and has no ×.
+    expect(within(appears).getByRole("link", { name: "Session 12" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/chronicle?session=${sessionId}`,
+    );
+    expect(within(appears).queryByRole("button", { name: "Unlink Session 12" })).toBeNull();
+    expect(within(appears).getByRole("link", { name: sketch.name })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/encounters?encounter=${sketchId}`,
+    );
+    expect(within(appears).getByRole("link", { name: readAloud.title })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/notes?note=${noteId}`,
+    );
+    // Drawn in that order: nights, encounters, notes, then the menu.
+    expect(
+      within(appears)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Session 12", sketch.name, readAloud.title, "Link…"]);
+    expect(within(drawer).queryByText(/^Not at the table/)).toBeNull();
+  });
+
+  it("unlinks an encounter from the NPC, and a note from its own links", async () => {
+    links = [{ kind: "encounter", id: sketchId }];
+    server.routes.set(`GET ${notesPath}`, {
+      status: 200,
+      body: page([{ ...readAloud, links: [{ kind: "npc", id: npcId }] }]),
+    });
+    server.routes.set(`DELETE ${linksPath}/encounter/${sketchId}`, {
+      status: 200,
+      body: { npcId, links: [] },
+    });
+    server.routes.set(`DELETE ${notesPath}/${noteId}/links/npc/${npcId}`, {
+      status: 200,
+      body: readAloud,
+    });
+    const drawer = await open();
+
+    await userEvent.click(
+      await within(drawer).findByRole("button", { name: `Unlink ${sketch.name}` }),
+    );
+    await waitFor(() =>
+      expect(sent("DELETE", `${linksPath}/encounter/${sketchId}`)).toHaveLength(1),
+    );
+    await userEvent.click(
+      within(drawer).getByRole("button", { name: `Unlink ${readAloud.title}` }),
+    );
+    await waitFor(() =>
+      expect(sent("DELETE", `${notesPath}/${noteId}/links/npc/${npcId}`)).toHaveLength(1),
+    );
+    // Neither leaves the drawer.
+    expect(screen.getByRole("dialog", { name: "Cazril" })).toBeInTheDocument();
+    expect(patches()).toEqual([]);
+  });
+
+  it("links an encounter to the NPC, or the NPC to a note, from the menu", async () => {
+    server.routes.set(`POST ${linksPath}`, {
+      status: 200,
+      body: { npcId, links: [{ kind: "encounter", id: sketchId }] },
+    });
+    server.routes.set(`POST ${notesPath}/${noteId}/links`, {
+      status: 200,
+      body: { ...readAloud, links: [{ kind: "npc", id: npcId }] },
+    });
+    const drawer = await open();
+    // Nothing yet, and it says so.
+    expect(
+      await within(drawer).findByText("Not at the table, in an encounter or in a note yet."),
+    ).toBeInTheDocument();
+
+    await userEvent.click(within(drawer).getByRole("button", { name: "Link…" }));
+    const items = await screen.findAllByRole("menuitem");
+    // Every encounter and note, none linked yet.
+    expect(items.map((item) => item.textContent)).toEqual([
+      encounter.name,
+      sketch.name,
+      readAloud.title,
+    ]);
+    await userEvent.click(screen.getByRole("menuitem", { name: sketch.name }));
+    await waitFor(() =>
+      expect(sent("POST", linksPath)).toEqual([{ kind: "encounter", id: sketchId }]),
+    );
+
+    await userEvent.click(within(drawer).getByRole("button", { name: "Link…" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: readAloud.title }));
+    await waitFor(() =>
+      expect(sent("POST", `${notesPath}/${noteId}/links`)).toEqual([{ kind: "npc", id: npcId }]),
+    );
+    expect(patches()).toEqual([]);
+  });
+
+  it("says so when nobody is seated", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: [] });
+    const drawer = await open();
+    expect(
+      await within(drawer).findByText("Nobody is seated at this table yet."),
+    ).toBeInTheDocument();
+    expect(within(drawer).queryByRole("group", { name: "Tied to" })).toBeNull();
   });
 });
