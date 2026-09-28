@@ -3,6 +3,7 @@ import {
   type CampaignMembership,
   type SharedWorldMembership,
   type NpcCreate,
+  type NpcSheetSummary,
   type NpcSource,
 } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
@@ -14,6 +15,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  cardLinkClassName,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,10 +28,9 @@ import {
   EmptyState,
   Loading,
 } from "@taverns/ui";
-import { Atom } from "effect/unstable/reactivity";
 import { Result } from "effect";
 import { useMemo, useState, type ReactNode } from "react";
-import { apiAtom, useApiAtom } from "../api/atoms";
+import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { membershipsAtom } from "../campaign/load";
@@ -39,7 +40,9 @@ import { LibraryNav } from "../library/LibraryNav";
 import { useFilterQuery } from "../library/query";
 import { TopBar } from "../shell/TopBar";
 import { Field, SaveFailure, Textarea } from "../ui/form";
+import { libraryNpcShelfAtom } from "./libraryLoad";
 import { NpcAvatar } from "./NpcAvatar";
+import { sheetSummaryLine } from "./npcSheet";
 import {
   draftOf,
   emptyDraft,
@@ -49,13 +52,6 @@ import {
   type NpcDraft,
 } from "./persona";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
-
-const libraryNpcsAtom = Atom.family((archived: boolean) =>
-  apiAtom(
-    (client) => client.library.npcs({ query: archived ? { archived: true } : {} }),
-    [reads.libraryNpcs],
-  ),
-);
 
 const sourceDescription = (source: NpcSource): string => {
   const summary = source.persona.identity?.summary?.trim() ?? "";
@@ -497,25 +493,44 @@ function ShareDialog({
   );
 }
 
+/**
+ * One original on the shelf. **The card opens its stats page** from anywhere
+ * on its face (`/library/npcs/$npcId`, `LibraryNpcScreen`), where its sheet is
+ * read and written; the persona's *Edit*, *Share* and *Add to campaign* stay
+ * the card's own and do not navigate. Its stats are one line, the Cast
+ * drawer's (`sheetSummaryLine`), or *No stats*.
+ */
 function SourceCard({
   source,
+  sheet,
   onEdit,
   onAdd,
   onShare,
 }: {
   readonly source: NpcSource;
+  /** The original's sheet as the shelf's read has it; `undefined` when there is none. */
+  readonly sheet: NpcSheetSummary | undefined;
   readonly onEdit: () => void;
   readonly onAdd: () => void;
   readonly onShare: () => void;
 }) {
   return (
-    <Card className="h-full">
+    <Card linked className="h-full">
       <CardHeader>
         <div className="flex items-start gap-2.5">
           {/* A Library original is never drawn; a copy into a cast is. */}
           <NpcAvatar name={source.name} image={null} />
           <div className="min-w-0 flex-1">
-            <CardTitle>{source.name}</CardTitle>
+            <CardTitle>
+              <Link
+                to="/library/npcs/$npcId"
+                params={{ npcId: source.id }}
+                data-card-link
+                className={cardLinkClassName}
+              >
+                {source.name}
+              </Link>
+            </CardTitle>
             {source.role !== "" && (
               <p className="text-caption leading-body text-muted-foreground">{source.role}</p>
             )}
@@ -531,6 +546,15 @@ function SourceCard({
           </Button>
         </div>
         <CardDescription className="line-clamp-3">{sourceDescription(source)}</CardDescription>
+        <p
+          data-slot="npc-source-stats"
+          className="mb-0 flex min-w-0 items-start gap-1.5 text-caption leading-body text-muted-foreground"
+        >
+          <Icon name="swords" size={12} className="mt-0.5 shrink-0 text-faint" />
+          <span className="min-w-0">
+            {sheet === undefined ? "No stats" : sheetSummaryLine(sheet)}
+          </span>
+        </p>
       </CardHeader>
       <CardContent className="mt-auto flex flex-wrap items-center gap-1.5">
         {((source.privateMaterial.secrets ?? "").trim() !== "" ||
@@ -555,7 +579,7 @@ function SourceCard({
 
 export function NpcLibraryScreen() {
   const filter = useFilterQuery([]);
-  const [resource, reload] = useApiAtom(libraryNpcsAtom(false));
+  const [resource, reload] = useApiAtom(libraryNpcShelfAtom);
   const [membershipsResource] = useApiAtom(membershipsAtom);
   const [worldsResource] = useApiAtom(sharedWorldsAtom);
   const [editing, setEditing] = useState<NpcSource | "new" | undefined>();
@@ -567,9 +591,18 @@ export function NpcLibraryScreen() {
   const filtered = useMemo(
     () =>
       resource.state === "ready"
-        ? resource.value.filter((source) => sourceMatches(filter.q, source))
+        ? resource.value.sources.filter((source) => sourceMatches(filter.q, source))
         : [],
     [filter.q, resource],
+  );
+  const sheets = useMemo(
+    () =>
+      new Map(
+        resource.state === "ready"
+          ? resource.value.sheets.map((sheet) => [sheet.npcId, sheet] as const)
+          : [],
+      ),
+    [resource],
   );
 
   return (
@@ -618,6 +651,7 @@ export function NpcLibraryScreen() {
                 <SourceCard
                   key={source.id}
                   source={source}
+                  sheet={sheets.get(source.id)}
                   onEdit={() => setEditing(source)}
                   onAdd={() => setAdding(source)}
                   onShare={() => setSharing(source)}

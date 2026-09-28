@@ -22,6 +22,7 @@ import { NotesScreen } from "./campaign/NotesScreen";
 import { ArchivedCastScreen } from "./cast/ArchivedCastScreen";
 import { CastScreen } from "./cast/CastScreen";
 import { NpcFollowUpScreen } from "./cast/NpcFollowUpScreen";
+import { LibraryNpcScreen } from "./cast/LibraryNpcScreen";
 import { NpcLibraryScreen } from "./cast/NpcLibraryScreen";
 import { NpcScreen } from "./cast/NpcScreen";
 import { PlayerNpcChatScreen } from "./cast/PlayerNpcChatScreen";
@@ -538,6 +539,31 @@ const libraryNpcsRoute = createRoute({
 });
 
 /**
+ * One NPC source's stats page: the Library's twin of the NPC page's *Stats*
+ * tab, the owner's alone through its read. A different source is a different
+ * sheet, so the leaf remounts on the id; a bad id falls back to the shelf.
+ */
+const libraryNpcRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/library/npcs/$npcId",
+  params: {
+    parse: ({ npcId }) => {
+      const decoded = asNpcId(npcId);
+      return decoded === undefined ? false : { npcId: decoded };
+    },
+  },
+  component: LibraryNpcScreen,
+  remountDeps: ({ params }) => params.npcId,
+});
+
+/** A half-typed source link still knows it meant the NPC shelf. */
+const libraryNpcsSplatRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/library/npcs/$",
+  component: NpcLibraryScreen,
+});
+
+/**
  * The Chronicle names a campaign for the same reason the bestiary does: every
  * source it reads — `chronicle.read`, `chronicle.readAsPlayer` — hangs off
  * `/campaigns/:campaignId`.
@@ -772,6 +798,8 @@ export const routeTree = rootRoute.addChildren([
     libraryEquipmentRoute,
     libraryMagicItemsRoute,
     libraryNpcsRoute,
+    libraryNpcRoute,
+    libraryNpcsSplatRoute,
     campaignRoute.addChildren([
       campaignIndexRoute,
       encountersRoute,
@@ -843,6 +871,7 @@ export const routes = {
   libraryEquipment: libraryEquipmentRoute,
   libraryMagicItems: libraryMagicItemsRoute,
   libraryNpcs: libraryNpcsRoute,
+  libraryNpc: libraryNpcRoute,
   campaign: campaignRoute,
   encounters: encountersRoute,
   encounter: encounterRoute,

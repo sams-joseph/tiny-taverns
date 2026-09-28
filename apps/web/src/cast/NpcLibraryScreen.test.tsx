@@ -6,6 +6,7 @@ import {
   campaign,
   campaignId,
   cazril,
+  cazrilSheetSummary,
   cazrilSource,
   sharedWorldDetails,
   worldId,
@@ -176,5 +177,46 @@ describe("NpcLibraryScreen", () => {
       }),
     );
     expect(server.calls.some((call) => call.pathname.includes(standaloneContextId))).toBe(false);
+  });
+
+  it("gives each card its stats in one line, and opens the source's stats page from the card", async () => {
+    await renderLibrary();
+    await screen.findByText("Cazril");
+    const line = document.querySelector('[data-slot="npc-source-stats"]');
+    expect(line).toHaveTextContent("No stats");
+
+    const name = screen.getByRole("link", { name: "Cazril" });
+    expect(name).toHaveAttribute("href", `/library/npcs/${cazrilSource.id}`);
+    expect(name).toHaveAttribute("data-card-link");
+    // The card's own verbs stay buttons: none of them is the way in.
+    expect(screen.getByRole("button", { name: "Edit Cazril" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add to campaign" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Open|Add stats/ })).toBeNull();
+
+    await userEvent.click(name);
+    expect(await screen.findByText("No stats yet")).toBeInTheDocument();
+    expect(globalThis.location.pathname).toBe(`/library/npcs/${cazrilSource.id}`);
+  });
+
+  it("draws a written sheet's line from the shelf's summaries", async () => {
+    server.routes.set("GET /library/npcs/-/sheets", {
+      status: 200,
+      body: [{ ...cazrilSheetSummary, npcId: cazrilSource.id }],
+    });
+    await renderLibrary();
+    await screen.findByText("Cazril");
+    expect(document.querySelector('[data-slot="npc-source-stats"]')).toHaveTextContent(
+      "Level 5 Human Fighter · AC 17 · HP 44 · CR 3",
+    );
+  });
+
+  it("says a failed sheet read rather than drawing no stats on every card", async () => {
+    server.routes.set("GET /library/npcs/-/sheets", {
+      status: 500,
+      body: { _tag: "InternalError", message: "boom" },
+    });
+    await renderLibrary();
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("No stats")).toBeNull();
   });
 });

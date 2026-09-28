@@ -3,7 +3,16 @@ import { renderAt } from "../test/renderRoute";
 import { ABILITY_KEYS } from "@taverns/api";
 import { vi } from "vitest";
 import { type HostedSession } from "../auth/hostedSession";
-import { campaignId, encounterId, npcId, runId, seatId, sessionId, worldId } from "../test/ids";
+import {
+  campaignId,
+  encounterId,
+  npcId,
+  runId,
+  seatId,
+  sessionId,
+  sourceNpcId,
+  worldId,
+} from "../test/ids";
 import { TEST_SESSION } from "../test/session";
 
 /**
@@ -20,7 +29,7 @@ import { TEST_SESSION } from "../test/session";
  */
 
 /** The ids a screen's path names are `test/ids.ts`'s, which says why. */
-export { campaignId, encounterId, npcId, runId, seatId, sessionId, worldId };
+export { campaignId, encounterId, npcId, runId, seatId, sessionId, sourceNpcId, worldId };
 export const sketchId = "2b1f2a1e-0000-4000-8000-000000000602";
 export const prepItemId = "2b1f2a1e-0000-4000-8000-000000000701";
 export const noteId = "2b1f2a1e-0000-4000-8000-000000000801";
@@ -404,7 +413,7 @@ export const cazrilSheet = {
 };
 
 export const cazrilSource = {
-  id: "2b1f2a1e-0000-4000-8000-00000000d0c0",
+  id: sourceNpcId,
   accountId: theDmAccountId,
   name: "Cazril",
   role: "the ferryman at the crossing",
@@ -1948,6 +1957,10 @@ export const fullCampaign = (): Map<string, Answer> =>
     ["GET /library/compendium", { status: 200, body: page([combatRuleArticle]) }],
     ["GET /library/feats", { status: 200, body: page(libraryFeats) }],
     ["GET /library/npcs", { status: 200, body: [cazrilSource] }],
+    // Cazril's original has no stats yet: the shelf is empty and its sheet `null`.
+    ["GET /library/npcs/-/sheets", { status: 200, body: [] }],
+    [`GET /library/npcs/${cazrilSource.id}`, { status: 200, body: cazrilSource }],
+    [`GET /library/npcs/${cazrilSource.id}/sheet`, { status: 200, body: null }],
     [`GET /library/compendium/${ruleArticleId}`, { status: 200, body: combatRuleDetail }],
     // The rules vocabulary this table builds characters from — the create
     // form's pickers: the shared bundle plus what reaches this table through

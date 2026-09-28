@@ -70,6 +70,8 @@ const everyRoute: Record<RouteIds<typeof routeTree>, string | undefined> = {
   "/_shell/library/equipment": "/library/equipment",
   "/_shell/library/magic-items": "/library/magic-items",
   "/_shell/library/npcs": "/library/npcs",
+  "/_shell/library/npcs/$npcId": `/library/npcs/${npcId}`,
+  "/_shell/library/npcs/$": "/library/npcs/not-a-uuid",
   "/_shell/campaigns/$campaignId/": `/campaigns/${campaignId}`,
   "/_shell/campaigns/$campaignId/$": `/campaigns/${campaignId}/a-section-we-do-not-serve`,
   "/_shell/campaigns/$campaignId/encounters": `/campaigns/${campaignId}/encounters`,

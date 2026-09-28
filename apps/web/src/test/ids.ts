@@ -15,6 +15,8 @@ export const campaignId = Schema.decodeSync(CampaignId)("2b1f2a1e-0000-4000-8000
 export const sessionId = "2b1f2a1e-0000-4000-8000-000000000501";
 export const encounterId = "2b1f2a1e-0000-4000-8000-000000000601";
 export const npcId = "2b1f2a1e-0000-4000-8000-00000000d0c1";
+/** Cazril's Library original — the Library NPC page's path names it. */
+export const sourceNpcId = "2b1f2a1e-0000-4000-8000-00000000d0c0";
 export const runId = "2b1f2a1e-0000-4000-8000-000000000c01";
 /** The Chronicle's older night, session 11 — `?session=` names it. */
 export const chronicleNightId = "2b1f2a1e-0000-4000-8000-000000000511";

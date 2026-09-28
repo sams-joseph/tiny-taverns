@@ -5,6 +5,7 @@ import {
   castShelfPrep,
   cazrilSheet,
   cazrilSheetSummary,
+  cazrilSource,
   sessionId,
   encounterShelf,
   fullCampaign,
@@ -116,6 +117,16 @@ const creator = (): Map<string, Answer> => {
   routes.set(`GET /campaigns/${campaignId}/npcs/${cazrilSheet.npcId}/sheet`, {
     status: 200,
     body: cazrilSheet,
+  });
+  // The Library's Cazril has the same sheet, so the shelf's card line and the
+  // Library NPC page are measured over a written one.
+  routes.set("GET /library/npcs/-/sheets", {
+    status: 200,
+    body: [{ ...cazrilSheetSummary, npcId: cazrilSource.id }],
+  });
+  routes.set(`GET /library/npcs/${cazrilSource.id}/sheet`, {
+    status: 200,
+    body: { ...cazrilSheet, npcId: cazrilSource.id },
   });
   for (const npc of castShelf)
     routes.set(`GET /campaigns/${campaignId}/npcs/${npc.id}/links`, {

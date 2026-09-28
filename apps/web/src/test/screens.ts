@@ -6,6 +6,7 @@ import {
   runId,
   seatId,
   sessionId,
+  sourceNpcId,
   worldId,
 } from "./ids";
 
@@ -41,7 +42,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The twenty-eight screens. */
+/** The thirty screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -77,6 +78,8 @@ export const screens: ReadonlyArray<Screen> = [
     path: `${c}/sessions/${sessionId}/runs/${runId}`,
   },
   { name: "spells", scenario: "creator", path: "/library/spells" },
+  { name: "library-npcs", scenario: "creator", path: "/library/npcs" },
+  { name: "library-npc", scenario: "creator", path: `/library/npcs/${sourceNpcId}` },
   { name: "characters", scenario: "player", path: "/characters" },
   { name: "sheet", scenario: "player", path: `/characters/${brannocId}` },
   { name: "player-overview", scenario: "player", path: c },

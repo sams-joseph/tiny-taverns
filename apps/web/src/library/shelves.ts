@@ -79,13 +79,14 @@ export const SHELVES: ReadonlyArray<{
 /**
  * The shelf this route is on, or `undefined` outside the Library. `/library`
  * is a prefix of every shelf, so the creatures shelf is what is left when no
- * other shelf matches.
+ * other shelf matches. A page under a shelf (`/library/npcs/$npcId`) is on
+ * that shelf.
  */
 export function useActiveShelf(): Shelf | undefined {
   const matchRoute = useMatchRoute();
   if (matchRoute({ to: "/library", fuzzy: true }) === false) return undefined;
   return (
-    SHELVES.find((shelf) => shelf.to !== "/library" && matchRoute({ to: shelf.to }))?.to ??
-    "/library"
+    SHELVES.find((shelf) => shelf.to !== "/library" && matchRoute({ to: shelf.to, fuzzy: true }))
+      ?.to ?? "/library"
   );
 }
