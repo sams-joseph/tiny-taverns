@@ -22,7 +22,15 @@ import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   ensureCampaignWritable,
   libraryRowReadable,
@@ -249,9 +257,16 @@ export class Npcs extends Context.Service<
       creator: CampaignCreatorActor,
       id: NpcId,
     ) => Effect.Effect<Npc, NotFound, never>;
+    /**
+     * The cast's create. `from` is the Hob turn a kept draft came from, and
+     * only `repo/Proposals.ts` passes one: the NPC is then `assistant`'s with
+     * that turn. There is no `origin` on `NpcCreate`, so it cannot arrive from
+     * a client.
+     */
     readonly create: (
       creator: CampaignCreatorActor,
       payload: NpcCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Npc, NotFound, never>;
     readonly sourcesForCampaign: (
       creator: CampaignCreatorActor,
@@ -355,7 +370,7 @@ export class Npcs extends Context.Service<
 
         findById: (creator, id) => dieOnSqlError(one(creator, id)),
 
-        create: (creator, payload) =>
+        create: (creator, payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -373,6 +388,7 @@ export class Npcs extends Context.Service<
                           ? undefined
                           : JSON.stringify(payload.privateMaterial),
                       visibility: payload.visibility,
+                      ...assistantColumns(from),
                     }),
                   )}
                   returning npc.*, ${npcImageColumns(sql)}

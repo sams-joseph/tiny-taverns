@@ -29,6 +29,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Memberships } from "../src/repo/Memberships.js";
 import { Notes } from "../src/repo/Notes.js";
+import { NpcPreps } from "../src/repo/NpcPrep.js";
 import { NpcSheets } from "../src/repo/NpcSheets.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Party } from "../src/repo/Party.js";
@@ -79,6 +80,8 @@ const runtime = ManagedRuntime.make(
       Layer.provide([
         CampaignCreatorActors.layer,
         NpcSheets.layer,
+        Npcs.layer,
+        NpcPreps.layer,
         Beats.layer.pipe(Layer.provide(live)),
         Campaigns.layer,
         CampaignStories.layer,

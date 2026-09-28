@@ -609,14 +609,14 @@ export const servicesOver = <E>(
     NpcFollowUps.layer.pipe(Layer.provide(imageUrls)),
     // Each NPC's attitude, status, whereabouts and first meeting: creator-only,
     // every method behind the `CampaignCreatorActor` proof. The handlers write
-    // it; Hob's creator toolkit reads it through `getNpc` and nothing writes it
-    // for a model.
+    // it; Hob's creator toolkit reads it through `getNpc`, and a new NPC Hob
+    // drafted is given its prep only by the creator's accept.
     NpcPreps.layer,
     // An NPC's ties to encounters and seats: DM prep, only the handlers hold it.
     NpcLinks.layer,
     // An NPC's character-style sheet: DM prep, a campaign NPC's creator's
-    // behind the proof and a Library original's owner's. Only the handlers
-    // hold it; no toolkit reads or writes it.
+    // behind the proof and a Library original's owner's. The creator's Hob
+    // reads it through `getNpc`; only the handlers and the accept write it.
     NpcSheets.layer,
     NpcProposals.layer.pipe(
       Layer.provide([
@@ -710,6 +710,11 @@ export const servicesOver = <E>(
         // creator proof the accept asks for again.
         CampaignCreatorActors.layer,
         NpcSheets.layer,
+        // A kept NPC joins the cast through the cast's own create, and its
+        // prep through the creator's own PATCH. The bare `Npcs.layer`: a new
+        // NPC has no portrait to sign yet, and the handler draws it after.
+        Npcs.layer,
+        NpcPreps.layer,
       ]),
     ),
     // A view over five tables and a writer of none. It needs no `LiveEvents`

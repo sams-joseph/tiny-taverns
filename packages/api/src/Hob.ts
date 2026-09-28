@@ -16,7 +16,7 @@ import {
   SharedWorldId,
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
-import { NpcSheet } from "./Npc.js";
+import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
 import { Session } from "./Session.js";
 
 /**
@@ -152,8 +152,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `nightSummary` (a played night's summary, kept on the night), an
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
- * campaign's own story so far (`campaignStory`), an NPC's sheet (`npcSheet`),
- * and a `campaign` (the asker's new table). The union is discriminated on `target` for the reason
+ * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
+ * an NPC's sheet (`npcSheet`), and a `campaign` (the asker's new table). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
  * the client renders anyway is the failure this schema style exists to
@@ -161,8 +161,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
- * `proposeNightSummary`, `proposeEncounter`, `proposeCampaignStory` and
- * `proposeNpcSheet`; the drafting
+ * `proposeNightSummary`, `proposeEncounter`, `proposeCampaignStory`,
+ * `proposeNpc` and `proposeNpcSheet`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
@@ -387,6 +387,50 @@ export const HobProposal = Schema.Union([
     ),
     /** Short lines, in the order Hob wrote them — `character`'s *What Hob did*. */
     rationale: Schema.Array(Schema.String),
+  }),
+  /**
+   * A new NPC for the campaign's cast, offered to its creator by the
+   * campaign's own Hob — the creator's toolkit alone has `proposeNpc`.
+   *
+   * The fields are the ones the Cast drawer writes: the name and role, the
+   * public persona (a summary, the appearance line the portrait is drawn
+   * from, the voice and manner, what they want), the DM-only secret, and the
+   * creator's prep (attitude, status, whereabouts). No `visibility`: a kept
+   * NPC takes the column's default, hidden from the table until the DM shares
+   * it, as every accepted row does.
+   *
+   * `sheet` is null unless the DM asked for stats; when drafted it is composed
+   * exactly as `npcSheet`'s is, through `startingSheetBody`, so the two tools
+   * cannot disagree about what a level 5 Fighter is. Accepting creates the
+   * NPC through the cast's own create, then its prep and its sheet through
+   * the creator's own writes, the NPC and the sheet stamped `origin =
+   * 'assistant'` with the turn, and the handler starts the portrait after
+   * the commit as the cast's create does.
+   */
+  Schema.Struct({
+    target: Schema.Literal("npc"),
+    name: Schema.String,
+    /** `""` when Hob gave none, as the column's default is. */
+    role: Schema.String,
+    persona: NpcPersona,
+    privateMaterial: NpcPrivateMaterial,
+    prep: Schema.Struct({
+      attitude: Schema.NullOr(NpcAttitude),
+      status: Schema.NullOr(NpcStatus),
+      whereabouts: Schema.NullOr(Schema.String),
+    }),
+    sheet: Schema.NullOr(
+      Schema.Struct({
+        level: Schema.Int,
+        race: Schema.NullOr(Schema.String),
+        subrace: Schema.NullOr(Schema.String),
+        className: Schema.String,
+        ac: Schema.NullOr(Schema.Int),
+        hpMax: Schema.NullOr(Schema.Int),
+        cr: Schema.NullOr(ChallengeRating),
+        sheet: SheetBody,
+      }),
+    ),
   }),
   /**
    * A new campaign, drafted in the account's own conversation (`/me/hob`) —
@@ -687,6 +731,11 @@ export const HobAccepted = Schema.Union([
   }),
   /** The story so far a campaign's creator kept from their Hob. */
   Schema.Struct({ accepted: Schema.Literal("campaignStory"), story: CampaignStory }),
+  /**
+   * The NPC a campaign's creator kept from their Hob, as the cast's create
+   * answers it: `imagePending` when its portrait started after the commit.
+   */
+  Schema.Struct({ accepted: Schema.Literal("npc"), npc: Npc }),
   /** The NPC sheet a campaign's creator kept from their Hob. */
   Schema.Struct({ accepted: Schema.Literal("npcSheet"), sheet: NpcSheet }),
   /**

@@ -279,7 +279,9 @@ const callsFor = (scope: HobScope): ScopeCalls => {
          * the beat under whichever night is current — resolved server-side, so
          * the campaign-wide key is the one this panel can name. An NPC's sheet
          * is read by its Stats tab and, as a line, by the Cast drawer (the
-         * shelf read), so keeping one names both. Anything else
+         * shelf read), so keeping one names both. A new NPC joins the Cast,
+         * whose cards, prep and sheet lines are three reads, so keeping one
+         * names all three. Anything else
          * Hob keeps here is a note, an encounter or the story so far, all three
          * named because the model decides which.
          */
@@ -290,7 +292,13 @@ const callsFor = (scope: HobScope): ScopeCalls => {
               ? [reads.sessions(campaignId)]
               : accepted.accepted === "npcSheet"
                 ? [reads.npcSheet(accepted.sheet.npcId), reads.npcSheets(campaignId)]
-                : [reads.notes(campaignId), reads.encounters(campaignId), reads.story(campaignId)],
+                : accepted.accepted === "npc"
+                  ? [reads.npcs(campaignId), reads.npcPrep(campaignId), reads.npcSheets(campaignId)]
+                  : [
+                      reads.notes(campaignId),
+                      reads.encounters(campaignId),
+                      reads.story(campaignId),
+                    ],
       };
     }
     case "sharedWorld": {
