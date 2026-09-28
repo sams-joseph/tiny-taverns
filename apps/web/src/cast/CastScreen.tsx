@@ -1,6 +1,13 @@
-import { type Npc, type NpcId, UNNAMED_NPC } from "@taverns/api";
+import {
+  type Npc,
+  type NpcAttitude,
+  type NpcId,
+  type NpcPrep,
+  type Session,
+  UNNAMED_NPC,
+} from "@taverns/api";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Button, EMPTY_FILTER_VALUE, EmptyState, FilterInput, Icon } from "@taverns/ui";
+import { Button, EMPTY_FILTER_VALUE, EmptyState, FilterInput, Icon, Toggle } from "@taverns/ui";
 import { Result } from "effect";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useApiAtom, useInvalidate } from "../api/atoms";
@@ -9,11 +16,11 @@ import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { SaveFailure } from "../ui/form";
-import { npcsAtom } from "./load";
+import { castAtom, npcsAtom } from "./load";
 import { useNpcSavers } from "./npcAutosave";
 import { NpcCard } from "./NpcCard";
 import { NpcDrawer } from "./NpcDrawer";
-import { npcMatches } from "./persona";
+import { ATTITUDES, castMatches, castSummary, MET_PILLS, type MetFilter, prepById } from "./prep";
 
 /**
  * The cast — the campaign's NPCs, as the redesign draws the tab
@@ -21,7 +28,8 @@ import { npcMatches } from "./persona";
  * with the NPC chosen open in a drawer beside them.
  *
  * **Centred at the Overview's width** (`CampaignChrome`'s `centred`), header
- * included, and scrolled by the window. The header holds the count and two
+ * included, and scrolled by the window. The header holds the counts (every
+ * live NPC, how many the party has met, how many are hostile) and two
  * presses: the outline *Archived*, the way back to what the drawer's *Archive*
  * took off this shelf, and a secondary *Add NPC* — secondary rather than the
  * drawing's peach, because the campaign row's press is this screen's one
@@ -29,8 +37,17 @@ import { npcMatches } from "./persona";
  *
  * **The search is in the body**, on a filter row above the grid, as the Notes
  * tab's is: a client-side filter over what was loaded, because a cast is
- * bounded by a campaign the way its notes are. The row is not drawn over an
- * empty cast, where there is nothing to filter.
+ * bounded by a campaign the way its notes are. Beside it are the drawing's two
+ * single-select pill groups, ANDed with the search and each other: *Everyone*
+ * / *Met* / *Not met yet*, always one lit, and *Friendly* / *Indifferent* /
+ * *Hostile*, where pressing the lit one clears it — the fourth exception to
+ * the one-filter rule (`web-screens.md`). The drawing's hairline between the
+ * groups is left out: where the row wraps it ended one line or began the next,
+ * so the groups are set apart by their gap instead. The row is not drawn over
+ * an empty cast, where there is nothing to filter.
+ *
+ * **The DM's prep** (`NpcPrep`) is read beside the rows (`castAtom`), with the
+ * nights *first met* names, and drawn on each card and in the drawer.
  *
  * **The grid is the drawing's `auto-fill` over a `--cast-card-min` floor**, so
  * its columns follow the room the page has, a docked Hob panel included, and
@@ -54,6 +71,8 @@ export function CastScreen() {
   const { npc: chosen } = useSearch({ strict: false });
   const navigate = useNavigate();
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
+  const [met, setMet] = useState<MetFilter>("everyone");
+  const [attitude, setAttitude] = useState<NpcAttitude | null>(null);
   /** The NPC *Add NPC* just made, until the cast's own read has it. */
   const [created, setCreated] = useState<Npc>();
   /** The same NPC, until its drawer closes: its name is focused as it opens. */
@@ -98,21 +117,24 @@ export function CastScreen() {
       [reads.npcs(campaignId)],
     );
     if (Result.isFailure(made)) return;
-    // A new NPC is found wherever the search was: clear it.
+    // A new NPC is found wherever the filters were: clear them.
     setFilter(EMPTY_FILTER_VALUE);
+    setMet("everyone");
+    setAttitude(null);
     setCreated(made.success);
     setFresh(made.success.id);
     choose(made.success.id);
   };
 
-  const reload = async (npc: Npc) => {
+  const reload = async (npc: Npc, prep: NpcPrep | undefined) => {
     const read = await submit(
       (client) => client.npcs.findById({ params: { campaignId, npcId: npc.id } }),
       [reads.npcs(campaignId), reads.npc(npc.id)],
     );
     if (Result.isFailure(read)) return;
     forget(npc.id);
-    saverFor(read.success);
+    // The conflict was the row's; the prep carries no version, and the list's is current.
+    saverFor({ npc: read.success, prep });
     setReloads((count) => count + 1);
   };
 
@@ -121,11 +143,8 @@ export function CastScreen() {
       campaignId={campaignId}
       title="Cast"
       centred
-      extra={npcsAtom(campaignId)}
-      subtitle={({ extra }) => {
-        const count = withCreated(created, extra).length;
-        return count === 0 ? "No NPCs yet" : `${String(count)} ${count === 1 ? "NPC" : "NPCs"}`;
-      }}
+      extra={castAtom(campaignId)}
+      subtitle={({ extra }) => castSummary(withCreated(created, extra.npcs), prepById(extra.prep))}
       actions={() => (
         <>
           <Button
@@ -145,7 +164,8 @@ export function CastScreen() {
       )}
     >
       {({ extra }) => {
-        const npcs = withCreated(created, extra);
+        const npcs = withCreated(created, extra.npcs);
+        const prep = prepById(extra.prep);
         return (
           <>
             {failure !== undefined && (
@@ -161,7 +181,10 @@ export function CastScreen() {
               </EmptyState>
             ) : (
               <div className="flex flex-col gap-5">
-                <div data-slot="cast-filters" className="flex flex-wrap items-center gap-3">
+                <div
+                  data-slot="cast-filters"
+                  className="flex flex-wrap items-center gap-x-6 gap-y-3"
+                >
                   <FilterInput
                     label="Search the cast"
                     value={filter}
@@ -169,9 +192,47 @@ export function CastScreen() {
                     facets={[]}
                     className="w-full max-w-cast-search"
                   />
+                  <div
+                    role="group"
+                    aria-label="Filter by meeting"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {MET_PILLS.map(([value, label]) => (
+                      <Toggle
+                        key={value}
+                        size="sm"
+                        className="rounded-pill"
+                        pressed={met === value}
+                        onPressedChange={() => setMet(value)}
+                      >
+                        {label}
+                      </Toggle>
+                    ))}
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Filter by attitude"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {ATTITUDES.map(({ value, label }) => (
+                      <Toggle
+                        key={value}
+                        size="sm"
+                        className="rounded-pill"
+                        pressed={attitude === value}
+                        onPressedChange={(pressed) => setAttitude(pressed ? value : null)}
+                      >
+                        {label}
+                      </Toggle>
+                    ))}
+                  </div>
                 </div>
                 <CastGrid
-                  npcs={npcs.filter((npc) => npcMatches(filter.text, npc))}
+                  npcs={npcs.filter((npc) =>
+                    castMatches({ text: filter.text, met, attitude }, npc, prep.get(npc.id)),
+                  )}
+                  prep={prep}
+                  nights={extra.nights}
                   chosen={chosen}
                 />
               </div>
@@ -183,7 +244,8 @@ export function CastScreen() {
                 <NpcDrawer
                   key={`${npc.id}:${String(reloads)}`}
                   npc={npc}
-                  saver={saverFor(npc)}
+                  nights={extra.nights}
+                  saver={saverFor({ npc, prep: prep.get(npc.id) })}
                   focusName={fresh === npc.id}
                   onClose={() => choose(undefined)}
                   onArchived={() => {
@@ -191,7 +253,7 @@ export function CastScreen() {
                     setCreated((made) => (made?.id === npc.id ? undefined : made));
                     choose(undefined);
                   }}
-                  onReload={() => void reload(npc)}
+                  onReload={() => void reload(npc, prep.get(npc.id))}
                 />
               )}
               onUnknown={() => choose(undefined)}
@@ -233,15 +295,19 @@ function ChosenNpc({
 
 function CastGrid({
   npcs,
+  prep,
+  nights,
   chosen,
 }: {
   readonly npcs: ReadonlyArray<Npc>;
+  readonly prep: ReadonlyMap<NpcId, NpcPrep>;
+  readonly nights: ReadonlyArray<Session>;
   readonly chosen: NpcId | undefined;
 }) {
   if (npcs.length === 0) {
     return (
       <EmptyState icon="search" title="Nobody here">
-        Loosen the search, or add the NPC you just made up.
+        Loosen a filter, or add the NPC you just made up.
       </EmptyState>
     );
   }
@@ -252,7 +318,7 @@ function CastGrid({
     >
       {npcs.map((npc) => (
         <li key={npc.id} className="min-w-0">
-          <NpcCard npc={npc} chosen={npc.id === chosen} />
+          <NpcCard npc={npc} prep={prep.get(npc.id)} nights={nights} chosen={npc.id === chosen} />
         </li>
       ))}
     </ul>

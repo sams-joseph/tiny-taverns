@@ -496,6 +496,51 @@ export const castShelf = [
   },
 ];
 
+/** An NPC's prep with nothing set, as the server answers one nobody wrote. */
+export const blankPrep = (npcId: string) => ({
+  npcId,
+  attitude: null,
+  status: null,
+  whereabouts: null,
+  metSessionId: null,
+  tableNights: [],
+});
+
+/**
+ * The DM's prep for `castShelf`, in its order, with first meetings on `night`:
+ * every attitude, a status that is and is not badged, a *where* long enough to
+ * wrap, one NPC not met yet and one with nothing set at all.
+ */
+export const castShelfPrep = (night: string) => [
+  {
+    ...blankPrep(castShelf[0]!.id),
+    attitude: "indifferent",
+    status: "alive",
+    whereabouts: "The crossing",
+    metSessionId: night,
+  },
+  {
+    ...blankPrep(castShelf[1]!.id),
+    attitude: "friendly",
+    whereabouts: "With the caravan",
+    metSessionId: night,
+  },
+  {
+    ...blankPrep(castShelf[2]!.id),
+    attitude: "hostile",
+    status: "captive",
+    whereabouts: "Toll bridge on the Vell road, under the third arch",
+    metSessionId: night,
+  },
+  {
+    ...blankPrep(castShelf[3]!.id),
+    attitude: "hostile",
+    status: "unknown",
+    whereabouts: "Stilt-hut, deep marsh",
+  },
+  blankPrep(castShelf[4]!.id),
+];
+
 export const drawnPortrait = {
   thumbUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/thumb?e=1&s=t",
   cardUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/card?e=1&s=c",
@@ -1787,6 +1832,8 @@ export const fullCampaign = (): Map<string, Answer> =>
         body: { campaignId, proposalCount: 0, awarenessCount: 0, items: [] },
       },
     ],
+    [`GET /campaigns/${campaignId}/npcs/-/prep`, { status: 200, body: [blankPrep(npcId)] }],
+    [`PATCH /campaigns/${campaignId}/npcs/${npcId}/prep`, { status: 200, body: blankPrep(npcId) }],
     [`GET /campaigns/${campaignId}/npcs/-/player`, { status: 200, body: [playerCazril] }],
     [`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, { status: 200, body: [] }],
     [`GET /campaigns/${campaignId}/npcs/${npcId}`, { status: 200, body: cazril }],

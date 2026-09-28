@@ -174,6 +174,14 @@ export const reads = {
    */
   npcs: (campaignId: CampaignId): ReadKey => key`npcs:${campaignId}`,
 
+  /**
+   * The creator's prep for every NPC in the cast — attitude, status, where and
+   * first met. A key of its own, not `npcs`', for `partyPrep`'s reason: no
+   * player read answers it, and a prep edit is no reason to re-read the rows.
+   * Its read answers `npcs` too, since which NPCs it lists moves with the cast.
+   */
+  npcPrep: (campaignId: CampaignId): ReadKey => key`npc-prep:${campaignId}`,
+
   /** One NPC's row: the detail screen's read, refreshed by its own edits. */
   npc: (npcId: NpcId): ReadKey => key`npc:${npcId}`,
 

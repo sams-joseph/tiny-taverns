@@ -184,11 +184,20 @@ export const initialsOf = (name: string): string => {
   return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
 };
 
-/** Case-insensitive contains over the fields a search box should reach. */
-export const npcMatches = (needle: string, npc: Npc): boolean => {
+/**
+ * Case-insensitive contains over the fields a search box should reach: the
+ * row's, and where the DM's prep says the party can find them.
+ */
+export const npcMatches = (needle: string, npc: Npc, whereabouts: string | null): boolean => {
   const term = needle.trim().toLowerCase();
   if (term === "") return true;
-  return [npc.name, npc.role, npc.persona.identity?.summary ?? "", npc.persona.voice?.manner ?? ""]
+  return [
+    npc.name,
+    npc.role,
+    npc.persona.identity?.summary ?? "",
+    npc.persona.voice?.manner ?? "",
+    whereabouts ?? "",
+  ]
     .join("\n")
     .toLowerCase()
     .includes(term);

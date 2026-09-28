@@ -13,6 +13,15 @@ import { Icon } from "./icon";
  * leave document order to decide, and that is how a select once opened
  * underneath the dialog it belonged to and the backdrop ate the click.
  *
+ * ### Modal, over the whole app
+ *
+ * The default: `fixed`, portalled to `<body>`, from the viewport's top to its
+ * bottom, with the scrim over the app's nav rows as well as the page. A modal
+ * sheet is something the reader is doing instead of the page, so nothing
+ * behind it stays lit; a caller never offsets it under the chrome. When the
+ * page must stay usable alongside the panel, the panel is not modal — the Hob
+ * panel below is the one case.
+ *
  * ### `container`: over a region, rather than over the page
  *
  * Upstream's sheet is `fixed`, portalled to `<body>`, and covers the window. That

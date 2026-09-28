@@ -7,16 +7,19 @@ import {
   bodyOf,
   campaignId,
   castShelf,
+  castShelfPrep,
   cazril,
   installStubServer,
   npcId,
+  sessionId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
 
 /**
  * The Cast screen against a stubbed wire decoded by the real client: the
- * grid, the two empty states, the search, and *Add NPC*. The drawer a card
+ * grid, the prep on each card and the counts, the two empty states, the
+ * search and the pills, and *Add NPC*. The drawer a card
  * opens is `NpcDrawer.test.tsx`.
  */
 
@@ -39,7 +42,7 @@ describe("CastScreen", () => {
     await renderCast();
 
     expect(await screen.findByRole("heading", { level: 1, name: "Cast" })).toBeInTheDocument();
-    expect(screen.getByText("1 NPC")).toBeInTheDocument();
+    expect(screen.getByText("1 NPC · 0 met · 0 hostile")).toBeInTheDocument();
     // The Overview's centred frame, header and body both inside it.
     const frame = screen
       .getByRole("heading", { level: 1, name: "Cast" })
@@ -87,7 +90,7 @@ describe("CastScreen", () => {
     await renderCast();
 
     await screen.findByRole("link", { name: "Grusk" });
-    expect(screen.getByText("5 NPCs")).toBeInTheDocument();
+    expect(screen.getByText("5 NPCs · 0 met · 0 hostile")).toBeInTheDocument();
     const cards = document.querySelectorAll('[data-slot="npc-card"]');
     expect(cards).toHaveLength(5);
     const drawing = screen.getByRole("status");
@@ -129,6 +132,88 @@ describe("CastScreen", () => {
     expect(screen.queryByRole("combobox", { name: "Search the cast" })).toBeNull();
   });
 
+  it("draws each NPC's prep on its card, and nothing that was never set", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
+      status: 200,
+      body: castShelfPrep(sessionId),
+    });
+    await renderCast();
+    await screen.findByRole("link", { name: "Grusk" });
+
+    // Every live NPC, the met and the hostile, whatever the filter shows.
+    expect(screen.getByText("5 NPCs · 3 met · 2 hostile")).toBeInTheDocument();
+    const card = (name: string) =>
+      screen.getByRole("link", { name }).closest('[data-slot="npc-card"]') as HTMLElement;
+    const badges = (name: string) =>
+      Array.from(card(name).querySelectorAll('[data-slot="npc-card-badges"] > *')).map(
+        (badge) => badge.textContent,
+      );
+
+    const grusk = card("Grusk");
+    expect(badges("Grusk")).toEqual(["Hostile", "Captive"]);
+    expect(within(grusk).getByText("Hostile")).toHaveClass("bg-danger");
+    expect(within(grusk).getByText("Captive")).toHaveClass("bg-info-soft");
+    expect(within(grusk).getByText(/Toll bridge on the Vell road/)).toBeInTheDocument();
+    expect(within(grusk).getByText("First met in session 12")).toBeInTheDocument();
+    expect(within(card("Master Hollis")).getByText("Friendly")).toHaveClass("bg-success-soft");
+    expect(within(card("Mother Sallow")).getByText("Unknown")).toHaveClass("bg-surface-raised");
+    expect(within(card("Mother Sallow")).getByText("Not met yet")).toBeInTheDocument();
+    // Alive is the ordinary state: the attitude is badged, the status is not.
+    expect(within(card("Cazril")).getByText("Indifferent")).toHaveClass("border-strong");
+    expect(within(card("Cazril")).queryByText("Alive")).toBeNull();
+    // Nothing set is no badge and no *where*, never a placeholder — only the
+    // met line, since an unset *first met* means "not met yet".
+    expect(badges("Joss")).toEqual([]);
+    expect(card("Joss").querySelector('[data-slot="npc-card-lines"]')).toHaveTextContent(
+      /^Not met yet$/,
+    );
+    expect(within(card("Joss")).queryByText("Somewhere")).toBeNull();
+  });
+
+  it("narrows by the two pill groups, ANDed with the search, and the lit attitude clears", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
+      status: 200,
+      body: castShelfPrep(sessionId),
+    });
+    await renderCast();
+    await screen.findByRole("link", { name: "Grusk" });
+    const shown = () =>
+      Array.from(document.querySelectorAll('[data-slot="npc-card"] [data-card-link]')).map(
+        (link) => link.textContent,
+      );
+    const met = screen.getByRole("group", { name: "Filter by meeting" });
+    const attitude = screen.getByRole("group", { name: "Filter by attitude" });
+    const pill = (group: HTMLElement, name: string) => within(group).getByRole("button", { name });
+    expect(pill(met, "Everyone")).toHaveAttribute("aria-pressed", "true");
+    expect(shown()).toHaveLength(5);
+
+    await userEvent.click(pill(met, "Met"));
+    expect(shown()).toEqual(["Cazril", "Master Hollis", "Grusk"]);
+    expect(pill(met, "Everyone")).toHaveAttribute("aria-pressed", "false");
+    // Pressing the lit met pill leaves it lit: one of the three always is.
+    await userEvent.click(pill(met, "Met"));
+    expect(pill(met, "Met")).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(pill(attitude, "Hostile"));
+    expect(shown()).toEqual(["Grusk"]);
+    await userEvent.click(pill(met, "Not met yet"));
+    expect(shown()).toEqual(["Mother Sallow"]);
+    // The lit attitude pressed again clears it.
+    await userEvent.click(pill(attitude, "Hostile"));
+    expect(pill(attitude, "Hostile")).toHaveAttribute("aria-pressed", "false");
+    expect(shown()).toEqual(["Mother Sallow", "Joss"]);
+
+    // The search reaches *where*, and ANDs with the pills.
+    await userEvent.type(screen.getByRole("combobox", { name: "Search the cast" }), "marsh");
+    await waitFor(() => expect(shown()).toEqual(["Mother Sallow"]));
+    await userEvent.click(pill(met, "Met"));
+    expect(await screen.findByText("Nobody here")).toBeInTheDocument();
+    // The counts are the cast's, not the filter's.
+    expect(screen.getByText("5 NPCs · 3 met · 2 hostile")).toBeInTheDocument();
+  });
+
   it("searches the cast in the body, and says when nobody answers", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
     await renderCast();
@@ -146,7 +231,7 @@ describe("CastScreen", () => {
     await userEvent.type(search, "innkeeper");
     expect(await screen.findByText("Nobody here")).toBeInTheDocument();
     // The count is the cast's, not the search's.
-    expect(screen.getByText("5 NPCs")).toBeInTheDocument();
+    expect(screen.getByText("5 NPCs · 0 met · 0 hostile")).toBeInTheDocument();
   });
 
   it("adds a blank NPC at once and opens its drawer with the name focused", async () => {
@@ -157,6 +242,8 @@ describe("CastScreen", () => {
       await screen.findByRole("combobox", { name: "Search the cast" }),
       "nobody by this name",
     );
+    await userEvent.click(screen.getByRole("button", { name: "Not met yet" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hostile" }));
     expect(await screen.findByText("Nobody here")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Add NPC" }));
@@ -176,7 +263,17 @@ describe("CastScreen", () => {
     // The search is cleared, so the new card is on the grid behind it (hidden
     // from the accessibility tree while the modal is open), and counted.
     expect(screen.getByRole("link", { name: UNNAMED_NPC, hidden: true })).toBeInTheDocument();
-    expect(screen.getByText("2 NPCs")).toBeInTheDocument();
+    expect(screen.getByText("2 NPCs · 0 met · 0 hostile")).toBeInTheDocument();
+    // And both pill groups are back to showing everyone.
+    const filters = document.querySelector('[data-slot="cast-filters"]') as HTMLElement;
+    expect(within(filters).getByRole("button", { name: "Everyone", hidden: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(filters).getByRole("button", { name: "Hostile", hidden: true })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("closes a drawer the cast does not list, and says nothing is chosen", async () => {

@@ -127,15 +127,17 @@ describe("what the card and the detail say", () => {
     expect(initialsOf(UNNAMED_NPC)).toBe("?");
   });
 
-  it("searches the name, the role, the summary and the manner, and never the private material", () => {
+  it("searches the name, the role, the summary, the manner and where, and never the private material", () => {
     const npc = row({
       persona: { identity: { summary: "Takes names." }, voice: { manner: "Dry." } },
       privateMaterial: { secrets: "HAGPAYS" },
     });
-    expect(npcMatches("ferry", npc)).toBe(true);
-    expect(npcMatches("NAMES", npc)).toBe(true);
-    expect(npcMatches("dry", npc)).toBe(true);
-    expect(npcMatches("hagpays", npc)).toBe(false);
-    expect(npcMatches("  ", npc)).toBe(true);
+    expect(npcMatches("ferry", npc, null)).toBe(true);
+    expect(npcMatches("NAMES", npc, null)).toBe(true);
+    expect(npcMatches("dry", npc, null)).toBe(true);
+    expect(npcMatches("hagpays", npc, null)).toBe(false);
+    expect(npcMatches("  ", npc, null)).toBe(true);
+    expect(npcMatches("marsh", npc, null)).toBe(false);
+    expect(npcMatches("marsh", npc, "Stilt-hut, deep marsh")).toBe(true);
   });
 });

@@ -3,14 +3,21 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import { campaignId, cazril, installStubServer, npcId } from "../campaign/campaign.fixtures";
+import {
+  blankPrep,
+  campaignId,
+  cazril,
+  installStubServer,
+  npcId,
+  sessionId,
+} from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
 import { AUTOSAVE_DELAY_MS } from "../ui/autosave";
 
 /**
  * The NPC drawer over the stub wire: how it opens and closes, what each edit
- * sends and when, and where it leads. The saver's pure half — which lines a
+ * sends and when — the DM's prep to its own endpoint — and where it leads. The saver's pure half — which lines a
  * change rebuilds, and the role held for a settled save — is
  * `npcAutosave.test.ts`.
  */
@@ -46,6 +53,11 @@ const open = async () => {
 const patches = () =>
   server.calls
     .filter((call) => call.method === "PATCH" && call.pathname === npcPath)
+    .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+
+const prepPatches = () =>
+  server.calls
+    .filter((call) => call.method === "PATCH" && call.pathname === `${npcPath}/prep`)
     .map((call) => JSON.parse(call.body) as Record<string, unknown>);
 
 const chosen = () => new URLSearchParams(globalThis.location.search).get("npc");
@@ -216,6 +228,75 @@ describe("the NPC drawer", () => {
       cazril.persona.voice.manner,
     );
     expect(within(screen.getByRole("dialog")).queryByRole("alert")).toBeNull();
+  });
+
+  it("saves the prep to its own endpoint: a toggle at once, and pressing the lit one clears it", async () => {
+    const drawer = await open();
+    const toward = within(drawer).getByRole("group", { name: "Toward the party" });
+    const status = within(drawer).getByRole("group", { name: "Status" });
+    // Nothing set is nothing lit, never a default.
+    for (const toggle of [
+      ...within(toward).getAllByRole("button"),
+      ...within(status).getAllByRole("button"),
+    ])
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(within(toward).getByRole("button", { name: "Hostile" }));
+    await waitFor(() => expect(prepPatches()).toEqual([{ attitude: "hostile" }]));
+    await userEvent.click(within(status).getByRole("button", { name: "Dead" }));
+    await waitFor(() => expect(prepPatches()).toHaveLength(2));
+    await userEvent.click(within(toward).getByRole("button", { name: "Hostile" }));
+    await waitFor(() => expect(prepPatches()).toHaveLength(3));
+    expect(prepPatches()).toEqual([
+      { attitude: "hostile" },
+      { status: "dead" },
+      { attitude: null },
+    ]);
+    expect(within(toward).getByRole("button", { name: "Hostile" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // The prep is not the row's: nothing went to the NPC itself.
+    expect(patches()).toEqual([]);
+  });
+
+  it("saves where on the pause, trimmed, and an emptied one as cleared", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/prep`, {
+      status: 200,
+      body: [{ ...blankPrep(npcId), whereabouts: "The crossing" }],
+    });
+    const drawer = await open();
+    const where = within(drawer).getByRole("textbox", { name: "Where" });
+    expect(where).toHaveValue("The crossing");
+    await userEvent.clear(where);
+    await userEvent.tab();
+    await waitFor(() => expect(prepPatches()).toEqual([{ whereabouts: null }]));
+
+    await userEvent.type(where, "Under the ford ");
+    await waitFor(() => expect(prepPatches()).toHaveLength(2), {
+      timeout: AUTOSAVE_DELAY_MS * 3,
+    });
+    expect(prepPatches()[1]).toEqual({ whereabouts: "Under the ford" });
+  });
+
+  it("picks the night the party first met them, or Not met yet", async () => {
+    const drawer = await open();
+    const said = () => drawer.querySelector('[data-slot="sheet-description"]');
+    expect(said()).toHaveTextContent("Not met yet");
+    const met = within(drawer).getByRole("combobox", { name: "First met" });
+    expect(met).toHaveTextContent("Not met yet");
+
+    await userEvent.click(met);
+    await userEvent.click(await screen.findByRole("option", { name: "Session 12" }));
+    await waitFor(() => expect(prepPatches()).toEqual([{ metSessionId: sessionId }]));
+    // The header says so as it changes.
+    expect(said()).toHaveTextContent("First met in session 12");
+
+    await userEvent.click(within(drawer).getByRole("combobox", { name: "First met" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Not met yet" }));
+    await waitFor(() => expect(prepPatches()).toHaveLength(2));
+    expect(prepPatches()[1]).toEqual({ metSessionId: null });
+    expect(said()).toHaveTextContent("Not met yet");
   });
 
   it("leads to the NPC's rehearsal and to the cast's follow-up", async () => {
