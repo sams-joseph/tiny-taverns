@@ -225,6 +225,15 @@ export class ImageRecords extends Context.Service<
             .withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
+                // A subject already recorded gets nothing, whoever asks; say so
+                // before queueing on the lock, because an NPC asks again on
+                // every edit (`HobImages.drawNpc`). The insert's `on conflict`
+                // below still settles a race.
+                const recorded = yield* sql`
+                  select 1 from ${table(kind)}
+                  where ${sql(IMAGE_KINDS[kind].subjectColumn)} = ${subjectId}
+                `;
+                if (recorded.length > 0) return undefined;
                 yield* sql`select pg_advisory_xact_lock(${START_LOCK})`;
                 const owned = yield* OWNED_SUBJECT[kind](sql, subjectId, actor);
                 const subject = owned[0];

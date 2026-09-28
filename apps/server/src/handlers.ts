@@ -1257,7 +1257,10 @@ const NpcsLive = HttpApiBuilder.group(
         // Both ways an NPC joins a cast start its portrait after the insert
         // commits, as a character's and a campaign's do: `drawNpc` returns at
         // once, with the NPC marked `imagePending` when a draw started. No Hob
-        // path drafts an NPC, and a Library original is never drawn.
+        // path drafts an NPC, and a Library original is never drawn. An NPC
+        // created blank has nothing to draw from, so `update` asks too: the
+        // first edit that gives it a subject starts its one draw, and every
+        // later edit finds the record and draws nothing.
         .handle("create", ({ params, payload }) =>
           asCreator(params.campaignId, (creator) => npcs.create(creator, payload)).pipe(
             Effect.flatMap(images.drawNpc),
@@ -1278,7 +1281,9 @@ const NpcsLive = HttpApiBuilder.group(
           asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
         )
         .handle("update", ({ params, payload }) =>
-          asCreator(params.campaignId, (creator) => npcs.update(creator, params.npcId, payload)),
+          asCreator(params.campaignId, (creator) =>
+            npcs.update(creator, params.npcId, payload),
+          ).pipe(Effect.flatMap(images.drawNpc)),
         )
         .handle("archive", ({ params }) =>
           asCreator(params.campaignId, (creator) => npcs.archive(creator, params.npcId)),

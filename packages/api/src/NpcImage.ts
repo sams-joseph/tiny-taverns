@@ -60,8 +60,9 @@ const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text
 
 /**
  * Whether there is anything to draw: a role, an appearance or a summary. An NPC
- * that is only a name would be a portrait of the house style alone, so a caller
- * skips rather than drawing a stranger.
+ * that is only a name would be a portrait of the house style alone, so it is
+ * not drawn yet: the server records nothing for it, and the first write that
+ * makes this true starts its one draw (`HobImages.drawNpc`).
  */
 export const npcImageHasSubject = (npc: NpcImageSubject): boolean =>
   clean(npc.role, ROLE_MAX) !== undefined ||
