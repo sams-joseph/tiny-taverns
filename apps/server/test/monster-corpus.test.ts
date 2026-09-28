@@ -1,5 +1,5 @@
-import { Actor, CurrentActor, NotFound } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Actor, CurrentActor, NotFound, NpcSheetPut, sheetFromStatBlock } from "@taverns/api";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
@@ -106,6 +106,50 @@ describe("2014 SRD monsters", () => {
     expect(dragon?.legendary).toBe(true);
     expect(dragon?.statBlock.actions?.some((action) => action.name === "Fire Breath")).toBe(true);
     expect(dragon?.statBlock.legendaryActions?.length).toBeGreaterThan(0);
+  });
+
+  it("translates every SRD humanoid into an NPC sheet the wire accepts", async () => {
+    const humanoids = await run(
+      asActor(
+        Effect.flatMap(Creatures, (creatures) =>
+          creatures.library({ types: ["humanoid"], sort: "name", limit: 200 }),
+        ),
+      ),
+    );
+    const bundled = humanoids.items.filter((creature) => creature.accountId === null);
+    // The 50 humanoids of the pinned snapshot, the 21 NPC blocks among them.
+    expect(bundled.filter((creature) => creature.subtype === "any race")).toHaveLength(21);
+
+    const decodePut = Schema.decodeUnknownSync(NpcSheetPut);
+    for (const creature of bundled) {
+      const started = sheetFromStatBlock(creature);
+      expect(() => decodePut(started), creature.name).not.toThrow();
+      expect(started.cr, creature.name).toBe(creature.cr);
+      expect(started.sheet.abilities, creature.name).toHaveLength(6);
+    }
+
+    const veteran = bundled.find((creature) => creature.name === "Veteran");
+    const sheet = veteran === undefined ? undefined : sheetFromStatBlock(veteran);
+    expect(sheet).toMatchObject({ ac: 17, hpMax: 58, cr: "3" });
+    expect(sheet?.sheet.skills).toContainEqual({
+      name: "Athletics",
+      ability: "STR",
+      bonus: "+5",
+      proficient: true,
+    });
+    expect(sheet?.sheet.actions).toContainEqual(
+      expect.objectContaining({ name: "Longsword", hit: "+5", dice: "1d8+3", source: "weapon" }),
+    );
+
+    const captain = bundled.find((creature) => creature.name === "Bandit Captain");
+    const captainSheet = captain === undefined ? undefined : sheetFromStatBlock(captain).sheet;
+    expect(captainSheet?.abilities.find((cell) => cell.label === "DEX")).toMatchObject({
+      save: "+5",
+      proficient: true,
+    });
+    expect(captainSheet?.actions).toContainEqual(
+      expect.objectContaining({ name: "Parry", cost: "reaction" }),
+    );
   });
 
   it("records concrete relationships to proficiencies, conditions, damage types, spells, equipment and forms", async () => {

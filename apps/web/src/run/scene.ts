@@ -6,13 +6,12 @@ import type {
   EncounterRunCheck,
   EncounterRunScene,
 } from "@taverns/api";
-import { challengeTally, NEUTRAL_RUN_NAMES } from "@taverns/api";
+import { challengeTally, NEUTRAL_RUN_NAMES, STANDARD_SKILLS } from "@taverns/api";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { parseDiceExpression } from "../characters/rolls";
-import { STANDARD_SKILLS } from "../characters/skills";
 import type { RunPath } from "./load";
 
 /**

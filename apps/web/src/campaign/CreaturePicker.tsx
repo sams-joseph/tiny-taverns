@@ -19,7 +19,9 @@ import { CR_PILLS, type CrPill, crRange } from "./encounterDraft";
 /**
  * The encounter builder's bestiary: what an encounter's roster is added from,
  * over the bestiary the campaign can reach — the redesign's rail card
- * (`Campaign Overview.dc.html`).
+ * (`Campaign Overview.dc.html`). It is also what an NPC's sheet is started
+ * from (*Start from a bestiary NPC*), narrowed to humanoids, and that reader
+ * may be a Library NPC's, so the list it reads is a `BestiaryScope`.
  *
  * `creatures.list` is campaign-scoped in the path and returns the campaign's own
  * creatures *and* the global `system` corpus in one list — see `Api.ts`. So this
@@ -69,31 +71,49 @@ const SHOWN = 12;
 const SEARCH_SETTLE_MS = 250;
 
 /**
- * One page of the campaign's reachable bestiary, keyed on the campaign, the
- * settled search term and the CR band.
+ * Which bestiary a picker reads: a campaign's — its own creatures and the
+ * bundle, `creatures.list` — or the reader's Library and the bundle,
+ * `library.list`. The two answer the same filter (`CreatureFilter` is
+ * `LibraryFilter`), so the picker is one list over either.
+ */
+export type BestiaryScope =
+  { readonly kind: "campaign"; readonly campaignId: CampaignId } | { readonly kind: "library" };
+
+/**
+ * One page of the reachable bestiary, keyed on where it is read from, the
+ * settled search term, the CR band and the creature type.
  *
- * A **record** key, compared structurally (see `api/atoms.ts`), and at module
- * scope because an atom is its own identity — built in the component it would
- * be a new one on every keystroke's render and never settle.
+ * A **record** key of primitives, compared structurally (see `api/atoms.ts`),
+ * and at module scope because an atom is its own identity — built in the
+ * component it would be a new one on every keystroke's render and never
+ * settle. `campaignId: null` is the Library.
  */
 const pickerAtom = Atom.family(
   ({
     campaignId,
     query,
     band,
+    type,
   }: {
-    readonly campaignId: CampaignId;
+    readonly campaignId: CampaignId | null;
     readonly query: string;
     readonly band: CrPill;
-  }) =>
-    apiAtom(
-      (client) =>
-        client.creatures.list({
-          params: { campaignId },
-          query: { q: query, ...crRange(band), sort: "cr", limit: SHOWN },
-        }),
-      [reads.creatures(campaignId)],
-    ),
+    readonly type: string | null;
+  }) => {
+    const filter = {
+      q: query,
+      ...crRange(band),
+      ...(type === null ? {} : { types: [type] }),
+      sort: "cr" as const,
+      limit: SHOWN,
+    };
+    return campaignId === null
+      ? apiAtom((client) => client.library.list({ query: filter }), [reads.library])
+      : apiAtom(
+          (client) => client.creatures.list({ params: { campaignId }, query: filter }),
+          [reads.creatures(campaignId)],
+        );
+  },
 );
 
 /** `"Humanoid · 200 xp"`: what it is and what it is worth, as the drawing's second line. */
@@ -105,13 +125,19 @@ const kindAndXp = (creature: Creature): string => {
 };
 
 export function CreaturePicker({
-  campaignId,
+  scope,
+  type,
   counts,
+  pickLabel,
   onPick,
 }: {
-  readonly campaignId: CampaignId;
+  readonly scope: BestiaryScope;
+  /** Only creatures of this type (`"humanoid"`), narrowed by the server like the search. */
+  readonly type?: string;
   /** How many of each creature the roster holds, for the row's ×N. */
-  readonly counts: ReadonlyMap<CreatureId, number>;
+  readonly counts?: ReadonlyMap<CreatureId, number>;
+  /** What the row's button does, for its accessible name: *"Add Goblin"*. */
+  readonly pickLabel: (creature: Creature) => string;
   /** The whole row: the roster line carries its CR, AC, hp and XP. */
   readonly onPick: (creature: Creature) => void;
 }) {
@@ -126,7 +152,14 @@ export function CreaturePicker({
 
   // Keyed on the settled query, not the keystroke: the key is what says "a
   // different read", so the debounce above is what the request count follows.
-  const [resource, reload] = useApiAtom(pickerAtom({ campaignId, query, band }));
+  const [resource, reload] = useApiAtom(
+    pickerAtom({
+      campaignId: scope.kind === "campaign" ? scope.campaignId : null,
+      query,
+      band,
+      type: type ?? null,
+    }),
+  );
 
   return (
     <Card
@@ -185,7 +218,7 @@ export function CreaturePicker({
         ) : (
           <ul className="m-0 flex list-none flex-col p-0">
             {resource.value.items.map((creature) => {
-              const count = counts.get(creature.id);
+              const count = counts?.get(creature.id);
               return (
                 // The name keeps a readable width and the CR and the + wrap
                 // under it before they take it: on a phone they would
@@ -225,7 +258,7 @@ export function CreaturePicker({
                       variant="outline"
                       size="icon"
                       className="text-muted-foreground hover:text-heading"
-                      aria-label={`Add ${creature.name}`}
+                      aria-label={pickLabel(creature)}
                       onClick={() => onPick(creature)}
                     >
                       <Icon name="plus" size={14} />

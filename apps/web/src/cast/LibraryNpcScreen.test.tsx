@@ -6,7 +6,9 @@ import {
   cazrilSheetSummary,
   cazrilSource,
   coreOptions,
+  goblin,
   installStubServer,
+  page,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 
@@ -50,6 +52,32 @@ describe("LibraryNpcScreen", () => {
     expect(screen.queryByRole("button", { name: "Edit stats" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
     expect(screen.getByRole("button", { name: "Write one" })).toBeInTheDocument();
+  });
+
+  it("starts one from the owner's own bestiary, through the Library endpoint", async () => {
+    server.routes.set(`GET /library/creatures`, { status: 200, body: page([goblin]) });
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: sourceSheet });
+    await renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Start from a bestiary NPC" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Start Cazril’s stats from the bestiary",
+    });
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: "Start from Goblin Boss" }),
+    );
+    // A Library original is in no campaign: the Library and the bundle, narrowed to humanoids.
+    const list = server.calls.find(
+      (call) => call.method === "GET" && call.pathname === "/library/creatures",
+    );
+    expect(new URLSearchParams(list?.search).getAll("types")).toEqual(["humanoid"]);
+    expect(server.calls.some((call) => /^\/campaigns\//.test(call.pathname))).toBe(false);
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: sourceSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start from Goblin Boss" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const [put] = sheetCalls("PUT");
+    expect(JSON.parse(put!.body)).toMatchObject({ ac: 17, hpMax: 21, cr: "1" });
   });
 
   it("writes one through the owner's Library endpoint, never a campaign's", async () => {

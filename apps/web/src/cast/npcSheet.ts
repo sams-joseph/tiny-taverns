@@ -14,12 +14,14 @@ import {
   optionNamed,
   startingSheetBody,
   subraceNamed,
+  type StatBlockSheet,
 } from "@taverns/api";
 import type { Effect } from "effect";
 import type { AsyncResult, Atom } from "effect/unstable/reactivity";
 import type { HttpClient } from "effect/unstable/http";
 import { reads, type Invalidation } from "../api/keys";
 import type { TavernsClient } from "../api/client";
+import type { BestiaryScope } from "../campaign/CreaturePicker";
 import { badScores } from "../characters/abilities";
 import {
   type CharacterDraft,
@@ -68,6 +70,34 @@ export const sheetSummaryLine = (sheet: NpcSheetSummary): string => {
 export const challengeLine = (cr: ChallengeRating): string => {
   const xp = creatureXp({ cr, statBlockXp: null });
   return xp === null ? `CR ${cr}` : `CR ${cr} · ${xp.toLocaleString("en")} XP`;
+};
+
+/**
+ * *"AC 17 · HP 58 · CR 3 · 700 XP"*, then what else the stat block brings —
+ * the confirm step of *Start from a bestiary NPC*, so the DM sees what is
+ * about to be written before it is.
+ */
+export const bestiaryStartLines = (
+  started: StatBlockSheet,
+): { readonly numbers: string; readonly contents: string } => {
+  const numbers = [
+    `AC ${String(started.ac)}`,
+    `HP ${String(started.hpMax)}`,
+    ...(started.cr === null ? [] : [challengeLine(started.cr)]),
+  ].join(" · ");
+  const count = (n: number, one: string, many: string) =>
+    n === 0 ? [] : [`${String(n)} ${n === 1 ? one : many}`];
+  const sheet = started.sheet;
+  const contents = [
+    ...(sheet.abilities.length === 0 ? [] : ["Abilities"]),
+    ...count(sheet.skills?.length ?? 0, "skill", "skills"),
+    ...count(sheet.traits.length, "feature", "features"),
+    ...count(sheet.actions?.length ?? 0, "action", "actions"),
+  ];
+  return {
+    numbers,
+    contents: contents.length === 0 ? "Nothing else is written on it." : contents.join(" · "),
+  };
 };
 
 /** What the identity dialog's boxes hold, as typed. */
@@ -278,6 +308,12 @@ export interface NpcSheetTarget {
    */
   readonly options: Atom.Atom<AsyncResult.AsyncResult<ReadonlyArray<CharacterOption>, unknown>>;
   /**
+   * The bestiary *Start from a bestiary NPC* picks from: the one the NPC's
+   * owner reads beside it — a campaign's for a campaign NPC, the owner's
+   * Library and the bundle for a Library original.
+   */
+  readonly bestiary: BestiaryScope;
+  /**
    * What every write of the sheet changed: the sheet, and the shelf the
    * one-line summaries read (the drawer's, a Library card's).
    */
@@ -296,6 +332,7 @@ export const campaignSheetTarget = (campaignId: CampaignId, npcId: NpcId): NpcSh
     update: (client, patch) => client.npcs.updateSheet({ params, payload: patch }),
     remove: (client) => client.npcs.removeSheet({ params }),
     options: campaignOptionsAtom(campaignId),
+    bestiary: { kind: "campaign", campaignId },
     writes: [reads.npcSheet(npcId), reads.npcSheets(campaignId)],
     spellbook: npcSheetSpellsAtom(params),
     noSpells: "No spells are available for this class and level in this campaign’s rules.",
@@ -315,6 +352,7 @@ export const librarySheetTarget = (npcId: NpcId): NpcSheetTarget => {
     update: (client, patch) => client.library.updateNpcSheet({ params, payload: patch }),
     remove: (client) => client.library.removeNpcSheet({ params }),
     options: coreOptionsAtom,
+    bestiary: { kind: "library" },
     writes: [reads.npcSheet(npcId), reads.libraryNpcSheets],
     spellbook: librarySheetSpellsAtom(npcId),
     noSpells: "No spells are available for this class and level in the core rules.",

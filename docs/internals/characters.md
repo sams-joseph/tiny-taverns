@@ -86,6 +86,8 @@ A character's portrait is the first kind of Hob-drawn image. [Images](images.md)
 
 It runs `seedFor` first, then `sheetGrantsFor` at the seed's level on the moved cells, then marks the class's saves with `withSavingThrows`. `startingSeed` is the seed half alone, which the form reads to fill its two boxes before anything is composed.
 
+An NPC sheet can also start from a bestiary creature (_Start from a bestiary NPC_ on the Stats tab). That is a translation, not a composition, so it does not go through `startingSheetBody`: `sheetFromStatBlock` (`packages/api/src/StatBlockSheet.ts`) moves what the stat block printed onto the sheet and leaves class, level and race empty, because no class or level can be read off a stat block. None of its lines is `derived`, so a later level-up recompute, which rewrites only derived lines from a class, leaves them alone. `monster-corpus.test.ts` runs every SRD humanoid through it against the PUT's wire schema.
+
 `sheetGrantsFor` reads only resolved `CharacterOption`s:
 
 - top-level class features up to the level (a `parent_feature_id` is a pick made later), with prose only at level 1;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { skillDrafts, skillsFrom, STANDARD_SKILLS } from "./skills";
+import { STANDARD_SKILLS } from "@taverns/api";
+import { skillDrafts, skillsFrom } from "./skills";
 
 /**
  * The skills editor's pure half. The failure it exists to catch is the quiet

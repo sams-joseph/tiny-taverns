@@ -188,6 +188,13 @@ const creatorScene = (mode: SceneMode) => (): Map<string, Answer> =>
 
 export const scenarios = {
   creator,
+  // Cazril with no sheet yet: the Stats tab's empty state and its quick
+  // starts, over the campaign's bestiary.
+  "creator-unsheeted": () =>
+    new Map([
+      ...creator(),
+      [`GET /campaigns/${campaignId}/npcs/${cazrilSheet.npcId}/sheet`, { status: 200, body: null }],
+    ]),
   "creator-social": creatorScene("social"),
   "creator-challenge": creatorScene("challenge"),
   "creator-hazard": creatorScene("hazard"),

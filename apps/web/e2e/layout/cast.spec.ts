@@ -15,7 +15,10 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways, its
  * section editors clear of their headings with one opened inside the window,
  * and its quick start's dialog (`cast/NpcQuickStartDialog.tsx`) inside the
- * window with a body that scrolls and a footer that shows.
+ * window with a body that scrolls and a footer that shows; and with no sheet
+ * yet, its three starts clear of each other, and *Start from a bestiary NPC*'s
+ * dialog over the whole app, its picker and its confirm inside it at every
+ * width.
  * All of it is layout, hit-testing or focus across real events, which jsdom
  * does not compute.
  *
@@ -27,6 +30,7 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
 
 const cast = screens.find((screen) => screen.name === "cast")!;
 const npcStats = screens.find((screen) => screen.name === "npc-stats")!;
+const npcStatsBlank = screens.find((screen) => screen.name === "npc-stats-blank")!;
 
 /** The drawing's column count at each width: `auto-fill` over a 250px floor. */
 const COLUMNS: Readonly<Record<(typeof WIDTHS)[number], number>> = {
@@ -315,6 +319,86 @@ for (const width of WIDTHS) {
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
         await page.keyboard.press("Escape");
         await expect(dialog).toBeHidden();
+      });
+    });
+
+    test("npc stats, started from the bestiary", async ({ app, page }) => {
+      await app.open(npcStatsBlank);
+      const panel = page.locator('[data-slot="npc-sheet"]');
+      await expect(panel.getByText("No stats yet")).toBeVisible();
+
+      await test.step("the three starts sit inside the panel, clear of each other", async () => {
+        const frame = await box(panel);
+        const starts = await Promise.all(
+          ["Start from class and level", "Start from a bestiary NPC", "Write one"].map(
+            async (name) => [name, await box(panel.getByRole("button", { name }))] as const,
+          ),
+        );
+        for (const [name, part] of starts) {
+          expect.soft(part.x, `${name} left`).toBeGreaterThanOrEqual(frame.x - 0.5);
+          expect
+            .soft(part.x + part.width, `${name} right`)
+            .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+        }
+        for (const [i, [one, a]] of starts.entries())
+          for (const [two, b] of starts.slice(i + 1)) {
+            const apart =
+              a.x + a.width <= b.x ||
+              b.x + b.width <= a.x ||
+              a.y + a.height <= b.y ||
+              b.y + b.height <= a.y;
+            expect.soft(apart, `${one} clear of ${two}`).toBe(true);
+          }
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
+
+      await panel.getByRole("button", { name: "Start from a bestiary NPC" }).click();
+      const dialog = page.getByRole("dialog", { name: "Start Cazril’s stats from the bestiary" });
+      await expect(dialog).toBeVisible();
+      await app.settle();
+
+      const insideDialog = async (what: string) => {
+        const frame = await box(dialog);
+        expect.soft(frame.x, "dialog left").toBeGreaterThanOrEqual(0);
+        expect.soft(frame.x + frame.width, "dialog right").toBeLessThanOrEqual(width);
+        const parts = await dialog
+          .locator('button, [data-slot="picker-row"], [data-slot="bestiary-start"]')
+          .evaluateAll((els) =>
+            els.map((el) => {
+              const rect = el.getBoundingClientRect();
+              return { name: el.textContent?.slice(0, 24) ?? "", x: rect.x, w: rect.width };
+            }),
+          );
+        expect.soft(parts.length, `${what}: parts drawn`).toBeGreaterThan(0);
+        for (const part of parts) {
+          expect.soft(part.x, `${what}: ${part.name} left`).toBeGreaterThanOrEqual(frame.x - 0.5);
+          expect
+            .soft(part.x + part.w, `${what}: ${part.name} right`)
+            .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+        }
+      };
+
+      await test.step("its scrim covers the nav rows as well as the page", async () => {
+        const hit = await page.evaluate(
+          () =>
+            document.elementFromPoint(2, 2)?.closest("[data-slot]")?.getAttribute("data-slot") ??
+            null,
+        );
+        expect.soft(hit, "what is under the top-left corner").toBe("dialog-overlay");
+      });
+
+      await test.step("the picker's rows and buttons stay inside the dialog", async () => {
+        await expect(dialog.getByRole("button", { name: "Start from Goblin Boss" })).toBeVisible();
+        await insideDialog("picker");
+      });
+
+      await test.step("the confirm stays inside it too", async () => {
+        await dialog.getByRole("button", { name: "Start from Goblin Boss" }).click();
+        await expect(dialog.locator('[data-slot="bestiary-start"]')).toBeVisible();
+        await insideDialog("confirm");
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
       });
     });
 
