@@ -2,6 +2,7 @@ import {
   type Encounter,
   type Note,
   type Npc,
+  type NpcSheetSummary,
   NPC_WHEREABOUTS_MAX,
   type PartySeat,
   type Session,
@@ -37,6 +38,7 @@ import { SaveState } from "../ui/SaveState";
 import { NpcAvatar } from "./NpcAvatar";
 import { NpcLinks } from "./NpcLinks";
 import type { NpcFields, NpcSaver } from "./npcAutosave";
+import { sheetSummaryLine } from "./npcSheet";
 import { ATTITUDES, metLine, nightLabel, STATUSES } from "./prep";
 
 /** *First met*'s one option that is not a night. */
@@ -75,6 +77,12 @@ const NOT_MET = "";
  * and never a guess. *First met* is a control the drawing lacks — there it is
  * fixture data — and picks one of the campaign's nights, or *Not met yet*.
  *
+ * **Their stats are one line**, after the prep: the sheet's level, class and
+ * numbers from the Cast's shelf read (`NpcSheetSummary`), or *No stats*, with
+ * the way to the NPC page's *Stats* tab, where the sheet is read and written.
+ * The drawer writes none of it. DM only, like the secret: no player reads an
+ * NPC's sheet.
+ *
  * **What they are tied to and where they show up** (`NpcLinks`) close the
  * body, as drawn: a toggle per seat, and chips for the nights they were at the
  * table, the encounters and the notes, each written at once rather than
@@ -90,6 +98,7 @@ export function NpcDrawer({
   encounters,
   notes,
   party,
+  sheet,
   saver,
   focusName,
   onClose,
@@ -106,6 +115,8 @@ export function NpcDrawer({
   readonly encounters: ReadonlyArray<Encounter>;
   readonly notes: ReadonlyArray<Note>;
   readonly party: ReadonlyArray<PartySeat>;
+  /** The NPC's sheet as the Cast's shelf read has it; `undefined` when there is none. */
+  readonly sheet: NpcSheetSummary | undefined;
   readonly saver: NpcSaver;
   /** Just made by *Add NPC*: the name is focused, ready to type. */
   readonly focusName: boolean;
@@ -265,6 +276,36 @@ export function NpcDrawer({
               </SelectContent>
             </Select>
           </Field>
+
+          <div data-slot="npc-drawer-stats" className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="font-sans text-label leading-snug font-medium">Stats</span>
+              <Badge variant="magic">DM only</Badge>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <p className="mb-0 min-w-0 flex-1 text-body-s leading-body text-muted-foreground">
+                {sheet === undefined ? "No stats" : sheetSummaryLine(sheet)}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={
+                  sheet === undefined ? `Add stats for ${npc.name}` : `Open ${npc.name}’s stats`
+                }
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/campaigns/$campaignId/cast/$npcId"
+                    params={{ campaignId, npcId: npc.id }}
+                    hash="stats"
+                  />
+                }
+              >
+                {sheet === undefined ? "Add" : "Open"}
+                <Icon name="arrow-right" size={13} />
+              </Button>
+            </div>
+          </div>
 
           <Field label="Voice and manner" htmlFor="npc-drawer-manner">
             <Textarea

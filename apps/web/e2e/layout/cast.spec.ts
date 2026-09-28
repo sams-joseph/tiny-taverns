@@ -10,7 +10,9 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * drawer (`cast/NpcDrawer.tsx`): that it covers the whole app, top to bottom,
  * with its scrim over the nav rows; that it is modal — focus inside, Esc
  * closing it, the window not scrolling under it — that its *Tied to* toggles
- * and *Shows up in* chips wrap inside it, and that its footer fits.
+ * and *Shows up in* chips wrap inside it, that its stats line wraps beside
+ * its button, and that its footer fits. Last the NPC page's *Stats* tab
+ * (`cast/NpcSheetPanel.tsx`): in the Overview's frame, nothing sideways.
  * All of it is layout, hit-testing or focus across real events, which jsdom
  * does not compute.
  *
@@ -21,6 +23,7 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  */
 
 const cast = screens.find((screen) => screen.name === "cast")!;
+const npcStats = screens.find((screen) => screen.name === "npc-stats")!;
 
 /** The drawing's column count at each width: `auto-fill` over a 250px floor. */
 const COLUMNS: Readonly<Record<(typeof WIDTHS)[number], number>> = {
@@ -173,6 +176,52 @@ for (const width of WIDTHS) {
       });
     });
 
+    test("npc stats", async ({ app, page }) => {
+      await app.open(npcStats);
+      const panel = page.locator('[data-slot="npc-sheet"]');
+      await expect(panel.getByRole("heading", { name: "Level 5 Human Fighter" })).toBeVisible();
+
+      await test.step("nothing scrolls sideways", async () => {
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
+
+      await test.step("it sits in the Overview's frame, on the header's left edge", async () => {
+        const h1 = await box(page.locator('main [data-slot="page-heading"] h1'));
+        const frame = await box(panel);
+        expect.soft(frame.x, "panel left").toBeCloseTo(h1.x, 0);
+        expect.soft(frame.width, "panel inside the page").toBeLessThanOrEqual(width);
+        // Centred at the Overview's width: as far from the right as the left.
+        if (width === 1440) expect.soft(frame.x).toBeCloseTo(width - (frame.x + frame.width), 0);
+      });
+
+      await test.step("the identity card's actions and the document stay inside it", async () => {
+        const frame = await box(panel);
+        const parts = await panel
+          .locator('button, [data-slot="card"], section')
+          .evaluateAll((els) =>
+            els.map((el) => {
+              const rect = el.getBoundingClientRect();
+              return { name: el.textContent?.slice(0, 24) ?? "", x: rect.x, w: rect.width };
+            }),
+          );
+        for (const part of parts) {
+          expect.soft(part.x, `${part.name} left`).toBeGreaterThanOrEqual(frame.x - 0.5);
+          expect
+            .soft(part.x + part.w, `${part.name} right`)
+            .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+        }
+        const edit = await box(panel.getByRole("button", { name: "Edit stats" }));
+        const remove = await box(panel.getByRole("button", { name: "Remove" }));
+        const apart =
+          edit.x + edit.width <= remove.x ||
+          remove.x + remove.width <= edit.x ||
+          edit.y + edit.height <= remove.y ||
+          remove.y + remove.height <= edit.y;
+        expect.soft(apart, "Edit stats clear of Remove").toBe(true);
+      });
+    });
+
     test("npc drawer", async ({ app, page }) => {
       await app.open(cast);
       const cards = page.locator('[data-slot="npc-card"]');
@@ -257,6 +306,20 @@ for (const width of WIDTHS) {
           expect.soft(target.width, "× width").toBeGreaterThanOrEqual(24);
           expect.soft(target.height, "× height").toBeGreaterThanOrEqual(24);
         }
+      });
+
+      await test.step("its stats line wraps beside its button, inside it", async () => {
+        const frame = await box(drawer);
+        const row = drawer.locator('[data-slot="npc-drawer-stats"]');
+        await expect(row).toContainText("Level 5 Human Fighter · AC 17 · HP 44 · CR 3");
+        const line = await box(row.locator("p"));
+        const open = await box(row.getByRole("button", { name: "Open Master Hollis’s stats" }));
+        expect.soft(line.x, "line left").toBeGreaterThanOrEqual(frame.x);
+        expect.soft(line.x + line.width, "line clear of the button").toBeLessThanOrEqual(open.x);
+        expect
+          .soft(open.x + open.width, "button right")
+          .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+        expect.soft(open.height, "button height").toBeGreaterThanOrEqual(24);
       });
 
       await test.step("focus is inside it", async () => {

@@ -7,6 +7,8 @@ import type {
   NpcMemory,
   NpcPrep,
   NpcProposal,
+  NpcSheet,
+  NpcSheetSummary,
   PlayerNpc,
   Session,
   SessionId,
@@ -20,8 +22,8 @@ import { reads } from "../api/keys";
  * The cast's reads, as atoms — `Atom.family` at module scope, keyed on what
  * each read closes over, exactly as `campaign/load.ts` does.
  *
- * One combination, the Cast's (`castAtom`): its cards need the rows, their prep
- * and the nights together. Otherwise each list is its screen's `extra` (the
+ * One combination, the Cast's (`castAtom`): its cards need the rows, their prep,
+ * their sheets' summaries and the nights together. Otherwise each list is its screen's `extra` (the
  * archived shelf's) and one row is the NPC screen's. The rehearsal
  * transcript is deliberately *not* an atom — like Hob's it is read by the hook
  * that streams into it (`cast/rehearsal.ts`), because a refresh would replace
@@ -63,6 +65,22 @@ export const npcPrepAtom = Atom.family((campaignId: CampaignId) =>
   ),
 );
 
+/**
+ * The summary of every live NPC's sheet (`sheets`), in the list's order,
+ * leaving out an NPC with none — the drawer's one line. The document is not
+ * in it; the Stats tab reads one NPC's (`npcSheetAtom`). The creator's alone:
+ * no player read touches `npc_sheet`.
+ *
+ * It answers `npcs` as well as its own key, for the prep's reason: which NPCs
+ * it lists moves whenever an NPC is archived or restored.
+ */
+export const npcSheetsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.npcs.sheets({ params: { campaignId }, query: {} }),
+    [reads.npcSheets(campaignId), reads.npcs(campaignId)],
+  ),
+);
+
 /** The campaign's nights, newest first: what *First met* picks from and names. */
 export const castNightsAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
@@ -76,12 +94,14 @@ export interface CastShelf {
   readonly npcs: ReadonlyArray<Npc>;
   /** Each live NPC's prep; one the list has not caught up with has none yet. */
   readonly prep: ReadonlyArray<NpcPrep>;
+  /** The live NPCs' sheets, without their documents; an NPC with none is not in it. */
+  readonly sheets: ReadonlyArray<NpcSheetSummary>;
   readonly nights: ReadonlyArray<Session>;
 }
 
 /**
- * The Cast's `extra`: the rows, their prep and the nights, one value with
- * three states, as the Party tab's roster is. Told how to refresh, for the
+ * The Cast's `extra`: the rows, their prep, their sheets' summaries and the
+ * nights, one value with three states, as the Party tab's roster is. Told how to refresh, for the
  * reason `rosterAtom` gives.
  */
 export const castAtom = Atom.family((campaignId: CampaignId) =>
@@ -90,11 +110,13 @@ export const castAtom = Atom.family((campaignId: CampaignId) =>
       AsyncResult.all({
         npcs: get(npcsAtom(campaignId)),
         prep: get(npcPrepAtom(campaignId)),
+        sheets: get(npcSheetsAtom(campaignId)),
         nights: get(castNightsAtom(campaignId)),
       }),
     (refresh) => {
       refresh(npcsAtom(campaignId));
       refresh(npcPrepAtom(campaignId));
+      refresh(npcSheetsAtom(campaignId));
       refresh(castNightsAtom(campaignId));
     },
   ),
@@ -111,6 +133,8 @@ export interface NpcDetail {
   readonly memories: ReadonlyArray<NpcMemory>;
   readonly proposals: ReadonlyArray<NpcProposal>;
   readonly awarenessCandidates: ReadonlyArray<NpcAwarenessCandidate>;
+  /** The Stats tab's sheet, or `null` when the DM has not written one. */
+  readonly sheet: NpcSheet | null;
 }
 
 const npcRowAtom = Atom.family((at: OneNpc) =>
@@ -130,6 +154,10 @@ export const npcLinksAtom = Atom.family((at: OneNpc) =>
     (client) => client.npcs.links({ params: at }),
     [reads.npcLinks(at.npcId), reads.encounters(at.campaignId)],
   ),
+);
+
+const npcSheetAtom = Atom.family((at: OneNpc) =>
+  apiAtom((client) => client.npcs.sheet({ params: at }), [reads.npcSheet(at.npcId)]),
 );
 
 const npcKnowledgeAtom = Atom.family((at: OneNpc) =>
@@ -209,6 +237,7 @@ export const npcAtom = Atom.family((at: OneNpc) =>
         memories: get(npcMemoriesAtom(at)),
         proposals: get(npcProposalsAtom(at)),
         awarenessCandidates: get(npcAwarenessCandidatesAtom(at)),
+        sheet: get(npcSheetAtom(at)),
       }),
     ),
   ),

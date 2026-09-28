@@ -351,6 +351,55 @@ export const cazril = {
   updatedAt: stamps.updatedAt,
 };
 
+/**
+ * Cazril's sheet as the creator reads it (`NpcSheet`): a level, a class and
+ * the numbers, a challenge rating, and a rules half with abilities, a feature
+ * and an attack — enough for the Stats tab to draw the character's document.
+ * The default wire has no sheet for him; a test that wants this re-aims
+ * `GET …/npcs/:npcId/sheet`, and `cazrilSheetSummary` is the same row as the
+ * Cast's shelf read carries it: the columns, no document.
+ */
+export const cazrilSheetSummary = {
+  npcId,
+  level: 5,
+  race: "Human",
+  subrace: null,
+  className: "Fighter",
+  descriptor: "Level 5 Human Fighter",
+  ac: 17,
+  hpMax: 44,
+  cr: "3",
+  version: 3,
+  updatedAt: stamps.updatedAt,
+};
+
+export const cazrilSheet = {
+  ...cazrilSheetSummary,
+  sheet: {
+    abilities: [
+      { label: "STR", score: "16", modifier: "+3", save: "+6" },
+      { label: "DEX", score: "12", modifier: "+1" },
+      { label: "CON", score: "14", modifier: "+2", save: "+5" },
+      { label: "INT", score: "10", modifier: "+0" },
+      { label: "WIS", score: "13", modifier: "+1" },
+      { label: "CHA", score: "8", modifier: "-1" },
+    ],
+    traits: [{ name: "Second Wind", text: "Regain 1d10 + 5 hit points as a bonus action." }],
+    actions: [
+      {
+        id: "atk:boathook",
+        name: "Boathook",
+        cost: "action",
+        hit: "+6",
+        dice: "1d8+3",
+        damageType: "Piercing",
+        range: "Reach 10 ft.",
+        source: "other",
+      },
+    ],
+  },
+};
+
 export const cazrilSource = {
   id: "2b1f2a1e-0000-4000-8000-00000000d0c0",
   accountId: theDmAccountId,
@@ -1850,6 +1899,9 @@ export const fullCampaign = (): Map<string, Answer> =>
     ],
     [`GET /campaigns/${campaignId}/npcs/-/prep`, { status: 200, body: [blankPrep(npcId)] }],
     [`PATCH /campaigns/${campaignId}/npcs/${npcId}/prep`, { status: 200, body: blankPrep(npcId) }],
+    // No NPC has stats yet: the shelf is empty and Cazril's sheet is `null`.
+    [`GET /campaigns/${campaignId}/npcs/-/sheets`, { status: 200, body: [] }],
+    [`GET /campaigns/${campaignId}/npcs/${npcId}/sheet`, { status: 200, body: null }],
     // Tied to nothing and linked to nothing, as a new NPC is.
     [
       `GET /campaigns/${campaignId}/npcs/${npcId}/links`,

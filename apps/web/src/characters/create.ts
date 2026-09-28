@@ -49,8 +49,44 @@ export const tablesForNewCharacter = (
   memberships: ReadonlyArray<CampaignMembership>,
 ): ReadonlyArray<CampaignMembership> => memberships;
 
-const parseOptional = (raw: string): number | null | undefined =>
+/** `""` ⇄ `null`. A blank number box is *I have not filled this in*, not a zero; `undefined` is not a whole number. */
+export const parseOptional = (raw: string): number | null | undefined =>
   raw.trim() === "" ? null : Number.isInteger(Number(raw)) ? Number(raw) : undefined;
+
+/** What a sheet's level, AC and hit-point boxes refuse, before the schema refuses it. */
+export interface IdentityNumberProblems {
+  readonly level?: string;
+  readonly ac?: string;
+  readonly hpMax?: string;
+}
+
+/**
+ * **The sheet's three identity numbers, checked the way the columns check
+ * them** — a character's (this form, `IdentityDialog`) and an NPC sheet's
+ * (`cast/NpcSheetDialog.tsx`), which carry the same columns under the same
+ * bounds. Each box may be blank; a filled one is a whole number in range.
+ */
+export const identityNumberProblems = (boxes: {
+  readonly level: string;
+  readonly ac: string;
+  readonly hpMax: string;
+}): IdentityNumberProblems => {
+  const problems: { level?: string; ac?: string; hpMax?: string } = {};
+  const level = parseOptional(boxes.level);
+  const ac = parseOptional(boxes.ac);
+  const hpMax = parseOptional(boxes.hpMax);
+  if (level === undefined) problems.level = "A level is a whole number.";
+  else if (level !== null && (level < 1 || level > MAX_LEVEL)) {
+    problems.level = `Between 1 and ${String(MAX_LEVEL)}.`;
+  }
+  if (ac === undefined) problems.ac = "An armour class is a whole number.";
+  else if (ac !== null && (ac < 0 || ac > MAX_AC)) problems.ac = `Between 0 and ${String(MAX_AC)}.`;
+  if (hpMax === undefined) problems.hpMax = "Hit points are a whole number.";
+  else if (hpMax !== null && (hpMax < 0 || hpMax > MAX_HP)) {
+    problems.hpMax = `Between 0 and ${MAX_HP.toLocaleString("en")}.`;
+  }
+  return problems;
+};
 
 const isWebUrl = (raw: string): boolean => /^https?:\/\//i.test(raw);
 
@@ -124,22 +160,9 @@ export const problemsIn = (draft: CharacterDraft): DraftProblems => {
     hpMax?: string;
     sheetUrl?: string;
     abilities?: string;
-  } = {};
-  const level = parseOptional(draft.level);
-  const ac = parseOptional(draft.ac);
-  const hpMax = parseOptional(draft.hpMax);
+  } = { ...identityNumberProblems(draft) };
 
   if (draft.name.trim() === "") problems.name = "Give them a name.";
-  if (level === undefined) problems.level = "A level is a whole number.";
-  else if (level !== null && (level < 1 || level > MAX_LEVEL)) {
-    problems.level = `Between 1 and ${String(MAX_LEVEL)}.`;
-  }
-  if (ac === undefined) problems.ac = "An armour class is a whole number.";
-  else if (ac !== null && (ac < 0 || ac > MAX_AC)) problems.ac = `Between 0 and ${String(MAX_AC)}.`;
-  if (hpMax === undefined) problems.hpMax = "Hit points are a whole number.";
-  else if (hpMax !== null && (hpMax < 0 || hpMax > MAX_HP)) {
-    problems.hpMax = `Between 0 and ${MAX_HP.toLocaleString("en")}.`;
-  }
   if (draft.sheetUrl.trim() !== "" && !isWebUrl(draft.sheetUrl.trim())) {
     problems.sheetUrl = "A link starting http:// or https://.";
   }

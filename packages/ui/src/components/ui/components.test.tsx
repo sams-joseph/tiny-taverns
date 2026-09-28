@@ -643,6 +643,27 @@ describe("states", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("draws its one next step under the sentence, only when given one", () => {
+    const { rerender } = render(
+      <EmptyState icon="footprints" title="No monsters yet">
+        Add one.
+      </EmptyState>,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
+
+    rerender(
+      <EmptyState icon="footprints" title="No monsters yet" action={<button>Add monster</button>}>
+        Add one.
+      </EmptyState>,
+    );
+    const action = screen.getByRole("button", { name: "Add monster" });
+    expect(action.closest('[data-slot="empty-state"]')).not.toBeNull();
+    expect(
+      screen.getByText("Add one.").compareDocumentPosition(action) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("alerts a failure by its title and offers a retry only when given one", async () => {
     const user = userEvent.setup();
     let retries = 0;

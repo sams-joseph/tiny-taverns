@@ -182,6 +182,17 @@ export const reads = {
    */
   npcPrep: (campaignId: CampaignId): ReadKey => key`npc-prep:${campaignId}`,
 
+  /**
+   * The summary of every NPC's sheet in the cast (`npcs.sheets`): the drawer's
+   * one line. The creator's alone, like the prep, and a key of its own for the
+   * same reason. Its read answers `npcs` too, since which NPCs it lists moves
+   * with the cast.
+   */
+  npcSheets: (campaignId: CampaignId): ReadKey => key`npc-sheets:${campaignId}`,
+
+  /** One NPC's whole sheet (`npcs.sheet`): the Stats tab's read. */
+  npcSheet: (npcId: NpcId): ReadKey => key`npc-sheet:${npcId}`,
+
   /** One NPC's row: the detail screen's read, refreshed by its own edits. */
   npc: (npcId: NpcId): ReadKey => key`npc:${npcId}`,
 

@@ -23,6 +23,8 @@ import { Field, SaveFailure, Textarea } from "../ui/form";
 import { npcAtom, sessionNpcsAtom, type NpcDetail } from "./load";
 import { NpcAvatar } from "./NpcAvatar";
 import { NpcDialog } from "./NpcDialog";
+import { campaignSheetTarget } from "./npcSheet";
+import { NpcSheetPanel } from "./NpcSheetPanel";
 import { useNpcRehearsal } from "./rehearsal";
 import { RehearsalPanel } from "./RehearsalPanel";
 import { TabRow, type Collapse } from "../shell/TabRow";
@@ -30,6 +32,9 @@ import { TabRow, type Collapse } from "../shell/TabRow";
 /**
  * One NPC: the persona as the creator wrote it, the rehearsal beside it, and
  * a small inspector under the persona.
+ *
+ * **Centred at the Overview's width** (`CampaignChrome`'s `centred`), header
+ * and body in one frame, as the Cast it opens from is.
  *
  * ### Two columns wide, one narrow — on the column's width
  *
@@ -51,7 +56,8 @@ import { TabRow, type Collapse } from "../shell/TabRow";
  * still renders it, with *Restore* where *Archive* was, and the rehearsal
  * composer replaced by the reason.
  */
-type NpcTab = "profile" | "rehearsal" | "knowledge" | "memory" | "awareness" | "proposals";
+type NpcTab =
+  "profile" | "stats" | "rehearsal" | "knowledge" | "memory" | "awareness" | "proposals";
 
 const NPC_TABS: ReadonlyArray<{
   readonly id: NpcTab;
@@ -59,6 +65,7 @@ const NPC_TABS: ReadonlyArray<{
   readonly collapse?: Collapse;
 }> = [
   { id: "profile", label: "Profile" },
+  { id: "stats", label: "Stats" },
   { id: "rehearsal", label: "Rehearsal" },
   { id: "knowledge", label: "Knowledge", collapse: "xl" },
   { id: "memory", label: "Memory", collapse: "xl" },
@@ -84,6 +91,7 @@ export function NpcScreen() {
     <CampaignChrome
       campaignId={campaignId}
       title="Cast"
+      centred
       extra={npcAtom({ campaignId, npcId })}
       subtitle={({ extra }) =>
         extra.npc.role === "" ? extra.npc.name : `${extra.npc.name} · ${extra.npc.role}`
@@ -120,9 +128,10 @@ export function NpcScreen() {
 }
 
 /**
- * The NPC's own tabs, on the header's tab row. Six do not fit a phone, so the
- * narrow strip keeps the two used at the table and puts the rest in its *More*
- * menu (`shell/TabRow.tsx`).
+ * The NPC's own tabs, on the header's tab row. Seven do not fit a phone, so
+ * the narrow strip keeps the three used at the table — who they are, their
+ * stats and how they talk — and puts the rest in its *More* menu
+ * (`shell/TabRow.tsx`).
  */
 function NpcTabs({
   active,
@@ -195,6 +204,17 @@ function NpcBody({
     );
   }
 
+  if (active === "stats") {
+    return (
+      <div className="@container">
+        <NpcSheetPanel
+          name={npc.name}
+          sheet={detail.sheet}
+          target={campaignSheetTarget(npc.campaignId, npc.id)}
+        />
+      </div>
+    );
+  }
   if (active === "knowledge") return <KnowledgePanel npc={npc} facts={knowledge} />;
   if (active === "memory") return <MemoryPanel npc={npc} memories={memories} />;
   if (active === "awareness") {

@@ -6,6 +6,7 @@ import {
   bodyOf,
   campaignId,
   cazril,
+  cazrilSheet,
   installStubServer,
   npcId,
   npcRehearsalStatus,
@@ -631,4 +632,193 @@ describe("NpcScreen", () => {
     expect(calls).toHaveLength(2);
     expect(JSON.parse(calls[1]!.body)).toMatchObject({ visibility: "dm", expectedVersion: 3 });
   }, 20_000);
+});
+
+describe("the Stats tab", () => {
+  const sheetPath = `/campaigns/${campaignId}/npcs/${npcId}/sheet`;
+
+  const renderStats = async () => {
+    await renderAt(`/campaigns/${campaignId}/cast/${npcId}#stats`, (screen) => (
+      <HostedSessionScope session={TEST_SESSION}>{screen}</HostedSessionScope>
+    ));
+    return await screen.findByText(/No stats yet|Level 5 Human Fighter/);
+  };
+
+  const sheetCalls = (method: string) =>
+    server.calls.filter((call) => call.method === method && call.pathname === sheetPath);
+
+  it("sits after Profile, opens from #stats, and says there are no stats yet", async () => {
+    await renderStats();
+    const tabs = screen
+      .getAllByRole("button")
+      .map((button) => button.textContent?.trim())
+      .filter((label) => label === "Profile" || label === "Stats" || label === "Rehearsal");
+    expect(tabs.slice(0, 3)).toEqual(["Profile", "Stats", "Rehearsal"]);
+
+    expect(screen.getByText("No stats yet")).toBeInTheDocument();
+    expect(screen.getByText(/Only you see them/)).toBeInTheDocument();
+    // Nothing to edit or remove until there is a sheet, and no quick start it cannot run.
+    expect(screen.queryByRole("button", { name: "Edit stats" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    expect(screen.queryByText(/class and level/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Write one" })).toBeInTheDocument();
+  });
+
+  it("writes one: the identity over a blank document, and re-reads the sheet", async () => {
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Write one" }));
+    const dialog = await screen.findByRole("dialog", { name: "Write Cazril’s stats" });
+    await userEvent.type(within(dialog).getByRole("spinbutton", { name: "Level" }), "5");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Class" }), "Fighter");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Race" }), " Human ");
+    await userEvent.type(within(dialog).getByRole("spinbutton", { name: "AC" }), "17");
+    await userEvent.type(within(dialog).getByRole("spinbutton", { name: "Hit points" }), "44");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Challenge rating" }));
+    await userEvent.click(await screen.findByRole("option", { name: "CR 3 · 700 XP" }));
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Write stats" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [put] = sheetCalls("PUT");
+    // Every column, blank ones as `null`, over the column default — and no version, since none was read.
+    expect(JSON.parse(put!.body)).toEqual({
+      level: 5,
+      race: "Human",
+      subrace: null,
+      className: "Fighter",
+      ac: 17,
+      hpMax: 44,
+      cr: "3",
+      sheet: { abilities: [], traits: [] },
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Level 5 Human Fighter" }),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses a number out of bounds before anything is sent", async () => {
+    await renderStats();
+    await userEvent.click(screen.getByRole("button", { name: "Write one" }));
+    const dialog = await screen.findByRole("dialog", { name: "Write Cazril’s stats" });
+    await userEvent.type(within(dialog).getByRole("spinbutton", { name: "AC" }), "41");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Write stats" }));
+    expect(within(dialog).getByText("Between 0 and 40.")).toBeInTheDocument();
+    expect(sheetCalls("PUT")).toHaveLength(0);
+  });
+
+  it("draws the sheet read-only: the identity, the challenge line and the character's document", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await renderStats();
+
+    expect(screen.getByRole("heading", { name: "Level 5 Human Fighter" })).toBeInTheDocument();
+    expect(screen.getByText("CR 3 · 700 XP")).toBeInTheDocument();
+    expect(screen.getByText("Armour class")).toBeInTheDocument();
+    expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByText("44")).toBeInTheDocument();
+    expect(screen.getByText("DM only")).toBeInTheDocument();
+
+    const document = screen.getByRole("region", { name: "Cazril's sheet" });
+    expect(within(document).getByText("STR")).toBeInTheDocument();
+    expect(within(document).getByText("Second Wind")).toBeInTheDocument();
+    expect(within(document).getByText("Boathook")).toBeInTheDocument();
+    // Read-only: nothing rolls, nothing spends, no section is drawn to hold an edit.
+    expect(within(document).queryByRole("button")).toBeNull();
+    // The player's half has no key here, so Story and Level ups are not drawn.
+    expect(within(document).queryByText("Story")).toBeNull();
+    expect(within(document).queryByText("Level ups")).toBeNull();
+  });
+
+  it("edits the identity by sending only what changed, with the version it read", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    server.routes.set(`PATCH ${sheetPath}`, {
+      status: 200,
+      body: { ...cazrilSheet, hpMax: 52, cr: null, version: 4 },
+    });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit stats" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Cazril’s stats" });
+    expect(within(dialog).getByRole("spinbutton", { name: "Level" })).toHaveValue(5);
+    const hp = within(dialog).getByRole("spinbutton", { name: "Hit points" });
+    await userEvent.clear(hp);
+    await userEvent.type(hp, "52");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Challenge rating" }));
+    await userEvent.click(await screen.findByRole("option", { name: "No rating" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [patch] = sheetCalls("PATCH");
+    // No level or class, so the server has no reason to recompute the document.
+    expect(JSON.parse(patch!.body)).toEqual({ expectedVersion: 3, hpMax: 52, cr: null });
+  });
+
+  it("sends nothing when nothing changed", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await renderStats();
+    await userEvent.click(screen.getByRole("button", { name: "Edit stats" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Cazril’s stats" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sheetCalls("PATCH")).toHaveLength(0);
+  });
+
+  it("says when the sheet moved on under the edit, and offers a reload", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    server.routes.set(`PATCH ${sheetPath}`, {
+      status: 409,
+      body: {
+        _tag: "Conflict",
+        message: "the NPC's sheet moved on while you were editing (version 4, you read 3).",
+      },
+    });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit stats" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Cazril’s stats" });
+    const ac = within(dialog).getByRole("spinbutton", { name: "AC" });
+    await userEvent.clear(ac);
+    await userEvent.type(ac, "16");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    expect(await within(dialog).findByText(/moved on while you were editing/)).toBeInTheDocument();
+
+    server.routes.set(`GET ${sheetPath}`, {
+      status: 200,
+      body: { ...cazrilSheet, ac: 18, version: 4 },
+    });
+    const reads = server.calls.filter(
+      (call) => call.method === "GET" && call.pathname === sheetPath,
+    );
+    const before = reads.length;
+    await userEvent.click(within(dialog).getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "GET" && call.pathname === sheetPath).length,
+      ).toBeGreaterThan(before),
+    );
+    expect(await screen.findByText("18")).toBeInTheDocument();
+  });
+
+  it("removes the sheet only once asked, and goes back to no stats", async () => {
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    server.routes.set(`DELETE ${sheetPath}`, { status: 204, body: null });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    let dialog = await screen.findByRole("dialog", { name: "Remove Cazril’s stats?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep them" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sheetCalls("DELETE")).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    dialog = await screen.findByRole("dialog", { name: "Remove Cazril’s stats?" });
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: null });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove stats" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sheetCalls("DELETE")).toHaveLength(1);
+    expect(await screen.findByText("No stats yet")).toBeInTheDocument();
+  });
 });

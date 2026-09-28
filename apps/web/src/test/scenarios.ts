@@ -3,6 +3,8 @@ import {
   campaignId,
   castShelf,
   castShelfPrep,
+  cazrilSheet,
+  cazrilSheetSummary,
   sessionId,
   encounterShelf,
   fullCampaign,
@@ -103,6 +105,17 @@ const creator = (): Map<string, Answer> => {
     body: castShelfPrep(session12.id).map((prep) =>
       prep.npcId === hollis.id ? { ...prep, tableNights: [session11.id, session12.id] } : prep,
     ),
+  });
+  // Master Hollis has stats, so the drawer's one line is measured over a
+  // summary long enough to wrap beside its button; the others have none. Cazril
+  // has his whole sheet, which the NPC page's Stats tab draws.
+  routes.set(`GET /campaigns/${campaignId}/npcs/-/sheets`, {
+    status: 200,
+    body: [{ ...cazrilSheetSummary, npcId: hollis.id }],
+  });
+  routes.set(`GET /campaigns/${campaignId}/npcs/${cazrilSheet.npcId}/sheet`, {
+    status: 200,
+    body: cazrilSheet,
   });
   for (const npc of castShelf)
     routes.set(`GET /campaigns/${campaignId}/npcs/${npc.id}/links`, {
