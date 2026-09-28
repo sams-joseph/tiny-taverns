@@ -41,7 +41,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The twenty-six screens. */
+/** The twenty-seven screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -55,6 +55,7 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "notes", scenario: "creator", path: `${c}/notes` },
   { name: "cast", scenario: "creator", path: `${c}/cast` },
   { name: "npc", scenario: "creator", path: `${c}/cast/${npcId}` },
+  { name: "cast-archived", scenario: "creator", path: `${c}/cast/archived` },
   { name: "chronicle", scenario: "creator", path: `${c}/chronicle` },
   { name: "party", scenario: "creator", path: `${c}/party` },
   { name: "party-seat", scenario: "creator", path: `${c}/party/${seatId}` },

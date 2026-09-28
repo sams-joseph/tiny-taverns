@@ -19,6 +19,7 @@ import { EncounterBuilderScreen } from "./campaign/EncounterBuilderScreen";
 import { EncounterScreen } from "./campaign/EncounterScreen";
 import { EncountersScreen } from "./campaign/EncountersScreen";
 import { NotesScreen } from "./campaign/NotesScreen";
+import { ArchivedCastScreen } from "./cast/ArchivedCastScreen";
 import { CastScreen } from "./cast/CastScreen";
 import { NpcFollowUpScreen } from "./cast/NpcFollowUpScreen";
 import { NpcLibraryScreen } from "./cast/NpcLibraryScreen";
@@ -384,6 +385,14 @@ const npcFollowUpRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "cast/follow-up",
   component: NpcFollowUpScreen,
+  remountDeps: ({ params }) => params.campaignId,
+});
+
+/** The NPCs archived off the Cast: a second URL, as every archived shelf is. */
+const castArchivedRoute = createRoute({
+  getParentRoute: () => campaignRoute,
+  path: "cast/archived",
+  component: ArchivedCastScreen,
   remountDeps: ({ params }) => params.campaignId,
 });
 
@@ -764,6 +773,7 @@ export const routeTree = rootRoute.addChildren([
       notesRoute,
       castRoute,
       npcFollowUpRoute,
+      castArchivedRoute,
       playerNpcTalkRoute,
       npcRoute,
       castSplatRoute,
@@ -832,6 +842,7 @@ export const routes = {
   notes: notesRoute,
   cast: castRoute,
   npcFollowUp: npcFollowUpRoute,
+  castArchived: castArchivedRoute,
   npc: npcRoute,
   chronicle: chronicleRoute,
   party: partyRoute,

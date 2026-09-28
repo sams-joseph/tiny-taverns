@@ -183,10 +183,21 @@ export function CastScreen() {
             facets={[]}
             className="min-h-control-sm max-w-52 py-0.5"
           />
-          {/* Five controls do not fit one unwrapping header row between the
-              header's wrap breakpoint and a wide desktop, so the secondary
-              press keeps its name for screen readers and its tooltip-sized
-              `title` there and draws only its icon. */}
+          {/* Six controls do not fit one unwrapping header row between the
+              header's wrap breakpoint and a wide desktop, so the two quiet
+              ones keep their names for screen readers and their tooltip-sized
+              `title` there and draw only their icons. The shelf is the way
+              back from the NPC page's *Archive*. */}
+          <Button
+            variant="outline"
+            size="sm"
+            title="Archived NPCs"
+            nativeButton={false}
+            render={<Link to="/campaigns/$campaignId/cast/archived" params={{ campaignId }} />}
+          >
+            <Icon name="archive" size={14} />
+            <span className="@4xl/app:@max-7xl/app:sr-only">Archived</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"

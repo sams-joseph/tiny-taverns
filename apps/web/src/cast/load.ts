@@ -18,8 +18,8 @@ import { reads } from "../api/keys";
  * The cast's reads, as atoms — `Atom.family` at module scope, keyed on what
  * each read closes over, exactly as `campaign/load.ts` does.
  *
- * Two atoms and no combination: the list is the Cast screen's `extra` and one
- * row is the NPC screen's, and neither needs the other. The rehearsal
+ * No combinations: each list is its screen's `extra` (the Cast's, the archived
+ * shelf's) and one row is the NPC screen's, and none needs another. The rehearsal
  * transcript is deliberately *not* an atom — like Hob's it is read by the hook
  * that streams into it (`cast/rehearsal.ts`), because a refresh would replace
  * the reply the creator is watching arrive.
@@ -28,6 +28,18 @@ import { reads } from "../api/keys";
 export const npcsAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.npcs.list({ params: { campaignId }, query: {} }),
+    [reads.npcs(campaignId)],
+  ),
+);
+
+/**
+ * The other shelf: the NPCs archived off the Cast. The server answers it on
+ * the same endpoint with `archived: true`, and it shares the list's one key,
+ * so archiving or restoring an NPC re-reads both shelves at once.
+ */
+export const archivedNpcsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.npcs.list({ params: { campaignId }, query: { archived: true } }),
     [reads.npcs(campaignId)],
   ),
 );
