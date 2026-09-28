@@ -3,10 +3,8 @@ import {
   Button,
   Card,
   CardContent,
-  Checkbox,
   Icon,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -36,20 +34,21 @@ import {
   pickKitRow,
   pickKitSide,
   problemsIn,
-  raceChoiceNote,
   raceIn,
   refused,
   seededDraft,
-  selectedRaceBonuses,
   subraceOptionsOf,
-  withKitDefaults,
+  withPick,
+  withRaceBonus,
   type CharacterDraft as FormDraft,
   type SeededField,
+  type SheetPick,
 } from "./create";
 import { DraftAside } from "./DraftAside";
 import { KitFields } from "./KitFields";
+import { RaceBonusFields } from "./RaceBonusFields";
 import { DraftCard } from "./DraftCard";
-import { ABILITY_KEYS, APPEARANCE_MAX, type AbilityKey, type CampaignId } from "@taverns/api";
+import { APPEARANCE_MAX, type AbilityKey, type CampaignId } from "@taverns/api";
 import { STARTERS, useCharacterDraft } from "./draft";
 import { newCharacterAtom } from "./load";
 import { characterCreateWrites, createOwnCharacter } from "./write";
@@ -203,26 +202,8 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
    * a watcher, which is what makes *seed, never recompute* a property of the
    * wiring rather than of a flag.
    */
-  const pick = (key: "race" | "subrace" | "className" | "background", value: string) =>
-    setDraft((current) => {
-      const next =
-        key === "race"
-          ? { ...current, race: value, subrace: "", raceBonusChoices: [] }
-          : { ...current, [key]: value };
-      // A class pick resets the kit to side (a) throughout — the choices are
-      // the class's own, and a pick made against another class's list would
-      // point at a side that no longer exists. A background pick does the
-      // same to its own kit.
-      return seededDraft(
-        key === "className"
-          ? withKitDefaults(next, options)
-          : key === "background"
-            ? withKitDefaults(next, options, "backgroundKitChoices")
-            : next,
-        edited,
-        options,
-      );
-    });
+  const pick = (key: SheetPick, value: string) =>
+    setDraft((current) => withPick(current, key, value, edited, options));
 
   /**
    * The level re-seeds as well: the hit points are the die at 1st level and its
@@ -233,12 +214,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
     setDraft((current) => seededDraft({ ...current, level }, edited, options));
 
   const toggleRaceBonus = (ability: AbilityKey, on: boolean) =>
-    setDraft((current) => {
-      const selected = on
-        ? [...current.raceBonusChoices, ability]
-        : current.raceBonusChoices.filter((item) => item !== ability);
-      return seededDraft({ ...current, raceBonusChoices: selected }, edited, options);
-    });
+    setDraft((current) => withRaceBonus(current, ability, on, edited, options));
 
   /**
    * The scores re-seed too, through **the same one call** — because the seed
@@ -308,9 +284,6 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
   const backgroundKit = backgroundKitOf(draft, options);
   const selectedRace = raceIn(draft, options);
   const subraces = subraceOptionsOf(selectedRace);
-  const raceBonuses = selectedRaceBonuses(draft, options);
-  const raceChoice = raceChoiceNote(draft, options);
-  const choice = selectedRace?.kind === "race" ? selectedRace.body.abilityBonusChoice : undefined;
 
   /**
    * Which of the two paths this screen is on.
@@ -832,39 +805,12 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
                   />
                 )}
 
-                {choice !== undefined && (
-                  <fieldset className="flex flex-col gap-2">
-                    <legend className="text-label leading-snug font-semibold text-heading">
-                      Race bonus choices
-                    </legend>
-                    <div className="flex flex-wrap gap-x-5 gap-y-2.5">
-                      {ABILITY_KEYS.map((ability) =>
-                        choice.bonuses.some((bonus) => bonus.ability === ability) ? (
-                          <div key={ability} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`new-character-race-bonus-${ability}`}
-                              checked={draft.raceBonusChoices.includes(ability)}
-                              onCheckedChange={(next) => toggleRaceBonus(ability, next === true)}
-                            />
-                            <Label htmlFor={`new-character-race-bonus-${ability}`}>{ability}</Label>
-                          </div>
-                        ) : null,
-                      )}
-                    </div>
-                  </fieldset>
-                )}
-
-                {(raceBonuses !== "" || raceChoice !== undefined) && (
-                  <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
-                    <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
-                    <span>
-                      {raceBonuses === ""
-                        ? "No race bonuses selected yet."
-                        : `Race bonuses: ${raceBonuses}.`}
-                      {raceChoice === undefined ? "" : ` ${raceChoice}`}
-                    </span>
-                  </p>
-                )}
+                <RaceBonusFields
+                  idPrefix="new-character"
+                  draft={draft}
+                  options={options}
+                  onToggle={toggleRaceBonus}
+                />
 
                 {/* **The six cells, and they sit here because this is where
                     they matter**: the two boxes directly below are worked out

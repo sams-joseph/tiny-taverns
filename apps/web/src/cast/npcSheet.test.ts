@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cazrilSheet, cazrilSheetSummary } from "../campaign/campaign.fixtures";
+import type { CharacterOption } from "@taverns/api";
+import { campaignOptions, cazrilSheet, cazrilSheetSummary } from "../campaign/campaign.fixtures";
+import { emptyDraft } from "../characters/create";
 import {
   boxesOf,
   challengeLine,
   identityPatch,
+  quickStartDraft,
+  quickStartPayload,
+  quickStartProblems,
   sheetSummaryLine,
   writeOnePayload,
 } from "./npcSheet";
@@ -80,5 +85,59 @@ describe("the identity payloads", () => {
       race: null,
       ac: null,
     });
+  });
+});
+
+describe("the quick start", () => {
+  const options = campaignOptions as unknown as ReadonlyArray<CharacterOption>;
+
+  it("opens on the character form's blank draft", () => {
+    expect(quickStartDraft(null, options)).toEqual(emptyDraft);
+  });
+
+  it("rebuilds from the sheet's level and labels, spelled as the options spell them, but not its scores", () => {
+    const draft = quickStartDraft({ ...sheet, race: "human", className: "FIGHTER" }, options);
+    expect(draft).toMatchObject({ level: "5", race: "Human", className: "Fighter", subrace: "" });
+    // The document's cells are after the race's bonuses; seeding from them would add them twice.
+    expect(draft.abilities.every((cell) => cell.score === "")).toBe(true);
+    // Seeded from the class at level 5 with no scores: 10, then four levels of 6.
+    expect(draft).toMatchObject({ ac: "10", hpMax: "34" });
+  });
+
+  it("leaves out a label the options no longer name", () => {
+    const draft = quickStartDraft({ ...sheet, className: "Ferryman" }, options);
+    expect(draft.className).toBe("");
+  });
+
+  it("needs a class and a level, and holds the form's bounds", () => {
+    expect(quickStartProblems(emptyDraft)).toEqual({ className: "Pick a class." });
+    expect(quickStartProblems({ ...emptyDraft, className: "Fighter", level: "" })).toEqual({
+      level: "Give them a level.",
+    });
+    expect(quickStartProblems({ ...emptyDraft, className: "Fighter", level: "101" })).toEqual({
+      level: "Between 1 and 100.",
+    });
+  });
+
+  it("writes a rebuild over the version it read, and keeps the DM's rating", () => {
+    const draft = quickStartDraft(sheet, options);
+    const payload = quickStartPayload(draft, options, sheet);
+    expect(payload).toMatchObject({
+      expectedVersion: 3,
+      level: 5,
+      race: "Human",
+      subrace: null,
+      className: "Fighter",
+      ac: 10,
+      hpMax: 34,
+      cr: "3",
+    });
+    expect(payload.sheet.identity).toMatchObject({ hitDice: "5/5 d10" });
+  });
+
+  it("names no version when there is no sheet to have read", () => {
+    const payload = quickStartPayload({ ...emptyDraft, className: "Fighter" }, options, null);
+    expect(payload).not.toHaveProperty("expectedVersion");
+    expect(payload.cr).toBeNull();
   });
 });
