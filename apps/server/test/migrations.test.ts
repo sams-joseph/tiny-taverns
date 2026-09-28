@@ -29,6 +29,7 @@ import characterInspiration from "../src/migrations/0062_character_inspiration.j
 import runScenes from "../src/migrations/0065_run_scenes.js";
 import initiativePhase from "../src/migrations/0066_initiative_phase.js";
 import noteCategoryPin from "../src/migrations/0068_note_category_pin.js";
+import npcLinks from "../src/migrations/0074_npc_links.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -94,6 +95,9 @@ afterAll(() => phaseRuntime.dispose());
 /** A seventeenth, for notes written before a note had a category or a pin. */
 const noteRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_note"));
 afterAll(() => noteRuntime.dispose());
+/** An eighteenth, for note links made before a note could name an NPC. */
+const noteLinkRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_note_link"));
+afterAll(() => noteLinkRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -241,6 +245,7 @@ describe("migrations", () => {
       "npc_awareness_candidate",
       "npc_image",
       "npc_knowledge_fact",
+      "npc_link",
       "npc_memory",
       "npc_prep",
       "npc_proposal",
@@ -349,6 +354,7 @@ describe("migrations", () => {
       { migration_id: 71, name: "campaign_act" },
       { migration_id: 72, name: "campaign_story" },
       { migration_id: 73, name: "npc_prep" },
+      { migration_id: 74, name: "npc_links" },
     ]);
   }, 60_000);
 
@@ -431,6 +437,7 @@ describe("migrations", () => {
       { migration_id: 71, name: "campaign_act" },
       { migration_id: 72, name: "campaign_story" },
       { migration_id: 73, name: "npc_prep" },
+      { migration_id: 74, name: "npc_links" },
     ]);
   }, 60_000);
 });
@@ -1683,5 +1690,71 @@ describe("upgrading a database whose notes predate categories and pins", () => {
       { title: "Cazril", kind: "read_aloud", category: null, pinned_at: null },
     ]);
     expect(measured.sixth).toContain("note_category_check");
+  }, 60_000);
+});
+
+describe("upgrading a database whose note links predate NPC links", () => {
+  it("keeps every link already made, and still wants exactly one target", async () => {
+    const measured = await noteLinkRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0069` left: a note link names an encounter or a seat.
+        yield* sql`drop table npc_link`;
+        yield* sql`alter table note_link drop column npc_id`;
+        yield* sql`
+          alter table note_link add constraint note_link_one_target
+            check (num_nonnulls(encounter_id, campaign_character_id) = 1)
+        `;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "note-link-hash" })}
+          returning id
+        `)[0]!.id;
+        const campaign = yield* rawCampaign(sql, account, "The Salt Road");
+        const encounter = (yield* sql<{ readonly id: string }>`
+          insert into encounter ${sql.insert({ campaign_id: campaign, name: "The ford" })}
+          returning id
+        `)[0]!.id;
+        const note = (yield* sql<{ readonly id: string }>`
+          insert into note ${sql.insert({ campaign_id: campaign, title: "Cazril" })}
+          returning id
+        `)[0]!.id;
+        yield* sql`
+          insert into note_link ${sql.insert({
+            note_id: note,
+            campaign_id: campaign,
+            encounter_id: encounter,
+          })}
+        `;
+
+        yield* npcLinks;
+        const links = yield* sql<{
+          readonly encounter_id: string | null;
+          readonly npc_id: string | null;
+        }>`
+          select encounter_id, npc_id from note_link
+        `;
+        const npc = (yield* sql<{ readonly id: string }>`
+          insert into npc ${sql.insert({ campaign_id: campaign, name: "Hollis" })}
+          returning id
+        `)[0]!.id;
+        const two = yield* sql`
+          insert into note_link ${sql.insert({
+            note_id: note,
+            campaign_id: campaign,
+            encounter_id: encounter,
+            npc_id: npc,
+          })}
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { links, encounter, two };
+      }).pipe(Effect.orDie),
+    );
+
+    expect(measured.links).toEqual([{ encounter_id: measured.encounter, npc_id: null }]);
+    expect(measured.two).toContain("note_link_one_target");
   }, 60_000);
 });

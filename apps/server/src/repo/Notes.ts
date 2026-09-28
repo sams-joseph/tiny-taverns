@@ -1,6 +1,5 @@
 import {
   type Actor,
-  type CampaignCharacterId,
   type CampaignId,
   type CreatedOrder,
   type CreatedPageFilterValues,
@@ -22,6 +21,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { ensureLinkTarget, type LinkTargetId, linkColumn, linksAggregate } from "./links.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
@@ -35,7 +35,6 @@ import {
 import {
   ensureCampaignReadable,
   ensureCampaignWritable,
-  ownedRowReadable,
   rowReadable,
   rowWritable,
 } from "./visibility.js";
@@ -57,18 +56,12 @@ export interface NoteRow extends ProvenanceColumns {
  * Every column of the creator's `Note`: the row, and its links as one `json`
  * array in the order they were added. The links need no predicate of their
  * own — a row reaches this select only through the note's, and every target
- * is in the note's campaign by key (`0069_note_links.ts`). Usable in a
- * `returning`, where the subquery sees the note's links as they stand.
+ * is in the note's campaign by key (`0069_note_links.ts`, `0074_npc_links.ts`).
+ * Usable in a `returning`, where the subquery sees the note's links as they
+ * stand.
  */
 export const noteColumns = (sql: SqlClient.SqlClient): Statement.Fragment =>
-  sql`note.*, coalesce((
-    select json_agg(json_build_object(
-      'kind', case when note_link.encounter_id is null then 'seat' else 'encounter' end,
-      'id', coalesce(note_link.encounter_id, note_link.campaign_character_id)
-    ) order by note_link.created_at, note_link.id)
-    from note_link
-    where note_link.note_id = note.id
-  ), '[]'::json) as links`;
+  sql`note.*, ${linksAggregate(sql, "note_link", sql`note_link.note_id = note.id`)} as links`;
 
 export const toNote = (row: NoteRow): Note =>
   new Note({
@@ -172,46 +165,6 @@ const ensureEncounterWritable = (
     }
   });
 
-/**
- * Fails with `NotFound` unless the link's target is in this campaign and the
- * creator reaches it: an encounter they may write, or a seat whose character
- * is still at the table. The composite keys already refuse another campaign's
- * target, as a 500; this is the same refusal as the 404 the surface answers
- * with, and it also refuses a retired seat, whose page a chip could not open.
- */
-const ensureLinkTarget = (
-  sql: SqlClient.SqlClient,
-  creator: CampaignCreatorActor,
-  link: NoteLink,
-) =>
-  Effect.gen(function* () {
-    const { campaign, actor } = creator;
-    const rows =
-      link.kind === "encounter"
-        ? yield* sql<{ readonly id: EncounterId }>`
-            select encounter.id from encounter
-            where encounter.id = ${link.id}
-              and ${rowWritable(sql, "encounter", campaign, actor)}
-          `
-        : yield* sql<{ readonly id: CampaignCharacterId }>`
-            select campaign_character.id from campaign_character
-            where campaign_character.id = ${link.id}
-              and campaign_character.campaign_id = ${campaign}
-              and campaign_character.left_at is null
-              and ${ownedRowReadable(sql, "campaign_character", campaign, actor)}
-          `;
-    if (rows.length === 0) {
-      return yield* new NotFound({
-        resource: link.kind === "encounter" ? "encounter" : "seat",
-        id: link.id,
-      });
-    }
-  });
-
-/** The `note_link` column a link of this kind sets. */
-const linkColumn = (kind: NoteLinkKind) =>
-  kind === "encounter" ? "encounter_id" : "campaign_character_id";
-
 export class Notes extends Context.Service<
   Notes,
   {
@@ -279,7 +232,7 @@ export class Notes extends Context.Service<
       creator: CampaignCreatorActor,
       id: NoteId,
       kind: NoteLinkKind,
-      targetId: EncounterId | CampaignCharacterId,
+      targetId: LinkTargetId,
     ) => Effect.Effect<Note, NotFound>;
   }
 >()("Notes") {

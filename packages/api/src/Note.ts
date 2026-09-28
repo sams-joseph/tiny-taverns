@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CampaignCharacterId, CampaignId, EncounterId, NoteId } from "./Ids.js";
+import { CampaignCharacterId, CampaignId, EncounterId, NoteId, NpcId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
 /**
@@ -48,8 +48,8 @@ export const NoteAttachment = Schema.Struct({
 export type NoteAttachment = typeof NoteAttachment.Type;
 
 /**
- * What a note is about: an encounter or a seat in its campaign. A note has any
- * number of these, and each is added and removed on its own
+ * What a note is about: an encounter, a seat or an NPC in its campaign. A note
+ * has any number of these, and each is added and removed on its own
  * (`notes.addLink` / `notes.removeLink`).
  *
  * **Not the attachment.** `attachedTo` is the read-aloud's one encounter, the
@@ -60,15 +60,19 @@ export type NoteAttachment = typeof NoteAttachment.Type;
  * `seat` is the character's place in this party (`CampaignCharacterId`), not
  * the account-owned character: the link is a fact about this table.
  *
+ * `npc` is a campaign NPC, which is how the Cast answers which notes an NPC
+ * shows up in: it reads the notes' links, not a second table.
+ *
  * **The creator's alone.** `PlayerNote` has no links, because a link names an
- * encounter or a seat whether or not the reader may read it.
+ * encounter, a seat or an NPC whether or not the reader may read it.
  */
-export const NoteLinkKind = Schema.Literals(["encounter", "seat"]);
+export const NoteLinkKind = Schema.Literals(["encounter", "seat", "npc"]);
 export type NoteLinkKind = typeof NoteLinkKind.Type;
 
 export const NoteLink = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("encounter"), id: EncounterId }),
   Schema.Struct({ kind: Schema.Literal("seat"), id: CampaignCharacterId }),
+  Schema.Struct({ kind: Schema.Literal("npc"), id: NpcId }),
 ]);
 export type NoteLink = typeof NoteLink.Type;
 

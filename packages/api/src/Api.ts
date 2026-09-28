@@ -171,6 +171,9 @@ import {
   NpcKnowledgeFact,
   NpcKnowledgeFactCreate,
   NpcKnowledgeFactUpdate,
+  NpcLink,
+  NpcLinkKind,
+  NpcLinks,
   NpcListFilter,
   NpcPrep,
   NpcPrepUpdate,
@@ -1219,10 +1222,11 @@ class NotesGroup extends HttpApiGroup.make("notes")
       error: NotFound,
     }),
     /**
-     * Links the note to an encounter or a seat of this campaign, and answers
-     * the note with its links. Adding a link it already has changes nothing.
-     * A target that is not in this campaign — or a seat whose character has
-     * left — is `NotFound`, as the note would be.
+     * Links the note to an encounter, a seat or an NPC of this campaign, and
+     * answers the note with its links. Adding a link it already has changes
+     * nothing. A target that is not in this campaign — or a seat whose
+     * character has left, or an archived NPC — is `NotFound`, as the note
+     * would be.
      */
     HttpApiEndpoint.post("addLink", "/:noteId/links", {
       params: { campaignId: CampaignId, noteId: NoteId },
@@ -1239,7 +1243,7 @@ class NotesGroup extends HttpApiGroup.make("notes")
         campaignId: CampaignId,
         noteId: NoteId,
         kind: NoteLinkKind,
-        targetId: Schema.Union([EncounterId, CampaignCharacterId]),
+        targetId: Schema.Union([EncounterId, CampaignCharacterId, NpcId]),
       },
       success: Note,
       error: NotFound,
@@ -2401,6 +2405,36 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       params: { campaignId: CampaignId, npcId: NpcId },
       payload: Schema.Struct({}),
       success: Npc,
+      error: NotFound,
+    }),
+    /**
+     * The NPC's ties to encounters and seats (`NpcLink`), the creator's alone.
+     * Adding a link it already has changes nothing, and a target that is not
+     * in this campaign, or a seat whose character has left, is `NotFound`, as
+     * the NPC would be. Removing is keyed by the target so a chip can name what
+     * it removes, and removing a link the NPC does not have changes nothing.
+     * None of the three moves the NPC's `version` or `updatedAt`: a link is not
+     * an edit of the persona. Each answers the NPC's links as they stand.
+     */
+    HttpApiEndpoint.get("links", "/:npcId/links", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: NpcLinks,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.post("addLink", "/:npcId/links", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcLink,
+      success: NpcLinks,
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("removeLink", "/:npcId/links/:kind/:targetId", {
+      params: {
+        campaignId: CampaignId,
+        npcId: NpcId,
+        kind: NpcLinkKind,
+        targetId: Schema.Union([EncounterId, CampaignCharacterId]),
+      },
+      success: NpcLinks,
       error: NotFound,
     }),
     HttpApiEndpoint.get("rehearsal", "/:npcId/rehearsal", {

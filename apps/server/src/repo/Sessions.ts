@@ -262,7 +262,7 @@ export class Sessions extends Context.Service<
 
       /**
        * A spotlight names a live seat of this campaign that the creator reads,
-       * as a note's seat link does (`Notes.ensureLinkTarget`). The night is
+       * as a note's seat link does (`links.ensureLinkTarget`). The night is
        * asked about first, so somebody who may not write it is told the
        * session is not there, never anything about a seat; the composite key
        * refuses another campaign's seat anyway, and this turns that into a

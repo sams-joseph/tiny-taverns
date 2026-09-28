@@ -62,6 +62,8 @@ export function NoteLinks({
 
   const attached = attachedTo === null ? undefined : encounterOf(attachedTo.id);
   const linked = note.links.flatMap((link) => {
+    // A link to an NPC draws no chip here yet: this frame reads no cast.
+    if (link.kind === "npc") return [];
     const label =
       link.kind === "encounter" ? encounterOf(link.id)?.name : seatOf(link.id)?.displayName;
     return label === undefined ? [] : [{ link, label }];
@@ -74,7 +76,7 @@ export function NoteLinks({
   );
   const linkableSeats = party.filter((row) => !has("seat", row.seat.id));
 
-  const add = (link: NoteLink) => {
+  const add = (link: Extract<NoteLink, { readonly kind: "encounter" | "seat" }>) => {
     const params = { campaignId, noteId: note.id };
     void submit(
       (client) =>

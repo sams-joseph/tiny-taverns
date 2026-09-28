@@ -5,6 +5,7 @@ import {
   type CampaignId,
   type EncounterId,
   type NoteId,
+  type NpcId,
   TavernsApi,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -21,11 +22,11 @@ import { migratedDatabase } from "./support/database.js";
  * **A note's links: the creator's to make, the creator's to read, and gone
  * with their target while the note stays.**
  *
- * Over the real application and Postgres. A link names an encounter or a seat
- * of the note's own campaign; anything else is `NotFound`, as is every link
- * endpoint to anybody but the creator. A player's notes never carry one,
- * which is read on the raw wire because the derived client decodes into the
- * narrow class and would drop a field the server should never have sent
+ * Over the real application and Postgres. A link names an encounter, a seat
+ * or an NPC of the note's own campaign; anything else is `NotFound`, as is
+ * every link endpoint to anybody but the creator. A player's notes never carry
+ * one, which is read on the raw wire because the derived client decodes into
+ * the narrow class and would drop a field the server should never have sent
  * (`recap.test.ts` asks the same of a player's recap).
  *
  * The people are minted the shipped way: a player admitted through a real
@@ -119,6 +120,8 @@ let ilseSeat: CampaignCharacterId;
 let joSeat: CampaignCharacterId;
 let otherEncounter: EncounterId;
 let otherSeat: CampaignCharacterId;
+let otherNpc: NpcId;
+let hollis: NpcId;
 let hettie: NoteId;
 let shared: NoteId;
 
@@ -126,6 +129,11 @@ const encounter = (campaignId: CampaignId, name: string) =>
   as(jo.token, (client) =>
     client.encounters.create({ params: { campaignId }, payload: { name } }),
   ).then((made) => made.id);
+
+const npc = (campaignId: CampaignId, name: string) =>
+  as(jo.token, (client) => client.npcs.create({ params: { campaignId }, payload: { name } })).then(
+    (made) => made.id,
+  );
 
 const note = (title: string, visibility?: "shared") =>
   as(jo.token, (client) =>
@@ -155,12 +163,14 @@ beforeAll(async () => {
   ford = await encounter(table, "The ford");
 
   // Another of Jo's own tables: the same creator, so only the campaign
-  // boundary stands between its encounter and seat and a note here.
+  // boundary stands between its encounter, seat and NPC and a note here.
   elsewhere = (
     await as(jo.token, (client) => campaignVia(client, { name: "Rook's Rest", visibility: "dm" }))
   ).id;
   otherEncounter = await encounter(elsewhere, "A fight elsewhere");
   otherSeat = (await run(aCharacterAt(elsewhere, jo.actor, { name: "Wick" }))).seatId;
+  otherNpc = await npc(elsewhere, "Rook");
+  hollis = await npc(table, "Hollis Grey");
 
   hettie = await note("Hettie is lying about the tide");
   shared = await note("House rule", "shared");
@@ -293,6 +303,77 @@ describe("the creator linking a note", () => {
     expect(await linkRows(noteId)).toBe(0);
   });
 
+  it("links an NPC of the cast, and refuses one that is archived, elsewhere or a Library original", async () => {
+    const noteId = await note("Hollis owes the ferryman");
+    const linked = await as(jo.token, (client) =>
+      client.notes.addLink({
+        params: { campaignId: table, noteId },
+        payload: { kind: "npc", id: hollis },
+      }),
+    );
+    await as(jo.token, (client) =>
+      client.notes.addLink({
+        params: { campaignId: table, noteId },
+        payload: { kind: "encounter", id: ambush },
+      }),
+    );
+    expect(linked.links).toEqual([{ kind: "npc", id: hollis }]);
+    const found = await as(jo.token, (client) =>
+      client.notes.findById({ params: { campaignId: table, noteId } }),
+    );
+    expect(found.links).toEqual([
+      { kind: "npc", id: hollis },
+      { kind: "encounter", id: ambush },
+    ]);
+
+    const archived = await npc(table, "Gone for now");
+    await as(jo.token, (client) =>
+      client.npcs.archive({ params: { campaignId: table, npcId: archived }, payload: {} }),
+    );
+    const original = await as(jo.token, (client) =>
+      client.library.createNpc({ payload: { name: "A Library original" } }),
+    );
+    const bodies = [
+      { kind: "npc", id: otherNpc },
+      { kind: "npc", id: archived },
+      { kind: "npc", id: original.id },
+      // An NPC's id named as a seat, and a seat's as an NPC.
+      { kind: "seat", id: hollis },
+      { kind: "npc", id: ilseSeat },
+    ];
+    for (const body of bodies) {
+      const answer = await wire(jo.token, "POST", linksPath(noteId), body);
+      expect({ body, status: answer.status }).toEqual({ body, status: 404 });
+    }
+
+    const removed = await as(jo.token, (client) =>
+      client.notes.removeLink({
+        params: { campaignId: table, noteId, kind: "npc", targetId: hollis },
+      }),
+    );
+    expect(removed.links).toEqual([{ kind: "encounter", id: ambush }]);
+
+    // Archiving an NPC a note already names keeps the link, as a retired
+    // seat's is kept.
+    const kept = await npc(table, "Archived later");
+    await as(jo.token, (client) =>
+      client.notes.addLink({
+        params: { campaignId: table, noteId },
+        payload: { kind: "npc", id: kept },
+      }),
+    );
+    await as(jo.token, (client) =>
+      client.npcs.archive({ params: { campaignId: table, npcId: kept }, payload: {} }),
+    );
+    const after = await as(jo.token, (client) =>
+      client.notes.findById({ params: { campaignId: table, noteId } }),
+    );
+    expect(after.links).toEqual([
+      { kind: "encounter", id: ambush },
+      { kind: "npc", id: kept },
+    ]);
+  });
+
   it("is a key, not a check: the table refuses a link across campaigns", async () => {
     const refused = await runtime.runPromise(
       Effect.flatMap(
@@ -304,6 +385,17 @@ describe("the creator linking a note", () => {
       ).pipe(Effect.flip, Effect.map(causes)),
     );
     expect(refused).toContain("note_link_encounter_fkey");
+
+    const npcRefused = await runtime.runPromise(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`
+          insert into note_link (note_id, campaign_id, npc_id)
+          values (${hettie}, ${table}, ${otherNpc})
+        `,
+      ).pipe(Effect.flip, Effect.map(causes)),
+    );
+    expect(npcRefused).toContain("note_link_npc_fkey");
   });
 });
 
@@ -330,12 +422,19 @@ describe("the link endpoints, to anybody but the creator", () => {
 });
 
 describe("a player's reads of a linked note", () => {
-  it("carry no links, and name no linked encounter or seat", async () => {
+  it("carry no links, and name no linked encounter, seat or NPC", async () => {
+    await as(jo.token, (client) =>
+      client.notes.addLink({
+        params: { campaignId: table, noteId: shared },
+        payload: { kind: "npc", id: hollis },
+      }),
+    );
     const listed = await wire(ilse.token, "GET", `/campaigns/${table}/player-notes`);
     expect(listed.status).toBe(200);
     expect(listed.body).toContain("House rule");
     expect(listed.body).not.toContain('"links"');
     expect(listed.body).not.toContain(ambush);
+    expect(listed.body).not.toContain(hollis);
   });
 });
 

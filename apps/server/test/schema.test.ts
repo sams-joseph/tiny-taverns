@@ -112,9 +112,10 @@ const NOT_CONTENT = [
   "magic_item_rarity",
   "magic_item_variant",
   "magic_school",
-  // A note's link to an encounter or a seat: an edge between two rows that
-  // each carry their own visibility and provenance, read and written by the
-  // note's creator alone through the creator proof. See 0069_note_links.ts.
+  // A note's link to an encounter, a seat or an NPC: an edge between two rows
+  // that each carry their own visibility and provenance, read and written by
+  // the note's creator alone through the creator proof. See 0069_note_links.ts
+  // and 0074_npc_links.ts.
   "note_link",
   // An NPC's portrait: who may see it is exactly who may read the NPC, through
   // the NPC's own reads. See 0050_npc_images.ts.
@@ -123,6 +124,9 @@ const NOT_CONTENT = [
   // creator's alone through the creator proof, reached only by walking its NPC,
   // and written by nobody but the creator. See 0073_npc_prep.ts.
   "npc_prep",
+  // An NPC's link to an encounter or a seat: the same edge from an NPC, DM
+  // prep read and written by the campaign's creator alone. See 0074_npc_links.ts.
+  "npc_link",
   "play_group",
   "proficiency",
   "racial_trait_damage_type",

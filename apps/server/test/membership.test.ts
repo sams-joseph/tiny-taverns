@@ -1051,6 +1051,10 @@ describe("a stranger reads nothing", () => {
               -- behind the creator proof; a stranger's refusal there is
               -- covered in npc-prep.test.ts.
               'npc_prep',
+              -- An NPC's links are read only through the creator's link read,
+              -- behind the creator proof; a stranger's refusal there is
+              -- covered in npc-links.test.ts.
+              'npc_link',
               'play_group',
               'character_option_ability_bonus',
               'character_option_equipment_reference',

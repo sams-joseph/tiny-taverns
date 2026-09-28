@@ -1,7 +1,9 @@
 import { Schema } from "effect";
 import {
   AccountId,
+  CampaignCharacterId,
   CampaignId,
+  EncounterId,
   SessionId,
   NoteId,
   BeatId,
@@ -333,6 +335,39 @@ export const NpcPrepUpdate = Schema.Struct({
   metSessionId: Schema.optional(Schema.NullOr(SessionId)),
 });
 export type NpcPrepUpdate = typeof NpcPrepUpdate.Type;
+
+/**
+ * What the creator ties an NPC to: an encounter they show up in, or a seat
+ * whose character they are bound up with. An NPC has any number of these, and
+ * each is added and removed on its own (`npcs.addLink` / `npcs.removeLink`),
+ * the note link's shape (`NoteLink`) and for its reasons.
+ *
+ * `seat` is the character's place in this party (`CampaignCharacterId`), not
+ * the account-owned character: a tie is a fact about this table.
+ *
+ * **DM prep, never a player's.** No player read joins `npc_link`, and
+ * `PlayerNpc` has no links: a link names an encounter or a seat whether or not
+ * the reader may read it. The notes that name an NPC are the note's links
+ * (`NoteLink` of kind `npc`), read on `Note`, not here.
+ */
+export const NpcLinkKind = Schema.Literals(["encounter", "seat"]);
+export type NpcLinkKind = typeof NpcLinkKind.Type;
+
+export const NpcLink = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("encounter"), id: EncounterId }),
+  Schema.Struct({ kind: Schema.Literal("seat"), id: CampaignCharacterId }),
+]);
+export type NpcLink = typeof NpcLink.Type;
+
+/**
+ * One NPC's links, in the order they were added: the read and the answer to
+ * every link write. A link to a seat whose character has left stays in the
+ * record, as a note's does; the client draws only what it can open.
+ */
+export class NpcLinks extends Schema.Class<NpcLinks>("NpcLinks")({
+  npcId: NpcId,
+  links: Schema.Array(NpcLink),
+}) {}
 
 /**
  * The channel a thread is on. **One member in this slice**, and the column

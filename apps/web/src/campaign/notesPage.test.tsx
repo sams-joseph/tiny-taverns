@@ -441,6 +441,8 @@ describe("the Linked chips", () => {
       { kind: "seat", id: seatId },
       // A retired seat keeps its link, but its page is gone: no chip.
       { kind: "seat", id: retiredSeat },
+      // The pane reads no cast, so a link to an NPC draws no chip here yet.
+      { kind: "npc", id: "2b1f2a1e-0000-4000-8000-000000000899" },
     ],
   };
   const withGrusk = (note: typeof linkedGrusk | typeof grusk) =>
@@ -472,7 +474,7 @@ describe("the Linked chips", () => {
     expect(screen.queryByText("Not linked to anything yet.")).toBeNull();
   });
 
-  it("opens each link's object, and draws no chip for a seat no longer at the table", async () => {
+  it("opens each link's object, and draws no chip for a retired seat or an NPC", async () => {
     withGrusk(linkedGrusk);
     await open(`?note=${grusk.id}`);
 
@@ -484,7 +486,7 @@ describe("the Linked chips", () => {
       "href",
       `/campaigns/${campaignId}/party/${seatId}`,
     );
-    // Two chips and the menu: the retired seat is not drawn.
+    // Two chips and the menu: the retired seat and the NPC are not drawn.
     expect(linked()).toHaveLength(3);
     expect(screen.getByRole("button", { name: `Unlink ${sketch.name}` })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unlink Brannoc" })).toBeInTheDocument();
