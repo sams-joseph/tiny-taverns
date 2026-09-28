@@ -177,6 +177,10 @@ import {
   NpcListFilter,
   NpcPrep,
   NpcPrepUpdate,
+  NpcSheet,
+  NpcSheetPut,
+  NpcSheetSummary,
+  NpcSheetUpdate,
   NpcMemory,
   NpcMemoryCreate,
   NpcMemoryUpdate,
@@ -2396,9 +2400,48 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       success: Schema.Array(NpcPrep),
       error: NotFound,
     }),
+    // Every NPC's sheet row on the shelf the query names, in the list's order,
+    // leaving out an NPC with no sheet: the creator's alone, like the prep
+    // above (`0076_npc_sheets.ts`). No player path reads a sheet.
+    HttpApiEndpoint.get("sheets", "/-/sheets", {
+      params: { campaignId: CampaignId },
+      query: NpcListFilter,
+      success: Schema.Array(NpcSheetSummary),
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("findById", "/:npcId", {
       params: { campaignId: CampaignId, npcId: NpcId },
       success: Npc,
+      error: NotFound,
+    }),
+    /**
+     * One NPC's sheet, the creator's alone. An NPC with no sheet answers
+     * `null`; `NotFound` stays for an NPC the reader cannot reach. `putSheet`
+     * starts or replaces it whole, `updateSheet` patches it, and `removeSheet`
+     * is the reverse state: removing a sheet the NPC does not have changes
+     * nothing. A `Conflict` is a stale or missing `expectedVersion`, or a
+     * subrace the race does not contain in this campaign's rules.
+     */
+    HttpApiEndpoint.get("sheet", "/:npcId/sheet", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: Schema.NullOr(NpcSheet),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("putSheet", "/:npcId/sheet", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcSheetPut,
+      success: NpcSheet,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.patch("updateSheet", "/:npcId/sheet", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcSheetUpdate,
+      success: NpcSheet,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("removeSheet", "/:npcId/sheet", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
     HttpApiEndpoint.patch("update", "/:npcId", {

@@ -15,7 +15,15 @@ import {
   NpcThreadId,
   NpcTurnId,
 } from "./Ids.js";
-import { APPEARANCE_MAX } from "./Character.js";
+import {
+  APPEARANCE_MAX,
+  SheetArmorClass,
+  SheetBody,
+  SheetHitPoints,
+  SheetLabel,
+  SheetLevel,
+} from "./Character.js";
+import { ChallengeRating } from "./EncounterDifficulty.js";
 import { SceneAttitude } from "./EncounterRunScene.js";
 import { NoteKind } from "./Note.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
@@ -32,6 +40,11 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  * granting future copying only. Campaign NPCs have creator rehearsal and
  * private player direct chat channels, no tools, and write nothing into the
  * campaign.
+ *
+ * It stays not a character when it has stats: an NPC may *carry* a
+ * character-style sheet (`NpcSheet`), the rules half of a character's document
+ * on a creator-only table of its own, but it is never a `character` row — no
+ * account owns it, no seat holds it, and no player reads the sheet.
  *
  * ### Private material is its own field, by construction
  *
@@ -354,6 +367,110 @@ export const NpcPrepUpdate = Schema.Struct({
   metSessionId: Schema.optional(Schema.NullOr(SessionId)),
 });
 export type NpcPrepUpdate = typeof NpcPrepUpdate.Type;
+
+/**
+ * An NPC sheet's row without its document — **what the Cast reads for every
+ * NPC at once** (the shelf read, and the drawer's one line), because a sheet
+ * with a spell list is too large to fold into a list.
+ *
+ * The columns are a character's durable identity columns under the same
+ * checks, and `descriptor` is derived from them the way `Character.descriptor`
+ * is: a generated column no payload names. Every one is `null` until the DM
+ * says, as on a character. `cr` is the one column a character does not have:
+ * the challenge rating the DM sets by hand, closed to the ratings the XP table
+ * knows ({@link ChallengeRating}) so it always has XP.
+ */
+const npcSheetSummaryFields = {
+  npcId: NpcId,
+  /** `5`. */
+  level: Schema.NullOr(Schema.Int),
+  /** `"Human"` — an open label, as a character's is. */
+  race: Schema.NullOr(Schema.String),
+  subrace: Schema.NullOr(Schema.String),
+  /** `"Fighter"`. */
+  className: Schema.NullOr(Schema.String),
+  /** `"Level 5 Human Fighter"` — derived from the three above and `level`, never written. */
+  descriptor: Schema.NullOr(Schema.String),
+  ac: Schema.NullOr(Schema.Int),
+  hpMax: Schema.NullOr(Schema.Int),
+  cr: Schema.NullOr(ChallengeRating),
+  /** The optimistic-concurrency counter, as `Npc.version` is: bumped by every write. */
+  version: Schema.Int,
+  updatedAt: Schema.DateTimeUtcFromString,
+};
+
+export class NpcSheetSummary extends Schema.Class<NpcSheetSummary>("NpcSheetSummary")(
+  npcSheetSummaryFields,
+) {}
+
+/**
+ * An NPC's character-style sheet — **DM prep, the creator's alone**, never
+ * shown to a player, and not a character.
+ *
+ * The NPC is still "not a character and not a creature": it *carries* a sheet
+ * written the way a character's is, on its own table (`0076_npc_sheets.ts`),
+ * keyed by the NPC alone. The document is the rules half of a character's
+ * sheet ({@link SheetBody}), reused rather than forked, so the character's
+ * renderer and rules read it unchanged; the player's own half — notes, story,
+ * journal, the level-up log, death saves — has no key here, and a write that
+ * sends one has it dropped on decode.
+ *
+ * Not on `Npc` and not on `PlayerNpc`: a player reads a shared NPC's row and
+ * the NPC agent's prompt is compiled from it, so the sheet reaches the wire
+ * only through the creator's sheet reads, as `NpcPrep` does. An NPC with no
+ * sheet reads `null`, never an empty sheet the product made up.
+ */
+export class NpcSheet extends Schema.Class<NpcSheet>("NpcSheet")({
+  ...npcSheetSummaryFields,
+  sheet: SheetBody,
+}) {}
+
+/**
+ * The creator's PUT: **creates the sheet or replaces it whole** — every
+ * column and the document. An absent column is `null`, as on a character's
+ * create.
+ *
+ * `expectedVersion` is required once a sheet exists: a write that starts a
+ * sheet over (a quick start) must say which sheet it read, so it cannot
+ * silently overwrite hand edits. Missing or stale, it is a `Conflict`; sent
+ * when there is no sheet, it is a `Conflict` too, because the sheet it read is
+ * gone. No payload carries `origin`: only the creator writes an NPC's sheet,
+ * by hand.
+ */
+export const NpcSheetPut = Schema.Struct({
+  expectedVersion: Schema.optional(Schema.Int),
+  level: Schema.optional(Schema.NullOr(SheetLevel)),
+  race: Schema.optional(Schema.NullOr(SheetLabel)),
+  subrace: Schema.optional(Schema.NullOr(SheetLabel)),
+  className: Schema.optional(Schema.NullOr(SheetLabel)),
+  ac: Schema.optional(Schema.NullOr(SheetArmorClass)),
+  hpMax: Schema.optional(Schema.NullOr(SheetHitPoints)),
+  cr: Schema.optional(Schema.NullOr(ChallengeRating)),
+  sheet: SheetBody,
+});
+export type NpcSheetPut = typeof NpcSheetPut.Type;
+
+/**
+ * The creator's PATCH, `CharacterOwnUpdate`'s idiom: an absent key is
+ * untouched and `null` clears it; `sheet` is a whole document. A `level` or
+ * `className` change with no `sheet` beside it recomputes the document's
+ * derived lines against the NPC's rules, as a character's level-up does.
+ * `expectedVersion` opts into the `Conflict`; omitted, the write is
+ * last-writer-wins. A PATCH of an NPC with no sheet is `NotFound`: start one
+ * with the PUT.
+ */
+export const NpcSheetUpdate = Schema.Struct({
+  expectedVersion: Schema.optional(Schema.Int),
+  level: Schema.optional(Schema.NullOr(SheetLevel)),
+  race: Schema.optional(Schema.NullOr(SheetLabel)),
+  subrace: Schema.optional(Schema.NullOr(SheetLabel)),
+  className: Schema.optional(Schema.NullOr(SheetLabel)),
+  ac: Schema.optional(Schema.NullOr(SheetArmorClass)),
+  hpMax: Schema.optional(Schema.NullOr(SheetHitPoints)),
+  cr: Schema.optional(Schema.NullOr(ChallengeRating)),
+  sheet: Schema.optional(SheetBody),
+});
+export type NpcSheetUpdate = typeof NpcSheetUpdate.Type;
 
 /**
  * What the creator ties an NPC to: an encounter they show up in, or a seat

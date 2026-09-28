@@ -133,6 +133,11 @@ const NOT_CONTENT = [
   // An NPC's link to an encounter or a seat: the same edge from an NPC, DM
   // prep read and written by the campaign's creator alone. See 0074_npc_links.ts.
   "npc_link",
+  // An NPC's character-style sheet: DM prep, the creator's alone through the
+  // creator proof, reached only by walking its NPC, and written by nobody but
+  // the creator. Who may read it and where it came from are its NPC's. See
+  // 0076_npc_sheets.ts.
+  "npc_sheet",
   "play_group",
   "proficiency",
   "racial_trait_damage_type",
