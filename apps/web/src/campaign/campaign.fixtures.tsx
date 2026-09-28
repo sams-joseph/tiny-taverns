@@ -375,6 +375,9 @@ export const cazrilSheetSummary = {
 
 export const cazrilSheet = {
   ...cazrilSheetSummary,
+  // Written by hand: a kept Hob draft would be `assistant`, with its turn.
+  origin: "authored",
+  assistantTurnId: null,
   sheet: {
     abilities: [
       { label: "STR", score: "16", modifier: "+3", save: "+6" },

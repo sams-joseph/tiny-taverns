@@ -156,7 +156,8 @@ export const npcLinksAtom = Atom.family((at: OneNpc) =>
   ),
 );
 
-const npcSheetAtom = Atom.family((at: OneNpc) =>
+/** One NPC's sheet, or `null`: the Stats tab's read, folded into `npcAtom`. */
+export const npcSheetAtom = Atom.family((at: OneNpc) =>
   apiAtom((client) => client.npcs.sheet({ params: at }), [reads.npcSheet(at.npcId)]),
 );
 
