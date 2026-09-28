@@ -4,8 +4,11 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * The Cast tab (`cast/CastScreen.tsx`) at every width: the card grid's
  * columns, a row of cards lining up, the header, the filter row and the grid
  * sharing one left edge inside the Overview's centred frame, and each card
- * opening its NPC from anywhere on its face, the portrait band included. All
- * of it is layout or hit-testing, which jsdom does not compute.
+ * opening its NPC's drawer from anywhere on its face, the portrait band
+ * included. Then the drawer (`cast/NpcDrawer.tsx`): where it hangs, that it
+ * is modal — focus inside, Esc closing it, the window not scrolling under it
+ * — and that its footer fits. All of it is layout, hit-testing or focus
+ * across real events, which jsdom does not compute.
  *
  * Read over the creator scenario's `castShelf`: five NPCs, one with Hob's
  * portrait, one Hob is still drawing, one whose role wraps and one with none.
@@ -110,7 +113,97 @@ for (const width of WIDTHS) {
         expect.soft(target, "the portrait band is the name link's overlay").toBe("Master Hollis");
         const href = await hollis.getByRole("link", { name: "Master Hollis" }).getAttribute("href");
         await page.mouse.click(at.x, at.y);
-        await expect(page).toHaveURL((url) => url.pathname === href);
+        await expect(page).toHaveURL((url) => url.pathname + url.search === href);
+        await expect(page.getByRole("dialog", { name: "Master Hollis" })).toBeVisible();
+      });
+    });
+
+    test("npc drawer", async ({ app, page }) => {
+      await app.open(cast);
+      const cards = page.locator('[data-slot="npc-card"]');
+      await expect(cards).toHaveCount(5);
+      // Scrolled a little first, so a window that moved under the drawer shows.
+      await page.evaluate(() => window.scrollTo(0, 40));
+      const scrolled = await page.evaluate(() => window.scrollY);
+
+      const hollis = page.getByRole("link", { name: "Master Hollis" });
+      await hollis.click();
+      const drawer = page.locator('[data-slot="npc-drawer"]');
+      await expect(drawer).toBeVisible();
+      await app.settle();
+
+      await test.step("it hangs under the chrome, against the right edge, 480 wide or the whole width", async () => {
+        const placed = await drawer.evaluate((el) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            chrome: Number.parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue("--chrome-height"),
+            ),
+            viewport: document.documentElement.clientWidth,
+          };
+        });
+        expect.soft(placed.chrome, "the chrome's height").toBeGreaterThan(0);
+        expect.soft(placed.top, "drawer top").toBeCloseTo(placed.chrome, 0);
+        expect.soft(placed.right, "drawer right").toBeCloseTo(placed.viewport, 0);
+        expect.soft(placed.bottom, "drawer bottom").toBeCloseTo(HEIGHT, 0);
+        expect.soft(placed.width, "drawer width").toBeCloseTo(Math.min(480, placed.viewport), 0);
+      });
+
+      await test.step("focus is inside it", async () => {
+        const inside = await drawer.evaluate((el) => el.contains(document.activeElement));
+        expect.soft(inside, "the focused element is in the drawer").toBe(true);
+      });
+
+      await test.step("its footer fits, one control beside another", async () => {
+        const footer = drawer.locator('[data-slot="sheet-footer"]');
+        const frame = await box(drawer);
+        const controls = await footer.locator("a, button").evaluateAll((els) =>
+          els.map((el) => {
+            const rect = el.getBoundingClientRect();
+            return {
+              name: el.textContent ?? "",
+              x: rect.x,
+              y: rect.y,
+              w: rect.width,
+              h: rect.height,
+            };
+          }),
+        );
+        expect
+          .soft(controls.map((c) => c.name.trim()))
+          .toEqual(["Archive", "NPC follow-up", "Rehearse", "Done"]);
+        for (const [i, a] of controls.entries()) {
+          expect.soft(a.x, `${a.name} left`).toBeGreaterThanOrEqual(frame.x);
+          expect
+            .soft(a.x + a.w, `${a.name} right`)
+            .toBeLessThanOrEqual(frame.x + frame.width + 0.5);
+          for (const b of controls.slice(i + 1)) {
+            const apart =
+              a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+            expect.soft(apart, `${a.name} clear of ${b.name}`).toBe(true);
+          }
+        }
+      });
+
+      await test.step("the window does not scroll under it", async () => {
+        // Over the scrim where one is showing, and over the drawer where it is the width.
+        const frame = await box(drawer);
+        const x = frame.x > 40 ? frame.x / 2 : frame.x + frame.width / 2;
+        await page.mouse.move(x, HEIGHT - 100);
+        await page.mouse.wheel(0, 600);
+        await page.waitForTimeout(200);
+        expect.soft(await page.evaluate(() => window.scrollY), "window scrollY").toBe(scrolled);
+      });
+
+      await test.step("Esc closes it, and hands focus back to the card", async () => {
+        await page.keyboard.press("Escape");
+        await expect(drawer).toHaveCount(0);
+        await expect(page).toHaveURL((url) => !url.searchParams.has("npc"));
+        await expect(hollis).toBeFocused();
       });
     });
   });

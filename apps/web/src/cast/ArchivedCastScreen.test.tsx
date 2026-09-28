@@ -8,9 +8,9 @@ import { TEST_SESSION } from "../test/session";
 
 /**
  * The archived shelf, and the round trip it exists for: archiving an NPC is
- * only reversible if something leads back to it. The NPC page's *Archive*
- * takes it off the Cast, the Cast's *Archived* link opens the shelf, and
- * *Restore* there puts it back.
+ * only reversible if something leads back to it. The drawer's *Archive* takes
+ * it off the Cast, the Cast's *Archived* link opens the shelf, and *Restore*
+ * there puts it back.
  *
  * The stub answers the list the way the server does, by the query: the live
  * list without `archived`, the shelf with `archived=true`. So the shelf is
@@ -63,10 +63,12 @@ afterEach(() => cleanup());
 describe("ArchivedCastScreen", () => {
   it("takes an NPC off the Cast, finds it on the shelf, and restores it", async () => {
     stateful();
-    await renderPath(`/campaigns/${campaignId}/cast/${npcId}`);
+    await renderPath(`/campaigns/${campaignId}/cast?npc=${npcId}`);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/cast`));
+    const drawer = await screen.findByRole("dialog", { name: "Cazril" });
+    await userEvent.click(within(drawer).getByRole("button", { name: "Archive" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(globalThis.location.search).toBe("");
     expect(await screen.findByText("Nobody in the cast yet")).toBeInTheDocument();
 
     const link = screen.getByRole("button", { name: "Archived" });
@@ -101,7 +103,7 @@ describe("ArchivedCastScreen", () => {
     await waitFor(() => expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/cast`));
     expect(await screen.findByRole("link", { name: "Cazril" })).toHaveAttribute(
       "href",
-      `/campaigns/${campaignId}/cast/${npcId}`,
+      `/campaigns/${campaignId}/cast?npc=${npcId}`,
     );
   });
 

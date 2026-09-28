@@ -854,24 +854,28 @@ export function AppShell({
 }) {
   /** The bar's slot, published to the screen below once it has mounted. */
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
-  const column = useRef<HTMLDivElement>(null);
   const stack = useRef<HTMLDivElement>(null);
 
   // The sticky stack's height, measured and published as `--chrome-height` on
-  // the column, so a screen's own `sticky` can pin just under it — the window
-  // is every screen's scroller, and the stack is what covers its top. Measured
-  // rather than summed from the rows, because which rows there are is the
-  // route's (a campaign row, a tab strip) and a sum kept by hand drifts.
+  // the document's root, so a screen's own `sticky` can pin just under it — the
+  // window is every screen's scroller, and the stack is what covers its top —
+  // and so can an overlay portalled to the body, like the Cast's NPC drawer,
+  // which inherits nothing from the column. Measured rather than summed from
+  // the rows, because which rows there are is the route's (a campaign row, a
+  // tab strip) and a sum kept by hand drifts.
   useLayoutEffect(() => {
     const from = stack.current;
-    const to = column.current;
-    if (from === null || to === null) return;
+    if (from === null) return;
+    const to = document.documentElement;
     const publish = () => to.style.setProperty("--chrome-height", `${from.offsetHeight}px`);
     publish();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(publish);
-    observer.observe(from);
-    return () => observer.disconnect();
+    const observer =
+      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(publish);
+    observer?.observe(from);
+    return () => {
+      observer?.disconnect();
+      to.style.removeProperty("--chrome-height");
+    };
   }, []);
 
   return (
@@ -885,7 +889,7 @@ export function AppShell({
           shell actually has. The rows and `main` below each keep an unnamed
           `@container` of their own for the questions that really are about
           their own width. */}
-      <div ref={column} className="@container/app flex min-w-0 flex-1 flex-col">
+      <div className="@container/app flex min-w-0 flex-1 flex-col">
         {/* One sticky stack, so the global row, campaign row, screen bar and its
             optional tabs pin as a unit. Keeping the slot here also means none of
             those rows needs its own scroll container or a calculated top offset. */}

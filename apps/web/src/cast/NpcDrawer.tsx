@@ -1,0 +1,260 @@
+import { type Npc, UNNAMED_NPC } from "@taverns/api";
+import { Link } from "@tanstack/react-router";
+import {
+  Badge,
+  Button,
+  Icon,
+  Input,
+  Label,
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@taverns/ui";
+import { Result } from "effect";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { reads } from "../api/keys";
+import { useMutation } from "../api/mutation";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
+import { SaveState } from "../ui/SaveState";
+import { NpcAvatar } from "./NpcAvatar";
+import type { NpcFields, NpcSaver } from "./npcAutosave";
+
+/**
+ * One NPC, opened from the Cast in the drawer the redesign draws beside it
+ * (`Campaign Overview.dc.html`), for the quick fields: name, role, how they
+ * talk, what they want, the DM's secret, and whether the table can see them.
+ * Everything deeper — rehearsal, knowledge, memory, Hob's research and
+ * proposals, the rest of the persona — stays on the NPC's page, which
+ * *Rehearse* opens.
+ *
+ * **A modal `Sheet`**, so Esc, the scrim and *Done* close it, focus moves in
+ * and comes back, and the page behind does not scroll; its own body scrolls,
+ * a modal's one exception to the window being the scroller. It hangs under the
+ * shell's chrome (`--chrome-height`), as drawn, 480px wide or the whole width
+ * below that.
+ *
+ * **It saves as you type** (`npcAutosave.ts`): no *Save*, and *Done* only
+ * closes. The role is the one line sent on the blur rather than the pause,
+ * because the portrait is drawn once, from the first write that gives the NPC
+ * a subject. An edit made elsewhere since the drawer opened is a `Conflict`,
+ * offered a *Reload*.
+ *
+ * **What a shared NPC shows players is the public persona**, the manner and
+ * the wants included; the secret goes only to the private material and is
+ * marked *DM only*, and the share switch says so.
+ *
+ * *Archive* is the drawn *Remove from cast*, made reversible: the NPC moves to
+ * the archived shelf, where *Restore* brings them back.
+ */
+export function NpcDrawer({
+  npc,
+  saver,
+  focusName,
+  onClose,
+  onArchived,
+  onReload,
+}: {
+  /** The NPC as the Cast last read it: its portrait and its stored name. */
+  readonly npc: Npc;
+  readonly saver: NpcSaver;
+  /** Just made by *Add NPC*: the name is focused, ready to type. */
+  readonly focusName: boolean;
+  readonly onClose: () => void;
+  readonly onArchived: () => void;
+  /** The row moved on under the drawer: read it again and start over from it. */
+  readonly onReload: () => void;
+}) {
+  const [draft, setDraft] = useState<NpcFields>(saver.draft);
+  const status = useSyncExternalStore(saver.subscribe, saver.getStatus);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const archive = useMutation();
+  const campaignId = npc.campaignId;
+
+  const type = (fields: Partial<NpcFields>) => {
+    setDraft((current) => ({ ...current, ...fields }));
+    saver.type(fields);
+  };
+  const set = (fields: Partial<NpcFields>) => {
+    setDraft((current) => ({ ...current, ...fields }));
+    void saver.set(fields);
+  };
+  const settle = () => void saver.flush();
+
+  // Closing, by any of its ways, sends what is still waiting — the role too.
+  useEffect(() => () => void saver.flush(), [saver]);
+
+  const archiveNow = async () => {
+    // What was typed lands first, then nothing more is sent for this NPC.
+    await saver.flush();
+    saver.stop();
+    const done = await archive.submit(
+      (client) => client.npcs.archive({ params: { campaignId, npcId: npc.id }, payload: {} }),
+      [reads.npcs(campaignId), reads.npc(npc.id)],
+    );
+    if (Result.isSuccess(done)) onArchived();
+    else saver.resume();
+  };
+
+  const nameHeld = draft.name.trim() === "";
+  // A blank NPC's placeholder shows as an empty field, and is no mistake;
+  // emptying a name it was given is, and it keeps that name until retyped.
+  const nameWanted = nameHeld && npc.name !== UNNAMED_NPC;
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        data-slot="npc-drawer"
+        initialFocus={focusName ? nameRef : true}
+        overlayProps={{ className: "top-(--chrome-height)" }}
+        className="top-(--chrome-height) h-auto w-cast-drawer max-w-full"
+      >
+        <SheetHeader className="shrink-0 pr-12">
+          <SheetTitle>{nameHeld ? npc.name : draft.name.trim()}</SheetTitle>
+          {status.state === "failed" && status.failure.kind === "conflict" ? (
+            <SaveFailure failure={status.failure} onReload={onReload} />
+          ) : (
+            <SaveState status={status} onRetry={settle} />
+          )}
+        </SheetHeader>
+
+        <div className="@container flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-gutter pb-gutter">
+          <div className="relative h-cast-drawer-portrait shrink-0 overflow-hidden rounded-md border border-hairline bg-surface-sunken">
+            <NpcAvatar name={npc.name} image={npc.image} size="card" />
+            {npc.imagePending && (
+              <Badge variant="outline" role="status" className="absolute bottom-2.5 left-card">
+                Hob is drawing…
+              </Badge>
+            )}
+          </div>
+
+          <div className="grid gap-3.5 @sm:grid-cols-2">
+            <Field
+              label="Name"
+              htmlFor="npc-drawer-name"
+              error={
+                nameWanted
+                  ? `An NPC needs a name. Until they have one, they keep “${npc.name}”.`
+                  : undefined
+              }
+            >
+              <Input
+                ref={nameRef}
+                id="npc-drawer-name"
+                placeholder="What the party calls them"
+                aria-invalid={nameWanted}
+                value={draft.name}
+                onChange={(event) => type({ name: event.target.value })}
+                onBlur={settle}
+              />
+            </Field>
+            <Field label="Role" htmlFor="npc-drawer-role">
+              <Input
+                id="npc-drawer-role"
+                placeholder="Innkeeper, rival, patron"
+                value={draft.role}
+                onChange={(event) => type({ role: event.target.value })}
+                onBlur={settle}
+              />
+            </Field>
+          </div>
+
+          <Field label="Voice and manner" htmlFor="npc-drawer-manner">
+            <Textarea
+              id="npc-drawer-manner"
+              rows={2}
+              className="min-h-0"
+              placeholder="How you play them at the table."
+              value={draft.manner}
+              onChange={(event) => type({ manner: event.target.value })}
+              onBlur={settle}
+            />
+          </Field>
+
+          <Field label="What they want" htmlFor="npc-drawer-wants">
+            <Textarea
+              id="npc-drawer-wants"
+              rows={2}
+              className="min-h-0"
+              placeholder="What they’d trade, lie or fight for."
+              value={draft.wants}
+              onChange={(event) => type({ wants: event.target.value })}
+              onBlur={settle}
+            />
+          </Field>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <Icon name="eye-off" size={13} className="text-magic-ink" />
+              <Label htmlFor="npc-drawer-secret">Secret</Label>
+              <Badge variant="magic">DM only</Badge>
+            </div>
+            <Textarea
+              id="npc-drawer-secret"
+              rows={3}
+              className="min-h-0"
+              placeholder="What the party doesn’t know yet."
+              value={draft.secrets}
+              onChange={(event) => type({ secrets: event.target.value })}
+              onBlur={settle}
+            />
+          </div>
+
+          <VisibilityField
+            id="npc-drawer-visibility"
+            value={draft.visibility}
+            onChange={(visibility) => set({ visibility })}
+            shared="Players can see and talk to them: their whole persona, the manner and wants included, but never the secret, which stays with you."
+            hidden="Only you see them. Share them when the table should meet them."
+          />
+        </div>
+
+        <SheetFooter className="shrink-0 flex-row flex-wrap items-center border-t border-hairline">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={archive.busy}
+            onClick={() => void archiveNow()}
+          >
+            <Icon name="archive" size={14} />
+            Archive
+          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link to="/campaigns/$campaignId/cast/follow-up" params={{ campaignId }} />}
+            >
+              NPC follow-up
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/campaigns/$campaignId/cast/$npcId"
+                  params={{ campaignId, npcId: npc.id }}
+                  hash="rehearsal"
+                />
+              }
+            >
+              Rehearse
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Done
+            </Button>
+          </div>
+          {archive.failure !== undefined && (
+            <div className="w-full">
+              <SaveFailure failure={archive.failure} />
+            </div>
+          )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}

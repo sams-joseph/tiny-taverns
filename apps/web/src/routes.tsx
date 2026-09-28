@@ -377,6 +377,15 @@ const notesRoute = createRoute({
 const castRoute = createRoute({
   getParentRoute: () => campaignRoute,
   path: "cast",
+  /**
+   * Which NPC the drawer holds, so a reload, a shared link and *Add NPC* land
+   * on it. A bad id, or one the cast does not list, is no choice — see
+   * `CastScreen`.
+   */
+  validateSearch: (search: Record<string, unknown>): { npc?: NpcId } => {
+    const npc = asNpcId(typeof search["npc"] === "string" ? search["npc"] : undefined);
+    return npc === undefined ? {} : { npc };
+  },
   component: CastScreen,
   remountDeps: ({ params }) => params.campaignId,
 });

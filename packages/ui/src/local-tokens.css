@@ -89,4 +89,9 @@
      whose search box is `flex: 0 1 280px`. */
   --cast-card-min: 250px;
   --cast-search-w: 280px;
+
+  /* The same drawing's NPC drawer: a `DrawerContent` of `width: 480` (full
+     width below that), opening on a 200px portrait. */
+  --cast-drawer-w: 480px;
+  --cast-drawer-portrait-h: 200px;
 }

@@ -1,4 +1,4 @@
-import { Npc, type NpcId, type CampaignId } from "@taverns/api";
+import { Npc, type NpcId, type CampaignId, UNNAMED_NPC } from "@taverns/api";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vitest";
 import {
@@ -124,6 +124,7 @@ describe("what the card and the detail say", () => {
     expect(initialsOf("Cazril")).toBe("CA");
     expect(initialsOf("Old Fen")).toBe("OF");
     expect(initialsOf("  ")).toBe("?");
+    expect(initialsOf(UNNAMED_NPC)).toBe("?");
   });
 
   it("searches the name, the role, the summary and the manner, and never the private material", () => {

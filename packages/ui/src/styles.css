@@ -299,6 +299,8 @@
   --spacing-party-card: var(--party-card-min);
   --spacing-portrait-band: var(--portrait-band-h);
   --spacing-cast-card: var(--cast-card-min);
+  --spacing-cast-drawer: var(--cast-drawer-w);
+  --spacing-cast-drawer-portrait: var(--cast-drawer-portrait-h);
   --container-measure: var(--measure);
   --container-overview: var(--overview-w);
   --container-overview-pitch: var(--overview-pitch-w);
