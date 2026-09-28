@@ -22,6 +22,10 @@ The product retains detail rather than summarising at write time. Hob proposes; 
 
 Do not render a field the API does not have, invent a control the wire cannot carry, or backfill a column with a guess. When a drawing or a plan asks for something the data cannot supply, report it and leave it out.
 
+### 5. Hob can make what a person can make, and everything can be deleted
+
+Any object a person can create, Hob can also create through the creator toolkit's `propose*` tool and the accept path, unless the maintainer has said otherwise for that object. Every object has a way to be deleted; archive, unshare or disconnect alone is not a delete, and a destructive delete asks for confirmation. The proposal pattern is `docs/internals/hob.md`; what a delete cascades or detaches is `docs/internals/data-model.md`.
+
 ## How we work
 
 Measure, do not reason: this project has repeatedly been wrong about a symptom until somebody looked at the wire, the request body or the rendered pixel. jsdom computes no layout, no stacking and no motion, so a real browser is the only place those are visible. Check the same commit twice under different load before believing a flaky test is yours.
