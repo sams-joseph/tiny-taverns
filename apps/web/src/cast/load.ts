@@ -83,17 +83,6 @@ const npcAwarenessCandidatesAtom = Atom.family((at: OneNpc) =>
   ),
 );
 
-export const npcPendingProposalCountAtom = Atom.family((at: OneNpc) =>
-  apiAtom(
-    (client) =>
-      Effect.map(
-        client.npcs.proposals({ params: at }),
-        (proposals) => proposals.filter((proposal) => proposal.state === "pending").length,
-      ),
-    [reads.npcProposals(at.npcId), reads.npcFollowUp(at.campaignId)],
-  ),
-);
-
 export const npcFollowUpAtom = Atom.family((campaignId: CampaignId) =>
   apiAtom(
     (client) => client.npcs.followUp({ params: { campaignId } }),

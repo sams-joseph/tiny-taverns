@@ -62,6 +62,18 @@ describe("NpcAvatar", () => {
     }
   });
 
+  it("fills a card's portrait band with the card size, over the initials", () => {
+    const { container } = render(
+      <NpcAvatar name="Marta Vell" image={drawnNpcPortrait} size="card" />,
+    );
+    expect(container.textContent).toBe("MV");
+    expect(container.querySelector("img")!.getAttribute("src")).toBe(
+      apiUrl(drawnNpcPortrait.cardUrl),
+    );
+    // It fills the band it is laid in rather than drawing a plate of its own.
+    expect(container.firstElementChild!.className).toContain("absolute inset-0");
+  });
+
   it("stays transparent until it loads, and falls back to the initials when it fails", () => {
     const { container, rerender } = render(<NpcAvatar name="Marta" image={drawnNpcPortrait} />);
     const img = container.querySelector("img")!;
@@ -88,7 +100,7 @@ const renderCreator = async (path: string): Promise<void> => {
 };
 
 describe("the cast", () => {
-  it("heads an NPC's card with its portrait", async () => {
+  it("heads an NPC's card with its portrait, at the card size", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
       status: 200,
       body: [{ ...cazril, image: drawnNpcPortrait }],
@@ -96,7 +108,7 @@ describe("the cast", () => {
     await renderCreator(`/campaigns/${campaignId}/cast`);
     const card = (await screen.findByRole("link", { name: "Cazril" })).closest("li")!;
     expect(within(card).getByText("CA")).toBeInTheDocument();
-    expect(card.querySelector("img")?.getAttribute("src")).toBe(thumb);
+    expect(card.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnNpcPortrait.cardUrl));
   });
 
   it("says Hob is drawing on the card, and re-reads the cast until the portrait lands", async () => {
@@ -111,7 +123,15 @@ describe("the cast", () => {
       status: 200,
       body: [{ ...cazril, image: drawnNpcPortrait }],
     });
-    await waitFor(() => expect(drawnPlates()).toHaveLength(1), { timeout: 15_000 });
+    // The card's band loads the card size, not the thumb.
+    const card = apiUrl(drawnNpcPortrait.cardUrl);
+    await waitFor(
+      () =>
+        expect(
+          [...document.querySelectorAll("img")].filter((img) => img.getAttribute("src") === card),
+        ).toHaveLength(1),
+      { timeout: 15_000 },
+    );
     expect(screen.queryByText("Hob is drawing…")).toBeNull();
   }, 30_000);
 });

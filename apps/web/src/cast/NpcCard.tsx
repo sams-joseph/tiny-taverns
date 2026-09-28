@@ -1,171 +1,49 @@
-import type { CampaignId, Npc, NpcId, SessionId } from "@taverns/api";
+import type { Npc } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Icon,
-} from "@taverns/ui";
-import { useApiAtom } from "../api/atoms";
-import { npcPendingProposalCountAtom, sessionNpcsAtom } from "./load";
+import { Badge, Card, cardLinkClassName, SectionHeading } from "@taverns/ui";
 import { NpcAvatar } from "./NpcAvatar";
-import { describeNpc, hasPrivateMaterial } from "./persona";
-import { npcIsOpenInSession } from "./status";
 
-function NpcStatusBadges({
-  npc,
-  currentSessionId,
-}: {
-  readonly npc: Npc;
-  readonly currentSessionId?: SessionId;
-}) {
-  const [proposalCount] = useApiAtom(
-    npcPendingProposalCountAtom({ campaignId: npc.campaignId, npcId: npc.id }),
-  );
+/**
+ * One NPC on the Cast, as the redesign draws the card: the portrait band, then
+ * who they are.
+ *
+ * **The whole card opens the NPC**, portrait band included: the name is the
+ * one link, its `::after` stretched over the card (`<Card linked>`), and the
+ * card carries no control of its own. Everything that manages an NPC — editing,
+ * sharing, rehearsing, reviewing what Hob proposed, archiving — is on its page.
+ *
+ * The band is the seat card's: the initials, with Hob's portrait over them once
+ * there is one, and *Hob is drawing…* while it is on its way (the Cast re-reads
+ * until it lands). The drawn card's attitude, status, whereabouts and *first
+ * met* lines are not here: nothing on the wire answers them yet, so they are
+ * not drawn.
+ */
+export function NpcCard({ npc }: { readonly npc: Npc }) {
   return (
-    <>
-      <NpcFacingBadge npc={npc} />
-      {currentSessionId !== undefined && npc.archivedAt === null && (
-        <NpcOpenBadge campaignId={npc.campaignId} npcId={npc.id} sessionId={currentSessionId} />
-      )}
-      {proposalCount.state === "ready" && proposalCount.value > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-caption text-accent-ink"
-          nativeButton={false}
-          render={
-            <Link
-              to="/campaigns/$campaignId/cast/$npcId"
-              params={{ campaignId: npc.campaignId, npcId: npc.id }}
-              hash="proposals"
-            />
-          }
-        >
-          <Icon name="sparkles" size={11} />
-          {proposalCount.value} pending
-        </Button>
-      )}
-    </>
-  );
-}
-
-function NpcFacingBadge({ npc }: { readonly npc: Npc }) {
-  if (npc.archivedAt !== null) return <Badge variant="outline">Archived</Badge>;
-  return npc.visibility === "shared" ? (
-    <Badge variant="secondary">
-      <Icon name="users" size={11} />
-      Player-facing
-    </Badge>
-  ) : (
-    <Badge variant="outline">
-      <Icon name="eye-off" size={11} />
-      Cast only
-    </Badge>
-  );
-}
-
-function NpcOpenBadge({
-  campaignId,
-  sessionId,
-  npcId,
-}: {
-  readonly campaignId: CampaignId;
-  readonly sessionId: SessionId;
-  readonly npcId: NpcId;
-}) {
-  const [sessionNpcs] = useApiAtom(sessionNpcsAtom({ campaignId, sessionId }));
-  if (sessionNpcs.state !== "ready") return null;
-  if (
-    !npcIsOpenInSession({
-      npc: { id: npcId },
-      currentSessionId: sessionId,
-      sessionNpcs: sessionNpcs.value,
-    })
-  ) {
-    return null;
-  }
-  return (
-    <Badge variant="secondary">
-      <Icon name="mic" size={11} />
-      Open at table
-    </Badge>
-  );
-}
-
-export function NpcCard({
-  npc,
-  onEdit,
-  currentSessionId,
-}: {
-  readonly npc: Npc;
-  readonly onEdit: () => void;
-  readonly currentSessionId?: SessionId;
-}) {
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <div className="flex items-start gap-2.5">
-          <NpcAvatar name={npc.name} image={npc.image} />
-          <div className="min-w-0 flex-1">
-            <CardTitle>
-              <Link
-                to="/campaigns/$campaignId/cast/$npcId"
-                params={{ campaignId: npc.campaignId, npcId: npc.id }}
-                className="hover:underline"
-              >
-                {npc.name}
-              </Link>
-            </CardTitle>
-            {npc.role !== "" && (
-              <p className="text-caption leading-body text-muted-foreground">{npc.role}</p>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="-mt-1 -mr-1 size-7 shrink-0"
-            aria-label={`Edit ${npc.name}`}
-            onClick={onEdit}
-          >
-            <Icon name="pencil" size={14} />
-          </Button>
-        </div>
-        <CardDescription className="line-clamp-3">{describeNpc(npc)}</CardDescription>
-      </CardHeader>
-      <CardContent className="mt-auto flex flex-wrap items-center gap-1.5">
+    <Card linked data-slot="npc-card" className="h-full overflow-hidden">
+      <div className="relative h-portrait-band shrink-0 overflow-hidden border-b border-hairline bg-surface-sunken">
+        <NpcAvatar name={npc.name} image={npc.image} size="card" />
         {npc.imagePending && (
-          <Badge variant="outline" role="status">
+          <Badge variant="outline" role="status" className="absolute bottom-2.5 left-card">
             Hob is drawing…
           </Badge>
         )}
-        <NpcStatusBadges npc={npc} currentSessionId={currentSessionId} />
-        {hasPrivateMaterial(npc) && (
-          <Badge variant="outline">
-            <Icon name="lock" size={11} />
-            Private material
-          </Badge>
+      </div>
+      <div className="px-card pt-3.5 pb-card">
+        <SectionHeading size="title">
+          <Link
+            to="/campaigns/$campaignId/cast/$npcId"
+            params={{ campaignId: npc.campaignId, npcId: npc.id }}
+            data-card-link
+            className={cardLinkClassName}
+          >
+            {npc.name}
+          </Link>
+        </SectionHeading>
+        {npc.role !== "" && (
+          <p className="mt-1 mb-0 text-body-s leading-snug text-muted-foreground">{npc.role}</p>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          nativeButton={false}
-          render={
-            <Link
-              to="/campaigns/$campaignId/cast/$npcId"
-              params={{ campaignId: npc.campaignId, npcId: npc.id }}
-            />
-          }
-        >
-          <Icon name="mic" size={13} />
-          Rehearse
-        </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }

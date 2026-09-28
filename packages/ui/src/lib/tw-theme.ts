@@ -162,7 +162,14 @@ export const twTheme = {
   blur: ["scrim", "site-header"],
   ease: ["out", "in-out", "settle"],
   animate: ["dialog-in", "dialog-out"],
-  container: ["measure", "overview", "overview-pitch", "encounters-list", "notes-list"],
+  container: [
+    "measure",
+    "overview",
+    "overview-pitch",
+    "encounters-list",
+    "notes-list",
+    "cast-search",
+  ],
 } as const;
 
 /**
@@ -192,5 +199,6 @@ export const twSpacing = [
   "notes-list-min",
   "notes-pane",
   "party-card",
-  "party-portrait",
+  "portrait-band",
+  "cast-card",
 ] as const;

@@ -172,26 +172,12 @@ export const hasAdvanced = (draft: NpcDraft): boolean =>
     ] as const
   ).some((key) => draft[key].trim() !== "");
 
-/** Whether the row carries any creator-only material — what the card's badge says. */
-export const hasPrivateMaterial = (npc: Npc): boolean =>
-  (npc.privateMaterial.secrets ?? "").trim() !== "" ||
-  (npc.privateMaterial.instructions ?? "").trim() !== "";
-
 /** Two letters for the avatar square — "Cazril" → "CA", "Old Fen" → "OF". */
 export const initialsOf = (name: string): string => {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
   return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
-};
-
-/** The card's one line under the name. */
-export const describeNpc = (npc: Npc): string => {
-  const summary = npc.persona.identity?.summary?.trim() ?? "";
-  if (summary !== "") return summary;
-  const manner = npc.persona.voice?.manner?.trim() ?? "";
-  if (manner !== "") return manner;
-  return "No persona written yet.";
 };
 
 /** Case-insensitive contains over the fields a search box should reach. */

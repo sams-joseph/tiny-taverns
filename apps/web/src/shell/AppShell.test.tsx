@@ -490,8 +490,8 @@ describe("the shell's top bar", () => {
         "Overview",
         "Encounters",
         "Party",
-        "Notes",
         "Cast",
+        "Notes",
         "Chronicle",
       ]);
       // Every one of them names the campaign, because every endpoint behind

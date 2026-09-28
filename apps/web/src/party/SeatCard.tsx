@@ -59,7 +59,7 @@ export function SeatCard({
       data-slot="seat-card"
       className={`${CARD_ROWS} grid grid-rows-subgrid gap-y-0 overflow-hidden`}
     >
-      <div className="relative h-party-portrait overflow-hidden border-b border-hairline bg-surface-sunken">
+      <div className="relative h-portrait-band overflow-hidden border-b border-hairline bg-surface-sunken">
         {/* The monogram, with Hob's portrait over it once there is one. */}
         <CharacterPortrait name={card.name} portrait={character?.portrait ?? null} size="card" />
       </div>

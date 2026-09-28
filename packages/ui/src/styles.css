@@ -297,12 +297,14 @@
   --spacing-notes-list-min: var(--notes-list-min);
   --spacing-notes-pane: var(--notes-pane-min);
   --spacing-party-card: var(--party-card-min);
-  --spacing-party-portrait: var(--party-portrait-h);
+  --spacing-portrait-band: var(--portrait-band-h);
+  --spacing-cast-card: var(--cast-card-min);
   --container-measure: var(--measure);
   --container-overview: var(--overview-w);
   --container-overview-pitch: var(--overview-pitch-w);
   --container-encounters-list: var(--encounters-list-w);
   --container-notes-list: var(--notes-list-w);
+  --container-cast-search: var(--cast-search-w);
 }
 
 /* --------------------------------------------------------------------------

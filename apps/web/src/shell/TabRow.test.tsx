@@ -62,14 +62,14 @@ describe("the campaign row's collapse", () => {
       within(all)
         .getAllByRole("menuitem")
         .map((item) => item.textContent),
-    ).toEqual(["Party", "Notes", "Cast", "Chronicle"]);
+    ).toEqual(["Party", "Cast", "Notes", "Chronicle"]);
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 
     await userEvent.click(narrow!);
     const menu = await screen.findByRole("menu");
     const items = within(menu).getAllByRole("menuitem");
-    expect(items.map((item) => item.textContent)).toEqual(["Party", "Notes", "Cast", "Chronicle"]);
+    expect(items.map((item) => item.textContent)).toEqual(["Party", "Cast", "Notes", "Chronicle"]);
     expect(within(menu).getByRole("menuitem", { name: "Chronicle" })).toHaveAttribute(
       "aria-current",
       "page",

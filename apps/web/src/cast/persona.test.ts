@@ -2,11 +2,9 @@ import { Npc, type NpcId, type CampaignId } from "@taverns/api";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vitest";
 import {
-  describeNpc,
   draftOf,
   emptyDraft,
   hasAdvanced,
-  hasPrivateMaterial,
   initialsOf,
   npcMatches,
   personaFrom,
@@ -126,18 +124,6 @@ describe("what the card and the detail say", () => {
     expect(initialsOf("Cazril")).toBe("CA");
     expect(initialsOf("Old Fen")).toBe("OF");
     expect(initialsOf("  ")).toBe("?");
-  });
-
-  it("describes an NPC by its summary, then its manner, then honestly", () => {
-    expect(describeNpc(row({ persona: { identity: { summary: "Old." } } }))).toBe("Old.");
-    expect(describeNpc(row({ persona: { voice: { manner: "Dry." } } }))).toBe("Dry.");
-    expect(describeNpc(row())).toBe("No persona written yet.");
-  });
-
-  it("marks private material only when there is some", () => {
-    expect(hasPrivateMaterial(row())).toBe(false);
-    expect(hasPrivateMaterial(row({ privateMaterial: { secrets: " " } }))).toBe(false);
-    expect(hasPrivateMaterial(row({ privateMaterial: { instructions: "x" } }))).toBe(true);
   });
 
   it("searches the name, the role, the summary and the manner, and never the private material", () => {
