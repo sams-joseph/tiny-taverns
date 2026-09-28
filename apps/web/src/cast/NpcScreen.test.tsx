@@ -584,4 +584,51 @@ describe("NpcScreen", () => {
       secrets: "The hag pays him in years. He has three left.",
     });
   }, 20_000);
+
+  it("shares an NPC with the table from the dialog, and unshares it back to the DM", async () => {
+    server.routes.set(`PATCH /campaigns/${campaignId}/npcs/${npcId}`, {
+      status: 200,
+      body: { ...cazril, visibility: "shared", version: 3 },
+    });
+    await renderNpc();
+    await screen.findByRole("heading", { name: "Cazril", level: 2 });
+    expect(screen.getByText("Cast only")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    let dialog = await screen.findByRole("dialog", { name: "Edit Cazril" });
+    const share = within(dialog).getByRole("switch", { name: "Players can see this" });
+    expect(share).not.toBeChecked();
+    await userEvent.click(share);
+    // The sentence names what a shared NPC carries, and that the secrets stay.
+    expect(
+      within(dialog).getByText(/everything here but the private material/),
+    ).toBeInTheDocument();
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}`, {
+      status: 200,
+      body: { ...cazril, visibility: "shared", version: 3 },
+    });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(bodyOf(server, "PATCH", `/npcs/${npcId}`)).toMatchObject({ visibility: "shared" });
+    // The page re-reads the row and badges it as the players see it.
+    await screen.findByText("Player-facing");
+
+    server.routes.set(`PATCH /campaigns/${campaignId}/npcs/${npcId}`, {
+      status: 200,
+      body: { ...cazril, visibility: "dm", version: 4 },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    dialog = await screen.findByRole("dialog", { name: "Edit Cazril" });
+    const unshare = within(dialog).getByRole("switch", { name: "Players can see this" });
+    expect(unshare).toBeChecked();
+    await userEvent.click(unshare);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // Off is a value the payload says, not a key it leaves out.
+    const calls = server.calls.filter(
+      (call) => call.method === "PATCH" && call.pathname.endsWith(`/npcs/${npcId}`),
+    );
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(calls[1]!.body)).toMatchObject({ visibility: "dm", expectedVersion: 3 });
+  }, 20_000);
 });

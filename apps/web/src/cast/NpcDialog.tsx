@@ -1,4 +1,4 @@
-import { APPEARANCE_MAX, type CampaignId, type Npc } from "@taverns/api";
+import { APPEARANCE_MAX, type CampaignId, type Npc, type Visibility } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -15,7 +15,7 @@ import { Result } from "effect";
 import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { Field, SaveFailure, Textarea } from "../ui/form";
+import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 import {
   draftOf,
   emptyDraft,
@@ -47,6 +47,13 @@ import {
  *
  * Each document is replaced whole on save, like a character sheet; the form
  * always holds the whole of both, so nothing it was not shown is lost.
+ *
+ * ### Sharing is the row's, and starts off
+ *
+ * `visibility` is the only way an NPC reaches the players, so it is on the
+ * first screen and sent on every save: a new NPC is kept to the DM until the
+ * switch says otherwise, and turning it off sends `dm` rather than leaving the
+ * row as it was.
  */
 
 export function NpcDialog({
@@ -62,6 +69,7 @@ export function NpcDialog({
   readonly onSaved: (saved: Npc) => void;
 }) {
   const [draft, setDraft] = useState<NpcDraft>(npc === undefined ? emptyDraft : draftOf(npc));
+  const [visibility, setVisibility] = useState<Visibility>(npc?.visibility ?? "dm");
   const [advanced, setAdvanced] = useState(npc !== undefined && hasAdvanced(draft));
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
@@ -79,6 +87,7 @@ export function NpcDialog({
       role: draft.role.trim(),
       persona: personaFrom(draft),
       privateMaterial: privateMaterialFrom(draft),
+      visibility,
     };
     const saved = await submit(
       (client) =>
@@ -175,6 +184,16 @@ export function NpcDialog({
               onChange={(event) => set("manner")(event.target.value)}
             />
           </Field>
+
+          {/* What a shared NPC carries is the whole public persona, not only
+              the lines a player's screen draws, so the sentence says so. */}
+          <VisibilityField
+            id="npc-visibility"
+            value={visibility}
+            onChange={setVisibility}
+            shared="Players can see and talk to them: everything here but the private material, which never leaves you."
+            hidden="Only you see them. Share them when the table should meet them."
+          />
 
           <div>
             <Button
