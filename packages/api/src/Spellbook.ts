@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import type { CharacterSheet, SheetAction, SheetResource, SpellKnown } from "./Character.js";
 import { Spell } from "./Spell.js";
-import { CharacterId, type SpellId } from "./Ids.js";
+import { CharacterId, NpcId, type SpellId } from "./Ids.js";
 
 /** How this class treats the picked spell list on the character sheet. */
 export const SpellSelectionMode = Schema.Literals(["none", "known", "prepared", "spellbook"]);
@@ -25,9 +25,11 @@ export const CharacterSpellOption = Schema.Struct({
 });
 export type CharacterSpellOption = typeof CharacterSpellOption.Type;
 
-/** One character's bounded spell vocabulary — the sheet picker reads this whole. */
-export const CharacterSpellbook = Schema.Struct({
-  characterId: CharacterId,
+/**
+ * A sheet's bounded spell vocabulary, the rules half both spellbooks share:
+ * what the class and level allow, and every spell the sheet's rules offer.
+ */
+const spellbookFields = {
   className: Schema.optional(Schema.String),
   subclassName: Schema.optional(Schema.String),
   level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
@@ -35,8 +37,25 @@ export const CharacterSpellbook = Schema.Struct({
   mode: SpellSelectionMode,
   limits: CharacterSpellLimits,
   spells: Schema.Array(CharacterSpellOption),
+};
+
+/** One character's bounded spell vocabulary — the sheet picker reads this whole. */
+export const CharacterSpellbook = Schema.Struct({
+  characterId: CharacterId,
+  ...spellbookFields,
 });
 export type CharacterSpellbook = typeof CharacterSpellbook.Type;
+
+/**
+ * One NPC sheet's bounded spell vocabulary (`npc_sheet`), the creator's or
+ * the Library owner's alone: a character's picker rules, against the NPC's
+ * own rules.
+ */
+export const NpcSpellbook = Schema.Struct({
+  npcId: NpcId,
+  ...spellbookFields,
+});
+export type NpcSpellbook = typeof NpcSpellbook.Type;
 
 /** The spell-selection rules shared by the persisted picker and Hob's draft. */
 export interface CharacterSpellRules {

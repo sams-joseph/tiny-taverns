@@ -335,12 +335,15 @@ const matchesSubclassList = (
           where lower(subclass_name) = lower(${subclassName}))
 `;
 
-interface SpellbookSource {
+export interface SpellbookSource {
   readonly className?: string | undefined;
   readonly subclassName?: string | undefined;
   readonly level: number;
   readonly body: SpellSourceBody;
-  /** `vocabularyAt` for a draft's context, `characterVocabulary` for a sheet. */
+  /**
+   * `vocabularyAt` for a draft's context, `characterVocabulary` for a sheet,
+   * and an NPC sheet's reach (`NpcSheets.ts`) for an NPC's.
+   */
   readonly vocabulary: Vocabulary;
 }
 
@@ -354,7 +357,8 @@ const emptySpellRules = (source: SpellbookSource): CharacterSpellRules => ({
   spells: [],
 });
 
-const spellbookRulesFor = (sql: SqlClient.SqlClient, source: SpellbookSource) =>
+/** The one spell-picker rule: a character's sheet, Hob's draft and an NPC's sheet all read it. */
+export const spellbookRulesFor = (sql: SqlClient.SqlClient, source: SpellbookSource) =>
   Effect.gen(function* () {
     const className = source.className?.trim();
     if (className === undefined || className === "") {

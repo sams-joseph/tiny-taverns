@@ -809,6 +809,7 @@ const LibraryLive = HttpApiBuilder.group(
         npcSheets.libraryUpdate(params.npcId, payload),
       )
       .handle("removeNpcSheet", ({ params }) => npcSheets.libraryRemove(params.npcId))
+      .handle("npcSheetSpells", ({ params }) => npcSheets.librarySpells(params.npcId))
       .handle("magicItems", ({ query }) => magicItems.library(query))
       .handle("createMagicItem", ({ payload }) => magicItems.libraryCreate(payload))
       .handle("findMagicItem", ({ params }) => magicItems.libraryFindById(params.magicItemId))
@@ -1327,6 +1328,9 @@ const NpcsLive = HttpApiBuilder.group(
         )
         .handle("removeSheet", ({ params }) =>
           asCreator(params.campaignId, (creator) => sheets.remove(creator, params.npcId)),
+        )
+        .handle("sheetSpells", ({ params }) =>
+          asCreator(params.campaignId, (creator) => sheets.spells(creator, params.npcId)),
         )
         .handle("update", ({ params, payload }) =>
           asCreator(params.campaignId, (creator) =>
