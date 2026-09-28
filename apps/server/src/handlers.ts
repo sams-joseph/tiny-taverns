@@ -386,6 +386,9 @@ const ImagesLive = HttpApiBuilder.group(
       .handle("portrait", ({ params, query }) =>
         images.image("character", { ...params, e: query.e, s: query.s }),
       )
+      .handle("portraitBanner", ({ params, query }) =>
+        images.image("characterBanner", { ...params, e: query.e, s: query.s }),
+      )
       .handle("campaign", ({ params, query }) =>
         images.image("campaign", { ...params, e: query.e, s: query.s }),
       )
@@ -394,6 +397,9 @@ const ImagesLive = HttpApiBuilder.group(
       )
       .handle("npc", ({ params, query }) =>
         images.image("npc", { ...params, e: query.e, s: query.s }),
+      )
+      .handle("npcBanner", ({ params, query }) =>
+        images.image("npcBanner", { ...params, e: query.e, s: query.s }),
       )
       .handle("battleMap", ({ params, query }) =>
         images.image("battleMap", { ...params, e: query.e, s: query.s }),

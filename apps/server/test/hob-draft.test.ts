@@ -405,7 +405,7 @@ describe("the toolkit is the core rules and nothing else", () => {
 });
 
 describe("keeping the draft", () => {
-  it("makes an unseated character drafted by Hob, and draws its portrait once", async () => {
+  it("makes an unseated character drafted by Hob, and draws its portrait and banner once", async () => {
     const { events } = await ask(fresh.token);
     const { threadId, turnId } = begunIn(events);
     const drawnBefore = images.requests().length;
@@ -418,7 +418,7 @@ describe("keeping the draft", () => {
     expect(accepted.character.className).toBe("Druid");
     expect(accepted.character.portraitPending).toBe(true);
     await settled();
-    expect(images.requests().length - drawnBefore).toBe(1);
+    expect(images.requests().length - drawnBefore).toBe(2);
 
     const rows = await sql(
       (sql) => sql<{

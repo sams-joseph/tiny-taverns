@@ -61,6 +61,9 @@ const NOT_CONTENT = [
   // here would be a second answer to a question the character already
   // answers. See 0048_character_portraits.ts.
   "character_portrait",
+  // A character's banner: the portrait's reason, beside it. See
+  // 0075_portrait_banners.ts.
+  "character_banner",
   "character_resource_request",
   "condition",
   "creature_armor_equipment",
@@ -120,6 +123,9 @@ const NOT_CONTENT = [
   // An NPC's portrait: who may see it is exactly who may read the NPC, through
   // the NPC's own reads. See 0050_npc_images.ts.
   "npc_image",
+  // An NPC's banner: the portrait's reason, beside it. See
+  // 0075_portrait_banners.ts.
+  "npc_banner",
   // An NPC's DM prep — attitude, status, whereabouts, first meeting: the
   // creator's alone through the creator proof, reached only by walking its NPC,
   // and written by nobody but the creator. See 0073_npc_prep.ts.

@@ -166,7 +166,7 @@ describe("the core rules", () => {
 });
 
 describe("creating a character with no campaign", () => {
-  it("writes an ordinary account-owned row with no seat, and draws its portrait once", async () => {
+  it("writes an ordinary account-owned row with no seat, and draws its portrait and banner once", async () => {
     const before = images.requests().length;
     const character = await as(fresh.token, (client) =>
       client.me.createCoreCharacter({
@@ -189,7 +189,7 @@ describe("creating a character with no campaign", () => {
     expect(character.subrace).toBe("High Elf");
     expect(character.portraitPending).toBe(true);
     await settled();
-    expect(images.requests().length - before).toBe(1);
+    expect(images.requests().length - before).toBe(2);
 
     const rows = await sql(
       (sql) => sql<{
@@ -214,6 +214,7 @@ describe("creating a character with no campaign", () => {
     const owned = mine.find((entry) => entry.character.id === character.id);
     expect(owned?.seats).toEqual([]);
     expect(owned?.character.portrait).not.toBeNull();
+    expect(owned?.character.banner).not.toBeNull();
 
     // Editing it changes nothing about the drawing: drawn once.
     await as(fresh.token, (client) =>
@@ -223,7 +224,7 @@ describe("creating a character with no campaign", () => {
       }),
     );
     await settled();
-    expect(images.requests().length - before).toBe(1);
+    expect(images.requests().length - before).toBe(2);
   });
 
   it("validates a subrace against the core rules, not the account's Library", async () => {

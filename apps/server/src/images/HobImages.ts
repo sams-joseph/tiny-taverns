@@ -8,6 +8,7 @@ import {
   Character,
   type CurrentActor,
   type Encounter,
+  HOUSE_BANNER_STYLE,
   HOUSE_COVER_STYLE,
   HOUSE_MAP_STYLE,
   HOUSE_PORTRAIT_STYLE,
@@ -54,19 +55,22 @@ import { renderImage } from "./render.js";
  *
  * ### The trigger
  *
- * Each kind has one entry point here, called by every handler that makes that
- * kind of thing **after** its transaction commits, with the row it returns:
+ * Each kind of subject has one entry point here, called by every handler that
+ * makes that kind of thing **after** its transaction commits, with the row it returns:
  * {@link HobImages} `drawCharacter` from the form's `POST …/characters` and
  * Hob's accept, `drawCampaign` from `POST /campaigns` and
  * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
  * `POST /campaigns/:campaignId/shared-world` (promotion), `drawNpc` from the
  * cast's create, its copy from the Library and its edit (an NPC created blank
  * is drawn by the first edit that gives it a subject), `drawBattleMap` from
- * `POST /campaigns/:c/encounters` and Hob's encounter accept. It records the one image row the subject
- * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
- * caps, the nothing-to-draw-from skip and the kind's rule about who may start
- * one) and hands a drawing row to a fiber. The request does not wait: a closed
- * tab still gets the picture, and a slow provider never holds a connection open.
+ * `POST /campaigns/:c/encounters` and Hob's encounter accept. It records the
+ * one image row of that kind the subject will ever have (`repo/Images.ts`
+ * `start`, which also applies the shared daily caps, the nothing-to-draw-from
+ * skip and the kind's rule about who may start one) and hands a drawing row to
+ * a fiber. A character and an NPC get two pictures, the square portrait and
+ * the wide banner a card's band shows, each its own record, job and spend
+ * (`startWithBanner`). The request does not wait: a closed tab still gets the
+ * picture, and a slow provider never holds a connection open.
  *
  * ### The job
  *
@@ -334,15 +338,37 @@ export class HobImages extends Context.Service<
               ),
           });
 
+        /**
+         * A portrait and its banner: the square first, then the wide picture
+         * from the same builder framed for a band. **The banner starts only
+         * when the square's draw started in this call**, so it keeps every
+         * rule the square has — drawn once, from the write that first gave
+         * the subject something to draw from, by the owner — and never
+         * starts alone: a square that was skipped, capped or recorded before
+         * (a subject drawn before banners existed) draws no banner. Each is
+         * its own start, so each is its own spend and meets the caps on its
+         * own: with one draw left in the day the square takes it and the
+         * banner is recorded `capped`. `true` when the square's draw started.
+         */
+        const startWithBanner = (
+          kind: "character" | "npc",
+          banner: "characterBanner" | "npcBanner",
+          subjectId: string,
+          prompt: (style: string) => string | undefined,
+        ): Effect.Effect<boolean, never, CurrentActor> =>
+          Effect.tap(
+            start(kind, subjectId, () => prompt(HOUSE_PORTRAIT_STYLE)),
+            (started) =>
+              started ? start(banner, subjectId, () => prompt(HOUSE_BANNER_STYLE)) : Effect.void,
+          );
+
         return {
           generating: Option.isSome(generation),
 
           drawCharacter: (character) =>
             Effect.map(
-              start("character", character.id, () =>
-                portraitHasSubject(character)
-                  ? portraitPromptFor(character, { style: HOUSE_PORTRAIT_STYLE })
-                  : undefined,
+              startWithBanner("character", "characterBanner", character.id, (style) =>
+                portraitHasSubject(character) ? portraitPromptFor(character, { style }) : undefined,
               ),
               (pending) =>
                 pending ? new Character({ ...character, portraitPending: true }) : character,
@@ -374,8 +400,8 @@ export class HobImages extends Context.Service<
           drawNpc: (npc) =>
             npcImageHasSubject(npc)
               ? Effect.map(
-                  start("npc", npc.id, () =>
-                    npcImagePromptFor(npc, { style: HOUSE_PORTRAIT_STYLE }),
+                  startWithBanner("npc", "npcBanner", npc.id, (style) =>
+                    npcImagePromptFor(npc, { style }),
                   ),
                   (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
                 )

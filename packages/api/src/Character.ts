@@ -467,6 +467,24 @@ export class CharacterPortraitImages extends Schema.Class<CharacterPortraitImage
   fullUrl: Schema.String,
 }) {}
 
+/**
+ * Where a character's banner loads from: two sizes of one 2:1 WebP, signed as
+ * `CharacterPortraitImages` is (`/portrait-banners/:imageId/:variant?e=…&s=…`)
+ * and minted by the same reads, so whoever can see the portrait can see the
+ * banner and nobody else gets a URL.
+ *
+ * The banner is its own draw, framed wide, for the places a card crops a
+ * portrait into a band; the square stays the plate everywhere else.
+ */
+export class CharacterBannerImages extends Schema.Class<CharacterBannerImages>(
+  "CharacterBannerImages",
+)({
+  /** 768 × 384, a card's portrait band at 2x. */
+  cardUrl: Schema.String,
+  /** 1536 × 768. */
+  fullUrl: Schema.String,
+}) {}
+
 export class Character extends Schema.Class<Character>("Character")({
   id: CharacterId,
   /**
@@ -588,9 +606,16 @@ export class Character extends Schema.Class<Character>("Character")({
    */
   portrait: Schema.NullOr(CharacterPortraitImages),
   /**
-   * The portrait is being drawn right now. A screen shows a quiet drawing state
-   * and re-reads the character until this is `false`; it never becomes `true`
-   * again for the same character, because a portrait is drawn once.
+   * The wide banner Hob drew beside the portrait, for a card's portrait band —
+   * or `null` for every reason `portrait` can be, and also when the character
+   * was drawn before banners existed. A band shows `portrait` then.
+   */
+  banner: Schema.NullOr(CharacterBannerImages),
+  /**
+   * The portrait or its banner is being drawn right now. A screen shows a
+   * quiet drawing state and re-reads the character until this is `false`; it
+   * never becomes `true` again for the same character, because each is drawn
+   * once.
    */
   portraitPending: Schema.Boolean,
   ...provenanceFields,

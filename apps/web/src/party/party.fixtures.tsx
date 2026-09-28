@@ -7,6 +7,7 @@ import {
   characterSeat,
   dmAccountId,
   dmMember,
+  drawnBanner,
   drawnPortrait,
   fullCampaign,
   worldId,
@@ -149,6 +150,9 @@ export const sorrelSheetSeat = {
   ...sorrelSeat,
   character: {
     ...sorrelSeat.character,
+    // Drawn since banners: the band shows the wide banner, the plates the square.
+    portrait: drawnPortrait,
+    banner: drawnBanner,
     conditions: ["Concentrating"],
     sheet: {
       notes: "",
@@ -171,7 +175,8 @@ export const sorrelSheetSeat = {
 
 /**
  * Pell, shared with the table and badly hurt — 9 of 52, the bar's *low* band —
- * with Hob's portrait, a cleric's Spell DC, two conditions and no saves written.
+ * with Hob's portrait drawn before banners (so its band shows the square), a
+ * cleric's Spell DC, two conditions and no saves written.
  */
 export const pellSheetSeat = {
   seat: { ...pellSeat.seat, visibility: "shared" },

@@ -19,9 +19,15 @@ import { useState } from "react";
  */
 export function DrawnImage({
   src,
+  srcSet,
   className,
 }: {
   readonly src: string | undefined;
+  /**
+   * Both sizes of a banner (`bandSource.ts`), for a plate whose drawn width
+   * varies; the browser picks by the width it actually draws.
+   */
+  readonly srcSet?: string;
   /** Where the crop anchors, e.g. `object-top` for a bust. */
   readonly className?: string;
 }) {
@@ -36,6 +42,8 @@ export function DrawnImage({
     <img
       key={src}
       src={src}
+      srcSet={srcSet}
+      sizes={srcSet === undefined ? undefined : "auto, 100vw"}
       alt=""
       loading="lazy"
       decoding="async"

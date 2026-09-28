@@ -10,6 +10,7 @@ import {
   type NpcListFilter,
   type NpcPersona,
   type NpcPrivateMaterial,
+  NpcBannerImages,
   NpcImages,
   NpcSource,
   type NpcUpdate,
@@ -48,19 +49,24 @@ import {
 export interface NpcImageRow {
   readonly image_id: string | null;
   readonly image_state: "generating" | "ready" | "failed" | null;
+  /** The banner's, beside the portrait's; `null` when the NPC has no banner record. */
+  readonly banner_id: string | null;
+  readonly banner_state: "generating" | "ready" | "failed" | null;
 }
 
 /**
- * The portrait's two facts beside an `npc` row: `image_id` and `image_state`,
- * as scalar subqueries so they fit a `select`, a `returning` and a column list
- * alike. **Every read that becomes an `Npc` or a `PlayerNpc` names this
+ * The portrait's two facts beside an `npc` row, `image_id` and `image_state`,
+ * and its banner's, `banner_id` and `banner_state`, as scalar subqueries so
+ * they fit a `select`, a `returning` and a column list alike. **Every read that becomes an `Npc` or a `PlayerNpc` names this
  * fragment** — `toNpc` and `toPlayerNpc` die on a row without it, so a path
  * that forgot is a failed test rather than an NPC whose portrait silently
  * vanished.
  */
 export const npcImageColumns = (sql: SqlClient.SqlClient) => sql`
   (select npc_image.id from npc_image where npc_image.npc_id = npc.id) as image_id,
-  (select npc_image.state from npc_image where npc_image.npc_id = npc.id) as image_state
+  (select npc_image.state from npc_image where npc_image.npc_id = npc.id) as image_state,
+  (select npc_banner.id from npc_banner where npc_banner.npc_id = npc.id) as banner_id,
+  (select npc_banner.state from npc_banner where npc_banner.npc_id = npc.id) as banner_state
 `;
 
 /**
@@ -69,7 +75,11 @@ export const npcImageColumns = (sql: SqlClient.SqlClient) => sql`
  * NPC agent's copies, which must never hold a bearer URL — and that mints
  * nothing, the same answer a server with no URL secret gives.
  */
-export type NpcImageSigner = (imageId: string) => NpcImages | null;
+export interface NpcImageSigner {
+  (imageId: string): NpcImages | null;
+  /** The banner's paths, beside the portrait's and minted by the same reads. */
+  readonly banner: (bannerId: string) => NpcBannerImages | null;
+}
 
 /** The signer a repository layer was built with, or `undefined`. */
 export const npcImageSigner: Effect.Effect<NpcImageSigner | undefined> = Effect.map(
@@ -77,12 +87,22 @@ export const npcImageSigner: Effect.Effect<NpcImageSigner | undefined> = Effect.
   (sign: ImageSigner | undefined) =>
     sign === undefined
       ? undefined
-      : (imageId) => {
-          const paths = sign("npc", imageId);
-          return paths === null
-            ? null
-            : new NpcImages({ thumbUrl: paths.thumb, cardUrl: paths.card, fullUrl: paths.full });
-        },
+      : Object.assign(
+          (imageId: string) => {
+            const paths = sign("npc", imageId);
+            return paths === null
+              ? null
+              : new NpcImages({ thumbUrl: paths.thumb, cardUrl: paths.card, fullUrl: paths.full });
+          },
+          {
+            banner: (bannerId: string) => {
+              const paths = sign("npcBanner", bannerId);
+              return paths === null
+                ? null
+                : new NpcBannerImages({ cardUrl: paths.card, fullUrl: paths.full });
+            },
+          },
+        ),
 );
 
 /**
@@ -95,8 +115,12 @@ export const npcImageSigner: Effect.Effect<NpcImageSigner | undefined> = Effect.
 export const npcImageOf = (
   row: NpcImageRow,
   sign: NpcImageSigner | undefined,
-): { readonly image: NpcImages | null; readonly imagePending: boolean } => {
-  if (row.image_state === undefined) {
+): {
+  readonly image: NpcImages | null;
+  readonly banner: NpcBannerImages | null;
+  readonly imagePending: boolean;
+} => {
+  if (row.image_state === undefined || row.banner_state === undefined) {
     throw new Error("an NPC read did not select npcImageColumns");
   }
   return {
@@ -104,7 +128,11 @@ export const npcImageOf = (
       row.image_state === "ready" && row.image_id !== null && sign !== undefined
         ? sign(row.image_id)
         : null,
-    imagePending: row.image_state === "generating",
+    banner:
+      row.banner_state === "ready" && row.banner_id !== null && sign !== undefined
+        ? sign.banner(row.banner_id)
+        : null,
+    imagePending: row.image_state === "generating" || row.banner_state === "generating",
   };
 };
 

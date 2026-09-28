@@ -687,6 +687,7 @@ const promptNpc = (npc: PlayerNpc): Npc =>
     assistantTurnId: null,
     // The prompt never reads the portrait, and this copy holds no URL.
     image: null,
+    banner: null,
     imagePending: false,
     createdAt: DateTime.fromDateUnsafe(new Date(0)),
     updatedAt: DateTime.fromDateUnsafe(new Date(0)),

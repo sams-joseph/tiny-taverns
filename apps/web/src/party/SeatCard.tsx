@@ -61,7 +61,12 @@ export function SeatCard({
     >
       <div className="relative h-portrait-band overflow-hidden border-b border-hairline bg-surface-sunken">
         {/* The monogram, with Hob's portrait over it once there is one. */}
-        <CharacterPortrait name={card.name} portrait={character?.portrait ?? null} size="card" />
+        <CharacterPortrait
+          name={card.name}
+          portrait={character?.portrait ?? null}
+          banner={character?.banner ?? null}
+          size="band"
+        />
       </div>
 
       <div className="flex flex-wrap items-start gap-3 px-card pt-4">

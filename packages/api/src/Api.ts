@@ -902,8 +902,8 @@ class InvitePreviewGroup extends HttpApiGroup.make("invitePreview").add(
  * middleware**, because an `<img>` cannot send a bearer header. One endpoint
  * per kind of image, each at the path its kind's signed URLs name.
  *
- * The capability is the signature instead. `Character.portrait`,
- * `Campaign.image`, `SharedWorld.image`, `Npc.image` and `BattleMap.image`
+ * The capability is the signature instead. `Character.portrait` and `banner`,
+ * `Campaign.image`, `SharedWorld.image`, `Npc.image` and `banner`, and `BattleMap.image`
  * carry these paths already signed, and the server mints them only inside a
  * read a SQL visibility predicate has allowed, so holding a URL means some read
  * let you see that character, campaign, Shared World, NPC or battle map within
@@ -923,6 +923,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** A character's portrait; the path predates the other kinds and keeps its name. */
     HttpApiEndpoint.get("portrait", "/portraits/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** A character's banner, beside its portrait. */
+    HttpApiEndpoint.get("portraitBanner", "/portrait-banners/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
@@ -950,6 +959,15 @@ class ImagesGroup extends HttpApiGroup.make("images")
   .add(
     /** A campaign NPC's portrait. */
     HttpApiEndpoint.get("npc", "/npc-images/:imageId/:variant", {
+      params: { imageId: Schema.String, variant: Schema.String },
+      query: signedImage,
+      success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),
+      error: NotFound,
+    }),
+  )
+  .add(
+    /** A campaign NPC's banner, beside its portrait. */
+    HttpApiEndpoint.get("npcBanner", "/npc-banners/:imageId/:variant", {
       params: { imageId: Schema.String, variant: Schema.String },
       query: signedImage,
       success: HttpApiSchema.StreamUint8Array({ contentType: "image/webp" }),

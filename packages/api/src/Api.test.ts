@@ -146,9 +146,11 @@ describe("the API declaration", () => {
       "health.check",
       "invitePreview.read",
       "images.portrait",
+      "images.portraitBanner",
       "images.campaign",
       "images.sharedWorld",
       "images.npc",
+      "images.npcBanner",
       "images.battleMap",
     ]);
   });

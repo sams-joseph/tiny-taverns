@@ -155,6 +155,8 @@ const characterOf = (row: SeatWithCharacterRow, sign?: PortraitSigner): Characte
       // `portraitColumns`; `null` is the seat read's own "no portrait".
       portrait_id: row.character_portrait_id as string | null,
       portrait_state: row.character_portrait_state as CharacterRow["portrait_state"],
+      banner_id: row.character_banner_id as string | null,
+      banner_state: row.character_banner_state as CharacterRow["banner_state"],
     },
     sign,
   );

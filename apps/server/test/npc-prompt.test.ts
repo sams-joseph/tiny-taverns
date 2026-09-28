@@ -77,6 +77,7 @@ const cazril = new Npc({
   origin: "authored",
   assistantTurnId: null,
   image: null,
+  banner: null,
   imagePending: false,
   createdAt: stamp,
   updatedAt: stamp,

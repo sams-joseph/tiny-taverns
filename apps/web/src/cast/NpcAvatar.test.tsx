@@ -6,6 +6,7 @@ import {
   campaign,
   campaignId,
   cazril,
+  drawnNpcBanner,
   drawnNpcPortrait,
   installStubServer,
   mintingSession,
@@ -62,16 +63,45 @@ describe("NpcAvatar", () => {
     }
   });
 
-  it("fills a card's portrait band with the card size, over the initials", () => {
+  it("fills a portrait band with the banner, over the initials", () => {
     const { container } = render(
-      <NpcAvatar name="Marta Vell" image={drawnNpcPortrait} size="card" />,
+      <NpcAvatar name="Marta Vell" image={drawnNpcPortrait} banner={drawnNpcBanner} size="band" />,
     );
     expect(container.textContent).toBe("MV");
-    expect(container.querySelector("img")!.getAttribute("src")).toBe(
-      apiUrl(drawnNpcPortrait.cardUrl),
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(apiUrl(drawnNpcBanner.cardUrl));
+    expect(img.getAttribute("srcset")).toBe(
+      `${apiUrl(drawnNpcBanner.cardUrl)} 768w, ${apiUrl(drawnNpcBanner.fullUrl)} 1536w`,
     );
+    expect(img.className).toContain("object-cover");
+    expect(img.className).toContain("object-center");
     // It fills the band it is laid in rather than drawing a plate of its own.
     expect(container.firstElementChild!.className).toContain("absolute inset-0");
+  });
+
+  it("falls back to the square's card size in a band with no banner", () => {
+    const { container } = render(
+      <NpcAvatar name="Marta Vell" image={drawnNpcPortrait} banner={null} size="band" />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(apiUrl(drawnNpcPortrait.cardUrl));
+    expect(img.hasAttribute("srcset")).toBe(false);
+    expect(img.className).toContain("object-top");
+  });
+
+  it("keeps the square on the plates, banner or not", () => {
+    for (const size of ["sm", "lg"] as const) {
+      const { container } = render(
+        <NpcAvatar
+          name="Marta Vell"
+          image={drawnNpcPortrait}
+          banner={drawnNpcBanner}
+          size={size}
+        />,
+      );
+      expect(container.querySelector("img")!.getAttribute("src")).toBe(thumb);
+      cleanup();
+    }
   });
 
   it("stays transparent until it loads, and falls back to the initials when it fails", () => {
@@ -109,6 +139,51 @@ describe("the cast", () => {
     const card = (await screen.findByRole("link", { name: "Cazril" })).closest("li")!;
     expect(within(card).getByText("CA")).toBeInTheDocument();
     expect(card.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnNpcPortrait.cardUrl));
+  });
+
+  it("heads an NPC's card with its banner when there is one, and its row mark stays square", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, image: drawnNpcPortrait, banner: drawnNpcBanner }],
+    });
+    await renderCreator(`/campaigns/${campaignId}/cast`);
+    const card = (await screen.findByRole("link", { name: "Cazril" })).closest("li")!;
+    expect([...card.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual([
+      apiUrl(drawnNpcBanner.cardUrl),
+    ]);
+  });
+
+  it("heads the NPC drawer with the banner, and with the square when there is none", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, image: drawnNpcPortrait, banner: drawnNpcBanner }],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}`, {
+      status: 200,
+      body: { ...cazril, image: drawnNpcPortrait, banner: drawnNpcBanner },
+    });
+    await renderCreator(`/campaigns/${campaignId}/cast?npc=${npcId}`);
+    const drawer = await screen.findByRole("dialog", { name: "Cazril" });
+    await waitFor(() =>
+      expect(drawer.querySelector("img")?.getAttribute("src")).toBe(apiUrl(drawnNpcBanner.cardUrl)),
+    );
+    cleanup();
+
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
+      status: 200,
+      body: [{ ...cazril, image: drawnNpcPortrait }],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}`, {
+      status: 200,
+      body: { ...cazril, image: drawnNpcPortrait },
+    });
+    await renderCreator(`/campaigns/${campaignId}/cast?npc=${npcId}`);
+    const plain = await screen.findByRole("dialog", { name: "Cazril" });
+    await waitFor(() =>
+      expect(plain.querySelector("img")?.getAttribute("src")).toBe(
+        apiUrl(drawnNpcPortrait.cardUrl),
+      ),
+    );
   });
 
   it("says Hob is drawing on the card, and re-reads the cast until the portrait lands", async () => {

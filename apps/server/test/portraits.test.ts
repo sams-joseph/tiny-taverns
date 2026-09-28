@@ -5,6 +5,8 @@ import {
   type Character,
   type CharacterId,
   CurrentActor,
+  HOUSE_BANNER_STYLE,
+  HOUSE_PORTRAIT_STYLE,
   type HobEvent,
   TavernsApi,
 } from "@taverns/api";
@@ -43,7 +45,8 @@ import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 const OPENAI = "https://api.openai.com/v1";
 const MODEL = "gpt-image-2.5-flare";
 const SECRET = Redacted.make("portrait-test-secret");
-const PER_ACCOUNT = 4;
+/** Four subjects' portraits and banners: each character is two draws. */
+const PER_ACCOUNT = 8;
 
 const images = scriptedImages({ apiUrl: OPENAI, model: MODEL });
 const chat = scriptedModel({
@@ -165,6 +168,30 @@ const recordOf = (characterId: CharacterId) =>
       }>`select * from character_portrait where character_id = ${characterId}`,
   ).then((rows) => rows[0]);
 
+const bannerOf = (characterId: CharacterId) =>
+  sql(
+    (sql) =>
+      sql<{
+        readonly id: string;
+        readonly state: string;
+        readonly failure: string | null;
+        readonly prompt: string | null;
+        readonly model: string | null;
+        readonly storage_prefix: string;
+      }>`select * from character_banner where character_id = ${characterId}`,
+  ).then((rows) => rows[0]);
+
+/** Today's spend for an account, by kind. */
+const spendOf = (accountId: string) =>
+  sql(
+    (sql) => sql<{ readonly kind: string; readonly count: number }>`
+      select kind, count(*)::int as count from image_spend
+      where account_id = ${accountId}
+        and spent_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'
+      group by kind order by kind
+    `,
+  ).then((rows) => Object.fromEntries(rows.map((row) => [row.kind, row.count])));
+
 const stored = (key: string) =>
   run(Effect.flatMap(ObjectStorage, (objects) => objects.head(StorageKey(key)))).then(
     Option.isSome,
@@ -205,7 +232,7 @@ const createAs = (
   payload: Parameters<Client["me"]["createCharacter"]>[0]["payload"],
 ) => as(who.token, (client) => client.me.createCharacter({ params: { campaignId }, payload }));
 
-describe("the form's create draws one portrait", () => {
+describe("the form's create draws one portrait and one banner", () => {
   let character: Character;
 
   beforeAll(async () => {
@@ -222,7 +249,7 @@ describe("the form's create draws one portrait", () => {
       },
     });
     await settled();
-    expect(images.requests().length - before).toBe(1);
+    expect(images.requests().length - before).toBe(2);
   }, 60_000);
 
   it("answers the create with the drawing state, and the draw finishes ready", async () => {
@@ -248,6 +275,30 @@ describe("the form's create draws one portrait", () => {
     expect(record?.storage_prefix).toBe(
       `portraits/${ilse.actor.accountId}/${character.id}/${record!.id}`,
     );
+  });
+
+  it("draws the banner as its own image, from the same builder framed wide", async () => {
+    const portrait = (await recordOf(character.id))!;
+    const banner = (await bannerOf(character.id))!;
+    expect(banner.state).toBe("ready");
+    expect(banner.id).not.toBe(portrait.id);
+    expect(banner.model).toBe(MODEL);
+    // The same subject, the same words, the banner's framing in place of the plate's.
+    expect(banner.prompt).toBe(portrait.prompt!.replace(HOUSE_PORTRAIT_STYLE, HOUSE_BANNER_STYLE));
+    expect(banner.prompt).not.toContain("Marta");
+    const body = images.requests().find((request) => request.prompt === banner.prompt);
+    expect(body?.size).toBe("1536x1024");
+    for (const file of ["original.png", "full.webp", "card.webp"]) {
+      expect(await stored(`${banner.storage_prefix}/${file}`)).toBe(true);
+    }
+    expect(await stored(`${banner.storage_prefix}/thumb.webp`)).toBe(false);
+    expect(banner.storage_prefix).toBe(
+      `portrait-banners/${ilse.actor.accountId}/${character.id}/${banner.id}`,
+    );
+  });
+
+  it("spends two draws, one of each kind", async () => {
+    expect(await spendOf(ilse.actor.accountId)).toEqual({ character: 1, characterBanner: 1 });
   });
 
   it("sends OpenAI's dialect to api.openai.com, and exactly the prompt it recorded", async () => {
@@ -303,6 +354,30 @@ describe("the form's create draws one portrait", () => {
     }
   });
 
+  it("signs the banner beside the portrait, and serves 2:1 WebP through it", async () => {
+    const banner = (await mine(ilse.token, character.id))?.banner;
+    expect(banner?.cardUrl).toMatch(/^\/portrait-banners\//);
+    const sharp = (await import("sharp")).default;
+    for (const [path, width, height] of [
+      [banner!.cardUrl, 768, 384],
+      [banner!.fullUrl, 1536, 768],
+    ] as const) {
+      const response = await load(path);
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("image/webp");
+      const metadata = await sharp(response.bytes).metadata();
+      expect([metadata.width, metadata.height]).toEqual([width, height]);
+    }
+    // A banner's signature opens nothing on the portrait's route, and back.
+    const portrait = (await mine(ilse.token, character.id))!.portrait!;
+    expect((await load(banner!.cardUrl.replace("/portrait-banners/", "/portraits/"))).status).toBe(
+      404,
+    );
+    expect((await load(portrait.cardUrl.replace("/portraits/", "/portrait-banners/"))).status).toBe(
+      404,
+    );
+  });
+
   it("refuses a forged, altered, other-size or expired URL with the same 404", async () => {
     const { thumbUrl, cardUrl } = (await mine(ilse.token, character.id))!.portrait!;
     const url = new URL(thumbUrl, "http://x");
@@ -341,8 +416,18 @@ describe("the form's create draws one portrait", () => {
         }),
       ).pipe(Effect.provideService(CurrentActor, ilse.actor)),
     );
+    const banner = await run(
+      Effect.flatMap(ImageRecords, (records) =>
+        records.start("characterBanner", character.id, {
+          prompt: "again",
+          model: MODEL,
+          limits: { perAccountPerDay: 100, perDay: 100 },
+        }),
+      ).pipe(Effect.provideService(CurrentActor, ilse.actor)),
+    );
     await settled();
     expect(record).toBeUndefined();
+    expect(banner).toBeUndefined();
     expect(images.requests().length).toBe(before);
     // The update's own response carries the portrait too.
     expect((await mine(ilse.token, character.id))?.portrait).not.toBeNull();
@@ -372,8 +457,14 @@ describe("the form's create draws one portrait", () => {
       const read = await characterIn(who);
       return read === "refused" ? undefined : read?.portrait?.thumbUrl;
     };
+    const bannerIn = async (who: Person) => {
+      const read = await characterIn(who);
+      return read === "refused" ? undefined : read?.banner?.cardUrl;
+    };
     expect(await thumbOf(ilse)).toMatch(/^\/portraits\//);
     expect(await thumbOf(dm)).toMatch(/^\/portraits\//);
+    expect(await bannerIn(ilse)).toMatch(/^\/portrait-banners\//);
+    expect(await bannerIn(dm)).toMatch(/^\/portrait-banners\//);
     expect(await characterIn(wren)).toBeUndefined();
 
     // Shared, the seat-mate reads the character, so the seat-mate sees it too.
@@ -386,23 +477,32 @@ describe("the form's create draws one portrait", () => {
     const seen = await thumbOf(wren);
     expect(seen).toMatch(/^\/portraits\//);
     expect((await load(seen!)).status).toBe(200);
+    const seenBanner = await bannerIn(wren);
+    expect(seenBanner).toMatch(/^\/portrait-banners\//);
+    expect((await load(seenBanner!)).status).toBe(200);
 
     // Somebody at no table of hers reads neither the character nor a URL.
     expect(await characterIn(stranger)).toBe("refused");
     expect(await mine(stranger.token, character.id)).toBeUndefined();
     const owned = await as(stranger.token, (client) => client.me.characters());
     expect(JSON.stringify(owned)).not.toContain("/portraits/");
+    expect(JSON.stringify(owned)).not.toContain("/portrait-banners/");
   });
 
   it("deletes the files with the character", async () => {
     const record = (await recordOf(character.id))!;
+    const banner = (await bannerOf(character.id))!;
     await as(ilse.token, (client) =>
       client.me.deleteCharacter({ params: { characterId: character.id } }),
     );
     await run(Effect.flatMap(HobImages, (portraits) => portraits.drainDeletions));
     expect(await recordOf(character.id)).toBeUndefined();
+    expect(await bannerOf(character.id)).toBeUndefined();
     for (const file of ["original.png", "full.webp", "card.webp", "thumb.webp"]) {
       expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);
+    }
+    for (const file of ["original.png", "full.webp", "card.webp"]) {
+      expect(await stored(`${banner.storage_prefix}/${file}`)).toBe(false);
     }
     const queued = await sql(
       (sql) => sql<{ readonly count: number }>`
@@ -486,7 +586,7 @@ const events = (actor: Actor) =>
     }).pipe(Effect.provideService(CurrentActor, actor)),
   );
 
-describe("Hob's kept draft draws one portrait", () => {
+describe("Hob's kept draft draws one portrait and one banner", () => {
   it("starts the draw from the accept, and it ends ready", async () => {
     const asked = await events(wren.actor);
     const began = asked.find((event) => event.event === "began");
@@ -504,12 +604,15 @@ describe("Hob's kept draft draws one portrait", () => {
     expect(accepted.character.portraitPending).toBe(true);
     await settled();
 
-    expect(images.requests().length - before).toBe(1);
+    expect(images.requests().length - before).toBe(2);
     const record = await recordOf(accepted.character.id);
     expect(record?.state).toBe("ready");
+    expect((await bannerOf(accepted.character.id))?.state).toBe("ready");
     expect(record?.prompt).toContain("Elf Druid");
     expect(record?.prompt).toContain("Thirties, wiry, mud to the knees.");
-    expect((await mine(wren.token, accepted.character.id))?.portrait).not.toBeNull();
+    const read = await mine(wren.token, accepted.character.id);
+    expect(read?.portrait).not.toBeNull();
+    expect(read?.banner).not.toBeNull();
   });
 });
 
@@ -524,7 +627,11 @@ describe("when there is no portrait", () => {
     expect(record?.state).toBe("failed");
     expect(record?.failure).toBe("skipped");
     expect(record?.prompt).toBeNull();
-    expect((await mine(wren.token, character.id))?.portrait).toBeNull();
+    // A skipped portrait starts no banner: the banner never starts alone.
+    expect(await bannerOf(character.id)).toBeUndefined();
+    const read = await mine(wren.token, character.id);
+    expect(read?.portrait).toBeNull();
+    expect(read?.banner).toBeNull();
   });
 
   it("records a moderation refusal and puts no provider text anywhere", async () => {
@@ -593,10 +700,12 @@ describe("when there is no portrait", () => {
       ).pipe(Effect.provideService(CurrentActor, wren.actor)),
     );
 
-    expect(hanging.requests()).toHaveLength(1);
+    // The portrait and its banner, each under its own timeout.
+    expect(hanging.requests().map((request) => request.size)).toEqual(["1024x1024", "1536x1024"]);
     const record = await recordOf(id);
     expect(record?.state).toBe("failed");
     expect(record?.failure).toBe("timeout");
+    expect((await bannerOf(id))?.failure).toBe("timeout");
     // Whatever might have been put is queued for deletion with the failure.
     const queued = await sql(
       (sql) => sql<{ readonly count: number }>`
@@ -611,7 +720,7 @@ describe("when there is no portrait", () => {
     const bram = await person("Bram");
     await run(admittedTo(campaignId, bram.actor, "Bram"));
     const drawn: Array<Character> = [];
-    for (let index = 0; index < PER_ACCOUNT; index += 1) {
+    for (let index = 0; index < PER_ACCOUNT / 2; index += 1) {
       drawn.push(await createAs(bram, { name: `Bram ${String(index)}`, race: "Halfling" }));
     }
     await settled();
@@ -623,7 +732,46 @@ describe("when there is no portrait", () => {
     const record = await recordOf(over.id);
     expect(record?.failure).toBe("capped");
     expect(record?.prompt).toContain("Halfling");
+    // A capped portrait starts no banner, so nothing is recorded for one.
+    expect(await bannerOf(over.id)).toBeUndefined();
     expect(drawn.every((character) => character.portraitPending)).toBe(true);
+    expect(await spendOf(bram.actor.accountId)).toEqual({
+      character: PER_ACCOUNT / 2,
+      characterBanner: PER_ACCOUNT / 2,
+    });
+  });
+
+  it("draws the portrait and caps the banner when one draw is left in the day", async () => {
+    const odo = await person("Odo");
+    await run(admittedTo(campaignId, odo.actor, "Odo"));
+    // A Shared World's cover is one draw from the same budget, which leaves an odd one.
+    await as(odo.token, (client) =>
+      client.sharedWorlds.create({ payload: { name: "Odo's World" } }),
+    );
+    for (let index = 0; index < PER_ACCOUNT / 2 - 1; index += 1) {
+      await createAs(odo, { name: `Odo ${String(index)}`, race: "Gnome" });
+    }
+    await settled();
+    const before = images.requests().length;
+    const last = await createAs(odo, { name: "Odo last", race: "Gnome" });
+    await settled();
+    expect(last.portraitPending).toBe(true);
+    expect(images.requests().length - before).toBe(1);
+    expect((await recordOf(last.id))?.state).toBe("ready");
+    const banner = await bannerOf(last.id);
+    expect(banner?.state).toBe("failed");
+    expect(banner?.failure).toBe("capped");
+    expect(banner?.prompt).toContain(HOUSE_BANNER_STYLE);
+    // The band falls back to the square: a portrait, and no banner.
+    const read = await mine(odo.token, last.id);
+    expect(read?.portrait).not.toBeNull();
+    expect(read?.banner).toBeNull();
+    expect(read?.portraitPending).toBe(false);
+    expect(await spendOf(odo.actor.accountId)).toEqual({
+      character: PER_ACCOUNT / 2,
+      characterBanner: PER_ACCOUNT / 2 - 1,
+      sharedWorld: 1,
+    });
   });
 
   it("does not give a deleted character's draw back to the account's day", async () => {
@@ -631,7 +779,7 @@ describe("when there is no portrait", () => {
     const tam = await person("Tam");
     await run(admittedTo(campaignId, tam.actor, "Tam"));
     const drawn: Array<Character> = [];
-    for (let index = 0; index < PER_ACCOUNT; index += 1) {
+    for (let index = 0; index < PER_ACCOUNT / 2; index += 1) {
       drawn.push(await createAs(tam, { name: `Tam ${String(index)}`, race: "Dwarf" }));
     }
     await settled();

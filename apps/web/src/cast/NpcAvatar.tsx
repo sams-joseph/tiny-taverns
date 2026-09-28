@@ -1,6 +1,7 @@
-import type { NpcImages } from "@taverns/api";
+import type { NpcBannerImages, NpcImages } from "@taverns/api";
 import { cn } from "@taverns/ui";
 import { apiUrl } from "../api/client";
+import { bandSource } from "../hob/bandSource";
 import { DrawnImage } from "../hob/DrawnImage";
 import { initialsOf } from "./persona";
 
@@ -20,8 +21,9 @@ import { initialsOf } from "./persona";
  * page, each reply in a conversation.
  *
  * `sm` is the 28px row mark and `lg` the 44px heading plate, both loading the
- * 160px thumb. `card` fills the Cast card's portrait band, as a character's
- * `CharacterPortrait` fills a seat card's, and loads the 640px card size. The
+ * 160px thumb. `band` fills the Cast card's portrait band and the NPC drawer's
+ * header, as a character's `CharacterPortrait` fills a seat card's: the wide
+ * banner, or the square's 640px card size without one (`bandSource`). The
  * plate clips with `overflow-clip`, not `overflow-hidden`: it sits inside the
  * rehearsal panel, which the window scrolls, and a clip makes no scroll
  * container (`RehearsalPanel.test.tsx` holds it to that).
@@ -29,16 +31,27 @@ import { initialsOf } from "./persona";
 export function NpcAvatar({
   name,
   image,
+  banner = null,
   size = "sm",
 }: {
   readonly name: string;
   readonly image: NpcImages | null;
-  readonly size?: "sm" | "lg" | "card";
+  /** The wide picture a `band` shows; read by no other size. */
+  readonly banner?: NpcBannerImages | null;
+  readonly size?: "sm" | "lg" | "band";
 }) {
-  const src = image === null ? undefined : apiUrl(size === "card" ? image.cardUrl : image.thumbUrl);
-  const picture = <DrawnImage src={src} className="object-top" />;
+  const band = size === "band" ? bandSource(image, banner) : undefined;
+  const picture =
+    size === "band" ? (
+      <DrawnImage src={band?.src} srcSet={band?.srcSet} className={band?.className} />
+    ) : (
+      <DrawnImage
+        src={image === null ? undefined : apiUrl(image.thumbUrl)}
+        className="object-top"
+      />
+    );
 
-  if (size === "card") {
+  if (size === "band") {
     return (
       <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
         <span className="font-display text-display-xl leading-none font-semibold text-faint">

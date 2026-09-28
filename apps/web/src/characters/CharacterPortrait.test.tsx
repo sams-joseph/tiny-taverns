@@ -23,6 +23,11 @@ const portrait = {
   fullUrl: "/portraits/p1/full?e=1&s=f",
 };
 
+const banner = {
+  cardUrl: "/portrait-banners/b1/card?e=1&s=c",
+  fullUrl: "/portrait-banners/b1/full?e=1&s=f",
+};
+
 describe("CharacterPortrait", () => {
   it("draws the initials and no image when there is no portrait", () => {
     const { container } = render(<CharacterPortrait name="Marta Vell" portrait={null} />);
@@ -45,11 +50,52 @@ describe("CharacterPortrait", () => {
     expect(img.className).toContain("size-full");
   });
 
-  it("uses the card size for the card", () => {
+  it("uses the square's card size for the My characters card, banner or not", () => {
     const { container } = render(
-      <CharacterPortrait name="Marta Vell" portrait={portrait} size="card" />,
+      <CharacterPortrait name="Marta Vell" portrait={portrait} banner={banner} size="card" />,
     );
-    expect(container.querySelector("img")?.getAttribute("src")).toBe(apiUrl(portrait.cardUrl));
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(apiUrl(portrait.cardUrl));
+    expect(img.hasAttribute("srcset")).toBe(false);
+    expect(img.className).toContain("object-top");
+  });
+
+  it("fills a band with the banner, both sizes offered, cropped from the middle", () => {
+    const { container } = render(
+      <CharacterPortrait name="Marta Vell" portrait={portrait} banner={banner} size="band" />,
+    );
+    const img = container.querySelector("img")!;
+    expect(container.textContent).toBe("MV");
+    expect(img.getAttribute("src")).toBe(apiUrl(banner.cardUrl));
+    expect(img.getAttribute("srcset")).toBe(
+      `${apiUrl(banner.cardUrl)} 768w, ${apiUrl(banner.fullUrl)} 1536w`,
+    );
+    expect(img.getAttribute("sizes")).toBe("auto, 100vw");
+    expect(img.getAttribute("loading")).toBe("lazy");
+    expect(img.className).toContain("object-cover");
+    expect(img.className).toContain("object-center");
+    expect(img.className).not.toContain("object-top");
+    expect(container.firstElementChild!.className).toContain("absolute inset-0");
+  });
+
+  it("falls back to the square's card size in a band with no banner", () => {
+    const { container } = render(
+      <CharacterPortrait name="Marta Vell" portrait={portrait} banner={null} size="band" />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(apiUrl(portrait.cardUrl));
+    expect(img.hasAttribute("srcset")).toBe(false);
+    expect(img.className).toContain("object-top");
+  });
+
+  it("never loads the banner on a plate", () => {
+    for (const size of ["row", "xs", "sm", "lg"] as const) {
+      const { container } = render(
+        <CharacterPortrait name="Marta Vell" portrait={portrait} banner={banner} size={size} />,
+      );
+      expect(container.querySelector("img")?.getAttribute("src")).toBe(apiUrl(portrait.thumbUrl));
+      cleanup();
+    }
   });
 
   it("stays transparent until it loads, then shows", () => {

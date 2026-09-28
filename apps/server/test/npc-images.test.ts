@@ -3,6 +3,8 @@ import {
   Actor,
   type CampaignId,
   CurrentActor,
+  HOUSE_BANNER_STYLE,
+  HOUSE_PORTRAIT_STYLE,
   type Npc,
   type NpcCreate,
   type NpcId,
@@ -42,7 +44,8 @@ import { MODERATION_TEXT, scriptedImages } from "./support/imageModel.js";
 const OPENAI = "https://api.openai.com/v1";
 const MODEL = "gpt-image-2.5-flare";
 const SECRET = Redacted.make("npc-image-test-secret");
-const PER_ACCOUNT = 8;
+/** Eight NPCs' portraits and banners: each NPC is two draws. */
+const PER_ACCOUNT = 16;
 
 const images = scriptedImages({ apiUrl: OPENAI, model: MODEL });
 
@@ -157,6 +160,11 @@ const recordOf = (npcId: NpcId) =>
     (rows) => rows[0],
   );
 
+const bannerOf = (npcId: NpcId) =>
+  sql((sql) => sql<Record>`select * from npc_banner where npc_id = ${npcId}`).then(
+    (rows) => rows[0],
+  );
+
 const stored = (key: string) =>
   run(Effect.flatMap(ObjectStorage, (objects) => objects.head(StorageKey(key)))).then(
     Option.isSome,
@@ -164,13 +172,18 @@ const stored = (key: string) =>
 
 const FILES = ["original.png", "thumb.webp", "card.webp", "full.webp"];
 
+const BANNER_FILES = ["original.png", "card.webp", "full.webp"];
+
+const isNpcPrompt = (request: { readonly prompt?: unknown }) =>
+  String(request.prompt).startsWith("Head-and-shoulders portrait of a character in a fantasy");
+
 /** The requests that asked for an NPC's bust, told apart from covers by the prompt. */
 const npcRequests = () =>
-  images
-    .requests()
-    .filter((request) =>
-      String(request.prompt).startsWith("Head-and-shoulders portrait of a character in a fantasy"),
-    );
+  images.requests().filter((request) => isNpcPrompt(request) && request.size === "1024x1024");
+
+/** The requests that asked for an NPC's banner: the same prompt, framed wide. */
+const bannerRequests = () =>
+  images.requests().filter((request) => isNpcPrompt(request) && request.size === "1536x1024");
 
 const campaignOf = (who: Person, name: string) =>
   as(who.token, (client) => client.campaigns.create({ payload: { name } })).then(
@@ -224,18 +237,21 @@ beforeAll(async () => {
   table = await campaignOf(jo, "The Salt Road");
 }, 60_000);
 
-describe("adding an NPC to the cast draws one portrait", () => {
+describe("adding an NPC to the cast draws one portrait and one banner", () => {
   let npc: Npc;
   let requestsBefore: number;
+  let bannersBefore: number;
 
   beforeAll(async () => {
     requestsBefore = npcRequests().length;
+    bannersBefore = bannerRequests().length;
     npc = await addNpc(jo, table, FERRYMAN);
     await settled();
   }, 60_000);
 
   it("answers the create with the drawing state, and the draw finishes ready", async () => {
     expect(npcRequests().length - requestsBefore).toBe(1);
+    expect(bannerRequests().length - bannersBefore).toBe(1);
     expect(npc.imagePending).toBe(true);
     expect(npc.image).toBeNull();
 
@@ -275,6 +291,47 @@ describe("adding an NPC to the cast draws one portrait", () => {
       quality: "medium",
       moderation: "auto",
     });
+  });
+
+  it("draws the banner from the same public persona, framed wide, as its own image", async () => {
+    const portrait = (await recordOf(npc.id))!;
+    const banner = (await bannerOf(npc.id))!;
+    expect(banner.state).toBe("ready");
+    expect(banner.campaign_id).toBe(table);
+    expect(banner.account_id).toBe(jo.actor.accountId);
+    expect(banner.prompt).toBe(portrait.prompt!.replace(HOUSE_PORTRAIT_STYLE, HOUSE_BANNER_STYLE));
+    for (const hidden of ["Cazril", "SECRET", "INSTRUCTION", "VOICE", "INTENT"]) {
+      expect(banner.prompt).not.toContain(hidden);
+    }
+    for (const file of BANNER_FILES) {
+      expect(await stored(`${banner.storage_prefix}/${file}`)).toBe(true);
+    }
+    expect(banner.storage_prefix).toBe(`npc-banners/${jo.actor.accountId}/${npc.id}/${banner.id}`);
+  });
+
+  it("signs the banner on the creator's reads, and serves 2:1 WebP through it", async () => {
+    const found = await as(jo.token, (client) =>
+      client.npcs.findById({ params: { campaignId: table, npcId: npc.id } }),
+    );
+    const listed = await as(jo.token, (client) =>
+      client.npcs.list({ params: { campaignId: table }, query: {} }),
+    );
+    expect(listed.find((entry) => entry.id === npc.id)?.banner).toEqual(found.banner);
+    const sharp = (await import("sharp")).default;
+    for (const [path, width, height] of [
+      [found.banner!.cardUrl, 768, 384],
+      [found.banner!.fullUrl, 1536, 768],
+    ] as const) {
+      expect(path).toMatch(/^\/npc-banners\/[0-9a-f-]+\/(card|full)\?e=\d+&s=/);
+      const response = await load(path);
+      expect(response.status).toBe(200);
+      const metadata = await sharp(response.bytes).metadata();
+      expect([metadata.format, metadata.width, metadata.height]).toEqual(["webp", width, height]);
+    }
+    // The kind is signed: a banner's URL opens nothing on the portrait's route.
+    expect(
+      (await load(found.banner!.cardUrl.replace("/npc-banners/", "/npc-images/"))).status,
+    ).toBe(404);
   });
 
   it("signs three sizes on the creator's reads, and serves square WebP through them", async () => {
@@ -368,6 +425,20 @@ describe("adding an NPC to the cast draws one portrait", () => {
     expect(npcRequests().length).toBe(before);
   });
 
+  it("draws no banner on an edit of an NPC drawn before banners existed", async () => {
+    // An NPC whose square was drawn before banners: a portrait, no banner record.
+    await sql((sql) => sql`delete from npc_banner where npc_id = ${npc.id}`);
+    const before = bannerRequests().length;
+    const edited = await editNpc(jo, table, npc.id, { role: "the ferryman, once more" });
+    await settled();
+    expect(edited.imagePending).toBe(false);
+    expect(bannerRequests().length).toBe(before);
+    expect(await bannerOf(npc.id)).toBeUndefined();
+    // Its band falls back to the square.
+    expect(edited.image).not.toBeNull();
+    expect(edited.banner).toBeNull();
+  });
+
   it("keeps the portrait through archive and restore, on the archived shelf too", async () => {
     const archived = await as(jo.token, (client) =>
       client.npcs.archive({ params: { campaignId: table, npcId: npc.id }, payload: {} }),
@@ -425,6 +496,8 @@ describe("the Library", () => {
     expect(copy.imagePending).toBe(true);
     await settled();
     expect(npcRequests().length - before).toBe(1);
+    expect((await bannerOf(copy.id))?.state).toBe("ready");
+    expect(await bannerOf(source.id)).toBeUndefined();
     const record = await recordOf(copy.id);
     expect(record?.state).toBe("ready");
     expect(record?.campaign_id).toBe(table);
@@ -481,10 +554,12 @@ describe("who sees a portrait is who sees the NPC", () => {
       client.npcs.findById({ params: { campaignId: table, npcId: hidden.id } }),
     );
     expect(found.image?.thumbUrl).toMatch(/^\/npc-images\//);
+    expect(found.banner?.cardUrl).toMatch(/^\/npc-banners\//);
   });
 
   it("gives a player the portrait of a shared NPC, and nothing of a hidden one", async () => {
     const hiddenImageId = (await recordOf(hidden.id))!.id;
+    const hiddenBannerId = (await bannerOf(hidden.id))!.id;
     const listed = await as(ilse.token, (client) =>
       client.npcs.playerList({ params: { campaignId: table } }),
     );
@@ -494,11 +569,16 @@ describe("who sees a portrait is who sees the NPC", () => {
     expect(url).toMatch(/^\/npc-images\//);
     expect((await load(url!)).status).toBe(200);
     expect(JSON.stringify(listed)).not.toContain(hiddenImageId);
+    const banner = listed.find((npc) => npc.id === shown.id)?.banner?.cardUrl;
+    expect(banner).toMatch(/^\/npc-banners\//);
+    expect((await load(banner!)).status).toBe(200);
+    expect(JSON.stringify(listed)).not.toContain(hiddenBannerId);
 
     const found = await attempt(ilse.token, (client) =>
       client.npcs.playerFindById({ params: { campaignId: table, npcId: shown.id } }),
     );
     expect(found.ok && found.value.image?.thumbUrl).toMatch(/^\/npc-images\//);
+    expect(found.ok && found.value.banner?.cardUrl).toMatch(/^\/npc-banners\//);
     expect(
       await attempt(ilse.token, (client) =>
         client.npcs.playerFindById({ params: { campaignId: table, npcId: hidden.id } }),
@@ -523,6 +603,7 @@ describe("who sees a portrait is who sees the NPC", () => {
         client.npcs.playerList({ params: { campaignId: table } }),
       );
       expect(JSON.stringify(listed)).not.toContain("/npc-images/");
+      expect(JSON.stringify(listed)).not.toContain("/npc-banners/");
     } finally {
       await as(jo.token, (client) =>
         client.npcs.update({
@@ -566,6 +647,7 @@ describe("who sees a portrait is who sees the NPC", () => {
     );
     expect(monitor.map((row) => row.npc.id)).toContain(shown.id);
     expect(JSON.stringify(monitor)).not.toContain("/npc-images/");
+    expect(JSON.stringify(monitor)).not.toContain("/npc-banners/");
   });
 
   it("gives a Shared World member who does not play, and a stranger, nothing", async () => {
@@ -593,6 +675,7 @@ describe("who sees a portrait is who sees the NPC", () => {
     expect(reads.shown._tag).toBe("Failure");
     expect(reads.hidden._tag).toBe("Failure");
     expect(JSON.stringify(reads)).not.toContain("/npc-images/");
+    expect(JSON.stringify(reads)).not.toContain("/npc-banners/");
 
     const unsigned = (
       await as(jo.token, (client) =>
@@ -687,6 +770,7 @@ describe("an NPC created blank is drawn by the first edit that gives it a subjec
     expect(edited.imagePending).toBe(true);
     await settled();
     expect(npcRequests().length - requestsBefore).toBe(1);
+    expect((await bannerOf(blank.id))?.state).toBe("ready");
     const record = await recordOf(blank.id);
     expect(record?.state).toBe("ready");
     expect(record?.account_id).toBe(jo.actor.accountId);
@@ -700,10 +784,12 @@ describe("an NPC created blank is drawn by the first edit that gives it a subjec
     );
     expect(found.imagePending).toBe(false);
     expect(found.image?.thumbUrl).toMatch(/^\/npc-images\//);
+    expect(found.banner?.cardUrl).toMatch(/^\/npc-banners\//);
   });
 
   it("draws nothing on any later edit, even one that changes what it would be drawn from", async () => {
     const before = npcRequests().length;
+    const bannersBefore = bannerRequests().length;
     const record = await recordOf(blank.id);
     for (const payload of [
       { role: "the ferryman's heir" },
@@ -715,6 +801,7 @@ describe("an NPC created blank is drawn by the first edit that gives it a subjec
     }
     await settled();
     expect(npcRequests().length).toBe(before);
+    expect(bannerRequests().length).toBe(bannersBefore);
     const after = await recordOf(blank.id);
     expect(after?.id).toBe(record?.id);
     expect(after?.prompt).toContain("the ferryman's daughter");
@@ -741,6 +828,7 @@ describe("when there is no portrait", () => {
     expect(npc.image).toBeNull();
     expect(npcRequests().length).toBe(before);
     expect(await recordOf(npc.id)).toBeUndefined();
+    expect(await bannerOf(npc.id)).toBeUndefined();
     expect(await spentBy(stranger)).toBe(spent);
   });
 
@@ -771,8 +859,9 @@ describe("when there is no portrait", () => {
     hanging.next({ kind: "hang" });
     const npc = await addNpc(stranger, theirs, { name: "Slow", role: "a patient heron-keeper" });
     await settled();
-    // The shared worker drew it; forget that, so the slow worker can start one.
+    // The shared worker drew both; forget that, so the slow worker can start them.
     await sql((sql) => sql`delete from npc_image where npc_id = ${npc.id}`);
+    await sql((sql) => sql`delete from npc_banner where npc_id = ${npc.id}`);
 
     await run(
       Effect.scoped(
@@ -795,10 +884,11 @@ describe("when there is no portrait", () => {
       ).pipe(Effect.provideService(CurrentActor, stranger.actor)),
     );
 
-    expect(hanging.requests()).toHaveLength(1);
-    expect(hanging.requests()[0]?.size).toBe("1024x1024");
+    // The portrait and its banner, each under its own timeout.
+    expect(hanging.requests().map((request) => request.size)).toEqual(["1024x1024", "1536x1024"]);
     const record = await recordOf(npc.id);
     expect(record?.failure).toBe("timeout");
+    expect((await bannerOf(npc.id))?.failure).toBe("timeout");
     const queued = await sql(
       (sql) => sql<{ readonly count: number }>`
         select count(*)::int as count from storage_deletion where prefix = ${record!.storage_prefix}
@@ -807,23 +897,47 @@ describe("when there is no portrait", () => {
     expect(queued[0]?.count).toBe(1);
   });
 
-  it("spends the one daily budget portraits and covers spend", async () => {
-    // A fresh account: its cover and its NPCs count against one per-account
-    // limit, so the NPC after the cover and PER_ACCOUNT - 1 NPCs is capped.
+  it("spends the one daily budget portraits, banners and covers spend", async () => {
+    // A fresh account: its cover and its NPCs' portraits and banners count
+    // against one per-account limit. The cover and seven NPCs leave one draw.
     const bram = await person("Bram");
     const own = await campaignOf(bram, "Bram's Table");
-    for (let index = 0; index < PER_ACCOUNT - 1; index += 1) {
+    for (let index = 0; index < PER_ACCOUNT / 2 - 1; index += 1) {
       await addNpc(bram, own, { name: `Bram's ${String(index)}`, role: "a regular" });
     }
     await settled();
+    expect(await spentBy(bram)).toBe(PER_ACCOUNT - 1);
+
+    // The last draw of the day goes to the portrait, and the banner is capped.
     const before = npcRequests().length;
+    const bannersBefore = bannerRequests().length;
+    const last = await addNpc(bram, own, { name: "Last Orders", role: "the barkeep" });
+    await settled();
+    expect(last.imagePending).toBe(true);
+    expect(npcRequests().length - before).toBe(1);
+    expect(bannerRequests().length).toBe(bannersBefore);
+    expect((await recordOf(last.id))?.state).toBe("ready");
+    const banner = await bannerOf(last.id);
+    expect(banner?.failure).toBe("capped");
+    expect(banner?.prompt).toContain("the barkeep");
+    const read = await as(bram.token, (client) =>
+      client.npcs.findById({ params: { campaignId: own, npcId: last.id } }),
+    );
+    expect(read.image).not.toBeNull();
+    expect(read.banner).toBeNull();
+    expect(read.imagePending).toBe(false);
+    expect(await spentBy(bram)).toBe(PER_ACCOUNT);
+
+    // Past the cap the portrait is capped, and a capped portrait starts no banner.
     const over = await addNpc(bram, own, { name: "One Too Many", role: "a latecomer" });
     await settled();
     expect(over.imagePending).toBe(false);
-    expect(npcRequests().length).toBe(before);
+    expect(npcRequests().length - before).toBe(1);
     const record = await recordOf(over.id);
     expect(record?.failure).toBe("capped");
     expect(record?.prompt).toContain("a latecomer");
+    expect(await bannerOf(over.id)).toBeUndefined();
+    expect(await spentBy(bram)).toBe(PER_ACCOUNT);
   });
 
   it("spends nothing on a blank NPC, and caps the edit that gives it a subject over the limit, once", async () => {
@@ -833,7 +947,8 @@ describe("when there is no portrait", () => {
     await settled();
     // The cover spent one; the blank NPC nothing.
     expect(await spentBy(cass)).toBe(1);
-    for (let index = 0; index < PER_ACCOUNT - 1; index += 1) {
+    // Seven NPCs drawn whole, and an eighth whose portrait is the day's last draw.
+    for (let index = 0; index < PER_ACCOUNT / 2; index += 1) {
       await addNpc(cass, own, { name: `Cass's ${String(index)}`, role: "a regular" });
     }
     await settled();
@@ -847,6 +962,7 @@ describe("when there is no portrait", () => {
     const record = await recordOf(blank.id);
     expect(record?.failure).toBe("capped");
     expect(record?.prompt).toContain("a card sharp");
+    expect(await bannerOf(blank.id)).toBeUndefined();
     expect(await spentBy(cass)).toBe(PER_ACCOUNT);
 
     // A capped NPC is not tried again by its next edit: one record, ever.
@@ -871,12 +987,20 @@ describe("deleting an NPC", () => {
     const npc = await addNpc(ilse, theirs, { name: "Brief", role: "a candle-seller" });
     await settled();
     const record = (await recordOf(npc.id))!;
+    const banner = (await bannerOf(npc.id))!;
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(true);
+    for (const file of BANNER_FILES) {
+      expect(await stored(`${banner.storage_prefix}/${file}`)).toBe(true);
+    }
 
     await sql((sql) => sql`delete from npc where id = ${npc.id}`);
     expect(await recordOf(npc.id)).toBeUndefined();
+    expect(await bannerOf(npc.id)).toBeUndefined();
     await run(Effect.flatMap(HobImages, (worker) => worker.drainDeletions));
     for (const file of FILES) expect(await stored(`${record.storage_prefix}/${file}`)).toBe(false);
+    for (const file of BANNER_FILES) {
+      expect(await stored(`${banner.storage_prefix}/${file}`)).toBe(false);
+    }
     const queued = await sql(
       (sql) => sql<{ readonly count: number }>`
         select count(*)::int as count from storage_deletion where prefix = ${record.storage_prefix}

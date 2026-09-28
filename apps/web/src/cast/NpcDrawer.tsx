@@ -170,7 +170,7 @@ export function NpcDrawer({
 
         <div className="@container flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-gutter pb-gutter">
           <div className="relative h-cast-drawer-portrait shrink-0 overflow-hidden rounded-md border border-hairline bg-surface-sunken">
-            <NpcAvatar name={npc.name} image={npc.image} size="card" />
+            <NpcAvatar name={npc.name} image={npc.image} banner={npc.banner} size="band" />
             {npc.imagePending && (
               <Badge variant="outline" role="status" className="absolute bottom-2.5 left-card">
                 Hob is drawing…
