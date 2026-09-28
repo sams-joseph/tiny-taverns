@@ -1,156 +1,43 @@
-import type { CampaignId, Npc, NpcFollowUp, NpcSource } from "@taverns/api";
+import type { Npc } from "@taverns/api";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import {
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  EMPTY_FILTER_VALUE,
-  FilterInput,
-  Icon,
-  EmptyState,
-  Loading,
-} from "@taverns/ui";
-import { Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Button, EMPTY_FILTER_VALUE, EmptyState, FilterInput, Icon } from "@taverns/ui";
 import { useCallback, useState } from "react";
-import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
+import { useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";
-import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { SaveFailure } from "../ui/form";
-import { npcFollowUpAtom, npcsAtom } from "./load";
+import { npcsAtom } from "./load";
 import { NpcCard } from "./NpcCard";
 import { NpcDialog } from "./NpcDialog";
 import { npcMatches } from "./persona";
-import { ApiFailureNotice } from "../api/ApiFailureNotice";
-
-const sourceDescription = (source: NpcSource): string => {
-  const summary = source.persona.identity?.summary?.trim() ?? "";
-  if (summary !== "") return summary;
-  const manner = source.persona.voice?.manner?.trim() ?? "";
-  if (manner !== "") return manner;
-  return "No persona written yet.";
-};
-
-const npcSourcesAtom = Atom.family((campaignId: CampaignId) =>
-  apiAtom((client) => client.npcs.sources({ params: { campaignId } }), [reads.libraryNpcs]),
-);
-
-const pendingFollowUp = (followUp: NpcFollowUp): number =>
-  followUp.proposalCount + followUp.awarenessCount;
-
-function FollowUpLink({ campaignId }: { readonly campaignId: CampaignId }) {
-  const [resource] = useApiAtom(npcFollowUpAtom(campaignId));
-  const count = resource.state === "ready" ? pendingFollowUp(resource.value) : 0;
-  return (
-    <Button
-      variant={count > 0 ? "secondary" : "outline"}
-      size="sm"
-      nativeButton={false}
-      render={<Link to="/campaigns/$campaignId/cast/follow-up" params={{ campaignId }} />}
-    >
-      <Icon name="sparkles" size={14} />
-      NPC follow-up
-      {count > 0 && <Badge variant="outline">{count}</Badge>}
-    </Button>
-  );
-}
-
-function AddNpcFromLibraryDialog({
-  campaignId,
-  onClose,
-}: {
-  readonly campaignId: CampaignId;
-  readonly onClose: () => void;
-}) {
-  const [resource, reload] = useApiAtom(npcSourcesAtom(campaignId));
-  const { busy, failure, submit } = useMutation();
-
-  const copy = async (source: NpcSource) => {
-    const saved = await submit(
-      (client) =>
-        client.npcs.copyFromSource({ params: { campaignId, sourceNpcId: source.id }, payload: {} }),
-      [reads.npcs(campaignId)],
-    );
-    if (Result.isSuccess(saved)) onClose();
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-label="Add NPC from Library">
-        <DialogHeader>
-          <DialogTitle>Add from Library</DialogTitle>
-          <DialogDescription>
-            Choose a reusable NPC source. Add from Library creates an independent Cast snapshot:
-            later source edits do not update it, and another creator's secrets shared through a
-            Shared World are not copied.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-gutter py-3">
-          {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
-          {resource.state === "failed" && (
-            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-          )}
-          {resource.state === "ready" && resource.value.length === 0 && (
-            <p className="text-body text-muted">No NPC sources are available yet.</p>
-          )}
-          {resource.state === "ready" &&
-            resource.value.map((source) => (
-              <Button
-                key={source.id}
-                variant="outline"
-                className="h-auto justify-start py-3 text-left"
-                onClick={() => void copy(source)}
-                disabled={busy}
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-label font-semibold text-heading">
-                    {source.name}
-                  </span>
-                  <span className="line-clamp-2 text-caption text-muted">
-                    {sourceDescription(source)}
-                  </span>
-                </span>
-              </Button>
-            ))}
-        </div>
-        <DialogFooter>
-          {failure !== undefined && <SaveFailure failure={failure} />}
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /**
- * The cast — the campaign's NPCs, as a grid.
+ * The cast — the campaign's NPCs, as the redesign draws the tab
+ * (`Campaign Overview.dc.html`): a header, a filter row, and a grid of cards.
  *
- * A campaign destination shaped like Notes and Encounters: the search box and
- * *New NPC* in the top bar's action slot (this screen's established placement,
- * and there is no tab strip for the tab rule to apply to), the list as the
- * frame's `extra` so the screen still has three states, and a client-side
- * filter over what was loaded — a cast is bounded by a campaign the way its
- * notes are.
+ * **Centred at the Overview's width** (`CampaignChrome`'s `centred`), header
+ * included, and scrolled by the window. The header holds the count and two
+ * presses: the outline *Archived*, the way back to what the NPC page's
+ * *Archive* took off this shelf, and a secondary *Add NPC* — secondary rather
+ * than the drawing's peach, because the campaign row's press is this screen's
+ * one primary.
  *
- * Creating lands on the new NPC's own screen, where the rehearsal is: the
- * point of writing one is to hear it, and the card's *Rehearse* goes to the
- * same place.
+ * **The search is in the body**, on a filter row above the grid, as the Notes
+ * tab's is: a client-side filter over what was loaded, because a cast is
+ * bounded by a campaign the way its notes are. The row is not drawn over an
+ * empty cast, where there is nothing to filter.
+ *
+ * **The grid is the drawing's `auto-fill` over a `--cast-card-min` floor**, so
+ * its columns follow the room the page has, a docked Hob panel included, and
+ * never a viewport breakpoint. Each card opens its NPC's page from anywhere on
+ * its face (`NpcCard`), where editing, sharing, rehearsing and Hob's proposals
+ * live. Creating lands on that page too.
  */
 export function CastScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
   const navigate = useNavigate();
   const [filter, setFilter] = useState(EMPTY_FILTER_VALUE);
-  const [editing, setEditing] = useState<{ readonly npc: Npc | undefined }>();
-  const [copying, setCopying] = useState(false);
+  const [creating, setCreating] = useState(false);
   // While Hob draws a new NPC's portrait, re-read the cast until it lands.
   const [cast] = useApiAtom(npcsAtom(campaignId));
   const invalidate = useInvalidate();
@@ -167,112 +54,92 @@ export function CastScreen() {
     <CampaignChrome
       campaignId={campaignId}
       title="Cast"
+      centred
       extra={npcsAtom(campaignId)}
       subtitle={({ extra }) =>
         extra.length === 0
-          ? "The people your players will meet"
-          : `${String(extra.length)} ${extra.length === 1 ? "person" : "people"} your players will meet`
+          ? "No NPCs yet"
+          : `${String(extra.length)} ${extra.length === 1 ? "NPC" : "NPCs"}`
       }
       actions={() => (
         <>
-          <FollowUpLink campaignId={campaignId} />
-          <FilterInput
-            label="Search the cast"
-            value={filter}
-            onChange={setFilter}
-            facets={[]}
-            className="min-h-control-sm max-w-52 py-0.5"
-          />
-          {/* Six controls do not fit one unwrapping header row between the
-              header's wrap breakpoint and a wide desktop, so the two quiet
-              ones keep their names for screen readers and their tooltip-sized
-              `title` there and draw only their icons. The shelf is the way
-              back from the NPC page's *Archive*. */}
           <Button
             variant="outline"
             size="sm"
-            title="Archived NPCs"
             nativeButton={false}
             render={<Link to="/campaigns/$campaignId/cast/archived" params={{ campaignId }} />}
           >
             <Icon name="archive" size={14} />
-            <span className="@4xl/app:@max-7xl/app:sr-only">Archived</span>
+            Archived
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            title="Add from Library"
-            onClick={() => setCopying(true)}
-          >
-            <Icon name="copy" size={14} />
-            <span className="@4xl/app:@max-7xl/app:sr-only">Add from Library</span>
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setEditing({ npc: undefined })}>
-            <Icon name="plus" size={14} />
-            New NPC
+          <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
+            <Icon name="user-plus" size={14} />
+            Add NPC
           </Button>
         </>
       )}
     >
-      {({ view, extra: npcs }) => {
-        const shown = npcs.filter((npc) => npcMatches(filter.text, npc));
-        return (
-          <>
-            {npcs.length === 0 ? (
-              <EmptyState icon="user-round" title="Nobody in the cast yet">
-                The ferryman, the patron, the innkeeper who knows too much. Write one with{" "}
-                <span className="text-heading">New NPC</span> above, add reusable sources from the
-                Library, then Rehearse them before the night.
-              </EmptyState>
-            ) : shown.length === 0 ? (
-              <EmptyState icon="search" title="Nothing matches">
-                Nobody here answers to &ldquo;{filter.text.trim()}&rdquo;. Loosen the search, or
-                clear it.
-              </EmptyState>
-            ) : (
-              <div className="@container">
-                <ul className="grid list-none grid-cols-1 gap-4 p-0 @lg:grid-cols-2 @3xl:grid-cols-3">
-                  {shown.map((npc) => (
-                    <li key={npc.id} className="min-w-0">
-                      <NpcCard
-                        npc={npc}
-                        currentSessionId={view.session?.id}
-                        onEdit={() => setEditing({ npc })}
-                      />
-                    </li>
-                  ))}
-                </ul>
+      {({ view, extra: npcs }) => (
+        <>
+          {npcs.length === 0 ? (
+            <EmptyState icon="user-round" title="Nobody in the cast yet">
+              The ferryman, the patron, the innkeeper who knows too much. Write one with{" "}
+              <span className="text-heading">Add NPC</span> above, or copy one in from your Library,
+              then rehearse them on their page before the night.
+            </EmptyState>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <div data-slot="cast-filters" className="flex flex-wrap items-center gap-3">
+                <FilterInput
+                  label="Search the cast"
+                  value={filter}
+                  onChange={setFilter}
+                  facets={[]}
+                  className="w-full max-w-cast-search"
+                />
               </div>
-            )}
+              <CastGrid npcs={npcs.filter((npc) => npcMatches(filter.text, npc))} />
+            </div>
+          )}
 
-            {copying && (
-              <AddNpcFromLibraryDialog
-                campaignId={view.campaign.id}
-                onClose={() => setCopying(false)}
-              />
-            )}
-
-            {editing !== undefined && (
-              <NpcDialog
-                key={editing.npc?.id ?? "new-npc"}
-                campaignId={view.campaign.id}
-                npc={editing.npc}
-                onClose={() => setEditing(undefined)}
-                onSaved={(saved) => {
-                  const created = editing.npc === undefined;
-                  setEditing(undefined);
-                  if (created) {
-                    void navigate({
-                      to: "/campaigns/$campaignId/cast/$npcId",
-                      params: { campaignId, npcId: saved.id },
-                    });
-                  }
-                }}
-              />
-            )}
-          </>
-        );
-      }}
+          {creating && (
+            <NpcDialog
+              campaignId={view.campaign.id}
+              npc={undefined}
+              onClose={() => setCreating(false)}
+              onSaved={(saved) => {
+                setCreating(false);
+                void navigate({
+                  to: "/campaigns/$campaignId/cast/$npcId",
+                  params: { campaignId, npcId: saved.id },
+                });
+              }}
+            />
+          )}
+        </>
+      )}
     </CampaignChrome>
+  );
+}
+
+function CastGrid({ npcs }: { readonly npcs: ReadonlyArray<Npc> }) {
+  if (npcs.length === 0) {
+    return (
+      <EmptyState icon="search" title="Nobody here">
+        Loosen the search, or add the NPC you just made up.
+      </EmptyState>
+    );
+  }
+  return (
+    <ul
+      data-slot="cast-grid"
+      className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,var(--spacing-cast-card)),1fr))] gap-4 p-0"
+    >
+      {npcs.map((npc) => (
+        <li key={npc.id} className="min-w-0">
+          <NpcCard npc={npc} />
+        </li>
+      ))}
+    </ul>
   );
 }

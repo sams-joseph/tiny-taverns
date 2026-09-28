@@ -19,10 +19,12 @@ import { initialsOf } from "./persona";
  * plate is the NPC's own face wherever it stands — the cast card, the NPC's
  * page, each reply in a conversation.
  *
- * Both sizes load the 160px thumb: `sm` is the 28px row mark, `lg` the 44px
- * heading plate. The plate clips with `overflow-clip`, not `overflow-hidden`:
- * it sits inside the rehearsal panel, which the window scrolls, and a clip
- * makes no scroll container (`RehearsalPanel.test.tsx` holds it to that).
+ * `sm` is the 28px row mark and `lg` the 44px heading plate, both loading the
+ * 160px thumb. `card` fills the Cast card's portrait band, as a character's
+ * `CharacterPortrait` fills a seat card's, and loads the 640px card size. The
+ * plate clips with `overflow-clip`, not `overflow-hidden`: it sits inside the
+ * rehearsal panel, which the window scrolls, and a clip makes no scroll
+ * container (`RehearsalPanel.test.tsx` holds it to that).
  */
 export function NpcAvatar({
   name,
@@ -31,8 +33,22 @@ export function NpcAvatar({
 }: {
   readonly name: string;
   readonly image: NpcImages | null;
-  readonly size?: "sm" | "lg";
+  readonly size?: "sm" | "lg" | "card";
 }) {
+  const src = image === null ? undefined : apiUrl(size === "card" ? image.cardUrl : image.thumbUrl);
+  const picture = <DrawnImage src={src} className="object-top" />;
+
+  if (size === "card") {
+    return (
+      <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+        <span className="font-display text-display-xl leading-none font-semibold text-faint">
+          {initialsOf(name)}
+        </span>
+        {picture}
+      </span>
+    );
+  }
+
   return (
     <span
       aria-hidden="true"
@@ -42,10 +58,7 @@ export function NpcAvatar({
       )}
     >
       {initialsOf(name)}
-      <DrawnImage
-        src={image === null ? undefined : apiUrl(image.thumbUrl)}
-        className="object-top"
-      />
+      {picture}
     </span>
   );
 }

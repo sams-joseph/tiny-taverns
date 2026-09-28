@@ -5,10 +5,10 @@ import { HostedSessionScope } from "../auth/AuthProvider";
 import {
   bodyOf,
   campaignId,
+  castShelf,
   cazril,
   installStubServer,
   npcId,
-  sessionId,
 } from "../campaign/campaign.fixtures";
 import { renderAt } from "../test/renderRoute";
 import { TEST_SESSION } from "../test/session";
@@ -34,129 +34,119 @@ const renderCast = async (): Promise<void> => {
   ));
 };
 
-const pendingProposal = {
-  id: "2b1f2a1e-0000-4000-8000-00000000f601",
-  campaignId,
-  npcId,
-  threadId: "2b1f2a1e-0000-4000-8000-00000000e0c1",
-  npcTurnId: "2b1f2a1e-0000-4000-8000-00000000e101",
-  proposedByAccountId: null,
-  kind: "memory",
-  content: { kind: "memory", body: "The party promised Cazril a true name." },
-  state: "pending",
-  decidedByAccountId: null,
-  decidedAt: null,
-  rejectionReason: null,
-  acceptedMemoryId: null,
-  acceptedNoteId: null,
-  acceptedBeatId: null,
-  visibility: "dm",
-  origin: "assistant",
-  assistantTurnId: null,
-  createdAt: cazril.createdAt,
-  updatedAt: cazril.updatedAt,
-};
-
-const followUpWithProposal = {
-  campaignId,
-  proposalCount: 1,
-  awarenessCount: 0,
-  items: [
-    {
-      itemKind: "proposal",
-      npc: { id: npcId, name: "Cazril", role: "the ferryman", archivedAt: null, image: null },
-      proposal: pendingProposal,
-      source: {
-        channel: "rehearsal",
-        sessionId: null,
-        sessionNumber: null,
-        label: "Creator rehearsal",
-      },
-    },
-  ],
-};
-
 describe("CastScreen", () => {
-  it("draws the cast as cards, on the campaign row, with the private-material mark", async () => {
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/follow-up`, {
-      status: 200,
-      body: followUpWithProposal,
-    });
+  it("draws the cast as cards, centred, on the campaign row", async () => {
     await renderCast();
 
-    expect(await screen.findByRole("heading", { name: "Cast" })).toBeInTheDocument();
-    // The count is the subtitle — "1 person your players will meet".
-    expect(screen.getByText("1 person your players will meet")).toBeInTheDocument();
-    const card = screen.getByRole("link", { name: "Cazril" }).closest("li");
+    expect(await screen.findByRole("heading", { level: 1, name: "Cast" })).toBeInTheDocument();
+    expect(screen.getByText("1 NPC")).toBeInTheDocument();
+    // The Overview's centred frame, header and body both inside it.
+    const frame = screen
+      .getByRole("heading", { level: 1, name: "Cast" })
+      .closest(".max-w-overview");
+    expect(frame).not.toBeNull();
+    expect(frame!.contains(screen.getByRole("link", { name: "Cazril" }))).toBe(true);
+    const card = screen.getByRole("link", { name: "Cazril" }).closest('[data-slot="npc-card"]');
     expect(card).not.toBeNull();
-    expect(within(card!).getByText("the ferryman at the crossing")).toBeInTheDocument();
-    expect(within(card!).getByText(/takes names instead of coin/)).toBeInTheDocument();
-    expect(within(card!).getByText("Cast only")).toBeInTheDocument();
-    expect(within(card!).getByText("Private material")).toBeInTheDocument();
-    // Both ways in point at the NPC's own screen.
-    expect(screen.getByRole("link", { name: "Cazril" })).toHaveAttribute(
-      "href",
-      `/campaigns/${campaignId}/cast/${npcId}`,
-    );
-    expect(within(card!).getByRole("button", { name: "Rehearse" })).toHaveAttribute(
-      "href",
-      `/campaigns/${campaignId}/cast/${npcId}`,
-    );
-    const followUp = screen.getByRole("button", { name: /NPC follow-up/ });
-    expect(followUp).toHaveAttribute("href", `/campaigns/${campaignId}/cast/follow-up`);
-    expect(within(followUp).getByText("1")).toBeInTheDocument();
-    // And *Cast* is the lit item on the campaign row.
+    expect(
+      within(card as HTMLElement).getByText("the ferryman at the crossing"),
+    ).toBeInTheDocument();
+    // And *Cast* is the lit item on the campaign row, between Party and Notes.
     const row = screen.getByRole("navigation", { name: "This campaign" });
     expect(within(row).getByRole("link", { name: "Cast" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("derives player-facing, current-session and pending-proposal cues from existing reads", async () => {
+  it("makes the card one link to the NPC's page, with nothing else on it", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
       status: 200,
       body: [{ ...cazril, visibility: "shared" }],
     });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/-/sessions/${sessionId}`, {
-      status: 200,
-      body: [
-        {
-          id: npcId,
-          campaignId,
-          name: "Cazril",
-          role: "the ferryman",
-          persona: cazril.persona,
-          image: null,
-          imagePending: false,
-        },
-      ],
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${npcId}/proposals`, {
-      status: 200,
-      body: [pendingProposal],
-    });
-
     await renderCast();
 
-    const card = (await screen.findByRole("link", { name: "Cazril" })).closest("li");
-    expect(card).not.toBeNull();
-    expect(within(card!).getByText("Player-facing")).toBeInTheDocument();
-    expect(within(card!).getByText("Open at table")).toBeInTheDocument();
-    const review = within(card!).getByRole("button", { name: "1 pending" });
-    expect(review).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}#proposals`);
+    const link = await screen.findByRole("link", { name: "Cazril" });
+    expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}`);
+    expect(link).toHaveAttribute("data-card-link");
+    const card = link.closest('[data-slot="npc-card"]') as HTMLElement;
+    expect(card.querySelectorAll("a, button")).toHaveLength(1);
+    // What today's card carried and the drawn one drops: the sharing and
+    // private-material badges, the summary line, and Edit and Rehearse.
+    for (const gone of ["Player-facing", "Cast only", "Private material", "Rehearse"])
+      expect(within(card).queryByText(gone)).toBeNull();
+    expect(within(card).queryByText(/takes names instead of coin/)).toBeNull();
+    expect(within(card).queryByRole("button", { name: /Edit/ })).toBeNull();
+    // Nor does the Cast read what only those cues needed.
+    expect(
+      server.calls.filter(
+        (call) => call.pathname.endsWith("/proposals") || call.pathname.includes("/-/sessions/"),
+      ),
+    ).toEqual([]);
   });
 
-  it("says what to do next when the cast is empty, and when nothing matches", async () => {
+  it("draws a card per NPC, with Hob's drawing only where it is on its way", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
+    await renderCast();
+
+    await screen.findByRole("link", { name: "Grusk" });
+    expect(screen.getByText("5 NPCs")).toBeInTheDocument();
+    const cards = document.querySelectorAll('[data-slot="npc-card"]');
+    expect(cards).toHaveLength(5);
+    const drawing = screen.getByRole("status");
+    expect(drawing).toHaveTextContent("Hob is drawing…");
+    expect(drawing.closest('[data-slot="npc-card"]')).toBe(
+      screen.getByRole("link", { name: "Grusk" }).closest('[data-slot="npc-card"]'),
+    );
+    // No role is no line, not a placeholder.
+    const joss = screen.getByRole("link", { name: "Joss" }).closest('[data-slot="npc-card"]')!;
+    expect(joss.querySelectorAll("p")).toHaveLength(0);
+  });
+
+  it("keeps the header to Archived and Add NPC, and neither is peach", async () => {
+    await renderCast();
+    await screen.findByRole("link", { name: "Cazril" });
+
+    const heading = document.querySelector('main [data-slot="page-heading"]') as HTMLElement;
+    expect(
+      within(heading)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Archived", "Add NPC"]);
+    expect(within(heading).getByRole("button", { name: "Archived" })).toHaveAttribute(
+      "href",
+      `/campaigns/${campaignId}/cast/archived`,
+    );
+    for (const button of within(heading).getAllByRole("button"))
+      expect(button).not.toHaveClass("bg-accent");
+    expect(screen.queryByRole("button", { name: /NPC follow-up/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add from Library/ })).toBeNull();
+  });
+
+  it("says what to do first over an empty cast, with no filter row", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: [] });
     await renderCast();
 
     expect(await screen.findByText("Nobody in the cast yet")).toBeInTheDocument();
-    expect(screen.getByText("The people your players will meet")).toBeInTheDocument();
-    cleanup();
+    expect(screen.getByText("No NPCs yet")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Search the cast" })).toBeNull();
+  });
 
-    server.reset();
+  it("searches the cast in the body, and says when nobody answers", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
     await renderCast();
-    await screen.findByRole("link", { name: "Cazril" });
-    await userEvent.type(screen.getByRole("combobox", { name: "Search the cast" }), "innkeeper");
-    expect(await screen.findByText("Nothing matches")).toBeInTheDocument();
+    await screen.findByRole("link", { name: "Grusk" });
+
+    const search = screen.getByRole("combobox", { name: "Search the cast" });
+    expect(search.closest('[data-slot="cast-filters"]')).not.toBeNull();
+    await userEvent.type(search, "troll");
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="npc-card"]')).toHaveLength(1),
+    );
+    expect(screen.getByRole("link", { name: "Grusk" })).toBeInTheDocument();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, "innkeeper");
+    expect(await screen.findByText("Nobody here")).toBeInTheDocument();
+    // The count is the cast's, not the search's.
+    expect(screen.getByText("5 NPCs")).toBeInTheDocument();
   });
 
   it("writes a new NPC with the secret in its own document, then goes to rehearse it", async () => {
@@ -195,7 +185,7 @@ describe("CastScreen", () => {
     await renderCast();
     await screen.findByRole("link", { name: "Cazril" });
 
-    await userEvent.click(screen.getByRole("button", { name: "New NPC" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add NPC" }));
     const dialog = await screen.findByRole("dialog", { name: "New NPC" });
     // Basic first: the advanced half is behind a press, and the private
     // section is not on screen until it is opened.
@@ -239,23 +229,10 @@ describe("CastScreen", () => {
     );
   }, 20_000);
 
-  it("explains Library-to-Cast copy semantics before copying a source", async () => {
-    await renderCast();
-    await screen.findByRole("link", { name: "Cazril" });
-
-    await userEvent.click(screen.getByRole("button", { name: "Add from Library" }));
-
-    expect(await screen.findByText(/Choose a reusable NPC source/)).toBeInTheDocument();
-    expect(screen.getByText(/independent Cast snapshot/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/another creator's secrets shared through a Shared World are not copied/),
-    ).toBeInTheDocument();
-  });
-
   it("refuses to create a nameless NPC, in the form, before any request", async () => {
     await renderCast();
     await screen.findByRole("link", { name: "Cazril" });
-    await userEvent.click(screen.getByRole("button", { name: "New NPC" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add NPC" }));
     const dialog = await screen.findByRole("dialog", { name: "New NPC" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Create NPC" }));
 

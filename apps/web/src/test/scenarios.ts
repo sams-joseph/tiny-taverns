@@ -1,6 +1,7 @@
 import {
   campaign,
   campaignId,
+  castShelf,
   sessionId,
   encounterShelf,
   fullCampaign,
@@ -87,6 +88,10 @@ const creator = (): Map<string, Answer> => {
   // their prep, so a card's foot draws a hook and a secret.
   routes.set(`GET /campaigns/${campaignId}/party`, { status: 200, body: fullPartySeats });
   routes.set(`GET /campaigns/${campaignId}/party-prep`, { status: 200, body: fullPartyPrep });
+  // A cast of five, so the Cast tab's grid is measured over several columns
+  // of cards: a drawn portrait, one still being drawn, a role that wraps and
+  // one with none.
+  routes.set(`GET /campaigns/${campaignId}/npcs`, { status: 200, body: castShelf });
   // Each of the Chronicle's two nights was a different seat's, so its
   // Spotlight draws four bars and names the two seats left behind.
   const spotlit = [

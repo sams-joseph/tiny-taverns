@@ -451,6 +451,51 @@ export const drawnNpcPortrait = {
   fullUrl: "/npc-images/2b1f2a1e-0000-4000-8000-00000000d001/full?e=1&s=f",
 };
 
+/**
+ * A cast of several, for the screens measured over a full shelf
+ * (`test/scenarios.ts`): the ferryman, a shared NPC with Hob's portrait, one
+ * whose portrait Hob is still drawing, one whose role is long enough to wrap
+ * on a card, and one with no role at all.
+ */
+export const castShelf = [
+  cazril,
+  {
+    ...cazril,
+    id: "2b1f2a1e-0000-4000-8000-00000000d0c3",
+    name: "Master Hollis",
+    role: "Caravan master, your employer",
+    persona: { identity: { summary: "Pays on time, asks no questions." } },
+    privateMaterial: {},
+    visibility: "shared",
+    image: drawnNpcPortrait,
+  },
+  {
+    ...cazril,
+    id: "2b1f2a1e-0000-4000-8000-00000000d0c4",
+    name: "Grusk",
+    role: "Troll, keeps the toll bridge",
+    persona: { identity: { appearance: "Moss in his beard, a toll-bell on a cord." } },
+    privateMaterial: {},
+    imagePending: true,
+  },
+  {
+    ...cazril,
+    id: "2b1f2a1e-0000-4000-8000-00000000d0c5",
+    name: "Mother Sallow",
+    role: "Green hag of the deep marsh, who trades in years and never in coin",
+    persona: {},
+    privateMaterial: {},
+  },
+  {
+    ...cazril,
+    id: "2b1f2a1e-0000-4000-8000-00000000d0c6",
+    name: "Joss",
+    role: "",
+    persona: {},
+    privateMaterial: {},
+  },
+];
+
 export const drawnPortrait = {
   thumbUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/thumb?e=1&s=t",
   cardUrl: "/portraits/2b1f2a1e-0000-4000-8000-00000000b001/card?e=1&s=c",

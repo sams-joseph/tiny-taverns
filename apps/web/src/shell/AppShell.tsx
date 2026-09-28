@@ -203,16 +203,16 @@ const campaignNavFor = (
       collapse: "lg",
     },
     {
-      label: "Notes",
-      link: { to: "/campaigns/$campaignId/notes", params: { campaignId } },
-      section: "notes",
-      collapse: "lg",
-    },
-    {
       label: "Cast",
       link: { to: "/campaigns/$campaignId/cast", params: { campaignId } },
       section: "cast",
       collapse: "xl",
+    },
+    {
+      label: "Notes",
+      link: { to: "/campaigns/$campaignId/notes", params: { campaignId } },
+      section: "notes",
+      collapse: "lg",
     },
     {
       label: "Chronicle",

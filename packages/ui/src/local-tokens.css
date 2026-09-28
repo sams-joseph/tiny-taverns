@@ -79,8 +79,14 @@
   --notes-pane-min: 420px;
 
   /* The same drawing's Party tab: a grid of character cards,
-     `repeat(auto-fill, minmax(min(100%, 270px), 1fr))`, each opening on a
-     150px portrait band. */
+     `repeat(auto-fill, minmax(min(100%, 270px), 1fr))`. Its cards and the Cast
+     tab's (below) each open on the same 150px portrait band. */
   --party-card-min: 270px;
-  --party-portrait-h: 150px;
+  --portrait-band-h: 150px;
+
+  /* The same drawing's Cast tab: a grid of NPC cards over a 250px floor,
+     `repeat(auto-fill, minmax(min(100%, 250px), 1fr))`, under a filter row
+     whose search box is `flex: 0 1 280px`. */
+  --cast-card-min: 250px;
+  --cast-search-w: 280px;
 }
