@@ -87,6 +87,16 @@ describe("sharing a campaign", () => {
     );
   });
 
+  it("leaves the Shared World to the campaign's actions menu", async () => {
+    await openSettings();
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Shared World")).toBeNull();
+    for (const name of ["Connect to Shared World", "Change Shared World"]) {
+      expect(within(dialog).queryByRole("button", { name })).toBeNull();
+    }
+  });
+
   it("opens on the stored description, sends it trimmed, and clears it with a null", async () => {
     server.routes.set(`GET ${campaignPath}`, {
       status: 200,
