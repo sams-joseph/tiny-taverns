@@ -60,7 +60,8 @@ import { renderImage } from "./render.js";
  * Hob's accept, `drawCampaign` from `POST /campaigns` and
  * `POST /worlds/:worldId/campaigns`, `drawSharedWorld` from `POST /worlds` and
  * `POST /campaigns/:campaignId/shared-world` (promotion), `drawNpc` from the
- * cast's create and its copy from the Library, `drawBattleMap` from
+ * cast's create, its copy from the Library and its edit (an NPC created blank
+ * is drawn by the first edit that gives it a subject), `drawBattleMap` from
  * `POST /campaigns/:c/encounters` and Hob's encounter accept. It records the one image row the subject
  * will ever have (`repo/Images.ts` `start`, which also applies the shared daily
  * caps, the nothing-to-draw-from skip and the kind's rule about who may start
@@ -128,7 +129,10 @@ export class HobImages extends Context.Service<
     ) => Effect.Effect<SharedWorld, never, CurrentActor>;
     /**
      * The same for a campaign NPC's portrait, drawn only from its public
-     * persona (`npcImagePromptFor`): `imagePending` when a draw started.
+     * persona (`npcImagePromptFor`): `imagePending` when a draw started. An NPC
+     * with nothing to draw from yet records nothing, so a later call — after
+     * the edit that gives it a role, appearance or summary — can still start
+     * its one draw; a call for an NPC that already has a record starts none.
      */
     readonly drawNpc: (npc: Npc) => Effect.Effect<Npc, never, CurrentActor>;
     /**
@@ -364,15 +368,18 @@ export class HobImages extends Context.Service<
               (pending) => (pending ? new SharedWorld({ ...world, imagePending: true }) : world),
             ),
 
+          // Unlike the other kinds, an NPC with nothing to draw from records
+          // nothing, not a `skipped` row: a cast can create one blank, and the
+          // edit that first gives it a subject is where its one draw starts.
           drawNpc: (npc) =>
-            Effect.map(
-              start("npc", npc.id, () =>
-                npcImageHasSubject(npc)
-                  ? npcImagePromptFor(npc, { style: HOUSE_PORTRAIT_STYLE })
-                  : undefined,
-              ),
-              (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
-            ),
+            npcImageHasSubject(npc)
+              ? Effect.map(
+                  start("npc", npc.id, () =>
+                    npcImagePromptFor(npc, { style: HOUSE_PORTRAIT_STYLE }),
+                  ),
+                  (pending) => (pending ? new Npc({ ...npc, imagePending: true }) : npc),
+                )
+              : Effect.succeed(npc),
 
           drawBattleMap: (map, encounter, creatureTypes) =>
             Effect.map(

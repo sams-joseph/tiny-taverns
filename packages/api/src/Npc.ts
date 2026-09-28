@@ -155,10 +155,11 @@ export class NpcImages extends Schema.Class<NpcImages>("NpcImages")({
 /** The portrait fields every read of a campaign NPC carries, the creator's and a player's alike. */
 const npcImageFields = {
   /**
-   * The portrait Hob drew once, after the NPC was added to the cast — or
-   * `null`: none was drawn (images are off, there was nothing public to draw
-   * from, the provider refused), it is still being drawn, or this server cannot
-   * sign URLs.
+   * The portrait Hob drew once, from the first write that gave the NPC
+   * something public to draw from (the create, or the edit that first set a
+   * role, appearance or summary) — or `null`: none was drawn (images are off,
+   * there is nothing public to draw from yet, the provider refused), it is
+   * still being drawn, or this server cannot sign URLs.
    */
   image: Schema.NullOr(NpcImages),
   /**
@@ -222,6 +223,21 @@ export class NpcSource extends Schema.Class<NpcSource>("NpcSource")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/**
+ * The name a cast's *Add NPC* stores for an NPC it creates blank, before the
+ * creator has typed one. **The web client sends it; the server has no
+ * default**: `name` stays required, so the placeholder is one named constant
+ * rather than a fallback nobody wrote down. It is an ordinary name to every
+ * read and to the NPC's prompt, and it never makes a portrait: the name is not
+ * drawn from, so a blank NPC waits for its first role, appearance or summary
+ * (`npcImageHasSubject`, `NpcImage.ts`).
+ */
+export const UNNAMED_NPC = "Unnamed NPC";
+
+/**
+ * A new campaign NPC. Only a name is required, so an NPC can be created blank
+ * ({@link UNNAMED_NPC}) and filled in afterwards through `NpcUpdate`.
+ */
 export const NpcCreate = Schema.Struct({
   name: npcName,
   role: Schema.optional(npcRole),

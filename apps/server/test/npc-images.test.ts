@@ -6,7 +6,9 @@ import {
   type Npc,
   type NpcCreate,
   type NpcId,
+  type NpcUpdate,
   TavernsApi,
+  UNNAMED_NPC,
 } from "@taverns/api";
 import { Context, Deferred, Effect, Layer, ManagedRuntime, Option, Redacted } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -25,8 +27,9 @@ import { migratedDatabase } from "./support/database.js";
 import { MODERATION_TEXT, scriptedImages } from "./support/imageModel.js";
 
 /**
- * **Hob draws a campaign NPC's portrait once, when it joins the cast, from its
- * public persona only — and whoever can see the NPC sees it.** One more kind
+ * **Hob draws a campaign NPC's portrait once, when it joins the cast or — for
+ * one created blank — at the first edit that gives it something to draw from,
+ * from its public persona only; and whoever can see the NPC sees it.** One more kind
  * of Hob-drawn image, over the same worker, signer and records as a
  * character's portrait (`portraits.test.ts`) and the campaign and Shared World
  * covers (`campaign-images.test.ts`, `shared-world-images.test.ts`).
@@ -179,6 +182,17 @@ const campaignOf = (who: Person, name: string) =>
 
 const addNpc = (who: Person, campaignId: CampaignId, payload: NpcCreate) =>
   as(who.token, (client) => client.npcs.create({ params: { campaignId }, payload }));
+
+const editNpc = (who: Person, campaignId: CampaignId, npcId: NpcId, payload: NpcUpdate) =>
+  as(who.token, (client) => client.npcs.update({ params: { campaignId, npcId }, payload }));
+
+/** What an account has spent on images today: the ledger the daily caps count. */
+const spentBy = (who: Person) =>
+  sql(
+    (sql) => sql<{ readonly count: number }>`
+      select count(*)::int as count from image_spend where account_id = ${who.actor.accountId}
+    `,
+  ).then((rows) => rows[0]?.count ?? 0);
 
 const FERRYMAN: NpcCreate = {
   name: "Cazril",
@@ -609,6 +623,104 @@ describe("who sees a portrait is who sees the NPC", () => {
   });
 });
 
+describe("an NPC created blank is drawn by the first edit that gives it a subject", () => {
+  let blank: Npc;
+  let requestsBefore: number;
+
+  beforeAll(async () => {
+    requestsBefore = npcRequests().length;
+    blank = await addNpc(jo, table, { name: UNNAMED_NPC });
+    await settled();
+  }, 60_000);
+
+  it("creates it under the placeholder name, with no record and no request", async () => {
+    expect(blank.name).toBe(UNNAMED_NPC);
+    expect(blank.role).toBe("");
+    expect(blank.imagePending).toBe(false);
+    expect(blank.image).toBeNull();
+    expect(await recordOf(blank.id)).toBeUndefined();
+    expect(npcRequests().length).toBe(requestsBefore);
+  });
+
+  it("draws nothing for an edit that gives it no subject: a real name, a voice, a secret", async () => {
+    const edited = await editNpc(jo, table, blank.id, {
+      name: "Joss",
+      persona: { voice: { manner: "VOICE-NOT-VISUAL" }, intent: { wants: "INTENT-NOT-VISUAL" } },
+      privateMaterial: { secrets: "SECRET-JOSS-OWES-THE-HAG" },
+    });
+    await settled();
+    expect(edited.name).toBe("Joss");
+    expect(edited.imagePending).toBe(false);
+    expect(await recordOf(blank.id)).toBeUndefined();
+    expect(npcRequests().length).toBe(requestsBefore);
+  });
+
+  it("refuses a player's and a stranger's edit with the same 404, and neither starts a draw", async () => {
+    for (const who of [ilse, stranger]) {
+      expect(
+        await attempt(who.token, (client) =>
+          client.npcs.update({
+            params: { campaignId: table, npcId: blank.id },
+            payload: { role: "a smuggler", persona: { identity: { appearance: "Scarred." } } },
+          }),
+        ),
+      ).toEqual({ ok: false, tag: "NotFound" });
+    }
+    await settled();
+    expect(await recordOf(blank.id)).toBeUndefined();
+    expect(npcRequests().length).toBe(requestsBefore);
+    const found = await as(jo.token, (client) =>
+      client.npcs.findById({ params: { campaignId: table, npcId: blank.id } }),
+    );
+    expect(found.role).toBe("");
+  });
+
+  it("starts its one draw on the edit that first sets a role, from the public persona only", async () => {
+    const edited = await editNpc(jo, table, blank.id, {
+      role: "the ferryman's daughter",
+      expectedVersion: (
+        await as(jo.token, (client) =>
+          client.npcs.findById({ params: { campaignId: table, npcId: blank.id } }),
+        )
+      ).version,
+    });
+    expect(edited.imagePending).toBe(true);
+    await settled();
+    expect(npcRequests().length - requestsBefore).toBe(1);
+    const record = await recordOf(blank.id);
+    expect(record?.state).toBe("ready");
+    expect(record?.account_id).toBe(jo.actor.accountId);
+    expect(record?.campaign_id).toBe(table);
+    expect(record?.prompt).toContain("the ferryman's daughter");
+    for (const hidden of ["Joss", UNNAMED_NPC, "SECRET", "VOICE", "INTENT"]) {
+      expect(record?.prompt).not.toContain(hidden);
+    }
+    const found = await as(jo.token, (client) =>
+      client.npcs.findById({ params: { campaignId: table, npcId: blank.id } }),
+    );
+    expect(found.imagePending).toBe(false);
+    expect(found.image?.thumbUrl).toMatch(/^\/npc-images\//);
+  });
+
+  it("draws nothing on any later edit, even one that changes what it would be drawn from", async () => {
+    const before = npcRequests().length;
+    const record = await recordOf(blank.id);
+    for (const payload of [
+      { role: "the ferryman's heir" },
+      { persona: { identity: { appearance: "Tall, with her father's lantern." } } },
+      { name: "Joss Ferrier" },
+    ] satisfies ReadonlyArray<NpcUpdate>) {
+      const edited = await editNpc(jo, table, blank.id, payload);
+      expect(edited.imagePending).toBe(false);
+    }
+    await settled();
+    expect(npcRequests().length).toBe(before);
+    const after = await recordOf(blank.id);
+    expect(after?.id).toBe(record?.id);
+    expect(after?.prompt).toContain("the ferryman's daughter");
+  });
+});
+
 describe("when there is no portrait", () => {
   let theirs: CampaignId;
 
@@ -616,8 +728,9 @@ describe("when there is no portrait", () => {
     theirs = await campaignOf(stranger, "Bo's Table");
   }, 60_000);
 
-  it("skips an NPC that is only a name, and says so on the record", async () => {
+  it("records nothing for an NPC that is only a name, so a later edit can still draw it", async () => {
     const before = npcRequests().length;
+    const spent = await spentBy(stranger);
     const npc = await addNpc(stranger, theirs, {
       name: "Nobody",
       persona: { voice: { manner: "Quiet." } },
@@ -627,10 +740,8 @@ describe("when there is no portrait", () => {
     expect(npc.imagePending).toBe(false);
     expect(npc.image).toBeNull();
     expect(npcRequests().length).toBe(before);
-    const record = await recordOf(npc.id);
-    expect(record?.state).toBe("failed");
-    expect(record?.failure).toBe("skipped");
-    expect(record?.prompt).toBeNull();
+    expect(await recordOf(npc.id)).toBeUndefined();
+    expect(await spentBy(stranger)).toBe(spent);
   });
 
   it("records a moderation refusal and puts no provider text anywhere", async () => {
@@ -713,6 +824,37 @@ describe("when there is no portrait", () => {
     const record = await recordOf(over.id);
     expect(record?.failure).toBe("capped");
     expect(record?.prompt).toContain("a latecomer");
+  });
+
+  it("spends nothing on a blank NPC, and caps the edit that gives it a subject over the limit, once", async () => {
+    const cass = await person("Cass");
+    const own = await campaignOf(cass, "Cass's Table");
+    const blank = await addNpc(cass, own, { name: UNNAMED_NPC });
+    await settled();
+    // The cover spent one; the blank NPC nothing.
+    expect(await spentBy(cass)).toBe(1);
+    for (let index = 0; index < PER_ACCOUNT - 1; index += 1) {
+      await addNpc(cass, own, { name: `Cass's ${String(index)}`, role: "a regular" });
+    }
+    await settled();
+    expect(await spentBy(cass)).toBe(PER_ACCOUNT);
+
+    const before = npcRequests().length;
+    const edited = await editNpc(cass, own, blank.id, { role: "a card sharp" });
+    await settled();
+    expect(edited.imagePending).toBe(false);
+    expect(npcRequests().length).toBe(before);
+    const record = await recordOf(blank.id);
+    expect(record?.failure).toBe("capped");
+    expect(record?.prompt).toContain("a card sharp");
+    expect(await spentBy(cass)).toBe(PER_ACCOUNT);
+
+    // A capped NPC is not tried again by its next edit: one record, ever.
+    await editNpc(cass, own, blank.id, { role: "a card sharp, retired" });
+    await settled();
+    expect(npcRequests().length).toBe(before);
+    expect((await recordOf(blank.id))?.id).toBe(record?.id);
+    expect(await spentBy(cass)).toBe(PER_ACCOUNT);
   });
 });
 
