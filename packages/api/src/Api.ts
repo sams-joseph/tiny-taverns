@@ -221,7 +221,7 @@ import { Roll, RollCreate, RollListFilter } from "./Roll.js";
 import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
-import { CharacterSpellbook } from "./Spellbook.js";
+import { CharacterSpellbook, NpcSpellbook } from "./Spellbook.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
@@ -1862,6 +1862,16 @@ class LibraryGroup extends HttpApiGroup.make("library")
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
+    /**
+     * The spell picker's rules for a Library original's sheet, against the
+     * core rules: `sheetSpells` over the owner's own originals. `NotFound`
+     * with resource `npc_sheet` for an original with no sheet.
+     */
+    HttpApiEndpoint.get("npcSheetSpells", "/npcs/:npcId/sheet/spells", {
+      params: { npcId: NpcId },
+      success: NpcSpellbook,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("magicItems", "/magic-items", {
       query: MagicItemFilter,
       success: pageOf(MagicItem, MagicItemSort),
@@ -2477,6 +2487,17 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
     HttpApiEndpoint.delete("removeSheet", "/:npcId/sheet", {
       params: { campaignId: CampaignId, npcId: NpcId },
       success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
+    /**
+     * The bounded spell vocabulary for one NPC sheet's picker, a character's
+     * picker rules against this campaign's rules: its homebrew spells are
+     * offered, as they are to a character seated here. The creator's alone;
+     * `NotFound` with resource `npc_sheet` for an NPC with no sheet.
+     */
+    HttpApiEndpoint.get("sheetSpells", "/:npcId/sheet/spells", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      success: NpcSpellbook,
       error: NotFound,
     }),
     HttpApiEndpoint.patch("update", "/:npcId", {

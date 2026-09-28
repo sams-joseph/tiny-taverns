@@ -10,6 +10,7 @@ import {
   type NpcSheetPut,
   NpcSheetSummary,
   type NpcSheetUpdate,
+  type NpcSpellbook,
   type SheetBody,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
@@ -17,6 +18,7 @@ import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
+import { spellbookRulesFor } from "./Spells.js";
 import {
   libraryRowReadable,
   libraryRowWritable,
@@ -45,7 +47,8 @@ import {
  *
  * The document is a character's rules half, and so are its rules: a level or
  * class change runs the character's own `recomputeForLevel`, and a subrace is
- * checked by the character's own `validateSubrace`, both against the rules
+ * checked by the character's own `validateSubrace`, and the spell picker's
+ * rules are the character's own `spellbookRulesFor`, all against the rules
  * the reach names — a campaign NPC's campaign's, a Library original's the
  * core rules.
  *
@@ -195,6 +198,15 @@ export class NpcSheets extends Context.Service<
     ) => Effect.Effect<NpcSheet, NotFound | Conflict>;
     /** Removes the sheet; an NPC with none is unchanged. `NotFound` for an NPC not in this campaign. */
     readonly remove: (creator: CampaignCreatorActor, id: NpcId) => Effect.Effect<void, NotFound>;
+    /**
+     * The spell picker's rules for the sheet, a character's picker against
+     * this campaign's rules. `NotFound` for an NPC with no sheet as for one
+     * not in this campaign.
+     */
+    readonly spells: (
+      creator: CampaignCreatorActor,
+      id: NpcId,
+    ) => Effect.Effect<NpcSpellbook, NotFound>;
     /** {@link list} over the actor's own Library originals, in `Npcs.library`'s order. */
     readonly libraryList: (
       filter: NpcListFilter,
@@ -213,6 +225,8 @@ export class NpcSheets extends Context.Service<
     ) => Effect.Effect<NpcSheet, NotFound | Conflict, CurrentActor>;
     /** {@link remove} for a Library original; every copy's own sheet stands. */
     readonly libraryRemove: (id: NpcId) => Effect.Effect<void, NotFound, CurrentActor>;
+    /** {@link spells} for a Library original, against the core rules. */
+    readonly librarySpells: (id: NpcId) => Effect.Effect<NpcSpellbook, NotFound, CurrentActor>;
   }
 >()("NpcSheets") {
   static readonly layer = Layer.effect(this)(
@@ -271,20 +285,43 @@ export class NpcSheets extends Context.Service<
           ),
         );
 
+      /** The sheet's row, `null` when the NPC has none; `NotFound` for an NPC out of reach. */
+      const sheetRow = (
+        reach: Reach,
+        id: NpcId,
+      ): Effect.Effect<NpcSheetBodyRow | null, NotFound | SqlError.SqlError> =>
+        Effect.gen(function* () {
+          const rows = yield* sql<NpcSheetBodyRow>`
+            select ${sheetColumns}
+            from npc
+            left join npc_sheet on npc_sheet.npc_id = npc.id
+            where npc.id = ${id}
+              and ${reach.readable}
+          `;
+          const row = rows[0];
+          if (row === undefined) return yield* new NotFound({ resource: "npc", id });
+          // The left join's miss: the NPC is there and has no sheet.
+          return (row.npc_id as NpcId | null) === null ? null : row;
+        });
+
       const find = (reach: Reach, id: NpcId) =>
         dieOnSqlError(
+          Effect.map(sheetRow(reach, id), (row) => (row === null ? null : toSheet(row))),
+        );
+
+      const spells = (reach: Reach, id: NpcId) =>
+        dieOnSqlError(
           Effect.gen(function* () {
-            const rows = yield* sql<NpcSheetBodyRow>`
-              select ${sheetColumns}
-              from npc
-              left join npc_sheet on npc_sheet.npc_id = npc.id
-              where npc.id = ${id}
-                and ${reach.readable}
-            `;
-            const row = rows[0];
-            if (row === undefined) return yield* new NotFound({ resource: "npc", id });
-            // The left join's miss: the NPC is there and has no sheet.
-            return (row.npc_id as NpcId | null) === null ? null : toSheet(row);
+            const row = yield* sheetRow(reach, id);
+            if (row === null) return yield* new NotFound({ resource: "npc_sheet", id });
+            const rules = yield* spellbookRulesFor(sql, {
+              className: row.class_name ?? undefined,
+              subclassName: row.body.identity?.subclass,
+              level: Math.max(1, row.level ?? 1),
+              body: row.body,
+              vocabulary: reach.vocabulary,
+            });
+            return { npcId: id, ...rules };
           }),
         );
 
@@ -412,11 +449,13 @@ export class NpcSheets extends Context.Service<
         put: (creator, id, payload) => put(campaignReach(sql, creator), id, payload),
         update: (creator, id, patch) => update(campaignReach(sql, creator), id, patch),
         remove: (creator, id) => remove(campaignReach(sql, creator), id),
+        spells: (creator, id) => spells(campaignReach(sql, creator), id),
         libraryList: (filter) => library((reach) => list(reach, filter)),
         libraryFind: (id) => library((reach) => find(reach, id)),
         libraryPut: (id, payload) => library((reach) => put(reach, id, payload)),
         libraryUpdate: (id, patch) => library((reach) => update(reach, id, patch)),
         libraryRemove: (id) => library((reach) => remove(reach, id)),
+        librarySpells: (id) => library((reach) => spells(reach, id)),
       };
     }),
   );
