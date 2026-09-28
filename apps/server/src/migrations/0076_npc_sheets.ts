@@ -51,12 +51,11 @@ import { SqlClient } from "effect/unstable/sql";
  * No live values yet: nothing can move an NPC's hit points until it can be a
  * combatant, so `hp_current` and `conditions` wait for that migration.
  *
- * **Not campaign content.** No `visibility`, `origin` or provenance of its
- * own: who may read it is its NPC's creator, where it came from is its NPC's,
- * and nothing but the creator's own writes put it there — Hob has no tool that
- * writes it, no player read selects it, and search does not index it. It is in
- * `NOT_CONTENT` (`schema.test.ts`). Deleting the NPC deletes its sheet;
- * archiving it leaves the sheet alone.
+ * **Not campaign content.** No `visibility`: who may read it is its NPC's
+ * creator. No player read selects it and search does not index it. It is in
+ * `NOT_CONTENT` (`schema.test.ts`). It gained the provenance pair in
+ * `0077_npc_sheet_origin.ts`, when the creator's Hob could draft one. Deleting
+ * the NPC deletes its sheet; archiving it leaves the sheet alone.
  */
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

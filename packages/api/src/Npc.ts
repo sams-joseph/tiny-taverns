@@ -424,10 +424,16 @@ export class NpcSheetSummary extends Schema.Class<NpcSheetSummary>("NpcSheetSumm
  * the NPC agent's prompt is compiled from it, so the sheet reaches the wire
  * only through the owner's sheet reads, as `NpcPrep` does. An NPC with no
  * sheet reads `null`, never an empty sheet the product made up.
+ *
+ * `origin` is `assistant`, with the turn, when the sheet is a Hob draft its
+ * creator kept (`proposeNpcSheet`); a hand-written PUT makes it `authored`
+ * again, and a PATCH keeps whichever it had, as an edited note keeps its own.
+ * There is no `visibility`: who may read a sheet is its NPC's owner.
  */
 export class NpcSheet extends Schema.Class<NpcSheet>("NpcSheet")({
   ...npcSheetSummaryFields,
   sheet: SheetBody,
+  ...provenanceFields,
 }) {}
 
 /**
@@ -439,8 +445,8 @@ export class NpcSheet extends Schema.Class<NpcSheet>("NpcSheet")({
  * sheet over (a quick start) must say which sheet it read, so it cannot
  * silently overwrite hand edits. Missing or stale, it is a `Conflict`; sent
  * when there is no sheet, it is a `Conflict` too, because the sheet it read is
- * gone. No payload carries `origin`: only the NPC's owner writes its sheet,
- * by hand.
+ * gone. No payload carries `origin`: a PUT is the owner's own hand, and a
+ * Hob draft reaches the same statement only through the creator's accept.
  */
 export const NpcSheetPut = Schema.Struct({
   expectedVersion: Schema.optional(Schema.Int),

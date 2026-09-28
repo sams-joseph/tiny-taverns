@@ -1075,6 +1075,107 @@ describe("the campaign's story so far", () => {
   });
 });
 
+describe("an NPC's sheet", () => {
+  const npcId = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b";
+  const sheet = {
+    abilities: [
+      { label: "STR", score: "16", modifier: "+3" },
+      { label: "DEX", score: "10", modifier: "+0" },
+      { label: "CON", score: "16", modifier: "+3" },
+      { label: "INT", score: "8", modifier: "-1" },
+      { label: "WIS", score: "13", modifier: "+1" },
+      { label: "CHA", score: "12", modifier: "+1" },
+    ],
+    traits: [{ name: "Second Wind", text: "Regain hit points as a bonus action." }],
+  };
+  const sheetProposal = {
+    target: "npcSheet",
+    npcId,
+    npcName: "Grusk",
+    level: 5,
+    race: "Dwarf",
+    subrace: "Hill Dwarf",
+    className: "Fighter",
+    ac: 10,
+    hpMax: 49,
+    cr: "3",
+    sheet,
+    replaces: null,
+    rationale: ["A ferry guard who has seen real fighting."],
+  };
+
+  it("draws the NPC, the line the sheet will read and its numbers, and keeps it with ids alone", async () => {
+    server.acceptBody = {
+      accepted: "npcSheet",
+      sheet: {
+        npcId,
+        level: 5,
+        race: "Dwarf",
+        subrace: "Hill Dwarf",
+        className: "Fighter",
+        descriptor: "Level 5 Hill Dwarf Fighter",
+        ac: 10,
+        hpMax: 49,
+        cr: "3",
+        version: 1,
+        updatedAt: stamp,
+        sheet,
+        origin: "assistant",
+        assistantTurnId: turnId,
+      },
+    };
+    server.frames = [began(threadId, turnId), proposed(turnId, sheetProposal), done()];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Give Grusk a level 5 fighter sheet.{Enter}");
+
+    expect(await screen.findByText("Grusk")).toBeInTheDocument();
+    expect(screen.getByText("NPC sheet")).toBeInTheDocument();
+    expect(screen.getByText("Level 5 Hill Dwarf Fighter · CR 3")).toBeInTheDocument();
+    expect(screen.getByText("AC").nextSibling).toHaveTextContent("10");
+    expect(screen.getByText("HP").nextSibling).toHaveTextContent("49");
+    expect(screen.getByText("A ferry guard who has seen real fighting.")).toBeInTheDocument();
+    // It replaces nothing, so it says nothing about replacing.
+    expect(screen.queryByText(/^Replaces/)).toBeNull();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("On the NPC’s sheet")).toBeInTheDocument();
+  });
+
+  it("says what keeping it replaces, and draws no rating or number Hob did not give", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, {
+        ...sheetProposal,
+        race: null,
+        subrace: null,
+        cr: null,
+        hpMax: null,
+        replaces: { version: 3, descriptor: "Level 2 Rogue" },
+        rationale: [],
+      }),
+      done(),
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Replace Grusk's sheet with a fighter.{Enter}");
+
+    expect(await screen.findByText("Level 5 Fighter")).toBeInTheDocument();
+    expect(screen.getByText("Replaces Level 2 Rogue")).toBeInTheDocument();
+    expect(screen.getByText("AC")).toBeInTheDocument();
+    expect(screen.queryByText("HP")).toBeNull();
+    expect(screen.queryByText(/CR/)).toBeNull();
+  });
+});
+
 describe("a change of scope under an open panel", () => {
   /**
    * The persistent layout keeps one panel mounted while the reader moves, so

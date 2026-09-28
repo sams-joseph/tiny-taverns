@@ -1,5 +1,6 @@
 import {
   type Actor,
+  type AssistantTurnId,
   type ChallengeRating,
   CurrentActor,
   Conflict,
@@ -16,7 +17,7 @@ import {
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { defined, dieOnSqlError, setClause } from "./rows.js";
+import { type AssistantOrigin, defined, dieOnSqlError, setClause } from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { spellbookRulesFor } from "./Spells.js";
 import {
@@ -53,9 +54,11 @@ import {
  * core rules.
  *
  * Nothing else writes it but the copy of a Library original into a campaign
- * (`Npcs.copyFromSource`), which takes the source's sheet beside its persona:
- * Hob has no tool for it, no NPC prompt reads it, and search does not index
- * it. It rings no doorbell, as prep does not: nothing live moved.
+ * (`Npcs.copyFromSource`), which takes the source's sheet beside its persona,
+ * and the creator's accept of a sheet their Hob drafted (`repo/Proposals.ts`),
+ * which goes through {@link put} with the turn, stamping `origin = 'assistant'`.
+ * No NPC prompt reads it and search does not index it. It rings no doorbell,
+ * as prep does not: nothing live moved.
  */
 
 interface NpcSheetRow {
@@ -74,6 +77,8 @@ interface NpcSheetRow {
 
 interface NpcSheetBodyRow extends NpcSheetRow {
   readonly body: SheetBody;
+  readonly origin: "authored" | "assistant";
+  readonly assistant_turn_id: AssistantTurnId | null;
 }
 
 const summaryFields = (row: NpcSheetRow) => ({
@@ -93,7 +98,12 @@ const summaryFields = (row: NpcSheetRow) => ({
 const toSummary = (row: NpcSheetRow): NpcSheetSummary => new NpcSheetSummary(summaryFields(row));
 
 const toSheet = (row: NpcSheetBodyRow): NpcSheet =>
-  new NpcSheet({ ...summaryFields(row), sheet: row.body });
+  new NpcSheet({
+    ...summaryFields(row),
+    sheet: row.body,
+    origin: row.origin,
+    assistantTurnId: row.assistant_turn_id,
+  });
 
 const encodeBody = (body: SheetBody): string => JSON.stringify(body);
 
@@ -180,11 +190,17 @@ export class NpcSheets extends Context.Service<
      * `expectedVersion` over an existing sheet, an `expectedVersion` when
      * there is none, and a subrace the race does not contain in the NPC's
      * rules.
+     *
+     * `from` is the Hob turn a kept draft came from, and only
+     * `repo/Proposals.ts` passes one: the sheet is then `assistant`'s with
+     * that turn. Without it the sheet is `authored`, since a PUT replaces the
+     * whole of whatever was there.
      */
     readonly put: (
       creator: CampaignCreatorActor,
       id: NpcId,
       payload: NpcSheetPut,
+      from?: AssistantOrigin,
     ) => Effect.Effect<NpcSheet, NotFound | Conflict>;
     /**
      * The PATCH: an absent key is untouched and `null` clears it. A level or
@@ -240,7 +256,9 @@ export class NpcSheets extends Context.Service<
         npc_sheet.class_name, npc_sheet.descriptor, npc_sheet.ac, npc_sheet.hp_max,
         npc_sheet.cr, npc_sheet.version, npc_sheet.updated_at
       `;
-      const sheetColumns = sql`${summaryColumns}, npc_sheet.body`;
+      const sheetColumns = sql`
+        ${summaryColumns}, npc_sheet.body, npc_sheet.origin, npc_sheet.assistant_turn_id
+      `;
 
       /** The NPC, in reach, locked for the write that follows. */
       const lockedNpc = (
@@ -325,7 +343,12 @@ export class NpcSheets extends Context.Service<
           }),
         );
 
-      const put = (reach: Reach, id: NpcId, payload: NpcSheetPut) =>
+      const put = (
+        reach: Reach,
+        id: NpcId,
+        payload: NpcSheetPut,
+        from: AssistantOrigin | undefined,
+      ) =>
         dieOnSqlError(
           sql.withTransaction(
             Effect.gen(function* () {
@@ -358,6 +381,10 @@ export class NpcSheets extends Context.Service<
                 hp_max: payload.hpMax ?? null,
                 cr: payload.cr ?? null,
                 body: encodeBody(payload.sheet),
+                // Whole, so the provenance too: a kept draft is the turn's,
+                // and a hand-written PUT over one is the creator's own again.
+                origin: from === undefined ? "authored" : "assistant",
+                assistant_turn_id: from?.assistantTurnId ?? null,
               };
               const rows = yield* sql<NpcSheetBodyRow>`
                 insert into npc_sheet ${sql.insert({ npc_id: id, ...columns })}
@@ -446,13 +473,13 @@ export class NpcSheets extends Context.Service<
       return {
         list: (creator, filter) => list(campaignReach(sql, creator), filter),
         find: (creator, id) => find(campaignReach(sql, creator), id),
-        put: (creator, id, payload) => put(campaignReach(sql, creator), id, payload),
+        put: (creator, id, payload, from) => put(campaignReach(sql, creator), id, payload, from),
         update: (creator, id, patch) => update(campaignReach(sql, creator), id, patch),
         remove: (creator, id) => remove(campaignReach(sql, creator), id),
         spells: (creator, id) => spells(campaignReach(sql, creator), id),
         libraryList: (filter) => library((reach) => list(reach, filter)),
         libraryFind: (id) => library((reach) => find(reach, id)),
-        libraryPut: (id, payload) => library((reach) => put(reach, id, payload)),
+        libraryPut: (id, payload) => library((reach) => put(reach, id, payload, undefined)),
         libraryUpdate: (id, patch) => library((reach) => update(reach, id, patch)),
         libraryRemove: (id) => library((reach) => remove(reach, id)),
         librarySpells: (id) => library((reach) => spells(reach, id)),

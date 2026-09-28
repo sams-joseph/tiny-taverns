@@ -360,6 +360,7 @@ describe("migrations", () => {
       { migration_id: 74, name: "npc_links" },
       { migration_id: 75, name: "portrait_banners" },
       { migration_id: 76, name: "npc_sheets" },
+      { migration_id: 77, name: "npc_sheet_origin" },
     ]);
   }, 60_000);
 
@@ -445,6 +446,7 @@ describe("migrations", () => {
       { migration_id: 74, name: "npc_links" },
       { migration_id: 75, name: "portrait_banners" },
       { migration_id: 76, name: "npc_sheets" },
+      { migration_id: 77, name: "npc_sheet_origin" },
     ]);
   }, 60_000);
 });

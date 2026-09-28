@@ -10,6 +10,7 @@ import {
   type CharacterOwnCreate,
   type HobProposal,
   NotFound,
+  type NpcSheetPut,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -17,10 +18,12 @@ import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
 import { CampaignStories } from "./CampaignStories.js";
 import { Characters } from "./Characters.js";
+import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
+import { NpcSheets } from "./NpcSheets.js";
 import { Sessions } from "./Sessions.js";
 import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
@@ -50,9 +53,10 @@ import type { ConversationReach } from "./visibility.js";
  *
  * `Notes.create`, `Beats.create`, `Encounters.create` (whose roster goes
  * through `EncounterCreatures.create`, as a builder's does),
- * `Characters.createOwn`, for a night's summary `Sessions.update`, and for a
+ * `Characters.createOwn`, for a night's summary `Sessions.update`, for a
  * campaign's story so far `CampaignStories.accept` (which shares the creator's
- * own write's upsert), each with one extra argument. No SQL for those tables
+ * own write's upsert), and for an NPC's sheet `NpcSheets.put` (the creator's
+ * own PUT, behind the creator proof), each with one extra argument. No SQL for those tables
  * is written here, so an accepted row is produced by *literally the same
  * statement* that produces an authored one —
  * which is what makes it indistinguishable in usefulness (search finds it, the
@@ -133,6 +137,25 @@ const noSession = new Conflict({
   message: "there is no session in progress to file a beat against — start one first",
 });
 
+/**
+ * An NPC sheet draft as the creator's PUT — **copied, not computed**, for the
+ * reason {@link ownCreateFrom} gives. `expectedVersion` is the sheet the draft
+ * said it replaces, so one edited by hand since the offer is the PUT's own
+ * stale-version `Conflict`; a draft that replaces nothing sends none, so a
+ * sheet written since is the PUT's "this NPC already has a sheet".
+ */
+const npcSheetPutFrom = (proposal: Extract<HobProposal, { target: "npcSheet" }>): NpcSheetPut => ({
+  ...(proposal.replaces === null ? {} : { expectedVersion: proposal.replaces.version }),
+  level: proposal.level,
+  race: proposal.race,
+  subrace: proposal.subrace,
+  className: proposal.className,
+  ac: proposal.ac,
+  hpMax: proposal.hpMax,
+  cr: proposal.cr,
+  sheet: proposal.sheet,
+});
+
 export class Proposals extends Context.Service<
   Proposals,
   {
@@ -179,6 +202,8 @@ export class Proposals extends Context.Service<
       const sharedWorldHistory = yield* GroupHistory;
       const sessions = yield* Sessions;
       const stories = yield* CampaignStories;
+      const creators = yield* CampaignCreatorActors;
+      const npcSheets = yield* NpcSheets;
 
       const materialise = (
         campaignId: CampaignId,
@@ -281,6 +306,23 @@ export class Proposals extends Context.Service<
               ),
               (story) => ({ accepted: "campaignStory" as const, story }),
             );
+
+          case "npcSheet":
+            // Through the creator's own PUT, behind the creator proof: only
+            // the creator's toolkit offers one, into the campaign's own
+            // thread, and the proof is asked again here so nothing but the
+            // creator can keep it. The NPC was the creator's when Hob read
+            // it; `put` walks it again, so one deleted since is `NotFound`.
+            return Effect.gen(function* () {
+              const creator = yield* creators.of(campaignId);
+              const sheet = yield* npcSheets.put(
+                creator,
+                proposal.npcId,
+                npcSheetPutFrom(proposal),
+                from,
+              );
+              return { accepted: "npcSheet" as const, sheet };
+            });
 
           case "campaign":
             // Only the account's own panel offers one, into a thread no
