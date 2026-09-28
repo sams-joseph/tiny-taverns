@@ -4,10 +4,10 @@ import {
   type EncounterId,
   ENCOUNTER_SKILLS_MAX,
   type NoteId,
+  STANDARD_SKILLS,
 } from "@taverns/api";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vitest";
-import { STANDARD_SKILLS } from "../characters/skills";
 import { encounter as fixtureEncounter } from "./campaign.fixtures";
 import {
   addCreature,

@@ -7,6 +7,38 @@ export type AbilityKey = typeof AbilityKey.Type;
 
 export const ABILITY_KEYS: ReadonlyArray<AbilityKey> = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
 
+/**
+ * The eighteen 2014 skills, `[skill, the ability it keys off]`, in the order
+ * the sheet draws them.
+ *
+ * A vocabulary, not a schema: `Skill.name` is open text and `Skill.ability`
+ * optional, so nothing on the wire knows there are eighteen of anything. What
+ * the list buys is one spelling and one keyed ability for every writer of a
+ * skill row — the sheet's skills editor, a stat block's translation
+ * (`sheetFromStatBlock`), the scene runner's check picker — so a *Sleight of
+ * Hand* written by one reads the same in the others.
+ */
+export const STANDARD_SKILLS: ReadonlyArray<readonly [string, AbilityKey]> = [
+  ["Acrobatics", "DEX"],
+  ["Animal Handling", "WIS"],
+  ["Arcana", "INT"],
+  ["Athletics", "STR"],
+  ["Deception", "CHA"],
+  ["History", "INT"],
+  ["Insight", "WIS"],
+  ["Intimidation", "CHA"],
+  ["Investigation", "INT"],
+  ["Medicine", "WIS"],
+  ["Nature", "INT"],
+  ["Perception", "WIS"],
+  ["Performance", "CHA"],
+  ["Persuasion", "CHA"],
+  ["Religion", "INT"],
+  ["Sleight of Hand", "DEX"],
+  ["Stealth", "DEX"],
+  ["Survival", "WIS"],
+];
+
 export const signed = (value: number): string => (value < 0 ? String(value) : `+${String(value)}`);
 
 export const modifierFor = (score: number): string => signed(Math.floor((score - 10) / 2));

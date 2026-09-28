@@ -45,7 +45,12 @@ export function BuilderRail({
   return (
     <>
       <DifficultyCard roster={roster} partyLevels={partyLevels} />
-      <CreaturePicker campaignId={campaignId} counts={counts} onPick={onPick} />
+      <CreaturePicker
+        scope={{ kind: "campaign", campaignId }}
+        counts={counts}
+        pickLabel={(creature) => `Add ${creature.name}`}
+        onPick={onPick}
+      />
     </>
   );
 }

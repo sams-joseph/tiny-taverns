@@ -28,12 +28,14 @@ import { SaveFailure } from "../ui/form";
 import { challengeLine, npcSheetEditor, type NpcSheetTarget } from "./npcSheet";
 import { NpcQuickStartDialog } from "./NpcQuickStartDialog";
 import { NpcSheetDialog } from "./NpcSheetDialog";
+import { NpcSheetFromBestiaryDialog } from "./NpcSheetFromBestiaryDialog";
 
 /** The NPC sheet has no spine to scroll to its sections, so nothing registers. */
 const ignoreSection = () => undefined;
 
 /** Which of the sheet's dialogs is open. */
-type Editing = "identity" | "start" | "abilities" | "skills" | "spells" | "gear" | "remove";
+type Editing =
+  "identity" | "start" | "bestiary" | "abilities" | "skills" | "spells" | "gear" | "remove";
 
 /**
  * An NPC's stats: **the character sheet's own document and its own section
@@ -48,8 +50,9 @@ type Editing = "identity" | "start" | "abilities" | "skills" | "spells" | "gear"
  * dialogs in its section headers (`npcSheetEditor`). It edits but does not
  * play: nothing on it rolls or spends until an NPC can take part in a fight.
  * The identity is the header's (*Write one*, *Edit stats*), beside the quick
- * start (*Start from class and level*, and *Rebuild* over a sheet, which asks
- * first) and *Remove*, which asks first — the document goes with it.
+ * starts (*Start from class and level*, and *Rebuild* over a sheet, which asks
+ * first; *Start from a bestiary NPC*, a stat block translated whole, from an
+ * empty tab) and *Remove*, which asks first — the document goes with it.
  *
  * **DM prep, and it says so.** No player reads an NPC's sheet: it is not on
  * the NPC a player sees, nor in search, nor in anything the NPC is told.
@@ -91,6 +94,9 @@ export function NpcSheetPanel({
           onClose={close}
           onSaved={close}
         />
+      )}
+      {editing === "bestiary" && sheet === null && (
+        <NpcSheetFromBestiaryDialog name={name} target={target} onClose={close} onSaved={close} />
       )}
       {editor !== undefined && editing === "abilities" && (
         <AbilitiesDialog
@@ -134,9 +140,13 @@ export function NpcSheetPanel({
           title="No stats yet"
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button size="sm" onClick={() => setEditing("start")}>
+              <Button variant="secondary" size="sm" onClick={() => setEditing("start")}>
                 <Icon name="wand-sparkles" size={14} />
                 Start from class and level
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setEditing("bestiary")}>
+                <Icon name="footprints" size={14} />
+                Start from a bestiary NPC
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setEditing("identity")}>
                 <Icon name="plus" size={14} />
@@ -146,8 +156,9 @@ export function NpcSheetPanel({
           }
         >
           Start {name} from a class at a level, with the features, spell slots and kit a character
-          of it has; or write the level, the armour class and hit points a fight reads, and a
-          challenge rating, yourself. Only you see them.
+          of it has, or from a Guard, a Veteran or a Mage in the bestiary; or write the level, the
+          armour class and hit points a fight reads, and a challenge rating, yourself. Only you see
+          them.
         </EmptyState>
         {dialogs}
       </div>

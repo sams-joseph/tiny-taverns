@@ -808,6 +808,100 @@ describe("the Stats tab", () => {
     expect(await screen.findByText("18")).toBeInTheDocument();
   });
 
+  it("starts one from a bestiary NPC: a humanoid picked, what it writes shown, then the translation PUT", async () => {
+    server.routes.set(`PUT ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Start from a bestiary NPC" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Start Cazril’s stats from the bestiary",
+    });
+    // The campaign's bestiary, narrowed to humanoids by the server, not here.
+    const list = server.calls.find(
+      (call) => call.method === "GET" && call.pathname === `/campaigns/${campaignId}/creatures`,
+    );
+    expect(new URLSearchParams(list?.search).getAll("types")).toEqual(["humanoid"]);
+
+    // Picking only chooses: nothing is written until the confirm.
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: "Start from Goblin Boss" }),
+    );
+    expect(sheetCalls("PUT")).toHaveLength(0);
+    expect(within(dialog).getByText("AC 17 · HP 21 · CR 1 · 200 XP")).toBeInTheDocument();
+    expect(within(dialog).getByText("Abilities · 1 feature · 1 action")).toBeInTheDocument();
+    expect(within(dialog).getByText(/No class or level/)).toBeInTheDocument();
+
+    // Back to the list and the same pick again.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Pick another" }));
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: "Start from Goblin Boss" }),
+    );
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start from Goblin Boss" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const [put] = sheetCalls("PUT");
+    // `sheetFromStatBlock`'s translation: no class, level or race, and no version.
+    expect(JSON.parse(put!.body)).toEqual({
+      ac: 17,
+      hpMax: 21,
+      cr: "1",
+      sheet: {
+        abilities: [
+          { label: "STR", score: "10", modifier: "+0" },
+          { label: "DEX", score: "14", modifier: "+2" },
+        ],
+        traits: [
+          {
+            name: "Nimble Escape",
+            text: "The boss takes the Disengage or Hide action as a bonus action on each of its turns.",
+          },
+        ],
+        identity: { speed: "30 ft." },
+        actions: [
+          {
+            id: "atk:scimitar",
+            name: "Scimitar",
+            cost: "action",
+            hit: "+4",
+            dice: "1d6+2",
+            text: "Melee weapon attack: +4 to hit, reach 5 ft., one target.",
+            source: "weapon",
+          },
+        ],
+      },
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Level 5 Human Fighter" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says so when a sheet was started elsewhere meanwhile, and offers to read it", async () => {
+    server.routes.set(`PUT ${sheetPath}`, {
+      status: 409,
+      body: { _tag: "Conflict", message: "this NPC already has a sheet." },
+    });
+    await renderStats();
+
+    await userEvent.click(screen.getByRole("button", { name: "Start from a bestiary NPC" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Start Cazril’s stats from the bestiary",
+    });
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: "Start from Goblin Boss" }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start from Goblin Boss" }));
+    expect(await within(dialog).findByText(/already has a sheet/)).toBeInTheDocument();
+
+    server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      await screen.findByRole("heading", { name: "Level 5 Human Fighter" }),
+    ).toBeInTheDocument();
+  });
+
   it("removes the sheet only once asked, and goes back to no stats", async () => {
     server.routes.set(`GET ${sheetPath}`, { status: 200, body: cazrilSheet });
     server.routes.set(`DELETE ${sheetPath}`, { status: 204, body: null });

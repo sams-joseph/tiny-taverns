@@ -1,18 +1,14 @@
-import type { Skill } from "@taverns/api";
+import { STANDARD_SKILLS, type Skill } from "@taverns/api";
 
 /**
- * The skill list, and which ability each one keys off — **the pure half of the
- * skills editor**, tested on its own for the reason `abilities.ts` is.
+ * The skills editor's pure half — **the drafts it opens with and the rows it
+ * writes**, tested on its own for the reason `abilities.ts` is. The eighteen
+ * and their keyed abilities are `STANDARD_SKILLS`, shared with every other
+ * writer of a skill row.
  *
- * ### The eighteen are a vocabulary, not a schema
- *
- * `Skill.name` is an open `NonEmptyString` and `Skill.ability` an optional
- * string, so nothing on the wire knows there are eighteen of anything. What the
- * list buys is that a player picking *Sleight of Hand* gets the same spelling
- * and the same keyed ability as every other player picking it, which is what
- * makes the column under the name mean something. A row already in the document
- * with a name outside the list is kept and drawn beside them — the same rule
- * `abilityDrafts` follows for a seventh ability cell.
+ * A row already in the document with a name outside the list is kept and
+ * drawn beside them — the same rule `abilityDrafts` follows for a seventh
+ * ability cell.
  *
  * ### There is no *four of four*, and that is the departure
  *
@@ -24,28 +20,6 @@ import type { Skill } from "@taverns/api";
  * hold it itself; a sheet that held it would tell a level-9 rogue their sheet
  * is wrong.
  */
-
-/** `[skill, the ability it keys off]`, in the order the sheet draws them. */
-export const STANDARD_SKILLS: ReadonlyArray<readonly [string, string]> = [
-  ["Acrobatics", "DEX"],
-  ["Animal Handling", "WIS"],
-  ["Arcana", "INT"],
-  ["Athletics", "STR"],
-  ["Deception", "CHA"],
-  ["History", "INT"],
-  ["Insight", "WIS"],
-  ["Intimidation", "CHA"],
-  ["Investigation", "INT"],
-  ["Medicine", "WIS"],
-  ["Nature", "INT"],
-  ["Perception", "WIS"],
-  ["Performance", "CHA"],
-  ["Persuasion", "CHA"],
-  ["Religion", "INT"],
-  ["Sleight of Hand", "DEX"],
-  ["Stealth", "DEX"],
-  ["Survival", "WIS"],
-];
 
 /** One row as it is being edited. `bonus` is free text — it is stored, not derived. */
 export interface SkillDraft {

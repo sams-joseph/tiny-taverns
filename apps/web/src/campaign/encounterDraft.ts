@@ -27,11 +27,11 @@ import {
   type NoteCreate,
   type NoteId,
   partyThresholds,
+  STANDARD_SKILLS,
   type UnratedReason,
   type Visibility,
 } from "@taverns/api";
 import { DateTime } from "effect";
-import { STANDARD_SKILLS } from "../characters/skills";
 
 /**
  * An encounter as it is being written — **the pure half of the encounter

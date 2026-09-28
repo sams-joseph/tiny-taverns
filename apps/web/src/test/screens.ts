@@ -23,10 +23,12 @@ import {
 /**
  * One account's view of the wire; `test/scenarios.ts` holds the maps. The
  * three `creator-*` scenes are the creator's wire with the run on the table
- * played as that kind of scene instead of a fight.
+ * played as that kind of scene instead of a fight; `creator-unsheeted` is
+ * the creator's wire with Cazril's sheet not yet written.
  */
 export type Scenario =
   | "creator"
+  | "creator-unsheeted"
   | "creator-social"
   | "creator-challenge"
   | "creator-hazard"
@@ -42,7 +44,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The thirty screens. */
+/** The thirty-one screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -57,6 +59,7 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "cast", scenario: "creator", path: `${c}/cast` },
   { name: "npc", scenario: "creator", path: `${c}/cast/${npcId}` },
   { name: "npc-stats", scenario: "creator", path: `${c}/cast/${npcId}#stats` },
+  { name: "npc-stats-blank", scenario: "creator-unsheeted", path: `${c}/cast/${npcId}#stats` },
   { name: "cast-archived", scenario: "creator", path: `${c}/cast/archived` },
   { name: "chronicle", scenario: "creator", path: `${c}/chronicle` },
   { name: "party", scenario: "creator", path: `${c}/party` },

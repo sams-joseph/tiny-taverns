@@ -53,6 +53,7 @@ export * from "./RuleArticle.js";
 export * from "./Ruleset.js";
 export * from "./Search.js";
 export * from "./SheetGrants.js";
+export * from "./StatBlockSheet.js";
 export * from "./Session.js";
 export * from "./Spell.js";
 export * from "./Spellbook.js";
