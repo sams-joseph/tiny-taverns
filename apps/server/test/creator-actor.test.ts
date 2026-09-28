@@ -532,7 +532,11 @@ describe("the scope, counted", () => {
     // A hundred and eighteen is `CampaignStories.read`: the story's wide row
     // carries its visibility and provenance, and a player reads the narrow
     // `readAsPlayer`, ungated for `Notes.listAsPlayer`'s reason.
-    expect(gated).toBe(118);
+    // A hundred and nineteen to twenty-three are `NpcPreps.list`, `find`,
+    // `update` and the two inner reads they share: an NPC's attitude, status,
+    // whereabouts and first meeting are the DM's own prep, gated from the day
+    // they were declared, and `PlayerNpc` carries none of them.
+    expect(gated).toBe(123);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

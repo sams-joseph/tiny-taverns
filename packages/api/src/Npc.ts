@@ -14,6 +14,7 @@ import {
   NpcTurnId,
 } from "./Ids.js";
 import { APPEARANCE_MAX } from "./Character.js";
+import { SceneAttitude } from "./EncounterRunScene.js";
 import { NoteKind } from "./Note.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
@@ -268,6 +269,70 @@ export const NpcListFilter = Schema.Struct({
   archived: Schema.optional(Schema.Boolean),
 });
 export type NpcListFilter = typeof NpcListFilter.Type;
+
+/**
+ * How an NPC stands toward the party, as the DM labels them. **The same three
+ * words a conversation scene is set to** (`SceneAttitude`), so the table has
+ * one vocabulary for it. It is not `NpcIntent.attitude`: that line is public
+ * persona, how the NPC speaks about the party; this one is the DM's prep.
+ */
+export const NpcAttitude = SceneAttitude;
+export type NpcAttitude = SceneAttitude;
+
+/**
+ * Whether the NPC is still about. A label and nothing more: a `dead` NPC can
+ * still be rehearsed or opened at the table.
+ */
+export const NpcStatus = Schema.Literals(["alive", "dead", "captive", "unknown"]);
+export type NpcStatus = typeof NpcStatus.Type;
+
+/** The bound the schema and the table both state for where the party can find an NPC. */
+export const NPC_WHEREABOUTS_MAX = 200;
+
+/** Where the party can find them: something besides whitespace, bounded. */
+const NpcWhereabouts = Schema.String.check(
+  Schema.isPattern(/\S/),
+  Schema.isMaxLength(NPC_WHEREABOUTS_MAX),
+);
+
+/**
+ * An NPC's DM prep — **the creator's alone**, never shown to a player, as a
+ * seat's `SeatPrep` is.
+ *
+ * Not on `Npc`: a player reads a shared NPC's row (`PlayerNpc`) and the NPC
+ * agent's prompt is compiled from it, so the prep lives on a table no player
+ * read touches (`0073_npc_prep.ts`) and reaches the wire only through the
+ * creator's prep reads. Every NPC has one; `null` is "not set", never a
+ * default the product guessed.
+ */
+export class NpcPrep extends Schema.Class<NpcPrep>("NpcPrep")({
+  npcId: NpcId,
+  attitude: Schema.NullOr(NpcAttitude),
+  status: Schema.NullOr(NpcStatus),
+  /** Where the party can find them — `"The tollhouse at the ford"`. */
+  whereabouts: Schema.NullOr(Schema.String),
+  /** The night of this campaign the party first met them; `null` is "not met yet". */
+  metSessionId: Schema.NullOr(SessionId),
+  /**
+   * The nights the NPC was opened at the table — its live-session
+   * conversations — oldest night first. Derived from the record, never typed:
+   * the DM's *First met* is a separate answer and the two may disagree.
+   */
+  tableNights: Schema.Array(SessionId),
+}) {}
+
+/**
+ * The creator's prep PATCH. An absent field is untouched and `null` clears it.
+ * There is no `origin`: only the creator writes an NPC's prep, by hand. The
+ * table nights are derived, so no payload names them.
+ */
+export const NpcPrepUpdate = Schema.Struct({
+  attitude: Schema.optional(Schema.NullOr(NpcAttitude)),
+  status: Schema.optional(Schema.NullOr(NpcStatus)),
+  whereabouts: Schema.optional(Schema.NullOr(NpcWhereabouts)),
+  metSessionId: Schema.optional(Schema.NullOr(SessionId)),
+});
+export type NpcPrepUpdate = typeof NpcPrepUpdate.Type;
 
 /**
  * The channel a thread is on. **One member in this slice**, and the column

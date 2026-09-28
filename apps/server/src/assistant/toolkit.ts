@@ -44,6 +44,7 @@ import {
   NotFound,
   NpcId,
   NpcPersona,
+  NpcPrep,
   NpcPrivateMaterial,
   OptionKind,
   optionNamed,
@@ -84,6 +85,7 @@ import type {
 import type { CampaignCreatorActor } from "../repo/CreatorActor.js";
 import type { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import type { NpcMemories } from "../repo/NpcMemories.js";
+import type { NpcPreps } from "../repo/NpcPrep.js";
 import type { Npcs } from "../repo/Npcs.js";
 import type { NpcAwareness, NpcAwarenessDraft } from "../repo/NpcAwareness.js";
 import type { Options } from "../repo/Options.js";
@@ -633,13 +635,23 @@ const NpcContext = Schema.Struct({
     }),
   ),
   memories: Schema.Array(Schema.Struct({ body: Schema.String })),
+  /**
+   * The DM's own prep: how the NPC stands toward the party, whether they are
+   * about, where to find them, the night the party first met them and the
+   * nights they were at the table. The creator's toolkits only — no other
+   * toolkit has `getNpc`, and the NPC agent's prompt never reads it.
+   */
+  prep: NpcPrep,
 });
 
 export const GetNpc = Tool.make("getNpc", {
   description:
     "Read one campaign NPC's bounded creator context by id: the campaign " +
     "instance's public persona, creator-only private material, active knowledge " +
-    "facts and approved memories. Take the id from a searchCampaign hit whose " +
+    "facts, approved memories and the DM's prep (attitude toward the party, " +
+    "status, whereabouts, the night the party first met them and the nights " +
+    "they were at the table, as session ids listSessions names). Take the id " +
+    "from a searchCampaign hit whose " +
     "source is 'npc'. This reads the campaign snapshot, not the Library source, " +
     "and never includes NPC chat transcripts.",
   parameters: Schema.Struct({ npcId: NpcId }),
@@ -1786,6 +1798,8 @@ export interface HobRepositories {
   readonly npcKnowledge: (typeof NpcKnowledge)["Service"];
   readonly npcMemories: (typeof NpcMemories)["Service"];
   readonly npcAwareness: (typeof NpcAwareness)["Service"];
+  /** Each NPC's DM prep, which `getNpc` returns beside the persona. */
+  readonly npcPreps: (typeof NpcPreps)["Service"];
   readonly events: (typeof SessionEvents)["Service"];
   /** The campaign's kept story so far, which a refresh starts from. */
   readonly stories: (typeof CampaignStories)["Service"];
@@ -2058,9 +2072,10 @@ export const dmHandlersFor = (
       Effect.gen(function* () {
         const npc = yield* repositories.npcs.findById(dm, npcId);
         if (npc.archivedAt !== null) return yield* new NotFound({ resource: "npc", id: npcId });
-        const [knowledge, memories] = yield* Effect.all([
+        const [knowledge, memories, prep] = yield* Effect.all([
           repositories.npcKnowledge.activeForPrompt(dm, npcId),
           repositories.npcMemories.approvedForPrompt(dm, npcId),
+          repositories.npcPreps.find(dm, npcId),
         ]);
         return {
           npcId: npc.id,
@@ -2076,6 +2091,7 @@ export const dmHandlersFor = (
             sourceLabel: fact.sourceLabel,
           })),
           memories: memories.slice(0, NPC_CONTEXT_LIMIT).map((memory) => ({ body: memory.body })),
+          prep,
         };
       }),
     sessionLog: ({ sessionId, since }) =>

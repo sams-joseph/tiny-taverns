@@ -46,6 +46,7 @@ import { HobThreads, type TurnDraft } from "../repo/HobThreads.js";
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
+import { NpcPreps } from "../repo/NpcPrep.js";
 import { Npcs } from "../repo/Npcs.js";
 import { Options } from "../repo/Options.js";
 import { Recap } from "../repo/Recap.js";
@@ -236,6 +237,7 @@ export class Hob extends Context.Service<
     | NpcKnowledge
     | NpcMemories
     | NpcAwareness
+    | NpcPreps
     | Npcs
     | LanguageModel.LanguageModel
     | Options
@@ -261,6 +263,9 @@ export class Hob extends Context.Service<
           npcKnowledge: yield* NpcKnowledge,
           npcMemories: yield* NpcMemories,
           npcAwareness: yield* NpcAwareness,
+          // The DM's prep beside each NPC, which `getNpc` returns to the
+          // creator's toolkits alone.
+          npcPreps: yield* NpcPreps,
           events: yield* SessionEvents,
           // The campaign's kept story so far, which the creator's Hob reads
           // before drafting a replacement.

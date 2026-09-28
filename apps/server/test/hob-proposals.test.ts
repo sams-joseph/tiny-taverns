@@ -30,6 +30,7 @@ import { Notes } from "../src/repo/Notes.js";
 import { NpcKnowledge } from "../src/repo/NpcKnowledge.js";
 import { NpcMemories } from "../src/repo/NpcMemories.js";
 import { NpcAwareness } from "../src/repo/NpcAwareness.js";
+import { NpcPreps } from "../src/repo/NpcPrep.js";
 import { Npcs } from "../src/repo/Npcs.js";
 import { Options } from "../src/repo/Options.js";
 import { Proposals } from "../src/repo/Proposals.js";
@@ -78,6 +79,7 @@ const services = Layer.mergeAll(
   NpcKnowledge.layer,
   NpcMemories.layer,
   NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+  NpcPreps.layer,
   Options.layer,
   Proposals.layer.pipe(
     Layer.provide([

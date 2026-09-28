@@ -172,6 +172,8 @@ import {
   NpcKnowledgeFactCreate,
   NpcKnowledgeFactUpdate,
   NpcListFilter,
+  NpcPrep,
+  NpcPrepUpdate,
   NpcMemory,
   NpcMemoryCreate,
   NpcMemoryUpdate,
@@ -2363,6 +2365,15 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       success: NpcFollowUp,
       error: NotFound,
     }),
+    // The DM's prep for each NPC on the shelf the query names, in the list's
+    // order: the creator's alone, on a table no player read touches
+    // (`0073_npc_prep.ts`).
+    HttpApiEndpoint.get("prepList", "/-/prep", {
+      params: { campaignId: CampaignId },
+      query: NpcListFilter,
+      success: Schema.Array(NpcPrep),
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("findById", "/:npcId", {
       params: { campaignId: CampaignId, npcId: NpcId },
       success: Npc,
@@ -2373,6 +2384,12 @@ class NpcsGroup extends HttpApiGroup.make("npcs")
       payload: NpcUpdate,
       success: Npc,
       error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.patch("updatePrep", "/:npcId/prep", {
+      params: { campaignId: CampaignId, npcId: NpcId },
+      payload: NpcPrepUpdate,
+      success: NpcPrep,
+      error: NotFound,
     }),
     HttpApiEndpoint.post("archive", "/:npcId/archive", {
       params: { campaignId: CampaignId, npcId: NpcId },

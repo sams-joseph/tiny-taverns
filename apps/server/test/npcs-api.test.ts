@@ -511,6 +511,8 @@ describe("the npcs group", () => {
           const attempts: Record<string, Effect.Effect<unknown, unknown>> = {
             list: client.npcs.list({ params: { campaignId }, query: {} }),
             followUp: client.npcs.followUp({ params: { campaignId } }),
+            prepList: client.npcs.prepList({ params: { campaignId }, query: {} }),
+            updatePrep: client.npcs.updatePrep({ params, payload: { attitude: "friendly" } }),
             create: client.npcs.create({ params: { campaignId }, payload: { name: "Mine" } }),
             find: client.npcs.findById({ params }),
             update: client.npcs.update({ params, payload: { name: "Renamed" } }),

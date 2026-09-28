@@ -1047,6 +1047,10 @@ describe("a stranger reads nothing", () => {
               -- A portrait is read only as a field of the NPC, through the
               -- NPC's own shipped reads; it has no read of its own.
               'npc_image',
+              -- An NPC's prep is read only through the creator's prep reads,
+              -- behind the creator proof; a stranger's refusal there is
+              -- covered in npc-prep.test.ts.
+              'npc_prep',
               'play_group',
               'character_option_ability_bonus',
               'character_option_equipment_reference',

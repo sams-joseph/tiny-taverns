@@ -119,6 +119,10 @@ const NOT_CONTENT = [
   // An NPC's portrait: who may see it is exactly who may read the NPC, through
   // the NPC's own reads. See 0050_npc_images.ts.
   "npc_image",
+  // An NPC's DM prep — attitude, status, whereabouts, first meeting: the
+  // creator's alone through the creator proof, reached only by walking its NPC,
+  // and written by nobody but the creator. See 0073_npc_prep.ts.
+  "npc_prep",
   "play_group",
   "proficiency",
   "racial_trait_damage_type",
