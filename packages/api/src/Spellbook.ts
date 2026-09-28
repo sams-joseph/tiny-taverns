@@ -81,9 +81,27 @@ const diceAt = (
   return best;
 };
 
-/** The action line for one selected spell. Pure, so the picker and recompute use one spelling. */
+/** The fields of a spell row its action line is written from. */
+export type SpellActionSource = Pick<
+  Spell,
+  | "id"
+  | "name"
+  | "level"
+  | "schoolName"
+  | "ritual"
+  | "concentration"
+  | "castingTime"
+  | "range"
+  | "spell"
+>;
+
+/**
+ * The action line for one selected spell. Pure, so the picker and recompute use
+ * one spelling. It reads only the {@link SpellActionSource} fields, so the
+ * level-up recompute can pass the columns it selected rather than a whole row.
+ */
 export const spellActionFor = (
-  option: CharacterSpellOption,
+  option: { readonly spell: SpellActionSource },
   context: {
     readonly characterLevel: number;
     readonly spellAttack?: string;

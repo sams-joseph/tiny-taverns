@@ -21,9 +21,6 @@ import {
   type RaceBody,
   type SessionId,
   type SheetResource,
-  type SpellBody,
-  type SpellId,
-  spellActionFor,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Option } from "effect";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
@@ -37,6 +34,7 @@ import {
   type ProvenanceColumns,
   setClause,
 } from "./rows.js";
+import { recomputeForLevel } from "./sheetLevel.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
@@ -507,91 +505,6 @@ export const restCharacterRow = (
     return { row: rows[0]!, detail: { rest: kind, hitDiceSpent, healing } };
   });
 
-interface LevelSpellRow {
-  readonly id: SpellId;
-  readonly name: string;
-  readonly level: number;
-  readonly school_name: string;
-  readonly ritual: boolean;
-  readonly concentration: boolean;
-  readonly casting_time: string;
-  readonly spell_range: string;
-  readonly duration: string;
-  readonly class_names: ReadonlyArray<string>;
-  readonly subclass_names: ReadonlyArray<string>;
-  readonly body: SpellBody;
-}
-
-const ordinal = (n: number): string =>
-  `${String(n)}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
-
-const slotResourcesFor = (
-  slots: ReadonlyArray<number>,
-  previous: ReadonlyArray<SheetResource>,
-): ReadonlyArray<SheetResource> => {
-  const used = new Map(previous.map((resource) => [resource.id, resource.used]));
-  return slots.flatMap((count, index) => {
-    if (count <= 0) return [];
-    const id = `slot:${String(index + 1)}`;
-    return [
-      {
-        id,
-        name: `${ordinal(index + 1)}-level slots`,
-        used: Math.max(0, Math.min(count, used.get(id) ?? 0)),
-        max: count,
-        recharge: "long" as const,
-        derived: true,
-      },
-    ];
-  });
-};
-
-const levelUpResources = (
-  sheet: CharacterSheet,
-  level: number,
-  hitDie: number | undefined,
-  slots: ReadonlyArray<number>,
-): ReadonlyArray<SheetResource> => {
-  const previous = sheet.resources ?? [];
-  const customAndNonSlots = previous.filter(
-    (resource) =>
-      !(
-        resource.derived === true &&
-        (resource.id.startsWith("slot:") || resource.id === "hit-dice")
-      ),
-  );
-  const hitDice =
-    hitDie === undefined
-      ? []
-      : [
-          {
-            id: "hit-dice",
-            name: "Hit dice",
-            used: Math.max(
-              0,
-              Math.min(level, previous.find((r) => r.id === "hit-dice")?.used ?? 0),
-            ),
-            max: level,
-            recharge: "long" as const,
-            unit: `d${String(hitDie)}`,
-            derived: true,
-          },
-        ];
-  return [...customAndNonSlots, ...slotResourcesFor(slots, previous), ...hitDice];
-};
-
-const rawSlots = (raw: Record<string, unknown> | undefined): ReadonlyArray<number> => {
-  if (raw === undefined) return [];
-  if (Array.isArray(raw.slots))
-    return raw.slots.filter((value): value is number => typeof value === "number");
-  const slots = Array.from({ length: 9 }, (_, index) => {
-    const value = raw[`spell_slots_level_${String(index + 1)}`];
-    return typeof value === "number" && Number.isFinite(value) ? value : 0;
-  });
-  while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
-  return slots;
-};
-
 export class Characters extends Context.Service<
   Characters,
   {
@@ -775,134 +688,6 @@ export class Characters extends Context.Service<
           { discard: true },
         );
 
-      const recomputeForLevel = (
-        before: CharacterRow,
-        nextLevel: number | null | undefined,
-        nextClassName: string | null | undefined,
-      ) =>
-        Effect.gen(function* () {
-          const level = Math.max(1, nextLevel ?? before.level ?? 1);
-          const className = present(nextClassName ?? before.class_name);
-          if (className === undefined) return before.body;
-          const actor = yield* CurrentActor;
-          const vocabulary = yield* characterVocabulary(sql, before.id, actor);
-          const classRows = yield* sql<{
-            readonly id: string;
-            readonly name: string;
-            readonly body: { readonly hitDie?: number; readonly spellcastingAbility?: string };
-          }>`
-            select id, name, body from character_option
-            where kind = 'class'
-              and lower(name) = lower(${className})
-              and ${vocabulary("character_option")}
-            order by case when account_id is null and campaign_id is null then 0 else 1 end,
-                     created_at asc, id asc
-            limit 1
-          `;
-          const classOption = classRows[0];
-          if (classOption === undefined) return before.body;
-          const levelRows = yield* sql<{
-            readonly body: { readonly spellcasting?: Record<string, unknown> };
-          }>`
-            select body from class_level
-            where class_option_id = ${classOption.id}
-              and subclass_id is null
-              and level <= ${level}
-            order by level desc
-            limit 1
-          `;
-          const slots = rawSlots(levelRows[0]?.body.spellcasting);
-          const highest = slots.reduce((best, count, index) => (count > 0 ? index + 1 : best), 0);
-          const knownIds = (before.body.spellcasting?.known ?? []).flatMap((spell) =>
-            spell.spellId === undefined || spell.spellId === null ? [] : [spell.spellId],
-          );
-          const subclassName = present(before.body.identity?.subclass);
-          const spellRows =
-            knownIds.length === 0
-              ? []
-              : yield* sql<LevelSpellRow>`
-                  select id, name, level, school_name, ritual, concentration, casting_time,
-                         spell_range, duration, class_names, subclass_names, body
-                  from spell
-                  where id = any(${knownIds})
-                    and ${vocabulary("spell")}
-                    and (level = 0 or level <= ${highest})
-                    and ${
-                      subclassName === undefined
-                        ? sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`
-                        : sql.or([
-                            sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`,
-                            sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
-                          ])
-                    }
-                `;
-          const spellById = new Map(spellRows.map((row) => [row.id, row]));
-          const keptKnown = (before.body.spellcasting?.known ?? []).filter(
-            (spell) =>
-              spell.spellId !== undefined && spell.spellId !== null && spellById.has(spell.spellId),
-          );
-          const spellActions = keptKnown.flatMap((known) => {
-            if (known.spellId === undefined || known.spellId === null) return [];
-            const row = spellById.get(known.spellId);
-            if (row === undefined) return [];
-            if (row.level > 0 && known.prepared !== true) return [];
-            return [
-              spellActionFor(
-                {
-                  list: row.subclass_names.some(
-                    (name) => name.toLowerCase() === subclassName?.toLowerCase(),
-                  )
-                    ? "subclass"
-                    : "class",
-                  spell: {
-                    id: row.id,
-                    campaignId: null,
-                    accountId: null,
-                    derivedFrom: null,
-                    name: row.name,
-                    level: row.level,
-                    schoolIndex: "",
-                    schoolName: row.school_name,
-                    ritual: row.ritual,
-                    concentration: row.concentration,
-                    castingTime: row.casting_time,
-                    range: row.spell_range,
-                    duration: row.duration,
-                    classIndexes: [],
-                    classNames: row.class_names,
-                    subclassIndexes: [],
-                    subclassNames: row.subclass_names,
-                    spell: row.body,
-                    visibility: "shared",
-                    origin: "system",
-                    assistantTurnId: null,
-                    createdAt: DateTime.fromDateUnsafe(before.created_at),
-                    updatedAt: DateTime.fromDateUnsafe(before.updated_at),
-                  },
-                },
-                {
-                  characterLevel: level,
-                  spellAttack: before.body.spellcasting?.attack,
-                  spellSave: before.body.spellcasting?.save,
-                },
-              ),
-            ];
-          });
-          return {
-            ...before.body,
-            resources: levelUpResources(before.body, level, classOption.body.hitDie, slots),
-            actions: [
-              ...(before.body.actions ?? []).filter(
-                (action) => !(action.derived === true && action.source === "spell"),
-              ),
-              ...spellActions,
-            ],
-            ...(before.body.spellcasting === undefined
-              ? {}
-              : { spellcasting: { ...before.body.spellcasting, known: keptKnown } }),
-          };
-        });
-
       return {
         mine: dieOnSqlError(
           Effect.gen(function* () {
@@ -987,7 +772,12 @@ export class Characters extends Context.Service<
               const recomputedSheet =
                 patch.sheet === undefined &&
                 (patch.level !== undefined || patch.className !== undefined)
-                  ? yield* recomputeForLevel(rowBefore, patch.level, patch.className)
+                  ? yield* recomputeForLevel(sql, {
+                      body: rowBefore.body,
+                      level: patch.level ?? rowBefore.level,
+                      className: patch.className ?? rowBefore.class_name,
+                      vocabulary: yield* characterVocabulary(sql, id, actor),
+                    })
                   : undefined;
               const columns = defined({
                 name: patch.name,

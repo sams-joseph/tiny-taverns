@@ -381,6 +381,59 @@ describe("the seed", () => {
   });
 });
 
+describe("hit points at a level", () => {
+  const FIGHTER: ClassEntry = { hitDie: 10, unarmouredAc: ["DEX"] };
+  const CLERIC: ClassEntry = { hitDie: 8, unarmouredAc: ["DEX"] };
+  const at = (
+    classEntry: ClassEntry,
+    abilities: ReadonlyArray<Ability>,
+    level: number | undefined,
+    raceEntry: RaceEntry = NO_RACE,
+    subraceEntry: SubraceEntry | undefined = undefined,
+  ) => seedFor({ classEntry, raceEntry, subraceEntry, abilities, level });
+
+  it("takes the whole die at 1st level and its average rounded up at each level after", () => {
+    // 10 + 2, then four levels of 6 + 2.
+    expect(at(FIGHTER, [cell("CON", 14, "+2")], 5).hpMax).toBe(44);
+    // 6 + 1, then three levels of 4 + 1.
+    expect(at(WIZARD, [cell("CON", 12, "+1")], 4).hpMax).toBe(22);
+    // 12 + 3, then nineteen levels of 7 + 3.
+    expect(at(BARBARIAN, [cell("CON", 16, "+3")], 20).hpMax).toBe(205);
+    // 8 + 0, then one level of 5 + 0.
+    expect(at(ROGUE, [cell("CON", 10, "+0")], 2).hpMax).toBe(13);
+  });
+
+  it("counts a race's per-level bonus once per level, on the constitution the race raised", () => {
+    // CON 14 + 2 is 16 (+3): 8 + 3, then two levels of 5 + 3, then the Hill
+    // Dwarf's +1 three times.
+    expect(at(CLERIC, [cell("CON", 14, "+2")], 3, DWARF, HILL_DWARF).hpMax).toBe(30);
+  });
+
+  it("rounds an odd homebrew die's average up", () => {
+    expect(at({ hitDie: 7, unarmouredAc: ["DEX"] }, NONE, 2).hpMax).toBe(11);
+  });
+
+  it("answers exactly as before at level 1, and reads no level as the starting one", () => {
+    expect(at(PALADIN, CON_HEAVY, 1)).toEqual(at(PALADIN, CON_HEAVY, undefined));
+    expect(at(PALADIN, CON_HEAVY, undefined).hpMax).toBe(12);
+    expect(at(PALADIN, CON_HEAVY, undefined).level).toBe(STARTING_LEVEL);
+  });
+
+  it("reads a level the way the sheet's grants do: whole, and at least 1", () => {
+    expect(at(FIGHTER, NONE, 0).level).toBe(1);
+    expect(at(FIGHTER, NONE, 0).hpMax).toBe(10);
+    expect(at(FIGHTER, NONE, 3.7).level).toBe(3);
+  });
+
+  it("still floors at 1, however many levels a frail wizard has", () => {
+    expect(at(WIZARD, [cell("CON", 1, "-5")], 5).hpMax).toBe(1);
+  });
+
+  it("leaves armour class alone", () => {
+    expect(at(FIGHTER, CON_HEAVY, 9).ac).toBe(at(FIGHTER, CON_HEAVY, 1).ac);
+  });
+});
+
 describe("what ability bonuses grant, in words", () => {
   it("is pre-signed and in the order it was written", () => {
     expect(

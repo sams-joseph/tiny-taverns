@@ -224,6 +224,14 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
       );
     });
 
+  /**
+   * The level re-seeds as well: the hit points are the die at 1st level and its
+   * average at every level after, so a Paladin 5 whose box still read a
+   * level-1 total would be wrong in the way nobody checks.
+   */
+  const setLevel = (level: string) =>
+    setDraft((current) => seededDraft({ ...current, level }, edited, options));
+
   const toggleRaceBonus = (ability: AbilityKey, on: boolean) =>
     setDraft((current) => {
       const selected = on
@@ -636,7 +644,7 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
                       max={MAX_LEVEL}
                       value={draft.level}
                       aria-invalid={showProblems && problems.level !== undefined}
-                      onChange={(event) => set("level", event.target.value)}
+                      onChange={(event) => setLevel(event.target.value)}
                       className="w-20"
                     />
                   </Field>
@@ -956,8 +964,9 @@ function CharacterCreate({ campaignId }: { readonly campaignId: CampaignId | nul
                     <p className="flex items-start gap-2 text-caption leading-body text-muted-foreground">
                       <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-faint" />
                       <span>
-                        A starting point from the class, the race or subrace and your ability scores
-                        — the hit die, and <span className="font-mono">10</span> before any armour.
+                        A starting point from the class and level, the race or subrace and your
+                        ability scores — the hit die, its average for each level after the first,
+                        and <span className="font-mono">10</span> before any armour.
                         {scores === undefined
                           ? " No scores are set, so every modifier counts as +0. Set them above and these follow."
                           : " Type over either; nothing changes them for you once they are created."}

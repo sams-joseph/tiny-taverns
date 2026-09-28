@@ -72,6 +72,14 @@ const DEX_ONLY: ReadonlyArray<AbilityKey> = ["DEX"];
 
 export const STARTING_LEVEL = 1;
 
+/**
+ * A level as the rules read it: a whole number, at least 1, and
+ * {@link STARTING_LEVEL} when nobody said. The seed and the sheet's grants read
+ * the level through this, so the hit points and the features agree.
+ */
+export const levelOf = (level: number | undefined): number =>
+  Math.max(1, Math.floor(level ?? STARTING_LEVEL));
+
 export const modifierOf = (abilities: ReadonlyArray<Ability>, key: AbilityKey): number => {
   const cell = abilities.find((ability) => ability.label.trim().toUpperCase() === key);
   if (cell === undefined) return 0;
@@ -103,9 +111,11 @@ export const seedFor = (input: {
   /** Accepted for call-site symmetry; 2014 backgrounds do not seed scores. */
   readonly backgroundEntry?: BackgroundEntry | undefined;
   readonly abilities: ReadonlyArray<Ability>;
+  /** The level the hit points are worked out at; {@link STARTING_LEVEL} when omitted. */
+  readonly level?: number | undefined;
 }): CharacterSeed => {
   const { classEntry, raceEntry, subraceEntry } = input;
-  const level = STARTING_LEVEL;
+  const level = levelOf(input.level);
   const chosen = input.raceBonusChoices ?? [];
   const appliedBonuses = [
     ...(raceEntry?.abilityBonuses ?? []),
@@ -119,9 +129,14 @@ export const seedFor = (input: {
 
   if (classEntry === undefined) return { level, ac, abilities, appliedBonuses };
 
+  // The 2014 fixed value: the whole hit die at 1st level, then its average
+  // rounded up at every level after (a d10 is 6), CON each time.
+  // The race's per-level bonus (a Hill Dwarf's +1) counts once per level.
+  const constitution = modifierOf(abilities, "CON");
   const hp =
     classEntry.hitDie +
-    modifierOf(abilities, "CON") +
+    constitution +
+    (Math.floor(classEntry.hitDie / 2) + 1 + constitution) * (level - 1) +
     ((raceEntry?.hpPerLevel ?? 0) + (subraceEntry?.hpPerLevel ?? 0)) * level;
   return { level, ac, hpMax: Math.max(1, hp), abilities, appliedBonuses };
 };

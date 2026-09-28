@@ -477,6 +477,34 @@ describe("what a class, race and subrace pick fills in", () => {
     expect(hand.ac).toBe("15");
   });
 
+  it("seeds hit points at the Level box's level, the same level the sheet is written at", () => {
+    const draft = draftWith({
+      className: "Barbarian",
+      race: "Dwarf",
+      subrace: "Hill Dwarf",
+      level: "4",
+      abilities: scored(13, 14, 15, 8, 12, 10),
+    });
+    const seeded = seededDraft(draft, untouched, VOCABULARY);
+    // CON 15 + 2 is +3: 12 + 3, three levels of 7 + 3, and the Hill Dwarf's +1
+    // four times.
+    expect(seeded.hpMax).toBe("49");
+    const payload = payloadFrom(seeded, VOCABULARY);
+    expect(payload.hpMax).toBe(49);
+    expect(payload.level).toBe(4);
+    expect(payload.sheet?.identity?.hitDice).toBe("4/4 d12");
+  });
+
+  it("follows the Level box until the player types hit points of their own", () => {
+    const draft = draftWith({ className: "Druid", race: "Elf", level: "3" });
+    // 8, then two levels of 5, nothing from constitution.
+    expect(seededDraft(draft, untouched, VOCABULARY).hpMax).toBe("18");
+    expect(seededDraft({ ...draft, level: "1" }, untouched, VOCABULARY).hpMax).toBe("8");
+    expect(
+      seededDraft({ ...draft, hpMax: "30" }, new Set<SeededField>(["hpMax"]), VOCABULARY).hpMax,
+    ).toBe("30");
+  });
+
   it("still seeds from a bare baseline when nobody typed a score", () => {
     const none = seededDraft(
       draftWith({ className: "Barbarian", race: "Dwarf", subrace: "Hill Dwarf" }),

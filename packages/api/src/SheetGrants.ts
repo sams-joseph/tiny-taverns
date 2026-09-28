@@ -1,5 +1,12 @@
 import { FEATURE_OVERLAY, RACIAL_TRAIT_OVERLAY, type OverlayContext } from "./ActionOverlay.js";
-import type { InventoryItem, SheetAction, SheetResource, Spellcasting } from "./Character.js";
+import type {
+  InventoryItem,
+  SheetAction,
+  SheetBody,
+  SheetIdentity,
+  SheetResource,
+  Spellcasting,
+} from "./Character.js";
 import type { Ability, Trait } from "./Creature.js";
 import type {
   BackgroundBody,
@@ -13,9 +20,23 @@ import type {
   RaceOption,
   StartingKit,
 } from "./CharacterOption.js";
-import { isBackgroundOption, isClassOption, isRaceOption } from "./CharacterOption.js";
+import {
+  isBackgroundOption,
+  isClassOption,
+  isRaceOption,
+  subraceNamed,
+} from "./CharacterOption.js";
 import type { EquipmentId, FeatureId, RacialTraitId } from "./Ids.js";
-import { type AbilityKey, ABILITY_KEYS, modifierOf, signed, STARTING_LEVEL } from "./Ruleset.js";
+import {
+  type AbilityBonus,
+  type AbilityKey,
+  ABILITY_KEYS,
+  type CharacterSeed,
+  levelOf,
+  modifierOf,
+  seedFor,
+  signed,
+} from "./Ruleset.js";
 
 /**
  * What the picked class, race, subrace and background put on a fresh sheet —
@@ -23,9 +44,10 @@ import { type AbilityKey, ABILITY_KEYS, modifierOf, signed, STARTING_LEVEL } fro
  *
  * ### Why this lives in `@taverns/api`
  *
- * The same reason `seedFor` does: **both creation paths call it**, the manual
- * form's `payloadFrom` (`apps/web/src/characters/create.ts`) and Hob's
- * `proposeCharacter` handler (`apps/server/src/assistant/toolkit.ts`). The
+ * The same reason `seedFor` does: **both creation paths call it**, through
+ * {@link startingSheetBody} — the manual form's `payloadFrom`
+ * (`apps/web/src/characters/create.ts`) and Hob's `proposeCharacter` handler
+ * (`apps/server/src/assistant/toolkit.ts`). The
  * two paths have diverged on exactly this material before — the manual form
  * once seeded from a bare 10 while Hob's draft carried the standard array —
  * and a second implementation of "which racial traits does a Hill Dwarf get"
@@ -574,7 +596,7 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
       ? sources.backgroundOption
       : undefined;
   const background = backgroundOption?.body;
-  const level = Math.max(1, Math.floor(sources.level ?? STARTING_LEVEL));
+  const level = levelOf(sources.level);
   const abilities = sources.abilities ?? [];
   const row = levelRow(classOption, level);
   const proficiencyBonus =
@@ -749,3 +771,96 @@ export const asBackgroundOption = (
   option: CharacterOption | undefined,
 ): BackgroundOption | undefined =>
   option !== undefined && isBackgroundOption(option) ? option : undefined;
+
+/** What {@link startingSheetBody} composes from: the resolved options and the few picks. */
+export interface StartingSheetSources {
+  readonly classOption?: ClassOption | undefined;
+  readonly raceOption?: RaceOption | undefined;
+  /** The subrace label as typed; resolved inside the race through `subraceNamed`. */
+  readonly subrace?: string | undefined;
+  readonly backgroundOption?: BackgroundOption | undefined;
+  /**
+   * The background as the identity card spells it: the option's name where it
+   * resolved, the typed label where it did not. Callers choose the spelling.
+   */
+  readonly background?: string | undefined;
+  /** Written to `identity.subclass` as given. */
+  readonly subclass?: string | undefined;
+  /** The level the sheet and its hit points are written for; `STARTING_LEVEL` when absent. */
+  readonly level?: number | undefined;
+  /** The six cells **before** the race moves them — the standard array as placed, say. */
+  readonly abilities: ReadonlyArray<Ability>;
+  /** Explicit picks for a source-defined race bonus option. */
+  readonly raceBonusChoices?: ReadonlyArray<AbilityBonus> | undefined;
+  readonly kitChoices?: ReadonlyArray<KitPick> | undefined;
+  readonly backgroundKitChoices?: ReadonlyArray<KitPick> | undefined;
+}
+
+/**
+ * The seed a starting sheet is written on: the cells with the race's bonuses
+ * applied, and the armour class and hit points read off them at the sheet's
+ * level. {@link startingSheetBody} calls it; a form that shows the seeded
+ * numbers before anything is composed calls it too, so the two cannot differ.
+ */
+export const startingSeed = (sources: StartingSheetSources): CharacterSeed =>
+  seedFor({
+    classEntry: sources.classOption?.body,
+    raceEntry: sources.raceOption?.body,
+    subraceEntry: subraceNamed(sources.raceOption?.body, sources.subrace),
+    raceBonusChoices: sources.raceBonusChoices ?? [],
+    abilities: sources.abilities,
+    level: sources.level,
+  });
+
+/**
+ * **The one assembly of a starting sheet's rules half** — the character form's
+ * `payloadFrom`, Hob's `proposeCharacter` and an NPC's quick start all compose
+ * through here, so none of them can start a Hill Dwarf Fighter differently.
+ *
+ * The seed moves the cells first, because a weapon's to-hit and a spell save
+ * DC are read off the moved ones; `sheetGrantsFor` then writes the corpora's
+ * half at the seed's level, and the class's saving throws are marked on the
+ * cells. Every optional key is omitted rather than written empty: a sheet with
+ * `actions: []` on it draws an Actions section that says nothing, where a sheet
+ * without the key draws the section's own invitation to fill it in.
+ *
+ * What only a caller knows stays with the caller — a character's notes and
+ * story, Hob's skills and the model's own kit lines — and goes on beside the
+ * body it returns.
+ */
+export const startingSheetBody = (
+  sources: StartingSheetSources,
+): { readonly body: SheetBody; readonly seed: CharacterSeed } => {
+  const seed = startingSeed(sources);
+  const subrace = subraceNamed(sources.raceOption?.body, sources.subrace);
+  const typedSubrace = sources.subrace?.trim();
+  const grants = sheetGrantsFor({
+    classOption: sources.classOption,
+    raceOption: sources.raceOption,
+    subraceName: subrace?.name ?? (typedSubrace === "" ? undefined : typedSubrace),
+    backgroundOption: sources.backgroundOption,
+    level: seed.level,
+    abilities: seed.abilities,
+    kitChoices: sources.kitChoices,
+    backgroundKitChoices: sources.backgroundKitChoices,
+  });
+  const subclass = sources.subclass?.trim();
+  const background = sources.background?.trim();
+  const identity: SheetIdentity = {
+    ...identityGrants(grants),
+    ...(subclass === undefined || subclass === "" ? {} : { subclass }),
+    ...(background === undefined || background === "" ? {} : { background }),
+  };
+  const body: SheetBody = {
+    abilities: withSavingThrows(seed.abilities, grants.savingThrows, grants.proficiencyBonus),
+    traits: grants.traits,
+    ...(Object.keys(identity).length === 0 ? {} : { identity }),
+    ...(grants.proficiencies.length === 0 ? {} : { proficiencies: grants.proficiencies }),
+    ...(grants.actions.length === 0 ? {} : { actions: grants.actions }),
+    ...(grants.resources.length === 0 ? {} : { resources: grants.resources }),
+    ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
+    ...(grants.inventory.length === 0 ? {} : { inventory: grants.inventory }),
+    ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
+  };
+  return { body, seed };
+};

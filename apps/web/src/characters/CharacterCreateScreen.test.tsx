@@ -707,7 +707,7 @@ describe("writing down a character of your own", () => {
     // Said where the numbers are, before the press rather than at the table —
     // including that no scores are set, which is what stops "6 hit points"
     // reading as this wizard's real total.
-    await screen.findByText(/A starting point from the class, the race or subrace/);
+    await screen.findByText(/A starting point from the class and level, the race or subrace/);
     await screen.findByText(/No scores are set, so every modifier counts as \+0/);
 
     // Changing the pick re-seeds: a wizard's hit points must not survive into a
@@ -718,6 +718,28 @@ describe("writing down a character of your own", () => {
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("12");
     await pick("Subrace", "Hill Dwarf");
     expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("13");
+  });
+
+  it("seeds the hit points at the level typed, before or after the class is picked", async () => {
+    await renderCreate();
+    await fillItIn();
+    await type(/^Name$/, "Sorrel Ash");
+    await pick("Class", "Barbarian");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("12");
+
+    // A d12 and no scores: 12, then four levels of 7.
+    await retype(/^Level$/, "5");
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("40");
+    await pick("Class", "Wizard");
+    // A d6: 6, then four levels of 4.
+    expect((screen.getByLabelText(/Hit points/) as HTMLInputElement).value).toBe("22");
+
+    await userEvent.click(screen.getByRole("button", { name: /Create character/i }));
+    expect(bodyOf(server, "POST", createPath)).toMatchObject({
+      className: "Wizard",
+      level: 5,
+      hpMax: 22,
+    });
   });
 
   it("never writes over a number the player typed, however the pick changes", async () => {
