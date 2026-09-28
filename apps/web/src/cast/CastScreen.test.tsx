@@ -228,6 +228,8 @@ describe("CastScreen", () => {
         voice: { phrases: ["Quiet, now."] },
       },
       privateMaterial: { secrets: "Fen hired the hag." },
+      // A new NPC is kept to the DM until the switch says otherwise.
+      visibility: "dm",
     });
     expect(JSON.stringify(sent.persona)).not.toContain("hired the hag");
 
