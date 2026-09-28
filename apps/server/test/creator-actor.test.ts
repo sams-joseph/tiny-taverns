@@ -520,10 +520,11 @@ describe("the scope, counted", () => {
     // `PlayerNote` with no visibility or provenance, ungated for
     // `listAsPlayer`'s reason on `Encounters`.
     // A hundred and ten to a hundred and thirteen are a note's links:
-    // `Notes.addLink` and `removeLink`, and the two inner helpers they share,
-    // the note's read and the target's check. A link names an encounter or a
-    // seat whether or not a player may read it, so it is the creator's from
-    // the day it was declared, and `PlayerNote` has none.
+    // `Notes.addLink` and `removeLink`, the note's read they share, and the
+    // target's check in `links.ts`, which an NPC's links share too. A link
+    // names an encounter, a seat or an NPC whether or not a player may read
+    // it, so it is the creator's from the day it was declared, and
+    // `PlayerNote` has none.
     // A hundred and fourteen is `Recap.chronicle`, every night at once: the
     // recap's gate over the list, from the day it was declared.
     // A hundred and fifteen to seventeen are `Acts.create`, `update` and
@@ -536,7 +537,11 @@ describe("the scope, counted", () => {
     // `update` and the two inner reads they share: an NPC's attitude, status,
     // whereabouts and first meeting are the DM's own prep, gated from the day
     // they were declared, and `PlayerNpc` carries none of them.
-    expect(gated).toBe(123);
+    // A hundred and twenty-four to twenty-eight are an NPC's links:
+    // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
+    // share, the NPC's check and its links' read. Ties are DM prep, the
+    // creator's from the day they were declared, and `PlayerNpc` has none.
+    expect(gated).toBe(128);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

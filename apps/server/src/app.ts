@@ -68,6 +68,7 @@ import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { NpcPreps } from "./repo/NpcPrep.js";
+import { NpcLinks } from "./repo/NpcLinks.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -486,6 +487,7 @@ export const servicesOver = <E>(
   | NpcAwareness
   | NpcFollowUps
   | NpcPreps
+  | NpcLinks
   | Npcs
   | NpcThreads
   | ObjectStorage
@@ -606,6 +608,8 @@ export const servicesOver = <E>(
     // it; Hob's creator toolkit reads it through `getNpc` and nothing writes it
     // for a model.
     NpcPreps.layer,
+    // An NPC's ties to encounters and seats: DM prep, only the handlers hold it.
+    NpcLinks.layer,
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -808,6 +812,7 @@ export const applicationOver = <E>(
     | NpcAwareness
     | NpcFollowUps
     | NpcPreps
+    | NpcLinks
     | Npcs
     | NpcThreads
     | Options

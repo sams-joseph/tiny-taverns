@@ -55,6 +55,7 @@ import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { NpcPreps } from "./repo/NpcPrep.js";
+import { NpcLinks } from "./repo/NpcLinks.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { PlayerTable } from "./repo/PlayerTable.js";
@@ -1235,6 +1236,7 @@ const NpcsLive = HttpApiBuilder.group(
   "npcs",
   Effect.fnUntraced(function* (handlers) {
     const npcs = yield* Npcs;
+    const links = yield* NpcLinks;
     const knowledge = yield* NpcKnowledge;
     const memories = yield* NpcMemories;
     const proposals = yield* NpcProposals;
@@ -1301,6 +1303,18 @@ const NpcsLive = HttpApiBuilder.group(
         )
         .handle("restore", ({ params }) =>
           asCreator(params.campaignId, (creator) => npcs.restore(creator, params.npcId)),
+        )
+        // Ties are DM prep: the creator's to read and the creator's to write.
+        .handle("links", ({ params }) =>
+          asCreator(params.campaignId, (creator) => links.list(creator, params.npcId)),
+        )
+        .handle("addLink", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => links.add(creator, params.npcId, payload)),
+        )
+        .handle("removeLink", ({ params }) =>
+          asCreator(params.campaignId, (creator) =>
+            links.remove(creator, params.npcId, params.kind, params.targetId),
+          ),
         )
         .handle("rehearsal", ({ params }) => agent.status(params.campaignId, params.npcId))
         .handle("rehearse", ({ params, payload }) =>
