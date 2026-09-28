@@ -1827,6 +1827,41 @@ class LibraryGroup extends HttpApiGroup.make("library")
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
+    /**
+     * A Library original's sheet, the campaign `npcs.sheets` … `removeSheet`
+     * over the owner's own originals: the shelf's summaries in `npcs`' order,
+     * leaving out an original with no sheet; one sheet, or `null`; the PUT,
+     * the PATCH and the reverse state. Written against the core rules, as an
+     * unseated character is. Another account's original is `NotFound`, and so
+     * is a campaign NPC. A copy into a campaign takes the sheet
+     * (`npcs.copyFromSource`); removing the original leaves every copy's.
+     */
+    HttpApiEndpoint.get("npcSheets", "/npcs/-/sheets", {
+      query: NpcListFilter,
+      success: Schema.Array(NpcSheetSummary),
+    }),
+    HttpApiEndpoint.get("npcSheet", "/npcs/:npcId/sheet", {
+      params: { npcId: NpcId },
+      success: Schema.NullOr(NpcSheet),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.put("putNpcSheet", "/npcs/:npcId/sheet", {
+      params: { npcId: NpcId },
+      payload: NpcSheetPut,
+      success: NpcSheet,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.patch("updateNpcSheet", "/npcs/:npcId/sheet", {
+      params: { npcId: NpcId },
+      payload: NpcSheetUpdate,
+      success: NpcSheet,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.delete("removeNpcSheet", "/npcs/:npcId/sheet", {
+      params: { npcId: NpcId },
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
     HttpApiEndpoint.get("magicItems", "/magic-items", {
       query: MagicItemFilter,
       success: pageOf(MagicItem, MagicItemSort),

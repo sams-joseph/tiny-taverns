@@ -749,6 +749,8 @@ const LibraryLive = HttpApiBuilder.group(
     const ruleArticles = yield* RuleArticles;
     const feats = yield* Feats;
     const npcs = yield* Npcs;
+    // A Library original's sheet is its owner's alone, as the original is.
+    const npcSheets = yield* NpcSheets;
     return handlers
       .handle("list", ({ query }) => creatures.library(query))
       .handle("environments", () => creatures.libraryEnvironments())
@@ -800,6 +802,13 @@ const LibraryLive = HttpApiBuilder.group(
       .handle("archiveNpc", ({ params }) => npcs.libraryArchive(params.npcId))
       .handle("restoreNpc", ({ params }) => npcs.libraryRestore(params.npcId))
       .handle("removeNpc", ({ params }) => npcs.libraryRemove(params.npcId))
+      .handle("npcSheets", ({ query }) => npcSheets.libraryList(query))
+      .handle("npcSheet", ({ params }) => npcSheets.libraryFind(params.npcId))
+      .handle("putNpcSheet", ({ params, payload }) => npcSheets.libraryPut(params.npcId, payload))
+      .handle("updateNpcSheet", ({ params, payload }) =>
+        npcSheets.libraryUpdate(params.npcId, payload),
+      )
+      .handle("removeNpcSheet", ({ params }) => npcSheets.libraryRemove(params.npcId))
       .handle("magicItems", ({ query }) => magicItems.library(query))
       .handle("createMagicItem", ({ payload }) => magicItems.libraryCreate(payload))
       .handle("findMagicItem", ({ params }) => magicItems.libraryFindById(params.magicItemId))

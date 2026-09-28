@@ -541,12 +541,12 @@ describe("the scope, counted", () => {
     // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
     // share, the NPC's check and its links' read. Ties are DM prep, the
     // creator's from the day they were declared, and `PlayerNpc` has none.
-    // A hundred and twenty-nine to thirty-six are an NPC's sheet:
-    // `NpcSheets.list`, `find`, `put`, `update` and `remove`, and the three
-    // inner helpers they share — the NPC's lock, the sheet's read and the
-    // NPC's rules. A sheet is DM prep, the creator's from the day it was
-    // declared, and `PlayerNpc` carries none of it.
-    expect(gated).toBe(136);
+    // A hundred and twenty-nine to thirty-four are an NPC's sheet:
+    // `NpcSheets.list`, `find`, `put`, `update` and `remove`, and the one
+    // inner helper they share, the campaign's reach — the NPC in the proof's
+    // campaign and that campaign's rules. A sheet is DM prep, the creator's
+    // from the day it was declared, and `PlayerNpc` carries none of it.
+    expect(gated).toBe(134);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service
@@ -806,7 +806,11 @@ describe("the scope, counted", () => {
     // and `put`, `remove` and `accept`, writes whose reach is
     // `ensureCampaignWritable`, which is already the creator predicate — so a
     // hundred and sixty-seven.
-    expect(ungated).toBe(167);
+    // A hundred and sixty-eight to seventy-two are a Library original's sheet:
+    // `NpcSheets.libraryList`, `libraryFind`, `libraryPut`, `libraryUpdate`
+    // and `libraryRemove`, for `Npcs.library`'s reason: there is no campaign
+    // to prove, and `libraryRowWritable` is already the owner predicate.
+    expect(ungated).toBe(172);
   });
 });
 

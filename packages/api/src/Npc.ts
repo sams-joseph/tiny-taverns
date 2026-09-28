@@ -43,8 +43,10 @@ import { provenanceFields, Visibility } from "./Provenance.js";
  *
  * It stays not a character when it has stats: an NPC may *carry* a
  * character-style sheet (`NpcSheet`), the rules half of a character's document
- * on a creator-only table of its own, but it is never a `character` row — no
- * account owns it, no seat holds it, and no player reads the sheet.
+ * on a table of its own that only the NPC's owner reads — a campaign NPC's
+ * creator, a Library original's owner — but it is never a `character` row: no
+ * seat holds it, no player reads the sheet, and a copy into a campaign takes
+ * the original's sheet as it takes the persona.
  *
  * ### Private material is its own field, by construction
  *
@@ -404,12 +406,15 @@ export class NpcSheetSummary extends Schema.Class<NpcSheetSummary>("NpcSheetSumm
 ) {}
 
 /**
- * An NPC's character-style sheet — **DM prep, the creator's alone**, never
- * shown to a player, and not a character.
+ * An NPC's character-style sheet — **DM prep, its NPC's owner's alone** (a
+ * campaign NPC's creator, a Library original's owner), never shown to a
+ * player, and not a character.
  *
  * The NPC is still "not a character and not a creature": it *carries* a sheet
  * written the way a character's is, on its own table (`0076_npc_sheets.ts`),
- * keyed by the NPC alone. The document is the rules half of a character's
+ * keyed by the NPC alone, so a Library original carries one and a copy into a
+ * campaign takes it, for the owner and a Shared World copier alike: stats are
+ * rules, not secrets. The document is the rules half of a character's
  * sheet ({@link SheetBody}), reused rather than forked, so the character's
  * renderer and rules read it unchanged; the player's own half — notes, story,
  * journal, the level-up log, death saves — has no key here, and a write that
@@ -417,7 +422,7 @@ export class NpcSheetSummary extends Schema.Class<NpcSheetSummary>("NpcSheetSumm
  *
  * Not on `Npc` and not on `PlayerNpc`: a player reads a shared NPC's row and
  * the NPC agent's prompt is compiled from it, so the sheet reaches the wire
- * only through the creator's sheet reads, as `NpcPrep` does. An NPC with no
+ * only through the owner's sheet reads, as `NpcPrep` does. An NPC with no
  * sheet reads `null`, never an empty sheet the product made up.
  */
 export class NpcSheet extends Schema.Class<NpcSheet>("NpcSheet")({
@@ -434,7 +439,7 @@ export class NpcSheet extends Schema.Class<NpcSheet>("NpcSheet")({
  * sheet over (a quick start) must say which sheet it read, so it cannot
  * silently overwrite hand edits. Missing or stale, it is a `Conflict`; sent
  * when there is no sheet, it is a `Conflict` too, because the sheet it read is
- * gone. No payload carries `origin`: only the creator writes an NPC's sheet,
+ * gone. No payload carries `origin`: only the NPC's owner writes its sheet,
  * by hand.
  */
 export const NpcSheetPut = Schema.Struct({
