@@ -1553,11 +1553,12 @@ describe("a model that would not use its build tools", () => {
     expect(events.at(-1)?.event).toBe("done");
   }, 60_000);
 
-  it("stays quiet when the model did make the call and the tool refused it", async () => {
+  it("says nothing reached the DM when the tool refused the call, not that none was made", async () => {
     // It reached for a build tool and got an answer it could read — an invented
-    // creature id comes back as a `NotFound` through `failureMode: "return"`,
-    // which the model normally explains. Saying "no usable build tool call"
-    // there would be a true-sounding sentence about the wrong thing.
+    // creature id comes back as a `NotFound` through `failureMode: "return"`.
+    // Saying "no usable build tool call" there would be a true-sounding
+    // sentence about the wrong thing; saying nothing trusts a reply that may
+    // claim the card is on screen. So the turn ends in the one true report.
     const { events } = await ask(fixture.dm, fixture.campaign.id, {
       text: "Build me an encounter for the reeds.",
       rounds: [
@@ -1565,11 +1566,35 @@ describe("a model that would not use its build tools", () => {
           name: "Reed ambush",
           creatures: [{ creatureId: fixture.strangerCampaign.id, count: 3 }],
         }),
-        textChunks("I could not find that creature here."),
+        textChunks("Your ambush is ready to view."),
       ] as never,
     });
 
     expect(events.some((event) => event.event === "proposal")).toBe(false);
+    expect(events.some((event) => event.event === "done")).toBe(false);
+    const said = apologies(events);
+    expect(said).toHaveLength(1);
+    expect(said[0]).toContain("nothing reached you");
+    expect(said[0]).not.toContain("usable build tool call");
+  }, 60_000);
+
+  it("stays quiet when a refused call was fixed and offered in the same turn", async () => {
+    const { events } = await ask(fixture.dm, fixture.campaign.id, {
+      text: "Build me an encounter for the reeds.",
+      rounds: withGoblin([
+        toolCallChunks("proposeEncounter", {
+          name: "Reed ambush",
+          creatures: [{ creatureId: fixture.strangerCampaign.id, count: 3 }],
+        }),
+        toolCallChunks("proposeEncounter", {
+          name: "Reed ambush",
+          creatures: [{ creatureId: "", count: 3 }],
+        }),
+        textChunks("Three of them, in the reeds."),
+      ]) as never,
+    });
+
+    expect(events.some((event) => event.event === "proposal")).toBe(true);
     expect(apologies(events)).toEqual([]);
     expect(events.at(-1)?.event).toBe("done");
   }, 60_000);

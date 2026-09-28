@@ -90,7 +90,7 @@ Always pass the token limit explicitly. `@effect/ai-anthropic`'s capabilities ta
 
 Look at the wire first. `test/support/model.ts` records every request body, and one `HttpClient.tapRequest` settles which link failed. Every time this was reported the tools were in the request and the model could call them; the failures were downstream, and each said nothing.
 
-**Null optionals.** OpenAI strict mode puts every property in `required` with a `null` member, and an XML tool-call template through llama.cpp hands a string-typed optional the word `"null"`. The decode side refused both and killed the answer. The `optional`/`AbsentWord` helper is the fix; `Schema.optional` on a `Tool.make` parameter is the thing to grep for.
+**Null optionals.** OpenAI strict mode puts every property in `required` with a `null` member, and an XML tool-call template through llama.cpp hands a string-typed optional the word `"null"`. The decode side refused both and killed the answer. The `optional`/`AbsentWord` helper is the fix; `Schema.optional` on a `Tool.make` parameter is the thing to grep for. `optionalText` keeps the word, so in `proposeEncounter`, where every call carries a challenge's outcome lines, `"null"` read as an outcome and a social encounter or a fight was refused for numbers nobody sent; `proseOf` reads the absent words as absence in encounter text, which can never mean "None".
 
 **Reasoning inside the budget.** A thinking model spends `HOB_MAX_TOKENS` deliberating first, and reasoning parts are dropped on purpose, so the panel showed `began … done` with nothing between (or, on an endpoint that leaves `<think>` in `content`, prose and no tool call). `truncated` and `silence` in `Hob.ts` turn a `length` finish and an empty answer into `failed` events naming the knob, and a `length` round ends the loop. A `done` that follows nothing is the shape to distrust.
 
@@ -104,9 +104,11 @@ Look at the wire first. `test/support/model.ts` records every request body, and 
 
 **The model would not use its build tools, and now says so.** `round` rightly drops a clean finish with no tool call, which is why this was invisible. `printedTheCall` recognises two measured signatures: a tool name in call position, or arguments in a fence (`BUILD_ARGUMENTS`, parameter names the test pins are in a published schema). It fires from `tail` only when nothing was offered, nothing else failed, and no usable build call reached a handler. The creator's panel and the account's are general chat, so `askedForABuild` opts in (over `DM_NOUNS` or `ACCOUNT_NOUNS`) and errs toward silence; a drafting composer drafts by default, so `aQuestionAboutIt` is the only way out. `BuildSurface` names the three.
 
+**A refused build, reported as ready.** A `propose*` refusal goes back to the model, which is free to say the card is on screen anyway: a social encounter refused for carrying a Persuasion DC was answered "ready to view" and closed with `done`. Every prompt carries `REFUSED_OFFERS`; each `proposeEncounter` refusal names the parameters to give or leave out and ends saying nothing reached the DM (`notOffered`); and `tail` ends a turn whose build was refused and that offered nothing in `unoffered` rather than `done`, ahead of `silence` and `unbuilt`. A refusal the model fixed in the same turn is quiet.
+
 `apology()` is the only thing that fills `HobFailure.message`; `describe()` is for the log. `hob.test.ts` sweeps every reachable failure for framework fingerprints (`LanguageModel.`, `Invalid output`, `Expected `, ` at [`).
 
-A null `proposal` on a saved turn that reads like an offer means the model never called the tool: a model-tier symptom, checked with one query on `assistant_turn` before touching `apps/web/src/hob/`. Reach for "the model is the limit" last, not second.
+A null `proposal` on a saved turn that reads like an offer means the model never called the tool or its call was refused (the panel said which): a model-tier symptom, checked with one query on `assistant_turn` before touching `apps/web/src/hob/`. Reach for "the model is the limit" last, not second.
 
 ### Running and testing it
 
