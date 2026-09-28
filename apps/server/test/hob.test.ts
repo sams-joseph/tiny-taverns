@@ -447,6 +447,10 @@ describe("answering", () => {
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
+      // A new NPC for the Cast, with an optional sheet composed as
+      // `proposeNpcSheet`'s is; kept only by the creator's accept. No other
+      // toolkit has it.
+      "proposeNpc",
       "proposeNpcAwareness",
       // An NPC's stat sheet, built like a character's and kept only by the
       // creator's accept; `getNpc` above reads it back. No other toolkit has it.
@@ -1645,6 +1649,10 @@ describe("what counts as asking for a build", () => {
     ["Build me something for the reeds.", true],
     ["write something about the lantern-keeper", true],
     ["draft some read-aloud for the marsh", true],
+    // A new member of the Cast, which `proposeNpc` drafts.
+    ["Make an NPC for the ferry crossing", true],
+    ["add a blacksmith to the cast", true],
+    ["create a villain for the reeds", true],
     // Not asked for. Every one of these is a question this panel really gets.
     ["Who is the ferryman?", false],
     ["Who wrote this note?", false],
@@ -1656,6 +1664,8 @@ describe("what counts as asking for a build", () => {
     ["Summarise the last encounter", false],
     ["give me a summary of last session", false],
     ["give me something to read about the ferryman", false],
+    ["Who is in the cast?", false],
+    ["Did I already make an NPC for the ferry?", false],
     // Misses, kept visible: each is a build ask the rule lets past, because
     // erring towards silence is the instruction.
     ["Give me a name for the ferryman", false],
@@ -1739,6 +1749,7 @@ describe("what counts as asking for a build", () => {
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
+      "proposeNpc",
       "proposeNpcAwareness",
       "proposeNpcSheet",
     ]);
@@ -1815,6 +1826,10 @@ describe("the assistant seam", () => {
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
+      // A new NPC for the Cast, with an optional sheet composed as
+      // `proposeNpcSheet`'s is; kept only by the creator's accept. No other
+      // toolkit has it.
+      "proposeNpc",
       "proposeNpcAwareness",
       // An NPC's stat sheet, built like a character's and kept only by the
       // creator's accept; `getNpc` above reads it back. No other toolkit has it.

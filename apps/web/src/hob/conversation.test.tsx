@@ -7,11 +7,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   campaign as aCampaignRow,
   campaignId,
+  cazril,
   encounter as anEncounterRow,
   session as aSessionRow,
   worldId,
 } from "../campaign/campaign.fixtures";
-import { npcSheetAtom, npcSheetsAtom } from "../cast/load";
+import { npcPrepAtom, npcsAtom, npcSheetAtom, npcSheetsAtom } from "../cast/load";
 import { characterProposal } from "../characters/characters.fixtures";
 import { useApiAtom } from "../api/atoms";
 import type { HobScope } from "./conversation";
@@ -247,6 +248,10 @@ const installHobServer = (): HobStub => {
 
     // The Cast's shelf of sheets and one NPC's sheet: none yet, until a test keeps one.
     if (pathname.endsWith("/npcs/-/sheets")) return Promise.resolve(json([]));
+    // The Cast's rows and their prep: empty, until a test keeps a new NPC.
+    if (pathname.endsWith("/npcs") || pathname.endsWith("/npcs/-/prep")) {
+      return Promise.resolve(json([]));
+    }
     if (pathname.endsWith("/sheet")) return Promise.resolve(json(null));
 
     return Promise.resolve(new Response("{}", { status: 404 }));
@@ -1232,6 +1237,139 @@ describe("an NPC's sheet", () => {
     expect(screen.getByText("AC")).toBeInTheDocument();
     expect(screen.queryByText("HP")).toBeNull();
     expect(screen.queryByText(/CR/)).toBeNull();
+  });
+});
+
+describe("a new NPC for the Cast", () => {
+  const npcProposal = {
+    target: "npc",
+    name: "Mara Vell",
+    role: "the blacksmith at the ford",
+    persona: {
+      identity: {
+        summary: "Shoes the ferry horses and hears every rumour first.",
+        appearance: "Broad shoulders, a scorched leather apron, grey braid.",
+      },
+      voice: { manner: "Clipped, never looks up from the anvil." },
+      intent: { wants: "To buy the ferry out from under the toll-keeper." },
+    },
+    privateMaterial: { secrets: "She forged the toll seal herself." },
+    prep: { attitude: "indifferent", status: "alive", whereabouts: "The forge by the ford" },
+    sheet: {
+      level: 5,
+      race: "Dwarf",
+      subrace: "Hill Dwarf",
+      className: "Fighter",
+      ac: 10,
+      hpMax: 54,
+      cr: "3",
+      sheet: {
+        abilities: [
+          { label: "STR", score: "15", modifier: "+2" },
+          { label: "DEX", score: "13", modifier: "+1" },
+          { label: "CON", score: "16", modifier: "+3" },
+          { label: "INT", score: "8", modifier: "-1" },
+          { label: "WIS", score: "12", modifier: "+1" },
+          { label: "CHA", score: "10", modifier: "+0" },
+        ],
+        traits: [{ name: "Second Wind", text: "Regain hit points as a bonus action." }],
+      },
+    },
+  };
+  const keptNpc = {
+    ...cazril,
+    id: "6f7a8b9c-0d1e-4f2a-8b3c-4d5e6f7a8b9c",
+    name: "Mara Vell",
+    role: "the blacksmith at the ford",
+    persona: npcProposal.persona,
+    privateMaterial: npcProposal.privateMaterial,
+    version: 1,
+    origin: "assistant",
+    assistantTurnId: turnId,
+    imagePending: true,
+  };
+
+  it("draws the name, the role, the sheet's line and who they are, and keeps it with ids alone", async () => {
+    server.acceptBody = { accepted: "npc", npc: keptNpc };
+    server.frames = [began(threadId, turnId), proposed(turnId, npcProposal), done()];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Add a blacksmith to the cast.{Enter}");
+
+    expect(await screen.findByText("Mara Vell")).toBeInTheDocument();
+    expect(screen.getByText("NPC")).toBeInTheDocument();
+    expect(
+      screen.getByText("the blacksmith at the ford · Level 5 Hill Dwarf Fighter · CR 3"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("AC").nextSibling).toHaveTextContent("10");
+    expect(screen.getByText("HP").nextSibling).toHaveTextContent("54");
+    expect(
+      screen.getByText("Shoes the ferry horses and hears every rumour first."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Clipped, never looks up from the anvil.")).toBeInTheDocument();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("In the Cast")).toBeInTheDocument();
+  });
+
+  it("draws no sheet line or numbers for an NPC drafted without stats", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, { ...npcProposal, role: "", persona: {}, sheet: null }),
+      done(),
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Make an NPC.{Enter}");
+
+    expect(await screen.findByText("Mara Vell")).toBeInTheDocument();
+    expect(screen.queryByText(/Level 5/)).toBeNull();
+    expect(screen.queryByText("AC")).toBeNull();
+    expect(screen.queryByText("HP")).toBeNull();
+  });
+
+  it("re-reads the Cast's rows, prep and sheet lines once it is kept", async () => {
+    /** What the Cast reads, mounted beside the panel. */
+    function CastReaders() {
+      const [rows] = useApiAtom(npcsAtom(campaignId as CampaignId));
+      const [prep] = useApiAtom(npcPrepAtom(campaignId as CampaignId));
+      const [sheets] = useApiAtom(npcSheetsAtom(campaignId as CampaignId));
+      return <p>{`${rows.state} ${prep.state} ${sheets.state}`}</p>;
+    }
+    const castReads = () =>
+      server.paths.filter(
+        (path) =>
+          path === `/campaigns/${campaignId}/npcs` ||
+          path === `/campaigns/${campaignId}/npcs/-/prep` ||
+          path === `/campaigns/${campaignId}/npcs/-/sheets`,
+      ).length;
+    server.acceptBody = { accepted: "npc", npc: keptNpc };
+    server.frames = [began(threadId, turnId), proposed(turnId, npcProposal), done()];
+    render(
+      <HostedSessionScope session={TEST_SESSION}>
+        <CastReaders />
+        <ScopedHob hob={panelState(true)} scope={campaignScope} />
+      </HostedSessionScope>,
+    );
+    expect(await screen.findByText("ready ready ready")).toBeInTheDocument();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Add a blacksmith to the cast.{Enter}");
+    await screen.findByText("Mara Vell");
+    const before = castReads();
+    expect(before).toBe(3);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    // All three go back to the wire, so the Cast shows the new NPC at once.
+    await waitFor(() => expect(castReads()).toBe(before + 3));
   });
 });
 

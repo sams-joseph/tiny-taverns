@@ -165,18 +165,31 @@ function CampaignStoryBody({
   );
 }
 
+/**
+ * A new NPC Hob drafted for the Cast: who they are, how they look (the line
+ * the portrait is drawn from once kept), the voice and what they want, and the
+ * sheet's numbers when it was drafted with stats. The role and the sheet's
+ * line are the card's meta.
+ */
 function NpcBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npc" } }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex gap-3.5 font-mono text-mono leading-snug font-medium text-foreground">
-        <span>{artifact.race}</span>
-        <span className="text-muted-foreground">{artifact.alignment}</span>
-      </div>
-      <div className="text-body-s leading-body text-foreground">{artifact.summary}</div>
-      <div className="flex items-center gap-2 rounded-sm bg-surface-sunken px-2.5 py-1.5">
-        <Icon name="mic" size={13} className="shrink-0 text-magic-ink" />
-        <span className="text-caption leading-body text-muted-foreground">{artifact.voice}</span>
-      </div>
+      <SheetStats stats={artifact.stats} />
+      {artifact.summary !== undefined && (
+        <p className="text-body-s leading-body text-foreground">{artifact.summary}</p>
+      )}
+      {artifact.appearance !== undefined && (
+        <p className="text-body-s leading-body text-muted-foreground">{artifact.appearance}</p>
+      )}
+      {artifact.voice !== undefined && (
+        <div className="flex items-center gap-2 rounded-sm bg-surface-sunken px-2.5 py-1.5">
+          <Icon name="mic" size={13} className="shrink-0 text-magic-ink" />
+          <span className="text-caption leading-body text-muted-foreground">{artifact.voice}</span>
+        </div>
+      )}
+      {artifact.wants !== undefined && (
+        <p className="text-caption leading-body text-muted-foreground">Wants: {artifact.wants}</p>
+      )}
     </div>
   );
 }
@@ -268,6 +281,21 @@ function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
   );
 }
 
+/** A drafted sheet's seeded numbers — `AC 16  HP 44` — or nothing without one. */
+function SheetStats({ stats }: { readonly stats: ReadonlyArray<readonly [string, string]> }) {
+  if (stats.length === 0) return null;
+  return (
+    <dl className="flex gap-4 font-mono text-mono leading-snug font-medium">
+      {stats.map(([label, value]) => (
+        <div key={label} className="flex gap-1.5">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="text-foreground">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /**
  * An NPC's sheet Hob drafted: the seeded numbers, what keeping it replaces,
  * and Hob's reasons. The class and level are the card's meta line.
@@ -275,16 +303,7 @@ function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
 function NpcSheetBody({ artifact }: { readonly artifact: HobArtifact & { kind: "npcSheet" } }) {
   return (
     <div className="flex flex-col gap-2">
-      {artifact.stats.length > 0 && (
-        <dl className="flex gap-4 font-mono text-mono leading-snug font-medium">
-          {artifact.stats.map(([label, value]) => (
-            <div key={label} className="flex gap-1.5">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="text-foreground">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <SheetStats stats={artifact.stats} />
       {artifact.replaces !== undefined && (
         <p className="flex items-center gap-2 rounded-sm bg-surface-sunken px-2.5 py-1.5 text-caption leading-body text-muted-foreground">
           <Icon name="refresh-cw" size={12} className="shrink-0 text-faint" />
@@ -365,6 +384,7 @@ export function ArtifactCard({
   const campaign = artifact.kind === "campaign";
   const character = artifact.kind === "character";
   const npcSheet = artifact.kind === "npcSheet";
+  const npc = artifact.kind === "npc";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -476,7 +496,9 @@ export function ArtifactCard({
                           ? "On your roster"
                           : npcSheet
                             ? "On the NPC’s sheet"
-                            : "In tonight’s session"}
+                            : npc
+                              ? "In the Cast"
+                              : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -491,7 +513,7 @@ export function ArtifactCard({
                       ? "Keep as the story so far"
                       : chronicle
                         ? "Add to Chronicle"
-                        : campaign || character || npcSheet
+                        : campaign || character || npc || npcSheet
                           ? "Keep it"
                           : "Save to session"}
               </Button>

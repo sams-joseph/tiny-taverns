@@ -491,6 +491,9 @@ describe("the boundary — one table's words are in no other table's schema", ()
       "proposeEncounter",
       "proposeNightSummary",
       "proposeNote",
+      // Its sheet's labels are free text too, resolved by the same handler
+      // code as `proposeNpcSheet`'s.
+      "proposeNpc",
       "proposeNpcAwareness",
       // Its labels are bounded free text, resolved in the handler, so the
       // toolkit still carries no vocabulary.

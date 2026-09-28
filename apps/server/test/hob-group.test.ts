@@ -89,6 +89,8 @@ const services = Layer.mergeAll(
     Layer.provide([
       CampaignCreatorActors.layer,
       NpcSheets.layer,
+      Npcs.layer,
+      NpcPreps.layer,
       Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
       Campaigns.layer,
       CampaignStories.layer,

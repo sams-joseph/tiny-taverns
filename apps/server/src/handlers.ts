@@ -1156,7 +1156,9 @@ const HobLive = HttpApiBuilder.group(
         // A kept character draft is the second composer of a character, so it
         // starts the portrait exactly as the form's create does, after the
         // accept's transaction has committed; an accepted encounter is the
-        // second composer of an encounter, and starts its battle map the same way.
+        // second composer of an encounter, and starts its battle map the same
+        // way; a kept NPC is the cast's third way in, and starts its portrait
+        // as the cast's create does.
         .handle("accept", ({ params }) =>
           Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
             proposals.accept(reach, params.campaignId, params.threadId, params.turnId),
@@ -1170,6 +1172,8 @@ const HobLive = HttpApiBuilder.group(
                   }));
                 case "encounter":
                   return Effect.as(drawMap(accepted.encounter), accepted);
+                case "npc":
+                  return Effect.map(images.drawNpc(accepted.npc), (npc) => ({ ...accepted, npc }));
                 default:
                   return Effect.succeed(accepted);
               }
@@ -1276,13 +1280,14 @@ const NpcsLive = HttpApiBuilder.group(
         .handle("list", ({ params, query }) =>
           asCreator(params.campaignId, (creator) => npcs.list(creator, query)),
         )
-        // Both ways an NPC joins a cast start its portrait after the insert
+        // Every way an NPC joins a cast starts its portrait after the insert
         // commits, as a character's and a campaign's do: `drawNpc` returns at
-        // once, with the NPC marked `imagePending` when a draw started. No Hob
-        // path drafts an NPC, and a Library original is never drawn. An NPC
-        // created blank has nothing to draw from, so `update` asks too: the
-        // first edit that gives it a subject starts its one draw, and every
-        // later edit finds the record and draws nothing.
+        // once, with the NPC marked `imagePending` when a draw started. The
+        // third way is a Hob draft the creator kept (`hob.accept`), and a
+        // Library original is never drawn. An NPC created blank has nothing
+        // to draw from, so `update` asks too: the first edit that gives it a
+        // subject starts its one draw, and every later edit finds the record
+        // and draws nothing.
         .handle("create", ({ params, payload }) =>
           asCreator(params.campaignId, (creator) => npcs.create(creator, payload)).pipe(
             Effect.flatMap(images.drawNpc),

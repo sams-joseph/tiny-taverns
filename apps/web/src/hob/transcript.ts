@@ -9,12 +9,12 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Eight kinds of artifact are produced here.** `encounter`, `note`
- * (and read-aloud), `beat` and `npcSheet` are what campaign Hob can materialise; `chronicle`
+ * **Nine kinds of artifact are produced here.** `encounter`, `note`
+ * (and read-aloud), `beat`, `npc` and `npcSheet` are what campaign Hob can materialise; `chronicle`
  * and `story` are Shared World Hob's; `campaign` and `character` are what the
  * account's own panel drafts outside any campaign. The rest of the union is the
  * delivered specimen set, held by `hob.fixtures.ts` for the tests: nothing
- * produces an `npc`, a `checklist` or a `rules` card, because there is no table
+ * produces a `checklist` or a `rules` card, because there is no table
  * for one to be saved into and a *Save to session* button that could only fail
  * is worse than a kind that cannot be expressed.
  *
@@ -139,12 +139,21 @@ export type HobArtifact =
       readonly previously?: string;
     })
   | (ArtifactBase & {
+      /**
+       * A new member of the Cast. The delivered specimen drew a race and an
+       * alignment over the summary; an NPC has neither, so the card draws what
+       * the draft carries, and the role and the sheet's line are its meta.
+       */
       readonly kind: "npc";
-      readonly race: string;
-      readonly alignment: string;
-      readonly summary: string;
+      /** The one paragraph of who they are, when Hob wrote one. */
+      readonly summary?: string;
+      /** The line the portrait is drawn from, when Hob wrote one. */
+      readonly appearance?: string;
       /** How to do the voice — the one thing a DM cannot look up. */
-      readonly voice: string;
+      readonly voice?: string;
+      readonly wants?: string;
+      /** The sheet's seeded numbers, as `npcSheet`'s are; empty with no sheet. */
+      readonly stats: ReadonlyArray<readonly [string, string]>;
     })
   | (ArtifactBase & { readonly kind: "checklist"; readonly items: ReadonlyArray<HobChecklistItem> })
   | (ArtifactBase & {
@@ -206,6 +215,31 @@ const challengeOutcomes = (
           : [["On failure", challenge.onFailure] as const]),
       ]
     : [];
+
+/** The numbers a drafted NPC sheet was seeded with. */
+interface DraftedSheet {
+  readonly level: number;
+  readonly race: string | null;
+  readonly subrace: string | null;
+  readonly className: string;
+  readonly ac: number | null;
+  readonly hpMax: number | null;
+  readonly cr: string | null;
+}
+
+/** `["Level 5 Hill Dwarf Fighter", "CR 3"]` — a drafted sheet's meta, as the sheet's descriptor reads. */
+const sheetLine = (sheet: DraftedSheet): ReadonlyArray<string> => [
+  [`Level ${String(sheet.level)}`, sheet.subrace ?? sheet.race, sheet.className]
+    .filter((part): part is string => part !== null)
+    .join(" "),
+  ...(sheet.cr === null ? [] : [`CR ${sheet.cr}`]),
+];
+
+/** A drafted sheet's seeded armour class and hit points, as label and value. */
+const sheetStats = (sheet: DraftedSheet): ReadonlyArray<readonly [string, string]> => [
+  ...(sheet.ac === null ? [] : [["AC", String(sheet.ac)] as const]),
+  ...(sheet.hpMax === null ? [] : [["HP", String(sheet.hpMax)] as const]),
+];
 
 /**
  * A proposal from the wire, as the card the designers drew.
@@ -318,30 +352,41 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
      * sheet will read, and the numbers the seed worked out, and what keeping
      * it replaces. The document itself is not drawn here: it is the sheet.
      */
-    case "npcSheet": {
-      const descriptor = [
-        `Level ${String(proposal.level)}`,
-        proposal.subrace ?? proposal.race,
-        proposal.className,
-      ]
-        .filter((part): part is string => part !== null)
-        .join(" ");
+    case "npcSheet":
       return {
         id: turnId,
         kind: "npcSheet",
         title: proposal.npcName,
-        meta: [descriptor, proposal.cr === null ? undefined : `CR ${proposal.cr}`]
-          .filter((part) => part !== undefined)
-          .join(" · "),
+        meta: sheetLine(proposal).join(" · "),
         chips: [],
-        stats: [
-          ...(proposal.ac === null ? [] : [["AC", String(proposal.ac)] as const]),
-          ...(proposal.hpMax === null ? [] : [["HP", String(proposal.hpMax)] as const]),
-        ],
+        stats: sheetStats(proposal),
         ...(proposal.replaces === null
           ? {}
           : { replaces: proposal.replaces.descriptor ?? "The sheet it has now" }),
         rationale: proposal.rationale,
+      };
+    /**
+     * A new NPC the creator's Hob drafted for the Cast: the name, the role and
+     * the sheet's line when it has one, then what the drawer shows first — who
+     * they are, how they look, the voice and what they want. The secret and
+     * the prep are kept but not drawn here; the drawer shows them once kept.
+     */
+    case "npc": {
+      const { identity, voice, intent } = proposal.persona;
+      return {
+        id: turnId,
+        kind: "npc",
+        title: proposal.name,
+        meta: [
+          ...(proposal.role === "" ? [] : [proposal.role]),
+          ...(proposal.sheet === null ? [] : sheetLine(proposal.sheet)),
+        ].join(" · "),
+        chips: [],
+        ...(identity?.summary === undefined ? {} : { summary: identity.summary }),
+        ...(identity?.appearance === undefined ? {} : { appearance: identity.appearance }),
+        ...(voice?.manner === undefined ? {} : { voice: voice.manner }),
+        ...(intent?.wants === undefined ? {} : { wants: intent.wants }),
+        stats: proposal.sheet === null ? [] : sheetStats(proposal.sheet),
       };
     }
     /**

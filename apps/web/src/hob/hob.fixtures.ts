@@ -93,12 +93,15 @@ export const SAMPLE_NPC: HobArtifact = {
   id: "sample-npc",
   kind: "npc",
   title: "Ubbo, the reed envoy",
-  meta: "Bullywug · Neutral · Wants a courier",
+  meta: "Reed envoy · Level 3 Bullywug Druid",
   chips: ["Less friendly", "Give him a rival"],
-  race: "Bullywug envoy",
-  alignment: "Neutral",
   summary: "Wants the party to carry a complaint upriver. Will not say who to.",
-  voice: "Voice: slow, wet consonants, ends every sentence like a question",
+  voice: "Slow, wet consonants; ends every sentence like a question.",
+  wants: "A courier nobody upriver will recognise.",
+  stats: [
+    ["AC", "11"],
+    ["HP", "21"],
+  ],
 };
 
 export const SAMPLE_CHECKLIST: HobArtifact = {

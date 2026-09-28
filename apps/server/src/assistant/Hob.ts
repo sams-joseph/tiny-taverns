@@ -1568,6 +1568,14 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "boxed text",
   "beat",
   "beats",
+  // A new member of the Cast, which `proposeNpc` drafts — "make an NPC",
+  // "add a blacksmith to the cast".
+  "npc",
+  "npcs",
+  "non-player character",
+  "cast",
+  "villain",
+  "villains",
   // An NPC's stat sheet, which `proposeNpcSheet` drafts.
   "sheet",
   "stat sheet",
@@ -1868,6 +1876,8 @@ const dmPrompt = (
     "offer it with proposeEncounter, proposeNote, proposeBeat or proposeNightSummary.",
     "When the DM asks for the story so far or a Previously, call readCampaignStorySources,",
     "write both from that result alone, and offer them with proposeCampaignStory.",
+    "When the DM asks for a new NPC or to add someone to the Cast, offer them with",
+    "proposeNpc, with a sheet only when the DM asked for stats.",
     "When the DM asks you to give an NPC stats or a sheet, find the NPC with searchCampaign",
     "and offer one with proposeNpcSheet; getNpc reads the sheet an NPC already has.",
     "When your research shows an existing campaign NPC should explicitly know or remember",
@@ -2174,6 +2184,56 @@ const offered = (turn: HobTurn): string | undefined => {
       return `[You offered a campaign called "${proposal.name}" — ${
         turn.acceptedAt === null ? "not yet kept" : "kept"
       }: ${parts.join("; ")}]`;
+    }
+    // Read back in the tool's own words, so "make her older" or "give her
+    // stats too" redrafts the NPC offered rather than inventing another. A kept
+    // one is in the Cast now, where searchCampaign finds its id.
+    case "npc": {
+      const sheet = proposal.sheet;
+      const ranked =
+        sheet === null
+          ? ""
+          : [...sheet.sheet.abilities]
+              .sort((a, b) => Number(b.score) - Number(a.score))
+              .map((ability) => ability.label)
+              .join(" > ");
+      const parts = [
+        proposal.role === "" ? undefined : `role ${proposal.role}`,
+        proposal.persona.identity?.summary === undefined
+          ? undefined
+          : `summary: ${proposal.persona.identity.summary}`,
+        proposal.persona.identity?.appearance === undefined
+          ? undefined
+          : `appearance: ${proposal.persona.identity.appearance}`,
+        proposal.persona.voice?.manner === undefined
+          ? undefined
+          : `manner: ${proposal.persona.voice.manner}`,
+        proposal.persona.intent?.wants === undefined
+          ? undefined
+          : `wants: ${proposal.persona.intent.wants}`,
+        proposal.privateMaterial.secrets === undefined
+          ? undefined
+          : `secret: ${proposal.privateMaterial.secrets}`,
+        proposal.prep.attitude === null ? undefined : `attitude ${proposal.prep.attitude}`,
+        proposal.prep.status === null ? undefined : `status ${proposal.prep.status}`,
+        proposal.prep.whereabouts === null
+          ? undefined
+          : `whereabouts: ${proposal.prep.whereabouts}`,
+        sheet === null
+          ? undefined
+          : [
+              `sheet level ${String(sheet.level)} ${[sheet.subrace ?? sheet.race, sheet.className]
+                .filter((part) => part !== null)
+                .join(" ")}`,
+              sheet.cr === null ? undefined : `cr ${sheet.cr}`,
+              ranked === "" ? undefined : `abilities ranked ${ranked}`,
+            ]
+              .filter((part) => part !== undefined)
+              .join(", "),
+      ].filter((part) => part !== undefined);
+      return `[You offered the DM an NPC called "${proposal.name}" for the Cast — ${kept}${
+        parts.length === 0 ? "" : `: ${parts.join("; ")}`
+      }]`;
     }
     // Read back in the tool's own words, so "make him a level higher" or "a
     // paladin instead" redrafts from what was offered, with the NPC's id.

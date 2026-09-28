@@ -10,6 +10,7 @@ import {
   type CharacterOwnCreate,
   type HobProposal,
   NotFound,
+  type NpcPrepUpdate,
   type NpcSheetPut,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
@@ -23,7 +24,9 @@ import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
+import { NpcPreps } from "./NpcPrep.js";
 import { NpcSheets } from "./NpcSheets.js";
+import { Npcs } from "./Npcs.js";
 import { Sessions } from "./Sessions.js";
 import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
@@ -55,8 +58,10 @@ import type { ConversationReach } from "./visibility.js";
  * through `EncounterCreatures.create`, as a builder's does),
  * `Characters.createOwn`, for a night's summary `Sessions.update`, for a
  * campaign's story so far `CampaignStories.accept` (which shares the creator's
- * own write's upsert), and for an NPC's sheet `NpcSheets.put` (the creator's
- * own PUT, behind the creator proof), each with one extra argument. No SQL for those tables
+ * own write's upsert), for an NPC's sheet `NpcSheets.put` (the creator's
+ * own PUT, behind the creator proof), and for a new NPC the cast's
+ * `Npcs.create`, then `NpcPreps.update` and `NpcSheets.put` behind the same
+ * proof, each with one extra argument. No SQL for those tables
  * is written here, so an accepted row is produced by *literally the same
  * statement* that produces an authored one —
  * which is what makes it indistinguishable in usefulness (search finds it, the
@@ -142,18 +147,33 @@ const noSession = new Conflict({
  * reason {@link ownCreateFrom} gives. `expectedVersion` is the sheet the draft
  * said it replaces, so one edited by hand since the offer is the PUT's own
  * stale-version `Conflict`; a draft that replaces nothing sends none, so a
- * sheet written since is the PUT's "this NPC already has a sheet".
+ * sheet written since is the PUT's "this NPC already has a sheet". A new
+ * NPC's sheet replaces nothing.
  */
-const npcSheetPutFrom = (proposal: Extract<HobProposal, { target: "npcSheet" }>): NpcSheetPut => ({
-  ...(proposal.replaces === null ? {} : { expectedVersion: proposal.replaces.version }),
-  level: proposal.level,
-  race: proposal.race,
-  subrace: proposal.subrace,
-  className: proposal.className,
-  ac: proposal.ac,
-  hpMax: proposal.hpMax,
-  cr: proposal.cr,
-  sheet: proposal.sheet,
+const npcSheetPutFrom = (
+  draft: NonNullable<Extract<HobProposal, { target: "npc" }>["sheet"]>,
+  replaces: { readonly version: number } | null,
+): NpcSheetPut => ({
+  ...(replaces === null ? {} : { expectedVersion: replaces.version }),
+  level: draft.level,
+  race: draft.race,
+  subrace: draft.subrace,
+  className: draft.className,
+  ac: draft.ac,
+  hpMax: draft.hpMax,
+  cr: draft.cr,
+  sheet: draft.sheet,
+});
+
+/**
+ * A drafted NPC's prep as the creator's PATCH: only what Hob set, so an
+ * unset field is absent rather than a `null` that would read as "cleared".
+ * Empty when Hob set nothing, and then no prep row is written at all.
+ */
+const npcPrepFrom = (prep: Extract<HobProposal, { target: "npc" }>["prep"]): NpcPrepUpdate => ({
+  ...(prep.attitude === null ? {} : { attitude: prep.attitude }),
+  ...(prep.status === null ? {} : { status: prep.status }),
+  ...(prep.whereabouts === null ? {} : { whereabouts: prep.whereabouts }),
 });
 
 export class Proposals extends Context.Service<
@@ -204,6 +224,8 @@ export class Proposals extends Context.Service<
       const stories = yield* CampaignStories;
       const creators = yield* CampaignCreatorActors;
       const npcSheets = yield* NpcSheets;
+      const npcs = yield* Npcs;
+      const npcPreps = yield* NpcPreps;
 
       const materialise = (
         campaignId: CampaignId,
@@ -318,10 +340,37 @@ export class Proposals extends Context.Service<
               const sheet = yield* npcSheets.put(
                 creator,
                 proposal.npcId,
-                npcSheetPutFrom(proposal),
+                npcSheetPutFrom(proposal, proposal.replaces),
                 from,
               );
               return { accepted: "npcSheet" as const, sheet };
+            });
+
+          case "npc":
+            // Into the cast through the cast's own create, behind the creator
+            // proof the accept asks for again, as a kept sheet's is. The prep
+            // and the sheet follow in the same transaction through the
+            // creator's own writes, so a refused sheet keeps no NPC either.
+            // `visibility` is not named: the NPC joins the cast hidden from
+            // the table. The handler starts the portrait after the commit.
+            return Effect.gen(function* () {
+              const creator = yield* creators.of(campaignId);
+              const npc = yield* npcs.create(
+                creator,
+                {
+                  name: proposal.name,
+                  role: proposal.role,
+                  persona: proposal.persona,
+                  privateMaterial: proposal.privateMaterial,
+                },
+                from,
+              );
+              const prep = npcPrepFrom(proposal.prep);
+              if (Object.keys(prep).length > 0) yield* npcPreps.update(creator, npc.id, prep);
+              if (proposal.sheet !== null) {
+                yield* npcSheets.put(creator, npc.id, npcSheetPutFrom(proposal.sheet, null), from);
+              }
+              return { accepted: "npc" as const, npc };
             });
 
           case "campaign":
