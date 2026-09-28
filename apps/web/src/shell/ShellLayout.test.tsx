@@ -169,7 +169,9 @@ describe("the persistent shell", () => {
     expect(chrome).toHaveClass("sticky", "top-0", "z-chrome");
 
     const column = chrome?.parentElement;
-    expect(column?.style.getPropertyValue("--chrome-height")).toMatch(/^\d+(\.\d+)?px$/);
+    expect(document.documentElement.style.getPropertyValue("--chrome-height")).toMatch(
+      /^\d+(\.\d+)?px$/,
+    );
 
     const frame = column?.parentElement;
     expect(frame).toHaveClass("min-h-screen");

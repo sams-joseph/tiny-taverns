@@ -16,17 +16,13 @@ import { useState, type ReactNode } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
-import {
-  draftOf,
-  emptyDraft,
-  hasAdvanced,
-  type NpcDraft,
-  personaFrom,
-  privateMaterialFrom,
-} from "./persona";
+import { draftOf, hasAdvanced, type NpcDraft, personaFrom, privateMaterialFrom } from "./persona";
 
 /**
- * Writing an NPC — the builder, in the shipped dialog idiom.
+ * Editing an NPC's whole persona — the builder, in the shipped dialog idiom,
+ * opened by *Edit* on the NPC's page. The Cast's drawer (`NpcDrawer`) edits the
+ * few lines a DM reaches for at the table; this holds every line, and an NPC
+ * is made by the Cast's *Add NPC*, never here.
  *
  * ### Basic first, and *Advanced* is a press
  *
@@ -34,8 +30,7 @@ import {
  * engineering. *Basic* is a name, a role, who they are, how they look and
  * how they talk; *Advanced* is everything else — pronouns, phrases, motives,
  * boundaries, and the creator-only material — behind one disclosure. It opens already shown
- * when an existing row has anything in it, so an edit never hides what was
- * written.
+ * when the row has anything in it, so an edit never hides what was written.
  *
  * ### Private material is its own section, and its own document
  *
@@ -48,12 +43,11 @@ import {
  * Each document is replaced whole on save, like a character sheet; the form
  * always holds the whole of both, so nothing it was not shown is lost.
  *
- * ### Sharing is the row's, and starts off
+ * ### Sharing is the row's
  *
  * `visibility` is the only way an NPC reaches the players, so it is on the
- * first screen and sent on every save: a new NPC is kept to the DM until the
- * switch says otherwise, and turning it off sends `dm` rather than leaving the
- * row as it was.
+ * first screen and sent on every save: turning it off sends `dm` rather than
+ * leaving the row as it was.
  */
 
 export function NpcDialog({
@@ -63,14 +57,13 @@ export function NpcDialog({
   onSaved,
 }: {
   readonly campaignId: CampaignId;
-  /** Absent for a new one. Present, and this edits it. */
-  readonly npc: Npc | undefined;
+  readonly npc: Npc;
   readonly onClose: () => void;
   readonly onSaved: (saved: Npc) => void;
 }) {
-  const [draft, setDraft] = useState<NpcDraft>(npc === undefined ? emptyDraft : draftOf(npc));
-  const [visibility, setVisibility] = useState<Visibility>(npc?.visibility ?? "dm");
-  const [advanced, setAdvanced] = useState(npc !== undefined && hasAdvanced(draft));
+  const [draft, setDraft] = useState<NpcDraft>(() => draftOf(npc));
+  const [visibility, setVisibility] = useState<Visibility>(npc.visibility);
+  const [advanced, setAdvanced] = useState(() => hasAdvanced(draftOf(npc)));
   const [showProblems, setShowProblems] = useState(false);
   const { busy, failure, submit } = useMutation();
 
@@ -91,27 +84,22 @@ export function NpcDialog({
     };
     const saved = await submit(
       (client) =>
-        npc === undefined
-          ? client.npcs.create({ params: { campaignId }, payload })
-          : client.npcs.update({
-              params: { campaignId, npcId: npc.id },
-              // The version the form opened on: two tabs editing one persona
-              // notice each other instead of silently overwriting.
-              payload: { ...payload, expectedVersion: npc.version },
-            }),
-      npc === undefined ? [reads.npcs(campaignId)] : [reads.npcs(campaignId), reads.npc(npc.id)],
+        client.npcs.update({
+          params: { campaignId, npcId: npc.id },
+          // The version the form opened on: two tabs editing one persona
+          // notice each other instead of silently overwriting.
+          payload: { ...payload, expectedVersion: npc.version },
+        }),
+      [reads.npcs(campaignId), reads.npc(npc.id)],
     );
     if (Result.isSuccess(saved)) onSaved(saved.success);
   };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        aria-label={npc === undefined ? "New NPC" : `Edit ${npc.name}`}
-        className="sm:max-w-2xl"
-      >
+      <DialogContent aria-label={`Edit ${npc.name}`} className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{npc === undefined ? "New NPC" : `Edit ${npc.name}`}</DialogTitle>
+          <DialogTitle>{`Edit ${npc.name}`}</DialogTitle>
           <DialogDescription>
             A person your players will meet. Give them a voice and a reason, then rehearse them
             before the night.
@@ -156,7 +144,8 @@ export function NpcDialog({
           </Field>
 
           {/* On the first screen because the portrait is drawn once, from the
-              public persona, as the NPC joins the cast (`NpcImage.ts`). */}
+              public persona, by the first write that gives the NPC something
+              to draw from (`NpcImage.ts`). */}
           <Field
             label="Appearance"
             htmlFor="npc-appearance"
@@ -371,7 +360,7 @@ export function NpcDialog({
             Cancel
           </Button>
           <Button size="sm" disabled={busy} onClick={() => void save()}>
-            {busy ? "Saving…" : npc === undefined ? "Create NPC" : "Save changes"}
+            {busy ? "Saving…" : "Save changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { UNNAMED_NPC } from "@taverns/api";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostedSessionScope } from "../auth/AuthProvider";
@@ -15,9 +16,8 @@ import { TEST_SESSION } from "../test/session";
 
 /**
  * The Cast screen against a stubbed wire decoded by the real client: the
- * grid, the two empty states, and the builder — including the one property
- * the builder exists to keep, that what is typed under *Private material*
- * leaves the browser in `privateMaterial` and never in `persona`.
+ * grid, the two empty states, the search, and *Add NPC*. The drawer a card
+ * opens is `NpcDrawer.test.tsx`.
  */
 
 const server = installStubServer();
@@ -56,7 +56,7 @@ describe("CastScreen", () => {
     expect(within(row).getByRole("link", { name: "Cast" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("makes the card one link to the NPC's page, with nothing else on it", async () => {
+  it("makes the card one link to the NPC's drawer, with nothing else on it", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/npcs`, {
       status: 200,
       body: [{ ...cazril, visibility: "shared" }],
@@ -64,7 +64,7 @@ describe("CastScreen", () => {
     await renderCast();
 
     const link = await screen.findByRole("link", { name: "Cazril" });
-    expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/cast/${npcId}`);
+    expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/cast?npc=${npcId}`);
     expect(link).toHaveAttribute("data-card-link");
     const card = link.closest('[data-slot="npc-card"]') as HTMLElement;
     expect(card.querySelectorAll("a, button")).toHaveLength(1);
@@ -149,94 +149,51 @@ describe("CastScreen", () => {
     expect(screen.getByText("5 NPCs")).toBeInTheDocument();
   });
 
-  it("writes a new NPC with the secret in its own document, then goes to rehearse it", async () => {
-    const created = { ...cazril, id: "2b1f2a1e-0000-4000-8000-00000000d0c2", name: "Fen" };
+  it("adds a blank NPC at once and opens its drawer with the name focused", async () => {
+    const created = { ...blank, id: "2b1f2a1e-0000-4000-8000-00000000d0c2" };
     server.routes.set(`POST /campaigns/${campaignId}/npcs`, { status: 200, body: created });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}`, {
-      status: 200,
-      body: created,
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/rehearsal`, {
-      status: 200,
-      body: {
-        available: false,
-        model: null,
-        npc: "Fen",
-        templateVersion: "npc-prompt/1.1.0",
-        estimatedTokens: 90,
-        knowledgeIncluded: 0,
-        knowledgeTotal: 0,
-        memoriesIncluded: 0,
-        memoriesTotal: 0,
-      },
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/knowledge`, {
-      status: 200,
-      body: [],
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/memories`, {
-      status: 200,
-      body: [],
-    });
-    server.routes.set(`GET /campaigns/${campaignId}/npcs/${created.id}/threads`, {
-      status: 200,
-      body: [],
-    });
     await renderCast();
-    await screen.findByRole("link", { name: "Cazril" });
+    await userEvent.type(
+      await screen.findByRole("combobox", { name: "Search the cast" }),
+      "nobody by this name",
+    );
+    expect(await screen.findByText("Nobody here")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Add NPC" }));
-    const dialog = await screen.findByRole("dialog", { name: "New NPC" });
-    // Basic first: the advanced half is behind a press, and the private
-    // section is not on screen until it is opened.
-    expect(within(dialog).queryByLabelText("Secrets")).toBeNull();
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Fen");
-    await userEvent.type(within(dialog).getByLabelText("Role"), "the patron");
-    await userEvent.type(within(dialog).getByLabelText("Who they are"), "Pays for silence.");
-    // On the first screen, because the portrait is drawn from it as the NPC lands.
-    await userEvent.type(within(dialog).getByLabelText("Appearance"), "Rings on every finger.");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Advanced" }));
-    await userEvent.type(within(dialog).getByLabelText("Secrets"), "Fen hired the hag.");
-    await userEvent.type(within(dialog).getByLabelText("Phrases they use"), "Quiet, now.");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Create NPC" }));
 
-    // What left the browser: the public document and the private one, apart.
+    // Blank, under the one placeholder name, and the DM's alone: nothing for
+    // Hob to draw from yet, so no portrait is started by the create.
     await waitFor(() =>
-      expect(
-        server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/npcs")),
-      ).toBe(true),
+      expect(bodyOf(server, "POST", "/npcs")).toEqual({ name: UNNAMED_NPC, visibility: "dm" }),
     );
-    const sent = bodyOf(server, "POST", "/npcs") as {
-      readonly persona: unknown;
-      readonly privateMaterial: unknown;
-    };
-    expect(sent).toMatchObject({
-      name: "Fen",
-      role: "the patron",
-      persona: {
-        identity: { summary: "Pays for silence.", appearance: "Rings on every finger." },
-        voice: { phrases: ["Quiet, now."] },
-      },
-      privateMaterial: { secrets: "Fen hired the hag." },
-      // A new NPC is kept to the DM until the switch says otherwise.
-      visibility: "dm",
-    });
-    expect(JSON.stringify(sent.persona)).not.toContain("hired the hag");
+    const drawer = await screen.findByRole("dialog", { name: UNNAMED_NPC });
+    expect(new URLSearchParams(globalThis.location.search).get("npc")).toBe(created.id);
+    const name = within(drawer).getByRole("textbox", { name: "Name" });
+    // The placeholder is the stored name, not something typed: the field is empty.
+    expect(name).toHaveValue("");
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(within(drawer).queryByRole("alert")).toBeNull();
+    // The search is cleared, so the new card is on the grid behind it (hidden
+    // from the accessibility tree while the modal is open), and counted.
+    expect(screen.getByRole("link", { name: UNNAMED_NPC, hidden: true })).toBeInTheDocument();
+    expect(screen.getByText("2 NPCs")).toBeInTheDocument();
+  });
 
-    // A new NPC lands on its own screen, where the rehearsal is.
-    await waitFor(() =>
-      expect(globalThis.location.pathname).toBe(`/campaigns/${campaignId}/cast/${created.id}`),
-    );
-  }, 20_000);
-
-  it("refuses to create a nameless NPC, in the form, before any request", async () => {
-    await renderCast();
+  it("closes a drawer the cast does not list, and says nothing is chosen", async () => {
+    await renderAt(`/campaigns/${campaignId}/cast?npc=2b1f2a1e-0000-4000-8000-00000000dead`);
     await screen.findByRole("link", { name: "Cazril" });
-    await userEvent.click(screen.getByRole("button", { name: "Add NPC" }));
-    const dialog = await screen.findByRole("dialog", { name: "New NPC" });
-    await userEvent.click(within(dialog).getByRole("button", { name: "Create NPC" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Give them a name.");
-    expect(server.calls.filter((call) => call.method === "POST")).toEqual([]);
+    await waitFor(() => expect(globalThis.location.search).toBe(""));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+/** An NPC as *Add NPC* makes one. */
+const blank = {
+  ...cazril,
+  name: UNNAMED_NPC,
+  role: "",
+  persona: {},
+  privateMaterial: {},
+  version: 1,
+};

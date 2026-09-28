@@ -1,4 +1,4 @@
-import type { Npc, NpcPersona, NpcPrivateMaterial } from "@taverns/api";
+import { type Npc, type NpcPersona, type NpcPrivateMaterial, UNNAMED_NPC } from "@taverns/api";
 
 /**
  * The pure half of the NPC builder: the form's flat drafts and the two
@@ -172,8 +172,12 @@ export const hasAdvanced = (draft: NpcDraft): boolean =>
     ] as const
   ).some((key) => draft[key].trim() !== "");
 
-/** Two letters for the avatar square — "Cazril" → "CA", "Old Fen" → "OF". */
+/**
+ * Two letters for the avatar square — "Cazril" → "CA", "Old Fen" → "OF". A
+ * blank NPC's placeholder name is no name, so it is "?", not "UN".
+ */
 export const initialsOf = (name: string): string => {
+  if (name === UNNAMED_NPC) return "?";
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();

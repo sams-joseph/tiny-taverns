@@ -22,7 +22,8 @@ import {
 } from "react";
 import { ActionsMenu } from "../ui/ActionsMenu";
 import { VisibilityField } from "../ui/form";
-import type { NoteFields, NoteSaver, SaveStatus } from "./noteAutosave";
+import { SaveState } from "../ui/SaveState";
+import type { NoteFields, NoteSaver } from "./noteAutosave";
 import { NoteLinks } from "./NoteLinks";
 import { CATEGORIES, editedAgo, KINDS, noteLabel } from "./noteText";
 import { useNow } from "./when";
@@ -287,38 +288,6 @@ export function NotePane({
         party={party}
       />
     </article>
-  );
-}
-
-/**
- * *Saving…*, *Saved*, or *Couldn't save* with a way to try again — quiet,
- * beside the actions, and announced politely rather than as an alert, since
- * it changes every time the DM stops typing.
- */
-function SaveState({
-  status,
-  onRetry,
-}: {
-  readonly status: SaveStatus;
-  readonly onRetry: () => void;
-}) {
-  return (
-    <span
-      role="status"
-      data-slot="note-save-state"
-      className="flex items-center gap-2 text-caption leading-none text-faint"
-    >
-      {status.state === "saving" && "Saving…"}
-      {status.state === "saved" && "Saved"}
-      {status.state === "failed" && (
-        <>
-          <span className="text-danger-ink">Couldn&rsquo;t save</span>
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            Retry
-          </Button>
-        </>
-      )}
-    </span>
   );
 }
 
