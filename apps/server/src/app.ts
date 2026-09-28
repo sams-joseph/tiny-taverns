@@ -612,8 +612,9 @@ export const servicesOver = <E>(
     NpcPreps.layer,
     // An NPC's ties to encounters and seats: DM prep, only the handlers hold it.
     NpcLinks.layer,
-    // An NPC's character-style sheet: DM prep, creator-only behind the proof.
-    // Only the handlers hold it; no toolkit reads or writes it.
+    // An NPC's character-style sheet: DM prep, a campaign NPC's creator's
+    // behind the proof and a Library original's owner's. Only the handlers
+    // hold it; no toolkit reads or writes it.
     NpcSheets.layer,
     NpcProposals.layer.pipe(
       Layer.provide([

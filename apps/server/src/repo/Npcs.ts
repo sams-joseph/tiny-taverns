@@ -444,6 +444,17 @@ export class Npcs extends Context.Service<
                     and ${sourceVisible}
                   order by approved_at asc, id asc
                 `;
+                // The source's sheet, for the owner and a Shared World copier
+                // alike: stats are rules, not secrets. The copy's own sheet
+                // starts at version 1 and moves apart from the source's from
+                // here, as the persona does (`0076_npc_sheets.ts`).
+                yield* sql`
+                  insert into npc_sheet
+                    (npc_id, level, race, subrace, class_name, ac, hp_max, cr, body)
+                  select ${copy.id}, level, race, subrace, class_name, ac, hp_max, cr, body
+                  from npc_sheet
+                  where npc_id = ${sourceId}
+                `;
                 return asNpc(copy);
               }),
             ),

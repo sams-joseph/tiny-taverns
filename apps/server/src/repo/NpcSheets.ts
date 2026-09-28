@@ -1,5 +1,7 @@
 import {
+  type Actor,
   type ChallengeRating,
+  CurrentActor,
   Conflict,
   NotFound,
   type NpcId,
@@ -11,35 +13,46 @@ import {
   type SheetBody,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { defined, dieOnSqlError, setClause } from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
-import { rowWritable, type Vocabulary, vocabularyAt } from "./visibility.js";
+import {
+  libraryRowReadable,
+  libraryRowWritable,
+  rowWritable,
+  type Vocabulary,
+  vocabularyAt,
+} from "./visibility.js";
 
 /**
  * Reads and writes over `npc_sheet`, an NPC's character-style sheet
- * (`0076_npc_sheets.ts`) — **the creator's alone**, so every method takes a
- * `CampaignCreatorActor` and still composes the NPC's creator predicate
- * beneath it. There is no player read here, and no player path anywhere reads
- * this table.
+ * (`0076_npc_sheets.ts`) — **its NPC's owner's alone**: a campaign NPC's
+ * creator, through a `CampaignCreatorActor`, or a Library original's owner,
+ * through `CurrentActor` and the Library's own predicates. There is no player
+ * read here, and no player path anywhere reads this table.
  *
  * It is not `Npcs`, for `NpcPrep.ts`'s reason: `Npcs` answers a player too,
  * and an NPC read that could reach a sheet is the leak `CreatorActor.ts`'s
  * standing rule exists to make impossible.
  *
- * Every read and write walks the NPC, the sheet's only containment answer: the
- * NPC must be in the proof's campaign, so another campaign's NPC named in this
- * path, and a Library original, are the same `NotFound`.
+ * Every read and write walks the NPC, the sheet's only containment answer,
+ * under one {@link Reach}: the campaign's methods reach only an NPC in the
+ * proof's campaign, so another campaign's NPC and a Library original named in
+ * that path are the same `NotFound`; the Library's reach only the actor's own
+ * originals, so a campaign NPC and another account's original are `NotFound`
+ * there.
  *
  * The document is a character's rules half, and so are its rules: a level or
  * class change runs the character's own `recomputeForLevel`, and a subrace is
- * checked by the character's own `validateSubrace`, both against **the NPC's
- * campaign's rules** ({@link npcVocabulary}).
+ * checked by the character's own `validateSubrace`, both against the rules
+ * the reach names — a campaign NPC's campaign's, a Library original's the
+ * core rules.
  *
- * Nothing else writes it: Hob has no tool for it, no NPC prompt reads it, and
- * search does not index it. It rings no doorbell, as prep does not: nothing
- * live moved.
+ * Nothing else writes it but the copy of a Library original into a campaign
+ * (`Npcs.copyFromSource`), which takes the source's sheet beside its persona:
+ * Hob has no tool for it, no NPC prompt reads it, and search does not index
+ * it. It rings no doorbell, as prep does not: nothing live moved.
  */
 
 interface NpcSheetRow {
@@ -81,9 +94,6 @@ const toSheet = (row: NpcSheetBodyRow): NpcSheet =>
 
 const encodeBody = (body: SheetBody): string => JSON.stringify(body);
 
-/** Where a campaign NPC's subrace is checked, as a refusal names it. */
-const NPC_RULES = "in this campaign's rules";
-
 const staleVersion = (expected: number, actual: number): Conflict =>
   new Conflict({
     message: `the NPC's sheet moved on while you were editing (version ${String(actual)}, you read ${String(expected)}). Reload it and make the change again.`,
@@ -100,13 +110,47 @@ const goneSheet = (expected: number): Conflict =>
   });
 
 /**
- * **Which rules a campaign NPC's sheet is written against: its campaign's**,
- * `vocabularyAt` with that one table — everything `usableInCampaign` reaches
- * there for its creator. A Library NPC's (a later slice) is the core rules,
- * exactly an unseated character's answer.
+ * Which NPCs one reader's sheet methods reach, and **which rules those sheets
+ * are written against** — the one place both are decided.
  */
-const npcVocabulary = (sql: SqlClient.SqlClient, creator: CampaignCreatorActor): Vocabulary =>
-  vocabularyAt(sql, [creator.campaign], creator.actor);
+interface Reach {
+  /** The NPCs whose sheets this reader may read, as a `where` over `npc`. */
+  readonly readable: Statement.Fragment;
+  /** The NPCs whose sheets this reader may write; never wider than `readable`. */
+  readonly writable: Statement.Fragment;
+  readonly vocabulary: Vocabulary;
+  /** Where a subrace is checked, as a refusal names it. */
+  readonly rules: string;
+}
+
+/**
+ * A campaign NPC's sheet: the NPC in the proof's campaign, written against
+ * **its campaign's rules**, `vocabularyAt` with that one table — everything
+ * `usableInCampaign` reaches there for its creator.
+ */
+const campaignReach = (sql: SqlClient.SqlClient, creator: CampaignCreatorActor): Reach => {
+  const npc = rowWritable(sql, "npc", creator.campaign, creator.actor);
+  return {
+    readable: npc,
+    writable: npc,
+    vocabulary: vocabularyAt(sql, [creator.campaign], creator.actor),
+    rules: "in this campaign's rules",
+  };
+};
+
+/**
+ * A Library original's sheet: read as `Npcs.libraryFindById` reads the NPC
+ * and written as `libraryUpdate` writes it — the owner's, since an NPC has no
+ * bundle (`npc_one_owner`) — and written against **the core rules**, exactly
+ * an unseated character's answer. A copy rewrites nothing: its next level-up
+ * reads its campaign's rules.
+ */
+const libraryReach = (sql: SqlClient.SqlClient, actor: Actor): Reach => ({
+  readable: libraryRowReadable(sql, "npc", actor),
+  writable: libraryRowWritable(sql, "npc", actor),
+  vocabulary: vocabularyAt(sql, [], actor),
+  rules: "in the core rules",
+});
 
 export class NpcSheets extends Context.Service<
   NpcSheets,
@@ -151,6 +195,24 @@ export class NpcSheets extends Context.Service<
     ) => Effect.Effect<NpcSheet, NotFound | Conflict>;
     /** Removes the sheet; an NPC with none is unchanged. `NotFound` for an NPC not in this campaign. */
     readonly remove: (creator: CampaignCreatorActor, id: NpcId) => Effect.Effect<void, NotFound>;
+    /** {@link list} over the actor's own Library originals, in `Npcs.library`'s order. */
+    readonly libraryList: (
+      filter: NpcListFilter,
+    ) => Effect.Effect<ReadonlyArray<NpcSheetSummary>, never, CurrentActor>;
+    /** {@link find} for a Library original. `NotFound` for anything but the actor's own. */
+    readonly libraryFind: (id: NpcId) => Effect.Effect<NpcSheet | null, NotFound, CurrentActor>;
+    /** {@link put} for a Library original, checked against the core rules. */
+    readonly libraryPut: (
+      id: NpcId,
+      payload: NpcSheetPut,
+    ) => Effect.Effect<NpcSheet, NotFound | Conflict, CurrentActor>;
+    /** {@link update} for a Library original, recomputed against the core rules. */
+    readonly libraryUpdate: (
+      id: NpcId,
+      patch: NpcSheetUpdate,
+    ) => Effect.Effect<NpcSheet, NotFound | Conflict, CurrentActor>;
+    /** {@link remove} for a Library original; every copy's own sheet stands. */
+    readonly libraryRemove: (id: NpcId) => Effect.Effect<void, NotFound, CurrentActor>;
   }
 >()("NpcSheets") {
   static readonly layer = Layer.effect(this)(
@@ -166,9 +228,9 @@ export class NpcSheets extends Context.Service<
       `;
       const sheetColumns = sql`${summaryColumns}, npc_sheet.body`;
 
-      /** The NPC, in this campaign, locked for the write that follows. */
+      /** The NPC, in reach, locked for the write that follows. */
       const lockedNpc = (
-        creator: CampaignCreatorActor,
+        reach: Reach,
         id: NpcId,
       ): Effect.Effect<void, NotFound | SqlError.SqlError> =>
         Effect.gen(function* () {
@@ -179,7 +241,7 @@ export class NpcSheets extends Context.Service<
           const npcs = yield* sql<{ readonly id: NpcId }>`
             select npc.id from npc
             where npc.id = ${id}
-              and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
+              and ${reach.writable}
             for no key update
           `;
           if (npcs.length === 0) return yield* new NotFound({ resource: "npc", id });
@@ -194,153 +256,167 @@ export class NpcSheets extends Context.Service<
           (rows) => rows[0],
         );
 
-      const one = (creator: CampaignCreatorActor, id: NpcId) =>
+      const list = (reach: Reach, filter: NpcListFilter) =>
+        dieOnSqlError(
+          Effect.map(
+            sql<NpcSheetRow>`
+              select ${summaryColumns}
+              from npc
+              join npc_sheet on npc_sheet.npc_id = npc.id
+              where ${reach.readable}
+                and ${filter.archived === true ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
+              order by lower(npc.name) asc, npc.id asc
+            `,
+            (rows) => rows.map(toSummary),
+          ),
+        );
+
+      const find = (reach: Reach, id: NpcId) =>
+        dieOnSqlError(
+          Effect.gen(function* () {
+            const rows = yield* sql<NpcSheetBodyRow>`
+              select ${sheetColumns}
+              from npc
+              left join npc_sheet on npc_sheet.npc_id = npc.id
+              where npc.id = ${id}
+                and ${reach.readable}
+            `;
+            const row = rows[0];
+            if (row === undefined) return yield* new NotFound({ resource: "npc", id });
+            // The left join's miss: the NPC is there and has no sheet.
+            return (row.npc_id as NpcId | null) === null ? null : toSheet(row);
+          }),
+        );
+
+      const put = (reach: Reach, id: NpcId, payload: NpcSheetPut) =>
+        dieOnSqlError(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* lockedNpc(reach, id);
+              const before = yield* sheetUnderLock(id);
+              if (before === undefined) {
+                if (payload.expectedVersion !== undefined) {
+                  return yield* goneSheet(payload.expectedVersion);
+                }
+              } else if (payload.expectedVersion === undefined) {
+                return yield* missingVersion(before.version);
+              } else if (payload.expectedVersion !== before.version) {
+                return yield* staleVersion(payload.expectedVersion, before.version);
+              }
+              yield* validateSubrace(
+                sql,
+                reach.vocabulary("character_option"),
+                payload.race,
+                payload.subrace,
+                reach.rules,
+              );
+
+              // Whole: an absent column is `null`, as on a character's create.
+              const columns = {
+                level: payload.level ?? null,
+                race: payload.race ?? null,
+                subrace: payload.subrace ?? null,
+                class_name: payload.className ?? null,
+                ac: payload.ac ?? null,
+                hp_max: payload.hpMax ?? null,
+                cr: payload.cr ?? null,
+                body: encodeBody(payload.sheet),
+              };
+              const rows = yield* sql<NpcSheetBodyRow>`
+                insert into npc_sheet ${sql.insert({ npc_id: id, ...columns })}
+                on conflict (npc_id) do update
+                  set ${setClause(sql, columns)}, version = npc_sheet.version + 1
+                returning ${sheetColumns}
+              `;
+              return toSheet(rows[0]!);
+            }),
+          ),
+        );
+
+      const update = (reach: Reach, id: NpcId, patch: NpcSheetUpdate) =>
+        dieOnSqlError(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* lockedNpc(reach, id);
+              const before = yield* sheetUnderLock(id);
+              if (before === undefined) {
+                return yield* new NotFound({ resource: "npc_sheet", id });
+              }
+              if (patch.expectedVersion !== undefined && patch.expectedVersion !== before.version) {
+                return yield* staleVersion(patch.expectedVersion, before.version);
+              }
+              const nextRace = patch.race === undefined ? before.race : patch.race;
+              const nextSubrace = patch.subrace === undefined ? before.subrace : patch.subrace;
+              if (nextRace !== before.race || nextSubrace !== before.subrace) {
+                yield* validateSubrace(
+                  sql,
+                  reach.vocabulary("character_option"),
+                  nextRace,
+                  nextSubrace,
+                  reach.rules,
+                );
+              }
+              const body =
+                patch.sheet !== undefined
+                  ? patch.sheet
+                  : patch.level !== undefined || patch.className !== undefined
+                    ? yield* recomputeForLevel(sql, {
+                        body: before.body,
+                        level: patch.level === undefined ? before.level : patch.level,
+                        className:
+                          patch.className === undefined ? before.class_name : patch.className,
+                        vocabulary: reach.vocabulary,
+                      })
+                    : undefined;
+              const columns = defined({
+                level: patch.level,
+                race: patch.race,
+                subrace: patch.subrace,
+                class_name: patch.className,
+                ac: patch.ac,
+                hp_max: patch.hpMax,
+                cr: patch.cr,
+                body: body === undefined ? undefined : encodeBody(body),
+              });
+              const rows = yield* sql<NpcSheetBodyRow>`
+                update npc_sheet
+                set ${setClause(sql, columns)}, version = npc_sheet.version + 1
+                where npc_id = ${id}
+                returning ${sheetColumns}
+              `;
+              return toSheet(rows[0]!);
+            }),
+          ),
+        );
+
+      const remove = (reach: Reach, id: NpcId) =>
+        dieOnSqlError(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* lockedNpc(reach, id);
+              yield* sql`delete from npc_sheet where npc_id = ${id}`;
+            }),
+          ),
+        );
+
+      /** The Library's reach, for the actor the request resolved to. */
+      const library = <A, E>(body: (reach: Reach) => Effect.Effect<A, E>) =>
         Effect.gen(function* () {
-          const rows = yield* sql<NpcSheetBodyRow>`
-            select ${sheetColumns}
-            from npc
-            left join npc_sheet on npc_sheet.npc_id = npc.id
-            where npc.id = ${id}
-              and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
-          `;
-          const row = rows[0];
-          if (row === undefined) return yield* new NotFound({ resource: "npc", id });
-          // The left join's miss: the NPC is there and has no sheet.
-          return (row.npc_id as NpcId | null) === null ? null : toSheet(row);
+          const actor = yield* CurrentActor;
+          return yield* body(libraryReach(sql, actor));
         });
 
       return {
-        list: (creator, filter) =>
-          dieOnSqlError(
-            Effect.map(
-              sql<NpcSheetRow>`
-                select ${summaryColumns}
-                from npc
-                join npc_sheet on npc_sheet.npc_id = npc.id
-                where ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
-                  and ${filter.archived === true ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
-                order by lower(npc.name) asc, npc.id asc
-              `,
-              (rows) => rows.map(toSummary),
-            ),
-          ),
-
-        find: (creator, id) => dieOnSqlError(one(creator, id)),
-
-        put: (creator, id, payload) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                yield* lockedNpc(creator, id);
-                const before = yield* sheetUnderLock(id);
-                if (before === undefined) {
-                  if (payload.expectedVersion !== undefined) {
-                    return yield* goneSheet(payload.expectedVersion);
-                  }
-                } else if (payload.expectedVersion === undefined) {
-                  return yield* missingVersion(before.version);
-                } else if (payload.expectedVersion !== before.version) {
-                  return yield* staleVersion(payload.expectedVersion, before.version);
-                }
-                yield* validateSubrace(
-                  sql,
-                  npcVocabulary(sql, creator)("character_option"),
-                  payload.race,
-                  payload.subrace,
-                  NPC_RULES,
-                );
-
-                // Whole: an absent column is `null`, as on a character's create.
-                const columns = {
-                  level: payload.level ?? null,
-                  race: payload.race ?? null,
-                  subrace: payload.subrace ?? null,
-                  class_name: payload.className ?? null,
-                  ac: payload.ac ?? null,
-                  hp_max: payload.hpMax ?? null,
-                  cr: payload.cr ?? null,
-                  body: encodeBody(payload.sheet),
-                };
-                const rows = yield* sql<NpcSheetBodyRow>`
-                  insert into npc_sheet ${sql.insert({ npc_id: id, ...columns })}
-                  on conflict (npc_id) do update
-                    set ${setClause(sql, columns)}, version = npc_sheet.version + 1
-                  returning ${sheetColumns}
-                `;
-                return toSheet(rows[0]!);
-              }),
-            ),
-          ),
-
-        update: (creator, id, patch) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                yield* lockedNpc(creator, id);
-                const before = yield* sheetUnderLock(id);
-                if (before === undefined) {
-                  return yield* new NotFound({ resource: "npc_sheet", id });
-                }
-                if (
-                  patch.expectedVersion !== undefined &&
-                  patch.expectedVersion !== before.version
-                ) {
-                  return yield* staleVersion(patch.expectedVersion, before.version);
-                }
-                const vocabulary = npcVocabulary(sql, creator);
-                const nextRace = patch.race === undefined ? before.race : patch.race;
-                const nextSubrace = patch.subrace === undefined ? before.subrace : patch.subrace;
-                if (nextRace !== before.race || nextSubrace !== before.subrace) {
-                  yield* validateSubrace(
-                    sql,
-                    vocabulary("character_option"),
-                    nextRace,
-                    nextSubrace,
-                    NPC_RULES,
-                  );
-                }
-                const body =
-                  patch.sheet !== undefined
-                    ? patch.sheet
-                    : patch.level !== undefined || patch.className !== undefined
-                      ? yield* recomputeForLevel(sql, {
-                          body: before.body,
-                          level: patch.level === undefined ? before.level : patch.level,
-                          className:
-                            patch.className === undefined ? before.class_name : patch.className,
-                          vocabulary,
-                        })
-                      : undefined;
-                const columns = defined({
-                  level: patch.level,
-                  race: patch.race,
-                  subrace: patch.subrace,
-                  class_name: patch.className,
-                  ac: patch.ac,
-                  hp_max: patch.hpMax,
-                  cr: patch.cr,
-                  body: body === undefined ? undefined : encodeBody(body),
-                });
-                const rows = yield* sql<NpcSheetBodyRow>`
-                  update npc_sheet
-                  set ${setClause(sql, columns)}, version = npc_sheet.version + 1
-                  where npc_id = ${id}
-                  returning ${sheetColumns}
-                `;
-                return toSheet(rows[0]!);
-              }),
-            ),
-          ),
-
-        remove: (creator, id) =>
-          dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                yield* lockedNpc(creator, id);
-                yield* sql`delete from npc_sheet where npc_id = ${id}`;
-              }),
-            ),
-          ),
+        list: (creator, filter) => list(campaignReach(sql, creator), filter),
+        find: (creator, id) => find(campaignReach(sql, creator), id),
+        put: (creator, id, payload) => put(campaignReach(sql, creator), id, payload),
+        update: (creator, id, patch) => update(campaignReach(sql, creator), id, patch),
+        remove: (creator, id) => remove(campaignReach(sql, creator), id),
+        libraryList: (filter) => library((reach) => list(reach, filter)),
+        libraryFind: (id) => library((reach) => find(reach, id)),
+        libraryPut: (id, payload) => library((reach) => put(reach, id, payload)),
+        libraryUpdate: (id, patch) => library((reach) => update(reach, id, patch)),
+        libraryRemove: (id) => library((reach) => remove(reach, id)),
       };
     }),
   );
