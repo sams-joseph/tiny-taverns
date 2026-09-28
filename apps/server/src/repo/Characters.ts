@@ -18,7 +18,6 @@ import {
   type EncounterRunId,
   NotFound,
   OwnedCharacter,
-  type RaceBody,
   type SessionId,
   type SheetResource,
 } from "@taverns/api";
@@ -34,7 +33,7 @@ import {
   type ProvenanceColumns,
   setClause,
 } from "./rows.js";
-import { recomputeForLevel } from "./sheetLevel.js";
+import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
@@ -255,59 +254,12 @@ export type { CharacterRow };
 
 const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
 
-const present = (value: string | null | undefined): string | undefined => {
-  const trimmed = value?.trim();
-  return trimmed === undefined || trimmed === "" ? undefined : trimmed;
-};
-
-const subraceMismatch = (race: string, subrace: string): Conflict =>
-  new Conflict({
-    message: `"${subrace}" is not a subrace of "${race}" in a campaign this character is at. Pick one contained by that race or leave subrace blank.`,
-  });
-
-const missingRaceForSubrace = (subrace: string): Conflict =>
-  new Conflict({
-    message: `"${subrace}" needs a race before it can be checked. Pick the race it belongs to or leave subrace blank.`,
-  });
+/** Where a character's subrace is checked, as a refusal names it. */
+const CHARACTER_RULES = "in a campaign this character is at";
 
 const staleVersion = (expected: number, actual: number): Conflict =>
   new Conflict({
     message: `the sheet moved on while you were editing (version ${String(actual)}, you read ${String(expected)}). Reload it and make the change again.`,
-  });
-
-/**
- * A named subrace must be contained by the named race in the vocabulary the
- * character is checked against, so what is pickable is exactly what
- * validates. At creation that is the one the form or Hob used: the campaign
- * context's (`usableInCampaign`, `Options.list`'s) or the core rules
- * (`coreRulesUsable`, `Options.core`'s). On the shared sheet it is
- * `characterVocabulary`: every table the character sits at, or the core rules
- * when it sits at none.
- */
-const validateSubrace = (
-  sql: SqlClient.SqlClient,
-  vocabulary: Statement.Fragment,
-  race: string | null | undefined,
-  subrace: string | null | undefined,
-): Effect.Effect<void, Conflict> =>
-  Effect.gen(function* () {
-    const namedSubrace = present(subrace);
-    if (namedSubrace === undefined) return;
-    const namedRace = present(race);
-    if (namedRace === undefined) return yield* missingRaceForSubrace(namedSubrace);
-
-    const rows = yield* sql<{ readonly name: string; readonly body: RaceBody }>`
-      select name, body from character_option
-      where kind = 'race'
-        and lower(name) = lower(${namedRace})
-        and ${vocabulary}
-    `.pipe(Effect.orDie);
-    const resolves = rows.some((row) =>
-      row.body.subraces.some(
-        (candidate) => candidate.name.toLowerCase() === namedSubrace.toLowerCase(),
-      ),
-    );
-    if (!resolves) return yield* subraceMismatch(namedRace, namedSubrace);
   });
 
 interface SeatRefRow {
@@ -594,7 +546,13 @@ export class Characters extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* gate(actor);
-              yield* validateSubrace(sql, vocabulary(actor), payload.race, payload.subrace);
+              yield* validateSubrace(
+                sql,
+                vocabulary(actor),
+                payload.race,
+                payload.subrace,
+                CHARACTER_RULES,
+              );
               const rows = yield* sql<CharacterRow>`
                 insert into character ${sql.insert(
                   defined({
@@ -767,7 +725,13 @@ export class Characters extends Context.Service<
               const nextSubrace = patch.subrace === undefined ? rowBefore.subrace : patch.subrace;
               if (nextRace !== rowBefore.race || nextSubrace !== rowBefore.subrace) {
                 const vocabulary = yield* characterVocabulary(sql, id, actor);
-                yield* validateSubrace(sql, vocabulary("character_option"), nextRace, nextSubrace);
+                yield* validateSubrace(
+                  sql,
+                  vocabulary("character_option"),
+                  nextRace,
+                  nextSubrace,
+                  CHARACTER_RULES,
+                );
               }
               const recomputedSheet =
                 patch.sheet === undefined &&

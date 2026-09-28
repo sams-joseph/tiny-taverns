@@ -55,6 +55,7 @@ import { NpcProposals } from "./repo/NpcProposals.js";
 import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { NpcPreps } from "./repo/NpcPrep.js";
+import { NpcSheets } from "./repo/NpcSheets.js";
 import { NpcLinks } from "./repo/NpcLinks.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
@@ -1249,6 +1250,7 @@ const NpcsLive = HttpApiBuilder.group(
     const awareness = yield* NpcAwareness;
     const followUps = yield* NpcFollowUps;
     const preps = yield* NpcPreps;
+    const sheets = yield* NpcSheets;
     const threads = yield* NpcThreads;
     const agent = yield* NpcAgent;
     const creators = yield* CampaignCreatorActors;
@@ -1296,8 +1298,26 @@ const NpcsLive = HttpApiBuilder.group(
         .handle("updatePrep", ({ params, payload }) =>
           asCreator(params.campaignId, (creator) => preps.update(creator, params.npcId, payload)),
         )
+        // An NPC's sheet is the creator's alone, behind the proof as its prep
+        // is: anybody else is the campaign's `NotFound` before a sheet row is
+        // read or written.
+        .handle("sheets", ({ params, query }) =>
+          asCreator(params.campaignId, (creator) => sheets.list(creator, query)),
+        )
         .handle("findById", ({ params }) =>
           asCreator(params.campaignId, (creator) => npcs.findById(creator, params.npcId)),
+        )
+        .handle("sheet", ({ params }) =>
+          asCreator(params.campaignId, (creator) => sheets.find(creator, params.npcId)),
+        )
+        .handle("putSheet", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => sheets.put(creator, params.npcId, payload)),
+        )
+        .handle("updateSheet", ({ params, payload }) =>
+          asCreator(params.campaignId, (creator) => sheets.update(creator, params.npcId, payload)),
+        )
+        .handle("removeSheet", ({ params }) =>
+          asCreator(params.campaignId, (creator) => sheets.remove(creator, params.npcId)),
         )
         .handle("update", ({ params, payload }) =>
           asCreator(params.campaignId, (creator) =>

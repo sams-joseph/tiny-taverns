@@ -1,4 +1,6 @@
 import {
+  Conflict,
+  type RaceBody,
   type SheetBody,
   type SheetResource,
   type SpellBody,
@@ -6,15 +8,16 @@ import {
   spellActionFor,
 } from "@taverns/api";
 import { Effect } from "effect";
-import type { SqlClient, SqlError } from "effect/unstable/sql";
+import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
 import type { Vocabulary } from "./visibility.js";
 
 /**
- * **The one level-up rule for a sheet's rules half** — a character's today, an
- * NPC's next. A level or class change with no sheet in the same write runs
- * this, against the vocabulary the caller says the sheet is written in (a
- * character's is `characterVocabulary`). It checks no reach: the caller has
- * already proven the write is theirs.
+ * **The one level-up rule for a sheet's rules half** — a character's and an
+ * NPC's (`repo/NpcSheets.ts`). A level or class change with no sheet in the
+ * same write runs this, against the vocabulary the caller says the sheet is
+ * written in (a character's is `characterVocabulary`, a campaign NPC's its
+ * campaign's). It checks no reach: the caller has already proven the write is
+ * theirs. The subrace check below is shared the same way.
  *
  * It rewrites the derived half only, and keeps what a person typed:
  *
@@ -227,3 +230,52 @@ const rawSlots = (raw: Record<string, unknown> | undefined): ReadonlyArray<numbe
   while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
   return slots;
 };
+
+const subraceMismatch = (race: string, subrace: string, place: string): Conflict =>
+  new Conflict({
+    message: `"${subrace}" is not a subrace of "${race}" ${place}. Pick one contained by that race or leave subrace blank.`,
+  });
+
+const missingRaceForSubrace = (subrace: string): Conflict =>
+  new Conflict({
+    message: `"${subrace}" needs a race before it can be checked. Pick the race it belongs to or leave subrace blank.`,
+  });
+
+/**
+ * **The one subrace check for a sheet's identity** — a character's and an
+ * NPC's. A named subrace must be contained by the named race in the vocabulary
+ * the sheet is checked against, so what is pickable is exactly what validates.
+ *
+ * For a character, at creation that is the one the form or Hob used: the
+ * campaign context's (`usableInCampaign`, `Options.list`'s) or the core rules
+ * (`coreRulesUsable`, `Options.core`'s). On the shared sheet it is
+ * `characterVocabulary`: every table the character sits at, or the core rules
+ * when it sits at none. For a campaign NPC's sheet it is its campaign's.
+ * `place` says which, in the refusal ("in a campaign this character is at").
+ */
+export const validateSubrace = (
+  sql: SqlClient.SqlClient,
+  vocabulary: Statement.Fragment,
+  race: string | null | undefined,
+  subrace: string | null | undefined,
+  place: string,
+): Effect.Effect<void, Conflict> =>
+  Effect.gen(function* () {
+    const namedSubrace = present(subrace);
+    if (namedSubrace === undefined) return;
+    const namedRace = present(race);
+    if (namedRace === undefined) return yield* missingRaceForSubrace(namedSubrace);
+
+    const rows = yield* sql<{ readonly name: string; readonly body: RaceBody }>`
+      select name, body from character_option
+      where kind = 'race'
+        and lower(name) = lower(${namedRace})
+        and ${vocabulary}
+    `.pipe(Effect.orDie);
+    const resolves = rows.some((row) =>
+      row.body.subraces.some(
+        (candidate) => candidate.name.toLowerCase() === namedSubrace.toLowerCase(),
+      ),
+    );
+    if (!resolves) return yield* subraceMismatch(namedRace, namedSubrace, place);
+  });

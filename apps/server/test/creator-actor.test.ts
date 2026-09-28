@@ -541,7 +541,12 @@ describe("the scope, counted", () => {
     // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
     // share, the NPC's check and its links' read. Ties are DM prep, the
     // creator's from the day they were declared, and `PlayerNpc` has none.
-    expect(gated).toBe(128);
+    // A hundred and twenty-nine to thirty-six are an NPC's sheet:
+    // `NpcSheets.list`, `find`, `put`, `update` and `remove`, and the three
+    // inner helpers they share — the NPC's lock, the sheet's read and the
+    // NPC's rules. A sheet is DM prep, the creator's from the day it was
+    // declared, and `PlayerNpc` carries none of it.
+    expect(gated).toBe(136);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

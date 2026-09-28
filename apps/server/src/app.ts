@@ -69,6 +69,7 @@ import { NpcAwareness } from "./repo/NpcAwareness.js";
 import { NpcFollowUps } from "./repo/NpcFollowUp.js";
 import { NpcPreps } from "./repo/NpcPrep.js";
 import { NpcLinks } from "./repo/NpcLinks.js";
+import { NpcSheets } from "./repo/NpcSheets.js";
 import { Npcs } from "./repo/Npcs.js";
 import { NpcThreads } from "./repo/NpcThreads.js";
 import { Options } from "./repo/Options.js";
@@ -488,6 +489,7 @@ export const servicesOver = <E>(
   | NpcFollowUps
   | NpcPreps
   | NpcLinks
+  | NpcSheets
   | Npcs
   | NpcThreads
   | ObjectStorage
@@ -610,6 +612,9 @@ export const servicesOver = <E>(
     NpcPreps.layer,
     // An NPC's ties to encounters and seats: DM prep, only the handlers hold it.
     NpcLinks.layer,
+    // An NPC's character-style sheet: DM prep, creator-only behind the proof.
+    // Only the handlers hold it; no toolkit reads or writes it.
+    NpcSheets.layer,
     NpcProposals.layer.pipe(
       Layer.provide([
         Campaigns.layer,
@@ -813,6 +818,7 @@ export const applicationOver = <E>(
     | NpcFollowUps
     | NpcPreps
     | NpcLinks
+    | NpcSheets
     | Npcs
     | NpcThreads
     | Options

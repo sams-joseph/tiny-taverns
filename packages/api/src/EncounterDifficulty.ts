@@ -155,8 +155,58 @@ export const encounterMultiplier = (creatures: number, partySize: number): numbe
   return MULTIPLIERS[row + step]!;
 };
 
+/**
+ * The challenge ratings the XP table knows, lowest first — **the closed
+ * vocabulary of a rating somebody sets by hand** (an NPC sheet's `cr`), so a
+ * rating typed there always has XP. A stat block's `cr` stays open text: the
+ * bestiary imports what the source printed, and {@link creatureXp} answers
+ * `null` for a rating outside this list.
+ *
+ * The XP table below is keyed by this type, so the compiler keeps the two the
+ * same list; `0076_npc_sheets.ts` states it again as a check, and a server test
+ * pins that check equal to this.
+ */
+export const CHALLENGE_RATINGS = [
+  "0",
+  "1/8",
+  "1/4",
+  "1/2",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11",
+  "12",
+  "13",
+  "14",
+  "15",
+  "16",
+  "17",
+  "18",
+  "19",
+  "20",
+  "21",
+  "22",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
+  "29",
+  "30",
+] as const;
+export const ChallengeRating = Schema.Literals(CHALLENGE_RATINGS);
+export type ChallengeRating = typeof ChallengeRating.Type;
+
 /** DMG p.275 / the SRD, "Experience Points by Challenge Rating". */
-const XP_BY_CR: Readonly<Record<string, number>> = {
+const XP_BY_CR: Readonly<Record<ChallengeRating, number>> = {
   "0": 10,
   "1/8": 25,
   "1/4": 50,
@@ -222,7 +272,8 @@ export const creatureXp = (creature: {
     return creature.statBlockXp;
   }
   const cr = creature.cr.trim();
-  return XP_BY_CR[DECIMAL_CR[cr] ?? cr] ?? null;
+  const known = DECIMAL_CR[cr] ?? cr;
+  return Object.hasOwn(XP_BY_CR, known) ? XP_BY_CR[known as ChallengeRating] : null;
 };
 
 /** One roster line, as the rule needs it. */

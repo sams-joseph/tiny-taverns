@@ -640,11 +640,17 @@ export class Character extends Schema.Class<Character>("Character")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-const ac = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }));
-const hp = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
+/**
+ * The sheet's identity numbers and labels as a write states them, bounded the
+ * way the columns are — a character's here, and an NPC sheet's (`NpcSheetPut`,
+ * `0076_npc_sheets.ts`), which carries the same columns under the same checks.
+ */
+export const SheetArmorClass = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }));
+export const SheetHitPoints = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
 /** Bounded the way the column is: generously, to refuse a typo rather than epic play. */
-const level = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
-const shortLabel = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+export const SheetLevel = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
+/** A race, subrace or class name. */
+export const SheetLabel = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
 const sheetUrl = Schema.String.check(
   Schema.isLengthBetween(1, 2000),
   Schema.isPattern(/^https?:\/\//i),
@@ -682,12 +688,12 @@ export const CharacterOwnUpdate = Schema.Struct({
   expectedVersion: Schema.optional(Schema.Int),
   name: Schema.optional(Schema.NonEmptyString),
   playerName: Schema.optional(Schema.NullOr(Schema.String)),
-  level: Schema.optional(Schema.NullOr(level)),
-  race: Schema.optional(Schema.NullOr(shortLabel)),
-  subrace: Schema.optional(Schema.NullOr(shortLabel)),
-  className: Schema.optional(Schema.NullOr(shortLabel)),
-  ac: Schema.optional(Schema.NullOr(ac)),
-  hpMax: Schema.optional(Schema.NullOr(hp)),
+  level: Schema.optional(Schema.NullOr(SheetLevel)),
+  race: Schema.optional(Schema.NullOr(SheetLabel)),
+  subrace: Schema.optional(Schema.NullOr(SheetLabel)),
+  className: Schema.optional(Schema.NullOr(SheetLabel)),
+  ac: Schema.optional(Schema.NullOr(SheetArmorClass)),
+  hpMax: Schema.optional(Schema.NullOr(SheetHitPoints)),
   sheetUrl: Schema.optional(Schema.NullOr(sheetUrl)),
   /** Whole-document, like `CharacterUpdate.sheet` — and it races the same way. */
   sheet: Schema.optional(CharacterSheet),
@@ -709,12 +715,12 @@ export type CharacterOwnUpdate = typeof CharacterOwnUpdate.Type;
 export const CharacterOwnCreate = Schema.Struct({
   name: Schema.NonEmptyString,
   playerName: Schema.optional(Schema.String),
-  level: Schema.optional(level),
-  race: Schema.optional(shortLabel),
-  subrace: Schema.optional(shortLabel),
-  className: Schema.optional(shortLabel),
-  ac: Schema.optional(ac),
-  hpMax: Schema.optional(hp),
+  level: Schema.optional(SheetLevel),
+  race: Schema.optional(SheetLabel),
+  subrace: Schema.optional(SheetLabel),
+  className: Schema.optional(SheetLabel),
+  ac: Schema.optional(SheetArmorClass),
+  hpMax: Schema.optional(SheetHitPoints),
   sheetUrl: Schema.optional(sheetUrl),
   /** Omit and the column default — an empty document — decides. */
   sheet: Schema.optional(CharacterSheet),

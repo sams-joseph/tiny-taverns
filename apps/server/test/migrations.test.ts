@@ -251,6 +251,7 @@ describe("migrations", () => {
       "npc_memory",
       "npc_prep",
       "npc_proposal",
+      "npc_sheet",
       "npc_thread",
       "npc_turn",
       "play_group",
@@ -358,6 +359,7 @@ describe("migrations", () => {
       { migration_id: 73, name: "npc_prep" },
       { migration_id: 74, name: "npc_links" },
       { migration_id: 75, name: "portrait_banners" },
+      { migration_id: 76, name: "npc_sheets" },
     ]);
   }, 60_000);
 
@@ -442,6 +444,7 @@ describe("migrations", () => {
       { migration_id: 73, name: "npc_prep" },
       { migration_id: 74, name: "npc_links" },
       { migration_id: 75, name: "portrait_banners" },
+      { migration_id: 76, name: "npc_sheets" },
     ]);
   }, 60_000);
 });
