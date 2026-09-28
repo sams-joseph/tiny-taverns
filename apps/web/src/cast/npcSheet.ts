@@ -141,17 +141,22 @@ type SheetWrite<A> = Effect.Effect<A, unknown, HttpClient.HttpClient>;
 
 /**
  * Where an NPC's sheet is read and written, so the Stats panel draws one sheet
- * whichever NPC it is: a campaign NPC's through the creator's endpoints. A
- * Library original's is its owner's, under `/library`, and gets a target of
- * its own where a page draws it.
+ * whichever NPC it is: a campaign NPC's through the creator's endpoints, a
+ * Library original's through its owner's, under `/library`.
  */
 export interface NpcSheetTarget {
+  /**
+   * Where the NPC lives, which is what *Remove* tells the DM stays: a campaign
+   * NPC in its cast with its prep, a Library original on its shelf, with every
+   * copy's sheet its own.
+   */
+  readonly home: "cast" | "library";
   readonly put: (client: TavernsClient, payload: NpcSheetPut) => SheetWrite<NpcSheet>;
   readonly update: (client: TavernsClient, patch: NpcSheetUpdate) => SheetWrite<NpcSheet>;
   readonly remove: (client: TavernsClient) => SheetWrite<void>;
   /**
    * What every write of the sheet changed: the sheet, and the shelf the
-   * drawer's line reads.
+   * one-line summaries read (the drawer's, a Library card's).
    */
   readonly writes: Invalidation;
 }
@@ -159,9 +164,26 @@ export interface NpcSheetTarget {
 export const campaignSheetTarget = (campaignId: CampaignId, npcId: NpcId): NpcSheetTarget => {
   const params = { campaignId, npcId };
   return {
+    home: "cast",
     put: (client, payload) => client.npcs.putSheet({ params, payload }),
     update: (client, patch) => client.npcs.updateSheet({ params, payload: patch }),
     remove: (client) => client.npcs.removeSheet({ params }),
     writes: [reads.npcSheet(npcId), reads.npcSheets(campaignId)],
+  };
+};
+
+/**
+ * A Library original's sheet: the owner's, written against the core rules. A
+ * copy into a campaign took the sheet as it stood, so nothing here moves a
+ * copy's, and no campaign's shelf is named.
+ */
+export const librarySheetTarget = (npcId: NpcId): NpcSheetTarget => {
+  const params = { npcId };
+  return {
+    home: "library",
+    put: (client, payload) => client.library.putNpcSheet({ params, payload }),
+    update: (client, patch) => client.library.updateNpcSheet({ params, payload: patch }),
+    remove: (client) => client.library.removeNpcSheet({ params }),
+    writes: [reads.npcSheet(npcId), reads.libraryNpcSheets],
   };
 };

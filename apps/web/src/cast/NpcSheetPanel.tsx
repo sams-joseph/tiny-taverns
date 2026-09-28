@@ -161,7 +161,8 @@ export function NpcSheetPanel({
 /**
  * Removing an NPC's sheet: the reverse of *Write one*. It asks first, because
  * the document goes with it and nothing brings it back; the NPC itself, its
- * persona and its prep are untouched.
+ * persona and its prep are untouched, and so is every copy of a Library
+ * original's.
  */
 function RemoveSheetDialog({
   name,
@@ -191,8 +192,9 @@ function RemoveSheetDialog({
 
         <div className="flex flex-col gap-3 px-gutter py-3">
           <p className="text-body-s leading-body text-muted-foreground">
-            {name} stays in the cast, with their persona and your prep. To give them stats again,
-            write a new sheet.
+            {target.home === "library"
+              ? `${name} stays in your Library, with their persona. A copy already in a campaign keeps its own stats. To give them stats again, write a new sheet.`
+              : `${name} stays in the cast, with their persona and your prep. To give them stats again, write a new sheet.`}
           </p>
         </div>
 

@@ -336,6 +336,15 @@ export const reads = {
   /** One reusable NPC source. */
   libraryNpc: (npcId: NpcId): ReadKey => key`library:npcs:${npcId}`,
 
+  /**
+   * The summary of every Library NPC source's sheet (`library.npcSheets`): each
+   * card's one stats line. The owner's alone, and a key of its own for
+   * `npcSheets`' reason. Its read answers `libraryNpcs` too, since which
+   * sources it lists moves with the shelf. One source's whole sheet is
+   * `npcSheet`, the same key a campaign NPC's answers: an NPC id is one NPC.
+   */
+  libraryNpcSheets: "library:npc-sheets" as ReadKey,
+
   /** One Library feat and its prerequisite rows. */
   libraryFeat: (featId: FeatId): ReadKey => key`library:feats:${featId}`,
 
