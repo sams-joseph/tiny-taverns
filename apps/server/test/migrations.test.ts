@@ -367,6 +367,7 @@ describe("migrations", () => {
       { migration_id: 77, name: "npc_sheet_origin" },
       { migration_id: 78, name: "encounter_order" },
       { migration_id: 79, name: "shared_world_origin" },
+      { migration_id: 80, name: "assistant_turn_discard" },
     ]);
   }, 60_000);
 
@@ -455,6 +456,7 @@ describe("migrations", () => {
       { migration_id: 77, name: "npc_sheet_origin" },
       { migration_id: 78, name: "encounter_order" },
       { migration_id: 79, name: "shared_world_origin" },
+      { migration_id: 80, name: "assistant_turn_discard" },
     ]);
   }, 60_000);
 });
