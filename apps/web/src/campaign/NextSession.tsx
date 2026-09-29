@@ -296,14 +296,6 @@ export function NextSession({
         />
       </div>
 
-      {session === undefined && view.planned !== undefined && (
-        <CardFooter>
-          <p className="mb-0 text-body-s leading-body text-muted-foreground">
-            Planned. Starting the night opens it, checklist and all.
-          </p>
-        </CardFooter>
-      )}
-
       {session !== undefined && live === undefined && (
         <CardFooter className="flex-wrap justify-between">
           <p className="mb-0 text-body-s leading-body text-muted-foreground">{stateOf(session)}</p>

@@ -377,7 +377,6 @@ describe("the next session card", () => {
     const card = await cardOf("The toll bridge");
 
     expect(within(card).getByText("Print the salt road map")).toBeInTheDocument();
-    expect(within(card).getByText(/Planned\. Starting the night opens it/)).toBeInTheDocument();
     // Planned is not open: nothing to finish, and the row still starts it.
     expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
     expect(
