@@ -34,10 +34,13 @@ const actsAtom = Atom.family((campaignId: CampaignId) =>
 export function DeletePlannedNightDialog({
   campaignId,
   night,
+  next,
   onClose,
 }: {
   readonly campaignId: CampaignId;
   readonly night: Session;
+  /** The planned night *Start the night* opens once this one is gone; absent when none is left. */
+  readonly next: Session | undefined;
   readonly onClose: () => void;
 }) {
   const { busy, failure, submit } = useMutation();
@@ -66,7 +69,10 @@ export function DeletePlannedNightDialog({
 
         <div className="flex flex-col gap-3 px-gutter py-3">
           <p className="text-body-s leading-body text-muted-foreground">
-            The planned night and its checklist are deleted. Start the night makes a new one.
+            The planned night and its checklist are deleted.{" "}
+            {next === undefined
+              ? "Start the night makes a new one."
+              : `Start the night opens session ${String(next.number)} next.`}
           </p>
           {act !== undefined && (
             <p className="text-body-s leading-body text-muted-foreground">

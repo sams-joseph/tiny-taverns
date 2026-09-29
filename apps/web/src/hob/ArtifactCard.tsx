@@ -534,7 +534,7 @@ export function ArtifactCard({
                                 ? "In the Cast"
                                 : artifact.kind === "checklist"
                                   ? artifact.plannedAs === undefined
-                                    ? "Planned, not yet started"
+                                    ? "Kept as a planned night"
                                     : `Planned as session ${String(artifact.plannedAs)}`
                                   : act
                                     ? "In the Chronicle"

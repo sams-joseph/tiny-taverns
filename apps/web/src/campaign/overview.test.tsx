@@ -421,7 +421,11 @@ describe("the next session card", () => {
 
     await userEvent.click(within(card).getByRole("button", { name: "Delete The toll bridge" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
-    expect(within(dialog).getByText(/its checklist are deleted/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "The planned night and its checklist are deleted. Start the night makes a new one.",
+      ),
+    ).toBeInTheDocument();
     // No act starts at night 13, so the dialog names none.
     expect(within(dialog).queryByText(/act that starts at/)).toBeNull();
     expect(deletes()).toEqual([]);
@@ -484,6 +488,11 @@ describe("the next session card", () => {
 
     await userEvent.click(within(card).getByRole("button", { name: "Delete The ferry" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete The ferry?" });
+    expect(
+      within(dialog).getByText(
+        "The planned night and its checklist are deleted. Start the night opens session 13 next.",
+      ),
+    ).toBeInTheDocument();
     server.routes.set(`GET ${base}/sessions`, {
       status: 200,
       body: [plannedSession, begunSession],

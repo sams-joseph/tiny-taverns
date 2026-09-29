@@ -157,10 +157,13 @@ function PlannedNightSection({
   campaignId,
   planned,
   named,
+  next,
 }: {
   readonly campaignId: CampaignId;
   readonly planned: PlannedNight;
   readonly named: boolean;
+  /** The planned night *Start the night* opens once this one is deleted, if any. */
+  readonly next: Session | undefined;
 }) {
   const [deleting, setDeleting] = useState(false);
   const night = planned.session;
@@ -189,6 +192,7 @@ function PlannedNightSection({
         <DeletePlannedNightDialog
           campaignId={campaignId}
           night={night}
+          next={next}
           onClose={() => setDeleting(false)}
         />
       )}
@@ -347,6 +351,7 @@ export function NextSession({
             campaignId={view.campaign.id}
             planned={planned}
             named={view.planned.length > 1}
+            next={view.planned.find((other) => other !== planned)?.session}
           />
         ))
       ) : (

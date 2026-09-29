@@ -1444,7 +1444,7 @@ describe("a planned night and an act", () => {
     expect(screen.getByText("Planned as session 13")).toBeInTheDocument();
   });
 
-  it("reads a night with no title as the next session", async () => {
+  it("reads a night with no title as a planned session", async () => {
     server.frames = [
       began(threadId, turnId),
       proposed(turnId, { ...nightProposal, title: null, prep: ["One thing"], actTitle: null }),
@@ -1454,7 +1454,7 @@ describe("a planned night and an act", () => {
     await waitFor(() => expect(composer()).not.toBeNull());
     await userEvent.type(composer()!, "Plan next session.{Enter}");
 
-    expect(await screen.findByText("Next session")).toBeInTheDocument();
+    expect(await screen.findByText("Planned session")).toBeInTheDocument();
     expect(screen.getByText("1 prep line")).toBeInTheDocument();
   });
 

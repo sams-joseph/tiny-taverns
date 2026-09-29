@@ -327,8 +327,8 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         text: proposal.text,
       };
     /**
-     * The next night the creator's Hob planned, as the delivered prep list:
-     * its title (or *Next session*, as a night with none reads), each line
+     * A night the creator's Hob planned, as the delivered prep list:
+     * its title (or *Planned session* when it has none), each line
      * unticked, and the act it starts when it names one. No number: the keep
      * numbers the night one past the highest the campaign has then.
      */
@@ -336,7 +336,7 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
       return {
         id: turnId,
         kind: "checklist",
-        title: proposal.title ?? "Next session",
+        title: proposal.title ?? "Planned session",
         meta: [
           `${String(proposal.prep.length)} prep ${proposal.prep.length === 1 ? "line" : "lines"}`,
           ...(proposal.actTitle === null ? [] : [`Starts ${proposal.actTitle}`]),
