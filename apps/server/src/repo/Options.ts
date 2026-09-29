@@ -1,31 +1,40 @@
 import {
-  type AccountId,
+  BackgroundOption,
   type BackgroundBody,
-  type CampaignId,
+  CampaignId,
   type CharacterOption,
-  type CharacterOptionId,
+  CharacterOptionId,
   type ClassBody,
+  ClassOption,
   Conflict,
   CurrentActor,
   NotFound,
-  type OptionDetails,
+  OptionFilter,
   type OptionFilterValues,
   type OptionKind,
   OPTION_LIMIT,
-  type OptionLibraryCreate,
+  OptionLibraryCreate,
   type OptionLibraryUpdate,
   type OptionUpdate,
   type OptionVocabulary,
+  RaceOption,
   type RaceBody,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema, Struct } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
   libraryVocabulary,
-  optionDetailsFor,
+  optionDetailsReader,
   syncOptionRelationsInput,
 } from "../ruleset/vocabularies.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  setClause,
+  timestampColumns,
+} from "./rows.js";
 import {
   coreRulesUsable,
   ensureCampaignReadable,
@@ -34,53 +43,33 @@ import {
   libraryRowWritable,
 } from "./visibility.js";
 
-interface OptionRow extends ProvenanceColumns {
-  readonly id: CharacterOptionId;
-  /** Null for a Library original and for the bundle. */
-  readonly campaign_id: CampaignId | null;
-  /** Whose Library this is in; null for a campaign copy and for the bundle. */
-  readonly account_id: AccountId | null;
-  readonly derived_from: CharacterOptionId | null;
-  readonly kind: OptionKind;
-  readonly name: string;
-  /** Minimal source key this row snapshots, when it came from an imported source. */
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
-  readonly body: ClassBody | RaceBody | BackgroundBody;
-}
-
 /**
- * The row as the wire sees it.
+ * A `character_option` row as the wire's option reads it — everything but
+ * `details`, which is hydrated from the child tables — decoded off
+ * `select *` by `SqlSchema`. `source_*` columns are not on the wire and the
+ * decode drops them.
  *
- * A `switch` rather than one object literal, because `CharacterOption` is a
- * union discriminated on `kind` and the three arms carry different documents.
- * That the column and the document agree is a property of the **write** side —
- * every create and every update goes through a schema that pairs them, and
- * `update` refuses a body whose shape contradicts the row's own kind — exactly
- * as `Creatures.ts` trusts `body` to be a `StatBlock` because only a
- * `StatBlock` was ever put there.
+ * A union on `kind`, because the three arms carry different documents, and
+ * the decode is what pairs the column with its `jsonb` body: a class row whose
+ * body is not a `ClassBody` is a defect here rather than a lie on the wire.
+ * Every write already goes through a schema that pairs them, and `update`
+ * refuses a body whose shape contradicts the row's own kind.
  */
-const toOption = (row: OptionRow, details?: OptionDetails): CharacterOption => {
-  const shared = {
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    name: row.name,
-    ...(details === undefined ? {} : { details }),
-    ...provenanceOf(row),
-  };
-  switch (row.kind) {
-    case "class":
-      return { ...shared, kind: "class", body: row.body as ClassBody };
-    case "race":
-      return { ...shared, kind: "race", body: row.body as RaceBody };
-    case "background":
-      return { ...shared, kind: "background", body: row.body as BackgroundBody };
-  }
-};
+const optionRow = <Fields extends Schema.Struct.Fields & { readonly details: Schema.Top }>(
+  schema: Schema.Struct<Fields>,
+) =>
+  fromColumns(Schema.Struct({ ...Struct.omit(schema.fields, ["details"]), ...timestampColumns }));
+const OptionRow = Schema.Union([
+  optionRow(ClassOption),
+  optionRow(RaceOption),
+  optionRow(BackgroundOption),
+]);
+type OptionRow = typeof OptionRow.Type;
+
+const OptionListRequest = Schema.toType(Schema.Struct(OptionFilter));
+const CampaignListRequest = Schema.toType(
+  Schema.Struct({ campaignId: CampaignId, ...OptionFilter }),
+);
 
 /** The document on its way into a `jsonb` column, as text — `Creatures.ts`'s rule. */
 const encodeBody = (body: ClassBody | RaceBody | BackgroundBody): string => JSON.stringify(body);
@@ -255,29 +244,123 @@ export class Options extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const detailsFor = optionDetailsReader(sql);
 
-      /** The same, for the Library: this account's own originals and the bundle. */
-      const inLibrary = (id: CharacterOptionId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<OptionRow>`
-            select * from character_option
-            where character_option.id = ${id}
-              and ${libraryRowReadable(sql, "character_option", actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-          return rows[0]!;
-        });
+      /** One option this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(CharacterOptionId),
+        Result: OptionRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select * from character_option
+              where character_option.id = ${id}
+                and ${libraryRowReadable(sql, "character_option", actor)}
+            `,
+          ),
+      });
+      const findInLibrary = (id: CharacterOptionId) => inLibrary(id).pipe(orNotFound("option", id));
 
-      const hydrate = (row: OptionRow): Effect.Effect<CharacterOption, never> =>
-        Effect.map(Effect.orDie(optionDetailsFor(sql, row.id)), (details) =>
-          toOption(row, details),
+      /** One vocabulary read: whole rows under the caller's predicate, in `readOrder`. */
+      const vocabulary = (where: Statement.Fragment) => sql`
+        select * from character_option
+        where ${where}
+        order by ${readOrder(sql)}
+        limit ${OPTION_LIMIT}
+      `;
+      const usable = SqlSchema.findAll({
+        Request: CampaignListRequest,
+        Result: OptionRow,
+        execute: ({ campaignId, kind }) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+            vocabulary(
+              sql.and([
+                usableInCampaign(sql, "character_option", campaignId, actor),
+                ...ofKind(sql, kind),
+              ]),
+            ),
+          ),
+      });
+      const inLibraryList = SqlSchema.findAll({
+        Request: OptionListRequest,
+        Result: OptionRow,
+        execute: ({ kind }) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+            vocabulary(
+              sql.and([libraryRowReadable(sql, "character_option", actor), ...ofKind(sql, kind)]),
+            ),
+          ),
+      });
+      const coreList = SqlSchema.findAll({
+        Request: OptionListRequest,
+        Result: OptionRow,
+        execute: ({ kind }) =>
+          vocabulary(sql.and([coreRulesUsable(sql, "character_option"), ...ofKind(sql, kind)])),
+      });
+      /**
+       * A new original in this account's Library. `account_id` comes from the
+       * actor and from nothing a caller supplied, and `campaign_id` is not
+       * named at all — it takes the column default, which is null.
+       */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(OptionLibraryCreate),
+        Result: OptionRow,
+        execute: (payload) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              insert into character_option ${sql.insert({
+                account_id: actor.accountId,
+                kind: payload.kind,
+                name: payload.name,
+                body: encodeBody(payload.body),
+              })}
+              returning *
+            `,
+          ),
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            id: CharacterOptionId,
+            columns: Schema.Record(Schema.String, Schema.Unknown),
+          }),
+        ),
+        Result: OptionRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update character_option set ${setClause(sql, columns)}
+              where character_option.id = ${id}
+                and ${libraryRowWritable(sql, "character_option", actor)}
+              returning *
+            `,
+          ),
+      });
+
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(CharacterOptionId),
+        Result: fromColumns(Schema.Struct({ id: CharacterOptionId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from character_option
+              where character_option.id = ${id}
+                and ${libraryRowWritable(sql, "character_option", actor)}
+              returning character_option.id
+            `,
+          ),
+      });
+
+      /** Rows with their `details`, hydrated in one fixed set of statements. */
+      const hydrateAll = (rows: ReadonlyArray<OptionRow>) =>
+        Effect.map(detailsFor(rows.map((row) => row.id)), (details) =>
+          rows.map((row): CharacterOption => ({ ...row, details: details.get(row.id)! })),
         );
-
-      const hydrateAll = (
-        rows: ReadonlyArray<OptionRow>,
-      ): Effect.Effect<ReadonlyArray<CharacterOption>, never> =>
-        Effect.all(rows.map((row) => hydrate(row)));
+      const hydrate = (row: OptionRow) => Effect.map(hydrateAll([row]), (options) => options[0]!);
 
       /**
        * A patch's columns, with the body refused when it contradicts the row.
@@ -309,16 +392,7 @@ export class Options extends Context.Service<
               // A 404 rather than an empty list, so an unreachable campaign does
               // not read as "this table has no classes" on a picker.
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<OptionRow>`
-                select * from character_option
-                where ${sql.and([
-                  usableInCampaign(sql, "character_option", campaignId, actor),
-                  ...ofKind(sql, filter.kind),
-                ])}
-                order by ${readOrder(sql)}
-                limit ${OPTION_LIMIT}
-              `;
-              return yield* hydrateAll(rows);
+              return yield* hydrateAll(yield* usable({ campaignId, ...filter }));
             }),
           ),
 
@@ -330,53 +404,20 @@ export class Options extends Context.Service<
             }),
           ),
 
-        library: (filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<OptionRow>`
-                select * from character_option
-                where ${sql.and([
-                  libraryRowReadable(sql, "character_option", actor),
-                  ...ofKind(sql, filter.kind),
-                ])}
-                order by ${readOrder(sql)}
-                limit ${OPTION_LIMIT}
-              `;
-              return yield* hydrateAll(rows);
-            }),
-          ),
+        library: (filter) => dieOnSqlError(Effect.flatMap(inLibraryList(filter), hydrateAll)),
 
-        core: (filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<OptionRow>`
-                select * from character_option
-                where ${sql.and([coreRulesUsable(sql, "character_option"), ...ofKind(sql, filter.kind)])}
-                order by ${readOrder(sql)}
-                limit ${OPTION_LIMIT}
-              `;
-              return yield* hydrateAll(rows);
-            }),
-          ),
+        core: (filter) => dieOnSqlError(Effect.flatMap(coreList(filter), hydrateAll)),
 
-        libraryFindById: (id) => dieOnSqlError(Effect.flatMap(inLibrary(id), hydrate)),
+        libraryFindById: (id) => dieOnSqlError(Effect.flatMap(findInLibrary(id), hydrate)),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<OptionRow>`
-                  insert into character_option ${sql.insert({
-                    account_id: actor.accountId,
-                    kind: payload.kind,
-                    name: payload.name,
-                    body: encodeBody(payload.body),
-                  })}
-                  returning *
-                `;
-                const created = rows[0]!;
+                // An insert answers with its row; not getting one is a defect.
+                const created = yield* insertOriginal(payload).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
                 yield* syncOptionRelationsInput(sql, created.id, payload.relations);
                 return yield* hydrate(created);
               }),
@@ -387,20 +428,14 @@ export class Options extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const row = yield* inLibrary(id);
+                const row = yield* findInLibrary(id);
                 const columns = yield* columnsFor(row, patch);
-                const rows = yield* sql<OptionRow>`
-                  update character_option set ${setClause(sql, columns)}
-                  where character_option.id = ${id}
-                    and ${libraryRowWritable(sql, "character_option", actor)}
-                  returning *
-                `;
                 // A bundled option lands here — readable in this Library and
                 // owned by nobody — and so does another account's original.
                 // Both get the same refusal as "no such option", on purpose.
-                if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-                const updated = rows[0]!;
+                const updated = yield* updateOriginal({ id, columns }).pipe(
+                  orNotFound("option", id),
+                );
                 yield* syncOptionRelationsInput(sql, updated.id, patch.relations);
                 return yield* hydrate(updated);
               }),
@@ -408,18 +443,7 @@ export class Options extends Context.Service<
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: CharacterOptionId }>`
-                delete from character_option
-                where character_option.id = ${id}
-                  and ${libraryRowWritable(sql, "character_option", actor)}
-                returning character_option.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "option", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("option", id)))),
       };
     }),
   );

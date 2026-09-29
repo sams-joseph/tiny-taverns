@@ -1,7 +1,80 @@
-import type { AssistantTurnId, Origin, Visibility } from "@taverns/api";
-import { DateTime, Effect } from "effect";
+import { type AssistantTurnId, NotFound, type Origin, type Visibility } from "@taverns/api";
+import { type Cause, DateTime, Effect, Schema } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import type { SqlClient, Statement } from "effect/unstable/sql";
+
+/**
+ * A domain struct read straight off its columns: the same fields, decoded from
+ * their snake_case spelling (`assistantTurnId` from `assistant_turn_id`).
+ *
+ * This is the one place a column name becomes a field name. A repository
+ * converted to `SqlSchema` declares the wire schema it answers with, wraps it
+ * in this, and hands the pair to `SqlSchema.findAll`/`findOne` — there is no
+ * hand-written row type and no `to…` mapper beside it. Columns the struct does
+ * not name (`source_key`, a join's extra keys) are dropped by the decode, and
+ * nested `jsonb` documents keep the spelling the query built them in: only the
+ * top-level keys are renamed.
+ *
+ * A column whose driver value differs from the wire's encoding needs its own
+ * field: `timestampColumns` for the two every content row carries.
+ */
+export const fromColumns = <Fields extends Schema.Struct.Fields>(schema: Schema.Struct<Fields>) =>
+  schema.pipe(
+    Schema.encodeKeys(
+      Object.fromEntries(
+        Object.keys(schema.fields).map((field) => [
+          field,
+          field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
+        ]),
+      ) as { readonly [K in keyof Fields]: string },
+    ),
+  );
+
+/**
+ * Child rows read for many parents in one statement, filed under the parent
+ * each was read for, in the order the query returned them, with the parent's
+ * key dropped — what turns an `= any($1)` read back into one list per parent.
+ */
+export const fileUnder = <Row extends object, Key extends keyof Row>(
+  rows: ReadonlyArray<Row>,
+  key: Key,
+): ReadonlyMap<Row[Key], ReadonlyArray<Omit<Row, Key>>> => {
+  const filed = new Map<Row[Key], Array<Omit<Row, Key>>>();
+  for (const row of rows) {
+    const { [key]: parent, ...child } = row;
+    const siblings = filed.get(parent);
+    if (siblings === undefined) filed.set(parent, [child]);
+    else siblings.push(child);
+  }
+  return filed;
+};
+
+/**
+ * `created_at` and `updated_at` as the driver hands them over: a `Date`, where
+ * the wire carries an ISO string. Spread over a wire struct's fields before
+ * `fromColumns`; both decode to the same `DateTime.Utc`.
+ */
+export const timestampColumns = {
+  createdAt: Schema.DateTimeUtcFromDate,
+  updatedAt: Schema.DateTimeUtcFromDate,
+} as const;
+
+/**
+ * `SqlSchema.findOne`'s "no row" as the domain's refusal.
+ *
+ * `findOne` fails with `NoSuchElementError` when the predicate returned
+ * nothing, which is exactly the case AGENTS rule 1 answers with `NotFound`:
+ * a row that does not exist and a row this actor may not read are the same
+ * answer.
+ */
+export const orNotFound =
+  (resource: string, id: string) =>
+  <A, E, R>(
+    effect: Effect.Effect<A, E | Cause.NoSuchElementError, R>,
+  ): Effect.Effect<A, E | NotFound, R> =>
+    Effect.catchTag(effect, "NoSuchElementError", () =>
+      Effect.fail(new NotFound({ resource, id })),
+    );
 
 /**
  * The provenance/visibility tail every content row carries. Kept as one type so
@@ -86,19 +159,21 @@ export const likeContains = (query: string): string =>
   `%${query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 
 /**
- * Turns a `SqlError` into a defect, so a repository declares only the domain
- * errors a caller can do something about.
+ * Turns a `SqlError`, or a row its `SqlSchema` row schema refuses, into a
+ * defect, so a repository declares only the domain errors a caller can do
+ * something about.
  *
- * A broken query or an unreachable database is a 500 and a stack trace, not a
- * case for a handler to branch on. Keeping it out of the error channel is what
- * lets the `HttpApi` error schemas stay honest — every error the declaration
- * names is one a client can actually receive.
+ * A broken query, an unreachable database or a column holding what no write
+ * path puts there is a 500 and a stack trace, not a case for a handler to
+ * branch on. Keeping it out of the error channel is what lets the `HttpApi`
+ * error schemas stay honest — every error the declaration names is one a
+ * client can actually receive.
  */
 export const dieOnSqlError = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, Exclude<E, SqlError.SqlError>, R> =>
+): Effect.Effect<A, Exclude<E, SqlError.SqlError | Schema.SchemaError>, R> =>
   Effect.catch(effect, (error) =>
-    SqlError.isSqlError(error)
+    SqlError.isSqlError(error) || Schema.isSchemaError(error)
       ? Effect.die(error)
-      : Effect.fail(error as Exclude<E, SqlError.SqlError>),
+      : Effect.fail(error as Exclude<E, SqlError.SqlError | Schema.SchemaError>),
   );

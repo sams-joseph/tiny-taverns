@@ -1,24 +1,32 @@
-import type {
-  AccountId,
-  CampaignId,
+import {
+  type AccountId,
+  type CampaignId,
   CharacterOptionId,
-  CharacterOptionSubraceId,
+  type CharacterOptionSubraceId,
   KitEquipment,
+  OptionAbilityGrant,
+  OptionChoiceGroup,
   OptionClassLevel,
-  OptionDetails,
+  type OptionDetails,
   OptionFeatureGrant,
-  OptionRelationsInput,
-  OptionVocabulary,
-  RuleAbilityScore,
-  RuleChoiceKind,
+  OptionLanguageGrant,
+  OptionProficiencyGrant,
+  type OptionRelationsInput,
+  OptionSubraceDetail,
+  OptionTraitGrant,
+  type OptionVocabulary,
+  type RuleAbilityScore,
+  type RuleChoiceKind,
+  RuleChoiceGroupId,
   RuleLanguage,
   RuleProficiency,
-  RuleSkill,
+  type RuleSkill,
   RuleTrait,
   StartingKit,
 } from "@taverns/api";
-import { Effect } from "effect";
-import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
+import { Effect, Schema, Struct } from "effect";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { fileUnder, fromColumns } from "../repo/rows.js";
 import { damageTypeIdByKey, FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import {
   ABILITY_SCORE_RAW,
@@ -1173,19 +1181,98 @@ export const campaignVocabulary = (
     return { abilities, languages, skills, proficiencies, traits };
   });
 
-export const optionDetailsFor = (
-  sql: SqlClient.SqlClient,
-  optionId: CharacterOptionId,
-): Effect.Effect<OptionDetails, SqlError.SqlError> =>
-  Effect.gen(function* () {
-    const subraces = yield* sql<OptionDetails["subraces"][number]>`
-      select id::text, name, source_key as index, ordinal
+/** The key a child row was read for, beside the row, when one query answers many parents. */
+const optionKey = { optionId: CharacterOptionId } as const;
+const groupKey = { groupId: RuleChoiceGroupId } as const;
+
+const OptionIds = Schema.toType(Schema.Array(CharacterOptionId));
+const GroupIds = Schema.toType(Schema.Array(RuleChoiceGroupId));
+
+const SubraceRow = fromColumns(Schema.Struct({ ...optionKey, ...OptionSubraceDetail.fields }));
+const AbilityGrantRow = fromColumns(Schema.Struct({ ...optionKey, ...OptionAbilityGrant.fields }));
+const LanguageGrantRow = fromColumns(
+  Schema.Struct({ ...optionKey, ...OptionLanguageGrant.fields }),
+);
+const ProficiencyGrantRow = fromColumns(
+  Schema.Struct({ ...optionKey, ...OptionProficiencyGrant.fields }),
+);
+const TraitGrantRow = fromColumns(Schema.Struct({ ...optionKey, ...OptionTraitGrant.fields }));
+/** A choice group without its four member lists, which are read by group id. */
+const ChoiceGroupRow = fromColumns(
+  Schema.Struct({
+    ...optionKey,
+    ...Struct.omit(OptionChoiceGroup.fields, ["abilities", "languages", "proficiencies", "traits"]),
+  }),
+);
+const GroupAbilityRow = fromColumns(Schema.Struct({ ...groupKey, ...OptionAbilityGrant.fields }));
+const GroupLanguageRow = fromColumns(Schema.Struct({ ...groupKey, ...RuleLanguage.fields }));
+const GroupProficiencyRow = fromColumns(Schema.Struct({ ...groupKey, ...RuleProficiency.fields }));
+const GroupTraitRow = fromColumns(Schema.Struct({ ...groupKey, ...RuleTrait.fields }));
+const FeatureGrantRow = fromColumns(Schema.Struct({ ...optionKey, ...OptionFeatureGrant.fields }));
+/** One `class_level` row with the two body documents the class table is projected from. */
+const ClassLevelRow = fromColumns(
+  Schema.Struct({
+    ...optionKey,
+    ...Struct.pick(OptionClassLevel.fields, ["level", "proficiencyBonus"]),
+    classSpecific: Schema.Unknown,
+    spellcasting: Schema.Unknown,
+  }),
+);
+const ClassFeatureRow = fromColumns(
+  Schema.Struct({
+    ...optionKey,
+    ...Struct.pick(OptionFeatureGrant.fields, ["id", "index", "name"]),
+    level: OptionClassLevel.fields.level,
+  }),
+);
+const KitRow = fromColumns(Schema.Struct({ ...optionKey, kit: Schema.NullOr(StartingKit) }));
+const KitEquipmentRow = fromColumns(Schema.Struct({ ...optionKey, ...KitEquipment.fields }));
+const KitEquipmentRequest = Schema.toType(
+  Schema.Struct({
+    optionIds: Schema.Array(CharacterOptionId),
+    /** Every category each option's kit lets the player pick from, one pair per line. */
+    categories: Schema.Array(
+      Schema.Struct({ optionId: CharacterOptionId, category: Schema.String }),
+    ),
+  }),
+);
+
+/**
+ * The `details` of many options at once: **a fixed number of statements
+ * however many options are asked for.**
+ *
+ * Each child table is read once with `= any($1)` over every id and filed
+ * under its parent in JS, so a list of twenty options costs what a list of
+ * one does: fifteen statements, eleven for the option-level children and four
+ * for the choice groups' members, which are keyed by group rather than option.
+ * It used to be sixteen statements per option, run in turn, which put 354 on
+ * the wire for the bundle's 22 before the create form could draw a picker.
+ * `options-hydration.test.ts` holds the count.
+ *
+ * **No actor and no visibility predicate here, and none is needed:** every id
+ * handed in came out of a query that already applied one, and these are that
+ * row's own children. That is also why this is a plain query and not a
+ * `RequestResolver` — see `docs/internals/server.md`.
+ *
+ * Built once per layer; the answer has an entry for every id asked about.
+ */
+export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
+  const subraces = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: SubraceRow,
+    execute: (ids) => sql`
+      select option_id, id::text, name, source_key as index, ordinal
       from character_option_subrace
-      where option_id = ${optionId}
+      where option_id = any(${[...ids]})
       order by ordinal
-    `;
-    const abilityBonuses = yield* sql<OptionDetails["abilityBonuses"][number]>`
-      select jsonb_build_object(
+    `,
+  });
+  const abilityBonuses = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: AbilityGrantRow,
+    execute: (ids) => sql`
+      select character_option_ability_bonus.option_id,
+             jsonb_build_object(
                'id', ability_score.id::text,
                'index', ability_score.source_key,
                'name', ability_score.name,
@@ -1194,16 +1281,21 @@ export const optionDetailsFor = (
              ) as ability,
              character_option_ability_bonus.amount,
              character_option_ability_bonus.ordinal,
-             character_option_ability_bonus.subrace_id::text as "subraceId",
-             character_option_subrace.name as "subraceName"
+             character_option_ability_bonus.subrace_id::text as subrace_id,
+             character_option_subrace.name as subrace_name
       from character_option_ability_bonus
       join ability_score on ability_score.id = character_option_ability_bonus.ability_score_id
       left join character_option_subrace on character_option_subrace.id = character_option_ability_bonus.subrace_id
-      where character_option_ability_bonus.option_id = ${optionId}
+      where character_option_ability_bonus.option_id = any(${[...ids]})
       order by character_option_ability_bonus.subrace_id nulls first, character_option_ability_bonus.ordinal
-    `;
-    const languages = yield* sql<OptionDetails["languages"][number]>`
-      select jsonb_build_object(
+    `,
+  });
+  const languages = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: LanguageGrantRow,
+    execute: (ids) => sql`
+      select character_option_language.option_id,
+             jsonb_build_object(
                'id', language.id::text,
                'index', language.source_key,
                'name', language.name,
@@ -1212,16 +1304,21 @@ export const optionDetailsFor = (
                'typicalSpeakers', language.typical_speakers
              ) as language,
              character_option_language.ordinal,
-             character_option_language.subrace_id::text as "subraceId",
-             character_option_subrace.name as "subraceName"
+             character_option_language.subrace_id::text as subrace_id,
+             character_option_subrace.name as subrace_name
       from character_option_language
       join language on language.id = character_option_language.language_id
       left join character_option_subrace on character_option_subrace.id = character_option_language.subrace_id
-      where character_option_language.option_id = ${optionId}
+      where character_option_language.option_id = any(${[...ids]})
       order by character_option_language.subrace_id nulls first, character_option_language.ordinal
-    `;
-    const proficiencies = yield* sql<OptionDetails["proficiencies"][number]>`
-      select jsonb_build_object(
+    `,
+  });
+  const proficiencies = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: ProficiencyGrantRow,
+    execute: (ids) => sql`
+      select source.option_id,
+             jsonb_build_object(
                'id', proficiency.id::text,
                'index', proficiency.source_key,
                'name', proficiency.name,
@@ -1240,31 +1337,36 @@ export const optionDetailsFor = (
                  'parentTraitId', source_trait.parent_trait_id::text,
                  'desc', coalesce(source_trait.body -> 'desc', '[]'::jsonb)
                )
-             end as "sourceTrait",
-             source.ordinal,
-             source.subrace_id::text as "subraceId",
-             character_option_subrace.name as "subraceName"
+             end as source_trait,
+             least(source.sort_key, 10000)::int as ordinal,
+             source.subrace_id::text as subrace_id,
+             character_option_subrace.name as subrace_name
       from (
-        select option_id, subrace_id, proficiency_id, ordinal, null::uuid as source_trait_id
+        select option_id, subrace_id, proficiency_id, ordinal::bigint as sort_key, null::uuid as source_trait_id
         from character_option_proficiency
-        where option_id = ${optionId}
+        where option_id = any(${[...ids]})
         union all
         select character_option_trait.option_id,
                character_option_trait.subrace_id,
                racial_trait_proficiency.proficiency_id,
-               character_option_trait.ordinal * 1000 + racial_trait_proficiency.ordinal as ordinal,
+               character_option_trait.ordinal::bigint * 1000 + racial_trait_proficiency.ordinal as sort_key,
                character_option_trait.trait_id as source_trait_id
         from character_option_trait
         join racial_trait_proficiency on racial_trait_proficiency.trait_id = character_option_trait.trait_id
-        where character_option_trait.option_id = ${optionId}
+        where character_option_trait.option_id = any(${[...ids]})
       ) as source
       join proficiency on proficiency.id = source.proficiency_id
       left join racial_trait as source_trait on source_trait.id = source.source_trait_id
       left join character_option_subrace on character_option_subrace.id = source.subrace_id
-      order by source.subrace_id nulls first, source.ordinal
-    `;
-    const traits = yield* sql<OptionDetails["traits"][number]>`
-      select jsonb_build_object(
+      order by source.subrace_id nulls first, source.sort_key
+    `,
+  });
+  const traits = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: TraitGrantRow,
+    execute: (ids) => sql`
+      select character_option_trait.option_id,
+             jsonb_build_object(
                'id', racial_trait.id::text,
                'index', racial_trait.source_key,
                'name', racial_trait.name,
@@ -1272,266 +1374,364 @@ export const optionDetailsFor = (
                'desc', coalesce(racial_trait.body -> 'desc', '[]'::jsonb)
              ) as trait,
              character_option_trait.ordinal,
-             character_option_trait.subrace_id::text as "subraceId",
-             character_option_subrace.name as "subraceName"
+             character_option_trait.subrace_id::text as subrace_id,
+             character_option_subrace.name as subrace_name
       from character_option_trait
       join racial_trait on racial_trait.id = character_option_trait.trait_id
       left join character_option_subrace on character_option_subrace.id = character_option_trait.subrace_id
-      where character_option_trait.option_id = ${optionId}
+      where character_option_trait.option_id = any(${[...ids]})
       order by character_option_trait.subrace_id nulls first, character_option_trait.ordinal
-    `;
-
-    const groupRows = yield* sql<{
-      readonly id: string;
-      readonly owner: "option" | "subrace" | "trait";
-      readonly ownerName: string | null;
-      readonly kind: RuleChoiceKind;
-      readonly choose: number;
-      readonly desc: string | null;
-      readonly ordinal: number;
-    }>`
-      select rule_choice_group.id::text,
+    `,
+  });
+  /**
+   * Every choice group an option offers: its own and its subraces' (which
+   * carry its `option_id`), and those of every racial trait attached to it.
+   * A trait's group belongs to no option, so it is paired with each option
+   * the trait is attached to — once per option, however many times.
+   */
+  const choiceGroups = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: ChoiceGroupRow,
+    execute: (ids) => sql`
+      select offered.option_id,
+             rule_choice_group.id::text,
              case
                when rule_choice_group.trait_id is not null then 'trait'
                when rule_choice_group.subrace_id is not null then 'subrace'
                else 'option'
              end as owner,
-             coalesce(character_option_subrace.name, racial_trait.name) as "ownerName",
+             coalesce(character_option_subrace.name, racial_trait.name) as owner_name,
              rule_choice_group.kind,
              rule_choice_group.choose,
              rule_choice_group.description as desc,
              rule_choice_group.ordinal
-      from rule_choice_group
+      from (
+        select id as group_id, option_id
+        from rule_choice_group
+        where option_id = any(${[...ids]})
+        union
+        select rule_choice_group.id, character_option_trait.option_id
+        from rule_choice_group
+        join character_option_trait on character_option_trait.trait_id = rule_choice_group.trait_id
+        where character_option_trait.option_id = any(${[...ids]})
+      ) as offered
+      join rule_choice_group on rule_choice_group.id = offered.group_id
       left join character_option_subrace on character_option_subrace.id = rule_choice_group.subrace_id
       left join racial_trait on racial_trait.id = rule_choice_group.trait_id
-      where rule_choice_group.option_id = ${optionId}
-         or rule_choice_group.trait_id in (
-              select trait_id from character_option_trait where option_id = ${optionId}
-            )
-      order by owner, "ownerName" nulls first, rule_choice_group.ordinal
-    `;
-
-    const choices: Array<OptionDetails["choices"][number]> = [];
-    for (const group of groupRows) {
-      const abilities = yield* sql<OptionDetails["abilityBonuses"][number]>`
-        select jsonb_build_object(
-                 'id', ability_score.id::text,
-                 'index', ability_score.source_key,
-                 'name', ability_score.name,
-                 'fullName', coalesce(ability_score.full_name, ability_score.name),
-                 'desc', coalesce(ability_score.body -> 'desc', '[]'::jsonb)
-               ) as ability,
-               rule_choice_ability.amount,
-               rule_choice_ability.ordinal,
-               null::text as "subraceId",
-               null::text as "subraceName"
-        from rule_choice_ability
-        join ability_score on ability_score.id = rule_choice_ability.ability_score_id
-        where rule_choice_ability.group_id = ${group.id}
-        order by rule_choice_ability.ordinal
-      `;
-      const groupLanguages = yield* sql<RuleLanguage>`
-        select language.id::text, language.source_key as index, language.name, language.type, language.script,
-               language.typical_speakers as "typicalSpeakers"
-        from rule_choice_language
-        join language on language.id = rule_choice_language.language_id
-        where rule_choice_language.group_id = ${group.id}
-        order by rule_choice_language.ordinal
-      `;
-      const groupProfs = yield* sql<RuleProficiency>`
-        select proficiency.id::text, proficiency.source_key as index, proficiency.name, proficiency.type,
-               proficiency.reference_family as "referenceFamily",
-               proficiency.reference_key as "referenceKey",
-               proficiency.skill_id::text as "skillId",
-               proficiency.ability_score_id::text as "abilityScoreId"
-        from rule_choice_proficiency
-        join proficiency on proficiency.id = rule_choice_proficiency.proficiency_id
-        where rule_choice_proficiency.group_id = ${group.id}
-        order by rule_choice_proficiency.ordinal
-      `;
-      const groupTraits = yield* sql<RuleTrait>`
-        select racial_trait.id::text, racial_trait.source_key as index, racial_trait.name,
-               racial_trait.parent_trait_id::text as "parentTraitId",
-               coalesce(racial_trait.body -> 'desc', '[]'::jsonb) as desc
-        from rule_choice_trait
-        join racial_trait on racial_trait.id = rule_choice_trait.trait_id
-        where rule_choice_trait.group_id = ${group.id}
-        order by rule_choice_trait.ordinal
-      `;
-      choices.push({
-        id: group.id as never,
-        owner: group.owner,
-        ownerName: group.ownerName,
-        kind: group.kind,
-        choose: group.choose,
-        desc: group.desc,
-        ordinal: group.ordinal,
-        abilities,
-        languages: groupLanguages,
-        proficiencies: groupProfs,
-        traits: groupTraits,
-      });
-    }
-
-    /**
-     * The class's own level-1 grants, off the progression domain. Top-level
-     * only — a `parent_feature_id` names a pick inside a granted feature
-     * (*Fighting Style: Archery* under *Fighting Style*), which is the
-     * player's to make later, not the sheet's to start with. Empty for races
-     * and backgrounds by construction, and absent from the wire when empty so
-     * a non-class option's `details` does not grow two keys that mean nothing.
-     */
-    const levelOneFeatures = yield* sql<OptionFeatureGrant>`
-      select feature.id::text,
+      order by owner, owner_name nulls first, rule_choice_group.ordinal
+    `,
+  });
+  const groupAbilities = SqlSchema.findAll({
+    Request: GroupIds,
+    Result: GroupAbilityRow,
+    execute: (ids) => sql`
+      select rule_choice_ability.group_id,
+             jsonb_build_object(
+               'id', ability_score.id::text,
+               'index', ability_score.source_key,
+               'name', ability_score.name,
+               'fullName', coalesce(ability_score.full_name, ability_score.name),
+               'desc', coalesce(ability_score.body -> 'desc', '[]'::jsonb)
+             ) as ability,
+             rule_choice_ability.amount,
+             rule_choice_ability.ordinal,
+             null::text as subrace_id,
+             null::text as subrace_name
+      from rule_choice_ability
+      join ability_score on ability_score.id = rule_choice_ability.ability_score_id
+      where rule_choice_ability.group_id = any(${[...ids]})
+      order by rule_choice_ability.ordinal
+    `,
+  });
+  const groupLanguages = SqlSchema.findAll({
+    Request: GroupIds,
+    Result: GroupLanguageRow,
+    execute: (ids) => sql`
+      select rule_choice_language.group_id,
+             language.id::text, language.source_key as index, language.name, language.type,
+             language.script, language.typical_speakers
+      from rule_choice_language
+      join language on language.id = rule_choice_language.language_id
+      where rule_choice_language.group_id = any(${[...ids]})
+      order by rule_choice_language.ordinal
+    `,
+  });
+  const groupProficiencies = SqlSchema.findAll({
+    Request: GroupIds,
+    Result: GroupProficiencyRow,
+    execute: (ids) => sql`
+      select rule_choice_proficiency.group_id,
+             proficiency.id::text, proficiency.source_key as index, proficiency.name, proficiency.type,
+             proficiency.reference_family, proficiency.reference_key,
+             proficiency.skill_id::text as skill_id,
+             proficiency.ability_score_id::text as ability_score_id
+      from rule_choice_proficiency
+      join proficiency on proficiency.id = rule_choice_proficiency.proficiency_id
+      where rule_choice_proficiency.group_id = any(${[...ids]})
+      order by rule_choice_proficiency.ordinal
+    `,
+  });
+  const groupTraits = SqlSchema.findAll({
+    Request: GroupIds,
+    Result: GroupTraitRow,
+    execute: (ids) => sql`
+      select rule_choice_trait.group_id,
+             racial_trait.id::text, racial_trait.source_key as index, racial_trait.name,
+             racial_trait.parent_trait_id::text as parent_trait_id,
+             coalesce(racial_trait.body -> 'desc', '[]'::jsonb) as desc
+      from rule_choice_trait
+      join racial_trait on racial_trait.id = rule_choice_trait.trait_id
+      where rule_choice_trait.group_id = any(${[...ids]})
+      order by rule_choice_trait.ordinal
+    `,
+  });
+  /**
+   * The class's own level-1 grants, off the progression domain. Top-level
+   * only — a `parent_feature_id` names a pick inside a granted feature
+   * (*Fighting Style: Archery* under *Fighting Style*), which is the
+   * player's to make later, not the sheet's to start with.
+   */
+  const levelOneFeatures = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: FeatureGrantRow,
+    execute: (ids) => sql`
+      select feature.class_option_id as option_id,
+             feature.id::text,
              feature.source_key as index,
              feature.name,
              coalesce(feature.body -> 'desc', '[]'::jsonb) as desc
       from feature
-      where feature.class_option_id = ${optionId}
+      where feature.class_option_id = any(${[...ids]})
         and feature.level = 1
         and feature.subclass_id is null
         and feature.parent_feature_id is null
       order by lower(feature.name)
-    `;
-    const levelOne = yield* sql<{ readonly proficiency_bonus: number | null }>`
-      select class_level.proficiency_bonus
+    `,
+  });
+  const classLevels = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: ClassLevelRow,
+    execute: (ids) => sql`
+      select class_option_id as option_id,
+             level,
+             proficiency_bonus,
+             body -> 'classSpecific' as class_specific,
+             body -> 'spellcasting' as spellcasting
       from class_level
-      where class_level.class_option_id = ${optionId}
-        and class_level.level = 1
-        and class_level.subclass_id is null
-      limit 1
-    `;
-    const proficiencyBonus = levelOne[0]?.proficiency_bonus ?? null;
-
-    /**
-     * The class table, one row per level with no prose — see
-     * `OptionClassLevel`. Only numeric `classSpecific` values and only the
-     * non-zero ones, because every level of a class carries every key and a
-     * reader treats absent as zero; slots trimmed of trailing zeros the same
-     * way. Empty for races and backgrounds by construction.
-     */
-    const levelRows = yield* sql<{
-      readonly level: number;
-      readonly proficiency_bonus: number | null;
-      readonly body: { readonly classSpecific?: unknown; readonly spellcasting?: unknown };
-    }>`
-      select level, proficiency_bonus, body
-      from class_level
-      where class_option_id = ${optionId}
+      where class_option_id = any(${[...ids]})
         and subclass_id is null
       order by level
-    `;
-    const featureRows = yield* sql<{
-      readonly id: string;
-      readonly index: string | null;
-      readonly name: string;
-      readonly level: number;
-    }>`
-      select id::text, source_key as index, name, level
+    `,
+  });
+  const classFeatures = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: ClassFeatureRow,
+    execute: (ids) => sql`
+      select class_option_id as option_id, id::text, source_key as index, name, level
       from feature
-      where class_option_id = ${optionId}
+      where class_option_id = any(${[...ids]})
         and subclass_id is null
         and parent_feature_id is null
       order by level, lower(name)
-    `;
-    const classLevels: Array<OptionClassLevel> = levelRows.map((row) => {
-      const table = maybeObject(row.body.spellcasting);
-      const slots = Array.from({ length: 9 }, (_, i) =>
-        numberAt(table, `spell_slots_level_${String(i + 1)}`),
-      );
-      while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
-      const cantripsKnown = numberAt(table, "cantrips_known");
-      const spellsKnown = numberAt(table, "spells_known");
-      const spellcasting =
-        table === undefined
-          ? undefined
-          : {
-              ...(cantripsKnown === 0 ? {} : { cantripsKnown }),
-              ...(spellsKnown === 0 ? {} : { spellsKnown }),
-              slots,
-            };
-      const counters = Object.entries(maybeObject(row.body.classSpecific) ?? {}).flatMap(
-        ([key, value]): ReadonlyArray<readonly [string, number]> =>
-          typeof value === "number" && Number.isFinite(value) && value !== 0 ? [[key, value]] : [],
-      );
-      return {
-        level: row.level,
-        proficiencyBonus: row.proficiency_bonus,
-        ...(spellcasting === undefined ? {} : { spellcasting }),
-        ...(counters.length === 0 ? {} : { classSpecific: Object.fromEntries(counters) }),
-        features: featureRows
-          .filter((feature) => feature.level === row.level)
-          .map((feature) => ({
-            id: feature.id as never,
-            index: feature.index,
-            name: feature.name,
-          })),
-      };
-    });
-
-    /**
-     * The kit's rows, and the members of every category the kit lets the
-     * player pick from — the weapon columns a fresh sheet derives an attack
-     * from. The reference table names the counted rows; the categories are
-     * read off the body's `startingKit`, spelled against the same columns
-     * `inCategory` reads on the client, so the picker's members and the
-     * composer's check cannot disagree.
-     */
-    const kitBody = yield* sql<{ readonly kit: StartingKit | null }>`
-      select body -> 'startingKit' as kit from character_option where id = ${optionId}
-    `;
-    const categories = new Set<string>();
-    for (const choice of kitBody[0]?.kit?.choices ?? []) {
-      for (const side of choice.options) {
-        for (const line of side.lines)
-          if (line.category !== undefined) categories.add(line.category.index);
-      }
-    }
-    const equipment = yield* sql<KitEquipment>`
-      select equipment.id::text,
-             equipment.source_key as index,
-             equipment.name,
-             equipment.weapon_category as "weaponCategory",
-             equipment.weapon_range as "weaponRange",
-             equipment.category_range as "categoryRange",
-             equipment.armor_category as "armorCategory",
-             equipment.damage_dice as "damageDice",
-             equipment.damage_type_name as "damageType",
-             equipment.two_handed_damage_dice as "twoHandedDamageDice",
-             equipment.range_normal as "rangeNormal",
-             equipment.range_long as "rangeLong",
-             equipment.throw_range_normal as "throwRangeNormal",
-             equipment.throw_range_long as "throwRangeLong",
-             equipment.property_names as properties,
-             equipment.weight,
-             equipment.gear_category_index as "gearCategoryIndex",
-             equipment.tool_category as "toolCategory"
-      from equipment
-      where equipment.campaign_id is null
-        and equipment.account_id is null
-        and (
-          equipment.id in (
-            select equipment_id from character_option_equipment_reference
-            where option_id = ${optionId}
-          )
-          or ${categoryMembers(sql, [...categories])}
-        )
-      order by lower(equipment.name)
-    `;
-
-    return {
-      subraces,
-      abilityBonuses,
-      languages,
-      proficiencies,
-      traits,
-      choices,
-      ...(levelOneFeatures.length === 0 ? {} : { levelOneFeatures }),
-      ...(proficiencyBonus === null ? {} : { proficiencyBonus }),
-      ...(equipment.length === 0 ? {} : { equipment }),
-      ...(classLevels.length === 0 ? {} : { classLevels }),
-    };
+    `,
   });
+  const kits = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: KitRow,
+    execute: (ids) => sql`
+      select id as option_id, body -> 'startingKit' as kit
+      from character_option
+      where id = any(${[...ids]})
+    `,
+  });
+  /**
+   * The kit's rows, and the members of every category the kit lets the
+   * player pick from — the weapon columns a fresh sheet derives an attack
+   * from. The reference table names the counted rows; each category's members
+   * come from `categoryMembers`, spelled against the same columns
+   * `inCategory` reads on the client, so the picker's members and the
+   * composer's check cannot disagree. One statement for every option: each
+   * distinct category is matched once, and joined back to the options whose
+   * kits name it.
+   */
+  const kitEquipment = SqlSchema.findAll({
+    Request: KitEquipmentRequest,
+    Result: KitEquipmentRow,
+    execute: ({ optionIds, categories }) => {
+      const distinct = [...new Set(categories.map((line) => line.category))];
+      const members = sql.join(
+        " union all ",
+        false,
+        "select null::text as category, null::uuid as equipment_id where false",
+      )(
+        distinct.map(
+          (category) => sql`
+            select ${category}::text as category, equipment.id as equipment_id
+            from equipment
+            where ${categoryMembers(sql, [category])}
+          `,
+        ),
+      );
+      return sql`
+        select owner.option_id,
+               equipment.id::text,
+               equipment.source_key as index,
+               equipment.name,
+               equipment.weapon_category,
+               equipment.weapon_range,
+               equipment.category_range,
+               equipment.armor_category,
+               equipment.damage_dice,
+               equipment.damage_type_name as damage_type,
+               equipment.two_handed_damage_dice,
+               equipment.range_normal,
+               equipment.range_long,
+               equipment.throw_range_normal,
+               equipment.throw_range_long,
+               equipment.property_names as properties,
+               equipment.weight,
+               equipment.gear_category_index,
+               equipment.tool_category
+        from (
+          select option_id, equipment_id
+          from character_option_equipment_reference
+          where option_id = any(${[...optionIds]})
+          union
+          select kit_category.option_id, category_member.equipment_id
+          from unnest(
+                 ${categories.map((line) => line.optionId)}::uuid[],
+                 ${categories.map((line) => line.category)}::text[]
+               ) as kit_category (option_id, category)
+          join (${members}) as category_member on category_member.category = kit_category.category
+        ) as owner
+        join equipment on equipment.id = owner.equipment_id
+        where equipment.campaign_id is null
+          and equipment.account_id is null
+        order by lower(equipment.name)
+      `;
+    },
+  });
+
+  return (
+    optionIds: ReadonlyArray<CharacterOptionId>,
+  ): Effect.Effect<
+    ReadonlyMap<CharacterOptionId, OptionDetails>,
+    SqlError.SqlError | Schema.SchemaError
+  > =>
+    Effect.gen(function* () {
+      if (optionIds.length === 0) return new Map();
+      const subracesOf = fileUnder(yield* subraces(optionIds), "optionId");
+      const abilityBonusesOf = fileUnder(yield* abilityBonuses(optionIds), "optionId");
+      const languagesOf = fileUnder(yield* languages(optionIds), "optionId");
+      const proficienciesOf = fileUnder(yield* proficiencies(optionIds), "optionId");
+      const traitsOf = fileUnder(yield* traits(optionIds), "optionId");
+
+      const groups = yield* choiceGroups(optionIds);
+      const groupIds = [...new Set(groups.map((group) => group.id))];
+      const abilitiesIn = fileUnder(yield* groupAbilities(groupIds), "groupId");
+      const languagesIn = fileUnder(yield* groupLanguages(groupIds), "groupId");
+      const proficienciesIn = fileUnder(yield* groupProficiencies(groupIds), "groupId");
+      const traitsIn = fileUnder(yield* groupTraits(groupIds), "groupId");
+      const choicesOf = fileUnder(
+        groups.map((group) => ({
+          ...group,
+          abilities: abilitiesIn.get(group.id) ?? [],
+          languages: languagesIn.get(group.id) ?? [],
+          proficiencies: proficienciesIn.get(group.id) ?? [],
+          traits: traitsIn.get(group.id) ?? [],
+        })),
+        "optionId",
+      );
+
+      const levelOneFeaturesOf = fileUnder(yield* levelOneFeatures(optionIds), "optionId");
+      const classLevelsOf = fileUnder(yield* classLevels(optionIds), "optionId");
+      const classFeaturesOf = fileUnder(yield* classFeatures(optionIds), "optionId");
+
+      const categories = (yield* kits(optionIds)).flatMap(({ optionId, kit }) => {
+        const named = new Set<string>();
+        for (const choice of kit?.choices ?? []) {
+          for (const side of choice.options) {
+            for (const line of side.lines)
+              if (line.category !== undefined) named.add(line.category.index);
+          }
+        }
+        return [...named].map((category) => ({ optionId, category }));
+      });
+      const equipmentOf = fileUnder(yield* kitEquipment({ optionIds, categories }), "optionId");
+
+      return new Map(
+        optionIds.map((optionId): readonly [CharacterOptionId, OptionDetails] => {
+          const levelOne = levelOneFeaturesOf.get(optionId) ?? [];
+          const levelRows = classLevelsOf.get(optionId) ?? [];
+          const featureRows = classFeaturesOf.get(optionId) ?? [];
+          const equipment = equipmentOf.get(optionId) ?? [];
+          // The level-1 row of the class table; `class_level_class_level_key`
+          // makes it the only one.
+          const proficiencyBonus =
+            levelRows.find((row) => row.level === 1)?.proficiencyBonus ?? null;
+          const table = levelRows.map((row) => classLevelOf(row, featureRows));
+          return [
+            optionId,
+            {
+              subraces: subracesOf.get(optionId) ?? [],
+              abilityBonuses: abilityBonusesOf.get(optionId) ?? [],
+              languages: languagesOf.get(optionId) ?? [],
+              proficiencies: proficienciesOf.get(optionId) ?? [],
+              traits: traitsOf.get(optionId) ?? [],
+              choices: choicesOf.get(optionId) ?? [],
+              // Class options only, and absent from the wire when empty so a
+              // race's or background's `details` does not grow keys that mean
+              // nothing.
+              ...(levelOne.length === 0 ? {} : { levelOneFeatures: levelOne }),
+              ...(proficiencyBonus === null ? {} : { proficiencyBonus }),
+              ...(equipment.length === 0 ? {} : { equipment }),
+              ...(table.length === 0 ? {} : { classLevels: table }),
+            },
+          ];
+        }),
+      );
+    });
+};
+
+/**
+ * One row of the class table, with no prose — see `OptionClassLevel`. Only
+ * numeric `classSpecific` values and only the non-zero ones, because every
+ * level of a class carries every key and a reader treats absent as zero;
+ * slots trimmed of trailing zeros the same way.
+ */
+const classLevelOf = (
+  row: Omit<typeof ClassLevelRow.Type, "optionId">,
+  featureRows: ReadonlyArray<Omit<typeof ClassFeatureRow.Type, "optionId">>,
+): OptionClassLevel => {
+  const table = maybeObject(row.spellcasting);
+  const slots = Array.from({ length: 9 }, (_, i) =>
+    numberAt(table, `spell_slots_level_${String(i + 1)}`),
+  );
+  while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
+  const cantripsKnown = numberAt(table, "cantrips_known");
+  const spellsKnown = numberAt(table, "spells_known");
+  const spellcasting =
+    table === undefined
+      ? undefined
+      : {
+          ...(cantripsKnown === 0 ? {} : { cantripsKnown }),
+          ...(spellsKnown === 0 ? {} : { spellsKnown }),
+          slots,
+        };
+  const counters = Object.entries(maybeObject(row.classSpecific) ?? {}).flatMap(
+    ([key, value]): ReadonlyArray<readonly [string, number]> =>
+      typeof value === "number" && Number.isFinite(value) && value !== 0 ? [[key, value]] : [],
+  );
+  return {
+    level: row.level,
+    proficiencyBonus: row.proficiencyBonus,
+    ...(spellcasting === undefined ? {} : { spellcasting }),
+    ...(counters.length === 0 ? {} : { classSpecific: Object.fromEntries(counters) }),
+    features: featureRows
+      .filter((feature) => feature.level === row.level)
+      .map(({ id, index, name }) => ({ id, index, name })),
+  };
+};
 
 const maybeObject = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value)
