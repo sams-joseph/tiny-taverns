@@ -12,6 +12,7 @@ import {
   type PlayerNote,
   type Page,
   type PageCursor,
+  type PlannedOrder,
   type SessionId,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -333,12 +334,12 @@ describe("visibility on a paged read", () => {
     expect(seen.beats.rows.every((row) => row.visibility === "shared")).toBe(true);
   }, 60_000);
 
-  it("pages the creator's encounters, every one of them, oldest first", async () => {
+  it("pages the creator's encounters, every one of them, in the planned order", async () => {
     const seen = await runtime.runPromise(
       Effect.gen(function* () {
         const encounters = yield* Encounters;
         const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
-        return yield* walk<Encounter, CreatedOrder>((cursor) =>
+        return yield* walk<Encounter, PlannedOrder>((cursor) =>
           encounters.list(dm, { limit: 4, cursor }),
         );
       }),

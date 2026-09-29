@@ -812,7 +812,10 @@ describe("the scope, counted", () => {
     // `libraryUpdate`, `libraryRemove` and `librarySpells`, for
     // `Npcs.library`'s reason: there is no campaign to prove, and
     // `libraryRowWritable` is already the owner predicate.
-    expect(ungated).toBe(173);
+    // `Encounters.move` is the one hundred and seventy-fourth, for
+    // `Notes.setPinned`'s reason: a write whose reach is `rowWritable` and
+    // `ensureCampaignWritable`, which are already the creator predicate.
+    expect(ungated).toBe(174);
   });
 });
 

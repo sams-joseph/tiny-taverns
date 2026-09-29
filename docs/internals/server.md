@@ -85,7 +85,7 @@ The rules, all stated in `Page.ts`:
 - Filters are the caller's to resend; a cursor is a position, not a saved query.
 - **Every ordering ends in the row's id**, because no natural key is unique. A `timestamptz` ordering is truncated to milliseconds on both sides (`timeColumn`): the driver hands the column back as a `Date`, and a cursor compared against the full-precision column silently skips rows.
 
-Paged: the corpus lists plus notes, encounters and beats (`createdPageOf`). Lists bounded by what they hang off (combatants, members, a checklist) and `search` (a ranking with a `limit`) are deliberately not.
+Paged: the corpus lists plus notes and beats (`createdPageOf`) and encounters (`PlannedOrder`, the DM's order). Lists bounded by what they hang off (combatants, members, a checklist) and `search` (a ranking with a `limit`) are deliberately not.
 
 ## Authentication: two credential kinds, one seam
 

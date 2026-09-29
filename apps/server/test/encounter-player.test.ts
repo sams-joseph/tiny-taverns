@@ -29,6 +29,9 @@ import { migratedDatabase } from "./support/database.js";
  * wherever a leak is the question, because the derived client decodes into the
  * narrow class and would drop a field the server should never have sent.
  *
+ * The player's list follows the DM's planned order and carries no slot, so
+ * an encounter kept from them leaves no gap to count.
+ *
  * The people are minted the shipped way: a player admitted through a real
  * invitation with a seat the creator shared, and a member of the table's
  * Shared World who plays at another table in it.
@@ -279,6 +282,56 @@ describe("a seated player's read", () => {
       client.playerEncounters.list({ params: { campaignId: table } }),
     );
     expect(decoded.map((encounter) => encounter.id)).toEqual([ambush]);
+  });
+
+  it("follows the DM's planned order, told as array order and never as a number", async () => {
+    // Two more the table may read, made after the ambush and the kept draft.
+    const made = async (name: string) =>
+      (
+        await as(jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: table },
+            payload: { name, visibility: "shared", ready: true },
+          }),
+        )
+      ).id;
+    const toll = await made("Toll at the bridge");
+    const chapel = await made("The drowned chapel");
+    const moveTo = (encounterId: EncounterId, before: EncounterId) =>
+      as(jo.token, (client) =>
+        client.encounters.move({
+          params: { campaignId: table, encounterId },
+          payload: { before },
+        }),
+      );
+    const playerOrder = async () =>
+      (
+        await as(ilse.token, (client) =>
+          client.playerEncounters.list({ params: { campaignId: table } }),
+        )
+      ).map((encounter) => encounter.id);
+
+    expect(await playerOrder()).toEqual([ambush, toll, chapel]);
+    // The chapel to the top, and the kept draft between it and the toll: the
+    // player's list moves with the DM's, and the draft leaves no trace.
+    await moveTo(chapel, ambush);
+    await moveTo(hidden, toll);
+    expect(await playerOrder()).toEqual([chapel, ambush, toll]);
+    const dm = await as(jo.token, (client) =>
+      client.encounters.list({ params: { campaignId: table }, query: {} }),
+    );
+    expect(dm.items.map((encounter) => encounter.id)).toEqual([chapel, ambush, hidden, toll]);
+
+    // No slot on either wire: not the player's, and not the creator's either,
+    // whose array order is the whole answer too.
+    const player = await wire(ilse.token, `/campaigns/${table}/player-encounters`);
+    const creator = await wire(jo.token, `/campaigns/${table}/encounters`);
+    for (const body of [player.body, creator.body]) {
+      expect(body).not.toContain('"position"');
+      expect(body).not.toContain("planned_position");
+    }
+    const one = await wire(ilse.token, `/campaigns/${table}/player-encounters/${chapel}`);
+    expect(one.body).not.toContain('"position"');
   });
 
   it("is NotFound for an encounter the DM kept", async () => {

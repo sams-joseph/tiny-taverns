@@ -51,7 +51,13 @@ import {
   CreatureSort,
   LibraryFilter,
 } from "./Creature.js";
-import { Encounter, EncounterCreate, EncounterPrep, EncounterUpdate } from "./Encounter.js";
+import {
+  Encounter,
+  EncounterCreate,
+  EncounterPlacement,
+  EncounterPrep,
+  EncounterUpdate,
+} from "./Encounter.js";
 import { Feat, FeatFilter, FeatLibraryCreate, FeatLibraryUpdate, FeatSort } from "./Feat.js";
 import {
   Equipment,
@@ -202,7 +208,13 @@ import {
   NpcUpdate,
   PlayerNpc,
 } from "./Npc.js";
-import { createdPageFilter, createdPageOf, pageOf } from "./Page.js";
+import {
+  createdPageFilter,
+  createdPageOf,
+  pageOf,
+  PlannedOrder,
+  plannedPageFilter,
+} from "./Page.js";
 import { PlayerEncounter } from "./PlayerEncounter.js";
 import { PlayerNote } from "./PlayerNote.js";
 import { PlayerLiveEvent, PlayerLiveTable } from "./PlayerLive.js";
@@ -1289,10 +1301,11 @@ class NotesGroup extends HttpApiGroup.make("notes")
  */
 class EncountersGroup extends HttpApiGroup.make("encounters")
   .add(
+    /** In the DM's planned order; a new encounter lands at the end. */
     HttpApiEndpoint.get("list", "/", {
       params: { campaignId: CampaignId },
-      query: createdPageFilter,
-      success: createdPageOf(Encounter),
+      query: plannedPageFilter,
+      success: pageOf(Encounter, PlannedOrder),
       error: NotFound,
     }),
     HttpApiEndpoint.post("create", "/", {
@@ -1319,6 +1332,17 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
       success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
+    /**
+     * Put the encounter just before or just after another in the DM's
+     * planned order. Not an edit: nothing about either encounter changes.
+     * The anchor must be one of this campaign's encounters.
+     */
+    HttpApiEndpoint.post("move", "/:encounterId/move", {
+      params: { campaignId: CampaignId, encounterId: EncounterId },
+      payload: EncounterPlacement,
+      success: HttpApiSchema.NoContent,
+      error: NotFound,
+    }),
   )
   .prefix("/campaigns/:campaignId/encounters")
   .middleware(Authorization) {}
@@ -1333,7 +1357,9 @@ class EncountersGroup extends HttpApiGroup.make("encounters")
  * projection of this to diverge from — the creator has `encounters` — and a DM
  * calling it gets the same narrow shape over their own rows. The rows a reader
  * gets are `repo/visibility.ts`'s answer: a player's are the Shared and Ready encounters
- * and, on each, the shared roster lines. Unpaged, as `encounterPrep.list` is.
+ * and, on each, the shared roster lines. Unpaged, as `encounterPrep.list` is,
+ * and in the DM's planned order, told only as the array's order: no position
+ * is on the wire, so a hidden encounter leaves no gap a player could count.
  */
 class PlayerEncountersGroup extends HttpApiGroup.make("playerEncounters")
   .add(

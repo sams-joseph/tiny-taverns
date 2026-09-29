@@ -30,6 +30,7 @@ import runScenes from "../src/migrations/0065_run_scenes.js";
 import initiativePhase from "../src/migrations/0066_initiative_phase.js";
 import noteCategoryPin from "../src/migrations/0068_note_category_pin.js";
 import npcLinks from "../src/migrations/0074_npc_links.js";
+import encounterOrder from "../src/migrations/0078_encounter_order.js";
 import { freshDatabase } from "./support/database.js";
 
 /** Migrations run against a database created empty for this file. */
@@ -98,6 +99,9 @@ afterAll(() => noteRuntime.dispose());
 /** An eighteenth, for note links made before a note could name an NPC. */
 const noteLinkRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_note_link"));
 afterAll(() => noteLinkRuntime.dispose());
+/** A nineteenth, for encounters made before the DM could put them in order. */
+const orderRuntime = ManagedRuntime.make(freshDatabase("taverns_test_migrations_order"));
+afterAll(() => orderRuntime.dispose());
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -361,6 +365,7 @@ describe("migrations", () => {
       { migration_id: 75, name: "portrait_banners" },
       { migration_id: 76, name: "npc_sheets" },
       { migration_id: 77, name: "npc_sheet_origin" },
+      { migration_id: 78, name: "encounter_order" },
     ]);
   }, 60_000);
 
@@ -447,6 +452,7 @@ describe("migrations", () => {
       { migration_id: 75, name: "portrait_banners" },
       { migration_id: 76, name: "npc_sheets" },
       { migration_id: 77, name: "npc_sheet_origin" },
+      { migration_id: 78, name: "encounter_order" },
     ]);
   }, 60_000);
 });
@@ -1443,6 +1449,7 @@ describe("upgrading a database whose encounters predate Ready", () => {
             campaign_id: campaign,
             kind: "combat",
             treasure: "28 sp and a bone whistle",
+            position: 0,
           })}
         `;
 
@@ -1533,6 +1540,7 @@ describe("upgrading a database whose runs predate modes and scenes", () => {
             campaign_id: campaign,
             kind: "social",
             tactics: JSON.stringify(["Wants the toll waived"]),
+            position: 0,
           })}
         `;
         const sessions = yield* sql<{ readonly id: string }>`
@@ -1765,5 +1773,87 @@ describe("upgrading a database whose note links predate NPC links", () => {
 
     expect(measured.links).toEqual([{ encounter_id: measured.encounter, npc_id: null }]);
     expect(measured.two).toContain("note_link_one_target");
+  }, 60_000);
+});
+
+describe("upgrading a database whose encounters predate the planned order", () => {
+  it("puts every campaign's encounters in the order they were made, one to a slot", async () => {
+    const measured = await orderRuntime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* migrate;
+        // The shape `0077` left: prep with no slot.
+        yield* sql`alter table encounter_prep drop column position`;
+
+        const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "order-hash" })}
+          returning id
+        `)[0]!.id;
+        const salt = yield* rawCampaign(sql, account, "The Salt Road");
+        const rook = yield* rawCampaign(sql, account, "Rook's Rest");
+        // Made out of name order, and one campaign's interleaved with the
+        // other's, so the backfill has to partition and sort by creation.
+        const made: Array<{ readonly campaign: string; readonly name: string }> = [
+          { campaign: salt, name: "C ford" },
+          { campaign: rook, name: "Z gate" },
+          { campaign: salt, name: "A reeds" },
+          { campaign: salt, name: "B well" },
+          { campaign: rook, name: "Y tower" },
+        ];
+        for (const [index, { campaign, name }] of made.entries()) {
+          const id = (yield* sql<{ readonly id: string }>`
+            insert into encounter ${sql.insert({
+              campaign_id: campaign,
+              name,
+              created_at: new Date(Date.UTC(2026, 0, 1, 0, index)),
+            })}
+            returning id
+          `)[0]!.id;
+          yield* sql`
+            insert into encounter_prep ${sql.insert({ encounter_id: id, campaign_id: campaign, kind: "combat" })}
+          `;
+        }
+
+        yield* encounterOrder;
+        const slots = yield* sql<{
+          readonly campaign_id: string;
+          readonly name: string;
+          readonly position: number;
+        }>`
+          select encounter_prep.campaign_id, encounter.name, encounter_prep.position
+          from encounter_prep join encounter on encounter.id = encounter_prep.encounter_id
+          order by encounter_prep.campaign_id, encounter_prep.position
+        `;
+        const shared = yield* sql`
+          update encounter_prep set position = 0 where campaign_id = ${salt} and position = 1
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        const negative = yield* sql`
+          update encounter_prep set position = -1 where campaign_id = ${rook} and position = 0
+        `.pipe(
+          Effect.as("written"),
+          Effect.catch((error) => Effect.succeed(describeError(error))),
+        );
+        return { slots, salt, rook, shared, negative };
+      }).pipe(Effect.orDie),
+    );
+
+    const of = (campaign: string) =>
+      measured.slots
+        .filter((row) => row.campaign_id === campaign)
+        .map(({ name, position }) => ({ name, position }));
+    expect(of(measured.salt)).toEqual([
+      { name: "C ford", position: 0 },
+      { name: "A reeds", position: 1 },
+      { name: "B well", position: 2 },
+    ]);
+    expect(of(measured.rook)).toEqual([
+      { name: "Z gate", position: 0 },
+      { name: "Y tower", position: 1 },
+    ]);
+    expect(measured.shared).toContain("encounter_prep_campaign_position_key");
+    expect(measured.negative).toContain("encounter_prep_position_nonnegative");
   }, 60_000);
 });

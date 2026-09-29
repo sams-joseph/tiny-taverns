@@ -6,6 +6,7 @@ import {
   Conflict,
   CurrentActor,
   type HobEvent,
+  MAX_PAGE_SIZE,
   NotFound,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
@@ -412,6 +413,12 @@ describe("a proposal is not a row", () => {
 
 describe("accepting one", () => {
   it("makes a real encounter, with its creatures and its provenance", async () => {
+    // One the DM made by hand first, so "at the end" is after something.
+    const handMade = await runtime.runPromise(
+      Effect.flatMap(Encounters, (repo) =>
+        repo.create(fixture.campaign.id, { name: "The ford at dusk" }),
+      ).pipe(Effect.provideService(CurrentActor, fixture.dm), Effect.orDie),
+    );
     const { events } = await ask({
       text: "Build the ambush.",
       rounds: [anEncounter(fixture.croaker.id, 6), textChunks("Six of them.")],
@@ -458,6 +465,16 @@ describe("accepting one", () => {
     );
     expect(read.creatureCount).toBe(6);
     expect(read.visibility).toBe("dm");
+
+    // At the end of the DM's planned order, through the same append as the
+    // encounter made by hand before it.
+    const planned = await runtime.runPromise(
+      Effect.all([Encounters, asDm(fixture.dm, fixture.campaign.id)]).pipe(
+        Effect.flatMap(([repo, dm]) => repo.list(dm, { limit: MAX_PAGE_SIZE })),
+        Effect.orDie,
+      ),
+    );
+    expect(planned.items.slice(-2).map((each) => each.id)).toEqual([handMade.id, encounter.id]);
   }, 60_000);
 
   it("refuses a second accept rather than making a second row", async () => {

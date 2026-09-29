@@ -2,8 +2,6 @@ import {
   type Actor,
   type CampaignId,
   type Conflict,
-  type CreatedOrder,
-  type CreatedPageFilterValues,
   creatureXp,
   CurrentActor,
   Encounter,
@@ -14,10 +12,13 @@ import {
   type EncounterRunEndedReason,
   type EncounterRunId,
   type EncounterKind,
+  type EncounterPlacement,
   EncounterPrep,
   type EncounterUpdate,
   NotFound,
   type Page,
+  type PlannedOrder,
+  type PlannedPageFilterValues,
   PlayerEncounter,
   type PlayerEncounterCreature,
   type SessionId,
@@ -27,7 +28,14 @@ import { SqlClient, type Statement } from "effect/unstable/sql";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { RUN } from "./liveTables.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
+import {
+  orderClause,
+  orderColumn,
+  type Ordering,
+  pageClauses,
+  pageLimit,
+  pageOfRows,
+} from "./paging.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -72,6 +80,12 @@ interface EncounterRow extends ProvenanceColumns {
   readonly played_session_number: number | null;
   readonly played_ended_at: Date | null;
   readonly played_ended_reason: EncounterRunEndedReason | null;
+  /**
+   * The encounter's slot in the DM's planned order (`encounter_prep.position`,
+   * `0078_encounter_order.ts`): what the list sorts by and its cursor keys on,
+   * and never a field of `Encounter` — the array order is the answer.
+   */
+  readonly planned_position: number;
 }
 
 /**
@@ -304,21 +318,27 @@ export class Encounters extends Context.Service<
   Encounters,
   {
     /**
-     * Paged, oldest first — see `repo/paging.ts`. The creator's alone, so it
-     * takes the proof: `Encounter` carries the difficulty, which no player is
-     * told. A player's read is `listAsPlayer`.
+     * Paged, in the DM's planned order — see `repo/paging.ts`. The creator's
+     * alone, so it takes the proof: `Encounter` carries the difficulty, which
+     * no player is told. A player's read is `listAsPlayer`.
+     *
+     * A cursor keys on a slot a move can change, so a move landing between
+     * two page fetches can repeat or skip a row. The web client collects the
+     * whole list in one request of up to `MAX_PAGE_SIZE`, where that cannot
+     * arise; a longer list re-reads after the move anyway.
      */
     readonly list: (
       creator: CampaignCreatorActor,
-      filter: CreatedPageFilterValues,
-    ) => Effect.Effect<Page<Encounter, CreatedOrder>>;
+      filter: PlannedPageFilterValues,
+    ) => Effect.Effect<Page<Encounter, PlannedOrder>>;
     readonly findById: (
       creator: CampaignCreatorActor,
       id: EncounterId,
     ) => Effect.Effect<Encounter, NotFound>;
     /**
      * The encounters this reader can see, as `PlayerEncounter`: no
-     * difficulty, and the roster as names and counts. Oldest first, unpaged.
+     * difficulty, and the roster as names and counts. Unpaged, in the DM's
+     * planned order, which reaches the wire only as the array's order.
      */
     readonly listAsPlayer: (
       campaignId: CampaignId,
@@ -329,7 +349,8 @@ export class Encounters extends Context.Service<
     ) => Effect.Effect<PlayerEncounter, NotFound, CurrentActor>;
     /**
      * The encounter, its map, its prep and its roster, in one transaction.
-     * `from` is the accept path's, and only its — see `Notes.create`.
+     * `from` is the accept path's, and only its — see `Notes.create`. It
+     * lands at the end of the DM's planned order, however it was made.
      */
     readonly create: (
       campaignId: CampaignId,
@@ -346,6 +367,17 @@ export class Encounters extends Context.Service<
       id: EncounterId,
     ) => Effect.Effect<void, NotFound, CurrentActor>;
     /**
+     * Put the encounter just before or just after another in the DM's planned
+     * order, renumbering the campaign's slots `0..n-1` in one statement.
+     * `NotFound` unless this actor may write both — a player, a Shared World
+     * member and a stranger never can — and both are this campaign's.
+     */
+    readonly move: (
+      campaignId: CampaignId,
+      id: EncounterId,
+      placement: EncounterPlacement,
+    ) => Effect.Effect<void, NotFound, CurrentActor>;
+    /**
      * The encounter's DM prep, or `NotFound` for an encounter this creator
      * does not hold. The creator's alone, so it takes the proof: no player
      * path reads `encounter_prep`.
@@ -354,7 +386,7 @@ export class Encounters extends Context.Service<
       creator: CampaignCreatorActor,
       id: EncounterId,
     ) => Effect.Effect<EncounterPrep, NotFound>;
-    /** Every encounter's DM prep in the creator's campaign, oldest encounter first. */
+    /** Every encounter's DM prep in the creator's campaign, in the DM's planned order. */
     readonly prepList: (
       creator: CampaignCreatorActor,
     ) => Effect.Effect<ReadonlyArray<EncounterPrep>>;
@@ -366,7 +398,28 @@ export class Encounters extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const encounterCreatures = yield* EncounterCreatures;
-      const ordering = createdOrdering<EncounterRow>(sql, "encounter");
+      /**
+       * The DM's planned order, then the id — the tiebreak `Ordering`
+       * requires, though the unique slot leaves nothing for it to break.
+       */
+      const ordering: Ordering<EncounterRow> = [
+        orderColumn<EncounterRow>(
+          sql,
+          sql`planned.position`,
+          "integer",
+          (row) => row.planned_position,
+        ),
+        orderColumn<EncounterRow>(sql, sql`encounter.id`, "uuid", (row) => row.id),
+      ];
+
+      /**
+       * Every order write — an append and a move — first takes this lock on
+       * the campaign's row, so two of them never read the same slots. `no key
+       * update` leaves the `key share` a foreign-key insert takes free, so
+       * nothing else in the campaign waits on it.
+       */
+      const lockOrder = (campaignId: CampaignId) =>
+        sql`select 1 from campaign where campaign.id = ${campaignId} for no key update`;
 
       /**
        * The level of every live seat's character this reader can see — the
@@ -401,8 +454,10 @@ export class Encounters extends Context.Service<
         Effect.gen(function* () {
           const rows = yield* sql<EncounterRow>`
             select encounter.*, ${creatureCount(sql, campaignId, actor)},
-                   ${rosterXp(sql, campaignId, actor)}, last_played.*
+                   ${rosterXp(sql, campaignId, actor)}, last_played.*,
+                   planned.position as planned_position
             from encounter
+            join encounter_prep as planned on planned.encounter_id = encounter.id
             ${lastPlayed(sql, campaignId, actor)}
             where ${where}
             ${tail}
@@ -431,6 +486,10 @@ export class Encounters extends Context.Service<
        * rule as every read here, and none of the numbers. `rowReadable` is
        * what holds a draft back: a player reads an encounter only when it is
        * Shared and Ready (`sharedWithPlayers`).
+       *
+       * In the DM's planned order. The slot is sorted by and never selected,
+       * so what a player learns is only which of the encounters they can read
+       * comes first — a gap left by one they cannot is not there to count.
        */
       const selectPlayerEncounters = (
         campaignId: CampaignId,
@@ -442,9 +501,10 @@ export class Encounters extends Context.Service<
             select encounter.id, encounter.campaign_id, encounter.name, encounter.kind,
                    encounter.tags, ${rosterNames(sql, campaignId, actor)}, last_played.*
             from encounter
+            join encounter_prep as planned on planned.encounter_id = encounter.id
             ${lastPlayed(sql, campaignId, actor)}
             where ${sql.and([rowReadable(sql, "encounter", campaignId, actor), where])}
-            order by encounter.created_at, encounter.id
+            order by planned.position, encounter.id
           `,
           (rows) => rows.map(toPlayerEncounter),
         );
@@ -463,7 +523,7 @@ export class Encounters extends Context.Service<
                 ]),
                 sql`order by ${orderClause(sql, ordering)} limit ${pageLimit(filter.limit)}`,
               );
-              return pageOfRows(rows, filter.limit, ordering, "created", toEncounter);
+              return pageOfRows(rows, filter.limit, ordering, "planned", toEncounter);
             }),
           ),
 
@@ -513,6 +573,16 @@ export class Encounters extends Context.Service<
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
+                // At the end of the DM's order: the slot after the last, read
+                // under the order lock so a racing create or move cannot take
+                // it. No payload names a slot, as none names an origin, so
+                // Hob's accepted encounters land here through the same lines.
+                yield* lockOrder(campaignId);
+                const slots = yield* sql<{ readonly next: number }>`
+                  select coalesce(max(encounter_prep.position) + 1, 0)::int as next
+                  from encounter_prep where encounter_prep.campaign_id = ${campaignId}
+                `;
+                const next = slots[0]!.next;
                 const rows = yield* sql<{ readonly id: EncounterId; readonly kind: EncounterKind }>`
                   insert into encounter ${sql.insert(
                     defined({
@@ -548,6 +618,7 @@ export class Encounters extends Context.Service<
                     encounter_id: id,
                     campaign_id: campaignId,
                     kind,
+                    position: next,
                     ...prepColumns(payload),
                   })}
                 `;
@@ -652,6 +723,54 @@ export class Encounters extends Context.Service<
             }),
           ),
 
+        // Not an edit, so no `setClause`: that stamps `updated_at`, and moving
+        // an encounter changes nothing about it — the note pin's rule
+        // (`Notes.setPinned`). A played encounter keeps its slot and moves
+        // with the rest, so if its night is deleted it is back where the DM
+        // put it.
+        move: (campaignId, id, placement) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                const anchor = "before" in placement ? placement.before : placement.after;
+                // Only the campaign's writer takes its lock.
+                yield* ensureCampaignWritable(sql, campaignId, actor);
+                yield* lockOrder(campaignId);
+                // The campaign's encounters this actor may write, and only
+                // those, so a reader who cannot write one is told nothing of
+                // it: an id or an anchor outside the list is `NotFound`,
+                // whether it is another campaign's, deleted, or never was.
+                const order = (yield* sql<{ readonly encounter_id: EncounterId }>`
+                  select encounter_prep.encounter_id from encounter_prep
+                  where ${rowWritable(sql, "encounter_prep", campaignId, actor)}
+                  order by encounter_prep.position, encounter_prep.encounter_id
+                `).map((row) => row.encounter_id);
+                for (const named of [id, anchor]) {
+                  if (!order.includes(named)) {
+                    return yield* new NotFound({ resource: "encounter", id: named });
+                  }
+                }
+                if (id === anchor) return;
+                const rest = order.filter((each) => each !== id);
+                const at = rest.indexOf(anchor) + ("before" in placement ? 0 : 1);
+                const placed = [...rest.slice(0, at), id, ...rest.slice(at)];
+                // One statement, so the deferrable unique slot is checked once
+                // every row has its new number; rows already in place are not
+                // rewritten.
+                yield* sql`
+                  update encounter_prep set position = moved.position
+                  from (values ${sql.csv(
+                    placed.map((each, position) => sql`(${each}::uuid, ${position}::int)`),
+                  )}) as moved (encounter_id, position)
+                  where encounter_prep.encounter_id = moved.encounter_id
+                    and encounter_prep.campaign_id = ${campaignId}
+                    and encounter_prep.position <> moved.position
+                `;
+              }),
+            ),
+          ),
+
         prep: (creator, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
@@ -670,9 +789,8 @@ export class Encounters extends Context.Service<
             Effect.map(
               sql<EncounterPrepRow>`
                 select encounter_prep.* from encounter_prep
-                join encounter on encounter.id = encounter_prep.encounter_id
                 where ${rowWritable(sql, "encounter_prep", creator.campaign, creator.actor)}
-                order by encounter.created_at, encounter.id
+                order by encounter_prep.position, encounter_prep.encounter_id
               `,
               (rows) => rows.map(toEncounterPrep),
             ),
