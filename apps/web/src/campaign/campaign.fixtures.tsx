@@ -1489,6 +1489,8 @@ export interface Answer {
    * set, `body` is ignored.
    */
   readonly sse?: string;
+  /** Held until this settles, for a test that acts while the answer is on its way. */
+  readonly until?: Promise<unknown>;
 }
 
 export interface Call {
@@ -1796,7 +1798,8 @@ export const sketchRoster = [
 
 /**
  * Every route the shelf reads: the list, the prep, and each encounter's map,
- * roster and own prep. Only the ambush's map has a picture.
+ * roster and own prep, and the move each takes. Only the ambush's map has a
+ * picture.
  */
 export const encounterShelf = (): Map<string, Answer> => {
   const c = `/campaigns/${campaignId}`;
@@ -1826,6 +1829,12 @@ export const encounterShelf = (): Map<string, Answer> => {
   });
   routes.set(`GET ${c}/encounters/${bargainId}/creatures`, { status: 200, body: bargainRoster });
   routes.set(`GET ${c}/encounters/${sketchId}/creatures`, { status: 200, body: sketchRoster });
+  // A move is taken. The list is read back in the order it was, which drops
+  // the move (`useEncounterOrder`): a test that wants the move kept answers
+  // the re-read in the moved order itself.
+  for (const row of shelf) {
+    routes.set(`POST ${c}/encounters/${row.id}/move`, { status: 204, body: null });
+  }
   return routes;
 };
 
@@ -2069,12 +2078,12 @@ export const installStubServer = (): StubServer => {
       );
     }
     const body = typeof answer.body === "function" ? answer.body() : answer.body;
-    return Promise.resolve(
+    const respond = () =>
       new Response(answer.status === 204 ? null : JSON.stringify(body), {
         status: answer.status,
         headers: { "content-type": "application/json" },
-      }),
-    );
+      });
+    return answer.until === undefined ? Promise.resolve(respond()) : answer.until.then(respond);
   });
 
   return server;

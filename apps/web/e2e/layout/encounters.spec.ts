@@ -10,6 +10,12 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  *
  * Read over the creator scenario's shelf (`encounterShelf`): an encounter of
  * every kind, two played, and the fight on the table.
+ *
+ * Then the handles that put *Not yet played* in the DM's order, at the three
+ * widths the reorder plan names (a small phone, a tablet, a laptop): a target
+ * a thumb can press, names starting at one edge whatever section they are in,
+ * a press on a row landing on the row and not its handle, and the keyboard
+ * path through the menu handing focus back.
  */
 
 const encounters = screens.find((screen) => screen.name === "encounters")!;
@@ -216,6 +222,142 @@ for (const width of WIDTHS) {
       const at = await restingPlace(page);
       if (at.stacked)
         expect.soft(broughtUp(at), `preview brought up (${JSON.stringify(at)})`).toBe(true);
+    });
+  });
+}
+
+/**
+ * The server's side of a move, for this page only: the stub's list is one
+ * answer every worker shares, so the move is kept here and the list's re-read
+ * comes back in the moved order, as the server's would. Read back unchanged,
+ * the list would say the move never happened and the row would go back.
+ */
+const takesMoves = async (page: Page) => {
+  let order: Array<string> | undefined;
+  await page.route(/\/stub\/campaigns\/[^/]+\/encounters\/[^/]+\/move$/, async (route) => {
+    const id = /encounters\/([^/]+)\/move$/.exec(route.request().url())![1]!;
+    const { before, after } = route.request().postDataJSON() as {
+      before?: string;
+      after?: string;
+    };
+    const rest = order!.filter((row) => row !== id);
+    const anchor = rest.indexOf((before ?? after)!);
+    rest.splice(after === undefined ? anchor : anchor + 1, 0, id);
+    order = rest;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route(/\/stub\/campaigns\/[^/]+\/encounters(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const list = (await response.json()) as { items: ReadonlyArray<{ id: string }> };
+    order ??= list.items.map((row) => row.id);
+    const byId = new Map(list.items.map((row) => [row.id, row]));
+    await route.fulfill({ response, json: { ...list, items: order.map((id) => byId.get(id)) } });
+  });
+};
+
+/** The reorder plan's widths: a small phone, a tablet and a laptop. */
+const ORDER_WIDTHS = [360, 768, 1280] as const;
+
+for (const width of ORDER_WIDTHS) {
+  test.describe(`${width}px`, () => {
+    test.use({ viewport: { width, height: HEIGHT } });
+
+    test("encounter order handles", async ({ app, page }) => {
+      await takesMoves(page);
+      await app.open(encounters);
+      const list = page.locator('[data-slot="encounter-list"]');
+      const handles = list.locator('[data-slot="move-handle"]');
+      await expect(page.locator('[data-slot="encounter-preview"]')).toBeVisible();
+      await expect(page.locator('[data-slot="failure-notice"]')).toHaveCount(0);
+      // Five never played, and two played that draw no handle.
+      await expect(handles).toHaveCount(5);
+      const order = () =>
+        handles.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
+
+      await test.step("nothing scrolls sideways", async () => {
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
+
+      await test.step("a handle is a target at least 24px square", async () => {
+        for (const handle of await handles.all()) {
+          const at = await box(handle);
+          expect.soft(at.width, "handle width").toBeGreaterThanOrEqual(24);
+          expect.soft(at.height, "handle height").toBeGreaterThanOrEqual(24);
+        }
+      });
+
+      await test.step("every row starts at one edge, in every section", async () => {
+        const lefts = await list.locator("li").evaluateAll((items) =>
+          items.map((li) => ({
+            row: li.lastElementChild!.getBoundingClientRect().left,
+            name: li.lastElementChild!.querySelector(".font-semibold")!.getBoundingClientRect()
+              .left,
+          })),
+        );
+        // Unplayed and played rows both drawn.
+        expect.soft(lefts.length, "rows").toBe(7);
+        for (const left of lefts) {
+          expect.soft(left.row, "row left").toBeCloseTo(lefts[0]!.row, 0);
+          expect.soft(left.name, "name left").toBeCloseTo(lefts[0]!.name, 0);
+        }
+      });
+
+      await test.step("a press on a row's middle lands on the row, not its handle", async () => {
+        const row = page.getByRole("button", { name: /^The dry well/ });
+        await row.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+        const hit = await row.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return (
+            document
+              .elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+              ?.closest("button") === el
+          );
+        });
+        expect.soft(hit, "the row's middle is the row").toBe(true);
+      });
+
+      await test.step("Enter opens the menu, Move down moves the row, focus comes back", async () => {
+        expect(await order()).toEqual([
+          "Move Ambush in the reeds",
+          "Move Whatever is in the crate",
+          "Move The dry well",
+          "Move The hag's bargain",
+          "Move Salt-flat sandstorm",
+        ]);
+        const handle = page.getByRole("button", { name: "Move Ambush in the reeds" });
+        await handle.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+        await handle.focus();
+        await page.keyboard.press("Enter");
+        const menu = page.getByRole("menu");
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem", { name: "Move up" })).toHaveAttribute(
+          "aria-disabled",
+          "true",
+        );
+        const down = menu.getByRole("menuitem", { name: "Move down" });
+        // The menu is inside the page, not past its edge.
+        const at = await box(down);
+        expect.soft(at.x, "menu left").toBeGreaterThanOrEqual(0);
+        expect.soft(at.x + at.width, "menu right").toBeLessThanOrEqual(width);
+        await down.click();
+
+        await expect(menu).toBeHidden();
+        await expect
+          .poll(order)
+          .toEqual([
+            "Move Whatever is in the crate",
+            "Move Ambush in the reeds",
+            "Move The dry well",
+            "Move The hag's bargain",
+            "Move Salt-flat sandstorm",
+          ]);
+        await expect(handle).toBeFocused();
+        await expect(page.getByText("Ambush in the reeds moved to 2 of 5")).toBeAttached();
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
     });
   });
 }

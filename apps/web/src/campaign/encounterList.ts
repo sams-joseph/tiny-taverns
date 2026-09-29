@@ -3,6 +3,7 @@ import type {
   Encounter,
   EncounterId,
   EncounterKind,
+  EncounterPlacement,
   EncounterPlayed,
   EncounterPrep,
 } from "@taverns/api";
@@ -77,8 +78,9 @@ export interface EncounterSection {
 
 /**
  * The list in the order it is drawn, empty groups left out. Not yet played
- * keeps the order they were written in; played is most recent first, which is
- * the one a DM is likeliest to want the log of.
+ * keeps the DM's planned order, which is the list's own (`encounters.list`
+ * answers in it); played is most recent first, which is the one a DM is
+ * likeliest to want the log of.
  */
 export const sectionsOf = (
   encounters: ReadonlyArray<Encounter>,
@@ -92,6 +94,106 @@ export const sectionsOf = (
       encounters: group === "played" ? [...rows].sort((a, b) => playedAt(b) - playedAt(a)) : rows,
     };
   }).filter((section) => section.encounters.length > 0);
+
+/**
+ * What is still to be played, in the order the night will reach it: the fight
+ * on the table, then one carried off it and not yet picked up, then the rest in
+ * the DM's order. A played encounter is over (an encounter is played once), so
+ * it is left out. The Overview's *Next session* numbers these rows, and its
+ * opening read-aloud is the first one's.
+ */
+export const onDeckOf = (
+  encounters: ReadonlyArray<Encounter>,
+  liveId: EncounterId | undefined,
+): ReadonlyArray<Encounter> => {
+  const of = (tag: Playthrough["_tag"]) =>
+    encounters.filter((encounter) => playthroughOf(encounter, liveId)._tag === tag);
+  return [...of("live"), ...of("carried"), ...of("unplayed")];
+};
+
+/**
+ * The four moves the handle's menu offers, in the menu's order.
+ */
+export type OrderMove = "top" | "up" | "down" | "bottom";
+
+export const ORDER_MOVES: ReadonlyArray<readonly [OrderMove, string]> = [
+  ["top", "Move to top"],
+  ["up", "Move up"],
+  ["down", "Move down"],
+  ["bottom", "Move to bottom"],
+];
+
+/**
+ * Where a move puts an encounter, said the way the wire says it: before or
+ * after another encounter, never a position (`EncounterPlacement`).
+ *
+ * **The anchors are the rows the DM can see**: `rows` is the *Not yet played*
+ * section as drawn, under whatever kind pill is lit. *Move up* goes before the
+ * row drawn above it and *Move to top* before the first row drawn; an
+ * encounter the pill hides keeps its place relative to the ones around it. So
+ * under a pill the move does what the DM sees, and the rows they cannot see are
+ * not reordered behind their back.
+ *
+ * Nothing (`undefined`) when the move goes nowhere — the first row cannot go
+ * up — which is when its menu item is disabled.
+ */
+export const placementFor = (
+  rows: ReadonlyArray<Pick<Encounter, "id">>,
+  encounterId: EncounterId,
+  move: OrderMove,
+): EncounterPlacement | undefined => {
+  const at = rows.findIndex((row) => row.id === encounterId);
+  const last = rows.length - 1;
+  if (at === -1) return undefined;
+  switch (move) {
+    case "top":
+      return at === 0 ? undefined : { before: rows[0]!.id };
+    case "up":
+      return at === 0 ? undefined : { before: rows[at - 1]!.id };
+    case "down":
+      return at === last ? undefined : { after: rows[at + 1]!.id };
+    case "bottom":
+      return at === last ? undefined : { after: rows[last]!.id };
+  }
+};
+
+/**
+ * The list with one encounter moved, as the server moves it
+ * (`Encounters.move`): taken out, then put back before or after its anchor.
+ * The same list when either is not in it, or it is its own anchor — the
+ * server's no-op and `NotFound` both leave the order alone.
+ */
+export const placed = <E extends Pick<Encounter, "id">>(
+  encounters: ReadonlyArray<E>,
+  encounterId: EncounterId,
+  placement: EncounterPlacement,
+): ReadonlyArray<E> => {
+  const anchor = "before" in placement ? placement.before : placement.after;
+  const moving = encounters.find((encounter) => encounter.id === encounterId);
+  if (moving === undefined || anchor === encounterId) return encounters;
+  const rest = encounters.filter((encounter) => encounter.id !== encounterId);
+  const at = rest.findIndex((encounter) => encounter.id === anchor);
+  if (at === -1) return encounters;
+  const index = "before" in placement ? at : at + 1;
+  return [...rest.slice(0, index), moving, ...rest.slice(index)];
+};
+
+/**
+ * What the live region says once a row has moved: *"Toll bridge standoff moved
+ * to 2 of 5, after The drowned chapel."* — its place among the rows drawn, and
+ * the neighbour that says where that is. Nothing when it is not among them.
+ */
+export const movedWords = (
+  rows: ReadonlyArray<Pick<Encounter, "id" | "name">>,
+  encounterId: EncounterId,
+): string | undefined => {
+  const at = rows.findIndex((row) => row.id === encounterId);
+  if (at === -1) return undefined;
+  const place = `${rows[at]!.name} moved to ${String(at + 1)} of ${String(rows.length)}`;
+  const beside =
+    at > 0 ? `, after ${rows[at - 1]!.name}` : rows.length > 1 ? `, before ${rows[1]!.name}` : "";
+  return `${place}${beside}.`;
+};
 
 /** The pane's "Combat · Played · Session 12". */
 export const groupLabel = (encounter: Encounter, liveId: EncounterId | undefined): string => {

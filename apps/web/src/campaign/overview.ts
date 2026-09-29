@@ -130,16 +130,17 @@ export const recentNotes = <N extends Pick<Note, "updatedAt">>(
  *
  * The redesign draws an *Opening read-aloud* and nothing marks a note as the
  * opening one, so this is the captain's rule for today's data — the first
- * encounter is the one the night reaches first, and its first read-aloud is
- * what gets read out when it does. Both lists are oldest first, so "first" is
- * the order the DM wrote them in. With no such note there is no inset, rather
- * than one stubbed with somebody else's prose.
+ * encounter on deck is the one the night reaches first, and its first
+ * read-aloud is what gets read out when it does. `onDeck` is `onDeckOf`'s list,
+ * so a played encounter never opens the night; the notes are oldest first. With
+ * no such note there is no inset, rather than one stubbed with somebody else's
+ * prose.
  */
 export const openingReadAloud = (
-  encounters: ReadonlyArray<Encounter>,
+  onDeck: ReadonlyArray<Encounter>,
   notes: ReadonlyArray<Note>,
 ): Note | undefined => {
-  const first = encounters[0];
+  const first = onDeck[0];
   if (first === undefined) return undefined;
   return notes.find(
     (note) =>
