@@ -111,10 +111,10 @@ const ToldFightRow = fromColumns(
   { name: "encounter_name", outcome: "ended_reason" },
 );
 
-/** One played night, as the group's timeline lists it. */
 /** The written columns of an insert, as the method builds them. */
 const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
+/** One played night, as the group's timeline lists it. */
 const PlayedNightRow = fromColumns(
   Schema.Struct({
     campaignId: CampaignId,

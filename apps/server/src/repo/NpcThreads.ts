@@ -863,7 +863,19 @@ export class NpcThreads extends Context.Service<
             ),
           ),
 
-        playerList: (campaignId, npcId) => dieOnSqlError(privateThreads({ campaignId, npcId })),
+        playerList: (campaignId, npcId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              // Names the NPC, so one this actor cannot see is `NotFound`, as
+              // `Npcs.playerFindById` answers, rather than an empty list.
+              const actor = yield* CurrentActor;
+              const live = yield* sql<{ readonly id: NpcId }>`
+                select npc.id from npc where npc.id = ${npcId} and ${playerNpcReadable(sql, campaignId, actor)}
+              `;
+              if (live.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
+              return yield* privateThreads({ campaignId, npcId });
+            }),
+          ),
 
         playerFindById: (campaignId, npcId, id) =>
           dieOnSqlError(
