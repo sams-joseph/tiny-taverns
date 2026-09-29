@@ -87,24 +87,67 @@ describe("HobPanel, given a thread", () => {
 describe("the artifact card", () => {
   const one: ReadonlyArray<HobTurn> = [{ id: "a", who: "artifact", artifact: SAMPLE_ENCOUNTER }];
 
-  it("disables every action it was given no handler for", () => {
+  it("leaves out every answer it was given no handler for, rather than drawing a dead one", () => {
     render(<HobPanel turns={one} />);
 
     expect(screen.getByRole("button", { name: "Save to session" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("swaps to the saved state, which offers Open it instead", () => {
-    render(<HobPanel turns={one} savedArtifactIds={[SAMPLE_ENCOUNTER.id]} />);
+  it("hands Discard and Try again the card they were pressed on", async () => {
+    const onDiscard = vi.fn();
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
+    render(<HobPanel turns={one} onDiscard={onDiscard} onRetry={onRetry} />);
+
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDiscard).toHaveBeenCalledWith(SAMPLE_ENCOUNTER);
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledWith(SAMPLE_ENCOUNTER);
+  });
+
+  it("holds Try again while another answer is arriving, and only that", () => {
+    render(<HobPanel turns={one} onDiscard={vi.fn()} onRetry={vi.fn()} answering />);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeEnabled();
+  });
+
+  it("swaps to the saved state, which offers Open it for a card that can be opened", async () => {
+    const onOpenArtifact = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <HobPanel
+        turns={one}
+        savedArtifactIds={[SAMPLE_ENCOUNTER.id]}
+        onOpenArtifact={onOpenArtifact}
+        openableArtifactIds={[SAMPLE_ENCOUNTER.id]}
+      />,
+    );
 
     expect(screen.getByText("Saved")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open it" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save to session" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open it" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(SAMPLE_ENCOUNTER);
+  });
+
+  it("offers no Open it on a saved card with nothing to open", () => {
+    render(
+      <HobPanel turns={one} savedArtifactIds={[SAMPLE_ENCOUNTER.id]} onOpenArtifact={vi.fn()} />,
+    );
+
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open it" })).toBeNull();
   });
 
   it("gives a rules answer no Save — nothing to save, it is just an answer", () => {
-    render(<HobPanel turns={[{ id: "r", who: "artifact", artifact: SAMPLE_RULES }]} />);
+    render(
+      <HobPanel
+        turns={[{ id: "r", who: "artifact", artifact: SAMPLE_RULES }]}
+        onDiscard={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText("Rules")).toBeInTheDocument();
     expect(screen.getByText(/Nothing to save/)).toBeInTheDocument();

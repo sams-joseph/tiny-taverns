@@ -2135,14 +2135,24 @@ const RECENT_TURNS = 40;
  * follow-up cannot re-derive without spending another round searching for
  * creatures the model has already been shown. `accepted` is here for the same
  * reason it is on the wire: an offer that was kept and an offer still sitting
- * there are different facts, and only one of them is a row in the campaign.
+ * there are different facts, and only one of them is a row in the campaign. A
+ * discarded offer is a third fact — turned down, so neither a row nor still on
+ * the table — and *Try again* depends on Hob reading it that way.
  *
  * The `character` case is the one this matters most for; see it below.
  */
 const offered = (turn: HobTurn): string | undefined => {
   const proposal = turn.proposal;
   if (proposal === null) return undefined;
-  const kept = turn.acceptedAt === null ? "not yet accepted" : "accepted by the DM";
+  const kept =
+    turn.discardedAt !== null
+      ? "discarded"
+      : turn.acceptedAt === null
+        ? "not yet accepted"
+        : "accepted by the DM";
+  // The account's own drafts are *kept*, in the words of their card.
+  const draft =
+    turn.discardedAt !== null ? "discarded" : turn.acceptedAt === null ? "not yet kept" : "kept";
   switch (proposal.target) {
     case "note":
       return `[You offered the DM a ${
@@ -2244,16 +2254,14 @@ const offered = (turn: HobTurn): string | undefined => {
         proposal.partyName === null ? undefined : `party "${proposal.partyName}"`,
         proposal.description === null ? undefined : `pitch: ${proposal.description}`,
       ].filter((part) => part !== undefined);
-      return `[You offered a campaign called "${proposal.name}" — ${
-        turn.acceptedAt === null ? "not yet kept" : "kept"
-      }: ${parts.join("; ")}]`;
+      return `[You offered a campaign called "${proposal.name}" — ${draft}: ${parts.join("; ")}]`;
     }
     // The same, so "make it colder" redrafts the world rather than founding
     // another from the first message.
     case "sharedWorld":
-      return `[You offered a Shared World called "${proposal.name}" — ${
-        turn.acceptedAt === null ? "not yet kept" : "kept"
-      }${proposal.description === null ? "" : `: ${proposal.description}`}]`;
+      return `[You offered a Shared World called "${proposal.name}" — ${draft}${
+        proposal.description === null ? "" : `: ${proposal.description}`
+      }]`;
     // Read back in the tool's own words, so "make her older" or "give her
     // stats too" redrafts the NPC offered rather than inventing another. A kept
     // one is in the Cast now, where searchCampaign finds its id.

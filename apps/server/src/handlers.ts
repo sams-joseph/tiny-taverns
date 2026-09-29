@@ -1184,12 +1184,17 @@ const HobLive = HttpApiBuilder.group(
             }),
           ),
         )
+        .handle("discard", ({ params }) =>
+          Effect.flatMap(threads.reachOf(params.campaignId, params.threadId), (reach) =>
+            threads.discard(reach, params.campaignId, params.threadId, params.turnId),
+          ),
+        )
     );
   }),
 );
 
 /**
- * Hob with no campaign — `HobLive`'s five with one reach, the caller's own
+ * Hob with no campaign — `HobLive`'s six with one reach, the caller's own
  * account (`"account"`), so there is no proof to resolve and no two sets to
  * tell apart. A kept character starts its portrait after the accept commits,
  * as `createCoreCharacter` does, a kept campaign its cover, as
@@ -1247,6 +1252,11 @@ const MeHobLive = HttpApiBuilder.group(
                 return Effect.succeed(accepted);
             }
           }),
+        ),
+      )
+      .handle("discard", ({ params }) =>
+        Effect.flatMap(CurrentActor, (actor) =>
+          threads.discard("account", actor.accountId, params.threadId, params.turnId),
         ),
       );
   }),
@@ -1513,7 +1523,7 @@ const NpcsLive = HttpApiBuilder.group(
 );
 
 /**
- * Group Hob's handlers — the same five as the campaign surface, with one
+ * Group Hob's handlers — the same six as the campaign surface, with one
  * reach: the group's conversation is the group's, so there is no proof to
  * resolve and no two sets to tell apart. `conversationReachable`'s `"sharedWorld"`
  * arm gates every thread read on live membership underneath.
@@ -1548,6 +1558,9 @@ const SharedWorldHobLive = HttpApiBuilder.group(
       )
       .handle("accept", ({ params }) =>
         proposals.acceptSharedWorld(params.worldId, params.threadId, params.turnId),
+      )
+      .handle("discard", ({ params }) =>
+        threads.discard("sharedWorld", params.worldId, params.threadId, params.turnId),
       );
   }),
 );

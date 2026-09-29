@@ -818,7 +818,12 @@ describe("the scope, counted", () => {
     // `GroupHistory.clearSummary` is the one hundred and seventy-fifth: a
     // Shared World's write, not a campaign's, whose reach is
     // `ensureGroupWritable`, the world owner's predicate.
-    expect(ungated).toBe(175);
+    // `HobThreads.discard` is the one hundred and seventy-sixth, for
+    // `reachOf`'s reason: it answers to the thread's own reach, through the
+    // accept's turn lock, whose `"dm"` arm is already the creator predicate
+    // and whose other arms are a player's own thread, a Shared World's or an
+    // account's — no campaign for a proof to name.
+    expect(ungated).toBe(176);
   });
 });
 

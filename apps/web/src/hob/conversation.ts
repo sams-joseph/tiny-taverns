@@ -5,9 +5,11 @@ import type {
   SharedWorldId,
   HobAccepted,
   HobEvent,
+  HobKept,
   HobThread,
   HobTurn as RecordedTurn,
 } from "@taverns/api";
+import { keptFrom } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,7 +18,13 @@ import { makeClient, runApiResult, type TavernsClient } from "../api/client";
 import { reads, type ReadKey } from "../api/keys";
 import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
-import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } from "./transcript";
+import {
+  ARTIFACT_KINDS,
+  artifactFrom,
+  type HobArtifact,
+  type HobContextChip,
+  type HobTurn,
+} from "./transcript";
 
 /**
  * The one seam a real assistant attaches to — and one is attached.
@@ -39,7 +47,7 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  * them all, newest first, and the designers have not drawn a list. *New thread*
  * starts one, which is now exactly what it says.
  *
- * ### A card is an offer, and Save is the only thing that writes
+ * ### A card is an offer, and Save is the only thing that makes a row
  *
  * An artifact turn is a proposal Hob made, saved on its turn and nothing else.
  * `save` calls `POST …/accept`, which materialises a real note, beat,
@@ -47,12 +55,15 @@ import { artifactFrom, type HobArtifact, type HobContextChip, type HobTurn } fro
  * *generate with approval* decision, and this is the only button in the app
  * that reaches it.
  *
- * `discard` and `retry` stay undefined, so the card disables them. Discarding
- * would be a second write with a column of its own (an unaccepted proposal is
- * simply a line of transcript, and harmless), and *Try again* is a re-ask whose
- * wording is the designers' to choose. A disabled control is this surface's
- * shipped way of saying "not given", and it is honest where a handler that
- * silently did nothing would not be.
+ * The card's other answers are the kit's: *Discard* (`POST …/discard`) marks
+ * the proposal turned down on its turn and takes the card out of the thread,
+ * and a reload leaves it out; *Try again* is that discard and then a re-ask,
+ * in the thread like any question, which Hob answers knowing the last offer
+ * was turned down. A kept card's *Open it* opens what the keep made, read off
+ * the pointer the accept stored on the turn (`HobKept`), so it opens after a
+ * reload too. Each is offered only where it can work: *Try again* needs a
+ * model behind the panel, and a card kept before the pointer existed has
+ * nothing to open.
  *
  * ### Scope is explicit
  *
@@ -116,11 +127,13 @@ export interface HobConversation {
   readonly unavailable: string | undefined;
   /** Accepts a proposal into the scoped record. The only write on this surface. */
   readonly save: ((artifact: HobArtifact) => void) | undefined;
-  /** Opens what a kept card made, when it made something with a screen of its own. */
+  /** Opens what a kept card made. Undefined when nobody said how to open anything. */
   readonly open: ((artifact: HobArtifact) => void) | undefined;
-  /** The cards `open` can open: those kept while this conversation was on screen. */
+  /** The kept cards `open` can open: every one whose turn says what it made. */
   readonly openableArtifactIds: ReadonlyArray<string>;
+  /** Turns a proposal down: the card leaves the thread, and the turn records it. */
   readonly discard: ((artifact: HobArtifact) => void) | undefined;
+  /** Turns a proposal down and asks Hob for another. Undefined while nothing can answer. */
   readonly retry: ((artifact: HobArtifact) => void) | undefined;
   readonly reset: (() => void) | undefined;
 }
@@ -187,6 +200,23 @@ const saveFailureFor = (failure: ApiFailure): string =>
     ? `Nothing was saved: ${failure.message}.`
     : `Nothing was saved: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
 
+/** And when the discard failed, in the same shape. */
+const discardFailureFor = (failure: ApiFailure): string =>
+  failure.kind === "conflict"
+    ? `Nothing was discarded: ${failure.message}.`
+    : `Nothing was discarded: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
+
+/**
+ * What *Try again* asks, in the DM's voice: the card's own name for what it
+ * was, and another. It is an ordinary question in the thread, so it reads back
+ * as what was asked, and Hob's prompt already says the last offer was
+ * discarded.
+ */
+const retryQuestion = (artifact: HobArtifact): string =>
+  artifact.title === undefined
+    ? `Try again: another ${ARTIFACT_KINDS[artifact.kind].label.toLowerCase()}.`
+    : `Try again: another take on “${artifact.title}”.`;
+
 /**
  * A saved conversation, as the rows the panel draws.
  *
@@ -198,7 +228,8 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
   recorded.flatMap((turn) => {
     const said: ReadonlyArray<HobTurn> =
       turn.text === "" ? [] : [{ id: turn.id, who: turn.who, text: turn.text }];
-    return turn.proposal === null
+    // A discarded offer is no longer one: the words stay, the card does not.
+    return turn.proposal === null || turn.discardedAt !== null
       ? said
       : [
           ...said,
@@ -217,7 +248,7 @@ interface Opened {
 }
 
 /**
- * The five calls of one scope's API group, chosen once.
+ * The six calls of one scope's API group, chosen once.
  *
  * Three groups with the same shape (`hob`, `sharedWorldHob`, `meHob`), so the
  * hook below is written once over this rather than branching at every call.
@@ -239,6 +270,11 @@ interface ScopeCalls {
     threadId: AssistantThreadId,
     turnId: AssistantTurnId,
   ) => Effect.Effect<HobAccepted, unknown>;
+  readonly discard: (
+    client: TavernsClient,
+    threadId: AssistantThreadId,
+    turnId: AssistantTurnId,
+  ) => Effect.Effect<void, unknown>;
   readonly keeps: (accepted: HobAccepted) => ReadonlyArray<ReadKey>;
 }
 
@@ -270,6 +306,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         ask: (client, payload) => client.hob.ask({ params: { campaignId }, payload }),
         accept: (client, threadId, turnId) =>
           client.hob.accept({ params: { campaignId, threadId, turnId }, payload: {} }),
+        discard: (client, threadId, turnId) =>
+          client.hob.discard({ params: { campaignId, threadId, turnId }, payload: {} }),
         /**
          * Named by what was kept. Over-naming costs a request nobody was going
          * to make; under-naming costs a card that quietly says the wrong number.
@@ -339,6 +377,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         ask: (client, payload) => client.sharedWorldHob.ask({ params: { worldId }, payload }),
         accept: (client, threadId, turnId) =>
           client.sharedWorldHob.accept({ params: { worldId, threadId, turnId }, payload: {} }),
+        discard: (client, threadId, turnId) =>
+          client.sharedWorldHob.discard({ params: { worldId, threadId, turnId }, payload: {} }),
         keeps: () => [reads.sharedWorldHistory(worldId)],
       };
     }
@@ -370,6 +410,8 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         ask: (client, payload) => client.meHob.ask({ payload }),
         accept: (client, threadId, turnId) =>
           client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+        discard: (client, threadId, turnId) =>
+          client.meHob.discard({ params: { threadId, turnId }, payload: {} }),
         // A kept campaign is a row on the Campaigns list, and a card in its
         // Shared World's directory when it named one; a kept Shared World is
         // a card on the Shared Worlds list (and a world the campaign forms can
@@ -399,11 +441,14 @@ const callsFor = (scope: HobScope): ScopeCalls => {
  * @param onKept What to do once a proposal is kept, with what it made. The
  *   panel does not know the router; the account's panel opens a kept campaign
  *   or character through this.
+ * @param onOpen How to open what a kept card made — *Open it*. Absent, no
+ *   card offers to.
  */
 export function useHobConversation(
   scope: HobScope | undefined,
   open: boolean,
   onKept?: (accepted: HobAccepted) => void,
+  onOpen?: (kept: HobKept) => void,
 ): HobConversation {
   /**
    * The scope as one string, which is what every effect below keys on: a new
@@ -416,11 +461,13 @@ export function useHobConversation(
   scopeRef.current = scope;
   const onKeptRef = useRef(onKept);
   onKeptRef.current = onKept;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
   const fetchCredential = useCredential();
   const [turns, setTurns] = useState<ReadonlyArray<HobTurn>>([]);
   const [saved, setSaved] = useState<ReadonlyArray<string>>([]);
   /** What each kept card made, by turn id: what *Open it* opens. */
-  const [kept, setKept] = useState<Readonly<Record<string, HobAccepted>>>({});
+  const [kept, setKept] = useState<Readonly<Record<string, HobKept>>>({});
   const [asking, setAsking] = useState(false);
   /**
    * Whether words are currently arriving.
@@ -497,6 +544,13 @@ export function useHobConversation(
         thread.current = result.success.threadId;
         setSaved(
           result.success.recorded.filter((turn) => turn.acceptedAt !== null).map((turn) => turn.id),
+        );
+        setKept(
+          Object.fromEntries(
+            result.success.recorded.flatMap((turn) =>
+              turn.kept === null ? [] : [[turn.id, turn.kept] as const],
+            ),
+          ),
         );
         return shownAs(result.success.recorded);
       });
@@ -644,7 +698,7 @@ export function useHobConversation(
         );
         if (Result.isSuccess(result)) {
           setSaved((done) => [...done, turnId]);
-          setKept((made) => ({ ...made, [turnId]: result.success }));
+          setKept((made) => ({ ...made, [turnId]: keptFrom(result.success) }));
           const accepted = result.success;
           if (accepted.accepted === "night") {
             setTurns((current) =>
@@ -673,13 +727,61 @@ export function useHobConversation(
     [append, invalidate],
   );
 
-  /** Opens what a kept card made, again: the same thing a keep does first. */
+  /** Opens what a kept card made, by the pointer its turn carries. */
   const openKept = useCallback(
     (artifact: HobArtifact) => {
       const made = kept[artifact.id];
-      if (made !== undefined) onKeptRef.current?.(made);
+      if (made !== undefined) onOpenRef.current?.(made);
     },
     [kept],
+  );
+
+  /**
+   * Turns a proposal down on the server, then takes its card out of the
+   * thread. Answers whether it did, so *Try again* asks only after a discard
+   * that happened; a refusal is a line in the thread, where the card still is.
+   */
+  const discardOffer = useCallback(
+    async (artifact: HobArtifact): Promise<boolean> => {
+      const threadId = thread.current;
+      const current = scopeRef.current;
+      if (current === undefined || threadId === undefined) return false;
+      const calls = callsFor(current);
+      const token = await credentialRef.current();
+      const result = await runApiResult(
+        (client) => calls.discard(client, threadId, artifact.id as AssistantTurnId),
+        token,
+      );
+      if (Result.isFailure(result)) {
+        append({
+          id: `hob-${nextId.current++}`,
+          who: "hob",
+          text: discardFailureFor(result.failure),
+        });
+        return false;
+      }
+      setTurns((current) =>
+        current.filter((turn) => turn.who !== "artifact" || turn.artifact.id !== artifact.id),
+      );
+      return true;
+    },
+    [append],
+  );
+
+  const discard = useCallback(
+    (artifact: HobArtifact) => void discardOffer(artifact),
+    [discardOffer],
+  );
+
+  /** The latest `send`, for a re-ask that fires after a discard's round trip. */
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const retry = useCallback(
+    (artifact: HobArtifact) =>
+      void discardOffer(artifact).then((discarded) => {
+        if (discarded) sendRef.current(retryQuestion(artifact));
+      }),
+    [discardOffer],
   );
 
   const reset = useCallback(() => {
@@ -740,10 +842,11 @@ export function useHobConversation(
             "your own characters and campaigns."
           : "No model is configured behind Hob. Set HOB_API_URL and HOB_MODEL in apps/server/.env.local, then restart the server.",
     save: scope === undefined ? undefined : save,
-    open: scope?.type === "account" ? openKept : undefined,
+    open: onOpen === undefined ? undefined : openKept,
     openableArtifactIds: Object.keys(kept),
-    discard: undefined,
-    retry: undefined,
+    discard: scope === undefined ? undefined : discard,
+    // A re-ask needs somebody to answer it; the card holds it while `asking`.
+    retry: status?.available === true ? retry : undefined,
     reset: turns.length > 0 ? reset : undefined,
   };
 }
