@@ -1,42 +1,34 @@
 import {
   CampaignAct,
   type CampaignActCreate,
-  type CampaignActId,
+  CampaignActId,
   type CampaignActUpdate,
-  type CampaignId,
+  CampaignId,
   Conflict,
   CurrentActor,
   NotFound,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  fromColumns,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import { ensureCampaignReadable, rowReadable, rowWritable } from "./visibility.js";
 
-interface ActRow extends ProvenanceColumns {
-  readonly id: CampaignActId;
-  readonly campaign_id: CampaignId;
-  readonly title: string;
-  readonly first_session_number: number;
-}
+/** A `campaign_act` row as the wire reads it, decoded off `campaign_act.*` by `SqlSchema`. */
+const ActRow = classFromColumns(CampaignAct, { ...CampaignAct.fields, ...timestampColumns });
 
-const toAct = (row: ActRow): CampaignAct =>
-  new CampaignAct({
-    id: row.id,
-    campaignId: row.campaign_id,
-    title: row.title,
-    firstSessionNumber: row.first_session_number,
-    ...provenanceOf(row),
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /**
  * `(campaign_id, first_session_number)` is unique, so a second act at a night
@@ -102,6 +94,62 @@ export class Acts extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
+      const readable = SqlSchema.findAll({
+        Request: Schema.toType(CampaignId),
+        Result: ActRow,
+        execute: (campaignId) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign_act.* from campaign_act
+              where ${rowReadable(sql, "campaign_act", campaignId, actor)}
+              order by campaign_act.first_session_number asc
+            `,
+          ),
+      });
+      /**
+       * The night an act starts at, locked for the insert that follows, so a
+       * delete racing that write lands before it (and refuses it) or after it,
+       * which leaves the act at a gap as any delete does.
+       */
+      const startingNight = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, number: Schema.Int })),
+        Result: fromColumns(Schema.Struct({ id: Schema.String })),
+        execute: ({ campaign, actor, number }) => sql`
+          select session.id from session
+          where session.number = ${number}
+            and ${rowWritable(sql, "session", campaign, actor)}
+          for share
+        `,
+      });
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: ActRow,
+        execute: (columns) => sql`insert into campaign_act ${sql.insert(columns)} returning *`,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, id: CampaignActId, columns: Columns }),
+        ),
+        Result: ActRow,
+        execute: ({ campaign, actor, id, columns }) => sql`
+          update campaign_act set ${setClause(sql, columns)}
+          where campaign_act.id = ${id}
+            and ${rowWritable(sql, "campaign_act", campaign, actor)}
+          returning *
+        `,
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: CampaignActId })),
+        Result: fromColumns(Schema.Struct({ id: CampaignActId })),
+        execute: ({ campaign, actor, id }) => sql`
+          delete from campaign_act
+          where campaign_act.id = ${id}
+            and ${rowWritable(sql, "campaign_act", campaign, actor)}
+          returning campaign_act.id
+        `,
+      });
+
       return {
         list: (campaignId) =>
           dieOnSqlError(
@@ -110,12 +158,7 @@ export class Acts extends Context.Service<
               // A campaign this actor cannot read is `NotFound`, not an empty
               // list, like `sessions.list`.
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<ActRow>`
-                select campaign_act.* from campaign_act
-                where ${rowReadable(sql, "campaign_act", campaignId, actor)}
-                order by campaign_act.first_session_number asc
-              `;
-              return rows.map(toAct);
+              return yield* readable(campaignId);
             }),
           ),
 
@@ -124,34 +167,20 @@ export class Acts extends Context.Service<
             asConflict(
               sql.withTransaction(
                 Effect.gen(function* () {
-                  // The night is locked for the insert below, so a delete
-                  // racing this write lands before it (and refuses it) or
-                  // after it, which leaves the act at a gap as any delete does.
-                  const nights = yield* sql<{ readonly id: string }>`
-                    select session.id from session
-                    where session.number = ${payload.firstSessionNumber}
-                      and ${rowWritable(sql, "session", creator.campaign, creator.actor)}
-                    for share
-                  `;
-                  if (nights.length === 0) {
-                    return yield* new NotFound({
-                      resource: "session",
-                      id: String(payload.firstSessionNumber),
-                    });
-                  }
-                  const rows = yield* sql<ActRow>`
-                    insert into campaign_act ${sql.insert(
-                      defined({
-                        campaign_id: creator.campaign,
-                        title: payload.title.trim(),
-                        first_session_number: payload.firstSessionNumber,
-                        visibility: payload.visibility,
-                        ...assistantColumns(from),
-                      }),
-                    )}
-                    returning *
-                  `;
-                  return toAct(rows[0]!);
+                  yield* startingNight({
+                    ...asked(creator),
+                    number: payload.firstSessionNumber,
+                  }).pipe(orNotFound("session", String(payload.firstSessionNumber)));
+                  // An insert answers with its row; not getting one is a defect.
+                  return yield* insert(
+                    defined({
+                      campaign_id: creator.campaign,
+                      title: payload.title.trim(),
+                      first_session_number: payload.firstSessionNumber,
+                      visibility: payload.visibility,
+                      ...assistantColumns(from),
+                    }),
+                  ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 }),
               ),
             ),
@@ -159,30 +188,16 @@ export class Acts extends Context.Service<
 
         update: (creator, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const columns = defined({ title: patch.title?.trim(), visibility: patch.visibility });
-              const rows = yield* sql<ActRow>`
-                update campaign_act set ${setClause(sql, columns)}
-                where campaign_act.id = ${id}
-                  and ${rowWritable(sql, "campaign_act", creator.campaign, creator.actor)}
-                returning *
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "campaign_act", id });
-              return toAct(rows[0]!);
-            }),
+            change({
+              ...asked(creator),
+              id,
+              columns: defined({ title: patch.title?.trim(), visibility: patch.visibility }),
+            }).pipe(orNotFound("campaign_act", id)),
           ),
 
         remove: (creator, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<{ readonly id: CampaignActId }>`
-                delete from campaign_act
-                where campaign_act.id = ${id}
-                  and ${rowWritable(sql, "campaign_act", creator.campaign, creator.actor)}
-                returning campaign_act.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "campaign_act", id });
-            }),
+            Effect.asVoid(erase({ ...asked(creator), id }).pipe(orNotFound("campaign_act", id))),
           ),
       };
     }),

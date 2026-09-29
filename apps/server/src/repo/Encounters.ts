@@ -1,6 +1,6 @@
 import {
   type Actor,
-  type CampaignId,
+  CampaignId,
   type Conflict,
   creatureXp,
   CurrentActor,
@@ -8,26 +8,24 @@ import {
   type EncounterChallenge,
   type EncounterCreate,
   encounterDifficulty,
-  type EncounterId,
-  type EncounterRunEndedReason,
-  type EncounterRunId,
-  type EncounterKind,
+  EncounterId,
+  EncounterKind,
+  EncounterPlayed,
   type EncounterPlacement,
   EncounterPrep,
   type EncounterUpdate,
   NotFound,
   type Page,
   type PlannedOrder,
+  plannedPageFilter,
   type PlannedPageFilterValues,
   PlayerEncounter,
-  type PlayerEncounterCreature,
-  type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema, Struct } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { RUN } from "./liveTables.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   orderClause,
   orderColumn,
@@ -39,12 +37,14 @@ import {
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
+  fromColumns,
+  orNotFound,
   proseColumn,
-  provenanceOf,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   containedRowReadable,
@@ -57,121 +57,74 @@ import {
   rowWritable,
 } from "./visibility.js";
 
-/** One visible roster line, as the difficulty needs it — `json_agg`'d per encounter. */
-interface RosterXpRow {
-  readonly count: number;
-  readonly cr: string;
-  readonly stat_block_xp: number | null;
-}
-
-interface EncounterRow extends ProvenanceColumns {
-  readonly id: EncounterId;
-  readonly campaign_id: CampaignId;
-  readonly name: string;
-  readonly kind: EncounterKind;
-  /** `text[]`; the pg driver hands these back as a real JS array. */
-  readonly tags: ReadonlyArray<string>;
-  readonly creature_count: number;
-  /** `json`, which the pg driver parses. */
-  readonly roster_xp: ReadonlyArray<RosterXpRow>;
-  /** The last visible ended run's columns, all null when there is none. */
-  readonly played_run_id: EncounterRunId | null;
-  readonly played_session_id: SessionId | null;
-  readonly played_session_number: number | null;
-  readonly played_ended_at: Date | null;
-  readonly played_ended_reason: EncounterRunEndedReason | null;
-  /**
-   * The encounter's slot in the DM's planned order (`encounter_prep.position`,
-   * `0078_encounter_order.ts`): what the list sorts by and its cursor keys on,
-   * and never a field of `Encounter` — the array order is the answer.
-   */
-  readonly planned_position: number;
-}
+/**
+ * The last playing as `lastPlayed` builds it: `EncounterPlayed`, with the end
+ * as epoch milliseconds — the resolution the driver reads a `timestamptz` at.
+ */
+const PlayedColumn = Schema.NullOr(
+  Schema.Struct({ ...EncounterPlayed.fields, endedAt: Schema.DateTimeUtcFromMillis }),
+);
 
 /**
- * The row, with its difficulty computed against `partyLevels` — the one read
- * of the party the whole statement's encounters share.
+ * An `encounter` row as the creator reads it, decoded by `SqlSchema` off
+ * `encounterColumns`: everything but the difficulty, which is computed, and
+ * the two things it and the order are computed from.
+ *
+ * `roster_xp` is one visible roster line each, as the difficulty needs it
+ * (`rosterXp`). `planned_position` is the encounter's slot in the DM's planned
+ * order (`encounter_prep.position`, `0078_encounter_order.ts`): what the list
+ * sorts by and its cursor keys on, and never a field of `Encounter` — the
+ * array order is the answer.
  */
-const toEncounter =
+const EncounterRow = fromColumns(
+  Schema.Struct({
+    ...Struct.omit(Encounter.fields, ["difficulty"]),
+    lastPlayed: PlayedColumn,
+    rosterXp: Schema.Array(
+      Schema.Struct({
+        count: Schema.Int,
+        cr: Schema.String,
+        statBlockXp: Schema.NullOr(Schema.Number),
+      }),
+    ),
+    plannedPosition: Schema.Int,
+    ...timestampColumns,
+  }),
+);
+type EncounterRow = typeof EncounterRow.Type;
+
+/**
+ * The encounter, with its difficulty computed against `partyLevels` — the one
+ * read of the party the whole statement's encounters share — through
+ * `creatureXp`, the same function the roster read uses, so the band and the
+ * roster table cannot disagree about a creature.
+ */
+const rated =
   (partyLevels: ReadonlyArray<number | null>) =>
-  (row: EncounterRow): Encounter =>
+  ({ rosterXp, plannedPosition: _, ...encounter }: EncounterRow): Encounter =>
     new Encounter({
-      id: row.id,
-      campaignId: row.campaign_id,
-      name: row.name,
+      ...encounter,
       difficulty: encounterDifficulty(
-        row.roster_xp.map((line) => ({
-          count: line.count,
-          xp: creatureXp({ cr: line.cr, statBlockXp: line.stat_block_xp }),
-        })),
+        rosterXp.map((line) => ({ count: line.count, xp: creatureXp(line) })),
         partyLevels,
       ),
-      kind: row.kind,
-      tags: row.tags,
-      creatureCount: row.creature_count,
-      lastPlayed: playedOf(row),
-      ...provenanceOf(row),
     });
-
-type PlayedColumns = Pick<
-  EncounterRow,
-  | "played_run_id"
-  | "played_session_id"
-  | "played_session_number"
-  | "played_ended_at"
-  | "played_ended_reason"
->;
 
 /**
  * The player projection's row: the encounter's own player-safe columns, the
  * visible roster as names and counts, and the last playing. No creature
  * number is selected, so none can reach `PlayerEncounter` by a forgotten drop.
  */
-interface PlayerEncounterRow
-  extends PlayedColumns, Pick<EncounterRow, "id" | "campaign_id" | "name" | "kind" | "tags"> {
-  /** `json`, which the pg driver parses. */
-  readonly creatures: ReadonlyArray<PlayerEncounterCreature>;
-}
+const PlayerEncounterRow = classFromColumns(PlayerEncounter, {
+  ...PlayerEncounter.fields,
+  lastPlayed: PlayedColumn,
+});
 
-const playedOf = (row: PlayedColumns) =>
-  row.played_run_id === null
-    ? null
-    : {
-        runId: row.played_run_id,
-        sessionId: row.played_session_id!,
-        sessionNumber: row.played_session_number!,
-        endedAt: DateTime.fromDateUnsafe(row.played_ended_at!),
-        endedReason: row.played_ended_reason!,
-      };
+/** An `encounter_prep` row, decoded off `encounter_prep.*` by `SqlSchema`. */
+const EncounterPrepRow = classFromColumns(EncounterPrep, EncounterPrep.fields);
 
-const toPlayerEncounter = (row: PlayerEncounterRow): PlayerEncounter =>
-  new PlayerEncounter({
-    id: row.id,
-    campaignId: row.campaign_id,
-    name: row.name,
-    kind: row.kind,
-    tags: row.tags,
-    creatures: row.creatures,
-    lastPlayed: playedOf(row),
-  });
-
-interface EncounterPrepRow {
-  readonly encounter_id: EncounterId;
-  /** `jsonb`; the pg driver parses it, so these arrive as the documents themselves. */
-  readonly tactics: ReadonlyArray<string>;
-  readonly treasure: string | null;
-  readonly challenge: EncounterChallenge | null;
-  readonly ready: boolean;
-}
-
-const toEncounterPrep = (row: EncounterPrepRow): EncounterPrep =>
-  new EncounterPrep({
-    encounterId: row.encounter_id,
-    ready: row.ready,
-    tactics: row.tactics,
-    treasure: row.treasure,
-    challenge: row.challenge,
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /**
  * The prep's columns from a payload. The documents go in as JSON text, which
@@ -233,9 +186,7 @@ const creatureCount = (
 
 /**
  * The roster the difficulty is computed from: each visible line's count, and
- * its creature's rating and stated XP — `creatureXp` turns those into XP in
- * `toEncounter`, the same function the roster read uses, so the band and the
- * roster table cannot disagree about a creature.
+ * its creature's rating and stated XP, which `rated` turns into XP.
  *
  * The same visibility rule as `creatureCount`, and for the same reason: a
  * creature hidden from this reader moves neither the count nor the band.
@@ -249,7 +200,7 @@ const rosterXp = (
     select json_agg(json_build_object(
       'count', encounter_creature.count,
       'cr', creature.cr,
-      'stat_block_xp', ${statBlockXp(sql)}
+      'statBlockXp', ${statBlockXp(sql)}
     ))
     from encounter_creature
     join creature on creature.id = encounter_creature.creature_id
@@ -280,11 +231,12 @@ const rosterNames = (
  * The last time each encounter came off the table, among the runs this reader
  * can see — `containedRowReadable` over `RUN`, the predicate every run read
  * uses, so a fight the DM kept hidden, or one on a night the DM kept hidden,
- * is not played as far as a player knows.
+ * is not played as far as a player knows. `null` when there is none.
  *
  * The session number is a correlated subquery rather than a join for
  * `Recap.ts`'s reason: the predicate names the unaliased `session` inside its
- * own scope.
+ * own scope. The end is epoch milliseconds, truncated as the driver truncates
+ * a `timestamptz` it reads, so it is the same instant a column read would be.
  */
 const lastPlayed = (
   sql: SqlClient.SqlClient,
@@ -292,19 +244,22 @@ const lastPlayed = (
   actor: Actor,
 ): Statement.Fragment =>
   sql`left join lateral (
-    select encounter_run.id as played_run_id,
-           encounter_run.session_id as played_session_id,
-           (select session.number from session
-             where session.id = encounter_run.session_id) as played_session_number,
-           encounter_run.ended_at as played_ended_at,
-           encounter_run.ended_reason as played_ended_reason
+    select json_build_object(
+             'runId', encounter_run.id,
+             'sessionId', encounter_run.session_id,
+             'sessionNumber', (select session.number from session
+                                where session.id = encounter_run.session_id),
+             'endedAt', (extract(epoch from date_trunc('milliseconds', encounter_run.ended_at))
+                          * 1000)::bigint,
+             'endedReason', encounter_run.ended_reason
+           ) as last_played
     from encounter_run
     where encounter_run.encounter_id = encounter.id
       and encounter_run.ended_at is not null
       and ${containedRowReadable(sql, RUN, campaignId, actor)}
     order by encounter_run.ended_at desc, encounter_run.id desc
     limit 1
-  ) as last_played on true`;
+  ) as played on true`;
 
 /**
  * Reads and writes over `encounter`, the authored template.
@@ -407,7 +362,7 @@ export class Encounters extends Context.Service<
           sql,
           sql`planned.position`,
           "integer",
-          (row) => row.planned_position,
+          (row) => row.plannedPosition,
         ),
         orderColumn<EncounterRow>(sql, sql`encounter.id`, "uuid", (row) => row.id),
       ];
@@ -429,57 +384,73 @@ export class Encounters extends Context.Service<
        * deleted holds nobody and is not in it; a character with no level is,
        * as a `null` the rule counts and leaves out.
        */
-      const partyLevels = (campaignId: CampaignId, actor: Actor) =>
-        Effect.map(
-          sql<{ readonly level: number | null }>`
-            select character.level from campaign_character
-            join character on character.id = campaign_character.character_id
-            where campaign_character.left_at is null
-              and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
-          `,
-          (rows) => rows.map((row) => row.level),
-        );
+      const party = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(creatorFields)),
+        Result: fromColumns(Schema.Struct({ level: Schema.NullOr(Schema.Int) })),
+        execute: ({ campaign, actor }) => sql`
+          select character.level from campaign_character
+          join character on character.id = campaign_character.character_id
+          where campaign_character.left_at is null
+            and ${ownedRowReadable(sql, "campaign_character", campaign, actor)}
+        `,
+      });
 
       /**
        * Encounters with everything computed on read: the count, the roster
        * XP, the last playing. Every read goes through here, and a write reads
        * its row back through here, so no path answers a thinner `Encounter`.
        */
-      const selectEncounters = (
-        campaignId: CampaignId,
-        actor: Actor,
-        where: Statement.Fragment,
-        tail: Statement.Fragment = sql``,
+      const encounterColumns = (campaignId: CampaignId, actor: Actor) => sql`
+        select encounter.*, ${creatureCount(sql, campaignId, actor)},
+               ${rosterXp(sql, campaignId, actor)}, played.last_played,
+               planned.position as planned_position
+        from encounter
+        join encounter_prep as planned on planned.encounter_id = encounter.id
+        ${lastPlayed(sql, campaignId, actor)}
+      `;
+      const encounterPage = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, filter: Schema.Struct(plannedPageFilter) }),
+        ),
+        Result: EncounterRow,
+        execute: ({ campaign, actor, filter }) => sql`
+          ${encounterColumns(campaign, actor)}
+          where ${sql.and([
+            rowReadable(sql, "encounter", campaign, actor),
+            ...pageClauses(sql, ordering, filter.cursor),
+          ])}
+          order by ${orderClause(sql, ordering)} limit ${pageLimit(filter.limit)}
+        `,
+      });
+      /**
+       * One encounter by id — also how a row just written is read back the
+       * way every read reads it, through `rowReadable` too, which the roster
+       * subqueries rely on the enclosing query to have applied.
+       */
+      const encounterById = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: EncounterId })),
+        Result: EncounterRow,
+        execute: ({ campaign, actor, id }) => sql`
+          ${encounterColumns(campaign, actor)}
+          where encounter.id = ${id} and ${rowReadable(sql, "encounter", campaign, actor)}
+        `,
+      });
+      /** The rows, rated against the party this reader is shown — read once, and only for rows. */
+      const ratedAll = (
+        reader: { readonly campaign: CampaignId; readonly actor: Actor },
+        rows: ReadonlyArray<EncounterRow>,
+      ) =>
+        rows.length === 0
+          ? Effect.succeed(rated([]))
+          : Effect.map(party(reader), (levels) => rated(levels.map((row) => row.level)));
+      const readOne = (
+        reader: { readonly campaign: CampaignId; readonly actor: Actor },
+        id: EncounterId,
       ) =>
         Effect.gen(function* () {
-          const rows = yield* sql<EncounterRow>`
-            select encounter.*, ${creatureCount(sql, campaignId, actor)},
-                   ${rosterXp(sql, campaignId, actor)}, last_played.*,
-                   planned.position as planned_position
-            from encounter
-            join encounter_prep as planned on planned.encounter_id = encounter.id
-            ${lastPlayed(sql, campaignId, actor)}
-            where ${where}
-            ${tail}
-          `;
-          const levels = rows.length === 0 ? [] : yield* partyLevels(campaignId, actor);
-          return { rows, toEncounter: toEncounter(levels) };
+          const row = yield* encounterById({ ...reader, id }).pipe(orNotFound("encounter", id));
+          return (yield* ratedAll(reader, [row]))(row);
         });
-
-      /**
-       * One row just written, read back the way every read reads it — through
-       * `rowReadable` too, which the roster subqueries rely on the enclosing
-       * query to have applied.
-       */
-      const readBack = (campaignId: CampaignId, actor: Actor, id: EncounterId) =>
-        Effect.map(
-          selectEncounters(
-            campaignId,
-            actor,
-            sql.and([sql`encounter.id = ${id}`, rowReadable(sql, "encounter", campaignId, actor)]),
-          ),
-          ({ rows, toEncounter }) => toEncounter(rows[0]!),
-        );
 
       /**
        * The player projection: the same `rowReadable` and the same roster
@@ -491,77 +462,143 @@ export class Encounters extends Context.Service<
        * so what a player learns is only which of the encounters they can read
        * comes first — a gap left by one they cannot is not there to count.
        */
-      const selectPlayerEncounters = (
-        campaignId: CampaignId,
-        actor: Actor,
-        where: Statement.Fragment,
-      ) =>
-        Effect.map(
-          sql<PlayerEncounterRow>`
-            select encounter.id, encounter.campaign_id, encounter.name, encounter.kind,
-                   encounter.tags, ${rosterNames(sql, campaignId, actor)}, last_played.*
-            from encounter
-            join encounter_prep as planned on planned.encounter_id = encounter.id
-            ${lastPlayed(sql, campaignId, actor)}
-            where ${sql.and([rowReadable(sql, "encounter", campaignId, actor), where])}
-            order by planned.position, encounter.id
-          `,
-          (rows) => rows.map(toPlayerEncounter),
-        );
+      const playerEncounters = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, id: Schema.optionalKey(EncounterId) }),
+        ),
+        Result: PlayerEncounterRow,
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select encounter.id, encounter.campaign_id, encounter.name, encounter.kind,
+                     encounter.tags, ${rosterNames(sql, campaignId, actor)}, played.last_played
+              from encounter
+              join encounter_prep as planned on planned.encounter_id = encounter.id
+              ${lastPlayed(sql, campaignId, actor)}
+              where ${sql.and([
+                rowReadable(sql, "encounter", campaignId, actor),
+                id === undefined ? sql`true` : sql`encounter.id = ${id}`,
+              ])}
+              order by planned.position, encounter.id
+            `,
+          ),
+      });
+
+      /** The slot after the campaign's last, read under the order lock. */
+      const nextSlot = SqlSchema.findOne({
+        Request: Schema.toType(CampaignId),
+        Result: fromColumns(Schema.Struct({ next: Schema.Int })),
+        execute: (campaignId) => sql`
+          select coalesce(max(encounter_prep.position) + 1, 0)::int as next
+          from encounter_prep where encounter_prep.campaign_id = ${campaignId}
+        `,
+      });
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: fromColumns(Schema.Struct({ id: EncounterId, kind: EncounterKind })),
+        execute: (columns) => sql`
+          insert into encounter ${sql.insert(columns)}
+          returning encounter.id, encounter.kind
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, id: EncounterId, columns: Columns }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: EncounterId })),
+        execute: ({ campaignId, id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update encounter set ${setClause(sql, columns)}
+              where encounter.id = ${id}
+                and ${rowWritable(sql, "encounter", campaignId, actor)}
+              returning encounter.id
+            `,
+          ),
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: EncounterId })),
+        Result: fromColumns(Schema.Struct({ id: EncounterId })),
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from encounter
+              where encounter.id = ${id}
+                and ${rowWritable(sql, "encounter", campaignId, actor)}
+              returning encounter.id
+            `,
+          ),
+      });
+      /**
+       * The campaign's encounters this actor may write, and only those, in
+       * the DM's planned order.
+       */
+      const writableOrder = SqlSchema.findAll({
+        Request: Schema.toType(CampaignId),
+        Result: fromColumns(Schema.Struct({ encounterId: EncounterId })),
+        execute: (campaignId) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select encounter_prep.encounter_id from encounter_prep
+              where ${rowWritable(sql, "encounter_prep", campaignId, actor)}
+              order by encounter_prep.position, encounter_prep.encounter_id
+            `,
+          ),
+      });
+      const prepOf = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: EncounterId })),
+        Result: EncounterPrepRow,
+        execute: ({ campaign, actor, id }) => sql`
+          select encounter_prep.* from encounter_prep
+          where encounter_prep.encounter_id = ${id}
+            and ${rowWritable(sql, "encounter_prep", campaign, actor)}
+        `,
+      });
+      const preps = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(creatorFields)),
+        Result: EncounterPrepRow,
+        execute: ({ campaign, actor }) => sql`
+          select encounter_prep.* from encounter_prep
+          where ${rowWritable(sql, "encounter_prep", campaign, actor)}
+          order by encounter_prep.position, encounter_prep.encounter_id
+        `,
+      });
 
       return {
         list: (creator, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const { campaign, actor } = creator;
-              const { rows, toEncounter } = yield* selectEncounters(
-                campaign,
-                actor,
-                sql.and([
-                  rowReadable(sql, "encounter", campaign, actor),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ]),
-                sql`order by ${orderClause(sql, ordering)} limit ${pageLimit(filter.limit)}`,
+              const reader = asked(creator);
+              const rows = yield* encounterPage({ ...reader, filter });
+              return pageOfRows(
+                rows,
+                filter.limit,
+                ordering,
+                "planned",
+                yield* ratedAll(reader, rows),
               );
-              return pageOfRows(rows, filter.limit, ordering, "planned", toEncounter);
             }),
           ),
 
-        findById: (creator, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const { campaign, actor } = creator;
-              const { rows, toEncounter } = yield* selectEncounters(
-                campaign,
-                actor,
-                sql.and([
-                  sql`encounter.id = ${id}`,
-                  rowReadable(sql, "encounter", campaign, actor),
-                ]),
-              );
-              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
-              return toEncounter(rows[0]!);
-            }),
-          ),
+        findById: (creator, id) => dieOnSqlError(readOne(asked(creator), id)),
 
         listAsPlayer: (campaignId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              return yield* selectPlayerEncounters(campaignId, actor, sql`true`);
+              return yield* playerEncounters({ campaignId });
             }),
           ),
 
         findAsPlayer: (campaignId, id) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* selectPlayerEncounters(
-                campaignId,
-                actor,
-                sql`encounter.id = ${id}`,
-              );
+              const rows = yield* playerEncounters({ campaignId, id });
               if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
               return rows[0]!;
             }),
@@ -578,25 +615,21 @@ export class Encounters extends Context.Service<
                 // it. No payload names a slot, as none names an origin, so
                 // Hob's accepted encounters land here through the same lines.
                 yield* lockOrder(campaignId);
-                const slots = yield* sql<{ readonly next: number }>`
-                  select coalesce(max(encounter_prep.position) + 1, 0)::int as next
-                  from encounter_prep where encounter_prep.campaign_id = ${campaignId}
-                `;
-                const next = slots[0]!.next;
-                const rows = yield* sql<{ readonly id: EncounterId; readonly kind: EncounterKind }>`
-                  insert into encounter ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      name: payload.name,
-                      kind: payload.kind,
-                      tags: payload.tags,
-                      visibility: payload.visibility,
-                      ...assistantColumns(from),
-                    }),
-                  )}
-                  returning encounter.id, encounter.kind
-                `;
-                const { id, kind } = rows[0]!;
+                // An aggregate answers one row, and an insert its own; not
+                // getting one is a defect.
+                const { next } = yield* nextSlot(campaignId).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
+                const { id, kind } = yield* insert(
+                  defined({
+                    campaign_id: campaignId,
+                    name: payload.name,
+                    kind: payload.kind,
+                    tags: payload.tags,
+                    visibility: payload.visibility,
+                    ...assistantColumns(from),
+                  }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 // Every encounter has its one battle map, made with it: a blank
                 // board, and the setting line the picture is drawn from (or,
                 // without one, the name, tags and roster types) after this
@@ -637,7 +670,9 @@ export class Encounters extends Context.Service<
                 }
                 // Read back last, so the count and the difficulty are the
                 // roster's just written.
-                return yield* readBack(campaignId, actor, id);
+                return yield* readOne({ campaign: campaignId, actor }, id).pipe(
+                  Effect.catchTag("NotFound", Effect.die),
+                );
               }),
             ),
           ),
@@ -666,13 +701,7 @@ export class Encounters extends Context.Service<
                   tags: patch.tags,
                   visibility: patch.visibility,
                 });
-                const rows = yield* sql<{ readonly id: EncounterId }>`
-                  update encounter set ${setClause(sql, columns)}
-                  where encounter.id = ${id}
-                    and ${rowWritable(sql, "encounter", campaignId, actor)}
-                  returning encounter.id
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
+                yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));
                 // The setting line lives on the map, the creator's alone; the
                 // encounter row above is what a player may read. Editing it
                 // redraws nothing: a picture is drawn once.
@@ -691,7 +720,9 @@ export class Encounters extends Context.Service<
                       and ${rowWritable(sql, "encounter_prep", campaignId, actor)}
                   `;
                 }
-                return yield* readBack(campaignId, actor, id);
+                return yield* readOne({ campaign: campaignId, actor }, id).pipe(
+                  Effect.catchTag("NotFound", Effect.die),
+                );
               }),
             ),
           ),
@@ -710,18 +741,7 @@ export class Encounters extends Context.Service<
         // read-aloud is prose that stands on its own. The creatures themselves
         // are untouched — the roster row is not the creature.
         remove: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: EncounterId }>`
-                delete from encounter
-                where encounter.id = ${id}
-                  and ${rowWritable(sql, "encounter", campaignId, actor)}
-                returning encounter.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(erase({ campaignId, id }).pipe(orNotFound("encounter", id)))),
 
         // Not an edit, so no `setClause`: that stamps `updated_at`, and moving
         // an encounter changes nothing about it — the note pin's rule
@@ -741,11 +761,7 @@ export class Encounters extends Context.Service<
                 // those, so a reader who cannot write one is told nothing of
                 // it: an id or an anchor outside the list is `NotFound`,
                 // whether it is another campaign's, deleted, or never was.
-                const order = (yield* sql<{ readonly encounter_id: EncounterId }>`
-                  select encounter_prep.encounter_id from encounter_prep
-                  where ${rowWritable(sql, "encounter_prep", campaignId, actor)}
-                  order by encounter_prep.position, encounter_prep.encounter_id
-                `).map((row) => row.encounter_id);
+                const order = (yield* writableOrder(campaignId)).map((row) => row.encounterId);
                 for (const named of [id, anchor]) {
                   if (!order.includes(named)) {
                     return yield* new NotFound({ resource: "encounter", id: named });
@@ -772,29 +788,9 @@ export class Encounters extends Context.Service<
           ),
 
         prep: (creator, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<EncounterPrepRow>`
-                select encounter_prep.* from encounter_prep
-                where encounter_prep.encounter_id = ${id}
-                  and ${rowWritable(sql, "encounter_prep", creator.campaign, creator.actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "encounter", id });
-              return toEncounterPrep(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(prepOf({ ...asked(creator), id }).pipe(orNotFound("encounter", id))),
 
-        prepList: (creator) =>
-          dieOnSqlError(
-            Effect.map(
-              sql<EncounterPrepRow>`
-                select encounter_prep.* from encounter_prep
-                where ${rowWritable(sql, "encounter_prep", creator.campaign, creator.actor)}
-                order by encounter_prep.position, encounter_prep.encounter_id
-              `,
-              (rows) => rows.map(toEncounterPrep),
-            ),
-          ),
+        prepList: (creator) => dieOnSqlError(preps(asked(creator))),
       };
     }),
   ).pipe(Layer.provide(EncounterCreatures.layer));

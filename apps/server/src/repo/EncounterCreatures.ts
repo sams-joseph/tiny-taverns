@@ -1,27 +1,28 @@
 import {
-  type CampaignId,
+  CampaignId,
   Conflict,
-  type CreatureId,
+  CreatureId,
   creatureXp,
   CurrentActor,
   EncounterCreature,
   type EncounterCreatureCreate,
-  type EncounterCreatureId,
+  EncounterCreatureId,
   type EncounterCreatureUpdate,
-  type EncounterId,
+  EncounterId,
   NotFound,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema, Struct } from "effect";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   type AssistantOrigin,
   assistantColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  fromColumns,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   copyableIntoCampaign,
@@ -32,33 +33,26 @@ import {
   nestedRowWritable,
 } from "./visibility.js";
 
-/** The row, joined with the creature's name and numbers — see `list`. */
-interface EncounterCreatureRow extends ProvenanceColumns {
-  readonly id: EncounterCreatureId;
-  readonly encounter_id: EncounterId;
-  readonly creature_id: CreatureId;
-  readonly name: string;
-  readonly count: number;
-  readonly cr: string;
-  readonly ac: number;
-  readonly hp: number;
-  /** `body->'xp'`: a jsonb number when the stat block says, else null. */
-  readonly stat_block_xp: number | null;
-}
+/**
+ * A roster line joined with its creature's name and numbers, decoded off
+ * `rosterRows` by `SqlSchema`: everything but `xp`, which is computed, and the
+ * stat block's own figure it is computed from (`body->'xp'`, a jsonb number
+ * when the stat block says, else null).
+ */
+const RosterLineRow = fromColumns(
+  Schema.Struct({
+    ...Struct.omit(EncounterCreature.fields, ["xp"]),
+    statBlockXp: Schema.NullOr(Schema.Number),
+    ...timestampColumns,
+  }),
+);
 
-const toEncounterCreature = (row: EncounterCreatureRow): EncounterCreature =>
-  new EncounterCreature({
-    id: row.id,
-    encounterId: row.encounter_id,
-    creatureId: row.creature_id,
-    name: row.name,
-    count: row.count,
-    cr: row.cr,
-    ac: row.ac,
-    hp: row.hp,
-    xp: creatureXp({ cr: row.cr, statBlockXp: row.stat_block_xp }),
-    ...provenanceOf(row),
-  });
+/** The line with its XP: `creatureXp`, the rule the difficulty reads too. */
+const withXp = ({ statBlockXp, ...line }: typeof RosterLineRow.Type): EncounterCreature =>
+  new EncounterCreature({ ...line, xp: creatureXp({ cr: line.cr, statBlockXp }) });
+
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /**
  * The XP a creature's stat block states, or null when it states none — the
@@ -168,31 +162,33 @@ export class EncounterCreatures extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      interface SourceRow {
-        readonly id: CreatureId;
-        readonly campaign_id: CampaignId | null;
-        readonly account_id: string | null;
-      }
-
       /**
        * The creature this roster line will be built from, or the `NotFound`
        * that names it — anything `copyableIntoCampaign` reaches, so an old
        * campaign instance a Hob proposal recorded is as valid a source as a
        * fresh Library pick.
        */
+      const source = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, creatureId: CreatureId })),
+        Result: fromColumns(
+          Schema.Struct({
+            id: CreatureId,
+            campaignId: Schema.NullOr(CampaignId),
+            accountId: Schema.NullOr(Schema.String),
+          }),
+        ),
+        execute: ({ campaignId, creatureId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select creature.id, creature.campaign_id, creature.account_id from creature
+              where creature.id = ${creatureId}
+                and ${copyableIntoCampaign(sql, "creature", campaignId, actor)}
+            `,
+          ),
+      });
       const usableSource = (campaignId: CampaignId, creatureId: CreatureId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<SourceRow>`
-            select creature.id, creature.campaign_id, creature.account_id from creature
-            where creature.id = ${creatureId}
-              and ${copyableIntoCampaign(sql, "creature", campaignId, actor)}
-          `;
-          if (rows.length === 0) {
-            return yield* new NotFound({ resource: "creature", id: creatureId });
-          }
-          return rows[0]!;
-        });
+        source({ campaignId, creatureId }).pipe(orNotFound("creature", creatureId));
 
       /**
        * The instancing-aware half of the duplicate rule: a roster line already
@@ -201,14 +197,19 @@ export class EncounterCreatures extends Context.Service<
        * direct case against a race; this check is what keeps "add it twice"
        * from minting a second invisible instance.
        */
+      const rostered = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ encounterId: EncounterId, sourceId: CreatureId })),
+        Result: fromColumns(Schema.Struct({ id: EncounterCreatureId })),
+        execute: ({ encounterId, sourceId }) => sql`
+          select encounter_creature.id from encounter_creature
+          join creature on creature.id = encounter_creature.creature_id
+          where encounter_creature.encounter_id = ${encounterId}
+            and (creature.id = ${sourceId} or creature.derived_from = ${sourceId})
+        `,
+      });
       const ensureNotRostered = (encounterId: EncounterId, sourceId: CreatureId) =>
         Effect.gen(function* () {
-          const rows = yield* sql<{ readonly id: EncounterCreatureId }>`
-            select encounter_creature.id from encounter_creature
-            join creature on creature.id = encounter_creature.creature_id
-            where encounter_creature.encounter_id = ${encounterId}
-              and (creature.id = ${sourceId} or creature.derived_from = ${sourceId})
-          `;
+          const rows = yield* rostered({ encounterId, sourceId });
           if (rows.length > 0) return yield* Effect.fail(alreadyRostered);
         });
 
@@ -219,33 +220,40 @@ export class EncounterCreatures extends Context.Service<
        * `origin` and `visibility` fall to their column defaults, which is the
        * fail-closed answer every new row gets.
        */
+      const instance = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, sourceId: CreatureId })),
+        Result: fromColumns(Schema.Struct({ id: CreatureId })),
+        execute: ({ campaignId, sourceId }) => sql`
+          insert into creature (
+            campaign_id, derived_from, source_corpus, source_family, source_key,
+            name, size, type, subtype, alignment, cr, cr_sort, ac, hp,
+            environments, damage_vulnerabilities, damage_resistances,
+            damage_immunities, condition_immunities, movement_modes,
+            spellcaster, legendary, body
+          )
+          select
+            ${campaignId}, creature.id, creature.source_corpus, creature.source_family,
+            creature.source_key, creature.name, creature.size, creature.type,
+            creature.subtype, creature.alignment, creature.cr, creature.cr_sort,
+            creature.ac, creature.hp, creature.environments,
+            creature.damage_vulnerabilities, creature.damage_resistances,
+            creature.damage_immunities, creature.condition_immunities,
+            creature.movement_modes, creature.spellcaster, creature.legendary,
+            creature.body
+          from creature where creature.id = ${sourceId}
+          returning creature.id
+        `,
+      });
+      // The source was just read under its predicate; an insert that answers
+      // nothing is a defect.
       const instanceOf = (campaignId: CampaignId, sourceId: CreatureId) =>
-        Effect.map(
-          sql<{ readonly id: CreatureId }>`
-            insert into creature (
-              campaign_id, derived_from, source_corpus, source_family, source_key,
-              name, size, type, subtype, alignment, cr, cr_sort, ac, hp,
-              environments, damage_vulnerabilities, damage_resistances,
-              damage_immunities, condition_immunities, movement_modes,
-              spellcaster, legendary, body
-            )
-            select
-              ${campaignId}, creature.id, creature.source_corpus, creature.source_family,
-              creature.source_key, creature.name, creature.size, creature.type,
-              creature.subtype, creature.alignment, creature.cr, creature.cr_sort,
-              creature.ac, creature.hp, creature.environments,
-              creature.damage_vulnerabilities, creature.damage_resistances,
-              creature.damage_immunities, creature.condition_immunities,
-              creature.movement_modes, creature.spellcaster, creature.legendary,
-              creature.body
-            from creature where creature.id = ${sourceId}
-            returning creature.id
-          `,
-          (rows) => rows[0]!.id,
+        instance({ campaignId, sourceId }).pipe(
+          Effect.map((row) => row.id),
+          Effect.catchTag("NoSuchElementError", Effect.die),
         );
 
       /** The read half of a roster row: joined with its creature's name and numbers. */
-      const rosterRows = (clause: ReturnType<typeof sql.and>) => sql<EncounterCreatureRow>`
+      const rosterRows = (clause: ReturnType<typeof sql.and>) => sql`
         select encounter_creature.*, creature.name, creature.cr, creature.ac, creature.hp,
                ${statBlockXp(sql)} as stat_block_xp
         from encounter_creature
@@ -253,16 +261,78 @@ export class EncounterCreatures extends Context.Service<
         where ${clause}
         order by encounter_creature.created_at asc
       `;
+      const roster = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, encounterId: EncounterId })),
+        Result: RosterLineRow,
+        execute: ({ campaign, actor, encounterId }) =>
+          rosterRows(sql.and([nestedRowReadable(sql, ROSTER, encounterId, campaign, actor)])),
+      });
+      /** One line just written, read back the way the roster reads it. */
+      const line = SqlSchema.findOne({
+        Request: Schema.toType(EncounterCreatureId),
+        Result: RosterLineRow,
+        execute: (id) => rosterRows(sql.and([sql`encounter_creature.id = ${id}`])),
+      });
+      const readBack = (id: EncounterCreatureId) =>
+        line(id).pipe(Effect.map(withXp), Effect.catchTag("NoSuchElementError", Effect.die));
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: fromColumns(Schema.Struct({ id: EncounterCreatureId })),
+        execute: (columns) => sql`
+          insert into encounter_creature ${sql.insert(columns)}
+          returning encounter_creature.id
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            encounterId: EncounterId,
+            id: EncounterCreatureId,
+            columns: Columns,
+          }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: EncounterCreatureId })),
+        execute: ({ campaignId, encounterId, id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update encounter_creature set ${setClause(sql, columns)}
+              where encounter_creature.id = ${id}
+                and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
+              returning encounter_creature.id
+            `,
+          ),
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            encounterId: EncounterId,
+            id: EncounterCreatureId,
+          }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: EncounterCreatureId })),
+        execute: ({ campaignId, encounterId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from encounter_creature
+              where encounter_creature.id = ${id}
+                and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
+              returning encounter_creature.id
+            `,
+          ),
+      });
 
       return {
-        list: ({ campaign, actor }, encounterId) =>
+        list: (creator, encounterId) =>
           dieOnSqlError(
             Effect.gen(function* () {
+              const { campaign, actor } = creator;
               yield* ensureNestedParentReadable(sql, ROSTER, encounterId, campaign, actor);
-              const rows = yield* rosterRows(
-                sql.and([nestedRowReadable(sql, ROSTER, encounterId, campaign, actor)]),
-              );
-              return rows.map(toEncounterCreature);
+              const rows = yield* roster({ ...asked(creator), encounterId });
+              return rows.map(withXp);
             }),
           ),
 
@@ -280,25 +350,20 @@ export class EncounterCreatures extends Context.Service<
                   // points at that. The bundle and the campaign's own rows are
                   // referenced as they are.
                   const creatureId =
-                    source.campaign_id === null && source.account_id !== null
+                    source.campaignId === null && source.accountId !== null
                       ? yield* instanceOf(campaignId, source.id)
                       : source.id;
-                  const rows = yield* sql<{ readonly id: EncounterCreatureId }>`
-                    insert into encounter_creature ${sql.insert(
-                      defined({
-                        encounter_id: encounterId,
-                        creature_id: creatureId,
-                        count: payload.count,
-                        visibility: payload.visibility,
-                        ...assistantColumns(from),
-                      }),
-                    )}
-                    returning encounter_creature.id
-                  `;
-                  const readBack = yield* rosterRows(
-                    sql.and([sql`encounter_creature.id = ${rows[0]!.id}`]),
-                  );
-                  return toEncounterCreature(readBack[0]!);
+                  // An insert answers with its row; not getting one is a defect.
+                  const written = yield* insert(
+                    defined({
+                      encounter_id: encounterId,
+                      creature_id: creatureId,
+                      count: payload.count,
+                      visibility: payload.visibility,
+                      ...assistantColumns(from),
+                    }),
+                  ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+                  return yield* readBack(written.id);
                 }),
               ),
             ),
@@ -307,36 +372,19 @@ export class EncounterCreatures extends Context.Service<
         update: (campaignId, encounterId, id, patch) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               const columns = defined({ count: patch.count, visibility: patch.visibility });
-              const rows = yield* sql<{ readonly id: EncounterCreatureId }>`
-                update encounter_creature set ${setClause(sql, columns)}
-                where encounter_creature.id = ${id}
-                  and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
-                returning encounter_creature.id
-              `;
-              if (rows.length === 0) {
-                return yield* new NotFound({ resource: "encounter_creature", id });
-              }
-              const readBack = yield* rosterRows(sql.and([sql`encounter_creature.id = ${id}`]));
-              return toEncounterCreature(readBack[0]!);
+              yield* change({ campaignId, encounterId, id, columns }).pipe(
+                orNotFound("encounter_creature", id),
+              );
+              return yield* readBack(id);
             }),
           ),
 
         remove: (campaignId, encounterId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: EncounterCreatureId }>`
-                delete from encounter_creature
-                where encounter_creature.id = ${id}
-                  and ${nestedRowWritable(sql, ROSTER, encounterId, campaignId, actor)}
-                returning encounter_creature.id
-              `;
-              if (rows.length === 0) {
-                return yield* new NotFound({ resource: "encounter_creature", id });
-              }
-            }),
+            Effect.asVoid(
+              erase({ campaignId, encounterId, id }).pipe(orNotFound("encounter_creature", id)),
+            ),
           ),
       };
     }),

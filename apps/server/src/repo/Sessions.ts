@@ -1,31 +1,32 @@
 import {
-  type Actor,
-  type AssistantTurnId,
-  type CampaignCharacterId,
-  type CampaignId,
+  Actor,
+  AssistantTurnId,
+  CampaignCharacterId,
+  CampaignId,
   Conflict,
   CurrentActor,
-  type EncounterRunId,
+  EncounterRunId,
   NotFound,
   Session,
   type SessionCreate,
-  type SessionId,
+  SessionId,
   type SessionUpdate,
-  type SummaryOrigin,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { RUN } from "./liveTables.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
+  fromColumns,
+  orNotFound,
   proseColumn,
-  provenanceOf,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
@@ -37,37 +38,22 @@ import {
   rowWritable,
 } from "./visibility.js";
 
-export interface SessionRow extends ProvenanceColumns {
-  readonly id: SessionId;
-  readonly campaign_id: CampaignId;
-  readonly number: number;
-  readonly title: string | null;
-  readonly started_at: Date | null;
-  readonly ended_at: Date | null;
-  readonly active_encounter_run_id: EncounterRunId | null;
-  readonly summary: string | null;
-  readonly summary_origin: SummaryOrigin | null;
-  readonly summary_assistant_turn_id: AssistantTurnId | null;
-  readonly spotlight_seat_id: CampaignCharacterId | null;
-}
+/**
+ * A `session` row as the wire reads it, decoded by `SqlSchema` off
+ * `sessionColumns` or, for the creator's own writes, off `session.*`.
+ * `active_encounter_run_id` is read-only on the wire: it is written by
+ * starting and ending a run, and by nothing else — see `SessionUpdate`, which
+ * has no field for it. Exported for `Recap`, which reads a night the same way.
+ */
+export const SessionRow = classFromColumns(Session, {
+  ...Session.fields,
+  startedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  endedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  ...timestampColumns,
+});
 
-export const toSession = (row: SessionRow): Session =>
-  new Session({
-    id: row.id,
-    campaignId: row.campaign_id,
-    number: row.number,
-    title: row.title,
-    startedAt: row.started_at === null ? null : DateTime.fromDateUnsafe(row.started_at),
-    endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
-    // Read-only on the wire. It is written by starting and ending a run, and
-    // by nothing else — see `SessionUpdate`, which has no field for it.
-    activeEncounterRunId: row.active_encounter_run_id,
-    summary: row.summary,
-    summaryOrigin: row.summary_origin,
-    summaryAssistantTurnId: row.summary_assistant_turn_id,
-    spotlightSeatId: row.spotlight_seat_id,
-    ...provenanceOf(row),
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /**
  * A session row as this actor may read it: every column, with the two
@@ -175,12 +161,13 @@ export class Sessions extends Context.Service<
        * Scoped to the row that was just written: an un-end (`endedAt: null`)
        * clears nothing, and a campaign pointing somewhere else is untouched.
        */
-      const releaseIfFinished = (row: SessionRow) =>
-        row.ended_at === null
+      const releaseIfFinished = (session: Session) =>
+        session.endedAt === null
           ? Effect.void
           : Effect.asVoid(sql`
               update campaign set current_session_id = null, updated_at = now()
-              where campaign.id = ${row.campaign_id} and campaign.current_session_id = ${row.id}
+              where campaign.id = ${session.campaignId}
+                and campaign.current_session_id = ${session.id}
             `);
 
       /**
@@ -211,33 +198,37 @@ export class Sessions extends Context.Service<
        * deleted and nothing is decided on the DM's behalf: an unresumed carried
        * run is just an ended run with a marker on it.
        */
-      const carryLiveRun = (row: SessionRow) =>
-        row.ended_at === null
+      /** The night's live fight, ended as carried; no row when none was on the table. */
+      const carryRun = SqlSchema.findOneOption({
+        Request: Schema.toType(SessionId),
+        Result: fromColumns(
+          Schema.Struct({ id: EncounterRunId, round: Schema.Int, encounterName: Schema.String }),
+        ),
+        execute: (sessionId) => sql`
+          update encounter_run
+          set ended_at = now(), ended_reason = 'carried', updated_at = now()
+          where encounter_run.session_id = ${sessionId} and encounter_run.ended_at is null
+          returning encounter_run.id, encounter_run.round, encounter_run.encounter_name
+        `,
+      });
+      const carryLiveRun = (session: Session) =>
+        session.endedAt === null
           ? Effect.succeed(false)
           : Effect.gen(function* () {
-              const carried = yield* sql<{
-                readonly id: EncounterRunId;
-                readonly round: number;
-                readonly encounter_name: string;
-              }>`
-                update encounter_run
-                set ended_at = now(), ended_reason = 'carried', updated_at = now()
-                where encounter_run.session_id = ${row.id} and encounter_run.ended_at is null
-                returning encounter_run.id, encounter_run.round, encounter_run.encounter_name
-              `;
-              const run = carried[0];
-              if (run === undefined) return false;
+              const carried = yield* carryRun(session.id);
+              if (Option.isNone(carried)) return false;
+              const run = carried.value;
 
               yield* sql`
                 update session set active_encounter_run_id = null, updated_at = now()
-                where session.id = ${row.id} and session.active_encounter_run_id = ${run.id}
+                where session.id = ${session.id} and session.active_encounter_run_id = ${run.id}
               `;
               yield* appendEvent(sql, {
-                sessionId: row.id,
+                sessionId: session.id,
                 kind: "run-carried",
                 encounterRunId: run.id,
-                payload: { round: run.round, encounterName: run.encounter_name },
-                visibility: row.visibility,
+                payload: { round: run.round, encounterName: run.encounterName },
+                visibility: session.visibility,
               });
               return true;
             });
@@ -271,6 +262,29 @@ export class Sessions extends Context.Service<
        * refuses another campaign's seat anyway, and this turns that into a
        * `NotFound` rather than a failed statement.
        */
+      const writableNight = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ id: SessionId, campaignId: CampaignId, actor: Actor }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: SessionId })),
+        execute: ({ id, campaignId, actor }) => sql`
+          select session.id from session
+          where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+        `,
+      });
+      const liveSeat = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ seat: CampaignCharacterId, campaignId: CampaignId, actor: Actor }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: CampaignCharacterId })),
+        execute: ({ seat, campaignId, actor }) => sql`
+          select campaign_character.id from campaign_character
+          where campaign_character.id = ${seat}
+            and campaign_character.campaign_id = ${campaignId}
+            and campaign_character.left_at is null
+            and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+        `,
+      });
       const ensureSpotlightSeat = (
         id: SessionId,
         campaignId: CampaignId,
@@ -278,20 +292,81 @@ export class Sessions extends Context.Service<
         seat: CampaignCharacterId,
       ) =>
         Effect.gen(function* () {
-          const nights = yield* sql<{ readonly id: SessionId }>`
-            select session.id from session
-            where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-          `;
-          if (nights.length === 0) return yield* new NotFound({ resource: "session", id });
-          const seats = yield* sql<{ readonly id: CampaignCharacterId }>`
-            select campaign_character.id from campaign_character
-            where campaign_character.id = ${seat}
-              and campaign_character.campaign_id = ${campaignId}
-              and campaign_character.left_at is null
-              and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
-          `;
-          if (seats.length === 0) return yield* new NotFound({ resource: "seat", id: seat });
+          yield* writableNight({ id, campaignId, actor }).pipe(orNotFound("session", id));
+          yield* liveSeat({ seat, campaignId, actor }).pipe(orNotFound("seat", seat));
         });
+
+      const readable = SqlSchema.findAll({
+        Request: Schema.toType(CampaignId),
+        Result: SessionRow,
+        execute: (campaignId) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${sessionColumns(sql, campaignId, actor)} from session
+              where ${rowReadable(sql, "session", campaignId, actor)}
+              order by session.number desc
+            `,
+          ),
+      });
+      const readableById = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: SessionId })),
+        Result: SessionRow,
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${sessionColumns(sql, campaignId, actor)} from session
+              where session.id = ${id} and ${rowReadable(sql, "session", campaignId, actor)}
+            `,
+          ),
+      });
+      /** A new night. What reaches its campaign was checked by the method that built the columns. */
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: SessionRow,
+        execute: (columns) => sql`insert into session ${sql.insert(columns)} returning *`,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            id: SessionId,
+            columns: Columns,
+            summary: Schema.NullOr(Schema.String).pipe(Schema.optionalKey),
+            from: Schema.Struct({ assistantTurnId: AssistantTurnId }).pipe(Schema.optionalKey),
+          }),
+        ),
+        Result: SessionRow,
+        execute: ({ campaignId, id, columns, summary, from }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update session set ${setClause(sql, columns)}${summarySet(summary, from)}
+              where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+              returning *
+            `,
+          ),
+      });
+      /** The night as it stands, re-read after a carried fight moved its pointer. */
+      const settled = SqlSchema.findOne({
+        Request: Schema.toType(SessionId),
+        Result: SessionRow,
+        execute: (id) => sql`select * from session where session.id = ${id}`,
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: SessionId })),
+        Result: fromColumns(Schema.Struct({ id: SessionId })),
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from session
+              where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
+              returning session.id
+            `,
+          ),
+      });
 
       return {
         list: (campaignId) =>
@@ -299,27 +374,12 @@ export class Sessions extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<SessionRow>`
-                select ${sessionColumns(sql, campaignId, actor)} from session
-                where ${rowReadable(sql, "session", campaignId, actor)}
-                order by session.number desc
-              `;
-              return rows.map(toSession);
+              return yield* readable(campaignId);
             }),
           ),
 
         findById: (campaignId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<SessionRow>`
-                select ${sessionColumns(sql, campaignId, actor)} from session
-                where session.id = ${id} and ${rowReadable(sql, "session", campaignId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
-              return toSession(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(readableById({ campaignId, id }).pipe(orNotFound("session", id))),
 
         create: (campaignId, payload, from) =>
           dieOnSqlError(
@@ -328,19 +388,16 @@ export class Sessions extends Context.Service<
                 Effect.gen(function* () {
                   const actor = yield* CurrentActor;
                   yield* ensureCampaignWritable(sql, campaignId, actor);
-                  const rows = yield* sql<SessionRow>`
-                    insert into session ${sql.insert(
-                      defined({
-                        campaign_id: campaignId,
-                        number: payload.number,
-                        title: payload.title,
-                        visibility: payload.visibility,
-                        ...assistantColumns(from),
-                      }),
-                    )}
-                    returning *
-                  `;
-                  return toSession(rows[0]!);
+                  // An insert answers with its row; not getting one is a defect.
+                  return yield* insert(
+                    defined({
+                      campaign_id: campaignId,
+                      number: payload.number,
+                      title: payload.title,
+                      visibility: payload.visibility,
+                      ...assistantColumns(from),
+                    }),
+                  ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 }),
               ),
             ),
@@ -365,25 +422,24 @@ export class Sessions extends Context.Service<
                       visibility: patch.visibility,
                       spotlight_seat_id: spotlight,
                     });
-                    const rows = yield* sql<SessionRow>`
-                      update session set ${setClause(sql, columns)}${summarySet(
-                        proseColumn(patch.summary),
-                        from,
-                      )}
-                      where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-                      returning *
-                    `;
-                    if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
-                    yield* releaseIfFinished(rows[0]!);
-                    const carried = yield* carryLiveRun(rows[0]!);
+                    const summary = proseColumn(patch.summary);
+                    const written = yield* change({
+                      campaignId,
+                      id,
+                      columns,
+                      ...(summary === undefined ? {} : { summary }),
+                      ...(from === undefined ? {} : { from }),
+                    }).pipe(orNotFound("session", id));
+                    yield* releaseIfFinished(written);
+                    const carried = yield* carryLiveRun(written);
                     // Re-read rather than returning the row from above:
                     // `carryLiveRun` clears `active_encounter_run_id`, and
                     // handing back a session that still names a fight which is
                     // now off the table would be a lie one round trip long.
-                    const settled = carried
-                      ? yield* sql<SessionRow>`select * from session where session.id = ${id}`
-                      : rows;
-                    return { session: toSession(settled[0]!), carried };
+                    const session = carried
+                      ? yield* settled(id).pipe(Effect.catchTag("NoSuchElementError", Effect.die))
+                      : written;
+                    return { session, carried };
                   }),
                 )
                 .pipe(
@@ -410,7 +466,6 @@ export class Sessions extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
                 // The pointer used to fall away on its own: the foreign key was
                 // `on delete set null`, and it no longer can be — Postgres
                 // refuses that action on a key containing a generated column,
@@ -422,12 +477,7 @@ export class Sessions extends Context.Service<
                   update campaign set current_session_id = null, updated_at = now()
                   where campaign.id = ${campaignId} and campaign.current_session_id = ${id}
                 `;
-                const rows = yield* sql<{ readonly id: SessionId }>`
-                  delete from session
-                  where session.id = ${id} and ${rowWritable(sql, "session", campaignId, actor)}
-                  returning session.id
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "session", id });
+                yield* erase({ campaignId, id }).pipe(orNotFound("session", id));
               }),
             ),
           ),

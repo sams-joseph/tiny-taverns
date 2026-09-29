@@ -2,30 +2,33 @@ import {
   type Actor,
   Beat,
   type BeatCreate,
-  type BeatId,
+  BeatId,
   type BeatUpdate,
-  type CampaignId,
+  CampaignId,
   type CreatedOrder,
+  createdPageFilter,
   type CreatedPageFilterValues,
   CurrentActor,
   type EncounterRunId,
   NotFound,
   type Page,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import { RUNS } from "./liveTables.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  fromColumns,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
@@ -36,21 +39,17 @@ import {
   nestedRowWritable,
 } from "./visibility.js";
 
-export interface BeatRow extends ProvenanceColumns {
-  readonly id: BeatId;
-  readonly session_id: SessionId;
-  readonly encounter_run_id: EncounterRunId | null;
-  readonly body: string;
-}
+/**
+ * A `beat` row as the wire reads it, decoded off `beat.*` by `SqlSchema`.
+ * Exported for `Recap`, which reads every night's beats in one statement.
+ */
+export const BeatRow = classFromColumns(Beat, { ...Beat.fields, ...timestampColumns });
 
-export const toBeat = (row: BeatRow): Beat =>
-  new Beat({
-    id: row.id,
-    sessionId: row.session_id,
-    encounterRunId: row.encounter_run_id,
-    body: row.body,
-    ...provenanceOf(row),
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
+
+/** The session a beat is under, and the campaign the caller says that session is in. */
+const parentFields = { campaignId: CampaignId, sessionId: SessionId } as const;
 
 /**
  * `beat` hangs off `session`, which hangs off `campaign`. Exactly `prep_item`.
@@ -149,7 +148,76 @@ export class Beats extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
-      const ordering = createdOrdering<BeatRow>(sql, "beat");
+      const ordering = createdOrdering<Beat>(sql, "beat");
+
+      // Oldest first: a chronology, not a library. This is the order a recap
+      // quotes them in, and the order the night happened in.
+      const readablePage = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ ...parentFields, filter: Schema.Struct(createdPageFilter) }),
+        ),
+        Result: BeatRow,
+        execute: ({ campaignId, sessionId, filter }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select beat.* from beat
+              where ${sql.and([
+                nestedRowReadable(sql, BEATS, sessionId, campaignId, actor),
+                ...pageClauses(sql, ordering, filter.cursor),
+              ])}
+              order by ${orderClause(sql, ordering)}
+              limit ${pageLimit(filter.limit)}
+            `,
+          ),
+      });
+      const readableById = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...parentFields, id: BeatId })),
+        Result: BeatRow,
+        execute: ({ campaignId, sessionId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select beat.* from beat
+              where beat.id = ${id}
+                and ${nestedRowReadable(sql, BEATS, sessionId, campaignId, actor)}
+            `,
+          ),
+      });
+      /** A new beat. What reaches its session was checked by the method that built the columns. */
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: BeatRow,
+        execute: (columns) => sql`insert into beat ${sql.insert(columns)} returning *`,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...parentFields, id: BeatId, columns: Columns })),
+        Result: BeatRow,
+        execute: ({ campaignId, sessionId, id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update beat set ${setClause(sql, columns)}
+              where beat.id = ${id}
+                and ${nestedRowWritable(sql, BEATS, sessionId, campaignId, actor)}
+              returning *
+            `,
+          ),
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...parentFields, id: BeatId })),
+        Result: fromColumns(Schema.Struct({ id: BeatId })),
+        execute: ({ campaignId, sessionId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from beat
+              where beat.id = ${id}
+                and ${nestedRowWritable(sql, BEATS, sessionId, campaignId, actor)}
+              returning beat.id
+            `,
+          ),
+      });
 
       return {
         list: (campaignId, sessionId, filter) =>
@@ -157,34 +225,13 @@ export class Beats extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureNestedParentReadable(sql, BEATS, sessionId, campaignId, actor);
-              // Oldest first: a chronology, not a library. This is the order a
-              // recap quotes them in, and the order the night happened in.
-              const rows = yield* sql<BeatRow>`
-                select beat.* from beat
-                where ${sql.and([
-                  nestedRowReadable(sql, BEATS, sessionId, campaignId, actor),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, "created", toBeat);
+              const rows = yield* readablePage({ campaignId, sessionId, filter });
+              return pageOfRows(rows, filter.limit, ordering, "created", (beat) => beat);
             }),
           ),
 
         findById: (campaignId, sessionId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<BeatRow>`
-                select beat.* from beat
-                where beat.id = ${id}
-                  and ${nestedRowReadable(sql, BEATS, sessionId, campaignId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "beat", id });
-              return toBeat(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(readableById({ campaignId, sessionId, id }).pipe(orNotFound("beat", id))),
 
         create: (campaignId, sessionId, payload, from) =>
           dieOnSqlError(
@@ -200,19 +247,16 @@ export class Beats extends Context.Service<
                     payload.encounterRunId,
                     actor,
                   );
-                  const rows = yield* sql<BeatRow>`
-                    insert into beat ${sql.insert(
-                      defined({
-                        session_id: sessionId,
-                        encounter_run_id: payload.encounterRunId,
-                        body: payload.body,
-                        visibility: payload.visibility,
-                        ...assistantColumns(from),
-                      }),
-                    )}
-                    returning *
-                  `;
-                  const beat = toBeat(rows[0]!);
+                  // An insert answers with its row; not getting one is a defect.
+                  const beat = yield* insert(
+                    defined({
+                      session_id: sessionId,
+                      encounter_run_id: payload.encounterRunId,
+                      body: payload.body,
+                      visibility: payload.visibility,
+                      ...assistantColumns(from),
+                    }),
+                  ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   // No prose in the payload. The beat is the row; this is a
                   // pointer in time to it, so `payload` stays the
                   // human-legible remainder it is documented as being.
@@ -229,32 +273,17 @@ export class Beats extends Context.Service<
 
         update: (campaignId, sessionId, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const columns = defined({ body: patch.body, visibility: patch.visibility });
-              const rows = yield* sql<BeatRow>`
-                update beat set ${setClause(sql, columns)}
-                where beat.id = ${id}
-                  and ${nestedRowWritable(sql, BEATS, sessionId, campaignId, actor)}
-                returning *
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "beat", id });
-              return toBeat(rows[0]!);
-            }),
+            change({
+              campaignId,
+              sessionId,
+              id,
+              columns: defined({ body: patch.body, visibility: patch.visibility }),
+            }).pipe(orNotFound("beat", id)),
           ),
 
         remove: (campaignId, sessionId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: BeatId }>`
-                delete from beat
-                where beat.id = ${id}
-                  and ${nestedRowWritable(sql, BEATS, sessionId, campaignId, actor)}
-                returning beat.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "beat", id });
-            }),
+            Effect.asVoid(erase({ campaignId, sessionId, id }).pipe(orNotFound("beat", id))),
           ),
       };
     }),

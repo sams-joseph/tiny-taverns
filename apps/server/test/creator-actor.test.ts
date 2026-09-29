@@ -497,8 +497,8 @@ describe("the scope, counted", () => {
     // encounter's tactics, treasure and challenge numbers are the creator's
     // alone, gated from the day they were declared.
     // Ninety-three to ninety-five are `SeatPreps.list`, `update` and the inner
-    // read both restate: a seat's hook and secret are the DM's own notes about
-    // a player's character, gated from the day they were declared.
+    // read `update` answers with: a seat's hook and secret are the DM's own
+    // notes about a player's character, gated from the day they were declared.
     // Ninety-six through ninety-eight are `Encounters.list`, `findById` and
     // `EncounterCreatures.list`: `Encounter` carries the computed difficulty
     // and a roster line its creature's numbers, which a player is not told
