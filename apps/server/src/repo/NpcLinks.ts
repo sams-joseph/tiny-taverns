@@ -1,18 +1,21 @@
 import {
   type CampaignCharacterId,
   type EncounterId,
-  type NpcId,
+  NpcId,
   type NpcLink,
   type NpcLinkKind,
   NpcLinks as NpcLinksRow,
   NotFound,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { ensureLinkTarget, linkColumn, linksAggregate } from "./links.js";
-import { dieOnSqlError } from "./rows.js";
+import { classFromColumns, dieOnSqlError, orNotFound } from "./rows.js";
 import { rowWritable } from "./visibility.js";
+
+/** One NPC's links, decoded off the NPC's id and {@link linksAggregate} by `SqlSchema`. */
+const LinksRow = classFromColumns(NpcLinksRow, NpcLinksRow.fields);
 
 /**
  * An NPC's ties to encounters and seats (`npc_link`, `0074_npc_links.ts`):
@@ -60,16 +63,18 @@ export class NpcLinks extends Context.Service<
         });
 
       /** The NPC's links, under the NPC's own predicate: one statement, one answer. */
+      const links = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: NpcId })),
+        Result: LinksRow,
+        execute: ({ campaign, actor, id }) => sql`
+          select npc.id as npc_id,
+                 ${linksAggregate(sql, "npc_link", sql`npc_link.npc_id = npc.id`)} as links
+          from npc
+          where npc.id = ${id} and ${rowWritable(sql, "npc", campaign, actor)}
+        `,
+      });
       const read = (creator: CampaignCreatorActor, id: NpcId) =>
-        Effect.gen(function* () {
-          const rows = yield* sql<{ readonly links: ReadonlyArray<NpcLink> }>`
-            select ${linksAggregate(sql, "npc_link", sql`npc_link.npc_id = npc.id`)} as links
-            from npc
-            where npc.id = ${id} and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
-          return new NpcLinksRow({ npcId: id, links: rows[0]!.links });
-        });
+        links({ ...asked(creator), id }).pipe(orNotFound("npc", id));
 
       return {
         list: (creator, id) => dieOnSqlError(read(creator, id)),

@@ -484,7 +484,7 @@ export class Proposals extends Context.Service<
                   // offer.
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
-                if (turn.accepted_at !== null) return yield* alreadyAccepted;
+                if (turn.acceptedAt !== null) return yield* alreadyAccepted;
 
                 const accepted = yield* materialise(campaignId, turn.proposal, {
                   assistantTurnId: turnId,
@@ -510,7 +510,7 @@ export class Proposals extends Context.Service<
                 if (turn.proposal === null) {
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
-                if (turn.accepted_at !== null) return yield* alreadyKept;
+                if (turn.acceptedAt !== null) return yield* alreadyKept;
                 const from = { assistantTurnId: turnId };
                 const proposal = turn.proposal;
                 const accepted: HobAccepted | undefined =
@@ -576,7 +576,7 @@ export class Proposals extends Context.Service<
                 if (turn.proposal === null) {
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
-                if (turn.accepted_at !== null) return yield* alreadyAccepted;
+                if (turn.acceptedAt !== null) return yield* alreadyAccepted;
                 if (
                   turn.proposal.target !== "sharedWorldHistory" &&
                   turn.proposal.target !== "sharedWorldSummary"

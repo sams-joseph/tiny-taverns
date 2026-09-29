@@ -1,11 +1,9 @@
 import {
   type Actor,
-  type AssistantTurnId,
-  type ChallengeRating,
   CurrentActor,
   Conflict,
   NotFound,
-  type NpcId,
+  NpcId,
   type NpcListFilter,
   NpcSheet,
   type NpcSheetPut,
@@ -14,10 +12,18 @@ import {
   type NpcSpellbook,
   type SheetBody,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { type AssistantOrigin, defined, dieOnSqlError, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  setClause,
+} from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { spellbookRulesFor } from "./Spells.js";
 import {
@@ -61,51 +67,29 @@ import {
  * as prep does not: nothing live moved.
  */
 
-interface NpcSheetRow {
-  readonly npc_id: NpcId;
-  readonly level: number | null;
-  readonly race: string | null;
-  readonly subrace: string | null;
-  readonly class_name: string | null;
-  readonly descriptor: string | null;
-  readonly ac: number | null;
-  readonly hp_max: number | null;
-  readonly cr: ChallengeRating | null;
-  readonly version: number;
-  readonly updated_at: Date;
-}
-
-interface NpcSheetBodyRow extends NpcSheetRow {
-  readonly body: SheetBody;
-  readonly origin: "authored" | "assistant";
-  readonly assistant_turn_id: AssistantTurnId | null;
-}
-
-const summaryFields = (row: NpcSheetRow) => ({
-  npcId: row.npc_id,
-  level: row.level,
-  race: row.race,
-  subrace: row.subrace,
-  className: row.class_name,
-  descriptor: row.descriptor,
-  ac: row.ac,
-  hpMax: row.hp_max,
-  cr: row.cr,
-  version: row.version,
-  updatedAt: DateTime.fromDateUnsafe(row.updated_at),
+/** An `npc_sheet` row's summary, decoded off the summary columns by `SqlSchema`. */
+const NpcSheetSummaryRow = classFromColumns(NpcSheetSummary, {
+  ...NpcSheetSummary.fields,
+  updatedAt: Schema.DateTimeUtcFromDate,
 });
 
-const toSummary = (row: NpcSheetRow): NpcSheetSummary => new NpcSheetSummary(summaryFields(row));
+/** An `npc_sheet` row with its document, which the wire calls `sheet` and the table `body`. */
+const NpcSheetRow = classFromColumns(
+  NpcSheet,
+  { ...NpcSheet.fields, updatedAt: Schema.DateTimeUtcFromDate },
+  { sheet: "body" },
+);
 
-const toSheet = (row: NpcSheetBodyRow): NpcSheet =>
-  new NpcSheet({
-    ...summaryFields(row),
-    sheet: row.body,
-    origin: row.origin,
-    assistantTurnId: row.assistant_turn_id,
-  });
+/**
+ * The left join's miss: the NPC is there and has no sheet, so every sheet
+ * column, `npc_id` among them, reads `null`.
+ */
+const NoSheetRow = fromColumns(Schema.Struct({ npcId: Schema.Null }));
 
 const encodeBody = (body: SheetBody): string => JSON.stringify(body);
+
+/** The written columns of a PUT or a PATCH, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 const staleVersion = (expected: number, actual: number): Conflict =>
   new Conflict({
@@ -279,53 +263,52 @@ export class NpcSheets extends Context.Service<
           if (npcs.length === 0) return yield* new NotFound({ resource: "npc", id });
         });
 
-      /** The sheet as it stands, read under its NPC's lock, or `undefined` when there is none. */
-      const sheetUnderLock = (id: NpcId) =>
-        Effect.map(
-          sql<NpcSheetBodyRow>`
-            select ${sheetColumns} from npc_sheet where npc_id = ${id}
-          `,
-          (rows) => rows[0],
-        );
+      /** The sheet as it stands, read under its NPC's lock, or `None` when there is none. */
+      const sheetUnderLock = SqlSchema.findOneOption({
+        Request: Schema.toType(NpcId),
+        Result: NpcSheetRow,
+        execute: (id) => sql`
+          select ${sheetColumns} from npc_sheet where npc_id = ${id}
+        `,
+      });
 
-      const list = (reach: Reach, filter: NpcListFilter) =>
-        dieOnSqlError(
-          Effect.map(
-            sql<NpcSheetRow>`
-              select ${summaryColumns}
-              from npc
-              join npc_sheet on npc_sheet.npc_id = npc.id
-              where ${reach.readable}
-                and ${filter.archived === true ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
-              order by lower(npc.name) asc, npc.id asc
-            `,
-            (rows) => rows.map(toSummary),
-          ),
-        );
-
-      /** The sheet's row, `null` when the NPC has none; `NotFound` for an NPC out of reach. */
-      const sheetRow = (
-        reach: Reach,
-        id: NpcId,
-      ): Effect.Effect<NpcSheetBodyRow | null, NotFound | SqlError.SqlError> =>
-        Effect.gen(function* () {
-          const rows = yield* sql<NpcSheetBodyRow>`
-            select ${sheetColumns}
-            from npc
-            left join npc_sheet on npc_sheet.npc_id = npc.id
-            where npc.id = ${id}
-              and ${reach.readable}
-          `;
-          const row = rows[0];
-          if (row === undefined) return yield* new NotFound({ resource: "npc", id });
-          // The left join's miss: the NPC is there and has no sheet.
-          return (row.npc_id as NpcId | null) === null ? null : row;
+      // A reach is a predicate the read is built around, as `restCharacterRow`'s is.
+      const summaries = (reach: Reach) =>
+        SqlSchema.findAll({
+          Request: Schema.Boolean,
+          Result: NpcSheetSummaryRow,
+          execute: (archived) => sql`
+          select ${summaryColumns}
+          from npc
+          join npc_sheet on npc_sheet.npc_id = npc.id
+          where ${reach.readable}
+            and ${archived ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
+          order by lower(npc.name) asc, npc.id asc
+        `,
         });
+      const list = (reach: Reach, filter: NpcListFilter) =>
+        dieOnSqlError(summaries(reach)(filter.archived === true));
 
-      const find = (reach: Reach, id: NpcId) =>
-        dieOnSqlError(
-          Effect.map(sheetRow(reach, id), (row) => (row === null ? null : toSheet(row))),
+      /** The NPC in reach and its sheet, or the join's miss when it has none. */
+      const npcSheet = (reach: Reach) =>
+        SqlSchema.findOne({
+          Request: Schema.toType(NpcId),
+          Result: Schema.Union([NpcSheetRow, NoSheetRow]),
+          execute: (id) => sql`
+          select ${sheetColumns}
+          from npc
+          left join npc_sheet on npc_sheet.npc_id = npc.id
+          where npc.id = ${id}
+            and ${reach.readable}
+        `,
+        });
+      /** The sheet, `null` when the NPC has none; `NotFound` for an NPC out of reach. */
+      const sheetRow = (reach: Reach, id: NpcId) =>
+        Effect.map(npcSheet(reach)(id).pipe(orNotFound("npc", id)), (row) =>
+          row.npcId === null ? null : row,
         );
+
+      const find = (reach: Reach, id: NpcId) => dieOnSqlError(sheetRow(reach, id));
 
       const spells = (reach: Reach, id: NpcId) =>
         dieOnSqlError(
@@ -333,15 +316,37 @@ export class NpcSheets extends Context.Service<
             const row = yield* sheetRow(reach, id);
             if (row === null) return yield* new NotFound({ resource: "npc_sheet", id });
             const rules = yield* spellbookRulesFor(sql, {
-              className: row.class_name ?? undefined,
-              subclassName: row.body.identity?.subclass,
+              className: row.className ?? undefined,
+              subclassName: row.sheet.identity?.subclass,
               level: Math.max(1, row.level ?? 1),
-              body: row.body,
+              body: row.sheet,
               vocabulary: reach.vocabulary,
             });
             return { npcId: id, ...rules };
           }),
         );
+
+      const SheetWrite = Schema.toType(Schema.Struct({ id: NpcId, columns: Columns }));
+      const upsert = SqlSchema.findOne({
+        Request: SheetWrite,
+        Result: NpcSheetRow,
+        execute: ({ id, columns }) => sql`
+          insert into npc_sheet ${sql.insert({ npc_id: id, ...columns })}
+          on conflict (npc_id) do update
+            set ${setClause(sql, columns)}, version = npc_sheet.version + 1
+          returning ${sheetColumns}
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: SheetWrite,
+        Result: NpcSheetRow,
+        execute: ({ id, columns }) => sql`
+          update npc_sheet
+          set ${setClause(sql, columns)}, version = npc_sheet.version + 1
+          where npc_id = ${id}
+          returning ${sheetColumns}
+        `,
+      });
 
       const put = (
         reach: Reach,
@@ -353,7 +358,7 @@ export class NpcSheets extends Context.Service<
           sql.withTransaction(
             Effect.gen(function* () {
               yield* lockedNpc(reach, id);
-              const before = yield* sheetUnderLock(id);
+              const before = Option.getOrUndefined(yield* sheetUnderLock(id));
               if (before === undefined) {
                 if (payload.expectedVersion !== undefined) {
                   return yield* goneSheet(payload.expectedVersion);
@@ -386,13 +391,10 @@ export class NpcSheets extends Context.Service<
                 origin: from === undefined ? "authored" : "assistant",
                 assistant_turn_id: from?.assistantTurnId ?? null,
               };
-              const rows = yield* sql<NpcSheetBodyRow>`
-                insert into npc_sheet ${sql.insert({ npc_id: id, ...columns })}
-                on conflict (npc_id) do update
-                  set ${setClause(sql, columns)}, version = npc_sheet.version + 1
-                returning ${sheetColumns}
-              `;
-              return toSheet(rows[0]!);
+              // An upsert answers with its row; not getting one is a defect.
+              return yield* upsert({ id, columns }).pipe(
+                Effect.catchTag("NoSuchElementError", Effect.die),
+              );
             }),
           ),
         );
@@ -402,7 +404,7 @@ export class NpcSheets extends Context.Service<
           sql.withTransaction(
             Effect.gen(function* () {
               yield* lockedNpc(reach, id);
-              const before = yield* sheetUnderLock(id);
+              const before = Option.getOrUndefined(yield* sheetUnderLock(id));
               if (before === undefined) {
                 return yield* new NotFound({ resource: "npc_sheet", id });
               }
@@ -425,10 +427,10 @@ export class NpcSheets extends Context.Service<
                   ? patch.sheet
                   : patch.level !== undefined || patch.className !== undefined
                     ? yield* recomputeForLevel(sql, {
-                        body: before.body,
+                        body: before.sheet,
                         level: patch.level === undefined ? before.level : patch.level,
                         className:
-                          patch.className === undefined ? before.class_name : patch.className,
+                          patch.className === undefined ? before.className : patch.className,
                         vocabulary: reach.vocabulary,
                       })
                     : undefined;
@@ -442,13 +444,10 @@ export class NpcSheets extends Context.Service<
                 cr: patch.cr,
                 body: body === undefined ? undefined : encodeBody(body),
               });
-              const rows = yield* sql<NpcSheetBodyRow>`
-                update npc_sheet
-                set ${setClause(sql, columns)}, version = npc_sheet.version + 1
-                where npc_id = ${id}
-                returning ${sheetColumns}
-              `;
-              return toSheet(rows[0]!);
+              // The sheet is locked under its NPC; not getting it back is a defect.
+              return yield* change({ id, columns }).pipe(
+                Effect.catchTag("NoSuchElementError", Effect.die),
+              );
             }),
           ),
         );

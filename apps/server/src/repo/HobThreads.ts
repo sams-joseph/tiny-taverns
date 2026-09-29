@@ -1,20 +1,27 @@
 import {
-  type AccountId,
+  AccountId,
   type Actor,
-  type AssistantThreadId,
-  type AssistantTurnId,
-  type CampaignId,
+  AssistantThreadId,
+  AssistantTurnId,
+  CampaignId,
   CurrentActor,
-  type SharedWorldId,
-  type HobProposal,
+  SharedWorldId,
+  HobProposal,
   HobThread,
   HobTurn,
   type HobWho,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  timestampColumns,
+} from "./rows.js";
 import {
   type ConversationReach,
   conversationReachable,
@@ -66,45 +73,40 @@ import {
  * generates combatant ids ahead of its insert.
  */
 
-interface ThreadRow extends ProvenanceColumns {
-  readonly id: AssistantThreadId;
-  readonly campaign_id: CampaignId | null;
-  readonly group_id: SharedWorldId | null;
-  readonly title: string;
-}
+/**
+ * An `assistant_thread` row as the wire reads it, decoded off
+ * `assistant_thread.*` by `SqlSchema`. The wire's `worldId` is `group_id`;
+ * `account_id` and the provenance tail are not on the wire and the decode
+ * drops them.
+ */
+const ThreadRow = classFromColumns(
+  HobThread,
+  { ...HobThread.fields, ...timestampColumns },
+  { worldId: "group_id" },
+);
 
-interface TurnRow extends ProvenanceColumns {
-  readonly id: AssistantTurnId;
-  readonly thread_id: AssistantThreadId;
-  readonly who: HobWho;
-  readonly body: string;
-  /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
-  readonly proposal: HobProposal | null;
-  readonly accepted_at: Date | null;
-}
+/**
+ * An `assistant_turn` row as the wire reads it: `text` is `body`, and
+ * `proposal` is the `jsonb` document the pg driver has already parsed.
+ */
+const TurnRow = classFromColumns(
+  HobTurn,
+  {
+    ...HobTurn.fields,
+    acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    createdAt: Schema.DateTimeUtcFromDate,
+  },
+  { text: "body" },
+);
 
-const toThread = (row: ThreadRow): HobThread => {
-  const { createdAt, updatedAt } = provenanceOf(row);
-  return new HobThread({
-    id: row.id,
-    campaignId: row.campaign_id,
-    worldId: row.group_id,
-    title: row.title,
-    createdAt,
-    updatedAt,
-  });
-};
-
-export const toTurn = (row: TurnRow): HobTurn =>
-  new HobTurn({
-    id: row.id,
-    threadId: row.thread_id,
-    who: row.who,
-    text: row.body,
-    proposal: row.proposal,
-    acceptedAt: row.accepted_at === null ? null : DateTime.fromDateUnsafe(row.accepted_at),
-    createdAt: provenanceOf(row).createdAt,
-  });
+/** What an accept reads off the turn it locks: its proposal, and whether it was already kept. */
+const LockedTurnRow = fromColumns(
+  Schema.Struct({
+    id: AssistantTurnId,
+    proposal: Schema.NullOr(HobProposal),
+    acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  }),
+);
 
 /** `assistant_turn` hangs off `assistant_thread`, which hangs off `campaign`. */
 export const TURNS: NestedTable = {
@@ -135,6 +137,16 @@ export interface TurnDraft {
   readonly text: string;
   readonly proposal?: HobProposal;
 }
+
+/** What a conversation read is asked with: whose conversation, and in which scope. */
+const reachFields = {
+  reach: Schema.Literals(["dm", "own", "sharedWorld", "account"]),
+  scopeId: Schema.Union([CampaignId, SharedWorldId, AccountId]),
+} as const;
+const ReachRequest = Schema.toType(Schema.Struct(reachFields));
+
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 export class HobThreads extends Context.Service<
   HobThreads,
@@ -190,6 +202,80 @@ export class HobThreads extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
+      const threads = SqlSchema.findAll({
+        Request: ReachRequest,
+        Result: ThreadRow,
+        execute: ({ reach, scopeId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select assistant_thread.* from assistant_thread
+              where ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
+              order by assistant_thread.updated_at desc, assistant_thread.id desc
+            `,
+          ),
+      });
+      const thread = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...reachFields, id: AssistantThreadId })),
+        Result: ThreadRow,
+        execute: ({ reach, scopeId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select assistant_thread.* from assistant_thread
+              where assistant_thread.id = ${id}
+                and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
+            `,
+          ),
+      });
+      /** Whose a campaign thread is, read through either complete predicate. */
+      const threadOwner = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: AssistantThreadId })),
+        Result: fromColumns(
+          Schema.Struct({ id: AssistantThreadId, accountId: Schema.NullOr(Schema.String) }),
+        ),
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select assistant_thread.id, assistant_thread.account_id from assistant_thread
+              where assistant_thread.id = ${id}
+                and (${conversationReachable(sql, "assistant_thread", "dm", campaignId, actor)}
+                  or ${conversationReachable(sql, "assistant_thread", "own", campaignId, actor)})
+            `,
+          ),
+      });
+      const insertThread = SqlSchema.findOne({
+        Request: Columns,
+        Result: ThreadRow,
+        execute: (columns) => sql`insert into assistant_thread ${sql.insert(columns)} returning *`,
+      });
+      const threadTurns = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...reachFields, threadId: AssistantThreadId })),
+        Result: TurnRow,
+        execute: ({ reach, scopeId, threadId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select assistant_turn.* from assistant_turn
+              where ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
+              order by assistant_turn.created_at asc, assistant_turn.id asc
+            `,
+          ),
+      });
+      const upsertTurn = SqlSchema.findOne({
+        Request: Columns,
+        Result: TurnRow,
+        execute: (columns) => sql`
+          insert into assistant_turn ${sql.insert(columns)}
+          on conflict (id) do update
+          set body = excluded.body,
+              proposal = excluded.proposal,
+              updated_at = now()
+          returning *
+        `,
+      });
+
       return {
         list: (reach, scopeId) =>
           dieOnSqlError(
@@ -202,46 +288,19 @@ export class HobThreads extends Context.Service<
               } else if (reach !== "account") {
                 yield* ensureCampaignReadable(sql, scopeId as CampaignId, actor);
               }
-              const rows = yield* sql<ThreadRow>`
-                select assistant_thread.* from assistant_thread
-                where ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
-                order by assistant_thread.updated_at desc, assistant_thread.id desc
-              `;
-              return rows.map(toThread);
+              return yield* threads({ reach, scopeId });
             }),
           ),
 
         findById: (reach, scopeId, id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<ThreadRow>`
-                select assistant_thread.* from assistant_thread
-                where assistant_thread.id = ${id}
-                  and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
-              `;
-              if (rows.length === 0) {
-                return yield* new NotFound({ resource: "assistant_thread", id });
-              }
-              return toThread(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(thread({ reach, scopeId, id }).pipe(orNotFound("assistant_thread", id))),
 
         reachOf: (campaignId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<Pick<ThreadRow, "id"> & { account_id: string | null }>`
-                select assistant_thread.id, assistant_thread.account_id from assistant_thread
-                where assistant_thread.id = ${id}
-                  and (${conversationReachable(sql, "assistant_thread", "dm", campaignId, actor)}
-                    or ${conversationReachable(sql, "assistant_thread", "own", campaignId, actor)})
-              `;
-              if (rows.length === 0) {
-                return yield* new NotFound({ resource: "assistant_thread", id });
-              }
-              return rows[0]!.account_id === null ? ("dm" as const) : ("own" as const);
-            }),
+            threadOwner({ campaignId, id }).pipe(
+              orNotFound("assistant_thread", id),
+              Effect.map((row) => (row.accountId === null ? ("dm" as const) : ("own" as const))),
+            ),
           ),
 
         /**
@@ -271,19 +330,15 @@ export class HobThreads extends Context.Service<
                     ? ensureCampaignReadable(sql, scopeId as CampaignId, actor)
                     : ensureCampaignWritable(sql, scopeId as CampaignId, actor);
               }
-              const rows = yield* sql<ThreadRow>`
-                insert into assistant_thread ${sql.insert(
-                  defined({
-                    campaign_id: reach === "dm" || reach === "own" ? scopeId : undefined,
-                    group_id: reach === "sharedWorld" ? scopeId : undefined,
-                    account_id:
-                      reach === "own" || reach === "account" ? actor.accountId : undefined,
-                    title: titleFrom(firstQuestion),
-                  }),
-                )}
-                returning *
-              `;
-              return toThread(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertThread(
+                defined({
+                  campaign_id: reach === "dm" || reach === "own" ? scopeId : undefined,
+                  group_id: reach === "sharedWorld" ? scopeId : undefined,
+                  account_id: reach === "own" || reach === "account" ? actor.accountId : undefined,
+                  title: titleFrom(firstQuestion),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -302,12 +357,7 @@ export class HobThreads extends Context.Service<
                 scopeId,
                 actor,
               );
-              const rows = yield* sql<TurnRow>`
-                select assistant_turn.* from assistant_turn
-                where ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
-                order by assistant_turn.created_at asc, assistant_turn.id asc
-              `;
-              return rows.map(toTurn);
+              return yield* threadTurns({ reach, scopeId, threadId });
             }),
           ),
 
@@ -324,28 +374,21 @@ export class HobThreads extends Context.Service<
                   scopeId,
                   actor,
                 );
-                const rows = yield* sql<TurnRow>`
-                  insert into assistant_turn ${sql.insert(
-                    defined({
-                      id: draft.id,
-                      thread_id: threadId,
-                      who: draft.who,
-                      body: draft.text,
-                      proposal:
-                        draft.proposal === undefined ? undefined : JSON.stringify(draft.proposal),
-                      // A hob turn is the assistant's own content, and the turn
-                      // that produced it is itself. See `0010`.
-                      ...(draft.who === "hob"
-                        ? { origin: "assistant", assistant_turn_id: draft.id }
-                        : {}),
-                    }),
-                  )}
-                  on conflict (id) do update
-                  set body = excluded.body,
-                      proposal = excluded.proposal,
-                      updated_at = now()
-                  returning *
-                `;
+                const turn = yield* upsertTurn(
+                  defined({
+                    id: draft.id,
+                    thread_id: threadId,
+                    who: draft.who,
+                    body: draft.text,
+                    proposal:
+                      draft.proposal === undefined ? undefined : JSON.stringify(draft.proposal),
+                    // A hob turn is the assistant's own content, and the turn
+                    // that produced it is itself. See `0010`.
+                    ...(draft.who === "hob"
+                      ? { origin: "assistant", assistant_turn_id: draft.id }
+                      : {}),
+                  }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 // A thread's `updated_at` is what orders the list, so it has to
                 // move when the conversation does — the thread row itself never
                 // changes otherwise.
@@ -354,7 +397,7 @@ export class HobThreads extends Context.Service<
                   where assistant_thread.id = ${threadId}
                     and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
                 `;
-                return toTurn(rows[0]!);
+                return turn;
               }),
             ),
           ),
@@ -402,19 +445,18 @@ export const lockTurnForAccept = (
   threadId: AssistantThreadId,
   turnId: AssistantTurnId,
 ) =>
-  Effect.gen(function* () {
-    const actor = yield* CurrentActor;
-    const rows = yield* sql<TurnRow>`
-      select assistant_turn.* from assistant_turn
-      where assistant_turn.id = ${turnId}
-        and ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
-      for update
-    `;
-    if (rows.length === 0) {
-      return yield* new NotFound({ resource: "assistant_turn", id: turnId });
-    }
-    return rows[0]!;
-  });
+  Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+    SqlSchema.findOne({
+      Request: Schema.toType(AssistantTurnId),
+      Result: LockedTurnRow,
+      execute: (id) => sql`
+        select assistant_turn.* from assistant_turn
+        where assistant_turn.id = ${id}
+          and ${conversationTurnReachable(sql, TURNS, reach, threadId, scopeId, actor)}
+        for update
+      `,
+    })(turnId).pipe(orNotFound("assistant_turn", turnId)),
+  );
 
 /** Records that a human said yes, in the transaction that made the row. */
 export const markAccepted = (sql: SqlClient.SqlClient, turnId: AssistantTurnId) =>

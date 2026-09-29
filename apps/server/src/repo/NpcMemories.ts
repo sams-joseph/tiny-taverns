@@ -1,30 +1,30 @@
 import {
-  type CampaignId,
+  Actor,
+  CampaignId,
   CurrentActor,
   NpcMemory,
   type NpcMemoryCreate,
-  type NpcMemoryId,
-  type NpcMemoryStatus,
+  NpcMemoryId,
   type NpcMemoryUpdate,
-  type NpcKnowledgeSourceKind,
-  type NpcId,
+  NpcId,
   type NpcThreadId,
   type NpcTurnId,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { playerNpcReadable } from "./Npcs.js";
 import { NPC, NPC_THREADS } from "./NpcThreads.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   containedChildWritable,
@@ -43,35 +43,16 @@ import {
 
 export const NPC_MEMORIES: Containment = under("npc_memory", "npc_id", NPC);
 
-interface MemoryRow extends ProvenanceColumns {
-  readonly id: NpcMemoryId;
-  readonly npc_id: NpcId;
-  readonly body: string;
-  readonly status: NpcMemoryStatus;
-  readonly source_thread_id: NpcThreadId | null;
-  readonly source_turn_id: NpcTurnId | null;
-  readonly source_kind: NpcKnowledgeSourceKind;
-  readonly source_id: string | null;
-  readonly source_label: string;
-  readonly approved_at: Date | null;
-  readonly retired_at: Date | null;
-}
+/** An `npc_memory` row as the wire reads it, decoded off `npc_memory.*` by `SqlSchema`. */
+export const NpcMemoryRow = classFromColumns(NpcMemory, {
+  ...NpcMemory.fields,
+  ...timestampColumns,
+  approvedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  retiredAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+});
 
-export const toNpcMemory = (row: MemoryRow): NpcMemory =>
-  new NpcMemory({
-    id: row.id,
-    npcId: row.npc_id,
-    body: row.body,
-    status: row.status,
-    sourceThreadId: row.source_thread_id,
-    sourceTurnId: row.source_turn_id,
-    sourceKind: row.source_kind,
-    sourceId: row.source_id,
-    sourceLabel: row.source_label,
-    approvedAt: row.approved_at === null ? null : DateTime.fromDateUnsafe(row.approved_at),
-    retiredAt: row.retired_at === null ? null : DateTime.fromDateUnsafe(row.retired_at),
-    ...provenanceOf(row),
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 export class NpcMemories extends Context.Service<
   NpcMemories,
@@ -121,9 +102,6 @@ export class NpcMemories extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const memoryReachable = (creator: CampaignCreatorActor, npcId: NpcId) =>
-        containedChildWritable(sql, NPC_MEMORIES, npcId, creator.campaign, creator.actor);
-
       const ensureSource = (
         creator: CampaignCreatorActor,
         npcId: NpcId,
@@ -158,17 +136,122 @@ export class NpcMemories extends Context.Service<
           }
         });
 
+      const CreatorNpc = Schema.toType(Schema.Struct({ ...creatorFields, npcId: NpcId }));
+      const CreatorMemory = Schema.toType(
+        Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcMemoryId }),
+      );
+      const reachable = (campaign: CampaignId, actor: Actor, npcId: NpcId) =>
+        containedChildWritable(sql, NPC_MEMORIES, npcId, campaign, actor);
+
+      const all = SqlSchema.findAll({
+        Request: CreatorNpc,
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId }) => sql`
+          select npc_memory.* from npc_memory
+          where ${reachable(campaign, actor, npcId)}
+          order by npc_memory.created_at asc, npc_memory.id asc
+        `,
+      });
+      const approved = SqlSchema.findAll({
+        Request: CreatorNpc,
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId }) => sql`
+          select npc_memory.* from npc_memory
+          where ${reachable(campaign, actor, npcId)}
+            and npc_memory.status = 'approved'
+            and npc_memory.retired_at is null
+          order by npc_memory.approved_at asc, npc_memory.id asc
+        `,
+      });
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: NpcMemoryRow,
+        execute: (columns) => sql`insert into npc_memory ${sql.insert(columns)} returning *`,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcMemoryId, columns: Columns }),
+        ),
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId, id, columns }) => sql`
+          update npc_memory set ${setClause(sql, columns)}
+          where npc_memory.id = ${id}
+            and npc_memory.status <> 'retired'
+            and ${reachable(campaign, actor, npcId)}
+          returning *
+        `,
+      });
+      const approve = SqlSchema.findOne({
+        Request: CreatorMemory,
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId, id }) => sql`
+          update npc_memory
+          set status = 'approved', approved_at = coalesce(npc_memory.approved_at, now()), retired_at = null, updated_at = now()
+          where npc_memory.id = ${id}
+            and npc_memory.status <> 'retired'
+            and ${reachable(campaign, actor, npcId)}
+          returning *
+        `,
+      });
+      const retire = SqlSchema.findOne({
+        Request: CreatorMemory,
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId, id }) => sql`
+          update npc_memory
+          set status = 'retired', retired_at = coalesce(npc_memory.retired_at, now()), updated_at = now()
+          where npc_memory.id = ${id} and ${reachable(campaign, actor, npcId)}
+          returning *
+        `,
+      });
+      const retireAll = SqlSchema.findAll({
+        Request: CreatorNpc,
+        Result: NpcMemoryRow,
+        execute: ({ campaign, actor, npcId }) => sql`
+          update npc_memory
+          set status = 'retired', retired_at = coalesce(npc_memory.retired_at, now()), updated_at = now()
+          where ${reachable(campaign, actor, npcId)} and npc_memory.status <> 'retired'
+          returning *
+        `,
+      });
+      /** A player's prompt's memories: approved, shared, of an NPC they may read, and no source pointers. */
+      const playerSafe = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, npcId: NpcId, actor: Actor }),
+        ),
+        Result: NpcMemoryRow,
+        execute: ({ campaignId, npcId, actor }) => sql`
+          select npc_memory.id,
+                 npc_memory.npc_id,
+                 npc_memory.body,
+                 npc_memory.status,
+                 null::uuid as source_thread_id,
+                 null::uuid as source_turn_id,
+                 npc_memory.source_kind,
+                 null::uuid as source_id,
+                 npc_memory.source_label,
+                 npc_memory.approved_at,
+                 npc_memory.retired_at,
+                 npc_memory.visibility,
+                 npc_memory.origin,
+                 npc_memory.assistant_turn_id,
+                 npc_memory.created_at,
+                 npc_memory.updated_at
+          from npc_memory
+          where npc_memory.npc_id = ${npcId}
+            and npc_memory.status = 'approved'
+            and npc_memory.retired_at is null
+            and npc_memory.visibility = 'shared'
+            and exists (select 1 from npc where npc.id = npc_memory.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
+          order by npc_memory.approved_at asc, npc_memory.id asc
+        `,
+      });
+
       return {
         list: (creator, npcId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<MemoryRow>`
-                select npc_memory.* from npc_memory
-                where ${memoryReachable(creator, npcId)}
-                order by npc_memory.created_at asc, npc_memory.id asc
-              `;
-              return rows.map(toNpcMemory);
+              return yield* all({ ...asked(creator), npcId });
             }),
           ),
 
@@ -176,14 +259,7 @@ export class NpcMemories extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<MemoryRow>`
-                select npc_memory.* from npc_memory
-                where ${memoryReachable(creator, npcId)}
-                  and npc_memory.status = 'approved'
-                  and npc_memory.retired_at is null
-                order by npc_memory.approved_at asc, npc_memory.id asc
-              `;
-              return rows.map(toNpcMemory);
+              return yield* approved({ ...asked(creator), npcId });
             }),
           ),
 
@@ -192,91 +268,54 @@ export class NpcMemories extends Context.Service<
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
               yield* ensureSource(creator, npcId, payload.sourceThreadId, payload.sourceTurnId);
-              const rows = yield* sql<MemoryRow>`
-                insert into npc_memory ${sql.insert(
-                  defined({
-                    npc_id: npcId,
-                    body: payload.body,
-                    source_thread_id: payload.sourceThreadId,
-                    source_turn_id: payload.sourceTurnId,
-                    source_kind: payload.sourceKind,
-                    source_id: payload.sourceId,
-                    source_label: payload.sourceLabel,
-                    visibility: payload.visibility,
-                    ...assistantColumns(from),
-                  }),
-                )}
-                returning *
-              `;
-              return toNpcMemory(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insert(
+                defined({
+                  npc_id: npcId,
+                  body: payload.body,
+                  source_thread_id: payload.sourceThreadId,
+                  source_turn_id: payload.sourceTurnId,
+                  source_kind: payload.sourceKind,
+                  source_id: payload.sourceId,
+                  source_label: payload.sourceLabel,
+                  visibility: payload.visibility,
+                  ...assistantColumns(from),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         update: (creator, npcId, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<MemoryRow>`
-                update npc_memory set ${setClause(
-                  sql,
-                  defined({
-                    body: patch.body,
-                    source_kind: patch.sourceKind,
-                    source_id: patch.sourceId,
-                    source_label: patch.sourceLabel,
-                    visibility: patch.visibility,
-                  }),
-                )}
-                where npc_memory.id = ${id}
-                  and npc_memory.status <> 'retired'
-                  and ${memoryReachable(creator, npcId)}
-                returning *
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc_memory", id });
-              return toNpcMemory(rows[0]!);
-            }),
+            change({
+              ...asked(creator),
+              npcId,
+              id,
+              columns: defined({
+                body: patch.body,
+                source_kind: patch.sourceKind,
+                source_id: patch.sourceId,
+                source_label: patch.sourceLabel,
+                visibility: patch.visibility,
+              }),
+            }).pipe(orNotFound("npc_memory", id)),
           ),
 
         approve: (creator, npcId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<MemoryRow>`
-                update npc_memory
-                set status = 'approved', approved_at = coalesce(npc_memory.approved_at, now()), retired_at = null, updated_at = now()
-                where npc_memory.id = ${id}
-                  and npc_memory.status <> 'retired'
-                  and ${memoryReachable(creator, npcId)}
-                returning *
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc_memory", id });
-              return toNpcMemory(rows[0]!);
-            }),
+            approve({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_memory", id)),
           ),
 
         retire: (creator, npcId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<MemoryRow>`
-                update npc_memory
-                set status = 'retired', retired_at = coalesce(npc_memory.retired_at, now()), updated_at = now()
-                where npc_memory.id = ${id} and ${memoryReachable(creator, npcId)}
-                returning *
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc_memory", id });
-              return toNpcMemory(rows[0]!);
-            }),
+            retire({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_memory", id)),
           ),
 
         reset: (creator, npcId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<MemoryRow>`
-                update npc_memory
-                set status = 'retired', retired_at = coalesce(npc_memory.retired_at, now()), updated_at = now()
-                where ${memoryReachable(creator, npcId)} and npc_memory.status <> 'retired'
-                returning *
-              `;
-              return rows.map(toNpcMemory);
+              return yield* retireAll({ ...asked(creator), npcId });
             }),
           ),
 
@@ -284,39 +323,14 @@ export class NpcMemories extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<MemoryRow>`
-                select npc_memory.id,
-                       npc_memory.npc_id,
-                       npc_memory.body,
-                       npc_memory.status,
-                       null::uuid as source_thread_id,
-                       null::uuid as source_turn_id,
-                       npc_memory.source_kind,
-                       null::uuid as source_id,
-                       npc_memory.source_label,
-                       npc_memory.approved_at,
-                       npc_memory.retired_at,
-                       npc_memory.visibility,
-                       npc_memory.origin,
-                       npc_memory.assistant_turn_id,
-                       npc_memory.created_at,
-                       npc_memory.updated_at
-                from npc_memory
-                where npc_memory.npc_id = ${npcId}
-                  and npc_memory.status = 'approved'
-                  and npc_memory.retired_at is null
-                  and npc_memory.visibility = 'shared'
-                  and exists (select 1 from npc where npc.id = npc_memory.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
-                order by npc_memory.approved_at asc, npc_memory.id asc
-              `;
+              const rows = yield* playerSafe({ campaignId, npcId, actor });
               if (rows.length === 0) {
-                const reachable = yield* sql<{ readonly id: NpcId }>`
+                const npcs = yield* sql<{ readonly id: NpcId }>`
                   select npc.id from npc where npc.id = ${npcId} and ${playerNpcReadable(sql, campaignId, actor)}
                 `;
-                if (reachable.length === 0)
-                  return yield* new NotFound({ resource: "npc", id: npcId });
+                if (npcs.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
               }
-              return rows.map(toNpcMemory);
+              return rows;
             }),
           ),
       };

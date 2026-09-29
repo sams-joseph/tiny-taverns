@@ -1,28 +1,28 @@
 import {
-  type AccountId,
-  type CampaignId,
+  AccountId,
+  CampaignId,
   type CampaignInviteCreate,
   CampaignInvite,
   CampaignInvitePreview,
   CampaignInviteRedeemed,
-  type CampaignInviteId,
+  CampaignInviteId,
   CampaignSharedWorld,
   CurrentActor,
-  type SharedWorldId,
+  SharedWorldId,
   type InvitePreview,
   type InviteRedeemed,
-  type InviteStatus,
+  InviteStatus,
   IssuedInvite,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../Accounts.js";
 import { admitToGroup } from "./Groups.js";
 import { admitTo, revokeMemberAt } from "./Memberships.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { dieOnSqlError } from "./rows.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import { classFromColumns, dieOnSqlError, fromColumns, orNotFound } from "./rows.js";
 import { campaignWritableById } from "./visibility.js";
 
 /**
@@ -65,59 +65,66 @@ export const INVITE_TTL_DAYS = 14;
 
 const TOKEN_BYTES = 32;
 
-interface InviteRow {
-  readonly id: CampaignInviteId;
-  readonly group_id: SharedWorldId;
-  readonly campaign_id: CampaignId;
-  readonly label: string;
-  readonly created_at: Date;
-  readonly expires_at: Date;
-  readonly revoked_at: Date | null;
-  readonly redeemed_by: AccountId | null;
-  readonly redeemed_at: Date | null;
-  /** Computed by the database, so one clock decides. */
-  readonly expired: boolean;
-  readonly granted_campaign_membership: boolean;
-}
-
-interface ListedCampaignInviteRow extends InviteRow {
-  readonly redeemed_by_name: string | null;
-}
+/**
+ * Where an invitation is in its life, as a column the database computes, so
+ * one clock decides. Precedence is `revoked` → `redeemed` → `expired` →
+ * `live`: a withdrawal is an act somebody took, and it is what the owner must
+ * see on a line they revoked *after* it was accepted.
+ */
+const statusColumn = (sql: SqlClient.SqlClient) => sql`
+  case
+    when group_invite.revoked_at is not null then 'revoked'
+    when group_invite.redeemed_at is not null then 'redeemed'
+    when now() >= group_invite.expires_at then 'expired'
+    else 'live'
+  end as status
+`;
 
 /**
- * Where an invitation is in its life. Precedence is `revoked` → `redeemed` →
- * `expired` → `live`: a withdrawal is an act somebody took, and it is what the
- * owner must see on a line they revoked *after* it was accepted.
+ * The columns every read of this table selects. Written once because `status`
+ * is not a column and a read that forgot it would be refused by its decode.
  */
-const statusOf = (row: InviteRow): InviteStatus =>
-  row.revoked_at !== null
-    ? "revoked"
-    : row.redeemed_at !== null
-      ? "redeemed"
-      : row.expired
-        ? "expired"
-        : "live";
-
-const toInvite = (row: ListedCampaignInviteRow): CampaignInvite =>
-  new CampaignInvite({
-    id: row.id,
-    campaignId: row.campaign_id,
-    label: row.label,
-    status: statusOf(row),
-    expiresAt: DateTime.fromDateUnsafe(row.expires_at),
-    revokedAt: row.revoked_at === null ? null : DateTime.fromDateUnsafe(row.revoked_at),
-    redeemedAt: row.redeemed_at === null ? null : DateTime.fromDateUnsafe(row.redeemed_at),
-    redeemedByName: row.redeemed_by_name,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-  });
+const INVITE_COLUMNS = (sql: SqlClient.SqlClient) => sql`group_invite.*, ${statusColumn(sql)}`;
 
 /**
- * The columns every read of this table selects. Written once because
- * `expired` is not a column and a read that forgot it would silently report an
- * expired invitation as live.
+ * A `group_invite` row as its creator's list reads it, with the name of the
+ * account that accepted it (`redeemed_by_name`, `null` when nobody has).
  */
-const INVITE_COLUMNS = (sql: SqlClient.SqlClient) =>
-  sql`group_invite.*, now() >= group_invite.expires_at as expired`;
+const InviteRow = classFromColumns(CampaignInvite, {
+  ...CampaignInvite.fields,
+  expiresAt: Schema.DateTimeUtcFromDate,
+  revokedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  redeemedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  createdAt: Schema.DateTimeUtcFromDate,
+});
+
+/** What the redeeming side needs of the invitation a token names. */
+const TokenRow = fromColumns(
+  Schema.Struct({
+    id: CampaignInviteId,
+    groupId: SharedWorldId,
+    campaignId: CampaignId,
+    status: InviteStatus,
+    redeemedBy: Schema.NullOr(AccountId),
+    expiresAt: Schema.DateTimeUtcFromDate,
+  }),
+);
+
+/**
+ * The names an invitation may disclose: the Shared World only when the
+ * campaign's context is one, as `json_build_object` builds it.
+ */
+const NamedRow = fromColumns(
+  Schema.Struct({
+    sharedWorld: Schema.NullOr(CampaignSharedWorld),
+    campaignId: CampaignId,
+    campaignName: Schema.String,
+    creatorName: Schema.String,
+    campaignShared: Schema.Boolean,
+  }),
+);
+
+const Token = Schema.toType(Schema.String);
 
 export class Invites extends Context.Service<
   Invites,
@@ -151,47 +158,119 @@ export class Invites extends Context.Service<
        * than by the actor — the ids come off the invite row, so this cannot
        * be pointed at a group or campaign the token does not belong to.
        */
-      const namedByInvite = (groupId: SharedWorldId, campaignId: CampaignId) =>
-        Effect.map(
-          sql<{
-            readonly shared_world_id: SharedWorldId | null;
-            readonly shared_world_name: string | null;
-            readonly campaign_id: CampaignId;
-            readonly campaign_name: string;
-            readonly creator_name: string;
-            readonly campaign_shared: boolean;
-          }>`
-            select case when play_group.is_shared_world then play_group.id end
-                     as shared_world_id,
-                   case when play_group.is_shared_world then play_group.name end
-                     as shared_world_name,
-                   campaign.id as campaign_id,
-                   campaign.name as campaign_name,
-                   campaign_creator.name as creator_name,
-                   (campaign.visibility = 'shared') as campaign_shared
-            from play_group
-            join campaign on campaign.id = ${campaignId} and campaign.group_id = play_group.id
-            join account as campaign_creator
-              on campaign_creator.id = campaign.creator_account_id
-            where play_group.id = ${groupId}
-          `,
-          (rows) => rows[0],
-        );
+      const namedByInvite = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ groupId: SharedWorldId, campaignId: CampaignId })),
+        Result: NamedRow,
+        execute: ({ groupId, campaignId }) => sql`
+          select case when play_group.is_shared_world
+                   then json_build_object('id', play_group.id, 'name', play_group.name)
+                 end as shared_world,
+                 campaign.id as campaign_id,
+                 campaign.name as campaign_name,
+                 campaign_creator.name as creator_name,
+                 (campaign.visibility = 'shared') as campaign_shared
+          from play_group
+          join campaign on campaign.id = ${campaignId} and campaign.group_id = play_group.id
+          join account as campaign_creator
+            on campaign_creator.id = campaign.creator_account_id
+          where play_group.id = ${groupId}
+        `,
+      });
+
+      /** The invitation a token names, for the preview. */
+      const byToken = SqlSchema.findOne({
+        Request: Token,
+        Result: TokenRow,
+        execute: (token) => sql`
+          select ${INVITE_COLUMNS(sql)} from group_invite
+          where group_invite.token_hash = ${hashToken(token)}
+        `,
+      });
 
       /**
        * The invitation a token names, locked for the write that follows it.
        * `for update` is the whole of the single-use story: two clients racing
        * on one link serialise here.
        */
-      const lockByToken = (token: string) =>
-        Effect.map(
-          sql<InviteRow>`
-            select ${INVITE_COLUMNS(sql)} from group_invite
-            where group_invite.token_hash = ${hashToken(token)}
-            for update
-          `,
-          (rows) => rows[0],
-        );
+      const lockByToken = SqlSchema.findOne({
+        Request: Token,
+        Result: TokenRow,
+        execute: (token) => sql`
+          select ${INVITE_COLUMNS(sql)} from group_invite
+          where group_invite.token_hash = ${hashToken(token)}
+          for update
+        `,
+      });
+
+      const listed = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, group: SharedWorldId })),
+        Result: InviteRow,
+        execute: ({ campaign, group, actor }) => sql`
+          select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
+          from group_invite
+          left join account on account.id = group_invite.redeemed_by
+          where group_invite.campaign_id = ${campaign}
+            and group_invite.group_id = ${group}
+            and ${campaignWritableById(sql, campaign, actor)}
+          order by group_invite.created_at desc
+        `,
+      });
+
+      /** A new invitation, which nobody has accepted yet. */
+      const insert = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaign: CampaignId,
+            group: SharedWorldId,
+            tokenHash: Schema.String,
+            label: Schema.String,
+            expiresAt: Schema.Date,
+          }),
+        ),
+        Result: InviteRow,
+        execute: ({ campaign, group, tokenHash, label, expiresAt }) => sql`
+          insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
+          values (${group}, ${campaign}, ${tokenHash}, ${label}, ${expiresAt})
+          returning ${INVITE_COLUMNS(sql)}, null::text as redeemed_by_name
+        `,
+      });
+
+      /** Withdraws one of this creator's invitations, answering what it had granted. */
+      const withdraw = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, group: SharedWorldId, id: CampaignInviteId }),
+        ),
+        Result: fromColumns(
+          Schema.Struct({
+            redeemedBy: Schema.NullOr(AccountId),
+            grantedCampaignMembership: Schema.Boolean,
+          }),
+        ),
+        execute: ({ campaign, group, actor, id }) => sql`
+          update group_invite
+          set revoked_at = coalesce(group_invite.revoked_at, now())
+          where group_invite.id = ${id}
+            and group_invite.campaign_id = ${campaign}
+            and group_invite.group_id = ${group}
+            and ${campaignWritableById(sql, campaign, actor)}
+          returning group_invite.redeemed_by, group_invite.granted_campaign_membership
+        `,
+      });
+
+      /**
+       * An invitation this transaction has just withdrawn, read back by the id
+       * it withdrew, with the name of whoever had accepted it.
+       */
+      const withdrawn = SqlSchema.findOne({
+        Request: Schema.toType(CampaignInviteId),
+        Result: InviteRow,
+        execute: (id) => sql`
+          select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
+          from group_invite
+          left join account on account.id = group_invite.redeemed_by
+          where group_invite.id = ${id}
+        `,
+      });
 
       /**
        * Every refusal on the redeeming side, and there is only one of them:
@@ -203,20 +282,7 @@ export class Invites extends Context.Service<
 
       return {
         listForCampaign: (creator) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<ListedCampaignInviteRow>`
-                select ${INVITE_COLUMNS(sql)}, account.name as redeemed_by_name
-                from group_invite
-                left join account on account.id = group_invite.redeemed_by
-                where group_invite.campaign_id = ${creator.campaign}
-                  and group_invite.group_id = ${creator.group}
-                  and ${campaignWritableById(sql, creator.campaign, creator.actor)}
-                order by group_invite.created_at desc
-              `;
-              return rows.map(toInvite);
-            }),
-          ),
+          dieOnSqlError(listed({ ...asked(creator), group: creator.group })),
 
         createForCampaign: (creator, payload) =>
           dieOnSqlError(
@@ -230,16 +296,15 @@ export class Invites extends Context.Service<
 
               const token = randomBytes(TOKEN_BYTES).toString("base64url");
               const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
-              const rows = yield* sql<InviteRow>`
-                insert into group_invite (group_id, campaign_id, token_hash, label, expires_at)
-                values (${creator.group}, ${creator.campaign}, ${hashToken(token)},
-                        ${payload.label ?? ""}, ${expiresAt})
-                returning ${INVITE_COLUMNS(sql)}
-              `;
-              return new IssuedInvite({
-                invite: toInvite({ ...rows[0]!, redeemed_by_name: null }),
-                token,
-              });
+              // An insert answers with its row; not getting one is a defect.
+              const invite = yield* insert({
+                campaign: creator.campaign,
+                group: creator.group,
+                tokenHash: hashToken(token),
+                label: payload.label ?? "",
+                expiresAt,
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+              return new IssuedInvite({ invite, token });
             }),
           ),
 
@@ -247,28 +312,20 @@ export class Invites extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const rows = yield* sql<InviteRow>`
-                  update group_invite
-                  set revoked_at = coalesce(group_invite.revoked_at, now())
-                  where group_invite.id = ${inviteId}
-                    and group_invite.campaign_id = ${creator.campaign}
-                    and group_invite.group_id = ${creator.group}
-                    and ${campaignWritableById(sql, creator.campaign, creator.actor)}
-                  returning ${INVITE_COLUMNS(sql)}
-                `;
-                const row = rows[0];
-                if (row === undefined) {
-                  return yield* new NotFound({ resource: "invite", id: inviteId });
+                const granted = yield* withdraw({
+                  ...asked(creator),
+                  group: creator.group,
+                  id: inviteId,
+                }).pipe(orNotFound("invite", inviteId));
+
+                if (granted.redeemedBy !== null && granted.grantedCampaignMembership) {
+                  yield* revokeMemberAt(sql, creator.campaign, granted.redeemedBy);
                 }
 
-                if (row.redeemed_by !== null && row.granted_campaign_membership) {
-                  yield* revokeMemberAt(sql, creator.campaign, row.redeemed_by);
-                }
-
-                const named = yield* sql<{ readonly name: string }>`
-                  select account.name from account where account.id = ${row.redeemed_by}
-                `;
-                return toInvite({ ...row, redeemed_by_name: named[0]?.name ?? null });
+                // Withdrawn above, in this transaction; not reading it back is a defect.
+                return yield* withdrawn(inviteId).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),
@@ -276,28 +333,25 @@ export class Invites extends Context.Service<
         preview: (token) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const rows = yield* sql<InviteRow>`
-                select ${INVITE_COLUMNS(sql)} from group_invite
-                where group_invite.token_hash = ${hashToken(token)}
-              `;
-              const invite = rows[0];
+              const invite = yield* byToken(token).pipe(
+                Effect.catchTag("NoSuchElementError", () => Effect.fail(noSuchInvitation())),
+              );
               // Live only. An expired, withdrawn or already-accepted
               // invitation is the same nothing an invented token is.
-              if (invite === undefined || statusOf(invite) !== "live") {
+              if (invite.status !== "live") {
                 return yield* noSuchInvitation();
               }
 
-              const named = yield* namedByInvite(invite.group_id, invite.campaign_id);
-              if (named === undefined) {
-                return yield* noSuchInvitation();
-              }
+              const named = yield* namedByInvite(invite).pipe(
+                Effect.catchTag("NoSuchElementError", () => Effect.fail(noSuchInvitation())),
+              );
 
               return new CampaignInvitePreview({
                 kind: "campaign",
-                campaignName: named.campaign_name,
-                creatorName: named.creator_name,
-                sharedWorldName: named.shared_world_name,
-                expiresAt: DateTime.fromDateUnsafe(invite.expires_at),
+                campaignName: named.campaignName,
+                creatorName: named.creatorName,
+                sharedWorldName: named.sharedWorld?.name ?? null,
+                expiresAt: invite.expiresAt,
               });
             }),
           ),
@@ -307,29 +361,31 @@ export class Invites extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const invite = yield* lockByToken(token);
-                if (invite === undefined || invite.revoked_at !== null) {
+                const invite = yield* lockByToken(token).pipe(
+                  Effect.catchTag("NoSuchElementError", () => Effect.fail(noSuchInvitation())),
+                );
+                if (invite.status === "revoked") {
                   return yield* noSuchInvitation();
                 }
 
-                if (invite.redeemed_at !== null) {
+                if (invite.status === "redeemed") {
                   // Already spent. By this account it is the same success — a
                   // double-tapped *Join* is one person joining once. By
                   // anybody else it is gone.
-                  if (invite.redeemed_by !== actor.accountId) return yield* noSuchInvitation();
+                  if (invite.redeemedBy !== actor.accountId) return yield* noSuchInvitation();
                 } else {
-                  if (invite.expired) return yield* noSuchInvitation();
+                  if (invite.status === "expired") return yield* noSuchInvitation();
 
                   // The grant, and the whole of it: a group membership for
                   // the account `Authorization` resolved, and a participation
                   // at the named table when the invitation names one. No
                   // account id from a payload, no ids from a path, no role
                   // from anywhere.
-                  yield* admitToGroup(sql, invite.group_id, actor.accountId);
+                  yield* admitToGroup(sql, invite.groupId, actor.accountId);
                   const grantedCampaignMembership = yield* admitTo(
                     sql,
-                    invite.campaign_id,
-                    invite.group_id,
+                    invite.campaignId,
+                    invite.groupId,
                     actor.accountId,
                   );
                   yield* sql`
@@ -341,25 +397,19 @@ export class Invites extends Context.Service<
                   `;
                 }
 
-                const named = yield* namedByInvite(invite.group_id, invite.campaign_id);
-                if (named === undefined) return yield* noSuchInvitation();
+                const named = yield* namedByInvite(invite).pipe(
+                  Effect.catchTag("NoSuchElementError", () => Effect.fail(noSuchInvitation())),
+                );
 
-                const sharedWorld =
-                  named.shared_world_id === null || named.shared_world_name === null
-                    ? null
-                    : new CampaignSharedWorld({
-                        id: named.shared_world_id,
-                        name: named.shared_world_name,
-                      });
                 return new CampaignInviteRedeemed({
                   kind: "campaign",
-                  campaignId: named.campaign_id,
-                  campaignName: named.campaign_name,
-                  sharedWorld,
+                  campaignId: named.campaignId,
+                  campaignName: named.campaignName,
+                  sharedWorld: named.sharedWorld,
                   // The ordinary answer is `false`, and saying so here is what
                   // keeps "the creator has not shared this table yet" from
                   // reading as "this product is broken".
-                  shared: named.campaign_shared,
+                  shared: named.campaignShared,
                 });
               }),
             ),

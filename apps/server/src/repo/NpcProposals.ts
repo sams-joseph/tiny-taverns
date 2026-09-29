@@ -1,32 +1,32 @@
 import {
-  type AccountId,
   type Actor,
-  type BeatId,
-  type CampaignId,
+  CampaignId,
   Conflict,
   CurrentActor,
-  type NoteId,
   NpcProposal,
   type NpcProposalContent,
-  type NpcProposalId,
-  type NpcProposalKind,
+  NpcProposalId,
   type NpcProposalReject,
-  type NpcProposalState,
-  type NpcId,
-  type NpcMemoryId,
+  NpcId,
   type NpcThreadId,
   type NpcTurnId,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { Campaigns } from "./Campaigns.js";
 import { Notes } from "./Notes.js";
 import { Beats } from "./Beats.js";
 import { NpcMemories } from "./NpcMemories.js";
 import { NPC } from "./NpcThreads.js";
-import { dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import {
+  classFromColumns,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  timestampColumns,
+} from "./rows.js";
 import {
   campaignWritableById,
   containedChildWritable,
@@ -34,44 +34,32 @@ import {
   rowReadable,
 } from "./visibility.js";
 
-interface ProposalRow extends ProvenanceColumns {
-  readonly id: NpcProposalId;
-  readonly campaign_id: CampaignId;
-  readonly npc_id: NpcId;
-  readonly thread_id: NpcThreadId;
-  readonly npc_turn_id: NpcTurnId;
-  readonly proposed_by_account_id: AccountId | null;
-  readonly kind: NpcProposalKind;
-  readonly content: NpcProposalContent;
-  readonly state: NpcProposalState;
-  readonly decided_by_account_id: AccountId | null;
-  readonly decided_at: Date | null;
-  readonly rejection_reason: string | null;
-  readonly accepted_memory_id: NpcMemoryId | null;
-  readonly accepted_note_id: NoteId | null;
-  readonly accepted_beat_id: BeatId | null;
-  readonly npc_archived_at?: Date | null;
-}
+/**
+ * The fields of an `npc_proposal` row as the wire reads it, off
+ * `npc_proposal.*`: the stored `content` document decodes through the wire's
+ * union, so a row whose document is not one of its three kinds is a defect.
+ * Exported for the follow-up queue, which reads the same row beside its NPC.
+ */
+export const npcProposalFields = {
+  ...NpcProposal.fields,
+  ...timestampColumns,
+  decidedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+};
 
-export const toNpcProposal = (row: ProposalRow): NpcProposal =>
-  new NpcProposal({
-    id: row.id,
-    campaignId: row.campaign_id,
-    npcId: row.npc_id,
-    threadId: row.thread_id,
-    npcTurnId: row.npc_turn_id,
-    proposedByAccountId: row.proposed_by_account_id,
-    kind: row.kind,
-    content: row.content,
-    state: row.state,
-    decidedByAccountId: row.decided_by_account_id,
-    decidedAt: row.decided_at === null ? null : DateTime.fromDateUnsafe(row.decided_at),
-    rejectionReason: row.rejection_reason,
-    acceptedMemoryId: row.accepted_memory_id,
-    acceptedNoteId: row.accepted_note_id,
-    acceptedBeatId: row.accepted_beat_id,
-    ...provenanceOf(row),
-  });
+/** An `npc_proposal` row as the wire reads it, decoded by `SqlSchema`. */
+const NpcProposalRow = classFromColumns(NpcProposal, npcProposalFields);
+
+/** A proposal locked for review, with whether its NPC is archived beside it. */
+const LockedProposalRow = fromColumns(
+  Schema.Struct({
+    ...npcProposalFields,
+    npcArchivedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  }),
+);
+type LockedProposalRow = typeof LockedProposalRow.Type;
+
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 const alreadyAccepted = new Conflict({ message: "that NPC proposal has already been accepted" });
 const alreadyRejected = new Conflict({ message: "that NPC proposal has already been rejected" });
@@ -157,37 +145,95 @@ export class NpcProposals extends Context.Service<
           ]),
         ]);
 
+      const locked = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcProposalId }),
+        ),
+        Result: LockedProposalRow,
+        execute: ({ campaign, actor, npcId, id }) => sql`
+          select npc_proposal.*, npc.archived_at as npc_archived_at
+          from npc_proposal
+          join npc on npc.id = npc_proposal.npc_id
+          where npc_proposal.id = ${id}
+            and npc_proposal.npc_id = ${npcId}
+            and npc_proposal.campaign_id = ${campaign}
+            and ${containedChildWritable(sql, NPC, npcId, campaign, actor)}
+          for update of npc_proposal
+        `,
+      });
       const proposalOne = (creator: CampaignCreatorActor, npcId: NpcId, id: NpcProposalId) =>
-        Effect.gen(function* () {
-          const rows = yield* sql<ProposalRow>`
-            select npc_proposal.*, npc.archived_at as npc_archived_at
-            from npc_proposal
-            join npc on npc.id = npc_proposal.npc_id
-            where npc_proposal.id = ${id}
-              and npc_proposal.npc_id = ${npcId}
-              and npc_proposal.campaign_id = ${creator.campaign}
-              and ${containedChildWritable(sql, NPC, npcId, creator.campaign, creator.actor)}
-            for update of npc_proposal
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "npc_proposal", id });
-          return rows[0]!;
-        });
+        locked({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_proposal", id));
+      /** A turn's proposal, recorded once: a retried turn answers the row it already wrote. */
+      const upsert = SqlSchema.findOne({
+        Request: Columns,
+        Result: NpcProposalRow,
+        execute: (columns) => sql`
+          insert into npc_proposal ${sql.insert(columns)}
+          on conflict (npc_turn_id) do update
+          set updated_at = npc_proposal.updated_at
+          returning *
+        `,
+      });
+      const proposals = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ campaign: CampaignId, npcId: NpcId })),
+        Result: NpcProposalRow,
+        execute: ({ campaign, npcId }) => sql`
+          select npc_proposal.* from npc_proposal
+          where npc_proposal.npc_id = ${npcId}
+            and npc_proposal.campaign_id = ${campaign}
+          order by npc_proposal.created_at desc, npc_proposal.id desc
+        `,
+      });
+      /** The acceptance, on a proposal `proposalOne` has just locked, pointing at what it became. */
+      const accepted = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, id: NpcProposalId, destination: Columns }),
+        ),
+        Result: NpcProposalRow,
+        execute: ({ actor, id, destination }) => sql`
+          update npc_proposal
+          set state = 'accepted',
+              decided_by_account_id = ${actor.accountId},
+              decided_at = now(),
+              ${sql.update(destination)},
+              updated_at = now()
+          where npc_proposal.id = ${id}
+          returning *
+        `,
+      });
+      /** The rejection, on a proposal `proposalOne` has just locked. */
+      const rejected = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, id: NpcProposalId, reason: Schema.String }),
+        ),
+        Result: NpcProposalRow,
+        execute: ({ actor, id, reason }) => sql`
+          update npc_proposal
+          set state = 'rejected',
+              decided_by_account_id = ${actor.accountId},
+              decided_at = now(),
+              rejection_reason = ${reason},
+              updated_at = now()
+          where npc_proposal.id = ${id}
+          returning *
+        `,
+      });
 
-      const materialise = (creator: CampaignCreatorActor, row: ProposalRow) => {
+      const materialise = (creator: CampaignCreatorActor, row: LockedProposalRow) => {
         switch (row.content.kind) {
           case "memory":
             return Effect.map(
-              memories.draft(creator, row.npc_id, {
+              memories.draft(creator, row.npcId, {
                 body: row.content.body,
-                sourceThreadId: row.thread_id,
-                sourceTurnId: row.npc_turn_id,
+                sourceThreadId: row.threadId,
+                sourceTurnId: row.npcTurnId,
               }),
               (memory) => ({ accepted_memory_id: memory.id }),
             );
           case "note":
             return Effect.map(
               notes
-                .create(row.campaign_id, {
+                .create(row.campaignId, {
                   title: row.content.title,
                   body: row.content.body,
                   kind: row.content.noteKind,
@@ -198,11 +244,11 @@ export class NpcProposals extends Context.Service<
           case "beat":
             return Effect.gen(function* () {
               const campaign = yield* campaigns
-                .findById(row.campaign_id)
+                .findById(row.campaignId)
                 .pipe(Effect.provideService(CurrentActor, creator.actor));
               if (campaign.currentSessionId === null) return yield* noSession;
               const beat = yield* beats
-                .create(row.campaign_id, campaign.currentSessionId, { body: row.content.body })
+                .create(row.campaignId, campaign.currentSessionId, { body: row.content.body })
                 .pipe(Effect.provideService(CurrentActor, creator.actor));
               return { accepted_beat_id: beat.id };
             });
@@ -220,22 +266,17 @@ export class NpcProposals extends Context.Service<
               `;
               if (threadRows.length === 0)
                 return yield* new NotFound({ resource: "npc_thread", id: threadId });
-              const rows = yield* sql<ProposalRow>`
-                insert into npc_proposal ${sql.insert({
-                  campaign_id: campaignId,
-                  npc_id: npcId,
-                  thread_id: threadId,
-                  npc_turn_id: npcTurnId,
-                  proposed_by_account_id: actor.accountId,
-                  kind: content.kind,
-                  content: JSON.stringify(content),
-                  origin: "assistant",
-                })}
-                on conflict (npc_turn_id) do update
-                set updated_at = npc_proposal.updated_at
-                returning *
-              `;
-              return toNpcProposal(rows[0]!);
+              // An upsert answers with its row; not getting one is a defect.
+              return yield* upsert({
+                campaign_id: campaignId,
+                npc_id: npcId,
+                thread_id: threadId,
+                npc_turn_id: npcTurnId,
+                proposed_by_account_id: actor.accountId,
+                kind: content.kind,
+                content: JSON.stringify(content),
+                origin: "assistant",
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -243,13 +284,7 @@ export class NpcProposals extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<ProposalRow>`
-                select npc_proposal.* from npc_proposal
-                where npc_proposal.npc_id = ${npcId}
-                  and npc_proposal.campaign_id = ${creator.campaign}
-                order by npc_proposal.created_at desc, npc_proposal.id desc
-              `;
-              return rows.map(toNpcProposal);
+              return yield* proposals({ campaign: creator.campaign, npcId });
             }),
           ),
 
@@ -258,21 +293,14 @@ export class NpcProposals extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 const row = yield* proposalOne(creator, npcId, id);
-                if (row.npc_archived_at !== null) return yield* archivedNpc;
+                if (row.npcArchivedAt !== null) return yield* archivedNpc;
                 if (row.state === "accepted") return yield* alreadyAccepted;
                 if (row.state === "rejected") return yield* alreadyRejected;
                 const destination = yield* materialise(creator, row);
-                const updated = yield* sql<ProposalRow>`
-                  update npc_proposal
-                  set state = 'accepted',
-                      decided_by_account_id = ${creator.actor.accountId},
-                      decided_at = now(),
-                      ${sql.update(destination)},
-                      updated_at = now()
-                  where npc_proposal.id = ${id}
-                  returning *
-                `;
-                return toNpcProposal(updated[0]!);
+                // The row is locked and in reach; not getting it back is a defect.
+                return yield* accepted({ ...asked(creator), id, destination }).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),
@@ -285,17 +313,10 @@ export class NpcProposals extends Context.Service<
                 if (row.state === "accepted") return yield* alreadyAccepted;
                 if (row.state === "rejected") return yield* alreadyRejected;
                 const reason = payload.reason?.trim() || "Rejected by the campaign creator.";
-                const updated = yield* sql<ProposalRow>`
-                  update npc_proposal
-                  set state = 'rejected',
-                      decided_by_account_id = ${creator.actor.accountId},
-                      decided_at = now(),
-                      rejection_reason = ${reason},
-                      updated_at = now()
-                  where npc_proposal.id = ${id}
-                  returning *
-                `;
-                return toNpcProposal(updated[0]!);
+                // The row is locked and in reach; not getting it back is a defect.
+                return yield* rejected({ ...asked(creator), id, reason }).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),

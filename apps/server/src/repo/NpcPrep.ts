@@ -1,17 +1,24 @@
 import {
+  type Actor,
+  type CampaignId,
   NotFound,
-  type NpcAttitude,
-  type NpcId,
+  NpcId,
   type NpcListFilter,
   NpcPrep,
   type NpcPrepUpdate,
-  type NpcStatus,
   type SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { defined, dieOnSqlError, proseColumn, setClause } from "./rows.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  orNotFound,
+  proseColumn,
+  setClause,
+} from "./rows.js";
 import { rowWritable } from "./visibility.js";
 
 /**
@@ -35,24 +42,8 @@ import { rowWritable } from "./visibility.js";
  * not index it.
  */
 
-interface NpcPrepRow {
-  readonly npc_id: NpcId;
-  readonly attitude: NpcAttitude | null;
-  readonly status: NpcStatus | null;
-  readonly whereabouts: string | null;
-  readonly met_session_id: SessionId | null;
-  readonly table_nights: ReadonlyArray<SessionId>;
-}
-
-const toNpcPrep = (row: NpcPrepRow): NpcPrep =>
-  new NpcPrep({
-    npcId: row.npc_id,
-    attitude: row.attitude,
-    status: row.status,
-    whereabouts: row.whereabouts,
-    metSessionId: row.met_session_id,
-    tableNights: row.table_nights,
-  });
+/** An NPC's prep as the wire reads it, decoded off `npcsWithPrep` by `SqlSchema`. */
+const NpcPrepRow = classFromColumns(NpcPrep, NpcPrep.fields);
 
 export class NpcPreps extends Context.Service<
   NpcPreps,
@@ -91,7 +82,7 @@ export class NpcPreps extends Context.Service<
        * through the thread's key, so a night can only ever be one of this
        * table's.
        */
-      const npcsWithPrep = (creator: CampaignCreatorActor) => sql`
+      const npcsWithPrep = (campaign: CampaignId, actor: Actor) => sql`
         select npc.id as npc_id,
                npc_prep.attitude, npc_prep.status, npc_prep.whereabouts, npc_prep.met_session_id,
                coalesce(
@@ -106,28 +97,30 @@ export class NpcPreps extends Context.Service<
                ) as table_nights
         from npc
         left join npc_prep on npc_prep.npc_id = npc.id
-        where ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
+        where ${rowWritable(sql, "npc", campaign, actor)}
       `;
 
+      const prepOf = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: NpcId })),
+        Result: NpcPrepRow,
+        execute: ({ campaign, actor, id }) =>
+          sql`${npcsWithPrep(campaign, actor)} and npc.id = ${id}`,
+      });
       const one = (creator: CampaignCreatorActor, id: NpcId) =>
-        Effect.gen(function* () {
-          const rows = yield* sql<NpcPrepRow>`${npcsWithPrep(creator)} and npc.id = ${id}`;
-          if (rows.length === 0) return yield* new NotFound({ resource: "npc", id });
-          return toNpcPrep(rows[0]!);
-        });
+        prepOf({ ...asked(creator), id }).pipe(orNotFound("npc", id));
+      const preps = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, archived: Schema.Boolean })),
+        Result: NpcPrepRow,
+        execute: ({ campaign, actor, archived }) => sql`
+          ${npcsWithPrep(campaign, actor)}
+            and ${archived ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
+          order by lower(npc.name) asc, npc.id asc
+        `,
+      });
 
       return {
         list: (creator, filter) =>
-          dieOnSqlError(
-            Effect.map(
-              sql<NpcPrepRow>`
-                ${npcsWithPrep(creator)}
-                  and ${filter.archived === true ? sql`npc.archived_at is not null` : sql`npc.archived_at is null`}
-                order by lower(npc.name) asc, npc.id asc
-              `,
-              (rows) => rows.map(toNpcPrep),
-            ),
-          ),
+          dieOnSqlError(preps({ ...asked(creator), archived: filter.archived === true })),
 
         find: (creator, id) => dieOnSqlError(one(creator, id)),
 

@@ -2,14 +2,14 @@ import {
   type Actor,
   CurrentActor,
   SharedWorldLibraryShare,
-  type SharedWorldId,
-  type LibraryShareCreate,
+  SharedWorldId,
+  LibraryShareCreate,
   type LibraryShareKind,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
-import { dieOnSqlError } from "./rows.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { classFromColumns, dieOnSqlError, orNotFound } from "./rows.js";
 import { ensureGroupReadable } from "./visibility.js";
 
 /**
@@ -36,26 +36,15 @@ import { ensureGroupReadable } from "./visibility.js";
  * holds the list and the type restates it.
  */
 
-interface ShareRow {
-  readonly group_id: SharedWorldId;
-  readonly owner_account_id: string;
-  readonly resource_kind: LibraryShareKind;
-  readonly resource_id: string;
-  readonly name: string | null;
-  readonly shared_by_name: string;
-  readonly created_at: Date;
-}
-
-const toShare = (row: ShareRow): SharedWorldLibraryShare =>
-  new SharedWorldLibraryShare({
-    worldId: row.group_id,
-    ownerAccountId: row.owner_account_id as SharedWorldLibraryShare["ownerAccountId"],
-    kind: row.resource_kind,
-    resourceId: row.resource_id,
-    name: row.name,
-    sharedByName: row.shared_by_name,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-  });
+/**
+ * A `group_library_share` row as the wire reads it, beside the name of the
+ * account that shared it (`shared_by_name`) and the original's resolved `name`.
+ */
+const ShareRow = classFromColumns(
+  SharedWorldLibraryShare,
+  { ...SharedWorldLibraryShare.fields, createdAt: Schema.DateTimeUtcFromDate },
+  { worldId: "group_id", kind: "resource_kind" },
+);
 
 /**
  * The share list's name join: one arm per corpus, resolved to the original's
@@ -119,8 +108,12 @@ export class LibraryShares extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const readShare = (groupId: SharedWorldId, payload: LibraryShareCreate) =>
-        sql<ShareRow>`
+      const readShare = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ groupId: SharedWorldId, payload: LibraryShareCreate }),
+        ),
+        Result: ShareRow,
+        execute: ({ groupId, payload }) => sql`
           select group_library_share.*,
                  account.name as shared_by_name,
                  ${nameColumn(sql)} as name
@@ -129,7 +122,21 @@ export class LibraryShares extends Context.Service<
           where group_library_share.group_id = ${groupId}
             and group_library_share.resource_kind = ${payload.kind}
             and group_library_share.resource_id = ${payload.resourceId}
-        `;
+        `,
+      });
+      const shelf = SqlSchema.findAll({
+        Request: Schema.toType(SharedWorldId),
+        Result: ShareRow,
+        execute: (groupId) => sql`
+          select group_library_share.*,
+                 account.name as shared_by_name,
+                 ${nameColumn(sql)} as name
+          from group_library_share
+          join account on account.id = group_library_share.shared_by_account_id
+          where group_library_share.group_id = ${groupId}
+          order by group_library_share.created_at desc
+        `,
+      });
 
       return {
         list: (groupId) =>
@@ -137,16 +144,7 @@ export class LibraryShares extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const rows = yield* sql<ShareRow>`
-                select group_library_share.*,
-                       account.name as shared_by_name,
-                       ${nameColumn(sql)} as name
-                from group_library_share
-                join account on account.id = group_library_share.shared_by_account_id
-                where group_library_share.group_id = ${groupId}
-                order by group_library_share.created_at desc
-              `;
-              return rows.map(toShare);
+              return yield* shelf(groupId);
             }),
           ),
 
@@ -167,14 +165,16 @@ export class LibraryShares extends Context.Service<
                 where ${ownOriginal(sql, payload.kind, payload.resourceId, actor)}
                 on conflict (group_id, resource_kind, resource_id) do nothing
               `;
-              const rows = yield* readShare(groupId, payload);
-              if (rows.length === 0 || rows[0]!.owner_account_id !== actor.accountId) {
+              const share = yield* readShare({ groupId, payload }).pipe(
+                orNotFound(payload.kind, payload.resourceId),
+              );
+              if (share.ownerAccountId !== actor.accountId) {
                 return yield* new NotFound({
                   resource: payload.kind,
                   id: payload.resourceId,
                 });
               }
-              return toShare(rows[0]!);
+              return share;
             }),
           ),
 

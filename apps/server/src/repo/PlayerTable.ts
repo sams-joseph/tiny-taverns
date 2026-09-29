@@ -1,8 +1,8 @@
 import {
-  type Actor,
-  type CampaignCharacterId,
+  Actor,
+  CampaignCharacterId,
   CampaignId,
-  type CharacterId,
+  CharacterId,
   type CombatantId,
   CombatantPosition,
   Conflict,
@@ -50,10 +50,10 @@ import {
   rowReadable,
 } from "./visibility.js";
 
-interface ActiveSeatRow {
-  readonly id: CampaignCharacterId;
-  readonly character_id: CharacterId;
-}
+/** One of the reader's live seats at the table, holding a character. */
+const ActiveSeatRow = fromColumns(
+  Schema.Struct({ id: CampaignCharacterId, characterId: CharacterId }),
+);
 
 /** Where a row's token stands on the player's board, or `null` when it is not on it. */
 const token = { token: Schema.NullOr(CombatantPosition) } as const;
@@ -276,8 +276,10 @@ export class PlayerTable extends Context.Service<
         `,
       });
 
-      const activeSeats = (campaignId: CampaignId, actor: Actor) =>
-        sql<ActiveSeatRow>`
+      const seats = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, actor: Actor })),
+        Result: ActiveSeatRow,
+        execute: ({ campaignId, actor }) => sql`
           select campaign_character.id, campaign_character.character_id
           from campaign_character
           where campaign_character.campaign_id = ${campaignId}
@@ -285,7 +287,10 @@ export class PlayerTable extends Context.Service<
             and campaign_character.left_at is null
             and campaign_character.character_id is not null
           order by campaign_character.joined_at asc, campaign_character.id asc
-        `.pipe(Effect.orDie);
+        `,
+      });
+      const activeSeats = (campaignId: CampaignId, actor: Actor) =>
+        seats({ campaignId, actor }).pipe(Effect.orDie);
 
       const currentReadableSession = (campaignId: CampaignId, sessionId: SessionId, actor: Actor) =>
         sql<{ readonly id: SessionId }>`

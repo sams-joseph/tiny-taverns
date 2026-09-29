@@ -1,6 +1,6 @@
 import {
   type AccountId,
-  type Actor,
+  Actor,
   CampaignId,
   Conflict,
   CurrentActor,
@@ -22,13 +22,7 @@ import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { initiativeOrder } from "./liveTables.js";
-import {
-  npcImageSigner,
-  type PlayerNpcRow,
-  playerNpcColumns,
-  playerNpcReadable,
-  toPlayerNpc,
-} from "./Npcs.js";
+import { npcImageSigner, playerNpcColumns, playerNpcReadable, playerNpcRow } from "./Npcs.js";
 import {
   classFromColumns,
   defined,
@@ -279,7 +273,7 @@ export class NpcThreads extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       // A session read hands the NPC back as a `PlayerNpc`, portrait included,
       // signed only on the handlers' copy of this repository (`app.ts`).
-      const sign = yield* npcImageSigner;
+      const PlayerNpcRow = playerNpcRow(yield* npcImageSigner);
       const live = yield* Effect.serviceOption(LiveEvents);
 
       const threadReachable = (
@@ -703,6 +697,101 @@ export class NpcThreads extends Context.Service<
         `,
       });
 
+      /**
+       * The NPC of each table chat, with its chat's state. A night has one
+       * table chat per NPC, so the NPC's id names its thread here.
+       */
+      const tableNpcs = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(NpcThreadId)),
+        Result: PlayerNpcRow,
+        execute: (threadIds) => sql`
+          select ${playerNpcColumns(sql)}, npc_thread.session_state
+          from npc
+          join npc_thread on npc_thread.npc_id = npc.id
+          where npc_thread.id = any(${[...threadIds]})
+        `,
+      });
+      /** The NPCs open at this night's table, as this participant may see them. */
+      const sessionNpcs = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, sessionId: SessionId, actor: Actor }),
+        ),
+        Result: PlayerNpcRow,
+        execute: ({ campaignId, sessionId, actor }) => sql`
+          select ${playerNpcColumns(sql)}, npc_thread.session_state
+          from npc
+          join npc_thread on npc_thread.npc_id = npc.id
+          where npc_thread.channel = 'session_shared'
+            and npc_thread.session_id = ${sessionId}
+            and ${sessionParticipant(campaignId, sessionId, actor)}
+            and npc.campaign_id = ${campaignId}
+            and npc.archived_at is null
+            and (${campaignWritableById(sql, campaignId, actor)} or (npc.visibility = 'shared' and npc_thread.visibility = 'shared' and npc_thread.session_state <> 'closed'))
+          order by npc.name asc, npc.id asc
+        `,
+      });
+      /** One NPC at this night's table, through its table chat. */
+      const sessionNpc = SqlSchema.findOne({
+        Request: SessionNpcRequest,
+        Result: PlayerNpcRow,
+        execute: ({ campaignId, sessionId, npcId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${playerNpcColumns(sql)}, npc_thread.session_state
+              from npc
+              join npc_thread on npc_thread.npc_id = npc.id
+              where npc.id = ${npcId}
+                and ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
+            `,
+          ),
+      });
+
+      /** The night a table chat's prompt names, read after its thread was reached. */
+      const sessionHeader = SqlSchema.findOneOption({
+        Request: Schema.toType(SessionId),
+        Result: fromColumns(
+          Schema.Struct({ number: Schema.Int, title: Schema.NullOr(Schema.String) }),
+        ),
+        execute: (sessionId) => sql`
+          select session.number, session.title
+          from session
+          where session.id = ${sessionId}
+        `,
+      });
+      /** The night's shared fight, if one is under way, and who is up. */
+      const liveFight = SqlSchema.findOneOption({
+        Request: Schema.toType(SessionId),
+        Result: fromColumns(
+          Schema.Struct({
+            id: Schema.String,
+            round: Schema.Int,
+            activeName: Schema.NullOr(Schema.String),
+          }),
+        ),
+        execute: (sessionId) => sql`
+          select encounter_run.id::text as id, encounter_run.round, active.display_name as active_name
+          from encounter_run
+          left join combatant active on active.id = encounter_run.active_combatant_id and active.visibility = 'shared'
+          where encounter_run.session_id = ${sessionId}
+            and encounter_run.ended_at is null
+            and encounter_run.visibility = 'shared'
+          limit 1
+        `,
+      });
+      /** The shared combatants of that fight, in initiative order. */
+      const fightOrder = SqlSchema.findAll({
+        Request: Schema.String,
+        Result: fromColumns(Schema.Struct({ displayName: Schema.String })),
+        execute: (runId) => sql`
+          select combatant.display_name
+          from combatant
+          where combatant.encounter_run_id = ${runId}
+            and combatant.visibility = 'shared'
+          ${initiativeOrder(sql)}
+        `,
+      });
+
       return {
         list: (creator, npcId) =>
           dieOnSqlError(
@@ -910,14 +999,7 @@ export class NpcThreads extends Context.Service<
               // statements per thread. `npc-session-monitor.test.ts` holds the
               // count. The ids came out of the creator's query above, so these
               // need no predicate of their own.
-              // A night has one table chat per NPC, so the NPC's id names its thread here.
-              const npcRows = yield* sql<PlayerNpcRow>`
-                select ${playerNpcColumns(sql)}, npc_thread.session_state
-                from npc
-                join npc_thread on npc_thread.npc_id = npc.id
-                where npc_thread.id = any(${threadIds})
-              `;
-              const npcOf = new Map(npcRows.map((row) => [row.id, row]));
+              const npcOf = new Map((yield* tableNpcs(threadIds)).map((npc) => [npc.id, npc]));
               const turnsOf = Arr.groupBy(yield* tableTurns(threadIds), (turn) => turn.threadId);
               const pendingOf = new Map(
                 (yield* pendingProposals(threadIds)).map((row) => [row.threadId, row.count]),
@@ -931,7 +1013,7 @@ export class NpcThreads extends Context.Service<
                 const lastFailure =
                   finish === null || finish === "stop" ? null : `Last reply ended with ${finish}.`;
                 return new NpcSessionMonitor({
-                  npc: toPlayerNpc(npcOf.get(thread.npcId)!, sign),
+                  npc: npcOf.get(thread.npcId)!,
                   thread,
                   turns: turnsOf[thread.id] ?? [],
                   pendingProposals: pendingOf.get(thread.id) ?? 0,
@@ -947,36 +1029,13 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* ensureSessionParticipant(campaignId, sessionId);
-              const rows = yield* sql<PlayerNpcRow>`
-                select ${playerNpcColumns(sql)}, npc_thread.session_state
-                from npc
-                join npc_thread on npc_thread.npc_id = npc.id
-                where npc_thread.channel = 'session_shared'
-                  and npc_thread.session_id = ${sessionId}
-                  and ${sessionParticipant(campaignId, sessionId, actor)}
-                  and npc.campaign_id = ${campaignId}
-                  and npc.archived_at is null
-                  and (${campaignWritableById(sql, campaignId, actor)} or (npc.visibility = 'shared' and npc_thread.visibility = 'shared' and npc_thread.session_state <> 'closed'))
-                order by npc.name asc, npc.id asc
-              `;
-              return rows.map((row) => toPlayerNpc(row, sign));
+              return yield* sessionNpcs({ campaignId, sessionId, actor });
             }),
           ),
 
         sessionFind: (campaignId, sessionId, npcId) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<PlayerNpcRow>`
-                select ${playerNpcColumns(sql)}, npc_thread.session_state
-                from npc
-                join npc_thread on npc_thread.npc_id = npc.id
-                where npc.id = ${npcId}
-                  and ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
-              return toPlayerNpc(rows[0]!, sign);
-            }),
+            sessionNpc({ campaignId, sessionId, npcId }).pipe(orNotFound("npc", npcId)),
           ),
 
         sessionTurns: (campaignId, sessionId, npcId) =>
@@ -1043,44 +1102,18 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureSessionThread(campaignId, sessionId, npcId);
-              const sessionRows = yield* sql<{
-                readonly number: number;
-                readonly title: string | null;
-              }>`
-                select session.number, session.title
-                from session
-                where session.id = ${sessionId}
-              `;
-              const runRows = yield* sql<{
-                readonly id: string;
-                readonly round: number;
-                readonly active_name: string | null;
-              }>`
-                select encounter_run.id::text as id, encounter_run.round, active.display_name as active_name
-                from encounter_run
-                left join combatant active on active.id = encounter_run.active_combatant_id and active.visibility = 'shared'
-                where encounter_run.session_id = ${sessionId}
-                  and encounter_run.ended_at is null
-                  and encounter_run.visibility = 'shared'
-                limit 1
-              `;
-              const fight =
-                runRows[0] === undefined
-                  ? null
-                  : {
-                      round: runRows[0].round,
-                      upNext: runRows[0].active_name,
-                      order: (yield* sql<{ readonly display_name: string }>`
-                  select combatant.display_name
-                  from combatant
-                  where combatant.encounter_run_id = ${runRows[0].id}
-                    and combatant.visibility = 'shared'
-                  ${initiativeOrder(sql)}
-                `).map((row) => row.display_name),
-                    };
+              const session = yield* sessionHeader(sessionId);
+              const run = yield* liveFight(sessionId);
+              const fight = Option.isNone(run)
+                ? null
+                : {
+                    round: run.value.round,
+                    upNext: run.value.activeName,
+                    order: (yield* fightOrder(run.value.id)).map((row) => row.displayName),
+                  };
               return {
-                sessionNumber: sessionRows[0]?.number ?? 0,
-                sessionTitle: sessionRows[0]?.title ?? null,
+                sessionNumber: Option.match(session, { onNone: () => 0, onSome: (s) => s.number }),
+                sessionTitle: Option.match(session, { onNone: () => null, onSome: (s) => s.title }),
                 fight,
               };
             }),

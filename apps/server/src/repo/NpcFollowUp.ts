@@ -1,135 +1,111 @@
 import {
+  NpcAwarenessCandidate,
+  NpcChannel,
   NpcFollowUp,
   NpcFollowUpAwarenessCandidate,
   NpcFollowUpNpc,
   NpcFollowUpProposal,
-  type AccountId,
-  type BeatId,
-  type CampaignId,
-  type NoteId,
-  type NpcAwarenessCandidateId,
-  type NpcAwarenessCandidateKind,
-  type NpcAwarenessCandidateState,
-  type NpcChannel,
-  type NpcId,
-  type NpcKnowledgeFactId,
-  type NpcKnowledgeSourceKind,
-  type NpcMemoryId,
-  type NpcProposalContent,
-  type NpcProposalId,
-  type NpcProposalKind,
-  type NpcProposalState,
-  type NpcThreadId,
-  type NpcTurnId,
-  type SessionId,
+  NpcProposal,
+  SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { toNpcAwarenessCandidate } from "./NpcAwareness.js";
-import {
-  type NpcImageRow,
-  type NpcImageSigner,
-  npcImageColumns,
-  npcImageOf,
-  npcImageSigner,
-} from "./Npcs.js";
-import { toNpcProposal } from "./NpcProposals.js";
-import { dieOnSqlError, type ProvenanceColumns } from "./rows.js";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import { npcAwarenessCandidateFields } from "./NpcAwareness.js";
+import { npcImageColumns, npcImageFromId, type NpcImageSigner, npcImageSigner } from "./Npcs.js";
+import { npcProposalFields } from "./NpcProposals.js";
+import { dieOnSqlError, fromColumns } from "./rows.js";
 import { rowWritable } from "./visibility.js";
 
-/** The portrait columns sit beside the NPC the creator's `rowWritable` returned. */
-interface NpcSummaryRow extends NpcImageRow {
-  readonly npc_id: NpcId;
-  readonly npc_name: string;
-  readonly npc_role: string;
-  readonly npc_archived_at: Date | null;
-}
+/**
+ * The NPC beside a queued item, as the creator's `rowWritable` returned it:
+ * its name, role and shelf, and its portrait off {@link npcImageColumns}.
+ */
+const npcFields = (sign: NpcImageSigner | undefined) => ({
+  npcName: NpcFollowUpNpc.fields.name,
+  npcRole: NpcFollowUpNpc.fields.role,
+  npcArchivedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  npcImage: npcImageFromId(sign),
+});
 
-interface FollowUpProposalRow extends ProvenanceColumns, NpcSummaryRow {
-  readonly id: NpcProposalId;
-  readonly campaign_id: CampaignId;
-  readonly npc_id: NpcId;
-  readonly thread_id: NpcThreadId;
-  readonly npc_turn_id: NpcTurnId;
-  readonly proposed_by_account_id: AccountId | null;
-  readonly kind: NpcProposalKind;
-  readonly content: NpcProposalContent;
-  readonly state: NpcProposalState;
-  readonly decided_by_account_id: AccountId | null;
-  readonly decided_at: Date | null;
-  readonly rejection_reason: string | null;
-  readonly accepted_memory_id: NpcMemoryId | null;
-  readonly accepted_note_id: NoteId | null;
-  readonly accepted_beat_id: BeatId | null;
-  readonly channel: NpcChannel;
-  readonly session_id: SessionId | null;
-  readonly session_number: number | null;
-}
+/** A pending proposal, its NPC, and the thread it was proposed in. */
+const followUpProposalRow = (sign: NpcImageSigner | undefined) =>
+  fromColumns(
+    Schema.Struct({
+      ...npcProposalFields,
+      ...npcFields(sign),
+      channel: NpcChannel,
+      sessionId: Schema.NullOr(SessionId),
+      sessionNumber: Schema.NullOr(Schema.Int),
+    }),
+    { npcImage: "image_id" },
+  );
+type FollowUpProposalRow = ReturnType<typeof followUpProposalRow>["Type"];
 
-interface FollowUpCandidateRow extends ProvenanceColumns, NpcSummaryRow {
-  readonly id: NpcAwarenessCandidateId;
-  readonly campaign_id: CampaignId;
-  readonly npc_id: NpcId;
-  readonly kind: NpcAwarenessCandidateKind;
-  readonly body: string;
-  readonly source_kind: NpcKnowledgeSourceKind;
-  readonly source_id: string | null;
-  readonly source_label: string;
-  readonly source_excerpt: string;
-  readonly rationale: string;
-  readonly version: number;
-  readonly state: NpcAwarenessCandidateState;
-  readonly decided_by_account_id: AccountId | null;
-  readonly decided_at: Date | null;
-  readonly rejection_reason: string | null;
-  readonly accepted_knowledge_fact_id: NpcKnowledgeFactId | null;
-  readonly accepted_memory_id: NpcMemoryId | null;
-}
-
-const npcSummary = (row: NpcSummaryRow, sign: NpcImageSigner | undefined): NpcFollowUpNpc =>
-  new NpcFollowUpNpc({
-    id: row.npc_id,
-    name: row.npc_name,
-    role: row.npc_role,
-    archivedAt: row.npc_archived_at === null ? null : DateTime.fromDateUnsafe(row.npc_archived_at),
-    image: npcImageOf(row, sign).image,
+/** A pending awareness candidate and its NPC. */
+const followUpCandidateRow = (sign: NpcImageSigner | undefined) =>
+  fromColumns(Schema.Struct({ ...npcAwarenessCandidateFields, ...npcFields(sign) }), {
+    npcImage: "image_id",
   });
+type FollowUpCandidateRow = ReturnType<typeof followUpCandidateRow>["Type"];
 
-const sourceLabel = (row: FollowUpProposalRow): string => {
-  if (row.channel === "session_shared") {
-    return row.session_number === null
+type NpcColumns = "npcName" | "npcRole" | "npcArchivedAt" | "npcImage";
+
+const npcSummary = (
+  id: NpcFollowUpNpc["id"],
+  row: Pick<FollowUpProposalRow, NpcColumns>,
+): NpcFollowUpNpc =>
+  new NpcFollowUpNpc(
+    {
+      id,
+      name: row.npcName,
+      role: row.npcRole,
+      archivedAt: row.npcArchivedAt,
+      image: row.npcImage,
+    },
+    { disableChecks: true },
+  );
+
+const sourceLabel = (channel: NpcChannel, sessionNumber: number | null): string => {
+  if (channel === "session_shared") {
+    return sessionNumber === null
       ? "Shared table conversation"
-      : `Shared table conversation · Session ${String(row.session_number)}`;
+      : `Shared table conversation · Session ${String(sessionNumber)}`;
   }
-  if (row.channel === "rehearsal") return "Creator rehearsal";
+  if (channel === "rehearsal") return "Creator rehearsal";
   return "Private player chat";
 };
 
-const proposalItem = (
-  row: FollowUpProposalRow,
-  sign: NpcImageSigner | undefined,
-): NpcFollowUpProposal =>
+/** A decoded proposal row as its queue item: the NPC, the proposal, and where it came from. */
+const proposalItem = ({
+  npcName,
+  npcRole,
+  npcArchivedAt,
+  npcImage,
+  channel,
+  sessionId,
+  sessionNumber,
+  ...proposal
+}: FollowUpProposalRow): NpcFollowUpProposal =>
   new NpcFollowUpProposal({
     itemKind: "proposal",
-    npc: npcSummary(row, sign),
-    proposal: toNpcProposal(row),
-    source: {
-      channel: row.channel,
-      sessionId: row.session_id,
-      sessionNumber: row.session_number,
-      label: sourceLabel(row),
-    },
+    npc: npcSummary(proposal.npcId, { npcName, npcRole, npcArchivedAt, npcImage }),
+    proposal: new NpcProposal(proposal, { disableChecks: true }),
+    source: { channel, sessionId, sessionNumber, label: sourceLabel(channel, sessionNumber) },
   });
 
-const candidateItem = (
-  row: FollowUpCandidateRow,
-  sign: NpcImageSigner | undefined,
-): NpcFollowUpAwarenessCandidate =>
+/** A decoded candidate row as its queue item: the NPC and the candidate. */
+const candidateItem = ({
+  npcName,
+  npcRole,
+  npcArchivedAt,
+  npcImage,
+  ...candidate
+}: FollowUpCandidateRow): NpcFollowUpAwarenessCandidate =>
   new NpcFollowUpAwarenessCandidate({
     itemKind: "awareness",
-    npc: npcSummary(row, sign),
-    candidate: toNpcAwarenessCandidate(row),
+    npc: npcSummary(candidate.npcId, { npcName, npcRole, npcArchivedAt, npcImage }),
+    candidate: new NpcAwarenessCandidate(candidate, { disableChecks: true }),
   });
 
 /**
@@ -151,46 +127,58 @@ export class NpcFollowUps extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const sign = yield* npcImageSigner;
+      const CreatorRequest = Schema.toType(Schema.Struct(creatorFields));
+
+      const pendingProposals = SqlSchema.findAll({
+        Request: CreatorRequest,
+        Result: followUpProposalRow(sign),
+        execute: ({ campaign, actor }) => sql`
+          select npc_proposal.*,
+                 npc.name as npc_name,
+                 npc.role as npc_role,
+                 npc.archived_at as npc_archived_at,
+                 ${npcImageColumns(sql)},
+                 npc_thread.channel,
+                 npc_thread.session_id,
+                 session.number as session_number
+          from npc_proposal
+          join npc on npc.id = npc_proposal.npc_id
+          join npc_thread on npc_thread.id = npc_proposal.thread_id
+          left join session on session.id = npc_thread.session_id
+          where npc_proposal.campaign_id = ${campaign}
+            and npc_proposal.state = 'pending'
+            and ${rowWritable(sql, "npc", campaign, actor)}
+          order by npc_proposal.created_at desc, npc_proposal.id desc
+        `,
+      });
+      const pendingCandidates = SqlSchema.findAll({
+        Request: CreatorRequest,
+        Result: followUpCandidateRow(sign),
+        execute: ({ campaign, actor }) => sql`
+          select npc_awareness_candidate.*,
+                 npc.campaign_id,
+                 npc.name as npc_name,
+                 npc.role as npc_role,
+                 npc.archived_at as npc_archived_at,
+                 ${npcImageColumns(sql)}
+          from npc_awareness_candidate
+          join npc on npc.id = npc_awareness_candidate.npc_id
+          where npc.campaign_id = ${campaign}
+            and npc_awareness_candidate.state = 'pending'
+            and ${rowWritable(sql, "npc", campaign, actor)}
+          order by npc_awareness_candidate.created_at desc, npc_awareness_candidate.id desc
+        `,
+      });
 
       return {
         pending: (creator) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const proposalRows = yield* sql<FollowUpProposalRow>`
-                select npc_proposal.*,
-                       npc.name as npc_name,
-                       npc.role as npc_role,
-                       npc.archived_at as npc_archived_at,
-                       ${npcImageColumns(sql)},
-                       npc_thread.channel,
-                       npc_thread.session_id,
-                       session.number as session_number
-                from npc_proposal
-                join npc on npc.id = npc_proposal.npc_id
-                join npc_thread on npc_thread.id = npc_proposal.thread_id
-                left join session on session.id = npc_thread.session_id
-                where npc_proposal.campaign_id = ${creator.campaign}
-                  and npc_proposal.state = 'pending'
-                  and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
-                order by npc_proposal.created_at desc, npc_proposal.id desc
-              `;
-              const candidateRows = yield* sql<FollowUpCandidateRow>`
-                select npc_awareness_candidate.*,
-                       npc.campaign_id,
-                       npc.name as npc_name,
-                       npc.role as npc_role,
-                       npc.archived_at as npc_archived_at,
-                       ${npcImageColumns(sql)}
-                from npc_awareness_candidate
-                join npc on npc.id = npc_awareness_candidate.npc_id
-                where npc.campaign_id = ${creator.campaign}
-                  and npc_awareness_candidate.state = 'pending'
-                  and ${rowWritable(sql, "npc", creator.campaign, creator.actor)}
-                order by npc_awareness_candidate.created_at desc, npc_awareness_candidate.id desc
-              `;
+              const proposalRows = yield* pendingProposals(asked(creator));
+              const candidateRows = yield* pendingCandidates(asked(creator));
               const items = [
-                ...proposalRows.map((row) => proposalItem(row, sign)),
-                ...candidateRows.map((row) => candidateItem(row, sign)),
+                ...proposalRows.map(proposalItem),
+                ...candidateRows.map(candidateItem),
               ].sort((a, b) => {
                 const aTime =
                   a.itemKind === "proposal" ? a.proposal.createdAt : a.candidate.createdAt;

@@ -64,6 +64,51 @@ export const classFromColumns = <Self, Fields extends Schema.Struct.Fields>(
   );
 
 /**
+ * A wire class that holds one table's row under `key`, beside a few fields of
+ * its own — a membership's `campaign` or `sharedWorld` next to what the reader
+ * is there — decoded off one flat row the statement returned.
+ *
+ * The nested row goes through that table's own row schema, so a second read of
+ * the table never restates its decode (one decode per table); the fields beside
+ * it decode as {@link fromColumns} does, and columns neither names are dropped.
+ */
+export const classWithRow = <
+  Self,
+  Key extends string,
+  Row extends Schema.Top,
+  Fields extends Schema.Struct.Fields,
+>(
+  Class: new (fields: never, options?: Schema.MakeOptions) => Self,
+  key: Key,
+  row: Row,
+  fields: Fields,
+  columns: { readonly [K in keyof Fields]?: string } = {},
+) =>
+  Schema.Record(Schema.String, Schema.Unknown).pipe(
+    Schema.decodeTo(
+      Schema.Struct({ row, beside: fromColumns(Schema.Struct(fields), columns) }),
+      // The same flat row, handed to both halves; each keeps the keys it names.
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((columns: { readonly [x: string]: unknown }) => ({
+          row: columns,
+          beside: columns,
+        })),
+        SchemaGetter.forbidden(() => "a row is read, never written back"),
+      ) as never,
+    ),
+    Schema.decodeTo(
+      Schema.instanceOf(Class),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform(
+          ({ row, beside }: { readonly row: Row["Type"]; readonly beside: object }) =>
+            new Class({ [key]: row, ...beside } as never, { disableChecks: true }),
+        ),
+        SchemaGetter.forbidden(() => "a row is read, never written back"),
+      ) as never,
+    ),
+  );
+
+/**
  * Child rows read for many parents in one statement, filed under the parent
  * each was read for, in the order the query returned them, with the parent's
  * key dropped — what turns an `= any($1)` read back into one list per parent.
