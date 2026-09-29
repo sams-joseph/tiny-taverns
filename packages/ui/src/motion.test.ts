@@ -50,6 +50,7 @@ const CANDIDATES = [
   "data-ending-style:animate-dialog-out",
   "toast-stack",
   "transition-toast",
+  "transition-settle",
 ];
 
 let css = "";
@@ -161,6 +162,16 @@ describe("toast motion", () => {
     expect(body).toMatch(/transform\s+var\(--dur-/);
     expect(body).toMatch(/opacity\s+var\(--dur-/);
     expect(body).toMatch(/height\s+var\(--dur-/);
+    expect(body).not.toMatch(/\d+m?s\b/);
+  });
+});
+
+describe("a dropped row's settle", () => {
+  it("drives its timing from the tokens, so reduced motion flattens it", () => {
+    // The drag library animates its drop in JavaScript on a 250ms of its own;
+    // the Encounters list turns that off and settles the row on this instead.
+    const body = ruleBody(".transition-settle");
+    expect(body).toMatch(/translate\s+var\(--dur-base\)\s+var\(--ease-settle\)/);
     expect(body).not.toMatch(/\d+m?s\b/);
   });
 });

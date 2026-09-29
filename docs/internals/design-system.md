@@ -50,14 +50,15 @@ Below the page title, every heading is `SectionHeading`, and heading type on an 
 
 Every z-index comes from §3 of `packages/ui/src/styles.css`. Reach for a rung, never a number:
 
-| rung      | value | why here                                                               |
-| --------- | ----- | ---------------------------------------------------------------------- |
-| `chrome`  | 10    | sticky page furniture and the inline Hob panel; must lose to the scrim |
-| `scrim`   | 100   | the modal backdrop                                                     |
-| `dialog`  | 110   | above its own backdrop by number, not by document order                |
-| `popup`   | 200   | select/menu/popover, often anchored inside a dialog, so more nested    |
-| `toast`   | 300   | an interruption that must not be lost behind a modal                   |
-| `tooltip` | 400   | labels a control on any layer and never takes a pointer                |
+| rung      | value | why here                                                                          |
+| --------- | ----- | --------------------------------------------------------------------------------- |
+| `lifted`  | 1     | a dropped list row sliding over its neighbours; page content, so under the chrome |
+| `chrome`  | 10    | sticky page furniture and the inline Hob panel; must lose to the scrim            |
+| `scrim`   | 100   | the modal backdrop                                                                |
+| `dialog`  | 110   | above its own backdrop by number, not by document order                           |
+| `popup`   | 200   | select/menu/popover, often anchored inside a dialog, so more nested               |
+| `toast`   | 300   | an interruption that must not be lost behind a modal                              |
+| `tooltip` | 400   | labels a control on any layer and never takes a pointer                           |
 
 Gaps of 100 so a rung can be inserted without renumbering. **Equal layers are the bug, not a tie**: a select at 40 under a dialog at 50 had its clicks eaten by the `fixed inset-0` backdrop, and toast and dialog both at 50 left document order to decide, always against the toast.
 

@@ -13,6 +13,7 @@ import {
 } from "./campaign.fixtures";
 import {
   creatureWords,
+  dropPlacement,
   encountersSummary,
   matchesKind,
   movedWords,
@@ -169,6 +170,42 @@ describe("placed", () => {
     expect(placed(shelf, well.id, { before: well.id })).toBe(shelf);
     expect(placed([ambush, crate], well.id, { before: ambush.id })).toEqual([ambush, crate]);
     expect(placed([ambush, crate], ambush.id, { after: well.id })).toEqual([ambush, crate]);
+  });
+});
+
+describe("dropPlacement", () => {
+  // Five 56px rows 6px apart, the list's own spacing; the dragged row's span
+  // is where it is drawn now, following the pointer.
+  const spans = (rows: ReadonlyArray<Encounter>) =>
+    rows.map((row, at) => ({ id: row.id, top: at * 62, bottom: at * 62 + 56 }));
+  const rows = [ambush, crate, well, bargain, storm];
+
+  it("drops into the gap nearest the pointer, before the first row or after the one above", () => {
+    // Above the crate's middle: the gap before it, which is the list's top.
+    expect(dropPlacement(spans(rows), well.id, 10)).toEqual({ before: ambush.id });
+    expect(dropPlacement(spans(rows), well.id, -400)).toEqual({ before: ambush.id });
+    // Past the ambush's middle, before the crate's: the gap between them.
+    expect(dropPlacement(spans(rows), well.id, 40)).toEqual({ after: ambush.id });
+    // Down past the bargain's middle, and past the end.
+    expect(dropPlacement(spans(rows), well.id, 220)).toEqual({ after: bargain.id });
+    expect(dropPlacement(spans(rows), well.id, 4000)).toEqual({ after: storm.id });
+  });
+
+  it("is nothing back in the row's own gap, so a drop there sends nothing", () => {
+    // Between the crate's middle and the bargain's: where the well already is.
+    expect(dropPlacement(spans(rows), well.id, 100)).toBeUndefined();
+    expect(dropPlacement(spans(rows), well.id, 150)).toBeUndefined();
+    expect(dropPlacement(spans(rows), ambush.id, -50)).toBeUndefined();
+    expect(dropPlacement(spans(rows), storm.id, 4000)).toBeUndefined();
+  });
+
+  it("anchors on the rows a pill draws, and has nothing for a row it does not hold", () => {
+    const other = rows.filter((row) => matchesKind(row, "other"));
+    expect(names(other)).toEqual(["The dry well", "Salt-flat sandstorm"]);
+    // Past the sandstorm, over the bargain the pill hides.
+    expect(dropPlacement(spans(other), well.id, 100)).toEqual({ after: storm.id });
+    expect(dropPlacement(spans(rows), pack.id, 100)).toBeUndefined();
+    expect(dropPlacement(spans([well]), well.id, 100)).toBeUndefined();
   });
 });
 

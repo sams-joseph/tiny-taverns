@@ -324,6 +324,13 @@
 
       The order comes from how these actually nest, not from convention:
 
+        lifted   a list row the DM dropped, sliding into its new place over
+                 the rows it passes. It is page content, so the sticky chrome
+                 covers it: it sits below chrome, the one rung that does. The
+                 drag library would put a dragged row in the browser's top
+                 layer with `z-index: calc(infinity)`, above every dialog and
+                 toast; the Encounters list draws its drag itself instead
+                 (`campaign/encounterDrag.ts`).
         chrome   sticky page furniture — the app header. Not an overlay at all,
                  and it must lose to the scrim, so it sits far below the band.
         scrim    the modal backdrop.
@@ -350,6 +357,7 @@
       writes a number instead, and compiles this file to assert the order.
    -------------------------------------------------------------------------- */
 @theme {
+  --z-index-lifted: 1;
   --z-index-chrome: 10;
   --z-index-scrim: 100;
   --z-index-dialog: 110;
@@ -421,6 +429,13 @@
     transform var(--dur-slow) var(--ease-out),
     opacity var(--dur-base) var(--ease-out),
     height var(--dur-fast) var(--ease-out);
+}
+
+/* A dropped row settling from where it was let go into its place in the list.
+   Named here, like the toast's, so the drag spells out no timing of its own; the
+   tokens zero it under reduced motion. */
+@utility transition-settle {
+  transition: translate var(--dur-base) var(--ease-settle);
 }
 
 @utility ring-focus {
