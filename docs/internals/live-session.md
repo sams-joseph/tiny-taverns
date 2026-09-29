@@ -45,9 +45,9 @@ Any live client must implement this against `GET …/runs/:runId/events` (`handl
 
 ## Starting: the night and the fight are two acts
 
-A session can start over roleplay with no encounter in sight, so opening a night and putting a fight on the table are separate doors sharing one client transition, `apps/web/src/session/start.ts`. `campaign/StartSessionDialog.tsx` opens a night and stops; `campaign/StartRunDialog.tsx` puts an encounter on the table, opening a night on the way only when none is open.
+A session can start over roleplay with no encounter in sight, so opening a night and putting a fight on the table are separate doors sharing one client transition, `apps/web/src/session/start.ts`. `campaign/StartSessionDialog.tsx` opens a night and stops; `campaign/StartRunDialog.tsx` puts an encounter on the table, opening a night on the way only when none is open. A night can also exist before it is opened: the creator's Hob plans one (`proposeNight`), and keeping it makes the session, its checklist and any act it starts, unstarted and not pointed at, so nothing is live for the table. `plannedNightOf` in `start.ts` is the one reading of "planned" (the lowest-numbered night neither started nor ended): while no night is open the _Next session_ card shows it with its checklist, and either door opens it (points the campaign at it and stamps it) rather than numbering a new one past it.
 
-`startSession` is three statements in order, and only the last is best effort: create the session, point `campaign.currentSessionId` at it (fatal, because a session nothing points at is a night the DM cannot find again), then stamp `startedAt` under `Effect.ignore`.
+`startSession` is three statements in order, and only the last is best effort: create the session (or take the planned one), point `campaign.currentSessionId` at it (fatal, because a session nothing points at is a night the DM cannot find again), then stamp `startedAt` under `Effect.ignore`.
 
 `startedAt` therefore belongs to the night, not the fight: a running session with `activeEncounterRunId` null is the ordinary state of an evening. The campaign's button has three states computed once by `actFor` in `campaign/act.tsx`, asking the session and the run separately: `run` is undefined both with no night and with a night that has nothing on the table.
 

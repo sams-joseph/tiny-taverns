@@ -1,4 +1,5 @@
 import {
+  ACT_TITLE_MAX,
   APPEARANCE_MAX,
   type Ability,
   type AbilityBonus,
@@ -76,6 +77,7 @@ import {
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/unstable/ai";
+import type { Acts } from "../repo/Acts.js";
 import type { CampaignStories } from "../repo/CampaignStories.js";
 import type { Creatures } from "../repo/Creatures.js";
 import type { GroupHistory, PlayedNight } from "../repo/GroupHistory.js";
@@ -1037,6 +1039,67 @@ export const ProposeNightSummary = Tool.make("proposeNightSummary", {
   failureMode: "return",
 });
 
+/** How many lines a planned night's checklist may carry. */
+const NIGHT_PREP_MAX = 12;
+
+/**
+ * A night, planned: its title, the lines of its "Before you sit down"
+ * checklist, and an act it starts when the DM asked for one.
+ *
+ * The creator's toolkit alone has it, for `proposeNightSummary`'s reason:
+ * only the creator makes a night. There is no number parameter: the night is
+ * numbered one past the highest the campaign has when the DM keeps it, so
+ * after any night already planned, and a kept night is planned, not open,
+ * until *Start the night* opens it (the earliest planned first). A night
+ * already on `listSessions` is never edited by this tool.
+ */
+export const ProposeNight = Tool.make("proposeNight", {
+  description:
+    "Offer the DM a new planned session: a short title when there is one, and the " +
+    "prep checklist for it — each line one thing to do or have ready before the party " +
+    'sits down ("Reread the ferryman\'s note", "Print the salt road map"). Set ' +
+    "actTitle only when the DM asked for this session to start a new act. It is numbered " +
+    "after every session on listSessions, including any already planned and not started; " +
+    "nothing already on listSessions changes. Only a suggestion: " +
+    "nothing is saved unless the DM accepts it. Say one short line about it and stop.",
+  parameters: Schema.Struct({
+    title: optionalText(120),
+    prep: optional(
+      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, 500))).check(
+        Schema.isMaxLength(NIGHT_PREP_MAX),
+      ),
+    ),
+    actTitle: optionalText(ACT_TITLE_MAX),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+/**
+ * A new act on the Chronicle, starting at a night the campaign already has
+ * and running until the next act. The creator's alone, as the act's own
+ * create is; the handler reads the nights and the acts through the creator's
+ * reads, so a night the campaign does not have, or one that already starts
+ * an act, is refused in words the model can act on.
+ */
+export const ProposeAct = Tool.make("proposeAct", {
+  description:
+    'Offer the DM a new act for the Chronicle: a title ("Act II · The heist") and ' +
+    "the session number it starts at, from listSessions. The act runs from that session " +
+    "until the next act. Leave sessionNumber out to start it at the newest session. To " +
+    "start an act at a session not planned yet, use proposeNight with actTitle instead. " +
+    "Only a suggestion: nothing is saved unless the DM accepts it. Say one short line " +
+    "about it and stop.",
+  parameters: Schema.Struct({
+    title: Schema.String.check(Schema.isLengthBetween(1, ACT_TITLE_MAX)),
+    sessionNumber: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100_000 }))),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
 export const ProposeEncounter = Tool.make("proposeEncounter", {
   description:
     "Offer the DM an encounter to save. Set kind to the one the DM asked for: " +
@@ -1129,6 +1192,15 @@ const notOffered = (why: string) =>
     message:
       `${why}. Nothing was offered to the DM — call proposeEncounter again with that ` +
       "fixed, and do not say an encounter is ready until it says it offered one.",
+  });
+
+/**
+ * {@link notOffered} for the two planning tools: the same refusal, naming the
+ * tool to call again.
+ */
+const notPlanned = (tool: "proposeNight" | "proposeAct", why: string) =>
+  new Conflict({
+    message: `${why}. Nothing was offered to the DM — call ${tool} again with that fixed.`,
   });
 
 /**
@@ -1802,6 +1874,8 @@ export const directResourceToolkitOver = (context: HobDirectResourceContext) => 
     ProposeNote,
     ProposeBeat,
     ProposeNightSummary,
+    ProposeNight,
+    ProposeAct,
     ProposeEncounter,
     ProposeCampaignStory,
     ProposeNpc,
@@ -1831,6 +1905,10 @@ export const HobToolkit = Toolkit.make(
   ProposeNote,
   ProposeBeat,
   ProposeNightSummary,
+  // The next night with its checklist, and an act on the Chronicle: the
+  // creator's alone, as making a night or an act by hand is.
+  ProposeNight,
+  ProposeAct,
   ProposeEncounter,
   ProposeCampaignStory,
   // A new NPC for the cast, and an NPC's stat sheet built like a character's:
@@ -2050,6 +2128,8 @@ export const accountToolkitListing = (
 export interface HobRepositories {
   readonly search: (typeof Search)["Service"];
   readonly sessions: (typeof Sessions)["Service"];
+  /** The campaign's acts, which `proposeAct` reads to refuse a night that already starts one. */
+  readonly acts: (typeof Acts)["Service"];
   readonly recap: (typeof Recap)["Service"];
   readonly creatures: (typeof Creatures)["Service"];
   readonly npcs: (typeof Npcs)["Service"];
@@ -2708,6 +2788,79 @@ export const dmHandlersFor = (
           { target: "nightSummary", sessionId: night.id, sessionNumber: night.number, text },
           `Offered the DM a summary of session ${String(night.number)} for the Chronicle. ` +
             "They can keep it or discard it; say one short line about it and stop.",
+        );
+      }),
+
+    proposeNight: ({ title, prep, actTitle }) =>
+      Effect.gen(function* () {
+        const named = proseOf(title);
+        const lines = linesOf(prep);
+        const act = proseOf(actTitle);
+        if (named === undefined && lines.length === 0) {
+          return yield* notPlanned(
+            "proposeNight",
+            "a planned session needs a title or at least one prep line — give it what the " +
+              "DM should do or have ready before the party sits down",
+          );
+        }
+        // The creator's own read of the nights, only to tell the model which
+        // number the night would take today and which are planned already;
+        // the accept numbers it again.
+        const nights = yield* as(repositories.sessions.list(campaignId));
+        const number = nights.reduce((highest, night) => Math.max(highest, night.number), 0) + 1;
+        const planned = nights
+          .filter((night) => night.startedAt === null && night.endedAt === null)
+          .map((night) => night.number)
+          .sort((a, b) => a - b);
+        return yield* offer(
+          { target: "night", title: named ?? null, prep: lines, actTitle: act ?? null },
+          `Offered the DM session ${String(number)}${named === undefined ? "" : `, "${named}"`}` +
+            `${lines.length === 0 ? "" : `, with ${String(lines.length)} prep ${lines.length === 1 ? "line" : "lines"}`}` +
+            `${act === undefined ? "" : `, starting the act "${act}"`}. ` +
+            (planned.length === 0
+              ? ""
+              : `${planned.length === 1 ? "Session" : "Sessions"} ${planned.join(", ")} ` +
+                `${planned.length === 1 ? "is" : "are"} already planned and not started, and ` +
+                "Start the night opens the earliest first; this one would come after. ") +
+            "Nothing is saved unless they accept it; say one short line about it and stop.",
+        );
+      }),
+
+    proposeAct: ({ title, sessionNumber }) =>
+      Effect.gen(function* () {
+        const named = title.trim();
+        if (named === "") {
+          return yield* notPlanned("proposeAct", "an act needs a title — give it one");
+        }
+        // The creator's own reads: the nights, newest first, and the acts.
+        const nights = yield* as(repositories.sessions.list(campaignId));
+        const wanted = absent(sessionNumber);
+        const night =
+          wanted === undefined ? nights[0] : nights.find((row) => row.number === wanted);
+        if (night === undefined) {
+          return yield* notPlanned(
+            "proposeAct",
+            nights.length === 0
+              ? "this campaign has no sessions yet, so an act has nowhere to start — plan the " +
+                  "next session with proposeNight and give it an actTitle"
+              : `there is no session ${String(wanted)} — pick one of ` +
+                  `${nights.map((row) => String(row.number)).join(", ")} from listSessions, or ` +
+                  "plan the next with proposeNight and an actTitle",
+          );
+        }
+        const acts = yield* as(repositories.acts.list(campaignId));
+        const starting = acts.find((act) => act.firstSessionNumber === night.number);
+        if (starting !== undefined) {
+          return yield* notPlanned(
+            "proposeAct",
+            `session ${String(night.number)} already starts the act "${starting.title}" — ` +
+              "pick another session, or ask the DM whether to rename that one by hand",
+          );
+        }
+        return yield* offer(
+          { target: "act", title: named, firstSessionNumber: night.number },
+          `Offered the DM the act "${named}", starting at session ${String(night.number)}. ` +
+            "Nothing is saved unless they accept it; say one short line about it and stop.",
         );
       }),
 

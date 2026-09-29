@@ -186,6 +186,7 @@ const languageModelLayer = (options: {
 export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
+  | Acts
   | Campaigns
   | CampaignStories
   | Creatures
@@ -420,6 +421,7 @@ export const servicesOver = <E>(
   assistant: Layer.Layer<
     Hob,
     E | Config.ConfigError,
+    | Acts
     | Campaigns
     | CampaignStories
     | Creatures
@@ -547,7 +549,8 @@ export const servicesOver = <E>(
     // has a prep tool, so a secret never reaches a model.
     SeatPreps.layer,
     // A campaign's acts on the Chronicle: the list is actor-scoped, the writes
-    // take the creator proof, and no toolkit has an act tool.
+    // take the creator proof. The creator's Hob reads the list for
+    // `proposeAct`; only the accept below writes one for a model.
     Acts.layer,
     // A campaign's story so far: the creator's wide read behind the proof, a
     // player's narrow one when shared. Hob reads it and drafts a replacement;
@@ -706,8 +709,14 @@ export const servicesOver = <E>(
         // `GroupHistory.create` a member's own hand does.
         GroupHistory.layer,
         Notes.layer,
-        // A night's summary Hob drafted is kept through the DM's own update.
+        // A night's summary Hob drafted is kept through the DM's own update,
+        // and a night it planned through the create a person's night takes,
+        // with its checklist through the checklist's own create.
         Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+        PrepItems.layer,
+        // A kept act, or the act a planned night starts, through the
+        // creator's own create.
+        Acts.layer,
         // A kept story so far replaces the campaign's through `accept`.
         CampaignStories.layer,
         // A kept NPC sheet goes through the creator's own PUT, behind the
@@ -745,6 +754,8 @@ export const servicesOver = <E>(
     // the same six services the handlers already have.
     assistant.pipe(
       Layer.provide([
+        // The acts, which `proposeAct` reads before offering one.
+        Acts.layer,
         Campaigns.layer,
         // The story so far, which the creator's Hob reads before it drafts one.
         CampaignStories.layer,

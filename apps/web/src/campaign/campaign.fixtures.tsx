@@ -160,6 +160,37 @@ export const session = {
   ...stamps,
 };
 
+/**
+ * Night 12 once it has begun: stamped, and not ended. A night list holding it
+ * has no planned night (`plannedNightOf`), so a test that takes the campaign's
+ * pointer away without meaning "a night was planned" answers the list with
+ * this rather than {@link session}, which has never been stamped.
+ */
+export const begunSession = { ...session, startedAt: "2026-07-19T20:00:00.000Z" };
+
+/**
+ * A night kept from Hob's plan: numbered past night 12, titled, neither started
+ * nor ended, and not pointed at by the campaign.
+ */
+export const plannedSessionId = "4c5d6e7f-8091-4a2b-8c3d-4e5f60718293";
+export const plannedSession = {
+  ...session,
+  id: plannedSessionId,
+  number: 13,
+  title: "The toll bridge",
+  origin: "assistant",
+  assistantTurnId: "5d6e7f80-91a2-4b3c-9d4e-5f6071829304",
+};
+
+/** A second kept plan, numbered past {@link plannedSession}. */
+export const laterPlannedSessionId = "5d6e7f80-91a2-4b3c-8d4e-5f6071829315";
+export const laterPlannedSession = {
+  ...plannedSession,
+  id: laterPlannedSessionId,
+  number: 14,
+  title: "The ferry",
+};
+
 export const encounter = {
   id: encounterId,
   campaignId,

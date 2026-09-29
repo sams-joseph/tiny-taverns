@@ -21,6 +21,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";
+import { plannedNightsOf } from "../session/start";
 
 /** Everything the campaign view renders, in one shape. */
 export interface CampaignView {
@@ -32,8 +33,15 @@ export interface CampaignView {
    * so the chrome and the body cannot disagree about whose screen this is.
    */
   readonly relation: CampaignRelation;
-  /** The session the DM is preparing, or `undefined` when there is not one yet. */
+  /** The night that is open, or `undefined` when none is. */
   readonly session: Session | undefined;
+  /**
+   * The planned nights while no night is open, earliest first, each with its
+   * checklist: kept from Hob's plan, made but neither started nor pointed at
+   * (`plannedNightsOf`). *Start the night* opens the first. Empty while a night
+   * is open, or when nothing is planned.
+   */
+  readonly planned: ReadonlyArray<PlannedNight>;
   readonly encounters: ReadonlyArray<Encounter>;
   readonly notes: ReadonlyArray<Note>;
   /**
@@ -43,7 +51,10 @@ export interface CampaignView {
    * error.
    */
   readonly party: ReadonlyArray<PartySeat>;
-  /** The "Before you sit down" checklist. Empty when there is no session. */
+  /**
+   * The "Before you sit down" checklist of the open night. Empty when none is
+   * open; a planned night carries its own.
+   */
   readonly prep: ReadonlyArray<PrepItem>;
   /**
    * The fight on the table right now — the fixtures' `active: true`
@@ -56,6 +67,12 @@ export interface CampaignView {
    * cannot disagree.
    */
   readonly run: EncounterRun | undefined;
+}
+
+/** A night planned but not yet opened, and its checklist. */
+export interface PlannedNight {
+  readonly session: Session;
+  readonly prep: ReadonlyArray<PrepItem>;
 }
 
 /**
@@ -154,6 +171,45 @@ const sessionAtom = Atom.family((night: Night) =>
 
 const prepAtom = Atom.family((night: Night) =>
   apiAtom((client) => client.prep.list({ params: night }), [reads.prep(night.sessionId)]),
+);
+
+/**
+ * The campaign's nights, read only to find the planned ones while no night is
+ * open. `sessions.list` answers the creator every night, newest first.
+ */
+const campaignSessionsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.sessions.list({ params: { campaignId } }),
+    [reads.sessions(campaignId)],
+  ),
+);
+
+/**
+ * The nights the checklists hang off: the campaign's open night, or while
+ * there is none the planned ones. The nights are read only in the second case,
+ * so a campaign with a night open pays nothing for the planned ones. The view
+ * and the frame's *Try again* both read it, so the retry names the checklists
+ * the view was showing.
+ */
+export const preparingNightAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable((get: Atom.AtomContext) =>
+    AsyncResult.flatMap(
+      get(campaignAtom(campaignId)),
+      (
+        campaign,
+      ): AsyncResult.AsyncResult<
+        { readonly open: SessionId } | { readonly planned: ReadonlyArray<Session> },
+        unknown
+      > => {
+        if (campaign.currentSessionId !== null) {
+          return AsyncResult.success({ open: campaign.currentSessionId });
+        }
+        return AsyncResult.map(get(campaignSessionsAtom(campaignId)), (sessions) => ({
+          planned: plannedNightsOf(sessions),
+        }));
+      },
+    ),
+  ),
 );
 
 const runsAtom = Atom.family((night: Night) =>
@@ -276,11 +332,11 @@ export const membersAtom = Atom.family((campaignId: CampaignId) =>
  * refreshed, so "read the whole campaign again" is "invalidate everything the
  * campaign is made of". The night is optional because a campaign between
  * sessions has none, and because a read that failed may not have got far enough
- * to say which one it is.
+ * to say which one it is; while none is open, the nights are the planned ones.
  */
 export const campaignViewKeys = (
   campaignId: CampaignId,
-  sessionId: SessionId | undefined,
+  sessionIds: ReadonlyArray<SessionId>,
 ): Invalidation => [
   reads.campaign(campaignId),
   reads.myCampaigns,
@@ -288,7 +344,7 @@ export const campaignViewKeys = (
   reads.notes(campaignId),
   reads.party(campaignId),
   reads.sessions(campaignId),
-  ...(sessionId === undefined ? [] : [reads.prep(sessionId), reads.runs(sessionId)]),
+  ...sessionIds.flatMap((sessionId) => [reads.prep(sessionId), reads.runs(sessionId)]),
 ];
 
 const assemble = (
@@ -321,10 +377,28 @@ const assemble = (
 
     const sessionId = round.campaign.currentSessionId;
     if (sessionId === null) {
-      return AsyncResult.success<CampaignView, unknown>(
-        { ...settled, session: undefined, prep: [], run: undefined },
-        { waiting: previous.waiting },
-      );
+      // No night is open, so the checklists are the planned nights', if any.
+      return AsyncResult.flatMap(get(preparingNightAtom(campaignId)), (preparing, before) => {
+        const nights = "planned" in preparing ? preparing.planned : [];
+        if (nights.length === 0) {
+          return AsyncResult.success<CampaignView, unknown>(
+            { ...settled, session: undefined, planned: [], prep: [], run: undefined },
+            { waiting: previous.waiting || before.waiting },
+          );
+        }
+        return AsyncResult.map(
+          AsyncResult.all(
+            nights.map((night) => get(prepAtom({ campaignId, sessionId: night.id }))),
+          ),
+          (preps): CampaignView => ({
+            ...settled,
+            session: undefined,
+            planned: nights.map((session, index) => ({ session, prep: preps[index] ?? [] })),
+            prep: [],
+            run: undefined,
+          }),
+        );
+      }) as AsyncResult.AsyncResult<CampaignView, unknown>;
     }
 
     const night: Night = { campaignId, sessionId };
@@ -336,6 +410,7 @@ const assemble = (
     return AsyncResult.map(live, (tonight) => ({
       ...settled,
       session: tonight.session,
+      planned: [],
       prep: tonight.prep,
       run: liveRun(tonight.runs),
     })) as AsyncResult.AsyncResult<CampaignView, unknown>;

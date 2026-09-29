@@ -18,6 +18,7 @@ import {
   playedSessionId,
   renderScreen,
   runId,
+  begunSession,
   session,
   sessionId,
   tollBridge,
@@ -121,6 +122,7 @@ describe("the Encounters preview", () => {
       status: 200,
       body: { ...campaign, currentSessionId: null },
     });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: [begunSession] });
     server.routes.set(`POST ${base}/sessions`, { status: 200, body: session });
     server.routes.set(`PATCH ${base}`, {
       status: 200,

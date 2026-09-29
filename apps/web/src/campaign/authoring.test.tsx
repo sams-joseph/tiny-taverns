@@ -15,6 +15,11 @@ import {
   renderParty,
   renderScreen,
   seatId,
+  begunSession,
+  laterPlannedSession,
+  laterPlannedSessionId,
+  plannedSession,
+  plannedSessionId,
   session,
   sessionId,
   page,
@@ -324,11 +329,15 @@ describe("authoring the checklist", () => {
 describe("starting a session", () => {
   const runsPath = `/campaigns/${campaignId}/sessions/${sessionId}/runs`;
 
-  /** A campaign that has never played: no night open, and its nights listed. */
+  /** A campaign with no night open, and its nights listed: none of them planned. */
   const coldCampaign = () => {
     server.routes.set(`GET /campaigns/${campaignId}`, {
       status: 200,
       body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
+      status: 200,
+      body: [begunSession],
     });
     server.routes.set(`POST /campaigns/${campaignId}/sessions`, { status: 200, body: session });
     server.routes.set(`PATCH /campaigns/${campaignId}`, {
@@ -400,6 +409,53 @@ describe("starting a session", () => {
     await waitFor(() =>
       expect(bodyOf(server, "POST", `/campaigns/${campaignId}/sessions`)).toEqual({ number: 13 }),
     );
+  });
+
+  it("opens the earliest planned night rather than making another, checklist and all", async () => {
+    // Nights kept from Hob's plan: numbered, titled, their checklists written,
+    // and nothing points at them. Starting the night opens the earliest.
+    coldCampaign();
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
+      status: 200,
+      body: [laterPlannedSession, plannedSession, begunSession],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: [],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${laterPlannedSessionId}/prep`, {
+      status: 200,
+      body: [],
+    });
+    server.routes.set(`PATCH /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: plannedSessionId },
+    });
+    server.routes.set(`PATCH /campaigns/${campaignId}/sessions/${plannedSessionId}`, {
+      status: 200,
+      body: plannedSession,
+    });
+    await renderScreen(mintingSession());
+
+    await pressAct("Start session");
+    await screen.findByText("Start session 13?");
+    await userEvent.click(screen.getByRole("button", { name: "Start the night" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/campaigns/${campaignId}`)).toEqual({
+        currentSessionId: plannedSessionId,
+      }),
+    );
+    expect(
+      (bodyOf(server, "PATCH", `/sessions/${plannedSessionId}`) as { startedAt: string }).startedAt,
+    ).toMatch(/^\d{4}-/);
+    // No second night: the earliest planned one is the one opened.
+    expect(
+      server.calls.some((call) => call.pathname.endsWith(`/sessions/${laterPlannedSessionId}`)),
+    ).toBe(false);
+    expect(
+      server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/sessions")),
+    ).toBe(false);
   });
 
   it("offers the fight rather than a second night once one is open", async () => {

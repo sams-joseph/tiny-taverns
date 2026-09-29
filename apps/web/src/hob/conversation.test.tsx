@@ -9,13 +9,16 @@ import {
   campaignId,
   cazril,
   encounter as anEncounterRow,
+  plannedSession,
+  prepItem,
   session as aSessionRow,
   sharedWorldDetails,
   worldId,
 } from "../campaign/campaign.fixtures";
-import { npcPrepAtom, npcsAtom, npcSheetAtom, npcSheetsAtom } from "../cast/load";
+import { castNightsAtom, npcPrepAtom, npcsAtom, npcSheetAtom, npcSheetsAtom } from "../cast/load";
 import { characterProposal } from "../characters/characters.fixtures";
-import { useApiAtom } from "../api/atoms";
+import { apiAtom, useApiAtom } from "../api/atoms";
+import { reads } from "../api/keys";
 import type { HobScope } from "./conversation";
 import { ScopedHob } from "./Hob";
 import type { HobPanelState } from "./useHobPanel";
@@ -254,6 +257,10 @@ const installHobServer = (): HobStub => {
       return Promise.resolve(json([]));
     }
     if (pathname.endsWith("/sheet")) return Promise.resolve(json(null));
+    // The nights and the acts: none, until a test keeps a planned night or an act.
+    if (pathname.endsWith("/sessions") || pathname.endsWith("/acts")) {
+      return Promise.resolve(json([]));
+    }
 
     return Promise.resolve(new Response("{}", { status: 404 }));
   });
@@ -1372,6 +1379,135 @@ describe("a new NPC for the Cast", () => {
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     // All three go back to the wire, so the Cast shows the new NPC at once.
     await waitFor(() => expect(castReads()).toBe(before + 3));
+  });
+});
+
+/** The Chronicle's acts, as its spine reads them: `reads.acts`. */
+const actsReader = apiAtom(
+  (client) => client.acts.list({ params: { campaignId: campaignId as CampaignId } }),
+  [reads.acts(campaignId as CampaignId)],
+);
+
+describe("a planned night and an act", () => {
+  const nightProposal = {
+    target: "night",
+    title: "The toll bridge",
+    prep: ["Reread the ferryman's note", "Print the salt road map", "Name the toll-keeper"],
+    actTitle: "Act II · The heist",
+  };
+  const act = {
+    id: "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+    campaignId,
+    title: "Act II · The heist",
+    firstSessionNumber: 13,
+    visibility: "dm",
+    origin: "assistant",
+    assistantTurnId: turnId,
+    createdAt: "2026-07-20T09:00:00.000Z",
+    updatedAt: "2026-07-20T09:00:00.000Z",
+  };
+  const keptNight = {
+    accepted: "night",
+    session: { ...plannedSession, assistantTurnId: turnId },
+    prep: nightProposal.prep.map((label, index) => ({
+      ...prepItem,
+      id: `8b9c0d1e-2f3a-4b4c-9d5e-6f7a8b9c0d1${String(index)}`,
+      sessionId: plannedSession.id,
+      label,
+      origin: "assistant",
+      assistantTurnId: turnId,
+    })),
+    act,
+  };
+
+  it("draws the night as a prep list, its lines unticked, and keeps it with ids alone", async () => {
+    server.acceptBody = keptNight;
+    server.frames = [began(threadId, turnId), proposed(turnId, nightProposal), done()];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Plan next session.{Enter}");
+
+    expect(await screen.findByText("The toll bridge")).toBeInTheDocument();
+    expect(screen.getByText("Prep list")).toBeInTheDocument();
+    expect(screen.getByText("3 prep lines · Starts Act II · The heist")).toBeInTheDocument();
+    for (const line of nightProposal.prep) expect(screen.getByText(line)).toBeInTheDocument();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([
+        `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`,
+      ]),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("Planned as session 13")).toBeInTheDocument();
+  });
+
+  it("reads a night with no title as a planned session", async () => {
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, { ...nightProposal, title: null, prep: ["One thing"], actTitle: null }),
+      done(),
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Plan next session.{Enter}");
+
+    expect(await screen.findByText("Planned session")).toBeInTheDocument();
+    expect(screen.getByText("1 prep line")).toBeInTheDocument();
+  });
+
+  it("draws an act with the night it starts at, and keeps it", async () => {
+    server.acceptBody = { accepted: "act", act };
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, { target: "act", title: "Act II · The heist", firstSessionNumber: 13 }),
+      done(),
+    ];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Add an act for the heist.{Enter}");
+
+    expect(await screen.findByText("Act II · The heist")).toBeInTheDocument();
+    expect(screen.getByText("Act")).toBeInTheDocument();
+    expect(screen.getByText("From session 13")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("In the Chronicle")).toBeInTheDocument();
+  });
+
+  it("re-reads the nights and the acts once a planned night is kept", async () => {
+    /** What the Chronicle and the Next session card read, mounted beside the panel. */
+    function NightReaders() {
+      const [nights] = useApiAtom(castNightsAtom(campaignId as CampaignId));
+      const [acts] = useApiAtom(actsReader);
+      return <p>{`${nights.state} ${acts.state}`}</p>;
+    }
+    const reads = () =>
+      server.paths.filter(
+        (path) =>
+          path === `/campaigns/${campaignId}/sessions` || path === `/campaigns/${campaignId}/acts`,
+      ).length;
+    server.acceptBody = keptNight;
+    server.frames = [began(threadId, turnId), proposed(turnId, nightProposal), done()];
+    render(
+      <HostedSessionScope session={TEST_SESSION}>
+        <NightReaders />
+        <ScopedHob hob={panelState(true)} scope={campaignScope} />
+      </HostedSessionScope>,
+    );
+    expect(await screen.findByText("ready ready")).toBeInTheDocument();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Plan next session.{Enter}");
+    await screen.findByText("The toll bridge");
+    const before = reads();
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    // Both go back to the wire, so the new night and its act show at once.
+    await waitFor(() => expect(reads()).toBe(before + 2));
   });
 });
 

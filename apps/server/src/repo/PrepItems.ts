@@ -10,7 +10,15 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import {
   ensureNestedParentReadable,
   ensureNestedParentWritable,
@@ -64,10 +72,12 @@ export class PrepItems extends Context.Service<
       sessionId: SessionId,
       id: PrepItemId,
     ) => Effect.Effect<PrepItem, NotFound, CurrentActor>;
+    /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
       sessionId: SessionId,
       payload: PrepItemCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<PrepItem, NotFound, CurrentActor>;
     readonly update: (
       campaignId: CampaignId,
@@ -115,7 +125,7 @@ export class PrepItems extends Context.Service<
             }),
           ),
 
-        create: (campaignId, sessionId, payload) =>
+        create: (campaignId, sessionId, payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
@@ -128,6 +138,7 @@ export class PrepItems extends Context.Service<
                       label: payload.label,
                       done: payload.done,
                       visibility: payload.visibility,
+                      ...assistantColumns(from),
                     }),
                   )}
                   returning *

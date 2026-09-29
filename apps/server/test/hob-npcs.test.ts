@@ -12,6 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { PrepItems } from "../src/repo/PrepItems.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
@@ -79,6 +81,8 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Acts.layer,
+  PrepItems.layer,
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_npcs")));
 

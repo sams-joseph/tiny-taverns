@@ -1,8 +1,10 @@
-import type { Encounter, EncounterPlayed, EncounterPrep, Session } from "@taverns/api";
+import type { CampaignId, Encounter, EncounterPlayed, EncounterPrep, Session } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
-import type { CampaignView } from "./load";
+import { useState } from "react";
+import { DeletePlannedNightDialog } from "./DeletePlannedNightDialog";
+import type { CampaignView, PlannedNight } from "./load";
 import { onDeckOf, playedLabel } from "./encounterList";
 import { encounterDetail, openingReadAloud } from "./overview";
 import { sectionLink } from "./OverviewParts";
@@ -148,8 +150,61 @@ function EncounterRow({
 }
 
 /**
+ * A planned night's part of the card: its checklist and its delete. With more
+ * than one planned, each is named, so every checklist says whose it is.
+ */
+function PlannedNightSection({
+  campaignId,
+  planned,
+  named,
+  next,
+}: {
+  readonly campaignId: CampaignId;
+  readonly planned: PlannedNight;
+  readonly named: boolean;
+  /** The planned night *Start the night* opens once this one is deleted, if any. */
+  readonly next: Session | undefined;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const night = planned.session;
+  const name = night.title ?? `Session ${String(night.number)}`;
+  return (
+    <section className="border-t border-hairline" aria-label={name}>
+      {named && (
+        <div className="px-card pt-4 text-label leading-none font-medium text-muted-foreground">
+          {night.title === null ? name : `Session ${String(night.number)} · ${night.title}`}
+        </div>
+      )}
+      <PrepChecklist campaignId={campaignId} sessionId={night.id} items={planned.prep} />
+      <CardFooter className="justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-muted-foreground"
+          aria-label={`Delete ${name}`}
+          onClick={() => setDeleting(true)}
+        >
+          <Icon name="trash-2" size={14} />
+          Delete this night
+        </Button>
+      </CardFooter>
+      {deleting && (
+        <DeletePlannedNightDialog
+          campaignId={campaignId}
+          night={night}
+          next={next}
+          onClose={() => setDeleting(false)}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
  * The night being prepared: what it is called, what it opens on, what is on
- * deck and what is still to do.
+ * deck and what is still to do. While no night is open that is the planned
+ * ones (`CampaignView.planned`), in number order, each with its own checklist;
+ * the card is titled for the earliest, which *Start the night* opens.
  *
  * The one card on the page about the next thing to happen, so it wears the
  * accent rule. The press that starts the night is not on it: it is the
@@ -174,6 +229,9 @@ function EncounterRow({
  * which opens the encounter builder, and *Run* stay above that link. *Run* is
  * only on an encounter never played; a played one has *View log*, and a carried
  * one *Pick up* (`playthroughOf` in `encounterList.ts`).
+ *
+ * Each planned night can be deleted from here, behind a confirmation; one
+ * that was started cannot.
  */
 export function NextSession({
   view,
@@ -191,6 +249,9 @@ export function NextSession({
 }) {
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
   const { session, run: live } = view;
+  // The night the card is about: the open one, or while none is open the
+  // earliest planned one, which *Start the night* will open.
+  const night = session ?? view.planned[0]?.session;
   const total = view.encounters.length;
   // What is still to be played, in the order the night reaches it: the one on
   // the table, a carried one, then the DM's order (`onDeckOf`).
@@ -205,9 +266,9 @@ export function NextSession({
         <div className="min-w-0 flex-1">
           <div className="text-label leading-none font-medium text-accent-ink">Next session</div>
           <SectionHeading size="display" className="mt-2.5">
-            {session === undefined
+            {night === undefined
               ? "Nothing is running yet"
-              : (session.title ?? `Session ${String(session.number)}`)}
+              : (night.title ?? `Session ${String(night.number)}`)}
           </SectionHeading>
           <p className="mt-1.5 mb-0 text-body-s leading-body text-muted-foreground">
             {count === 0
@@ -283,14 +344,26 @@ export function NextSession({
         </div>
       </div>
 
-      <div className="border-t border-hairline">
-        <PrepChecklist
-          key={session?.id ?? view.campaign.id}
-          campaignId={view.campaign.id}
-          sessionId={session?.id}
-          items={view.prep}
-        />
-      </div>
+      {session === undefined && view.planned.length > 0 ? (
+        view.planned.map((planned) => (
+          <PlannedNightSection
+            key={planned.session.id}
+            campaignId={view.campaign.id}
+            planned={planned}
+            named={view.planned.length > 1}
+            next={view.planned.find((other) => other !== planned)?.session}
+          />
+        ))
+      ) : (
+        <div className="border-t border-hairline">
+          <PrepChecklist
+            key={session?.id ?? view.campaign.id}
+            campaignId={view.campaign.id}
+            sessionId={session?.id}
+            items={view.prep}
+          />
+        </div>
+      )}
 
       {session !== undefined && live === undefined && (
         <CardFooter className="flex-wrap justify-between">

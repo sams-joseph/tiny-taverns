@@ -3,7 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DateTime, Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { recap11, session11, sessions } from "../chronicle/chronicle.fixtures";
+import { recap11, saltRoad, session11, sessions } from "../chronicle/chronicle.fixtures";
 import { dayOf } from "../chronicle/format";
 import { liveFight, runningSession } from "../run/run.fixtures";
 import {
@@ -20,6 +20,13 @@ import {
   partySeat,
   readAloud,
   renderScreen,
+  begunSession,
+  bodyOf,
+  laterPlannedSession,
+  laterPlannedSessionId,
+  plannedSession,
+  plannedSessionId,
+  prepItem,
   session,
   sessionId,
   sketch,
@@ -327,6 +334,7 @@ describe("the next session card", () => {
       status: 200,
       body: { ...campaign, currentSessionId: null },
     });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: [begunSession] });
     server.routes.set(`GET ${base}/encounters`, { status: 200, body: page([]) });
     await renderScreen(mintingSession());
     const card = await cardOf("Nothing is running yet");
@@ -340,6 +348,214 @@ describe("the next session card", () => {
     expect(within(card).getByText(/No session in the works/)).toBeInTheDocument();
     // Nothing is open, so there is nothing to finish.
     expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
+  });
+
+  it("shows the planned night and its checklist while no night is open", async () => {
+    server.routes.set(`GET ${base}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: [plannedSession, begunSession],
+    });
+    server.routes.set(`GET ${base}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: [
+        {
+          ...prepItem,
+          id: "6e7f8091-a2b3-4c4d-8e5f-607182930415",
+          sessionId: plannedSessionId,
+          label: "Print the salt road map",
+          done: false,
+        },
+      ],
+    });
+    server.routes.set(`POST ${base}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: { ...prepItem, sessionId: plannedSessionId, label: "Name the toll-keeper" },
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    expect(within(card).getByText("Print the salt road map")).toBeInTheDocument();
+    // Planned is not open: nothing to finish, and the row still starts it.
+    expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
+    expect(
+      within(campaignRow()).getByRole("button", { name: "Start session" }),
+    ).toBeInTheDocument();
+
+    // The checklist is the planned night's own, and takes a line as it does tonight.
+    await userEvent.type(within(card).getByRole("textbox"), "Name the toll-keeper{Enter}");
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/sessions/${plannedSessionId}/prep`)).toEqual({
+        label: "Name the toll-keeper",
+      }),
+    );
+  });
+
+  /** No night open, and night 13 planned over the played night 12. */
+  const plannedOnly = () => {
+    server.routes.set(`GET ${base}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: [plannedSession, begunSession],
+    });
+    server.routes.set(`GET ${base}/sessions/${plannedSessionId}/prep`, { status: 200, body: [] });
+    server.routes.set(`GET ${base}/acts`, { status: 200, body: [] });
+    server.routes.set(`DELETE ${base}/sessions/${plannedSessionId}`, {
+      status: 204,
+      body: undefined,
+    });
+  };
+  const deletes = () =>
+    server.calls.filter((call) => call.method === "DELETE").map((call) => call.pathname);
+
+  it("deletes the planned night once confirmed", async () => {
+    plannedOnly();
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    await userEvent.click(within(card).getByRole("button", { name: "Delete The toll bridge" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
+    expect(
+      within(dialog).getByText(
+        "The planned night and its checklist are deleted. Start the night makes a new one.",
+      ),
+    ).toBeInTheDocument();
+    // No act starts at night 13, so the dialog names none.
+    expect(within(dialog).queryByText(/act that starts at/)).toBeNull();
+    expect(deletes()).toEqual([]);
+
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: [begunSession] });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete night" }));
+    await waitFor(() => expect(deletes()).toEqual([`${base}/sessions/${plannedSessionId}`]));
+
+    // The nights are re-read, so the card has no planned night left to show.
+    expect(await cardOf("Nothing is running yet")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Delete The toll bridge?" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete The toll bridge" })).toBeNull();
+  });
+
+  /** Nights 13 and 14 both planned, over the played night 12. */
+  const twoPlanned = () => {
+    plannedOnly();
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: [laterPlannedSession, plannedSession, begunSession],
+    });
+    server.routes.set(`GET ${base}/sessions/${laterPlannedSessionId}/prep`, {
+      status: 200,
+      body: [
+        {
+          ...prepItem,
+          id: "7f8091a2-b3c4-4d5e-8f60-718293041526",
+          sessionId: laterPlannedSessionId,
+          label: "Cast the ferryman",
+          done: false,
+        },
+      ],
+    });
+    server.routes.set(`DELETE ${base}/sessions/${laterPlannedSessionId}`, {
+      status: 204,
+      body: undefined,
+    });
+  };
+
+  it("lists every planned night in number order, each with its checklist", async () => {
+    twoPlanned();
+    await renderScreen(mintingSession());
+    // Titled for the earliest, which Start the night opens.
+    const card = await cardOf("The toll bridge");
+
+    const earlier = within(card).getByRole("region", { name: "The toll bridge" });
+    const later = within(card).getByRole("region", { name: "The ferry" });
+    expect(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(earlier).getByText("Session 13 · The toll bridge")).toBeInTheDocument();
+    expect(await within(later).findByText("Cast the ferryman")).toBeInTheDocument();
+    expect(within(later).getByText("Session 14 · The ferry")).toBeInTheDocument();
+    expect(within(earlier).queryByText("Cast the ferryman")).toBeNull();
+    expect(within(later).getByRole("button", { name: "Delete The ferry" })).toBeInTheDocument();
+  });
+
+  it("deletes one planned night and leaves the other", async () => {
+    twoPlanned();
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    await userEvent.click(within(card).getByRole("button", { name: "Delete The ferry" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete The ferry?" });
+    expect(
+      within(dialog).getByText(
+        "The planned night and its checklist are deleted. Start the night opens session 13 next.",
+      ),
+    ).toBeInTheDocument();
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: [plannedSession, begunSession],
+    });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete night" }));
+    await waitFor(() => expect(deletes()).toEqual([`${base}/sessions/${laterPlannedSessionId}`]));
+
+    await waitFor(() => expect(screen.queryByRole("region", { name: "The ferry" })).toBeNull());
+    const left = await cardOf("The toll bridge");
+    expect(
+      within(left).getByRole("button", { name: "Delete The toll bridge" }),
+    ).toBeInTheDocument();
+    expect(within(left).queryByText("Cast the ferryman")).toBeNull();
+  });
+
+  it("names the act that starts at the planned night, which the delete keeps", async () => {
+    plannedOnly();
+    server.routes.set(`GET ${base}/acts`, {
+      status: 200,
+      body: [
+        { ...saltRoad, firstSessionNumber: 12 },
+        {
+          ...saltRoad,
+          id: "2b1f2a1e-0000-4000-8000-000000000a13",
+          title: "Act III · The toll bridge",
+          firstSessionNumber: 13,
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    await userEvent.click(within(card).getByRole("button", { name: "Delete The toll bridge" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
+    expect(
+      await within(dialog).findByText(
+        "Act III · The toll bridge, the act that starts at session 13, is kept.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/its checklist are deleted/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Act II ·/)).toBeNull();
+  });
+
+  it("keeps the planned night when the delete is cancelled", async () => {
+    plannedOnly();
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    await userEvent.click(within(card).getByRole("button", { name: "Delete The toll bridge" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Delete The toll bridge?" })).toBeNull(),
+    );
+    expect(deletes()).toEqual([]);
+    expect(await cardOf("The toll bridge")).toBeInTheDocument();
+  });
+
+  it("offers no delete for a night that is open", async () => {
+    await renderScreen(mintingSession());
+    await screen.findByRole("button", { name: "Finish the night" });
+    expect(screen.queryByText("Delete this night")).toBeNull();
   });
 });
 

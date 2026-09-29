@@ -282,7 +282,10 @@ const callsFor = (scope: HobScope): ScopeCalls => {
          * is read by its Stats tab and, as a line, by the Cast drawer (the
          * shelf read), so keeping one names both. A new NPC joins the Cast,
          * whose cards, prep and sheet lines are three reads, so keeping one
-         * names all three. Anything else
+         * names all three. A planned night is a new row in the nights, which
+         * the Chronicle, the Next session card's planned night and *Start
+         * the night*'s number all read, with its checklist and the act it
+         * starts; a kept act is the Chronicle's acts alone. Anything else
          * Hob keeps here is a note, an encounter or the story so far, all three
          * named because the model decides which.
          */
@@ -295,11 +298,19 @@ const callsFor = (scope: HobScope): ScopeCalls => {
                 ? [reads.npcSheet(accepted.sheet.npcId), reads.npcSheets(campaignId)]
                 : accepted.accepted === "npc"
                   ? [reads.npcs(campaignId), reads.npcPrep(campaignId), reads.npcSheets(campaignId)]
-                  : [
-                      reads.notes(campaignId),
-                      reads.encounters(campaignId),
-                      reads.story(campaignId),
-                    ],
+                  : accepted.accepted === "night"
+                    ? [
+                        reads.sessions(campaignId),
+                        reads.prep(accepted.session.id),
+                        reads.acts(campaignId),
+                      ]
+                    : accepted.accepted === "act"
+                      ? [reads.acts(campaignId)]
+                      : [
+                          reads.notes(campaignId),
+                          reads.encounters(campaignId),
+                          reads.story(campaignId),
+                        ],
       };
     }
     case "sharedWorld": {
@@ -634,6 +645,18 @@ export function useHobConversation(
         if (Result.isSuccess(result)) {
           setSaved((done) => [...done, turnId]);
           setKept((made) => ({ ...made, [turnId]: result.success }));
+          const accepted = result.success;
+          if (accepted.accepted === "night") {
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.who === "artifact" &&
+                turn.artifact.id === turnId &&
+                turn.artifact.kind === "checklist"
+                  ? { ...turn, artifact: { ...turn.artifact, plannedAs: accepted.session.number } }
+                  : turn,
+              ),
+            );
+          }
           invalidate(calls.keeps(result.success));
           onKeptRef.current?.(result.success);
           return;

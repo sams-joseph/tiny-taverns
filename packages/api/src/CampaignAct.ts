@@ -34,8 +34,9 @@ const title = Schema.String.check(Schema.isPattern(/\S/), Schema.isMaxLength(ACT
 
 /**
  * Starting a new act at a night. The night must exist in the campaign; a
- * second act at the same night is a `Conflict`. There is no `origin`: only the
- * creator writes an act, by hand.
+ * second act at the same night is a `Conflict`. There is no `origin`: an act
+ * the creator keeps from their Hob is stamped by the accept
+ * (`repo/Proposals.ts`), never by a payload.
  */
 export const CampaignActCreate = Schema.Struct({
   title,

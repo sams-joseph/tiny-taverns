@@ -222,6 +222,15 @@ function ChecklistBody({ artifact }: { readonly artifact: HobArtifact & { kind: 
   );
 }
 
+/** What keeping an act does, in the words the Chronicle's own *Start act* uses. */
+function ActBody() {
+  return (
+    <p className="text-body-s leading-body text-muted-foreground">
+      Runs until the next act. Only you see it until you share it.
+    </p>
+  );
+}
+
 function RulesBody({ artifact }: { readonly artifact: HobArtifact & { kind: "rules" } }) {
   return (
     <div className="flex flex-col gap-2">
@@ -361,6 +370,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <NpcBody artifact={artifact} />;
     case "checklist":
       return <ChecklistBody artifact={artifact} />;
+    case "act":
+      return <ActBody />;
     case "campaign":
       return <CampaignBody artifact={artifact} />;
     case "sharedWorld":
@@ -404,6 +415,8 @@ export function ArtifactCard({
   const character = artifact.kind === "character";
   const npcSheet = artifact.kind === "npcSheet";
   const npc = artifact.kind === "npc";
+  const night = artifact.kind === "checklist";
+  const act = artifact.kind === "act";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -519,7 +532,13 @@ export function ArtifactCard({
                               ? "On the NPC’s sheet"
                               : npc
                                 ? "In the Cast"
-                                : "In tonight’s session"}
+                                : artifact.kind === "checklist"
+                                  ? artifact.plannedAs === undefined
+                                    ? "Kept as a planned night"
+                                    : `Planned as session ${String(artifact.plannedAs)}`
+                                  : act
+                                    ? "In the Chronicle"
+                                    : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -534,7 +553,7 @@ export function ArtifactCard({
                       ? "Keep as the story so far"
                       : chronicle
                         ? "Add to Chronicle"
-                        : campaign || sharedWorld || character || npc || npcSheet
+                        : campaign || sharedWorld || character || npc || npcSheet || night || act
                           ? "Keep it"
                           : "Save to session"}
               </Button>

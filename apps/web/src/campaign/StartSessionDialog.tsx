@@ -14,7 +14,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
-import { nextSessionNumber, startSession } from "../session/start";
+import { nightToOpen, startSession } from "../session/start";
 import { SaveFailure } from "../ui/form";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -51,7 +51,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * the `useCallback` here used to answer, in a shape that cannot be forgotten.
  */
 const nextNumberAtom = Atom.family((campaignId: Campaign["id"]) =>
-  apiAtom(nextSessionNumber(campaignId), [reads.sessions(campaignId)]),
+  apiAtom(nightToOpen(campaignId), [reads.sessions(campaignId)]),
 );
 
 export function StartSessionDialog({
@@ -90,7 +90,7 @@ export function StartSessionDialog({
         <DialogHeader>
           <DialogTitle>
             {number.state === "ready"
-              ? `Start session ${String(number.value)}?`
+              ? `Start session ${String(number.value.number)}?`
               : "Start a session"}
           </DialogTitle>
           <DialogDescription>

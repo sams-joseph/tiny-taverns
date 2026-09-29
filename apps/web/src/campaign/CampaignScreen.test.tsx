@@ -183,6 +183,8 @@ describe("CampaignScreen", () => {
     server.routes.set(`GET /campaigns/${campaignId}/encounters`, { status: 200, body: page([]) });
     server.routes.set(`GET /campaigns/${campaignId}/notes`, { status: 200, body: page([]) });
     server.routes.set(`GET /campaigns/${campaignId}/characters`, { status: 200, body: [] });
+    // Brand new: no night has been opened or planned.
+    server.routes.set(`GET /campaigns/${campaignId}/sessions`, { status: 200, body: [] });
     await renderScreen(mintingSession());
 
     expect(await screen.findByText("No encounters yet")).toBeInTheDocument();
