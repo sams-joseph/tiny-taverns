@@ -1689,6 +1689,8 @@ describe("what counts as asking for a build", () => {
     ["Did I already make an NPC for the ferry?", false],
     ["What happened last session?", false],
     ["Which act are we in?", false],
+    ["Make the innkeeper act nervous when they arrive", false],
+    ["I plan to run the fight tomorrow, what CR fits?", false],
     // Misses, kept visible: each is a build ask the rule lets past, because
     // erring towards silence is the instruction.
     ["Give me a name for the ferryman", false],

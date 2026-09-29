@@ -1522,7 +1522,6 @@ const MAKE_VERBS: ReadonlyArray<string> = [
   "design",
   "sketch",
   "compose",
-  "plan",
   "prep",
   "prepare",
   "come up with",
@@ -1550,6 +1549,27 @@ const WANT_VERBS: ReadonlyArray<string> = [
   "add",
 ];
 
+/**
+ * The next night with its checklist, which `proposeNight` drafts — "plan next
+ * session", "prep the next night". Only the next or a new night: "a summary of
+ * last session" is chat.
+ */
+const NIGHT_NOUNS: ReadonlyArray<string> = [
+  "next session",
+  "next night",
+  "new session",
+  "new night",
+  "prep list",
+  "prep checklist",
+  "checklist",
+];
+
+/**
+ * A verb that asks for a build only of a night: *"plan next session"* is one,
+ * *"I plan to run the fight tomorrow"* is not.
+ */
+const NIGHT_VERBS: ReadonlyArray<string> = ["plan"];
+
 /** The things the DM's toolkit can build, in the words a DM uses for them. */
 const DM_NOUNS: ReadonlyArray<string> = [
   "encounter",
@@ -1574,18 +1594,13 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "boxed text",
   "beat",
   "beats",
-  // The next night with its checklist, which `proposeNight` drafts — "plan
-  // next session", "prep the next night" — and an act, `proposeAct`'s. Only
-  // the next or a new night: "a summary of last session" is chat.
-  "next session",
-  "next night",
-  "new session",
-  "new night",
-  "prep list",
-  "prep checklist",
-  "checklist",
-  "act",
-  "acts",
+  ...NIGHT_NOUNS,
+  // An act, `proposeAct`'s, as a phrase: the bare word is also a verb, and
+  // "make the innkeeper act nervous" is chat.
+  "new act",
+  "an act",
+  "next act",
+  "another act",
   // A new member of the Cast, which `proposeNpc` drafts — "make an NPC",
   // "add a blacksmith to the cast".
   "npc",
@@ -1705,13 +1720,19 @@ export const askedForABuild = (asked: string, nouns: ReadonlyArray<string> = DM_
   const wanted = nouns.map((noun) => words(noun).join(" ")).filter((noun) => noun !== "");
   for (let at = 0; at < tokens.length; at += 1) {
     const strong = longestAt(MAKE_VERBS, tokens, at);
-    const verb = strong ?? longestAt(WANT_VERBS, tokens, at);
+    const night = longestAt(NIGHT_VERBS, tokens, at);
+    const verb = strong ?? longestAt(WANT_VERBS, tokens, at) ?? night;
     if (verb === undefined) continue;
     if (tokens.slice(Math.max(0, at - 3), at).some((word) => RECORD_MARKERS.includes(word))) {
       continue;
     }
     const from = at + verb.split(" ").length;
-    const looking = strong === undefined ? wanted : [...wanted, ...VAGUE_NOUNS];
+    const looking =
+      strong !== undefined
+        ? [...wanted, ...VAGUE_NOUNS]
+        : verb === night
+          ? wanted.filter((noun) => NIGHT_NOUNS.includes(noun))
+          : wanted;
     const until = Math.min(tokens.length, from + OBJECT_WINDOW);
     for (let object = from; object < until; object += 1) {
       if (looking.some((noun) => phraseAt(tokens, object, noun))) return true;
