@@ -442,7 +442,11 @@ function MovableItem({
       style={
         shift === undefined ? undefined : ({ "--row-shift": `${String(shift)}px` } as CSSProperties)
       }
-      onTransitionEnd={() => drag.onSettled(id)}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === "translate") {
+          drag.onSettled(id);
+        }
+      }}
       className={cn(
         "flex items-center gap-2 rounded-md",
         carried && "opacity-50",

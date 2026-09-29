@@ -190,8 +190,8 @@ export interface RowSpan {
  * the other rows nearest the pointer's `y`, so before the first row whose
  * middle is below it or after the last one above. `rows` is *Not yet played*
  * as drawn, in order, the dragged row among them; its own span is not a
- * target, since it follows the pointer. As with the menu, the anchors are the
- * rows the DM can see under the pill.
+ * target, since the carried row stays in its place, dimmed, until the drop.
+ * As with the menu, the anchors are the rows the DM can see under the pill.
  *
  * Nothing (`undefined`) when the drop leaves the order as it is — back in its
  * own gap — which is when no drop line is drawn and a drop sends nothing.

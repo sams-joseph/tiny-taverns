@@ -175,7 +175,7 @@ describe("placed", () => {
 
 describe("dropPlacement", () => {
   // Five 56px rows 6px apart, the list's own spacing; the dragged row's span
-  // is where it is drawn now, following the pointer.
+  // is its own place, where it stays, dimmed, while it is carried.
   const spans = (rows: ReadonlyArray<Encounter>) =>
     rows.map((row, at) => ({ id: row.id, top: at * 62, bottom: at * 62 + 56 }));
   const rows = [ambush, crate, well, bargain, storm];
