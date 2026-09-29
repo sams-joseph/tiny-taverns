@@ -3,12 +3,13 @@ import {
   type RaceBody,
   type SheetBody,
   type SheetResource,
-  type SpellBody,
-  type SpellId,
+  Spell,
+  SpellId,
   spellActionFor,
 } from "@taverns/api";
-import { Effect } from "effect";
-import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
+import { Effect, Schema, Struct } from "effect";
+import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { fromColumns } from "./rows.js";
 import type { Vocabulary } from "./visibility.js";
 
 /**
@@ -40,7 +41,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
     readonly className: string | null;
     readonly vocabulary: Vocabulary;
   },
-): Effect.Effect<Body, SqlError.SqlError> =>
+): Effect.Effect<Body, SqlError.SqlError | Schema.SchemaError> =>
   Effect.gen(function* () {
     const { body, vocabulary } = input;
     const level = Math.max(1, input.level ?? 1);
@@ -80,22 +81,26 @@ export const recomputeForLevel = <Body extends SheetBody>(
     const spellRows =
       knownIds.length === 0
         ? []
-        : yield* sql<LevelSpellRow>`
-            select id, name, level, school_name, ritual, concentration, casting_time,
-                   spell_range, body
-            from spell
-            where id = any(${knownIds})
-              and ${vocabulary("spell")}
-              and (level = 0 or level <= ${highest})
-              and ${
-                subclassName === undefined
-                  ? sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`
-                  : sql.or([
-                      sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`,
-                      sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
-                    ])
-              }
-          `;
+        : yield* SqlSchema.findAll({
+            Request: Schema.toType(Schema.Array(SpellId)),
+            Result: LevelSpellRow,
+            execute: (ids) => sql`
+              select id, name, level, school_name, ritual, concentration, casting_time,
+                     spell_range, body
+              from spell
+              where id = any(${ids})
+                and ${vocabulary("spell")}
+                and (level = 0 or level <= ${highest})
+                and ${
+                  subclassName === undefined
+                    ? sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`
+                    : sql.or([
+                        sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`,
+                        sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
+                      ])
+                }
+            `,
+          })(knownIds);
     const spellById = new Map(spellRows.map((row) => [row.id, row]));
     const keptKnown = (body.spellcasting?.known ?? []).filter(
       (spell) =>
@@ -108,19 +113,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
       if (row.level > 0 && known.prepared !== true) return [];
       return [
         spellActionFor(
-          {
-            spell: {
-              id: row.id,
-              name: row.name,
-              level: row.level,
-              schoolName: row.school_name,
-              ritual: row.ritual,
-              concentration: row.concentration,
-              castingTime: row.casting_time,
-              range: row.spell_range,
-              spell: row.body,
-            },
-          },
+          { spell: row },
           {
             characterLevel: level,
             spellAttack: body.spellcasting?.attack,
@@ -149,17 +142,23 @@ const present = (value: string | null | undefined): string | undefined => {
   return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 };
 
-interface LevelSpellRow {
-  readonly id: SpellId;
-  readonly name: string;
-  readonly level: number;
-  readonly school_name: string;
-  readonly ritual: boolean;
-  readonly concentration: boolean;
-  readonly casting_time: string;
-  readonly spell_range: string;
-  readonly body: SpellBody;
-}
+/** A known spell as a level-up rewrites its action line: `spellActionFor`'s half of a `spell` row. */
+const LevelSpellRow = fromColumns(
+  Schema.Struct(
+    Struct.pick(Spell.fields, [
+      "id",
+      "name",
+      "level",
+      "schoolName",
+      "ritual",
+      "concentration",
+      "castingTime",
+      "range",
+      "spell",
+    ]),
+  ),
+  { range: "spell_range", spell: "body" },
+);
 
 const ordinal = (n: number): string =>
   `${String(n)}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;

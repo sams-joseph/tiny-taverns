@@ -4,7 +4,7 @@ import {
   challengeTally,
   checkOutcome,
   type EncounterChallenge,
-  type EncounterKind,
+  EncounterKind,
   EncounterRunCheck,
   type EncounterRunCheckCreate,
   type EncounterRunCheckId,
@@ -12,14 +12,21 @@ import {
   EncounterRunScene,
   type EncounterRunSceneUpdate,
   NotFound,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
 import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { COMBATANT, RUNS } from "./liveTables.js";
-import { classFromColumns, defined, dieOnSqlError, fromColumns, setClause } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  setClause,
+} from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { containedChildWritable, nestedRowWritable } from "./visibility.js";
 
@@ -46,10 +53,8 @@ export const CheckRow = classFromColumns(
 /** A scene with nothing recorded: what a run whose scene row is missing reads as. */
 const emptyScene = { beats: [], challenge: null, attitude: null, stages: null, stage: null };
 
-interface RunRow {
-  readonly id: EncounterRunId;
-  readonly mode: EncounterKind;
-}
+/** The run a scene method is about, as its gate reads it: which kind of scene it plays. */
+const RunRow = fromColumns(Schema.Struct({ id: EncounterRunId, mode: EncounterKind }));
 
 /**
  * The DC a check is made against when the DM names none: a skill challenge's
@@ -112,22 +117,19 @@ export class RunScenes extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
 
-      const readRun = (
-        { actor, campaign }: CampaignCreatorActor,
-        sessionId: SessionId,
-        id: EncounterRunId,
-      ) =>
-        Effect.flatMap(
-          sql<RunRow>`
-            select encounter_run.id, encounter_run.mode from encounter_run
-            where encounter_run.id = ${id}
-              and ${nestedRowWritable(sql, RUNS, sessionId, campaign, actor)}
-          `,
-          (rows) =>
-            rows.length === 0
-              ? Effect.fail(new NotFound({ resource: "encounter_run", id }))
-              : Effect.succeed(rows[0]!),
-        );
+      const writableRun = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, sessionId: SessionId, id: EncounterRunId }),
+        ),
+        Result: RunRow,
+        execute: ({ campaign, actor, sessionId, id }) => sql`
+          select encounter_run.id, encounter_run.mode from encounter_run
+          where encounter_run.id = ${id}
+            and ${nestedRowWritable(sql, RUNS, sessionId, campaign, actor)}
+        `,
+      });
+      const readRun = (dm: CampaignCreatorActor, sessionId: SessionId, id: EncounterRunId) =>
+        writableRun({ ...asked(dm), sessionId, id }).pipe(orNotFound("encounter_run", id));
 
       /** The checks, oldest first — the order they were made in. */
       const checksOf = SqlSchema.findAll({

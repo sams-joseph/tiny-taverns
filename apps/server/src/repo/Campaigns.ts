@@ -1,19 +1,18 @@
 import {
-  type AccountId,
-  type Actor,
+  Actor,
   Campaign,
   type CampaignCreate,
+  CampaignId,
   CampaignImages,
-  type CampaignId,
   type CampaignUpdate,
   Conflict,
   CurrentActor,
-  type SharedWorldId,
+  SharedWorldId,
   NotFound,
   type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { foundGroup, moveToOwnContext } from "./Groups.js";
@@ -21,12 +20,13 @@ import { addCreator } from "./Memberships.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
+  orNotFound,
   proseColumn,
-  type ProvenanceColumns,
-  provenanceOf,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   campaignReadable,
@@ -36,39 +36,22 @@ import {
 } from "./visibility.js";
 
 /**
- * Exported for `repo/Memberships.ts`, which selects `campaign.*` beside the
- * actor's own membership row — the same rule `Recap.ts` follows, and the reason
- * it is a rule: **one mapper per table**, imported where a second read needs it
- * rather than restated. A second `toCampaign` is a second answer to what a
- * campaign is on the wire.
- */
-export interface CampaignRow extends ProvenanceColumns {
-  readonly id: CampaignId;
-  readonly group_id: SharedWorldId;
-  readonly creator_account_id: AccountId;
-  readonly name: string;
-  readonly party_name: string | null;
-  readonly description: string | null;
-  readonly player_count: number;
-  readonly current_session_id: SessionId | null;
-  readonly archived_at: Date | null;
-  /** From {@link campaignImageColumns}; `null` when the campaign has no cover record. */
-  readonly image_id: string | null;
-  readonly image_state: "generating" | "ready" | "failed" | null;
-}
-
-/**
- * The cover's two facts beside a campaign row: `image_id` and `image_state`,
- * as scalar subqueries so they fit a `select`, a `returning` and a column list
- * alike. **Every read that becomes a `Campaign` names this fragment** —
- * `toCampaign` dies on a row without it, so a path that forgot is a failed test
+ * The cover's two facts beside a campaign row: `image_id`, the id of a cover
+ * that is ready to sign, and `image_pending`, whether one is being drawn — as
+ * scalar subqueries so they fit a `select`, a `returning` and a column list
+ * alike. **Every read that becomes a `Campaign` names this fragment** — the
+ * decode refuses a row without it, so a path that forgot is a failed test
  * rather than a campaign whose cover silently vanished.
  */
 export const campaignImageColumns = (sql: SqlClient.SqlClient) => sql`
   (select campaign_image.id from campaign_image
-   where campaign_image.campaign_id = campaign.id) as image_id,
-  (select campaign_image.state from campaign_image
-   where campaign_image.campaign_id = campaign.id) as image_state
+   where campaign_image.campaign_id = campaign.id
+     and campaign_image.state = 'ready') as image_id,
+  coalesce(
+    (select campaign_image.state = 'generating' from campaign_image
+     where campaign_image.campaign_id = campaign.id),
+    false
+  ) as image_pending
 `;
 
 /**
@@ -103,25 +86,45 @@ export const campaignImages = (
   sign: CampaignImageSigner | undefined,
 ): Campaign["image"] => (imageId !== null && sign !== undefined ? sign(imageId) : null);
 
-export const toCampaign = (row: CampaignRow, sign: CampaignImageSigner | undefined): Campaign => {
-  if (row.image_state === undefined) {
-    throw new Error("a campaign read did not select campaignImageColumns");
-  }
-  return new Campaign({
-    id: row.id,
-    contextId: row.group_id,
-    creatorAccountId: row.creator_account_id,
-    name: row.name,
-    partyName: row.party_name,
-    description: row.description,
-    playerCount: row.player_count,
-    currentSessionId: row.current_session_id,
-    image: campaignImages(row.image_state === "ready" ? row.image_id : null, sign),
-    imagePending: row.image_state === "generating",
-    archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
-    ...provenanceOf(row),
-  });
-};
+/**
+ * A ready cover's id, decoded into the images the wire carries. Minting is the
+ * decode's last step, so the id a predicate let through is the only thing a URL
+ * is made from.
+ */
+const coverFromId = (sign: CampaignImageSigner | undefined) =>
+  Schema.NullOr(Schema.String).pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(CampaignImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((id: string | null) => campaignImages(id, sign)),
+        SchemaGetter.forbidden(() => "a cover is minted, never read back"),
+      ),
+    ),
+  );
+
+/**
+ * A `campaign` row as the wire reads it, decoded off `campaign.*` and
+ * {@link campaignImageColumns} by `SqlSchema`, its cover signed with the signer
+ * the reading repository was built with.
+ *
+ * **One decode per table**, exported for `repo/Memberships.ts`, which selects
+ * `campaign.*` beside the actor's own membership row and nests it through
+ * here rather than restating what a campaign is on the wire.
+ */
+export const campaignRow = (sign: CampaignImageSigner | undefined) =>
+  classFromColumns(
+    Campaign,
+    {
+      ...Campaign.fields,
+      ...timestampColumns,
+      archivedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+      image: coverFromId(sign),
+    },
+    { contextId: "group_id", image: "image_id" },
+  );
+
+/** The written columns of an insert or a PATCH, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /**
  * Reads and writes over `campaign`.
@@ -165,8 +168,99 @@ export class Campaigns extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const sign = yield* campaignImageSigner;
-      const asCampaign = (row: CampaignRow): Campaign => toCampaign(row, sign);
+      const CampaignRow = campaignRow(yield* campaignImageSigner);
+
+      const readable = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: CampaignRow,
+        execute: () =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign.*, ${campaignImageColumns(sql)} from campaign
+              where ${campaignReadable(sql, actor)} and campaign.archived_at is null
+              order by campaign.created_at desc
+            `,
+          ),
+      });
+      const readableById = SqlSchema.findOne({
+        Request: Schema.toType(CampaignId),
+        Result: CampaignRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign.*, ${campaignImageColumns(sql)} from campaign
+              where campaign.id = ${id} and ${campaignReadable(sql, actor, id)}
+            `,
+          ),
+      });
+      const insertRow = SqlSchema.findOne({
+        Request: Columns,
+        Result: CampaignRow,
+        execute: (columns) => sql`
+          insert into campaign ${sql.insert(columns)}
+          returning campaign.*, ${campaignImageColumns(sql)}
+        `,
+      });
+      /**
+       * The campaign a creator is taking out of its Shared World, locked with
+       * the world it leaves for the move that follows.
+       */
+      const leaving = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaign: CampaignId, group: SharedWorldId, actor: Actor }),
+        ),
+        Result: CampaignRow,
+        execute: ({ campaign, group, actor }) => sql`
+          select campaign.*, ${campaignImageColumns(sql)}
+          from campaign
+          join play_group as source on source.id = campaign.group_id
+          where campaign.id = ${campaign}
+            and campaign.group_id = ${group}
+            and campaign.creator_account_id = ${actor.accountId}
+            and source.is_shared_world
+          for update of campaign, source
+        `,
+      });
+      /** A campaign this transaction has just moved, read back by the id it moved. */
+      const moved = SqlSchema.findOne({
+        Request: Schema.toType(CampaignId),
+        Result: CampaignRow,
+        execute: (id) => sql`
+          select campaign.*, ${campaignImageColumns(sql)} from campaign
+          where campaign.id = ${id}
+        `,
+      });
+      /** The creator's PATCH, behind `campaignWritable`. */
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: CampaignId, columns: Columns })),
+        Result: CampaignRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update campaign set ${setClause(sql, columns)}
+              where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
+              returning campaign.*, ${campaignImageColumns(sql)}
+            `,
+          ),
+      });
+      /** Onto the archive shelf or off it — `archive` and `restore`, one statement. */
+      const shelve = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: CampaignId, archived: Schema.Boolean })),
+        Result: CampaignRow,
+        execute: ({ id, archived }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update campaign
+              set archived_at = ${archived ? sql`now()` : sql`null`}, updated_at = now()
+              where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
+              returning campaign.*, ${campaignImageColumns(sql)}
+            `,
+          ),
+      });
 
       /**
        * Whether a session may become this campaign's current one.
@@ -208,11 +302,6 @@ export class Campaigns extends Context.Service<
           }
         });
 
-      const one = (rows: ReadonlyArray<CampaignRow>, id: CampaignId) =>
-        rows.length === 0
-          ? Effect.fail(new NotFound({ resource: "campaign", id }))
-          : Effect.succeed(asCampaign(rows[0]!));
-
       const insert = (
         groupId: SharedWorldId,
         payload: CampaignCreate,
@@ -220,49 +309,27 @@ export class Campaigns extends Context.Service<
         from: AssistantOrigin | undefined,
       ) =>
         Effect.gen(function* () {
-          const rows = yield* sql<CampaignRow>`
-            insert into campaign ${sql.insert(
-              defined({
-                group_id: groupId,
-                creator_account_id: actor.accountId,
-                name: payload.name,
-                party_name: payload.partyName,
-                description: proseColumn(payload.description),
-                player_count: payload.playerCount,
-                visibility: payload.visibility,
-                ...assistantColumns(from),
-              }),
-            )}
-            returning campaign.*, ${campaignImageColumns(sql)}
-          `;
-          yield* addCreator(sql, rows[0]!.id, groupId, actor.accountId);
-          return asCampaign(rows[0]!);
+          // An insert answers with its row; not getting one is a defect.
+          const campaign = yield* insertRow(
+            defined({
+              group_id: groupId,
+              creator_account_id: actor.accountId,
+              name: payload.name,
+              party_name: payload.partyName,
+              description: proseColumn(payload.description),
+              player_count: payload.playerCount,
+              visibility: payload.visibility,
+              ...assistantColumns(from),
+            }),
+          ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+          yield* addCreator(sql, campaign.id, groupId, actor.accountId);
+          return campaign;
         });
 
       return {
-        list: dieOnSqlError(
-          Effect.gen(function* () {
-            const actor = yield* CurrentActor;
-            const rows = yield* sql<CampaignRow>`
-              select campaign.*, ${campaignImageColumns(sql)} from campaign
-              where ${campaignReadable(sql, actor)} and campaign.archived_at is null
-              order by campaign.created_at desc
-            `;
-            return rows.map(asCampaign);
-          }),
-        ),
+        list: dieOnSqlError(readable()),
 
-        findById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<CampaignRow>`
-                select campaign.*, ${campaignImageColumns(sql)} from campaign
-                where campaign.id = ${id} and ${campaignReadable(sql, actor, id)}
-              `;
-              return yield* one(rows, id);
-            }),
-          ),
+        findById: (id) => dieOnSqlError(readableById(id).pipe(orNotFound("campaign", id))),
 
         /**
          * Any live member of the group may create a campaign in it — the
@@ -320,29 +387,16 @@ export class Campaigns extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const sources = yield* sql<CampaignRow>`
-                  select campaign.*, ${campaignImageColumns(sql)}
-                  from campaign
-                  join play_group as source on source.id = campaign.group_id
-                  where campaign.id = ${creator.campaign}
-                    and campaign.group_id = ${creator.group}
-                    and campaign.creator_account_id = ${creator.actor.accountId}
-                    and source.is_shared_world
-                  for update of campaign, source
-                `;
-                if (sources.length === 0) {
-                  return yield* new NotFound({
-                    resource: "campaign",
-                    id: creator.campaign,
-                  });
-                }
+                const source = yield* leaving({
+                  campaign: creator.campaign,
+                  group: creator.group,
+                  actor: creator.actor,
+                }).pipe(orNotFound("campaign", creator.campaign));
 
-                yield* moveToOwnContext(sql, sources[0]!);
-                const rows = yield* sql<CampaignRow>`
-                  select campaign.*, ${campaignImageColumns(sql)} from campaign
-                  where campaign.id = ${creator.campaign}
-                `;
-                return yield* one(rows, creator.campaign);
+                yield* moveToOwnContext(sql, source);
+                return yield* moved(creator.campaign).pipe(
+                  orNotFound("campaign", creator.campaign),
+                );
               }),
             ),
           ),
@@ -360,12 +414,7 @@ export class Campaigns extends Context.Service<
                 current_session_id: patch.currentSessionId,
                 visibility: patch.visibility,
               });
-              const rows = yield* sql<CampaignRow>`
-                update campaign set ${setClause(sql, columns)}
-                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning campaign.*, ${campaignImageColumns(sql)}
-              `;
-              return yield* one(rows, id);
+              return yield* change({ id, columns }).pipe(orNotFound("campaign", id));
             }),
           ),
 
@@ -395,23 +444,13 @@ export class Campaigns extends Context.Service<
          * re-stamps `archived_at`, which is the same shelf a moment later.
          */
         archive: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<CampaignRow>`
-                update campaign set archived_at = now(), updated_at = now()
-                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning campaign.*, ${campaignImageColumns(sql)}
-              `;
-              return yield* one(rows, id);
-            }),
-          ),
+          dieOnSqlError(shelve({ id, archived: true }).pipe(orNotFound("campaign", id))),
 
         /**
          * Back on the list — `archive` read backwards, deliberately down to the
          * shape of the statement.
          *
-         * Same predicate, same `one`, same `NotFound`: a campaign somebody else
+         * Same predicate, same statement, same `NotFound`: a campaign somebody else
          * runs matches no row here for exactly the reason it matches none there,
          * so the refusal is not a second rule that could come to disagree with
          * the first. `campaignWritable` does not test `archived_at`, which is
@@ -424,17 +463,7 @@ export class Campaigns extends Context.Service<
          * pressing a button twice.
          */
         restore: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<CampaignRow>`
-                update campaign set archived_at = null, updated_at = now()
-                where campaign.id = ${id} and ${campaignWritable(sql, actor, id)}
-                returning campaign.*, ${campaignImageColumns(sql)}
-              `;
-              return yield* one(rows, id);
-            }),
-          ),
+          dieOnSqlError(shelve({ id, archived: false }).pipe(orNotFound("campaign", id))),
 
         /**
          * The campaign and everything that belongs only to it, in one

@@ -1,22 +1,30 @@
 import {
-  type Actor,
+  Actor,
   CampaignId,
   CharacterId,
   Conflict,
   CurrentActor,
-  type EncounterRunId,
+  EncounterRunId,
   NotFound,
   Roll,
   type RollCreate,
   RollId,
   type RollListFilterValues,
   SessionId,
+  Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
-import { classFromColumns, defined, dieOnSqlError, orNotFound, timestampColumns } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  timestampColumns,
+} from "./rows.js";
 import { RUN } from "./liveTables.js";
 import {
   campaignReadable,
@@ -33,12 +41,18 @@ import {
  */
 const RollRow = classFromColumns(Roll, { ...Roll.fields, ...timestampColumns });
 
-interface CurrentNightRow {
-  readonly session_id: SessionId | null;
-  readonly run_id: EncounterRunId | null;
-  readonly session_visibility: "dm" | "shared" | null;
-  readonly may_dm_roll: boolean;
-}
+/**
+ * The campaign's open night as a roll reads it: the night and its live fight,
+ * who the night is shown to, and whether this actor may roll as the DM.
+ */
+const CurrentNightRow = fromColumns(
+  Schema.Struct({
+    sessionId: Schema.NullOr(SessionId),
+    runId: Schema.NullOr(EncounterRunId),
+    sessionVisibility: Schema.NullOr(Visibility),
+    mayDmRoll: Schema.Boolean,
+  }),
+);
 
 const noOpenNight = new Conflict({ message: "nobody is playing at that table right now" });
 
@@ -105,11 +119,10 @@ export class Rolls extends Context.Service<
           Effect.orDie,
         );
 
-      const currentNight = (
-        campaignId: CampaignId,
-        actor: Actor,
-      ): Effect.Effect<CurrentNightRow, NotFound> =>
-        sql<CurrentNightRow>`
+      const nightOf = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, actor: Actor })),
+        Result: CurrentNightRow,
+        execute: ({ campaignId, actor }) => sql`
           select campaign.current_session_id as session_id,
                  session.active_encounter_run_id as run_id,
                  session.visibility as session_visibility,
@@ -117,14 +130,13 @@ export class Rolls extends Context.Service<
           from campaign
           left join session on session.id = campaign.current_session_id
           where campaign.id = ${campaignId} and ${campaignReadable(sql, actor, campaignId)}
-        `.pipe(
-          Effect.orDie,
-          Effect.flatMap((rows) =>
-            rows.length === 0
-              ? new NotFound({ resource: "campaign", id: campaignId })
-              : Effect.succeed(rows[0]!),
-          ),
-        );
+        `,
+      });
+      const currentNight = (
+        campaignId: CampaignId,
+        actor: Actor,
+      ): Effect.Effect<typeof CurrentNightRow.Type, NotFound> =>
+        nightOf({ campaignId, actor }).pipe(orNotFound("campaign", campaignId), dieOnSqlError);
 
       // The run pointer goes through the run predicate for the reason
       // `sessionColumns` gives: a roll made while a hidden fight is on the
@@ -249,16 +261,16 @@ export class Rolls extends Context.Service<
               const result = yield* sql.withTransaction(
                 Effect.gen(function* () {
                   const night = yield* currentNight(campaignId, actor);
-                  if (night.session_id === null || night.session_visibility === null) {
+                  if (night.sessionId === null || night.sessionVisibility === null) {
                     return yield* noOpenNight;
                   }
 
                   if (payload.characterId === undefined) {
-                    if (!night.may_dm_roll) {
+                    if (!night.mayDmRoll) {
                       return yield* new NotFound({ resource: "character", id: "dm-roll" });
                     }
                   } else {
-                    if (!night.may_dm_roll && night.session_visibility !== "shared") {
+                    if (!night.mayDmRoll && night.sessionVisibility !== "shared") {
                       return yield* noOpenNight;
                     }
                     if (!(yield* canRollCharacter(campaignId, payload.characterId, actor))) {
@@ -270,7 +282,7 @@ export class Rolls extends Context.Service<
                   }
 
                   if (payload.requestId !== undefined) {
-                    const seen = yield* existing(campaignId, night.session_id, payload.requestId);
+                    const seen = yield* existing(campaignId, night.sessionId, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
 
@@ -278,8 +290,8 @@ export class Rolls extends Context.Service<
                     insert into character_roll ${sql.insert(
                       defined({
                         campaign_id: campaignId,
-                        session_id: night.session_id,
-                        encounter_run_id: night.run_id,
+                        session_id: night.sessionId,
+                        encounter_run_id: night.runId,
                         account_id: actor.accountId,
                         character_id: payload.characterId,
                         label: payload.label,
@@ -291,23 +303,23 @@ export class Rolls extends Context.Service<
                         mode: payload.mode,
                         critical: payload.critical ?? null,
                         request_id: payload.requestId,
-                        visibility: night.session_visibility,
+                        visibility: night.sessionVisibility,
                       }),
                     )}
                     on conflict do nothing
                     returning character_roll.id
                   `;
                   if (rows.length === 0 && payload.requestId !== undefined) {
-                    const seen = yield* existing(campaignId, night.session_id, payload.requestId);
+                    const seen = yield* existing(campaignId, night.sessionId, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
                   const roll = yield* made({ campaignId, id: rows[0]!.id }).pipe(
                     Effect.catchTag("NoSuchElementError", Effect.die),
                   );
                   yield* appendEvent(sql, {
-                    sessionId: night.session_id,
+                    sessionId: night.sessionId,
                     kind: "roll-made",
-                    encounterRunId: night.run_id ?? undefined,
+                    encounterRunId: night.runId ?? undefined,
                     characterId: payload.characterId,
                     payload: { rollId: roll.id, total: roll.total },
                     visibility: roll.visibility,

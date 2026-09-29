@@ -1399,19 +1399,23 @@ describe("the seam", () => {
   });
 
   it("builds every player NPC from the narrow column list, never `npc.*`", () => {
-    // `toPlayerNpc` drops the wide columns, so a `select npc.*` behind it is
-    // invisible on the wire and in every runtime test. The rule is that the
-    // wide columns are not selected on a player's path at all, so it is
-    // checked here, over every statement that decodes to a `PlayerNpcRow`.
+    // The player row's decode drops the wide columns, so a `select npc.*`
+    // behind it is invisible on the wire and in every runtime test. The rule is
+    // that the wide columns are not selected on a player's path at all, so it
+    // is checked here, over every statement that decodes to `PlayerNpcRow`.
     const sourceDirectory = fileURLToPath(new URL("../src", import.meta.url));
     const files = readdirSync(sourceDirectory, { recursive: true, encoding: "utf8" }).filter(
       (name) => name.endsWith(".ts"),
     );
     const statements = files.flatMap((name) =>
       code(`${sourceDirectory}/${name}`)
-        .split("sql<PlayerNpcRow>`")
+        .split("SqlSchema.find")
         .slice(1)
-        .map((rest) => [name, rest.slice(0, rest.indexOf("`"))] as const),
+        .filter((read) => read.includes("Result: PlayerNpcRow,"))
+        .map((read) => {
+          const statement = read.slice(read.indexOf("sql`") + 4);
+          return [name, statement.slice(0, statement.indexOf("`"))] as const;
+        }),
     );
     expect(statements.map(([name]) => name).sort()).toEqual([
       "repo/NpcThreads.ts",

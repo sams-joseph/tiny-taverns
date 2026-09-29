@@ -1,14 +1,15 @@
-import type {
-  Actor,
-  CampaignId,
+import {
+  type Actor,
+  type CampaignId,
   CharacterId,
   CombatantId,
   EncounterRunId,
   SessionId,
 } from "@taverns/api";
-import { Effect } from "effect";
-import type { SqlClient, Statement } from "effect/unstable/sql";
+import { Effect, Option, Schema } from "effect";
+import { type SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { COMBATANT } from "./liveTables.js";
+import { fromColumns } from "./rows.js";
 import type { AppendEvent } from "./SessionEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
@@ -60,17 +61,11 @@ import {
  * character's own copy is still the authoritative one — and the honest
  * treatment is to say so rather than to take a lock across two sessions.
  */
-export interface LiveCombatant {
-  readonly combatantId: CombatantId;
-  readonly runId: EncounterRunId;
-  readonly sessionId: SessionId;
-}
-
-interface LiveCombatantRow {
-  readonly id: CombatantId;
-  readonly encounter_run_id: EncounterRunId;
-  readonly session_id: SessionId;
-}
+const LiveCombatantRow = fromColumns(
+  Schema.Struct({ combatantId: CombatantId, runId: EncounterRunId, sessionId: SessionId }),
+  { combatantId: "id", runId: "encounter_run_id" },
+);
+export type LiveCombatant = typeof LiveCombatantRow.Type;
 
 export const liveCombatantOf = (
   sql: SqlClient.SqlClient,
@@ -78,30 +73,23 @@ export const liveCombatantOf = (
   campaignId: CampaignId,
   actor: Actor,
 ): Effect.Effect<LiveCombatant | undefined, never> =>
-  sql<LiveCombatantRow>`
-    select combatant.id, combatant.encounter_run_id,
-           (select encounter_run.session_id from encounter_run
-            where encounter_run.id = combatant.encounter_run_id) as session_id
-    from combatant
-    where combatant.character_id = ${characterId}
-      and exists (select 1 from encounter_run
-                  where encounter_run.id = combatant.encounter_run_id
-                    and encounter_run.ended_at is null)
-      and ${containedRowWritable(sql, COMBATANT, campaignId, actor)}
-    order by combatant.created_at desc, combatant.id desc
-    limit 1
-  `.pipe(
-    Effect.map((rows) =>
-      rows[0] === undefined
-        ? undefined
-        : {
-            combatantId: rows[0].id,
-            runId: rows[0].encounter_run_id,
-            sessionId: rows[0].session_id,
-          },
-    ),
-    Effect.orDie,
-  );
+  SqlSchema.findOneOption({
+    Request: Schema.toType(CharacterId),
+    Result: LiveCombatantRow,
+    execute: (id) => sql`
+      select combatant.id, combatant.encounter_run_id,
+             (select encounter_run.session_id from encounter_run
+              where encounter_run.id = combatant.encounter_run_id) as session_id
+      from combatant
+      where combatant.character_id = ${id}
+        and exists (select 1 from encounter_run
+                    where encounter_run.id = combatant.encounter_run_id
+                      and encounter_run.ended_at is null)
+        and ${containedRowWritable(sql, COMBATANT, campaignId, actor)}
+      order by combatant.created_at desc, combatant.id desc
+      limit 1
+    `,
+  })(characterId).pipe(Effect.map(Option.getOrUndefined), Effect.orDie);
 
 /**
  * The fight's clamp, as a fragment: `[0, hp_max]`, in SQL.

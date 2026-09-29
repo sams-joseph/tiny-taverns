@@ -1,32 +1,37 @@
 import {
-  type AccountId,
-  type CampaignId,
+  AccountId,
+  Actor,
+  Campaign,
+  CampaignId,
   Conflict,
   CurrentActor,
   SharedWorld,
   SharedWorldCampaignCard,
-  type SharedWorldCampaignRelation,
   type SharedWorldCreate,
-  type SharedWorldId,
+  SharedWorldId,
   SharedWorldImages,
   SharedWorldMember,
   SharedWorldMembership,
   type SharedWorldUpdate,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import type { SqlError } from "effect/unstable/sql";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation, Struct } from "effect";
+import { SqlClient, type SqlError, SqlSchema } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { liveMemberAccountIds } from "./Memberships.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
+  classWithRow,
   defined,
   dieOnSqlError,
+  fromColumns,
+  orNotFound,
   proseColumn,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   ensureGroupReadable,
@@ -81,24 +86,30 @@ export const foundGroup = (
   ownerAccountId: AccountId,
   isSharedWorld = false,
   from?: AssistantOrigin,
-): Effect.Effect<SharedWorld, SqlError.SqlError> =>
+): Effect.Effect<SharedWorld, SqlError.SqlError | Schema.SchemaError> =>
   Effect.gen(function* () {
-    const rows = yield* sql<GroupRow>`
-      insert into play_group ${sql.insert(
-        defined({
-          owner_account_id: ownerAccountId,
-          name: world.name,
-          description: proseColumn(world.description),
-          is_shared_world: isSharedWorld,
-          ...assistantColumns(from),
-        }),
-      )}
-      returning *, ${sharedWorldImageColumns(sql, "play_group")}
-    `;
-    yield* addOwnerMember(sql, rows[0]!.id, ownerAccountId);
-    // Founded by this statement, so it has no cover to sign yet; its creator's
-    // handler starts the draw after the commit (`HobImages.drawSharedWorld`).
-    return toGroup(rows[0]!, undefined);
+    // An insert answers with its row; not getting one is a defect.
+    const group = yield* SqlSchema.findOne({
+      Request: Columns,
+      // Founded by this statement, so it has no cover to sign yet; its
+      // creator's handler starts the draw after the commit
+      // (`HobImages.drawSharedWorld`).
+      Result: UnsignedGroupRow,
+      execute: (columns) => sql`
+        insert into play_group ${sql.insert(columns)}
+        returning *, ${sharedWorldImageColumns(sql, "play_group")}
+      `,
+    })(
+      defined({
+        owner_account_id: ownerAccountId,
+        name: world.name,
+        description: proseColumn(world.description),
+        is_shared_world: isSharedWorld,
+        ...assistantColumns(from),
+      }),
+    ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+    yield* addOwnerMember(sql, group.id, ownerAccountId);
+    return group;
   });
 
 /**
@@ -133,15 +144,10 @@ export const admitToGroup = (
  */
 export const moveToOwnContext = (
   sql: SqlClient.SqlClient,
-  campaign: {
-    readonly id: CampaignId;
-    readonly group_id: SharedWorldId;
-    readonly creator_account_id: AccountId;
-    readonly name: string;
-  },
-): Effect.Effect<void, SqlError.SqlError> =>
+  campaign: MovingCampaign,
+): Effect.Effect<void, SqlError.SqlError | Schema.SchemaError> =>
   Effect.gen(function* () {
-    const context = yield* foundGroup(sql, { name: campaign.name }, campaign.creator_account_id);
+    const context = yield* foundGroup(sql, { name: campaign.name }, campaign.creatorAccountId);
     const participants = yield* liveMemberAccountIds(sql, campaign.id);
     yield* Effect.forEach(participants, (accountId) => admitToGroup(sql, context.id, accountId), {
       discard: true,
@@ -150,35 +156,26 @@ export const moveToOwnContext = (
       update campaign
       set group_id = ${context.id}, updated_at = now()
       where campaign.id = ${campaign.id}
-        and campaign.group_id = ${campaign.group_id}
+        and campaign.group_id = ${campaign.contextId}
     `;
   });
 
-interface GroupRow {
-  readonly id: SharedWorldId;
-  readonly owner_account_id: AccountId;
-  readonly name: string;
-  readonly description: string | null;
-  readonly is_shared_world: boolean;
-  readonly archived_at: Date | null;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-  /** From {@link sharedWorldImageColumns}; `null` when the world has no cover record. */
-  readonly image_id: string | null;
-  readonly image_state: "generating" | "ready" | "failed" | null;
-}
-
 /**
- * The cover's two facts beside a `play_group` row, as scalar subqueries, the
- * way `campaignImageColumns` sits beside a campaign. **Every read that becomes
- * a `SharedWorld` names this fragment**: `toGroup` dies on a row without it.
+ * The cover's two facts beside a `play_group` row — `image_id`, a cover ready
+ * to sign, and `image_pending` — as scalar subqueries, the way
+ * `campaignImageColumns` sits beside a campaign. **Every read that becomes a
+ * `SharedWorld` names this fragment**: the decode refuses a row without it.
  * `world` is the name the statement gives the `play_group` row it returns.
  */
 const sharedWorldImageColumns = (sql: SqlClient.SqlClient, world: string) => sql`
   (select shared_world_image.id from shared_world_image
-   where shared_world_image.group_id = ${sql(`${world}.id`)}) as image_id,
-  (select shared_world_image.state from shared_world_image
-   where shared_world_image.group_id = ${sql(`${world}.id`)}) as image_state
+   where shared_world_image.group_id = ${sql(`${world}.id`)}
+     and shared_world_image.state = 'ready') as image_id,
+  coalesce(
+    (select shared_world_image.state = 'generating' from shared_world_image
+     where shared_world_image.group_id = ${sql(`${world}.id`)}),
+    false
+  ) as image_pending
 `;
 
 /** Signs a ready cover's paths; the Shared World kind of `ImageUrls.pathsFor`. */
@@ -199,52 +196,71 @@ const sharedWorldImageSigner: Effect.Effect<SharedWorldImageSigner | undefined> 
 );
 
 /**
- * One mapper per table.
+ * A ready cover's id, decoded into the images the wire carries.
  *
- * **The only place a Shared World's cover URL is minted**, from a row whose own
- * SQL already returned the world to this reader (`groupReadable` or
- * `groupWritable`), which is what makes cover visibility exactly world
- * visibility.
+ * **The only place a Shared World's cover URL is minted**, as the last step of
+ * the decode of a row whose own SQL already returned the world to this reader
+ * (`groupReadable` or `groupWritable`), which is what makes cover visibility
+ * exactly world visibility.
  */
-const toGroup = (row: GroupRow, sign: SharedWorldImageSigner | undefined): SharedWorld => {
-  if (row.image_state === undefined) {
-    throw new Error("a Shared World read did not select sharedWorldImageColumns");
-  }
-  const imageId = row.image_state === "ready" ? row.image_id : null;
-  return new SharedWorld({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    ownerAccountId: row.owner_account_id,
-    image: imageId !== null && sign !== undefined ? sign(imageId) : null,
-    imagePending: row.image_state === "generating",
-    archivedAt: row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  });
-};
+const coverFromId = (sign: SharedWorldImageSigner | undefined) =>
+  Schema.NullOr(Schema.String).pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(SharedWorldImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((id: string | null) =>
+          id !== null && sign !== undefined ? sign(id) : null,
+        ),
+        SchemaGetter.forbidden(() => "a cover is minted, never read back"),
+      ),
+    ),
+  );
 
-interface GroupMembershipRow extends GroupRow {
-  readonly joined_at: Date;
-}
+/**
+ * A `play_group` row as the wire reads it, decoded off `play_group.*` and
+ * {@link sharedWorldImageColumns} by `SqlSchema`. One decode per table.
+ */
+const groupRow = (sign: SharedWorldImageSigner | undefined) =>
+  classFromColumns(
+    SharedWorld,
+    {
+      ...SharedWorld.fields,
+      ...timestampColumns,
+      archivedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+      image: coverFromId(sign),
+    },
+    { image: "image_id" },
+  );
 
-interface GroupMemberRow {
-  readonly account_id: AccountId;
-  readonly name: string;
-  readonly is_owner: boolean;
-  readonly joined_at: Date;
-}
+/** `groupRow` for a world founded by the statement that reads it, which has no cover to sign. */
+const UnsignedGroupRow = groupRow(undefined);
 
-interface CampaignCardRow {
-  readonly id: CampaignId;
-  readonly group_id: SharedWorldId;
-  readonly creator_account_id: AccountId;
-  readonly creator_name: string;
-  readonly name: string;
-  readonly relation: SharedWorldCampaignRelation;
-  readonly archived_at: Date | null;
-  readonly created_at: Date;
-}
+/** The written columns of an insert or a PATCH, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
+
+/** What `moveToOwnContext` needs of the campaign it moves: a `Campaign` has it all. */
+const MovingCampaign = Schema.Struct(
+  Struct.pick(Campaign.fields, ["id", "contextId", "creatorAccountId", "name"]),
+);
+type MovingCampaign = typeof MovingCampaign.Type;
+
+/** Every campaign in a world that is going, locked, decoded as the move needs it. */
+const MovingCampaignRow = fromColumns(MovingCampaign, { contextId: "group_id" });
+
+const MemberRow = classFromColumns(SharedWorldMember, {
+  ...SharedWorldMember.fields,
+  joinedAt: Schema.DateTimeUtcFromDate,
+});
+
+const CampaignCardRow = classFromColumns(
+  SharedWorldCampaignCard,
+  {
+    ...SharedWorldCampaignCard.fields,
+    archivedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    createdAt: Schema.DateTimeUtcFromDate,
+  },
+  { worldId: "group_id" },
+);
 
 export class Groups extends Context.Service<
   Groups,
@@ -308,22 +324,23 @@ export class Groups extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const sign = yield* sharedWorldImageSigner;
-      const asWorld = (row: GroupRow): SharedWorld => toGroup(row, sign);
+      const GroupRow = groupRow(yield* sharedWorldImageSigner);
       const imageColumns = sharedWorldImageColumns(sql, "play_group");
       const destinationImageColumns = sharedWorldImageColumns(sql, "destination");
 
-      const one = (rows: ReadonlyArray<GroupRow>, id: SharedWorldId) =>
-        rows.length === 0
-          ? Effect.fail(new NotFound({ resource: "shared-world", id }))
-          : Effect.succeed(asWorld(rows[0]!));
-
-      return {
-        mine: dieOnSqlError(
-          Effect.gen(function* () {
-            const actor = yield* CurrentActor;
-            const rows = yield* sql<GroupMembershipRow>`
-              select play_group.*, ${imageColumns}, group_member.created_at as joined_at
+      /** The reader's own membership of each world, the world nested through `GroupRow`. */
+      const memberships = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: classWithRow(SharedWorldMembership, "sharedWorld", GroupRow, {
+          isOwner: Schema.Boolean,
+          joinedAt: Schema.DateTimeUtcFromDate,
+        }),
+        execute: () =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select play_group.*, ${imageColumns}, group_member.created_at as joined_at,
+                     (play_group.owner_account_id = ${actor.accountId}) as is_owner
               from play_group
               join group_member
                 on group_member.group_id = play_group.id
@@ -333,44 +350,203 @@ export class Groups extends Context.Service<
                 and play_group.archived_at is null
                 and play_group.is_shared_world
               order by play_group.created_at desc
-            `;
-            return rows.map(
-              (row) =>
-                new SharedWorldMembership({
-                  sharedWorld: asWorld(row),
-                  isOwner: row.owner_account_id === actor.accountId,
-                  joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-                }),
-            );
-          }),
-        ),
-
-        archived: dieOnSqlError(
-          Effect.gen(function* () {
-            const actor = yield* CurrentActor;
-            const rows = yield* sql<GroupRow>`
+            `,
+          ),
+      });
+      const shelved = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: GroupRow,
+        execute: () =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
               select play_group.*, ${imageColumns} from play_group
               where play_group.owner_account_id = ${actor.accountId}
                 and ${groupReadable(sql, actor)}
                 and play_group.is_shared_world
                 and play_group.archived_at is not null
               order by play_group.archived_at desc, play_group.created_at desc
-            `;
-            return rows.map(asWorld);
-          }),
-        ),
-
-        findById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<GroupRow>`
-                select play_group.*, ${imageColumns} from play_group
-                where play_group.id = ${id} and ${groupReadable(sql, actor, id)}
-              `;
-              return yield* one(rows, id);
-            }),
+            `,
           ),
+      });
+      const readable = SqlSchema.findOne({
+        Request: Schema.toType(SharedWorldId),
+        Result: GroupRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select play_group.*, ${imageColumns} from play_group
+              where play_group.id = ${id} and ${groupReadable(sql, actor, id)}
+            `,
+          ),
+      });
+      /** A campaign's hidden context made an explicit world by its owner. */
+      const promoted = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ group: SharedWorldId, actor: Actor, columns: Columns }),
+        ),
+        Result: GroupRow,
+        execute: ({ group, actor, columns }) => sql`
+          update play_group
+          set ${setClause(sql, columns)}
+          where play_group.id = ${group}
+            and play_group.owner_account_id = ${actor.accountId}
+            and play_group.archived_at is null
+          returning play_group.*, ${imageColumns}
+        `,
+      });
+      const creatorWorld = Schema.toType(
+        Schema.Struct({
+          campaign: CampaignId,
+          group: SharedWorldId,
+          actor: Actor,
+          worldId: SharedWorldId,
+        }),
+      );
+      /**
+       * The owned world a standalone campaign is connecting to, locked with
+       * the campaign and the hidden context it leaves.
+       */
+      const connecting = SqlSchema.findOne({
+        Request: creatorWorld,
+        Result: GroupRow,
+        execute: ({ campaign, group, actor, worldId }) => sql`
+          select destination.*, ${destinationImageColumns}
+          from campaign
+          join play_group as source on source.id = campaign.group_id
+          cross join play_group as destination
+          where campaign.id = ${campaign}
+            and campaign.group_id = ${group}
+            and campaign.creator_account_id = ${actor.accountId}
+            and source.owner_account_id = ${actor.accountId}
+            and not source.is_shared_world
+            and source.archived_at is null
+            and destination.id = ${worldId}
+            and destination.owner_account_id = ${actor.accountId}
+            and destination.is_shared_world
+            and destination.archived_at is null
+          for update of campaign, source, destination
+        `,
+      });
+      /**
+       * The other owned world a connected campaign is moving to, locked with
+       * the campaign and the world it leaves.
+       */
+      const moving = SqlSchema.findOne({
+        Request: creatorWorld,
+        Result: GroupRow,
+        execute: ({ campaign, group, actor, worldId }) => sql`
+          select destination.*, ${destinationImageColumns}
+          from campaign
+          join play_group as source on source.id = campaign.group_id
+          cross join play_group as destination
+          where campaign.id = ${campaign}
+            and campaign.group_id = ${group}
+            and campaign.creator_account_id = ${actor.accountId}
+            and source.is_shared_world
+            and destination.id = ${worldId}
+            and destination.id <> source.id
+            and destination.owner_account_id = ${actor.accountId}
+            and destination.is_shared_world
+            and destination.archived_at is null
+          for update of campaign, source, destination
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: SharedWorldId, columns: Columns })),
+        Result: GroupRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update play_group set ${setClause(sql, columns)}
+              where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
+              returning play_group.*, ${imageColumns}
+            `,
+          ),
+      });
+      /** The world onto the archive shelf; the caller holds its lock and has checked it. */
+      const archiveRow = SqlSchema.findOne({
+        Request: Schema.toType(SharedWorldId),
+        Result: GroupRow,
+        execute: (id) => sql`
+          update play_group set archived_at = now(), updated_at = now()
+          where play_group.id = ${id}
+          returning play_group.*, ${imageColumns}
+        `,
+      });
+      const restoreRow = SqlSchema.findOne({
+        Request: Schema.toType(SharedWorldId),
+        Result: GroupRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update play_group set archived_at = null, updated_at = now()
+              where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
+              returning play_group.*, ${imageColumns}
+            `,
+          ),
+      });
+      const campaignsIn = SqlSchema.findAll({
+        Request: Schema.toType(SharedWorldId),
+        Result: MovingCampaignRow,
+        execute: (id) => sql`
+          select campaign.id, campaign.group_id, campaign.creator_account_id, campaign.name
+          from campaign
+          where campaign.group_id = ${id}
+          order by campaign.created_at
+          for update
+        `,
+      });
+      const roster = SqlSchema.findAll({
+        Request: Schema.toType(SharedWorldId),
+        Result: MemberRow,
+        execute: (id) => sql`
+          select group_member.account_id,
+                 group_member.created_at as joined_at,
+                 account.name,
+                 (play_group.owner_account_id = group_member.account_id) as is_owner
+          from group_member
+          join account on account.id = group_member.account_id
+          join play_group on play_group.id = group_member.group_id
+          where group_member.group_id = ${id}
+            and group_member.revoked_at is null
+          order by (play_group.owner_account_id = group_member.account_id) desc,
+                   group_member.created_at asc,
+                   group_member.account_id asc
+        `,
+      });
+      const directory = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ id: SharedWorldId, reader: AccountId })),
+        Result: CampaignCardRow,
+        execute: ({ id, reader }) => sql`
+          select campaign.id,
+                 campaign.group_id,
+                 campaign.creator_account_id,
+                 campaign.name,
+                 campaign.archived_at,
+                 campaign.created_at,
+                 account.name as creator_name,
+                 case
+                   when campaign.creator_account_id = ${reader} then 'creator'
+                   when ${memberOfCampaign(sql, sql("campaign.id"), reader)} then 'player'
+                   else 'none'
+                 end as relation
+          from campaign
+          join account on account.id = campaign.creator_account_id
+          where campaign.group_id = ${id}
+          order by campaign.created_at desc
+        `,
+      });
+
+      return {
+        mine: dieOnSqlError(memberships()),
+
+        archived: dieOnSqlError(shelved()),
+
+        findById: (id) => dieOnSqlError(readable(id).pipe(orNotFound("shared-world", id))),
 
         create: (payload, from) =>
           dieOnSqlError(
@@ -392,15 +568,11 @@ export class Groups extends Context.Service<
                 description: proseColumn(payload.description),
                 is_shared_world: true,
               });
-              const rows = yield* sql<GroupRow>`
-                update play_group
-                set ${setClause(sql, columns)}
-                where play_group.id = ${creator.group}
-                  and play_group.owner_account_id = ${creator.actor.accountId}
-                  and play_group.archived_at is null
-                returning play_group.*, ${imageColumns}
-              `;
-              return yield* one(rows, creator.group);
+              return yield* promoted({
+                group: creator.group,
+                actor: creator.actor,
+                columns,
+              }).pipe(orNotFound("shared-world", creator.group));
             }),
           ),
 
@@ -408,26 +580,12 @@ export class Groups extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const destinations = yield* sql<GroupRow>`
-                  select destination.*, ${destinationImageColumns}
-                  from campaign
-                  join play_group as source on source.id = campaign.group_id
-                  cross join play_group as destination
-                  where campaign.id = ${creator.campaign}
-                    and campaign.group_id = ${creator.group}
-                    and campaign.creator_account_id = ${creator.actor.accountId}
-                    and source.owner_account_id = ${creator.actor.accountId}
-                    and not source.is_shared_world
-                    and source.archived_at is null
-                    and destination.id = ${worldId}
-                    and destination.owner_account_id = ${creator.actor.accountId}
-                    and destination.is_shared_world
-                    and destination.archived_at is null
-                  for update of campaign, source, destination
-                `;
-                if (destinations.length === 0) {
-                  return yield* new NotFound({ resource: "shared-world", id: worldId });
-                }
+                const destination = yield* connecting({
+                  campaign: creator.campaign,
+                  group: creator.group,
+                  actor: creator.actor,
+                  worldId,
+                }).pipe(orNotFound("shared-world", worldId));
 
                 // Participation is the set that follows the campaign. World
                 // eligibility remains plumbing, so every live participant is
@@ -463,7 +621,7 @@ export class Groups extends Context.Service<
                     )
                 `;
 
-                return asWorld(destinations[0]!);
+                return destination;
               }),
             ),
           ),
@@ -472,25 +630,12 @@ export class Groups extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const destinations = yield* sql<GroupRow>`
-                  select destination.*, ${destinationImageColumns}
-                  from campaign
-                  join play_group as source on source.id = campaign.group_id
-                  cross join play_group as destination
-                  where campaign.id = ${creator.campaign}
-                    and campaign.group_id = ${creator.group}
-                    and campaign.creator_account_id = ${creator.actor.accountId}
-                    and source.is_shared_world
-                    and destination.id = ${worldId}
-                    and destination.id <> source.id
-                    and destination.owner_account_id = ${creator.actor.accountId}
-                    and destination.is_shared_world
-                    and destination.archived_at is null
-                  for update of campaign, source, destination
-                `;
-                if (destinations.length === 0) {
-                  return yield* new NotFound({ resource: "shared-world", id: worldId });
-                }
+                const destination = yield* moving({
+                  campaign: creator.campaign,
+                  group: creator.group,
+                  actor: creator.actor,
+                  worldId,
+                }).pipe(orNotFound("shared-world", worldId));
 
                 const participants = yield* liveMemberAccountIds(sql, creator.campaign);
                 yield* Effect.forEach(
@@ -510,26 +655,17 @@ export class Groups extends Context.Service<
                   return yield* new NotFound({ resource: "campaign", id: creator.campaign });
                 }
 
-                return asWorld(destinations[0]!);
+                return destination;
               }),
             ),
           ),
 
         update: (id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const columns = defined({
-                name: patch.name,
-                description: proseColumn(patch.description),
-              });
-              const rows = yield* sql<GroupRow>`
-                update play_group set ${setClause(sql, columns)}
-                where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning play_group.*, ${imageColumns}
-              `;
-              return yield* one(rows, id);
-            }),
+            change({
+              id,
+              columns: defined({ name: patch.name, description: proseColumn(patch.description) }),
+            }).pipe(orNotFound("shared-world", id)),
           ),
 
         archive: (id) =>
@@ -557,28 +693,15 @@ export class Groups extends Context.Service<
                   });
                 }
 
-                const rows = yield* sql<GroupRow>`
-                  update play_group set archived_at = now(), updated_at = now()
-                  where play_group.id = ${id}
-                  returning play_group.*, ${imageColumns}
-                `;
-                return asWorld(rows[0]!);
+                // The row is locked and was read above; not getting it is a defect.
+                return yield* archiveRow(id).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),
 
-        restore: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<GroupRow>`
-                update play_group set archived_at = null, updated_at = now()
-                where play_group.id = ${id} and ${groupWritable(sql, actor, id)}
-                returning play_group.*, ${imageColumns}
-              `;
-              return yield* one(rows, id);
-            }),
-          ),
+        restore: (id) => dieOnSqlError(restoreRow(id).pipe(orNotFound("shared-world", id))),
 
         /**
          * The world and everything that belongs only to it, in one
@@ -612,18 +735,7 @@ export class Groups extends Context.Service<
                   return yield* new NotFound({ resource: "shared-world", id });
                 }
 
-                const campaigns = yield* sql<{
-                  readonly id: CampaignId;
-                  readonly group_id: SharedWorldId;
-                  readonly creator_account_id: AccountId;
-                  readonly name: string;
-                }>`
-                  select campaign.id, campaign.group_id, campaign.creator_account_id, campaign.name
-                  from campaign
-                  where campaign.group_id = ${id}
-                  order by campaign.created_at
-                  for update
-                `;
+                const campaigns = yield* campaignsIn(id);
                 yield* Effect.forEach(campaigns, (campaign) => moveToOwnContext(sql, campaign), {
                   discard: true,
                 });
@@ -638,29 +750,7 @@ export class Groups extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, id, actor);
-              const rows = yield* sql<GroupMemberRow>`
-                select group_member.account_id,
-                       group_member.created_at as joined_at,
-                       account.name,
-                       (play_group.owner_account_id = group_member.account_id) as is_owner
-                from group_member
-                join account on account.id = group_member.account_id
-                join play_group on play_group.id = group_member.group_id
-                where group_member.group_id = ${id}
-                  and group_member.revoked_at is null
-                order by (play_group.owner_account_id = group_member.account_id) desc,
-                         group_member.created_at asc,
-                         group_member.account_id asc
-              `;
-              return rows.map(
-                (row) =>
-                  new SharedWorldMember({
-                    accountId: row.account_id,
-                    name: row.name,
-                    isOwner: row.is_owner,
-                    joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-                  }),
-              );
+              return yield* roster(id);
             }),
           ),
 
@@ -669,38 +759,7 @@ export class Groups extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, id, actor);
-              const rows = yield* sql<CampaignCardRow>`
-                select campaign.id,
-                       campaign.group_id,
-                       campaign.creator_account_id,
-                       campaign.name,
-                       campaign.archived_at,
-                       campaign.created_at,
-                       account.name as creator_name,
-                       case
-                         when campaign.creator_account_id = ${actor.accountId} then 'creator'
-                         when ${memberOfCampaign(sql, sql("campaign.id"), actor.accountId)} then 'player'
-                         else 'none'
-                       end as relation
-                from campaign
-                join account on account.id = campaign.creator_account_id
-                where campaign.group_id = ${id}
-                order by campaign.created_at desc
-              `;
-              return rows.map(
-                (row) =>
-                  new SharedWorldCampaignCard({
-                    id: row.id,
-                    worldId: row.group_id,
-                    creatorAccountId: row.creator_account_id,
-                    creatorName: row.creator_name,
-                    name: row.name,
-                    relation: row.relation,
-                    archivedAt:
-                      row.archived_at === null ? null : DateTime.fromDateUnsafe(row.archived_at),
-                    createdAt: DateTime.fromDateUnsafe(row.created_at),
-                  }),
-              );
+              return yield* directory({ id, reader: actor.accountId });
             }),
           ),
       };

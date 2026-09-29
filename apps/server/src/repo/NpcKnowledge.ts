@@ -1,27 +1,28 @@
 import {
-  type CampaignId,
+  Actor,
+  CampaignId,
   CurrentActor,
   NpcKnowledgeFact,
   type NpcKnowledgeFactCreate,
-  type NpcKnowledgeFactId,
+  NpcKnowledgeFactId,
   type NpcKnowledgeFactUpdate,
-  type NpcKnowledgeSourceKind,
-  type NpcId,
+  NpcId,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { playerNpcReadable } from "./Npcs.js";
 import { NPC } from "./NpcThreads.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   containedChildWritable,
@@ -40,27 +41,15 @@ import {
 
 export const NPC_KNOWLEDGE: Containment = under("npc_knowledge_fact", "npc_id", NPC);
 
-interface FactRow extends ProvenanceColumns {
-  readonly id: NpcKnowledgeFactId;
-  readonly npc_id: NpcId;
-  readonly body: string;
-  readonly source_kind: NpcKnowledgeSourceKind;
-  readonly source_id: string | null;
-  readonly source_label: string;
-  readonly retired_at: Date | null;
-}
+/** An `npc_knowledge_fact` row as the wire reads it, decoded off `npc_knowledge_fact.*` by `SqlSchema`. */
+export const NpcKnowledgeFactRow = classFromColumns(NpcKnowledgeFact, {
+  ...NpcKnowledgeFact.fields,
+  ...timestampColumns,
+  retiredAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+});
 
-export const toNpcKnowledgeFact = (row: FactRow): NpcKnowledgeFact =>
-  new NpcKnowledgeFact({
-    id: row.id,
-    npcId: row.npc_id,
-    body: row.body,
-    sourceKind: row.source_kind,
-    sourceId: row.source_id,
-    sourceLabel: row.source_label,
-    retiredAt: row.retired_at === null ? null : DateTime.fromDateUnsafe(row.retired_at),
-    ...provenanceOf(row),
-  });
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 export class NpcKnowledge extends Context.Service<
   NpcKnowledge,
@@ -101,20 +90,94 @@ export class NpcKnowledge extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const factReachable = (creator: CampaignCreatorActor, npcId: NpcId) =>
-        containedChildWritable(sql, NPC_KNOWLEDGE, npcId, creator.campaign, creator.actor);
+      const factReachable = (
+        campaign: CampaignId,
+        actor: Actor,
+        npcId: NpcId,
+      ): Statement.Fragment => containedChildWritable(sql, NPC_KNOWLEDGE, npcId, campaign, actor);
+
+      const facts = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, npcId: NpcId, activeOnly: Schema.Boolean }),
+        ),
+        Result: NpcKnowledgeFactRow,
+        execute: ({ campaign, actor, npcId, activeOnly }) => sql`
+          select npc_knowledge_fact.* from npc_knowledge_fact
+          where ${sql.and([
+            factReachable(campaign, actor, npcId),
+            ...(activeOnly ? [sql`npc_knowledge_fact.retired_at is null`] : []),
+          ])}
+          order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
+        `,
+      });
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: NpcKnowledgeFactRow,
+        execute: (columns) =>
+          sql`insert into npc_knowledge_fact ${sql.insert(columns)} returning *`,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            ...creatorFields,
+            npcId: NpcId,
+            id: NpcKnowledgeFactId,
+            columns: Columns,
+          }),
+        ),
+        Result: NpcKnowledgeFactRow,
+        execute: ({ campaign, actor, npcId, id, columns }) => sql`
+          update npc_knowledge_fact set ${setClause(sql, columns)}
+          where npc_knowledge_fact.id = ${id} and ${factReachable(campaign, actor, npcId)}
+          returning *
+        `,
+      });
+      const retire = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcKnowledgeFactId }),
+        ),
+        Result: NpcKnowledgeFactRow,
+        execute: ({ campaign, actor, npcId, id }) => sql`
+          update npc_knowledge_fact
+          set retired_at = coalesce(npc_knowledge_fact.retired_at, now()), updated_at = now()
+          where npc_knowledge_fact.id = ${id} and ${factReachable(campaign, actor, npcId)}
+          returning *
+        `,
+      });
+      /** A player's prompt's facts: active, shared, of an NPC they may read, and no source id. */
+      const playerSafe = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, npcId: NpcId, actor: Actor }),
+        ),
+        Result: NpcKnowledgeFactRow,
+        execute: ({ campaignId, npcId, actor }) => sql`
+          select npc_knowledge_fact.id,
+                 npc_knowledge_fact.npc_id,
+                 npc_knowledge_fact.body,
+                 npc_knowledge_fact.source_kind,
+                 null::uuid as source_id,
+                 npc_knowledge_fact.source_label,
+                 npc_knowledge_fact.retired_at,
+                 npc_knowledge_fact.visibility,
+                 npc_knowledge_fact.origin,
+                 npc_knowledge_fact.assistant_turn_id,
+                 npc_knowledge_fact.created_at,
+                 npc_knowledge_fact.updated_at
+          from npc_knowledge_fact
+          where npc_knowledge_fact.npc_id = ${npcId}
+            and npc_knowledge_fact.retired_at is null
+            and npc_knowledge_fact.visibility = 'shared'
+            and exists (select 1 from npc where npc.id = npc_knowledge_fact.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
+          order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
+        `,
+      });
 
       return {
         list: (creator, npcId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<FactRow>`
-                select npc_knowledge_fact.* from npc_knowledge_fact
-                where ${factReachable(creator, npcId)}
-                order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
-              `;
-              return rows.map(toNpcKnowledgeFact);
+              return yield* facts({ ...asked(creator), npcId, activeOnly: false });
             }),
           ),
 
@@ -122,12 +185,7 @@ export class NpcKnowledge extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<FactRow>`
-                select npc_knowledge_fact.* from npc_knowledge_fact
-                where ${factReachable(creator, npcId)} and npc_knowledge_fact.retired_at is null
-                order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
-              `;
-              return rows.map(toNpcKnowledgeFact);
+              return yield* facts({ ...asked(creator), npcId, activeOnly: true });
             }),
           ),
 
@@ -135,86 +193,47 @@ export class NpcKnowledge extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<FactRow>`
-                insert into npc_knowledge_fact ${sql.insert(
-                  defined({
-                    npc_id: npcId,
-                    body: payload.body,
-                    source_kind: payload.sourceKind,
-                    source_id: payload.sourceId,
-                    source_label: payload.sourceLabel,
-                    visibility: payload.visibility,
-                    ...assistantColumns(from),
-                  }),
-                )}
-                returning *
-              `;
-              return toNpcKnowledgeFact(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insert(
+                defined({
+                  npc_id: npcId,
+                  body: payload.body,
+                  source_kind: payload.sourceKind,
+                  source_id: payload.sourceId,
+                  source_label: payload.sourceLabel,
+                  visibility: payload.visibility,
+                  ...assistantColumns(from),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         update: (creator, npcId, id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<FactRow>`
-                update npc_knowledge_fact set ${setClause(
-                  sql,
-                  defined({
-                    body: patch.body,
-                    source_kind: patch.sourceKind,
-                    source_id: patch.sourceId,
-                    source_label: patch.sourceLabel,
-                    visibility: patch.visibility,
-                  }),
-                )}
-                where npc_knowledge_fact.id = ${id} and ${factReachable(creator, npcId)}
-                returning *
-              `;
-              if (rows.length === 0)
-                return yield* new NotFound({ resource: "npc_knowledge_fact", id });
-              return toNpcKnowledgeFact(rows[0]!);
-            }),
+            change({
+              ...asked(creator),
+              npcId,
+              id,
+              columns: defined({
+                body: patch.body,
+                source_kind: patch.sourceKind,
+                source_id: patch.sourceId,
+                source_label: patch.sourceLabel,
+                visibility: patch.visibility,
+              }),
+            }).pipe(orNotFound("npc_knowledge_fact", id)),
           ),
 
         retire: (creator, npcId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<FactRow>`
-                update npc_knowledge_fact
-                set retired_at = coalesce(npc_knowledge_fact.retired_at, now()), updated_at = now()
-                where npc_knowledge_fact.id = ${id} and ${factReachable(creator, npcId)}
-                returning *
-              `;
-              if (rows.length === 0)
-                return yield* new NotFound({ resource: "npc_knowledge_fact", id });
-              return toNpcKnowledgeFact(rows[0]!);
-            }),
+            retire({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_knowledge_fact", id)),
           ),
 
         playerSafeForPrompt: (campaignId, npcId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<FactRow>`
-                select npc_knowledge_fact.id,
-                       npc_knowledge_fact.npc_id,
-                       npc_knowledge_fact.body,
-                       npc_knowledge_fact.source_kind,
-                       null::uuid as source_id,
-                       npc_knowledge_fact.source_label,
-                       npc_knowledge_fact.retired_at,
-                       npc_knowledge_fact.visibility,
-                       npc_knowledge_fact.origin,
-                       npc_knowledge_fact.assistant_turn_id,
-                       npc_knowledge_fact.created_at,
-                       npc_knowledge_fact.updated_at
-                from npc_knowledge_fact
-                where npc_knowledge_fact.npc_id = ${npcId}
-                  and npc_knowledge_fact.retired_at is null
-                  and npc_knowledge_fact.visibility = 'shared'
-                  and exists (select 1 from npc where npc.id = npc_knowledge_fact.npc_id and ${playerNpcReadable(sql, campaignId, actor)})
-                order by npc_knowledge_fact.created_at asc, npc_knowledge_fact.id asc
-              `;
+              const rows = yield* playerSafe({ campaignId, npcId, actor });
               if (rows.length === 0) {
                 const reachable = yield* sql<{ readonly id: NpcId }>`
                   select npc.id from npc where npc.id = ${npcId} and ${playerNpcReadable(sql, campaignId, actor)}
@@ -222,7 +241,7 @@ export class NpcKnowledge extends Context.Service<
                 if (reachable.length === 0)
                   return yield* new NotFound({ resource: "npc", id: npcId });
               }
-              return rows.map(toNpcKnowledgeFact);
+              return rows;
             }),
           ),
       };

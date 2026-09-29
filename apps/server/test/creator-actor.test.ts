@@ -473,7 +473,7 @@ describe("the scope, counted", () => {
     // targets, the audit list, the spend and the undo all take the creator
     // proof for the live fight rather than a campaign id a model or client can
     // aim.
-    // Twenty-five through seventy-nine are the cast: `Npcs`, `NpcKnowledge`,
+    // Twenty-five through seventy-six are the cast: `Npcs`, `NpcKnowledge`,
     // `NpcMemories`, `NpcAwareness`, `NpcFollowUps`, `NpcThreads` and `NpcProposals`, gated from
     // the day the endpoints were declared, because an NPC row and its context
     // carry creator-only material and the creator actions that open, pause,
@@ -483,71 +483,71 @@ describe("the scope, counted", () => {
     // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
     // Campaign invitations add three creator-gated operations: list, mint and
     // revoke. Their authority follows the campaign, not its hidden group.
-    // Promoting a campaign's private context adds the eighty-third seam;
-    // connecting one to an owned Shared World adds the eighty-fourth, and
-    // disconnecting it again is the eighty-fifth. Moving directly between two
-    // Shared Worlds adds the eighty-sixth.
-    // Eighty-seven and eighty-eight are `BattleMaps.forEncounter` and
+    // Promoting a campaign's private context adds the eightieth seam;
+    // connecting one to an owned Shared World adds the eighty-first, and
+    // disconnecting it again is the eighty-second. Moving directly between two
+    // Shared Worlds adds the eighty-third.
+    // Eighty-four and eighty-five are `BattleMaps.forEncounter` and
     // `update`: an encounter's map is the creator's alone, gated from the day
     // it was declared, before any player projection of a map exists.
-    // Eighty-nine is `BattleMaps.forRun`, a fight's board, for the same reason.
-    // Ninety is `BattleMaps.rosterTypes`, the creature types a map without a
+    // Eighty-six is `BattleMaps.forRun`, a fight's board, for the same reason.
+    // Eighty-seven is `BattleMaps.rosterTypes`, the creature types a map without a
     // setting line is drawn from, read beside the map it draws.
-    // Ninety-one and ninety-two are `Encounters.prep` and `prepList`: an
+    // Eighty-eight and eighty-nine are `Encounters.prep` and `prepList`: an
     // encounter's tactics, treasure and challenge numbers are the creator's
     // alone, gated from the day they were declared.
-    // Ninety-three to ninety-five are `SeatPreps.list`, `update` and the inner
+    // Ninety to ninety-two are `SeatPreps.list`, `update` and the inner
     // read `update` answers with: a seat's hook and secret are the DM's own
     // notes about a player's character, gated from the day they were declared.
-    // Ninety-six through ninety-eight are `Encounters.list`, `findById` and
+    // Ninety-three through ninety-five are `Encounters.list`, `findById` and
     // `EncounterCreatures.list`: `Encounter` carries the computed difficulty
     // and a roster line its creature's numbers, which a player is not told
     // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
     // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
-    // Ninety-nine is `Combatants.move`: a token's square is the DM's alone
+    // Ninety-six is `Combatants.move`: a token's square is the DM's alone
     // until the map is shared.
-    // A hundred is `EncounterRuns.escalate`, and a hundred and one to a
-    // hundred and four are `RunScenes`' four: a running scene is copied from
-    // the prep and its checks carry DCs a player is not told, gated from the
-    // day declared.
-    // A hundred and five to a hundred and seven are the initiative phase:
+    // Ninety-seven is `EncounterRuns.escalate`, and ninety-eight to a hundred
+    // and two are `RunScenes`' four and the run read they share: a running
+    // scene is copied from the prep and its checks carry DCs a player is not
+    // told, gated from the day declared.
+    // A hundred and three to a hundred and five are the initiative phase:
     // `begin`, `reroll` and `Combatants.setInitiative`, the fight's own
     // writes. The player's own-initiative write is `PlayerTable.setInitiative`,
     // which is ungated for the read's reason: it reaches exactly the row
     // `ownSeatedCombatant` allows, and there is no DM projection of it.
-    // A hundred and eight and nine are `Notes.list` and `findById`: `Note` is
+    // A hundred and six and seven are `Notes.list` and `findById`: `Note` is
     // the creator's working record, and a player reads `listAsPlayer`, a
     // `PlayerNote` with no visibility or provenance, ungated for
     // `listAsPlayer`'s reason on `Encounters`.
-    // A hundred and ten to a hundred and thirteen are a note's links:
+    // A hundred and eight to a hundred and eleven are a note's links:
     // `Notes.addLink` and `removeLink`, the note's read they share, and the
     // target's check in `links.ts`, which an NPC's links share too. A link
     // names an encounter, a seat or an NPC whether or not a player may read
     // it, so it is the creator's from the day it was declared, and
     // `PlayerNote` has none.
-    // A hundred and fourteen is `Recap.chronicle`, every night at once: the
+    // A hundred and twelve is `Recap.chronicle`, every night at once: the
     // recap's gate over the list, from the day it was declared.
-    // A hundred and fifteen to seventeen are `Acts.create`, `update` and
+    // A hundred and thirteen to fifteen are `Acts.create`, `update` and
     // `remove`: starting, renaming, sharing and removing an act on the
     // Chronicle are the creator's acts, gated from the day declared.
-    // A hundred and eighteen is `CampaignStories.read`: the story's wide row
+    // A hundred and sixteen is `CampaignStories.read`: the story's wide row
     // carries its visibility and provenance, and a player reads the narrow
     // `readAsPlayer`, ungated for `Notes.listAsPlayer`'s reason.
-    // A hundred and nineteen to twenty-three are `NpcPreps.list`, `find`,
-    // `update` and the two inner reads they share: an NPC's attitude, status,
+    // A hundred and seventeen to twenty are `NpcPreps.list`, `find`,
+    // `update` and the inner read they share: an NPC's attitude, status,
     // whereabouts and first meeting are the DM's own prep, gated from the day
     // they were declared, and `PlayerNpc` carries none of them.
-    // A hundred and twenty-four to twenty-eight are an NPC's links:
+    // A hundred and twenty-one to twenty-five are an NPC's links:
     // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
     // share, the NPC's check and its links' read. Ties are DM prep, the
     // creator's from the day they were declared, and `PlayerNpc` has none.
-    // A hundred and twenty-nine to thirty-five are an NPC's sheet:
+    // A hundred and twenty-six to thirty-two are an NPC's sheet:
     // `NpcSheets.list`, `find`, `put`, `update`, `remove` and `spells`, the
     // sheet's spell picker, and the one inner helper they share, the
     // campaign's reach — the NPC in the proof's campaign and that campaign's
     // rules. A sheet is DM prep, the creator's from the day it was declared,
     // and `PlayerNpc` carries none of it.
-    expect(gated).toBe(135);
+    expect(gated).toBe(132);
     // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
     // `CurrentActor` like any other read and is what turns one into a proof —
     // plus the inner helper in `Proposals.ts` that restates its own service

@@ -1,28 +1,31 @@
 import {
-  type AccountId,
+  type Actor,
   type AssistantTurnId,
-  type CampaignId,
+  CampaignId,
   Conflict,
   NpcAwarenessCandidate,
   type NpcAwarenessCandidateApprove,
-  type NpcAwarenessCandidateId,
+  NpcAwarenessCandidateId,
   type NpcAwarenessCandidateKind,
   type NpcAwarenessCandidateReject,
-  type NpcAwarenessCandidateState,
   type NpcAwarenessCandidateUpdate,
-  type NpcId,
-  type NpcKnowledgeFactId,
+  NpcId,
   type NpcKnowledgeSourceKind,
-  type NpcMemoryId,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { NpcKnowledge } from "./NpcKnowledge.js";
 import { NpcMemories } from "./NpcMemories.js";
 import { NPC } from "./NpcThreads.js";
-import { dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  classFromColumns,
+  dieOnSqlError,
+  orNotFound,
+  setClause,
+  timestampColumns,
+} from "./rows.js";
 import {
   containedChildWritable,
   containedRowReadable,
@@ -58,47 +61,26 @@ export interface NpcAwarenessDraft {
   readonly rationale: string;
 }
 
-interface CandidateRow extends ProvenanceColumns {
-  readonly id: NpcAwarenessCandidateId;
-  readonly campaign_id: CampaignId;
-  readonly npc_id: NpcId;
-  readonly kind: NpcAwarenessCandidateKind;
-  readonly body: string;
-  readonly source_kind: NpcKnowledgeSourceKind;
-  readonly source_id: string | null;
-  readonly source_label: string;
-  readonly source_excerpt: string;
-  readonly rationale: string;
-  readonly version: number;
-  readonly state: NpcAwarenessCandidateState;
-  readonly decided_by_account_id: AccountId | null;
-  readonly decided_at: Date | null;
-  readonly rejection_reason: string | null;
-  readonly accepted_knowledge_fact_id: NpcKnowledgeFactId | null;
-  readonly accepted_memory_id: NpcMemoryId | null;
-}
+/**
+ * The fields of an `npc_awareness_candidate` row as the wire reads it, off
+ * `npc_awareness_candidate.*` and the campaign it was read under, which the
+ * table does not carry. Exported for the follow-up queue, which reads the same
+ * row beside its NPC.
+ */
+export const npcAwarenessCandidateFields = {
+  ...NpcAwarenessCandidate.fields,
+  ...timestampColumns,
+  decidedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+};
 
-export const toNpcAwarenessCandidate = (row: CandidateRow): NpcAwarenessCandidate =>
-  new NpcAwarenessCandidate({
-    id: row.id,
-    campaignId: row.campaign_id,
-    npcId: row.npc_id,
-    kind: row.kind,
-    body: row.body,
-    sourceKind: row.source_kind,
-    sourceId: row.source_id,
-    sourceLabel: row.source_label,
-    sourceExcerpt: row.source_excerpt,
-    rationale: row.rationale,
-    version: row.version,
-    state: row.state,
-    decidedByAccountId: row.decided_by_account_id,
-    decidedAt: row.decided_at === null ? null : DateTime.fromDateUnsafe(row.decided_at),
-    rejectionReason: row.rejection_reason,
-    acceptedKnowledgeFactId: row.accepted_knowledge_fact_id,
-    acceptedMemoryId: row.accepted_memory_id,
-    ...provenanceOf(row),
-  });
+/** An `npc_awareness_candidate` row as the wire reads it, decoded by `SqlSchema`. */
+const NpcAwarenessCandidateRow = classFromColumns(
+  NpcAwarenessCandidate,
+  npcAwarenessCandidateFields,
+);
+
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 const staleVersion = (expected: number, actual: number): Conflict =>
   new Conflict({
@@ -156,9 +138,6 @@ export class NpcAwareness extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const knowledge = yield* NpcKnowledge;
       const memories = yield* NpcMemories;
-
-      const candidateReachable = (creator: CampaignCreatorActor, npcId: NpcId) =>
-        containedChildWritable(sql, NPC_AWARENESS, npcId, creator.campaign, creator.actor);
 
       const ensureNpc = (creator: CampaignCreatorActor, npcId: NpcId) =>
         Effect.gen(function* () {
@@ -239,22 +218,101 @@ export class NpcAwareness extends Context.Service<
           }),
         );
 
-      const one = (creator: CampaignCreatorActor, npcId: NpcId, id: NpcAwarenessCandidateId) =>
-        Effect.gen(function* () {
-          const rows = yield* sql<CandidateRow>`
-            select npc_awareness_candidate.*, ${creator.campaign} as campaign_id
-            from npc_awareness_candidate
-            where npc_awareness_candidate.id = ${id}
-              and npc_awareness_candidate.npc_id = ${npcId}
-              and ${candidateReachable(creator, npcId)}
-            for update of npc_awareness_candidate
-          `;
-          if (rows.length === 0)
-            return yield* new NotFound({ resource: "npc_awareness_candidate", id });
-          return rows[0]!;
-        });
+      const CreatorCandidate = Schema.toType(
+        Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcAwarenessCandidateId }),
+      );
+      const reachable = (campaign: CampaignId, actor: Actor, npcId: NpcId) =>
+        containedChildWritable(sql, NPC_AWARENESS, npcId, campaign, actor);
 
-      const checkPending = (row: CandidateRow) => {
+      /** The candidate, locked for the review that follows. */
+      const locked = SqlSchema.findOne({
+        Request: CreatorCandidate,
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, actor, npcId, id }) => sql`
+          select npc_awareness_candidate.*, ${campaign} as campaign_id
+          from npc_awareness_candidate
+          where npc_awareness_candidate.id = ${id}
+            and npc_awareness_candidate.npc_id = ${npcId}
+            and ${reachable(campaign, actor, npcId)}
+          for update of npc_awareness_candidate
+        `,
+      });
+      const one = (creator: CampaignCreatorActor, npcId: NpcId, id: NpcAwarenessCandidateId) =>
+        locked({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_awareness_candidate", id));
+      const insert = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaign: CampaignId, columns: Columns })),
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, columns }) => sql`
+          insert into npc_awareness_candidate ${sql.insert(columns)}
+          returning *, ${campaign} as campaign_id
+        `,
+      });
+      const candidates = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, npcId: NpcId })),
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, actor, npcId }) => sql`
+          select npc_awareness_candidate.*, ${campaign} as campaign_id
+          from npc_awareness_candidate
+          where ${reachable(campaign, actor, npcId)}
+          order by npc_awareness_candidate.created_at desc, npc_awareness_candidate.id desc
+        `,
+      });
+      /** The reviewer's edit, landing only on the version it read. */
+      const change = SqlSchema.findOneOption({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaign: CampaignId,
+            id: NpcAwarenessCandidateId,
+            columns: Columns,
+            version: Schema.Int,
+          }),
+        ),
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, id, columns, version }) => sql`
+          update npc_awareness_candidate set ${setClause(sql, columns)}, version = npc_awareness_candidate.version + 1
+          where npc_awareness_candidate.id = ${id}
+            and npc_awareness_candidate.version = ${version}
+          returning *, ${campaign} as campaign_id
+        `,
+      });
+      /** The approval, on a candidate `one` has just locked, pointing at what it became. */
+      const approved = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, id: NpcAwarenessCandidateId, destination: Columns }),
+        ),
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, actor, id, destination }) => sql`
+          update npc_awareness_candidate
+          set state = 'approved',
+              decided_by_account_id = ${actor.accountId},
+              decided_at = now(),
+              ${sql.update(destination)},
+              version = npc_awareness_candidate.version + 1,
+              updated_at = now()
+          where npc_awareness_candidate.id = ${id}
+          returning *, ${campaign} as campaign_id
+        `,
+      });
+      /** The rejection, on a candidate `one` has just locked. */
+      const rejected = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, id: NpcAwarenessCandidateId, reason: Schema.String }),
+        ),
+        Result: NpcAwarenessCandidateRow,
+        execute: ({ campaign, actor, id, reason }) => sql`
+          update npc_awareness_candidate
+          set state = 'rejected',
+              decided_by_account_id = ${actor.accountId},
+              decided_at = now(),
+              rejection_reason = ${reason},
+              version = npc_awareness_candidate.version + 1,
+              updated_at = now()
+          where npc_awareness_candidate.id = ${id}
+          returning *, ${campaign} as campaign_id
+        `,
+      });
+
+      const checkPending = (row: NpcAwarenessCandidate) => {
         if (row.state === "approved") return Effect.fail(alreadyApproved);
         if (row.state === "rejected") return Effect.fail(alreadyRejected);
         return Effect.void;
@@ -267,8 +325,10 @@ export class NpcAwareness extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* validateDraft(creator, draft);
-              const rows = yield* sql<CandidateRow>`
-                insert into npc_awareness_candidate ${sql.insert({
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insert({
+                campaign: creator.campaign,
+                columns: {
                   npc_id: draft.npcId,
                   kind: draft.kind,
                   body: draft.body,
@@ -279,10 +339,8 @@ export class NpcAwareness extends Context.Service<
                   rationale: draft.rationale,
                   origin: "assistant",
                   assistant_turn_id: assistantTurnId,
-                })}
-                returning *, ${creator.campaign} as campaign_id
-              `;
-              return toNpcAwarenessCandidate(rows[0]!);
+                },
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -290,13 +348,7 @@ export class NpcAwareness extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<CandidateRow>`
-                select npc_awareness_candidate.*, ${creator.campaign} as campaign_id
-                from npc_awareness_candidate
-                where ${candidateReachable(creator, npcId)}
-                order by npc_awareness_candidate.created_at desc, npc_awareness_candidate.id desc
-              `;
-              return rows.map(toNpcAwarenessCandidate);
+              return yield* candidates({ ...asked(creator), npcId });
             }),
           ),
 
@@ -313,15 +365,17 @@ export class NpcAwareness extends Context.Service<
                   npcId,
                   kind: before.kind,
                   body: patch.body ?? before.body,
-                  sourceKind: patch.sourceKind ?? before.source_kind,
-                  sourceId: patch.sourceId === undefined ? before.source_id : patch.sourceId,
-                  sourceLabel: patch.sourceLabel ?? before.source_label,
-                  sourceExcerpt: patch.sourceExcerpt ?? before.source_excerpt,
+                  sourceKind: patch.sourceKind ?? before.sourceKind,
+                  sourceId: patch.sourceId === undefined ? before.sourceId : patch.sourceId,
+                  sourceLabel: patch.sourceLabel ?? before.sourceLabel,
+                  sourceExcerpt: patch.sourceExcerpt ?? before.sourceExcerpt,
                   rationale: patch.rationale ?? before.rationale,
                 };
                 yield* ensureSource(creator, nextDraft);
-                const rows = yield* sql<CandidateRow>`
-                  update npc_awareness_candidate set ${setClause(sql, {
+                const changed = yield* change({
+                  campaign: creator.campaign,
+                  id,
+                  columns: {
                     body: nextDraft.body,
                     source_kind: nextDraft.sourceKind,
                     source_id: nextDraft.sourceId,
@@ -329,16 +383,14 @@ export class NpcAwareness extends Context.Service<
                     source_excerpt: nextDraft.sourceExcerpt,
                     rationale: nextDraft.rationale,
                     ...(patch.visibility === undefined ? {} : { visibility: patch.visibility }),
-                  })}, version = npc_awareness_candidate.version + 1
-                  where npc_awareness_candidate.id = ${id}
-                    and npc_awareness_candidate.version = ${before.version}
-                  returning *, ${creator.campaign} as campaign_id
-                `;
-                if (rows.length === 0) {
+                  },
+                  version: before.version,
+                });
+                if (Option.isNone(changed)) {
                   const now = yield* one(creator, npcId, id);
                   return yield* staleVersion(before.version, now.version);
                 }
-                return toNpcAwarenessCandidate(rows[0]!);
+                return changed.value;
               }),
             ),
           ),
@@ -353,9 +405,9 @@ export class NpcAwareness extends Context.Service<
                   return yield* staleVersion(payload.expectedVersion, row.version);
                 }
                 const from =
-                  row.assistant_turn_id === null
+                  row.assistantTurnId === null
                     ? undefined
-                    : { assistantTurnId: row.assistant_turn_id };
+                    : { assistantTurnId: row.assistantTurnId };
                 const destination =
                   row.kind === "knowledge"
                     ? yield* Effect.map(
@@ -364,9 +416,9 @@ export class NpcAwareness extends Context.Service<
                           npcId,
                           {
                             body: row.body,
-                            sourceKind: row.source_kind,
-                            sourceId: row.source_id,
-                            sourceLabel: row.source_label,
+                            sourceKind: row.sourceKind,
+                            sourceId: row.sourceId,
+                            sourceLabel: row.sourceLabel,
                             visibility: row.visibility,
                           },
                           from,
@@ -379,27 +431,19 @@ export class NpcAwareness extends Context.Service<
                           npcId,
                           {
                             body: row.body,
-                            sourceKind: row.source_kind,
-                            sourceId: row.source_id,
-                            sourceLabel: row.source_label,
+                            sourceKind: row.sourceKind,
+                            sourceId: row.sourceId,
+                            sourceLabel: row.sourceLabel,
                             visibility: row.visibility,
                           },
                           from,
                         ),
                         (memory) => ({ accepted_memory_id: memory.id }),
                       );
-                const rows = yield* sql<CandidateRow>`
-                  update npc_awareness_candidate
-                  set state = 'approved',
-                      decided_by_account_id = ${creator.actor.accountId},
-                      decided_at = now(),
-                      ${sql.update(destination)},
-                      version = npc_awareness_candidate.version + 1,
-                      updated_at = now()
-                  where npc_awareness_candidate.id = ${id}
-                  returning *, ${creator.campaign} as campaign_id
-                `;
-                return toNpcAwarenessCandidate(rows[0]!);
+                // The row is locked and in reach; not getting it back is a defect.
+                return yield* approved({ ...asked(creator), id, destination }).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),
@@ -414,18 +458,10 @@ export class NpcAwareness extends Context.Service<
                   return yield* staleVersion(payload.expectedVersion, row.version);
                 }
                 const reason = payload.reason?.trim() || "Rejected by the campaign creator.";
-                const rows = yield* sql<CandidateRow>`
-                  update npc_awareness_candidate
-                  set state = 'rejected',
-                      decided_by_account_id = ${creator.actor.accountId},
-                      decided_at = now(),
-                      rejection_reason = ${reason},
-                      version = npc_awareness_candidate.version + 1,
-                      updated_at = now()
-                  where npc_awareness_candidate.id = ${id}
-                  returning *, ${creator.campaign} as campaign_id
-                `;
-                return toNpcAwarenessCandidate(rows[0]!);
+                // The row is locked and in reach; not getting it back is a defect.
+                return yield* rejected({ ...asked(creator), id, reason }).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
               }),
             ),
           ),

@@ -1,26 +1,21 @@
 import {
-  type AccountId,
-  type CampaignId,
+  AccountId,
+  CampaignId,
   CampaignMember,
   CampaignMembership,
-  type CampaignRelation,
+  CampaignRelation,
   CampaignSharedWorld,
   Conflict,
   CurrentActor,
   type SharedWorldId,
   NotFound,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import type { SqlError, Statement } from "effect/unstable/sql";
-import { SqlClient } from "effect/unstable/sql";
-import {
-  type CampaignRow,
-  campaignImageColumns,
-  campaignImageSigner,
-  toCampaign,
-} from "./Campaigns.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { dieOnSqlError } from "./rows.js";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { campaignImageColumns, campaignImageSigner, campaignRow } from "./Campaigns.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
+import { classFromColumns, classWithRow, dieOnSqlError, orNotFound } from "./rows.js";
 import { campaignReadable, campaignWritableById, memberOfGroup } from "./visibility.js";
 
 /**
@@ -178,21 +173,21 @@ export const revokeMemberAt = (
  */
 export type CampaignShelf = "live" | "archived";
 
-interface MembershipRow extends CampaignRow {
-  readonly is_creator: boolean;
-  readonly joined_at: Date;
-  readonly is_shared_world: boolean;
-  readonly shared_world_name: string;
-}
+/**
+ * What an account is at a table, derived per row from the creator column —
+ * `CampaignRelation` is never stored. `account` is the column holding the
+ * account the row is about.
+ */
+const relationColumn = (sql: SqlClient.SqlClient, account: Statement.Fragment) =>
+  sql`case when campaign.creator_account_id = ${account} then 'creator' else 'player' end
+      as relation`;
 
-interface MemberRow {
-  readonly account_id: AccountId;
-  readonly name: string;
-  readonly is_creator: boolean;
-  readonly joined_at: Date;
-}
-
-const relationOf = (isCreator: boolean): CampaignRelation => (isCreator ? "creator" : "player");
+/** A participant as the roster reads it: `campaign` and `account` must be in scope. */
+const MemberRow = classFromColumns(CampaignMember, {
+  ...CampaignMember.fields,
+  relation: CampaignRelation,
+  joinedAt: Schema.DateTimeUtcFromDate,
+});
 
 export class Memberships extends Context.Service<
   Memberships,
@@ -252,99 +247,88 @@ export class Memberships extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      // `mine` is a campaign read, so it signs covers exactly as `Campaigns`
-      // does, for the campaigns its own predicate returned.
-      const sign = yield* campaignImageSigner;
+      const CampaignRow = campaignRow(yield* campaignImageSigner);
 
       const onShelf = (shelf: CampaignShelf): Statement.Fragment =>
         shelf === "archived"
           ? sql`campaign.archived_at is not null`
           : sql`campaign.archived_at is null`;
 
-      const memberNamed = (campaignId: CampaignId, accountId: AccountId) =>
-        Effect.map(
-          sql<MemberRow>`
-            select campaign_member.account_id,
-                   campaign_member.created_at as joined_at,
-                   account.name,
-                   (campaign.creator_account_id = campaign_member.account_id) as is_creator
-            from campaign_member
-            join account on account.id = campaign_member.account_id
-            join campaign on campaign.id = campaign_member.campaign_id
-            where campaign_member.campaign_id = ${campaignId}
-              and campaign_member.account_id = ${accountId}
-              and campaign_member.revoked_at is null
-          `,
-          (rows) => rows[0],
-        );
-
-      const toMember = (row: MemberRow): CampaignMember =>
-        new CampaignMember({
-          accountId: row.account_id,
-          name: row.name,
-          relation: relationOf(row.is_creator),
-          joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-        });
+      /**
+       * The reader's own tables, the campaign nested through the one campaign
+       * decode (`campaignRow`), which signs covers exactly as `Campaigns` does,
+       * for the campaigns this read's own predicate returned.
+       */
+      const tables = SqlSchema.findAll({
+        Request: Schema.Literals(["live", "archived"]),
+        Result: classWithRow(CampaignMembership, "campaign", CampaignRow, {
+          relation: CampaignRelation,
+          sharedWorld: Schema.NullOr(CampaignSharedWorld),
+          joinedAt: Schema.DateTimeUtcFromDate,
+        }),
+        execute: (shelf) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign.*,
+                     ${campaignImageColumns(sql)},
+                     ${relationColumn(sql, sql`${actor.accountId}`)},
+                     campaign_member.created_at as joined_at,
+                     case when play_group.is_shared_world
+                       then json_build_object('id', play_group.id, 'name', play_group.name)
+                     end as shared_world
+              from campaign
+              join play_group on play_group.id = campaign.group_id
+              join campaign_member
+                on campaign_member.campaign_id = campaign.id
+               and campaign_member.account_id = ${actor.accountId}
+               and campaign_member.revoked_at is null
+              where ${campaignReadable(sql, actor)} and ${onShelf(shelf)}
+              order by campaign.created_at desc
+            `,
+          ),
+      });
+      const roster = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(creatorFields)),
+        Result: MemberRow,
+        execute: ({ campaign, actor }) => sql`
+          select campaign_member.account_id,
+                 campaign_member.created_at as joined_at,
+                 account.name,
+                 ${relationColumn(sql, sql`campaign_member.account_id`)}
+          from campaign_member
+          join account on account.id = campaign_member.account_id
+          join campaign on campaign.id = campaign_member.campaign_id
+          where campaign_member.campaign_id = ${campaign}
+            and campaign_member.revoked_at is null
+            and ${campaignWritableById(sql, campaign, actor)}
+          order by (campaign.creator_account_id = campaign_member.account_id) desc,
+                   campaign_member.created_at asc,
+                   campaign_member.account_id asc
+        `,
+      });
+      /** One live participant, by the campaign and account the caller already holds. */
+      const memberNamed = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, accountId: AccountId })),
+        Result: MemberRow,
+        execute: ({ campaignId, accountId }) => sql`
+          select campaign_member.account_id,
+                 campaign_member.created_at as joined_at,
+                 account.name,
+                 ${relationColumn(sql, sql`campaign_member.account_id`)}
+          from campaign_member
+          join account on account.id = campaign_member.account_id
+          join campaign on campaign.id = campaign_member.campaign_id
+          where campaign_member.campaign_id = ${campaignId}
+            and campaign_member.account_id = ${accountId}
+            and campaign_member.revoked_at is null
+        `,
+      });
 
       return {
-        mine: (shelf) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<MembershipRow>`
-                select campaign.*,
-                       ${campaignImageColumns(sql)},
-                       (campaign.creator_account_id = ${actor.accountId}) as is_creator,
-                       campaign_member.created_at as joined_at,
-                       play_group.is_shared_world,
-                       play_group.name as shared_world_name
-                from campaign
-                join play_group on play_group.id = campaign.group_id
-                join campaign_member
-                  on campaign_member.campaign_id = campaign.id
-                 and campaign_member.account_id = ${actor.accountId}
-                 and campaign_member.revoked_at is null
-                where ${campaignReadable(sql, actor)} and ${onShelf(shelf)}
-                order by campaign.created_at desc
-              `;
-              return rows.map(
-                (row) =>
-                  new CampaignMembership({
-                    campaign: toCampaign(row, sign),
-                    relation: relationOf(row.is_creator),
-                    sharedWorld: row.is_shared_world
-                      ? new CampaignSharedWorld({
-                          id: row.group_id,
-                          name: row.shared_world_name,
-                        })
-                      : null,
-                    joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-                  }),
-              );
-            }),
-          ),
+        mine: (shelf) => dieOnSqlError(tables(shelf)),
 
-        list: (creator) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<MemberRow>`
-                select campaign_member.account_id,
-                       campaign_member.created_at as joined_at,
-                       account.name,
-                       (campaign.creator_account_id = campaign_member.account_id) as is_creator
-                from campaign_member
-                join account on account.id = campaign_member.account_id
-                join campaign on campaign.id = campaign_member.campaign_id
-                where campaign_member.campaign_id = ${creator.campaign}
-                  and campaign_member.revoked_at is null
-                  and ${campaignWritableById(sql, creator.campaign, creator.actor)}
-                order by (campaign.creator_account_id = campaign_member.account_id) desc,
-                         campaign_member.created_at asc,
-                         campaign_member.account_id asc
-              `;
-              return rows.map(toMember);
-            }),
-          ),
+        list: (creator) => dieOnSqlError(roster(asked(creator))),
 
         add: (creator, accountId) =>
           dieOnSqlError(
@@ -361,11 +345,9 @@ export class Memberships extends Context.Service<
                   return yield* new NotFound({ resource: "member", id: accountId });
                 }
                 yield* admitTo(sql, creator.campaign, creator.group, accountId);
-                const row = yield* memberNamed(creator.campaign, accountId);
-                if (row === undefined) {
-                  return yield* new NotFound({ resource: "member", id: accountId });
-                }
-                return toMember(row);
+                return yield* memberNamed({ campaignId: creator.campaign, accountId }).pipe(
+                  orNotFound("member", accountId),
+                );
               }),
             ),
           ),

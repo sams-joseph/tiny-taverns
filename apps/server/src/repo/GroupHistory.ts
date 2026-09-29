@@ -1,22 +1,20 @@
 import {
-  type AccountId,
-  type AssistantTurnId,
-  type CampaignId,
+  AccountId,
+  AssistantTurnId,
+  CampaignId,
   Conflict,
-  type EncounterKind,
+  EncounterKind,
+  EncounterRunEndedReason,
   CurrentActor,
   type SharedWorldHistoryEntryCreate,
   SharedWorldHistoryEntry,
-  type SharedWorldHistoryEntryId,
   SharedWorldHistorySummary,
-  type SharedWorldHistorySummaryId,
-  type SharedWorldId,
+  SharedWorldId,
   NotFound,
-  type Origin,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
 import { fightName } from "./EncounterRuns.js";
 import { initiativeOrder } from "./liveTables.js";
@@ -24,8 +22,11 @@ import {
   type AssistantOrigin,
   assistantColumns,
   defined,
+  classFromColumns,
   dieOnSqlError,
+  fromColumns,
   likeContains,
+  orNotFound,
 } from "./rows.js";
 import {
   ensureGroupReadable,
@@ -59,69 +60,72 @@ import {
  * the one act that turns campaign-private material into group history.
  */
 
-interface EntryRow {
-  readonly id: SharedWorldHistoryEntryId;
-  readonly group_id: SharedWorldId;
-  readonly campaign_id: CampaignId | null;
-  readonly session_id: SessionId | null;
-  readonly source_kind: SharedWorldHistoryEntry["sourceKind"];
-  readonly source_id: string | null;
-  /** `bigint`, so `pg` hands it back as a string — narrowed here, once. */
-  readonly group_seq: string;
-  readonly occurred_at: Date | null;
-  readonly accepted_at: Date;
-  readonly title: string | null;
-  readonly body: string;
-  readonly facts: unknown;
-  readonly origin: Origin;
-  readonly assistant_turn_id: AssistantTurnId | null;
-  readonly created_by_account_id: AccountId | null;
-  readonly created_at: Date;
-}
+/** `bigint`, which `pg` hands back as a string: read as the wire's integer. */
+const seqColumn = Schema.NumberFromString.pipe(Schema.decodeTo(Schema.Int));
 
-const toEntry = (row: EntryRow): SharedWorldHistoryEntry =>
-  new SharedWorldHistoryEntry({
-    id: row.id,
-    worldId: row.group_id,
-    campaignId: row.campaign_id,
-    sessionId: row.session_id,
-    sourceKind: row.source_kind,
-    worldSeq: Number(row.group_seq),
-    occurredAt: row.occurred_at === null ? null : DateTime.fromDateUnsafe(row.occurred_at),
-    acceptedAt: DateTime.fromDateUnsafe(row.accepted_at),
-    title: row.title,
-    body: row.body,
-    facts: row.facts,
-    origin: row.origin,
-    assistantTurnId: row.assistant_turn_id,
-    createdByAccountId: row.created_by_account_id,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-  });
+/** A `group_history_entry` row as the wire reads it, decoded off `select *` by `SqlSchema`. */
+const EntryRow = classFromColumns(
+  SharedWorldHistoryEntry,
+  {
+    ...SharedWorldHistoryEntry.fields,
+    worldSeq: seqColumn,
+    occurredAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    acceptedAt: Schema.DateTimeUtcFromDate,
+    createdAt: Schema.DateTimeUtcFromDate,
+  },
+  { worldId: "group_id", worldSeq: "group_seq" },
+);
 
-interface SummaryRow {
-  readonly id: SharedWorldHistorySummaryId;
-  readonly group_id: SharedWorldId;
-  readonly status: SharedWorldHistorySummary["status"];
-  readonly last_group_seq: string;
-  readonly text: string;
-  readonly origin: "authored" | "assistant";
-  readonly assistant_turn_id: AssistantTurnId | null;
-  readonly accepted_at: Date | null;
-  readonly created_at: Date;
-}
+/** A `group_history_summary` row as the wire reads it. */
+const SummaryRow = classFromColumns(
+  SharedWorldHistorySummary,
+  {
+    ...SharedWorldHistorySummary.fields,
+    lastWorldSeq: seqColumn,
+    acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    createdAt: Schema.DateTimeUtcFromDate,
+  },
+  { worldId: "group_id", lastWorldSeq: "last_group_seq" },
+);
 
-const toSummary = (row: SummaryRow): SharedWorldHistorySummary =>
-  new SharedWorldHistorySummary({
-    id: row.id,
-    worldId: row.group_id,
-    status: row.status,
-    lastWorldSeq: Number(row.last_group_seq),
-    text: row.text,
-    origin: row.origin,
-    assistantTurnId: row.assistant_turn_id,
-    acceptedAt: row.accepted_at === null ? null : DateTime.fromDateUnsafe(row.accepted_at),
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-  });
+/** The session a told night is read from, beside its campaign's name and the told summary. */
+const NightRow = fromColumns(
+  Schema.Struct({
+    number: Schema.Int,
+    title: Schema.NullOr(Schema.String),
+    startedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    campaignName: Schema.String,
+    summary: Schema.NullOr(Schema.String),
+  }),
+);
+
+/** A shared, ended fight as its Shared World is told it. */
+const ToldFightRow = fromColumns(
+  Schema.Struct({
+    name: Schema.String,
+    mode: EncounterKind,
+    round: Schema.Int,
+    outcome: EncounterRunEndedReason,
+    fell: Schema.Array(Schema.String),
+  }),
+  { name: "encounter_name", outcome: "ended_reason" },
+);
+
+/** One played night, as the group's timeline lists it. */
+/** The written columns of an insert, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
+
+const PlayedNightRow = fromColumns(
+  Schema.Struct({
+    campaignId: CampaignId,
+    campaignName: Schema.String,
+    sessionId: SessionId,
+    number: Schema.Int,
+    title: Schema.NullOr(Schema.String),
+    startedAt: Schema.DateTimeUtcFromDate,
+    endedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  }),
+);
 
 /**
  * A night's summary as its Shared World may be told it: only when the session
@@ -379,6 +383,150 @@ export class GroupHistory extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
 
       /**
+       * A night's told fights: shared, ended, in the order they started — see
+       * `toldNight` for what is and is not told of each.
+       */
+      const toldFights = SqlSchema.findAll({
+        Request: Schema.toType(SessionId),
+        Result: ToldFightRow,
+        execute: (sessionId) => sql`
+          select ${fightName(sql, runEncounterToldTheWorld(sql))} as encounter_name,
+                 encounter_run.mode,
+                 encounter_run.round,
+                 encounter_run.ended_reason,
+                 array(
+                   select combatant.display_name from combatant
+                   where combatant.encounter_run_id = encounter_run.id
+                     and encounter_run.mode = 'combat'
+                     and combatant.hp_current <= 0
+                     and ${toldTheWorld(sql, "combatant")}
+                   ${initiativeOrder(sql)}
+                 ) as fell
+          from encounter_run
+          where encounter_run.session_id = ${sessionId}
+            and ${fightToldTheWorld(sql)}
+          order by encounter_run.started_at asc, encounter_run.id asc
+        `,
+      });
+      const entries = SqlSchema.findAll({
+        Request: Schema.toType(SharedWorldId),
+        Result: EntryRow,
+        execute: (groupId) => sql`
+          select * from group_history_entry
+          where group_history_entry.group_id = ${groupId}
+          order by group_history_entry.group_seq desc
+          limit ${ENTRY_LIMIT}
+        `,
+      });
+      /** The accepted-memory batch after `after`, oldest first. */
+      const entriesAfter = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ groupId: SharedWorldId, after: Schema.Number })),
+        Result: EntryRow,
+        execute: ({ groupId, after }) => sql`
+          select * from group_history_entry
+          where group_history_entry.group_id = ${groupId}
+            and group_history_entry.group_seq > ${after}
+          order by group_history_entry.group_seq asc
+          limit ${ENTRY_LIMIT}
+        `,
+      });
+      const matching = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ groupId: SharedWorldId, q: Schema.String })),
+        Result: EntryRow,
+        execute: ({ groupId, q }) => sql`
+          select * from group_history_entry
+          where group_history_entry.group_id = ${groupId}
+            and (group_history_entry.body ilike ${likeContains(q)}
+                 or group_history_entry.title ilike ${likeContains(q)})
+          order by group_history_entry.group_seq desc
+          limit 20
+        `,
+      });
+      const insertEntry = SqlSchema.findOne({
+        Request: Columns,
+        Result: EntryRow,
+        execute: (columns) =>
+          sql`insert into group_history_entry ${sql.insert(columns)} returning *`,
+      });
+      /** The world's one accepted summary, if it has one. */
+      const accepted = SqlSchema.findOneOption({
+        Request: Schema.toType(SharedWorldId),
+        Result: SummaryRow,
+        execute: (groupId) => sql`
+          select * from group_history_summary
+          where group_history_summary.group_id = ${groupId}
+            and group_history_summary.status = 'accepted'
+        `,
+      });
+      /** Group Hob's accepted Story So Far, which the caller has made the only accepted one. */
+      const insertSummary = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            groupId: SharedWorldId,
+            lastWorldSeq: Schema.Number,
+            text: Schema.String,
+            assistantTurnId: AssistantTurnId,
+            accountId: AccountId,
+          }),
+        ),
+        Result: SummaryRow,
+        execute: ({ groupId, lastWorldSeq, text, assistantTurnId, accountId }) => sql`
+          insert into group_history_summary
+            (group_id, status, last_group_seq, text, origin, assistant_turn_id,
+             accepted_by_account_id, accepted_at)
+          values (${groupId}, 'accepted', ${lastWorldSeq}, ${text}, 'assistant',
+                  ${assistantTurnId}, ${accountId}, now())
+          returning *
+        `,
+      });
+      /** A session of the proof's campaign, played or not, with what the world may be told of it. */
+      const sessionOf = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, sessionId: SessionId })),
+        Result: NightRow,
+        execute: ({ campaignId, sessionId }) => sql`
+          select session.number, session.title, session.started_at,
+                 campaign.name as campaign_name,
+                 ${toldSummary(sql)} as summary
+          from session
+          join campaign on campaign.id = session.campaign_id
+          where session.id = ${sessionId}
+            and campaign.id = ${campaignId}
+        `,
+      });
+      /** A played session of a campaign of this world. */
+      const playedNight = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ groupId: SharedWorldId, campaignId: CampaignId, sessionId: SessionId }),
+        ),
+        Result: NightRow,
+        execute: ({ groupId, campaignId, sessionId }) => sql`
+          select session.number, session.title, session.started_at,
+                 campaign.name as campaign_name,
+                 ${toldSummary(sql)} as summary
+          from session
+          join campaign on campaign.id = session.campaign_id
+          where session.id = ${sessionId}
+            and campaign.id = ${campaignId}
+            and campaign.group_id = ${groupId}
+            and session.started_at is not null
+        `,
+      });
+      const timeline = SqlSchema.findAll({
+        Request: Schema.toType(SharedWorldId),
+        Result: PlayedNightRow,
+        execute: (groupId) => sql`
+          select campaign.id as campaign_id, campaign.name as campaign_name,
+                 session.id as session_id, session.number, session.title,
+                 session.started_at, session.ended_at
+          from session
+          join campaign on campaign.id = session.campaign_id
+          where campaign.group_id = ${groupId}
+            and session.started_at is not null
+          order by session.started_at asc, session.id asc
+        `,
+      });
+
+      /**
        * One played night as its Shared World is told it — the one read behind
        * both `nightStory` and `fromRecap`, so what world Hob is told and what
        * the Chronicle keeps cannot disagree. Every part composes the Share
@@ -392,48 +540,27 @@ export class GroupHistory extends Context.Service<
        * its players were shown nobody in it. The caller has already bound the
        * session to its campaign and group and checked that it was played.
        */
-      const toldNight = (night: {
-        readonly sessionId: SessionId;
-        readonly number: number;
-        readonly title: string | null;
-        readonly startedAt: Date;
-        readonly campaignName: string;
-        readonly summary: string | null;
-      }) =>
+      const toldNight = (
+        sessionId: SessionId,
+        night: {
+          readonly number: number;
+          readonly title: string | null;
+          readonly startedAt: DateTime.Utc;
+          readonly campaignName: string;
+          readonly summary: string | null;
+        },
+      ) =>
         Effect.gen(function* () {
           const beats = yield* sql<{ readonly body: string }>`
             select beat.body from beat
-            where beat.session_id = ${night.sessionId}
+            where beat.session_id = ${sessionId}
               and ${toldTheWorld(sql, "beat")}
             order by beat.created_at asc, beat.id asc
           `;
-          const fights = yield* sql<{
-            readonly encounter_name: string;
-            readonly mode: EncounterKind;
-            readonly round: number;
-            readonly ended_reason: "resolved" | "carried";
-            readonly fell: ReadonlyArray<string>;
-          }>`
-            select ${fightName(sql, runEncounterToldTheWorld(sql))} as encounter_name,
-                   encounter_run.mode,
-                   encounter_run.round,
-                   encounter_run.ended_reason,
-                   array(
-                     select combatant.display_name from combatant
-                     where combatant.encounter_run_id = encounter_run.id
-                       and encounter_run.mode = 'combat'
-                       and combatant.hp_current <= 0
-                       and ${toldTheWorld(sql, "combatant")}
-                     ${initiativeOrder(sql)}
-                   ) as fell
-            from encounter_run
-            where encounter_run.session_id = ${night.sessionId}
-              and ${fightToldTheWorld(sql)}
-            order by encounter_run.started_at asc, encounter_run.id asc
-          `;
+          const fights = yield* toldFights(sessionId);
           const settled = yield* sql<{ readonly label: string }>`
             select prep_item.label from prep_item
-            where prep_item.session_id = ${night.sessionId}
+            where prep_item.session_id = ${sessionId}
               and prep_item.done
               and ${toldTheWorld(sql, "prep_item")}
             order by prep_item.created_at asc, prep_item.id asc
@@ -442,16 +569,10 @@ export class GroupHistory extends Context.Service<
             campaignName: night.campaignName,
             number: night.number,
             title: night.title,
-            startedAt: DateTime.fromDateUnsafe(night.startedAt),
+            startedAt: night.startedAt,
             summary: night.summary,
             beats: beats.map((row) => row.body),
-            fights: fights.map((row) => ({
-              name: row.encounter_name,
-              mode: row.mode,
-              round: row.round,
-              outcome: row.ended_reason,
-              fell: row.fell,
-            })),
+            fights,
             settled: settled.map((row) => row.label),
           } satisfies ToldNight;
         });
@@ -462,13 +583,7 @@ export class GroupHistory extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const rows = yield* sql<EntryRow>`
-                select * from group_history_entry
-                where group_history_entry.group_id = ${groupId}
-                order by group_history_entry.group_seq desc
-                limit ${ENTRY_LIMIT}
-              `;
-              return rows.map(toEntry);
+              return yield* entries(groupId);
             }),
           ),
 
@@ -502,26 +617,23 @@ export class GroupHistory extends Context.Service<
                   return yield* new NotFound({ resource: "session", id: payload.sessionId });
                 }
               }
-              const rows = yield* sql<EntryRow>`
-                insert into group_history_entry ${sql.insert(
-                  defined({
-                    group_id: groupId,
-                    campaign_id: payload.campaignId,
-                    session_id: payload.sessionId,
-                    source_kind: "manual",
-                    occurred_at:
-                      payload.occurredAt === undefined
-                        ? undefined
-                        : DateTime.toDate(payload.occurredAt),
-                    title: payload.title,
-                    body: payload.body,
-                    created_by_account_id: actor.accountId,
-                    ...assistantColumns(from),
-                  }),
-                )}
-                returning *
-              `;
-              return toEntry(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertEntry(
+                defined({
+                  group_id: groupId,
+                  campaign_id: payload.campaignId,
+                  session_id: payload.sessionId,
+                  source_kind: "manual",
+                  occurred_at:
+                    payload.occurredAt === undefined
+                      ? undefined
+                      : DateTime.toDate(payload.occurredAt),
+                  title: payload.title,
+                  body: payload.body,
+                  created_by_account_id: actor.accountId,
+                  ...assistantColumns(from),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -536,52 +648,31 @@ export class GroupHistory extends Context.Service<
               if (creator.group !== groupId) {
                 return yield* new NotFound({ resource: "campaign", id: creator.campaign });
               }
-              const nights = yield* sql<{
-                readonly number: number;
-                readonly title: string | null;
-                readonly started_at: Date | null;
-                readonly campaign_name: string;
-                readonly summary: string | null;
-              }>`
-                select session.number, session.title, session.started_at,
-                       campaign.name as campaign_name,
-                       ${toldSummary(sql)} as summary
-                from session
-                join campaign on campaign.id = session.campaign_id
-                where session.id = ${sessionId}
-                  and campaign.id = ${creator.campaign}
-              `;
-              if (nights.length === 0) {
-                return yield* new NotFound({ resource: "session", id: sessionId });
-              }
-              const night = nights[0]!;
-              if (night.started_at === null) {
+              const night = yield* sessionOf({ campaignId: creator.campaign, sessionId }).pipe(
+                orNotFound("session", sessionId),
+              );
+              if (night.startedAt === null) {
                 return yield* new Conflict({
                   message:
                     "this night has not been played yet — the chronicle records what happened, and nothing has",
                 });
               }
               const rendered = renderNightEntry(
-                yield* toldNight({
-                  sessionId,
-                  number: night.number,
-                  title: night.title,
-                  startedAt: night.started_at,
-                  campaignName: night.campaign_name,
-                  summary: night.summary,
-                }),
+                yield* toldNight(sessionId, { ...night, startedAt: night.startedAt }),
               );
-              const rows = yield* sql<EntryRow>`
-                insert into group_history_entry
-                  (group_id, campaign_id, session_id, source_kind, source_id, occurred_at,
-                   title, body, facts, created_by_account_id)
-                values (${groupId}, ${creator.campaign}, ${sessionId}, 'recap', ${sessionId},
-                        ${DateTime.toDate(rendered.occurredAt)},
-                        ${rendered.title}, ${rendered.body}, ${JSON.stringify(rendered.facts)},
-                        ${actor.accountId})
-                returning *
-              `;
-              return toEntry(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertEntry({
+                group_id: groupId,
+                campaign_id: creator.campaign,
+                session_id: sessionId,
+                source_kind: "recap",
+                source_id: sessionId,
+                occurred_at: DateTime.toDate(rendered.occurredAt),
+                title: rendered.title,
+                body: rendered.body,
+                facts: JSON.stringify(rendered.facts),
+                created_by_account_id: actor.accountId,
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -590,12 +681,7 @@ export class GroupHistory extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const rows = yield* sql<SummaryRow>`
-                select * from group_history_summary
-                where group_history_summary.group_id = ${groupId}
-                  and group_history_summary.status = 'accepted'
-              `;
-              return rows.length === 0 ? null : toSummary(rows[0]!);
+              return Option.getOrNull(yield* accepted(groupId));
             }),
           ),
 
@@ -604,25 +690,13 @@ export class GroupHistory extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const summaries = yield* sql<SummaryRow>`
-                select * from group_history_summary
-                where group_history_summary.group_id = ${groupId}
-                  and group_history_summary.status = 'accepted'
-              `;
-              const current = summaries.length === 0 ? null : toSummary(summaries[0]!);
+              const current = Option.getOrNull(yield* accepted(groupId));
               const after = current?.lastWorldSeq ?? 0;
-              const rows = yield* sql<EntryRow>`
-                select * from group_history_entry
-                where group_history_entry.group_id = ${groupId}
-                  and group_history_entry.group_seq > ${after}
-                order by group_history_entry.group_seq asc
-                limit ${ENTRY_LIMIT}
-              `;
-              const entries = rows.map(toEntry);
+              const batch = yield* entriesAfter({ groupId, after });
               return {
                 summary: current,
-                entries,
-                lastWorldSeq: entries.at(-1)?.worldSeq ?? after,
+                entries: batch,
+                lastWorldSeq: batch.at(-1)?.worldSeq ?? after,
               };
             }),
           ),
@@ -653,15 +727,14 @@ export class GroupHistory extends Context.Service<
                 set status = 'superseded', updated_at = now()
                 where group_id = ${groupId} and status = 'accepted'
               `;
-              const rows = yield* sql<SummaryRow>`
-                insert into group_history_summary
-                  (group_id, status, last_group_seq, text, origin, assistant_turn_id,
-                   accepted_by_account_id, accepted_at)
-                values (${groupId}, 'accepted', ${lastWorldSeq}, ${text}, 'assistant',
-                        ${from.assistantTurnId}, ${actor.accountId}, now())
-                returning *
-              `;
-              return toSummary(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertSummary({
+                groupId,
+                lastWorldSeq,
+                text,
+                assistantTurnId: from.assistantTurnId,
+                accountId: actor.accountId,
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -688,15 +761,7 @@ export class GroupHistory extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const rows = yield* sql<EntryRow>`
-                select * from group_history_entry
-                where group_history_entry.group_id = ${groupId}
-                  and (group_history_entry.body ilike ${likeContains(q)}
-                       or group_history_entry.title ilike ${likeContains(q)})
-                order by group_history_entry.group_seq desc
-                limit 20
-              `;
-              return rows.map(toEntry);
+              return yield* matching({ groupId, q });
             }),
           ),
 
@@ -705,33 +770,7 @@ export class GroupHistory extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureGroupReadable(sql, groupId, actor);
-              const rows = yield* sql<{
-                readonly campaign_id: CampaignId;
-                readonly campaign_name: string;
-                readonly session_id: SessionId;
-                readonly number: number;
-                readonly title: string | null;
-                readonly started_at: Date;
-                readonly ended_at: Date | null;
-              }>`
-                select campaign.id as campaign_id, campaign.name as campaign_name,
-                       session.id as session_id, session.number, session.title,
-                       session.started_at, session.ended_at
-                from session
-                join campaign on campaign.id = session.campaign_id
-                where campaign.group_id = ${groupId}
-                  and session.started_at is not null
-                order by session.started_at asc, session.id asc
-              `;
-              return rows.map((row): PlayedNight => ({
-                campaignId: row.campaign_id,
-                campaignName: row.campaign_name,
-                sessionId: row.session_id,
-                number: row.number,
-                title: row.title,
-                startedAt: DateTime.fromDateUnsafe(row.started_at),
-                endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
-              }));
+              return yield* timeline(groupId);
             }),
           ),
 
@@ -745,33 +784,13 @@ export class GroupHistory extends Context.Service<
               // planned session answers exactly as a missing one — unplayed
               // prep does not exist at group level, so there is nothing to be
               // told apart from nothing.
-              const nights = yield* sql<{
-                readonly number: number;
-                readonly title: string | null;
-                readonly started_at: Date;
-                readonly campaign_name: string;
-                readonly summary: string | null;
-              }>`
-                select session.number, session.title, session.started_at,
-                       campaign.name as campaign_name,
-                       ${toldSummary(sql)} as summary
-                from session
-                join campaign on campaign.id = session.campaign_id
-                where session.id = ${sessionId}
-                  and campaign.id = ${campaignId}
-                  and campaign.group_id = ${groupId}
-                  and session.started_at is not null
-              `;
-              if (nights.length === 0) {
-                return yield* new NotFound({ resource: "session", id: sessionId });
-              }
-              const night = yield* toldNight({
-                sessionId,
-                number: nights[0]!.number,
-                title: nights[0]!.title,
-                startedAt: nights[0]!.started_at,
-                campaignName: nights[0]!.campaign_name,
-                summary: nights[0]!.summary,
+              const played = yield* playedNight({ groupId, campaignId, sessionId }).pipe(
+                orNotFound("session", sessionId),
+              );
+              // `started_at is not null` is in the statement's own predicate.
+              const night = yield* toldNight(sessionId, {
+                ...played,
+                startedAt: played.startedAt!,
               });
               return {
                 campaignName: night.campaignName,

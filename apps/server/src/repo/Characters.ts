@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import {
-  type Actor,
+  Actor,
   CampaignId,
   Character,
   CharacterId,
@@ -12,13 +12,13 @@ import {
   CharacterSeatRef,
   type CharacterRest,
   type CharacterSheet,
-  type CombatantId,
+  CombatantId,
   Conflict,
   CurrentActor,
-  type EncounterRunId,
+  EncounterRunId,
   NotFound,
   OwnedCharacter,
-  type SessionId,
+  SessionId,
   type SheetResource,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
@@ -258,11 +258,15 @@ const SeatRefRow = fromColumns(
   { campaignCharacterId: "id" },
 );
 
-interface OpenSeatSessionRow {
-  readonly session_id: SessionId;
-  readonly combatant_id: CombatantId | null;
-  readonly run_id: EncounterRunId | null;
-}
+/** A night one of the reader's seats of a character is at, and the character's place in its live fight. */
+const OpenSeatSessionRow = fromColumns(
+  Schema.Struct({
+    sessionId: SessionId,
+    combatantId: Schema.NullOr(CombatantId),
+    runId: Schema.NullOr(EncounterRunId),
+  }),
+);
+type OpenSeatSession = typeof OpenSeatSessionRow.Type;
 
 /** The live fight a character is on the table in: which campaign's, and what it is called. */
 const LiveFightRow = fromColumns(
@@ -709,11 +713,10 @@ export class Characters extends Context.Service<
           ),
         );
 
-      const openSeatSessions = (
-        characterId: CharacterId,
-        actor: Actor,
-      ): Effect.Effect<ReadonlyArray<OpenSeatSessionRow>> =>
-        sql<OpenSeatSessionRow>`
+      const seatSessions = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ characterId: CharacterId, actor: Actor })),
+        Result: OpenSeatSessionRow,
+        execute: ({ characterId, actor }) => sql`
           select campaign.current_session_id as session_id,
                  combatant.id as combatant_id,
                  encounter_run.id as run_id
@@ -727,14 +730,20 @@ export class Characters extends Context.Service<
             and campaign_character.account_id = ${actor.accountId}
             and campaign_character.left_at is null
             and campaign.current_session_id is not null
-        `.pipe(Effect.orDie);
+        `,
+      });
+      const openSeatSessions = (
+        characterId: CharacterId,
+        actor: Actor,
+      ): Effect.Effect<ReadonlyArray<OpenSeatSession>> =>
+        seatSessions({ characterId, actor }).pipe(Effect.orDie);
 
-      const ringSessions = (sessions: ReadonlyArray<OpenSeatSessionRow>) =>
+      const ringSessions = (sessions: ReadonlyArray<OpenSeatSession>) =>
         Option.match(live, {
           onNone: () => Effect.void,
           onSome: (events) =>
             Effect.forEach(
-              [...new Set(sessions.map((session) => session.session_id))],
+              [...new Set(sessions.map((session) => session.sessionId))],
               (sessionId) => events.touched(sessionId),
               { discard: true },
             ),
@@ -742,7 +751,7 @@ export class Characters extends Context.Service<
 
       const appendTouched = (
         characterId: CharacterId,
-        sessions: ReadonlyArray<OpenSeatSessionRow>,
+        sessions: ReadonlyArray<OpenSeatSession>,
         detail: Record<string, unknown>,
         requestId: string | undefined,
       ): Effect.Effect<void> =>
@@ -750,15 +759,15 @@ export class Characters extends Context.Service<
           sessions,
           (session) =>
             appendCharacterUpdated(sql, {
-              sessionId: session.session_id,
+              sessionId: session.sessionId,
               characterId,
               live:
-                session.combatant_id === null || session.run_id === null
+                session.combatantId === null || session.runId === null
                   ? undefined
                   : {
-                      combatantId: session.combatant_id,
-                      runId: session.run_id,
-                      sessionId: session.session_id,
+                      combatantId: session.combatantId,
+                      runId: session.runId,
+                      sessionId: session.sessionId,
                     },
               detail,
               requestId,
