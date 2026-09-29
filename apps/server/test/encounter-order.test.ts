@@ -133,10 +133,20 @@ const move = (
   who: Person,
   campaignId: CampaignId,
   encounterId: EncounterId,
-  payload: EncounterPlacement,
+  placement: EncounterPlacement,
 ) =>
   attempt(who.token, (client) =>
-    client.encounters.move({ params: { campaignId, encounterId }, payload }),
+    // One branch each: the derived client's argument is a union of its own,
+    // which a union payload does not distribute into.
+    "before" in placement
+      ? client.encounters.move({
+          params: { campaignId, encounterId },
+          payload: { before: placement.before },
+        })
+      : client.encounters.move({
+          params: { campaignId, encounterId },
+          payload: { after: placement.after },
+        }),
   );
 
 /** The stored slots, as a campaign holds them, in slot order. */
