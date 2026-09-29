@@ -1829,8 +1829,9 @@ export const encounterShelf = (): Map<string, Answer> => {
   });
   routes.set(`GET ${c}/encounters/${bargainId}/creatures`, { status: 200, body: bargainRoster });
   routes.set(`GET ${c}/encounters/${sketchId}/creatures`, { status: 200, body: sketchRoster });
-  // A move is taken; the list is read back in the order it was, so a move on
-  // the page stays laid over it (`useEncounterOrder`).
+  // A move is taken. The list is read back in the order it was, which drops
+  // the move (`useEncounterOrder`): a test that wants the move kept answers
+  // the re-read in the moved order itself.
   for (const row of shelf) {
     routes.set(`POST ${c}/encounters/${row.id}/move`, { status: 204, body: null });
   }

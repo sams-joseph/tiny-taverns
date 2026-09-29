@@ -226,6 +226,36 @@ for (const width of WIDTHS) {
   });
 }
 
+/**
+ * The server's side of a move, for this page only: the stub's list is one
+ * answer every worker shares, so the move is kept here and the list's re-read
+ * comes back in the moved order, as the server's would. Read back unchanged,
+ * the list would say the move never happened and the row would go back.
+ */
+const takesMoves = async (page: Page) => {
+  let order: Array<string> | undefined;
+  await page.route(/\/stub\/campaigns\/[^/]+\/encounters\/[^/]+\/move$/, async (route) => {
+    const id = /encounters\/([^/]+)\/move$/.exec(route.request().url())![1]!;
+    const { before, after } = route.request().postDataJSON() as {
+      before?: string;
+      after?: string;
+    };
+    const rest = order!.filter((row) => row !== id);
+    const anchor = rest.indexOf((before ?? after)!);
+    rest.splice(after === undefined ? anchor : anchor + 1, 0, id);
+    order = rest;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route(/\/stub\/campaigns\/[^/]+\/encounters(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const list = (await response.json()) as { items: ReadonlyArray<{ id: string }> };
+    order ??= list.items.map((row) => row.id);
+    const byId = new Map(list.items.map((row) => [row.id, row]));
+    await route.fulfill({ response, json: { ...list, items: order.map((id) => byId.get(id)) } });
+  });
+};
+
 /** The reorder plan's widths: a small phone, a tablet and a laptop. */
 const ORDER_WIDTHS = [360, 768, 1280] as const;
 
@@ -234,6 +264,7 @@ for (const width of ORDER_WIDTHS) {
     test.use({ viewport: { width, height: HEIGHT } });
 
     test("encounter order handles", async ({ app, page }) => {
+      await takesMoves(page);
       await app.open(encounters);
       const list = page.locator('[data-slot="encounter-list"]');
       const handles = list.locator('[data-slot="move-handle"]');
