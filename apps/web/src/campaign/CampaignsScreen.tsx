@@ -120,7 +120,8 @@ export function CampaignsScreen() {
           New campaign
         </Button>
       </TopBar>
-      <div className="flex flex-col gap-6">
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your campaigns…" />}
         {resource.state === "failed" && (
           <ApiFailureNotice failure={resource.failure} onRetry={retry} />
@@ -133,7 +134,7 @@ export function CampaignsScreen() {
                 a game.
               </EmptyState>
             ) : (
-              <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
                 {memberships.map((membership) => (
                   <CampaignRow
                     key={membership.campaign.id}
