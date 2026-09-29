@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { sharedWorldCreateFrom } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -15,7 +16,6 @@ import { useInvalidate } from "../api/atoms";
 import { runApiResult } from "../api/client";
 import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
-import { describedBy } from "../ui/describedBy";
 import { NewSharedWorldDescription } from "../ui/description";
 
 /**
@@ -78,7 +78,7 @@ export function NewSharedWorldDialog({ onClose }: { readonly onClose: () => void
     const token = await fetchCredential();
     const result = await runApiResult(
       (client) =>
-        client.sharedWorlds.create({ payload: describedBy({ name: name.trim() }, description) }),
+        client.sharedWorlds.create({ payload: sharedWorldCreateFrom({ name, description }) }),
       token,
     );
 

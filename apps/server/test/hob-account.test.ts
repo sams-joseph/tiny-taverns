@@ -34,14 +34,16 @@ import {
 
 /**
  * **The account's own Hob panel** — `/me/hob` with no `intent`, the Hob on
- * every screen outside a campaign or Shared World — and the campaign it drafts.
+ * every screen outside a campaign or Shared World — and the campaign and the
+ * Shared World it drafts.
  *
  * Over the real application, so the reach, the toolkit, the accept and the
  * cover trigger are the shipped ones; only the model and the image endpoint
  * are scripted. Four claims:
  *
- * - **the toolkit fits the place** — character drafting and campaign drafting,
- *   no campaign content, and only the asker's own Shared Worlds to choose from;
+ * - **the toolkit fits the place** — character, campaign and Shared World
+ *   drafting, no campaign content, and only the asker's own Shared Worlds to
+ *   choose from;
  *   the create screen's composer (`intent: "character"`) has no campaign tool;
  * - **keeping a campaign makes exactly one**, created by the asker through the
  *   ordinary create, stamped `origin = 'assistant'` with the turn, with its
@@ -49,7 +51,10 @@ import {
  * - **only the owner keeps it** — another account gets `NotFound` and nothing
  *   is made, and a second keep is a `Conflict`;
  * - **the world is validated both times** — a world the asker is not in is
- *   refused to the model, and one archived before the keep refuses the keep.
+ *   refused to the model, and one archived before the keep refuses the keep;
+ * - **keeping a Shared World founds exactly one**, owned by the asker through
+ *   the ordinary create, stamped with the turn, with its one cover drawn, and
+ *   nobody else can keep it.
  */
 
 const script: Array<Round> = [];
@@ -220,16 +225,24 @@ beforeAll(async () => {
 }, 120_000);
 
 describe("the panel's toolkit fits where it is", () => {
-  it("offers character and campaign drafting and nothing that reads a campaign", async () => {
+  it("offers character, campaign and world drafting and nothing that reads a record", async () => {
     const { requests } = await ask(owner.token);
     expect(toolNames(requests[0])).toEqual([
       "listStartingSpells",
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
     const shown = JSON.stringify(requests[0]?.tools);
     expect(shown.toLowerCase()).not.toContain("campaignid");
-    for (const absent of ["searchCampaign", "proposeNote", "proposeEncounter", "proposeBeat"]) {
+    for (const absent of [
+      "searchCampaign",
+      "proposeNote",
+      "proposeEncounter",
+      "proposeBeat",
+      "proposeSharedWorldEntry",
+      "proposeStorySoFar",
+    ]) {
       expect(shown).not.toContain(absent);
     }
     // No campaign's record reaches the model from here.
@@ -473,5 +486,158 @@ describe("keeping it", () => {
       ),
     ).toBe("NotFound");
     expect(theirs.id).not.toBe(coast.id);
+  }, 60_000);
+});
+
+describe("drafting a Shared World", () => {
+  const WORLD_ASKED = "Make me a Shared World: a drowned archipelago where the tides forgot.";
+
+  /** A world a well-behaved model offers. */
+  const aWorld = (over: Record<string, unknown> = {}) =>
+    toolCallChunks("proposeSharedWorld", {
+      name: "The Sunken Reach",
+      description: "An archipelago the sea took back, where the bells still ring below.",
+      ...over,
+    });
+
+  const worldCount = () =>
+    sql(
+      (sql) =>
+        sql<{ readonly count: string }>`
+          select count(*)::text as count from play_group where is_shared_world
+        `,
+    ).then((rows) => Number(rows[0]?.count ?? "0"));
+
+  const offerWorld = (token: string, over: Record<string, unknown> = {}) =>
+    ask(token, { text: WORLD_ASKED, rounds: [aWorld(over), textChunks("Here is your world.")] });
+
+  it("offers a card and founds nothing until it is kept", async () => {
+    const count = await worldCount();
+    const { events, requests } = await offerWorld(owner.token);
+    expect(proposedIn(events)?.proposal).toEqual({
+      target: "sharedWorld",
+      name: "The Sunken Reach",
+      description: "An archipelago the sea took back, where the bells still ring below.",
+    });
+    expect(events.at(-1)?.event).toBe("done");
+    expect(await worldCount()).toBe(count);
+    // The account prompt names the tool, so the model knows it may.
+    expect(JSON.stringify(requests[0]?.messages)).toContain("proposeSharedWorld");
+  }, 60_000);
+
+  it("takes a blank description as none, and refuses a blank name to the model", async () => {
+    const plain = await offerWorld(owner.token, { description: "   " });
+    const proposed = proposedIn(plain.events);
+    expect(proposed?.proposal.target === "sharedWorld" && proposed.proposal.description).toBeNull();
+
+    const { events, requests } = await ask(owner.token, {
+      text: WORLD_ASKED,
+      rounds: [aWorld({ name: "   " }), textChunks("I need a name.")],
+    });
+    expect(proposedIn(events)).toBeUndefined();
+    expect(JSON.stringify(requests[1]?.messages)).toContain("give the Shared World a name");
+  }, 60_000);
+
+  it("reports a prose answer when a world was asked for", async () => {
+    const asked = await ask(owner.token, {
+      text: WORLD_ASKED,
+      rounds: [textChunks("A drowned archipelago, cold and bright.")],
+    });
+    const last = asked.events.at(-1);
+    expect(last?.event).toBe("failed");
+    expect(last?.event === "failed" && last.data.message).toContain("drafted nothing you can keep");
+  }, 60_000);
+
+  it("continues the same thread on a redraft, and shows the model its offer", async () => {
+    const first = await offerWorld(owner.token);
+    const { threadId } = begunIn(first.events);
+    const second = await ask(owner.token, {
+      threadId,
+      text: "Make it colder.",
+      rounds: [aWorld({ name: "The Frozen Reach" }), textChunks("Colder.")],
+    });
+    expect(begunIn(second.events).threadId).toBe(threadId);
+    expect(JSON.stringify(second.requests[0]?.messages)).toContain(
+      'You offered a Shared World called \\"The Sunken Reach\\"',
+    );
+  }, 60_000);
+
+  it("founds one world the asker owns, stamped with the turn, and draws its cover once", async () => {
+    const { events } = await offerWorld(owner.token);
+    const { threadId, turnId } = begunIn(events);
+    const count = await worldCount();
+    const drawnBefore = images.requests().length;
+
+    const accepted = await as(owner.token, (client) =>
+      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+    );
+    if (accepted.accepted !== "sharedWorld") throw new Error("not a Shared World");
+    expect(accepted.sharedWorld).toMatchObject({
+      name: "The Sunken Reach",
+      description: "An archipelago the sea took back, where the bells still ring below.",
+      ownerAccountId: owner.actor.accountId,
+      archivedAt: null,
+      imagePending: true,
+    });
+    expect(await worldCount()).toBe(count + 1);
+    await settled();
+    expect(images.requests().length - drawnBefore).toBe(1);
+
+    // The provenance is on the row, as a kept campaign's is.
+    const [row] = await sql(
+      (sql) =>
+        sql<{ readonly origin: string; readonly assistant_turn_id: string | null }>`
+          select origin, assistant_turn_id from play_group where id = ${accepted.sharedWorld.id}
+        `,
+    );
+    expect(row).toEqual({ origin: "assistant", assistant_turn_id: turnId });
+
+    // The asker's own, as by the form: on their list as its owner.
+    const mine = await as(owner.token, (client) => client.sharedWorlds.list());
+    const entry = mine.find((world) => world.sharedWorld.id === accepted.sharedWorld.id);
+    expect(entry?.isOwner).toBe(true);
+    const turns = await as(owner.token, (client) => client.meHob.turns({ params: { threadId } }));
+    expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).not.toBeNull();
+
+    // And a later campaign draft may start in it.
+    const { requests } = await ask(owner.token);
+    expect(JSON.stringify(requests[0]?.tools)).toContain("The Sunken Reach");
+  }, 60_000);
+
+  it("is one world however many times it is kept", async () => {
+    const { events } = await offerWorld(owner.token);
+    const { threadId, turnId } = begunIn(events);
+    await as(owner.token, (client) =>
+      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+    );
+    const count = await worldCount();
+    expect(
+      await refusal(owner.token, (client) =>
+        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+      ),
+    ).toBe("Conflict");
+    expect(await worldCount()).toBe(count);
+  }, 60_000);
+
+  it("is NotFound to another account, which founds nothing", async () => {
+    const { events } = await offerWorld(owner.token);
+    const { threadId, turnId } = begunIn(events);
+    const count = await worldCount();
+    expect(
+      await refusal(stranger.token, (client) =>
+        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+      ),
+    ).toBe("NotFound");
+    expect(await worldCount()).toBe(count);
+    // Nor through a Shared World's own accept, which reaches no account thread.
+    expect(
+      await refusal(owner.token, (client) =>
+        client.sharedWorldHob.accept({
+          params: { worldId: coast.id, threadId, turnId },
+          payload: {},
+        }),
+      ),
+    ).toBe("NotFound");
+    expect(await worldCount()).toBe(count);
   }, 60_000);
 });

@@ -29,6 +29,7 @@ import {
 } from "./rows.js";
 import {
   ensureGroupReadable,
+  ensureGroupWritable,
   fightToldTheWorld,
   runEncounterToldTheWorld,
   toldTheWorld,
@@ -321,6 +322,20 @@ export class GroupHistory extends Context.Service<
       lastWorldSeq: number,
       from: AssistantOrigin,
     ) => Effect.Effect<SharedWorldHistorySummary, NotFound, CurrentActor>;
+    /**
+     * The owner's clear: the world is left with no Story So Far. Owner-only
+     * (`ensureGroupWritable`), as renaming and archiving are, so a member who
+     * is not the owner is the ordinary `NotFound`; a world with none already
+     * is a no-op, as the campaign story's `remove` is.
+     *
+     * **Predecessors are kept, as a replacement keeps them.** The current
+     * summary is marked `superseded` rather than deleted, so a clear is a
+     * replacement by nothing: the row keeps its text and the turn it was kept
+     * from, and nothing reads a superseded row. With no accepted summary,
+     * `summarySources` starts from the first entry again, so Hob's next draft
+     * reads the whole Chronicle rather than extending what was cleared.
+     */
+    readonly clearSummary: (groupId: SharedWorldId) => Effect.Effect<void, NotFound, CurrentActor>;
     /**
      * Lexical search over the chronicle — group Hob's grounding read. `ILIKE`
      * over title and body, newest admitted first; the corpus is bounded (a
@@ -648,6 +663,24 @@ export class GroupHistory extends Context.Service<
               `;
               return toSummary(rows[0]!);
             }),
+          ),
+
+        clearSummary: (groupId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                const actor = yield* CurrentActor;
+                yield* ensureGroupWritable(sql, groupId, actor);
+                // The same row lock `acceptSummary` serializes on, so a keep
+                // and a clear at the same instant apply one after the other.
+                yield* sql`select id from play_group where id = ${groupId} for update`;
+                yield* sql`
+                  update group_history_summary
+                  set status = 'superseded', updated_at = now()
+                  where group_id = ${groupId} and status = 'accepted'
+                `;
+              }),
+            ),
           ),
 
         search: (groupId, q) =>

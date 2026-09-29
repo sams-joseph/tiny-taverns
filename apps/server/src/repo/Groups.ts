@@ -20,7 +20,14 @@ import { SqlClient } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { liveMemberAccountIds } from "./Memberships.js";
-import { defined, dieOnSqlError, proseColumn, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  proseColumn,
+  setClause,
+} from "./rows.js";
 import {
   ensureGroupReadable,
   groupReadable,
@@ -73,6 +80,7 @@ export const foundGroup = (
   world: { readonly name: string; readonly description?: string | undefined },
   ownerAccountId: AccountId,
   isSharedWorld = false,
+  from?: AssistantOrigin,
 ): Effect.Effect<SharedWorld, SqlError.SqlError> =>
   Effect.gen(function* () {
     const rows = yield* sql<GroupRow>`
@@ -82,6 +90,7 @@ export const foundGroup = (
           name: world.name,
           description: proseColumn(world.description),
           is_shared_world: isSharedWorld,
+          ...assistantColumns(from),
         }),
       )}
       returning *, ${sharedWorldImageColumns(sql, "play_group")}
@@ -245,9 +254,14 @@ export class Groups extends Context.Service<
     /** Archived explicit worlds owned by this account, for restoration. */
     readonly archived: Effect.Effect<ReadonlyArray<SharedWorld>, never, CurrentActor>;
     readonly findById: (id: SharedWorldId) => Effect.Effect<SharedWorld, NotFound, CurrentActor>;
-    /** Anybody may found a group; they become its owner and first member. */
+    /**
+     * Anybody may found a group; they become its owner and first member.
+     * `from` is Hob's accept (`Proposals.acceptDraft`); no create payload
+     * carries it.
+     */
     readonly create: (
       payload: SharedWorldCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<SharedWorld, never, CurrentActor>;
     /** Turns a standalone campaign's hidden context into an explicit Shared World. */
     readonly promote: (
@@ -358,12 +372,12 @@ export class Groups extends Context.Service<
             }),
           ),
 
-        create: (payload) =>
+        create: (payload, from) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                return yield* foundGroup(sql, payload, actor.accountId, true);
+                return yield* foundGroup(sql, payload, actor.accountId, true, from);
               }),
             ),
           ),

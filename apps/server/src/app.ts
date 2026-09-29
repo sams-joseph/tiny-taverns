@@ -698,6 +698,10 @@ export const servicesOver = <E>(
         // typed one takes, with `assistant_turn_id` on it.
         Characters.layer.pipe(Layer.provide(imageUrls)),
         Encounters.layer,
+        // A Shared World kept from the account's own Hob is founded through
+        // the same `Groups.create` the form's POST uses. The bare layer: a new
+        // world has no cover to sign yet, and the handler draws it after.
+        Groups.layer,
         // Group Hob's accepted chronicle line goes through the same
         // `GroupHistory.create` a member's own hand does.
         GroupHistory.layer,

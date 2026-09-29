@@ -1758,6 +1758,7 @@ describe("what counts as asking for a build", () => {
     expect(account.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
     // And nothing that builds is spelled another way: every remaining tool is a
     // read, by the list `the assistant seam` above pins.
@@ -1881,19 +1882,22 @@ describe("the assistant seam", () => {
     ]);
   });
 
-  it("counts the account panel's toolkit: the core drafting one plus proposeCampaign", () => {
-    // Outside any campaign Hob drafts the two things an account makes on its
-    // own. Campaign content needs a campaign; its tools are absent here.
+  it("counts the account panel's toolkit: the core drafting one plus campaigns and worlds", () => {
+    // Outside any campaign Hob drafts the three things an account makes on its
+    // own. Campaign content needs a campaign and a Chronicle entry a world;
+    // their tools are absent here.
     expect(Object.keys(accountToolkitOver(NO_VOCABULARY, []).tools).sort()).toEqual([
       "listStartingSpells",
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
     expect(Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools).sort()).toEqual([
       "listOptions",
       "listStartingSpells",
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
   });
 });

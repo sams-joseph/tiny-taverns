@@ -11,6 +11,7 @@ import {
   asClassOption,
   asRaceOption,
   CAMPAIGN_DESCRIPTION_MAX,
+  SHARED_WORLD_DESCRIPTION_MAX,
   CAMPAIGN_PREVIOUSLY_MAX,
   CAMPAIGN_STORY_MAX,
   CampaignId,
@@ -1985,14 +1986,41 @@ export const proposeCampaignOver = (worlds: ReadonlyArray<CampaignWorld>) => {
 type CampaignDraft = Tool.Parameters<ReturnType<typeof proposeCampaignOver>>;
 
 /**
+ * `proposeSharedWorld`: a new Shared World for the asker to own.
+ *
+ * The fields are the two `NewSharedWorldDialog` writes (a name, and the few
+ * sentences its one cover is drawn from), and the accept writes them through
+ * the same `sharedWorldCreateFrom`. Nothing about it is a read, so it is one
+ * tool rather than one built per request: a world is founded empty, and
+ * connecting campaigns to it is its owner's later act, never the draft's.
+ */
+export const ProposeSharedWorld = Tool.make("proposeSharedWorld", {
+  description:
+    "Offer them a new Shared World — a setting several of their campaigns can share, " +
+    "with one Chronicle of what has happened in it — built from what they described: " +
+    "a name, and a short description (the land, its age and its trouble, in a few " +
+    "sentences; its cover picture is drawn from it). They will own it. It starts " +
+    "with no campaigns; they connect or start those afterwards. Only a suggestion: " +
+    "nothing is made unless they keep it. Say one short line about it and stop.",
+  parameters: Schema.Struct({
+    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    description: optionalText(SHARED_WORLD_DESCRIPTION_MAX),
+  }),
+  success: Schema.String,
+  failure: proposalFailure,
+  failureMode: "return",
+});
+
+/**
  * **The account's own panel** — Hob on every screen outside a campaign or
  * Shared World (`/me/hob` with no `intent`).
  *
- * The core drafting toolkit plus {@link proposeCampaignOver}, and nothing
- * else: it has no campaign to read and no Shared World record, so it can draft
- * the two things an account makes on its own — a character over the core
- * rules and a new campaign. Campaign content (a note, an encounter) needs a
- * campaign, and its tools are absent rather than refused.
+ * The core drafting toolkit plus {@link proposeCampaignOver} and
+ * {@link ProposeSharedWorld}, and nothing else: it has no campaign to read and
+ * no Shared World record, so it can draft the three things an account makes
+ * on its own — a character over the core rules, a new campaign and a new
+ * Shared World. Campaign content (a note, an encounter) needs a campaign, and
+ * a Chronicle entry needs a world; their tools are absent rather than refused.
  */
 export const accountToolkitOver = (
   vocabulary: CharacterVocabulary,
@@ -2002,9 +2030,10 @@ export const accountToolkitOver = (
     CoreListStartingSpells,
     proposeCharacterOver(vocabulary, "core"),
     proposeCampaignOver(worlds),
+    ProposeSharedWorld,
   );
 
-/** {@link accountToolkitOver} above the cap: the same three, plus the listing. */
+/** {@link accountToolkitOver} above the cap: the same four, plus the listing. */
 export const accountToolkitListing = (
   vocabulary: CharacterVocabulary,
   worlds: ReadonlyArray<CampaignWorld>,
@@ -2014,6 +2043,7 @@ export const accountToolkitListing = (
     CoreListStartingSpells,
     proposeCharacterOver(vocabulary, "core"),
     proposeCampaignOver(worlds),
+    ProposeSharedWorld,
   );
 
 /** The repositories a DM Hob tool call may reach — read-only, except the conditional direct counter writer. */
@@ -3447,9 +3477,25 @@ const campaignHandlerFor =
       );
     });
 
+/** `proposeSharedWorld`, bound: the draft as the card shows it, nothing read. */
+const sharedWorldHandlerFor =
+  (actor: Actor, proposal: ProposalSlot) =>
+  ({ name, description }: Tool.Parameters<typeof ProposeSharedWorld>) =>
+    Effect.gen(function* () {
+      const title = name.trim();
+      // The form's create refuses a blank name, so the draft is told here,
+      // where the model can hear it, rather than failing the keep.
+      if (title === "") return yield* new Conflict({ message: "give the Shared World a name" });
+      return yield* bind(actor, proposal).offer(
+        { target: "sharedWorld", name: title, description: blank(description) ?? null },
+        `Offered the Shared World "${title}". Say one short line about it and stop.`,
+      );
+    });
+
 /**
  * The account panel's handlers: {@link coreHandlersFor}, the same drafting
- * code the create screen's composer runs, plus `proposeCampaign`.
+ * code the create screen's composer runs, plus `proposeCampaign` and
+ * `proposeSharedWorld`.
  */
 const accountHandlersFor = (
   repositories: DraftingRepositories,
@@ -3460,6 +3506,7 @@ const accountHandlersFor = (
 ) => ({
   ...coreHandlersFor(repositories, actor, proposal, vocabulary),
   proposeCampaign: campaignHandlerFor(actor, proposal, worlds),
+  proposeSharedWorld: sharedWorldHandlerFor(actor, proposal),
 });
 
 /** {@link accountToolkitOver}, bound to {@link accountHandlersFor}. */

@@ -87,6 +87,7 @@ const services = Layer.mergeAll(
   PrepItems.layer,
   Proposals.layer.pipe(
     Layer.provide([
+      Groups.layer,
       CampaignCreatorActors.layer,
       NpcSheets.layer,
       Npcs.layer,

@@ -815,7 +815,10 @@ describe("the scope, counted", () => {
     // `Encounters.move` is the one hundred and seventy-fourth, for
     // `Notes.setPinned`'s reason: a write whose reach is `rowWritable` and
     // `ensureCampaignWritable`, which are already the creator predicate.
-    expect(ungated).toBe(174);
+    // `GroupHistory.clearSummary` is the one hundred and seventy-fifth: a
+    // Shared World's write, not a campaign's, whose reach is
+    // `ensureGroupWritable`, the world owner's predicate.
+    expect(ungated).toBe(175);
   });
 });
 

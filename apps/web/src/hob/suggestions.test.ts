@@ -5,9 +5,10 @@ import { type AccountScreen, hobOpeningFor, type HobKnown } from "./suggestions"
  * The one mapping from where the reader is to what Hob offers, pinned.
  *
  * The property that matters is that a starter never offers something the
- * toolkit behind it cannot do: the account's panel drafts a campaign or a
- * character (`proposeCampaign`, `proposeCharacter`) and nothing else, and a
- * campaign's panel never offers to start another campaign.
+ * toolkit behind it cannot do: the account's panel drafts a campaign, a Shared
+ * World or a character (`proposeCampaign`, `proposeSharedWorld`,
+ * `proposeCharacter`) and nothing else, and a campaign's panel never offers to
+ * start another campaign.
  */
 
 const titles = (screen: AccountScreen, known: HobKnown = {}) =>
@@ -22,10 +23,10 @@ const SCREENS: ReadonlyArray<AccountScreen> = [
 ];
 
 describe("the account's panel", () => {
-  it.each(SCREENS)("offers only the two things it drafts, on %s", (screen) => {
+  it.each(SCREENS)("offers only the three things it drafts, on %s", (screen) => {
     for (const known of [{}, { campaigns: 0, characters: 0, sharedWorlds: 0 }, { sharedWorlds: 2 }])
       for (const title of titles(screen, known))
-        expect(title).toMatch(/^Draft (my first|another|a) (campaign|character)\b/);
+        expect(title).toMatch(/^Draft (my first|another|a) (campaign|Shared World|character)\b/);
   });
 
   it("never offers campaign content", () => {
@@ -36,7 +37,10 @@ describe("the account's panel", () => {
   it("puts what the screen is about first", () => {
     expect(titles("campaigns")[0]).toMatch(/campaign/);
     expect(titles("characters")[0]).toMatch(/character/);
-    expect(titles("sharedWorlds", { sharedWorlds: 1 })[0]).toBe(
+    expect(titles("sharedWorlds", { sharedWorlds: 1 })[0]).toBe("Draft another Shared World");
+    expect(titles("sharedWorlds", { sharedWorlds: 0 })[0]).toBe("Draft my first Shared World");
+    expect(titles("sharedWorlds")[0]).toBe("Draft a Shared World");
+    expect(titles("sharedWorlds", { sharedWorlds: 1 })[1]).toBe(
       "Draft a campaign in one of my Shared Worlds",
     );
   });

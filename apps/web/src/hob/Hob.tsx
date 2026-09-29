@@ -126,23 +126,36 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
   const { inline, close } = hob;
 
   /**
-   * A kept campaign or character opens, which is where the reader was going:
-   * the new table, or the new sheet. Overlaid, the panel closes too, since it
-   * covers the screen that just opened.
+   * A kept campaign, Shared World or character opens, which is where the
+   * reader was going: the new table, the new world, or the new sheet.
+   * Overlaid, the panel closes too, since it covers the screen that just
+   * opened.
    */
   const onKept = useCallback(
     (accepted: HobAccepted) => {
-      if (accepted.accepted !== "campaign" && accepted.accepted !== "character") return;
-      if (!inline) close();
-      void (accepted.accepted === "campaign"
-        ? navigate({
+      switch (accepted.accepted) {
+        case "campaign":
+          if (!inline) close();
+          void navigate({
             to: "/campaigns/$campaignId",
             params: { campaignId: accepted.campaign.id },
-          })
-        : navigate({
+          });
+          return;
+        case "sharedWorld":
+          if (!inline) close();
+          void navigate({
+            to: "/worlds/$worldId",
+            params: { worldId: accepted.sharedWorld.id },
+          });
+          return;
+        case "character":
+          if (!inline) close();
+          void navigate({
             to: "/characters/$characterId",
             params: { characterId: accepted.character.id },
-          }));
+          });
+          return;
+      }
     },
     [close, inline, navigate],
   );

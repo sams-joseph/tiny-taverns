@@ -139,6 +139,10 @@ const NOT_CONTENT = [
   // creator may keep a Hob draft of one. See 0076_npc_sheets.ts and
   // 0077_npc_sheet_origin.ts.
   "npc_sheet",
+  // A campaign's backing context or a Shared World: who may read it is its
+  // live members, never a dm/shared switch. It carries the provenance pair
+  // because an account may keep a Hob draft of a world. See
+  // 0079_shared_world_origin.ts.
   "play_group",
   "proficiency",
   "racial_trait_damage_type",

@@ -10,6 +10,7 @@ import {
   cazril,
   encounter as anEncounterRow,
   session as aSessionRow,
+  sharedWorldDetails,
   worldId,
 } from "../campaign/campaign.fixtures";
 import { npcPrepAtom, npcsAtom, npcSheetAtom, npcSheetsAtom } from "../cast/load";
@@ -1363,8 +1364,9 @@ describe("a new NPC for the Cast", () => {
     await waitFor(() => expect(composer()).not.toBeNull());
     await userEvent.type(composer()!, "Add a blacksmith to the cast.{Enter}");
     await screen.findByText("Mara Vell");
+    // Not a fixed three: an earlier test in this file may have left the
+    // campaign's sheet shelf warm, and a warm atom is not read again on mount.
     const before = castReads();
-    expect(before).toBe(3);
 
     await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -1597,6 +1599,41 @@ describe("the account's own Hob, outside any campaign", () => {
     // And *Open it* opens it again.
     await userEvent.click(screen.getByRole("button", { name: "Open it" }));
     expect(kept).toHaveLength(2);
+  });
+
+  it("draws a Shared World card, keeps it with ids alone, and opens what it made", async () => {
+    const kept: Array<HobAccepted> = [];
+    server.frames = [
+      began(threadId, turnId),
+      proposed(turnId, {
+        target: "sharedWorld",
+        name: "The Sunken Reach",
+        description: "An archipelago the sea took back.",
+      }),
+      done(),
+    ];
+    server.acceptBody = {
+      accepted: "sharedWorld",
+      sharedWorld: { ...sharedWorldDetails, name: "The Sunken Reach", imagePending: true },
+    };
+    renderHob({ account: true, onKept: (accepted) => kept.push(accepted) });
+    await waitFor(() => expect(composer()).not.toBeNull());
+
+    await userEvent.type(composer()!, "Draft me a Shared World.{Enter}");
+
+    expect(await screen.findByText("The Sunken Reach")).toBeInTheDocument();
+    expect(screen.getByText("Shared World")).toBeInTheDocument();
+    expect(screen.getByText("A new Shared World you will own")).toBeInTheDocument();
+    expect(screen.getByText("An archipelago the sea took back.")).toBeInTheDocument();
+    expect(server.accepts).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([`/me/hob/threads/${threadId}/turns/${turnId}/accept`]),
+    );
+    expect(await screen.findByText("In your Shared Worlds")).toBeInTheDocument();
+    expect(kept.map((accepted) => accepted.accepted)).toEqual(["sharedWorld"]);
   });
 
   it("draws a character card the same way", async () => {

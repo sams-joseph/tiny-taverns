@@ -12,13 +12,15 @@ import type { HobStarter } from "./transcript";
  * - **campaign** — the creator's panel: encounters, notes, read-aloud, prep.
  *   The delivered starters, unchanged.
  * - **sharedWorld** — the world's canonical history: never campaign prep.
- * - **account** — every screen outside both: the panel drafts a campaign or a
- *   character, and nothing that needs a campaign (no encounter, no note), which
- *   is exactly `proposeCampaign` and `proposeCharacter`.
+ * - **account** — every screen outside both: the panel drafts a campaign, a
+ *   Shared World or a character, and nothing that needs a campaign (no
+ *   encounter, no note), which is exactly `proposeCampaign`,
+ *   `proposeSharedWorld` and `proposeCharacter`.
  *
  * Within the account arm the order and the wording follow the screen and what
  * already exists there: on the Campaigns list a campaign comes first, on the
- * roster a character does, and an empty list says *first*. Counts are only
+ * Shared Worlds list a world does, on the roster a character does, and an
+ * empty list says *first*. Counts are only
  * what the screen behind the panel already read (`known`); an absent count is
  * simply not said, rather than guessed.
  *
@@ -70,6 +72,17 @@ const draftInAWorld: HobStarter = {
   sub: "A new table that shares a world you’re already in",
 };
 
+const draftSharedWorld = (known: HobKnown): HobStarter => ({
+  icon: "map",
+  title:
+    known.sharedWorlds === undefined
+      ? "Draft a Shared World"
+      : known.sharedWorlds === 0
+        ? "Draft my first Shared World"
+        : "Draft another Shared World",
+  sub: "A setting several of your campaigns can share",
+});
+
 const draftCharacter = (known: HobKnown): HobStarter => ({
   icon: "user-round",
   title:
@@ -91,7 +104,7 @@ const accountStarters = (screen: AccountScreen, known: HobKnown): ReadonlyArray<
     case "campaigns":
       return [draftCampaign(known), ...inAWorld, draftCharacter(known)];
     case "sharedWorlds":
-      return [...inAWorld, draftCampaign(known), draftCharacter(known)];
+      return [draftSharedWorld(known), ...inAWorld, draftCampaign(known), draftCharacter(known)];
     case "characters":
     case "library":
     case "elsewhere":
@@ -113,8 +126,9 @@ export const hobOpeningFor = (place: HobPlace): HobOpening => {
       return {
         title: "What shall we start?",
         description:
-          "I can draft a campaign for you to run or a character to play. I can’t see " +
-          "inside your campaigns from here: open one to plan in it.",
+          "I can draft a campaign for you to run, a Shared World for your campaigns to " +
+          "share, or a character to play. I can’t see inside your campaigns from here: " +
+          "open one to plan in it.",
         starters: accountStarters(place.screen, place.known),
       };
   }

@@ -366,6 +366,7 @@ describe("migrations", () => {
       { migration_id: 76, name: "npc_sheets" },
       { migration_id: 77, name: "npc_sheet_origin" },
       { migration_id: 78, name: "encounter_order" },
+      { migration_id: 79, name: "shared_world_origin" },
     ]);
   }, 60_000);
 
@@ -453,6 +454,7 @@ describe("migrations", () => {
       { migration_id: 76, name: "npc_sheets" },
       { migration_id: 77, name: "npc_sheet_origin" },
       { migration_id: 78, name: "encounter_order" },
+      { migration_id: 79, name: "shared_world_origin" },
     ]);
   }, 60_000);
 });

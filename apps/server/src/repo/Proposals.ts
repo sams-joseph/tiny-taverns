@@ -12,6 +12,7 @@ import {
   NotFound,
   type NpcPrepUpdate,
   type NpcSheetPut,
+  sharedWorldCreateFrom,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
@@ -22,6 +23,7 @@ import { Characters } from "./Characters.js";
 import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
+import { Groups } from "./Groups.js";
 import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import { NpcPreps } from "./NpcPrep.js";
@@ -84,7 +86,9 @@ import type { ConversationReach } from "./visibility.js";
  * thread can hold: a character, through `Characters.createCore` against the
  * core rules, or a campaign, through `Campaigns.createStandalone` or
  * `Campaigns.create` with the payload `campaignCreateFrom` builds for the form
- * too. The asker becomes the campaign's creator, exactly as by the form.
+ * too, or a Shared World, through `Groups.create` with the payload
+ * `sharedWorldCreateFrom` builds for the form. The asker becomes the
+ * campaign's creator, or the world's owner, exactly as by the form.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
@@ -96,7 +100,7 @@ const alreadyAccepted = new Conflict({
   message: "that is already in the campaign",
 });
 
-/** The same, for a character or a campaign kept from the account's own thread. */
+/** The same, for a character, a campaign or a Shared World kept from the account's own thread. */
 const alreadyKept = new Conflict({
   message: "that is already kept",
 });
@@ -199,11 +203,12 @@ export class Proposals extends Context.Service<
       turnId: AssistantTurnId,
     ) => Effect.Effect<HobAccepted, NotFound | Conflict, CurrentActor>;
     /**
-     * The yes for a character drafted with no campaign: a turn of the actor's
-     * own account-scoped thread, materialised through `Characters.createCore`
-     * with the turn on it. Only a `character` proposal can live in such a
-     * thread; anything else is refused rather than filed somewhere its card
-     * never named.
+     * The yes for something drafted with no campaign: a turn of the actor's
+     * own account-scoped thread, materialised with the turn on it — a
+     * character through `Characters.createCore`, a campaign through
+     * `Campaigns.create` or `createStandalone`, a Shared World through
+     * `Groups.create`. Only those can live in such a thread; anything else is
+     * refused rather than filed somewhere its card never named.
      */
     readonly acceptDraft: (
       threadId: AssistantThreadId,
@@ -215,6 +220,7 @@ export class Proposals extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const campaigns = yield* Campaigns;
+      const groups = yield* Groups;
       const notes = yield* Notes;
       const beats = yield* Beats;
       const encounters = yield* Encounters;
@@ -382,6 +388,14 @@ export class Proposals extends Context.Service<
               }),
             );
 
+          case "sharedWorld":
+            // The same: only the account's own panel offers a new world.
+            return Effect.fail(
+              new Conflict({
+                message: "that is a new Shared World — keep it from your own Hob conversation",
+              }),
+            );
+
           case "sharedWorldHistory":
           case "sharedWorldSummary":
             // Only a group thread ever carries one — the group toolkit is the
@@ -465,7 +479,16 @@ export class Proposals extends Context.Service<
                                   from,
                                 ),
                         }
-                      : undefined;
+                      : proposal.target === "sharedWorld"
+                        ? {
+                            accepted: "sharedWorld" as const,
+                            // The asker founds it and owns it, as by the form.
+                            sharedWorld: yield* groups.create(
+                              sharedWorldCreateFrom(proposal),
+                              from,
+                            ),
+                          }
+                        : undefined;
                 if (accepted === undefined) {
                   // Only the account's own toolkits write into these threads
                   // and they propose nothing else; the refusal is the same

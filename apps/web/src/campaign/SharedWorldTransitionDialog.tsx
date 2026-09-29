@@ -1,4 +1,9 @@
-import type { CampaignMembership, CampaignSharedWorld, SharedWorldMembership } from "@taverns/api";
+import {
+  type CampaignMembership,
+  type CampaignSharedWorld,
+  sharedWorldCreateFrom,
+  type SharedWorldMembership,
+} from "@taverns/api";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Button,
@@ -22,7 +27,6 @@ import { reads } from "../api/keys";
 import { useCredential } from "../auth/credential";
 import { SharedWorldFields } from "../shared-world/NewSharedWorldDialog";
 import { sharedWorldsAtom } from "../shared-world/load";
-import { describedBy } from "../ui/describedBy";
 import { membershipsAtom } from "./load";
 
 /**
@@ -144,7 +148,7 @@ function SharedWorldTransitionDialog({
       (client) =>
         client.campaigns.promoteSharedWorld({
           params: { campaignId: campaign.id },
-          payload: describedBy({ name: name.trim() }, description),
+          payload: sharedWorldCreateFrom({ name, description }),
         }),
       token,
     );

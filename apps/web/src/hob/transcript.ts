@@ -34,12 +34,13 @@ import type { IconName } from "@taverns/ui";
  * cannot express them is better than a card that renders a badge over an empty
  * body. They come back when the designers draw them.
  *
- * **`note`, `beat`, `summary`, `campaign`, `character` and `npcSheet` are
- * ours.** The delivery has no entry for any of them, and each is something Hob
- * can actually offer to keep. All six take glyphs the delivery already asked
- * for (`pencil`, `flag`, `history` — the Chronicle's own —, `layers` — the
- * Campaigns item on the global row —, `user-round` and `shield-half`, the
- * sheet's armour class), so the icon table did not grow.
+ * **`note`, `beat`, `summary`, `campaign`, `sharedWorld`, `character` and
+ * `npcSheet` are ours.** The delivery has no entry for any of them, and each
+ * is something Hob can actually offer to keep. All seven take glyphs the
+ * delivery already asked for (`pencil`, `flag`, `history` — the Chronicle's
+ * own —, `layers` — the Campaigns item on the global row —, `map` — a Shared
+ * World's own in the bar —, `user-round` and `shield-half`, the sheet's armour
+ * class), so the icon table did not grow.
  */
 export const ARTIFACT_KINDS = {
   encounter: { icon: "swords", label: "Encounter", variant: "default" },
@@ -54,6 +55,7 @@ export const ARTIFACT_KINDS = {
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
   campaign: { icon: "layers", label: "Campaign", variant: "default" },
+  sharedWorld: { icon: "map", label: "Shared World", variant: "default" },
   character: { icon: "user-round", label: "Character", variant: "magic" },
   npcSheet: { icon: "shield-half", label: "NPC sheet", variant: "magic" },
 } as const satisfies Record<
@@ -163,6 +165,11 @@ export type HobArtifact =
       readonly partyName?: string;
       /** The pitch its one cover is drawn from, when Hob wrote one. */
       readonly pitch?: string;
+    })
+  | (ArtifactBase & {
+      readonly kind: "sharedWorld";
+      /** What the world is, which its one cover is drawn from, when Hob wrote one. */
+      readonly description?: string;
     })
   | (ArtifactBase & {
       readonly kind: "character";
@@ -346,6 +353,15 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         ...(proposal.world === null ? {} : { world: proposal.world.name }),
         ...(proposal.partyName === null ? {} : { partyName: proposal.partyName }),
         ...(proposal.description === null ? {} : { pitch: proposal.description }),
+      };
+    case "sharedWorld":
+      return {
+        id: turnId,
+        kind: "sharedWorld",
+        title: proposal.name,
+        meta: "A new Shared World you will own",
+        chips: [],
+        ...(proposal.description === null ? {} : { description: proposal.description }),
       };
     /**
      * An NPC's sheet the creator's Hob drafted: the NPC by name, the line its

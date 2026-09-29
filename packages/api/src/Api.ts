@@ -790,6 +790,12 @@ class MembersGroup extends HttpApiGroup.make("members")
  * act — it renders their played night to prose and stores the copy, which is
  * how canonical campaign history crosses into group context without a group
  * read ever touching campaign tables.
+ *
+ * `clearSummary` is the owner's alone, as renaming and archiving are: it
+ * leaves the world with no Story So Far, and a member who is not the owner is
+ * the ordinary `NotFound`. The Chronicle is not touched, and Hob drafts a new
+ * summary from the whole of it. The cleared summary is kept as a superseded
+ * predecessor, as a replaced one is (`GroupHistory.clearSummary`).
  */
 class SharedWorldHistoryGroup extends HttpApiGroup.make("sharedWorldHistory")
   .add(
@@ -814,6 +820,11 @@ class SharedWorldHistoryGroup extends HttpApiGroup.make("sharedWorldHistory")
     HttpApiEndpoint.get("summary", "/summary", {
       params: { worldId: SharedWorldId },
       success: Schema.NullOr(SharedWorldHistorySummary),
+      error: NotFound,
+    }),
+    HttpApiEndpoint.delete("clearSummary", "/summary", {
+      params: { worldId: SharedWorldId },
+      success: HttpApiSchema.NoContent,
       error: NotFound,
     }),
   )
@@ -2380,10 +2391,12 @@ class HobGroup extends HttpApiGroup.make("hob")
  * (`conversationReachable`'s `"account"` arm), so another account's thread id
  * is the ordinary `NotFound`. Its toolkits hold no campaign or Shared World
  * read: character drafting over the core rules (`coreRulesUsable`), plus
- * campaign drafting on the panel (`HobDraftAsk.intent`). `accept` can make a
- * character, through the insert `me.createCoreCharacter` uses, or a campaign,
- * through the insert `campaigns.create` (or a Shared World's `createCampaign`)
- * uses, with its one cover drawn after the accept commits.
+ * campaign and Shared World drafting on the panel (`HobDraftAsk.intent`).
+ * `accept` can make a character, through the insert `me.createCoreCharacter`
+ * uses; a campaign, through the insert `campaigns.create` (or a Shared World's
+ * `createCampaign`) uses; or a Shared World, through the insert
+ * `sharedWorlds.create` uses. A kept campaign or world has its one cover drawn
+ * after the accept commits.
  */
 class MeHobGroup extends HttpApiGroup.make("meHob")
   .add(

@@ -3,7 +3,21 @@ import type {
   SharedWorldHistorySummary,
   SharedWorldId,
 } from "@taverns/api";
-import { Badge, Button, Card, CardContent, Loading } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Icon,
+  Loading,
+} from "@taverns/ui";
+import { Result } from "effect";
 import { useState } from "react";
 import { useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
@@ -25,15 +39,21 @@ import { historyAtom, summaryAtom } from "./load";
  */
 
 function StorySoFar({
+  worldId,
   summary,
   latestWorldSeq,
   onAskHob,
+  owns,
 }: {
+  readonly worldId: SharedWorldId;
   readonly summary: SharedWorldHistorySummary | null;
   readonly latestWorldSeq: number;
   /** Opens the Hob panel; absent where there is none, and so is the button. */
   readonly onAskHob: (() => void) | undefined;
+  /** Whether the reader owns the world: clearing is the owner's alone. */
+  readonly owns: boolean;
 }) {
+  const [clearing, setClearing] = useState(false);
   const stale = summary !== null && latestWorldSeq > summary.lastWorldSeq;
   return (
     <section className="flex flex-col gap-2" aria-label="Story So Far">
@@ -60,14 +80,79 @@ function StorySoFar({
               )}
             </>
           )}
-          {onAskHob !== undefined && (summary === null || stale) && (
-            <Button size="sm" variant="outline" className="self-start" onClick={onAskHob}>
-              {summary === null ? "Draft Story So Far with Hob" : "Refresh with Hob"}
-            </Button>
+          {((onAskHob !== undefined && (summary === null || stale)) ||
+            (owns && summary !== null)) && (
+            <div className="flex flex-wrap gap-2">
+              {onAskHob !== undefined && (summary === null || stale) && (
+                <Button size="sm" variant="outline" onClick={onAskHob}>
+                  {summary === null ? "Draft Story So Far with Hob" : "Refresh with Hob"}
+                </Button>
+              )}
+              {owns && summary !== null && (
+                <Button size="sm" variant="ghost" onClick={() => setClearing(true)}>
+                  <Icon name="trash-2" size={13} />
+                  Clear
+                </Button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
+      {clearing && <ClearStorySoFarDialog worldId={worldId} onClose={() => setClearing(false)} />}
     </section>
+  );
+}
+
+/**
+ * The owner's clear, behind a confirm that says what goes and what stays: the
+ * Story So Far goes for every member, and the Chronicle it was drawn from is
+ * not touched, so Hob can draft a new one from all of it.
+ */
+function ClearStorySoFarDialog({
+  worldId,
+  onClose,
+}: {
+  readonly worldId: SharedWorldId;
+  readonly onClose: () => void;
+}) {
+  const { busy, failure, submit } = useMutation();
+
+  const clear = async () => {
+    const done = await submit(
+      (client) => client.sharedWorldHistory.clearSummary({ params: { worldId } }),
+      [reads.sharedWorldHistory(worldId)],
+    );
+    if (Result.isSuccess(done)) onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Clear the Story So Far">
+        <DialogHeader>
+          <DialogTitle>Clear the Story So Far?</DialogTitle>
+          <DialogDescription>Every member of this Shared World stops reading it.</DialogDescription>
+        </DialogHeader>
+        <div className="px-gutter py-3">
+          <p className="text-body-s leading-body text-muted-foreground">
+            The Story So Far is cleared, and the world has none until a member keeps a new one. The
+            Chronicle is not touched, and Hob can draft a new Story So Far from all of it.
+          </p>
+        </div>
+        <DialogFooter>
+          {failure !== undefined && (
+            <div className="mr-auto min-w-0 flex-1 text-left">
+              <SaveFailure failure={failure} />
+            </div>
+          )}
+          <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>
+            Keep it
+          </Button>
+          <Button variant="destructive" size="sm" disabled={busy} onClick={() => void clear()}>
+            {busy ? "Clearing…" : "Clear Story So Far"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -144,10 +229,13 @@ function Composer({ worldId }: { readonly worldId: SharedWorldId }) {
 export function SharedWorldChronicle({
   worldId,
   onAskHob,
+  owns,
 }: {
   readonly worldId: SharedWorldId;
   /** Opens the Hob panel; absent where there is none, and so is the button. */
   readonly onAskHob: (() => void) | undefined;
+  /** Whether the reader owns the world, which is who may clear its Story So Far. */
+  readonly owns: boolean;
 }) {
   const [resource, retry] = useApiAtom(historyAtom(worldId));
   const [summary, retrySummary] = useApiAtom(summaryAtom(worldId));
@@ -160,6 +248,8 @@ export function SharedWorldChronicle({
       )}
       {summary.state === "ready" && resource.state === "ready" && (
         <StorySoFar
+          worldId={worldId}
+          owns={owns}
           summary={summary.value}
           latestWorldSeq={resource.value[0]?.worldSeq ?? 0}
           onAskHob={onAskHob}

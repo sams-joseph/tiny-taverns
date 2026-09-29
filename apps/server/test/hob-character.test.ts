@@ -101,6 +101,7 @@ const services = Layer.mergeAll(
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Proposals.layer.pipe(
     Layer.provide([
+      Groups.layer,
       CampaignCreatorActors.layer,
       NpcSheets.layer,
       Npcs.layer,

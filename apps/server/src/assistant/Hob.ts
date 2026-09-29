@@ -1584,15 +1584,20 @@ const DM_NOUNS: ReadonlyArray<string> = [
 ];
 
 /**
- * The things the account's own panel can build: a campaign and a character.
- * Deliberately no "game" or "world": *"what game should I run?"* is chat, and
- * a Shared World is not something this surface makes.
+ * The things the account's own panel can build: a campaign, a Shared World
+ * and a character. Deliberately no "game": *"what game should I run?"* is chat.
+ * "world" is here because `proposeSharedWorld` makes one; *"make me a world"*
+ * is a build ask.
  */
 const ACCOUNT_NOUNS: ReadonlyArray<string> = [
   "campaign",
   "campaigns",
   "table",
   "adventure",
+  "shared world",
+  "world",
+  "worlds",
+  "setting",
   "character",
   "characters",
   "hero",
@@ -1716,7 +1721,7 @@ export const aQuestionAboutIt = (asked: string): boolean => {
 /**
  * Whose gates apply: a campaign's creator's panel (`dm`), a drafting composer
  * (`own`), or the account's own panel (`account`), which is general chat like
- * the creator's and builds a campaign or a character.
+ * the creator's and builds a campaign, a Shared World or a character.
  */
 export type BuildSurface = "dm" | "own" | "account";
 
@@ -1753,7 +1758,7 @@ const unbuilt = (surface: BuildSurface): HobEvent => ({
       surface === "account"
         ? "Hob answered in words and drafted nothing you can keep — this model did not make " +
           "a usable drafting call, which smaller models often do not. Ask again, or start " +
-          "it yourself from the Campaigns or Characters screen."
+          "it yourself from the Campaigns, Shared Worlds or Characters screen."
         : surface === "dm"
           ? "Hob answered in words and built nothing you can save — this model did not make " +
             "a usable build tool call, which smaller models often do not. Ask again, or " +
@@ -2031,8 +2036,8 @@ const corePrompt = (): string =>
 /**
  * What Hob is told on **the account's own panel**, outside any campaign.
  *
- * It can draft the two things an account makes on its own and read nothing
- * else, so it says both, says what it cannot see, and keeps the character
+ * It can draft the three things an account makes on its own and read nothing
+ * else, so it says all three, says what it cannot see, and keeps the character
  * drafting rules word for word so the two drafting surfaces cannot drift.
  */
 const accountPrompt = (): string =>
@@ -2040,15 +2045,17 @@ const accountPrompt = (): string =>
     "You are Hob, the assistant behind the bar in Tiny Taverns — a tool for playing",
     "tabletop roleplaying games. Right now you are helping somebody outside any campaign.",
     "",
-    "You can draft two things for them. When they want a new campaign to run, offer it",
-    "with proposeCampaign: a name, a party name if one fits, and a short pitch. When",
-    "they want a character, draft one with proposeCharacter against the core rules, as",
-    "follows.",
+    "You can draft three things for them. When they want a new campaign to run, offer it",
+    "with proposeCampaign: a name, a party name if one fits, and a short pitch. When they",
+    "want a new Shared World — a setting several of their campaigns can share — offer it",
+    "with proposeSharedWorld: a name and a few sentences about the land, its age and its",
+    "trouble. When they want a character, draft one with proposeCharacter against the",
+    "core rules, as follows.",
     "",
     ...DRAFTING,
     "",
-    "If they ask for a change to a campaign you offered, offer the whole campaign again,",
-    "keeping everything they did not ask you to change.",
+    "If they ask for a change to a campaign or a Shared World you offered, offer the whole",
+    "of it again, keeping everything they did not ask you to change.",
     "",
     "You cannot see any campaign's record, notes or players from here, and you should",
     "say so if asked: to plan inside a campaign, they open it and ask there. Do not claim",
@@ -2185,6 +2192,12 @@ const offered = (turn: HobTurn): string | undefined => {
         turn.acceptedAt === null ? "not yet kept" : "kept"
       }: ${parts.join("; ")}]`;
     }
+    // The same, so "make it colder" redrafts the world rather than founding
+    // another from the first message.
+    case "sharedWorld":
+      return `[You offered a Shared World called "${proposal.name}" — ${
+        turn.acceptedAt === null ? "not yet kept" : "kept"
+      }${proposal.description === null ? "" : `: ${proposal.description}`}]`;
     // Read back in the tool's own words, so "make her older" or "give her
     // stats too" redrafts the NPC offered rather than inventing another. A kept
     // one is in the Cast now, where searchCampaign finds its id.

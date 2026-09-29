@@ -257,6 +257,22 @@ function CampaignBody({ artifact }: { readonly artifact: HobArtifact & { kind: "
   );
 }
 
+/**
+ * A Shared World Hob drafted: what the world is, which its one cover is drawn
+ * from — the one thing the create form asks for besides the name.
+ */
+function SharedWorldBody({
+  artifact,
+}: {
+  readonly artifact: HobArtifact & { kind: "sharedWorld" };
+}) {
+  return artifact.description === undefined ? null : (
+    <p className="text-body-s leading-body whitespace-pre-wrap text-foreground">
+      {artifact.description}
+    </p>
+  );
+}
+
 /** A character the account's panel drafted: how they look, and Hob's reasons. */
 function CharacterBody({ artifact }: { readonly artifact: HobArtifact & { kind: "character" } }) {
   return (
@@ -347,6 +363,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <ChecklistBody artifact={artifact} />;
     case "campaign":
       return <CampaignBody artifact={artifact} />;
+    case "sharedWorld":
+      return <SharedWorldBody artifact={artifact} />;
     case "character":
       return <CharacterBody artifact={artifact} />;
     case "npcSheet":
@@ -382,6 +400,7 @@ export function ArtifactCard({
   const summary = artifact.kind === "summary";
   const campaignStory = artifact.kind === "campaignStory";
   const campaign = artifact.kind === "campaign";
+  const sharedWorld = artifact.kind === "sharedWorld";
   const character = artifact.kind === "character";
   const npcSheet = artifact.kind === "npcSheet";
   const npc = artifact.kind === "npc";
@@ -492,13 +511,15 @@ export function ArtifactCard({
                       ? "In the Shared World Chronicle"
                       : campaign
                         ? "In your campaigns"
-                        : character
-                          ? "On your roster"
-                          : npcSheet
-                            ? "On the NPC’s sheet"
-                            : npc
-                              ? "In the Cast"
-                              : "In tonight’s session"}
+                        : sharedWorld
+                          ? "In your Shared Worlds"
+                          : character
+                            ? "On your roster"
+                            : npcSheet
+                              ? "On the NPC’s sheet"
+                              : npc
+                                ? "In the Cast"
+                                : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -513,7 +534,7 @@ export function ArtifactCard({
                       ? "Keep as the story so far"
                       : chronicle
                         ? "Add to Chronicle"
-                        : campaign || character || npc || npcSheet
+                        : campaign || sharedWorld || character || npc || npcSheet
                           ? "Keep it"
                           : "Save to session"}
               </Button>
