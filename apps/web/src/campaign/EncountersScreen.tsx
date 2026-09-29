@@ -435,8 +435,10 @@ function MovableItem({
   const carried = drag.carried(id);
   const shift = drag.shift(id);
   const settling = drag.settling(id);
+  // React copies `propertyName` onto `transitionend` only; a `transitioncancel`
+  // arrives as a plain synthetic event, so read the native one.
   const settled = (event: TransitionEvent<HTMLLIElement>) => {
-    if (event.target === event.currentTarget && event.propertyName === "translate") {
+    if (event.target === event.currentTarget && event.nativeEvent.propertyName === "translate") {
       drag.onSettled(id);
     }
   };
