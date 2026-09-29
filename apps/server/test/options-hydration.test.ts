@@ -206,7 +206,7 @@ describe("an option list", () => {
     expect(own[4]?.languages.length).toBeGreaterThan(0);
   });
 
-  it("reads a race whose eleventh trait grants a proficiency", async () => {
+  it("reads a race whose twelfth trait grants a proficiency", async () => {
     const { dm } = fixture;
     const { race, listed, found } = await run(
       Effect.gen(function* () {
@@ -215,7 +215,7 @@ describe("an option list", () => {
         const keenSenses = vocabulary.traits.find((trait) => trait.name === "Keen Senses")!;
         const fillers = vocabulary.traits
           .filter((trait) => trait.id !== keenSenses.id)
-          .slice(0, 10)
+          .slice(0, 11)
           .map((trait) => trait.id);
         const race = yield* as(dm)(
           options.libraryCreate({
