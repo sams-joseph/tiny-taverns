@@ -1,24 +1,24 @@
 import {
-  type Actor,
+  Actor,
   type AssistantTurnId,
-  type CampaignId,
+  CampaignId,
   type CharacterId,
   type CombatantId,
-  type EncounterRunId,
+  EncounterRunId,
   NotFound,
   type Origin,
   SessionEvent,
   type SessionEventId,
   type SessionEventKind,
-  type SessionId,
+  SessionId,
   type SessionLogFilterValues,
   type Visibility,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, timestampColumns } from "./rows.js";
 import {
   containedRowReadable,
   ensureNestedParentReadable,
@@ -29,36 +29,24 @@ import {
   under,
 } from "./visibility.js";
 
-interface SessionEventRow extends ProvenanceColumns {
-  readonly id: SessionEventId;
-  readonly session_id: SessionId;
-  /**
-   * `bigint`, and therefore a **string** off the wire. `pg` hands back `int8`
-   * as text to protect a precision JavaScript cannot hold — the same reason
-   * `creature.cr_sort` is `double precision` rather than `numeric`. Here the
-   * width is genuinely wanted (it is a sequence that only ever climbs) and the
-   * value is nowhere near 2^53, so the mapper narrows it once, here.
-   */
-  readonly seq: string;
-  readonly kind: SessionEventKind;
-  readonly encounter_run_id: EncounterRunId | null;
-  readonly combatant_id: CombatantId | null;
-  readonly character_id: CharacterId | null;
-  readonly payload: unknown;
-  readonly request_id: string | null;
-}
+/**
+ * A `session_event` row as the wire reads it, decoded off `session_event.*`
+ * by `SqlSchema`.
+ *
+ * `seq` is a `bigint`, and therefore a **string** off the wire: `pg` hands
+ * back `int8` as text to protect a precision JavaScript cannot hold — the same
+ * reason `creature.cr_sort` is `double precision` rather than `numeric`. Here
+ * the width is genuinely wanted (it is a sequence that only ever climbs) and
+ * the value is nowhere near 2^53, so the decode narrows it once, here.
+ */
+const SessionEventRow = classFromColumns(SessionEvent, {
+  ...SessionEvent.fields,
+  seq: Schema.NumberFromString.pipe(Schema.decodeTo(SessionEvent.fields.seq)),
+  ...timestampColumns,
+});
 
-const toSessionEvent = (row: SessionEventRow): SessionEvent =>
-  new SessionEvent({
-    id: row.id,
-    sessionId: row.session_id,
-    seq: Number(row.seq),
-    kind: row.kind,
-    encounterRunId: row.encounter_run_id,
-    combatantId: row.combatant_id,
-    payload: row.payload,
-    ...provenanceOf(row),
-  });
+/** The written columns, as `appendEvent` builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /** `session_event` hangs off `session`, which is campaign-scoped. */
 const LOG: NestedTable = { table: "session_event", parent: "session", foreignKey: "session_id" };
@@ -97,26 +85,24 @@ export const appendEvent = (
   sql: SqlClient.SqlClient,
   event: AppendEvent,
 ): Effect.Effect<SessionEvent, never, never> =>
-  sql<SessionEventRow>`
-    insert into session_event ${sql.insert(
-      defined({
-        session_id: event.sessionId,
-        kind: event.kind,
-        encounter_run_id: event.encounterRunId,
-        combatant_id: event.combatantId,
-        character_id: event.characterId,
-        payload: event.payload === undefined ? undefined : JSON.stringify(event.payload),
-        request_id: event.requestId,
-        visibility: event.visibility,
-        origin: event.origin,
-        assistant_turn_id: event.assistantTurnId,
-      }),
-    )}
-    returning *
-  `.pipe(
-    Effect.map((rows) => toSessionEvent(rows[0]!)),
-    Effect.orDie,
-  );
+  SqlSchema.findOne({
+    Request: Columns,
+    Result: SessionEventRow,
+    execute: (columns) => sql`insert into session_event ${sql.insert(columns)} returning *`,
+  })(
+    defined({
+      session_id: event.sessionId,
+      kind: event.kind,
+      encounter_run_id: event.encounterRunId,
+      combatant_id: event.combatantId,
+      character_id: event.characterId,
+      payload: event.payload === undefined ? undefined : JSON.stringify(event.payload),
+      request_id: event.requestId,
+      visibility: event.visibility,
+      origin: event.origin,
+      assistant_turn_id: event.assistantTurnId,
+    }),
+  ).pipe(Effect.orDie);
 
 /**
  * Whether this run has already recorded this `requestId`.
@@ -239,6 +225,26 @@ export class SessionEvents extends Context.Service<
        * back. Without it a client returning from an hour asleep would ask the
        * server to materialise the whole hour in one array.
        */
+      const runEvents = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            actor: Actor,
+            campaignId: CampaignId,
+            runId: EncounterRunId,
+            since: Schema.Number,
+            limit: Schema.Number,
+          }),
+        ),
+        Result: SessionEventRow,
+        execute: ({ actor, campaignId, runId, since, limit }) => sql`
+          select session_event.* from session_event
+          where session_event.encounter_run_id = ${runId}
+            and session_event.seq > ${since}
+            and ${logReadable(sql, campaignId, actor)}
+          order by session_event.seq asc
+          limit ${limit}
+        `,
+      });
       const runPage = (
         actor: Actor,
         campaignId: CampaignId,
@@ -246,31 +252,40 @@ export class SessionEvents extends Context.Service<
         since: number,
         limit: number,
       ): Effect.Effect<ReadonlyArray<SessionEvent>, never, never> =>
-        sql<SessionEventRow>`
+        runEvents({ actor, campaignId, runId, since, limit }).pipe(Effect.orDie);
+
+      const sessionEvents = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            actor: Actor,
+            campaignId: CampaignId,
+            sessionId: SessionId,
+            since: Schema.Number,
+            limit: Schema.Number,
+          }),
+        ),
+        Result: SessionEventRow,
+        execute: ({ actor, campaignId, sessionId, since, limit }) => sql`
           select session_event.* from session_event
-          where session_event.encounter_run_id = ${runId}
+          where ${nestedRowReadable(sql, LOG, sessionId, campaignId, actor)}
             and session_event.seq > ${since}
-            and ${logReadable(sql, campaignId, actor)}
           order by session_event.seq asc
           limit ${limit}
-        `.pipe(
-          Effect.map((rows) => rows.map(toSessionEvent)),
-          Effect.orDie,
-        );
+        `,
+      });
 
       return {
         list: ({ actor, campaign: campaignId }, sessionId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureNestedParentReadable(sql, LOG, sessionId, campaignId, actor);
-              const rows = yield* sql<SessionEventRow>`
-                select session_event.* from session_event
-                where ${nestedRowReadable(sql, LOG, sessionId, campaignId, actor)}
-                  and session_event.seq > ${filter.since ?? 0}
-                order by session_event.seq asc
-                limit ${filter.limit ?? 200}
-              `;
-              return rows.map(toSessionEvent);
+              return yield* sessionEvents({
+                actor,
+                campaignId,
+                sessionId,
+                since: filter.since ?? 0,
+                limit: filter.limit ?? 200,
+              });
             }),
           ),
 

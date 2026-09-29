@@ -1,24 +1,25 @@
 import {
-  type CampaignId,
+  CampaignId,
   CampaignStory,
-  type CampaignStoryId,
+  CampaignStoryId,
   type CampaignStoryPut,
   CurrentActor,
   NotFound,
   PlayerCampaignStory,
   type Visibility,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   type AssistantOrigin,
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   proseColumn,
-  type ProvenanceColumns,
-  provenanceOf,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   campaignWritableById,
@@ -44,30 +45,20 @@ import {
  * night of this campaign, as `acceptSummary` checks its boundary).
  */
 
-interface StoryRow extends ProvenanceColumns {
-  readonly id: CampaignStoryId;
-  readonly campaign_id: CampaignId;
-  readonly text: string;
-  readonly previously: string | null;
-  readonly after_session_number: number;
-}
+/** A `campaign_story` row as the creator reads it, decoded off `campaign_story.*` by `SqlSchema`. */
+const StoryRow = classFromColumns(CampaignStory, {
+  ...CampaignStory.fields,
+  ...timestampColumns,
+});
 
-const toStory = (row: StoryRow): CampaignStory =>
-  new CampaignStory({
-    id: row.id,
-    campaignId: row.campaign_id,
-    text: row.text,
-    previously: row.previously,
-    afterSessionNumber: row.after_session_number,
-    ...provenanceOf(row),
-  });
+/** The story as a player is told it, decoded off the narrow select in `readAsPlayer`. */
+const PlayerStoryRow = classFromColumns(PlayerCampaignStory, {
+  ...PlayerCampaignStory.fields,
+  updatedAt: timestampColumns.updatedAt,
+});
 
-interface PlayerStoryRow {
-  readonly text: string;
-  readonly previously: string | null;
-  readonly after_session_number: number;
-  readonly updated_at: Date;
-}
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /** What Hob drafted and the creator kept. */
 export interface CampaignStoryDraft {
@@ -118,21 +109,65 @@ export class CampaignStories extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      const current = (campaignId: CampaignId) =>
-        Effect.map(
-          sql<StoryRow>`select * from campaign_story where campaign_story.campaign_id = ${campaignId}`,
-          (rows) => rows[0],
-        );
+      const current = SqlSchema.findOneOption({
+        Request: Schema.toType(CampaignId),
+        Result: StoryRow,
+        execute: (campaignId) =>
+          sql`select * from campaign_story where campaign_story.campaign_id = ${campaignId}`,
+      });
 
       /** The newest night of this campaign that has ended, or zero. */
-      const newestEnded = (campaignId: CampaignId) =>
-        Effect.map(
-          sql<{ readonly number: number }>`
-            select coalesce(max(session.number), 0)::int as number from session
-            where session.campaign_id = ${campaignId} and session.ended_at is not null
-          `,
-          (rows) => rows[0]!.number,
-        );
+      const newestEnded = SqlSchema.findOne({
+        Request: Schema.toType(CampaignId),
+        Result: fromColumns(Schema.Struct({ number: Schema.Int })),
+        execute: (campaignId) => sql`
+          select coalesce(max(session.number), 0)::int as number from session
+          where session.campaign_id = ${campaignId} and session.ended_at is not null
+        `,
+      });
+
+      const readable = SqlSchema.findOneOption({
+        Request: Schema.toType(Schema.Struct(creatorFields)),
+        Result: StoryRow,
+        execute: ({ campaign, actor }) => sql`
+          select * from campaign_story
+          where ${rowReadable(sql, "campaign_story", campaign, actor)}
+        `,
+      });
+      const readableAsPlayer = SqlSchema.findOneOption({
+        Request: Schema.toType(CampaignId),
+        Result: PlayerStoryRow,
+        execute: (campaignId) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign_story.text, campaign_story.previously,
+                     campaign_story.after_session_number, campaign_story.updated_at
+              from campaign_story
+              where ${rowReadable(sql, "campaign_story", campaignId, actor)}
+            `,
+          ),
+      });
+      /** The share switch alone, on a story whose words did not change. */
+      const reshare = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: CampaignStoryId, columns: Columns })),
+        Result: StoryRow,
+        execute: ({ id, columns }) => sql`
+          update campaign_story
+          set ${setClause(sql, columns)}
+          where campaign_story.id = ${id}
+          returning *
+        `,
+      });
+      const upserted = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, columns: Columns })),
+        Result: StoryRow,
+        execute: ({ campaignId, columns }) => sql`
+          insert into campaign_story ${sql.insert({ campaign_id: campaignId, ...columns })}
+          on conflict (campaign_id) do update set ${sql.update(columns)}, updated_at = now()
+          returning *
+        `,
+      });
 
       /** An absent `visibility` keeps the story's own, or the column's `dm` for a new one. */
       const upsert = (
@@ -145,50 +180,21 @@ export class CampaignStories extends Context.Service<
           readonly origin: "authored" | "assistant";
           readonly assistant_turn_id: string | null;
         },
-      ) => {
-        const columns = defined(given);
-        return Effect.map(
-          sql<StoryRow>`
-            insert into campaign_story ${sql.insert({ campaign_id: campaignId, ...columns })}
-            on conflict (campaign_id) do update set ${sql.update(columns)}, updated_at = now()
-            returning *
-          `,
-          (rows) => toStory(rows[0]!),
+      ) =>
+        // An upsert answers with its row; not getting one is a defect.
+        upserted({ campaignId, columns: defined(given) }).pipe(
+          Effect.catchTag("NoSuchElementError", Effect.die),
         );
-      };
 
       return {
-        read: (creator) =>
-          dieOnSqlError(
-            Effect.map(
-              sql<StoryRow>`
-                select * from campaign_story
-                where ${rowReadable(sql, "campaign_story", creator.campaign, creator.actor)}
-              `,
-              (rows) => (rows.length === 0 ? null : toStory(rows[0]!)),
-            ),
-          ),
+        read: (creator) => dieOnSqlError(Effect.map(readable(asked(creator)), Option.getOrNull)),
 
         readAsPlayer: (campaignId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<PlayerStoryRow>`
-                select campaign_story.text, campaign_story.previously,
-                       campaign_story.after_session_number, campaign_story.updated_at
-                from campaign_story
-                where ${rowReadable(sql, "campaign_story", campaignId, actor)}
-              `;
-              const row = rows[0];
-              return row === undefined
-                ? null
-                : new PlayerCampaignStory({
-                    text: row.text,
-                    previously: row.previously,
-                    afterSessionNumber: row.after_session_number,
-                    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-                  });
+              return Option.getOrNull(yield* readableAsPlayer(campaignId));
             }),
           ),
 
@@ -200,20 +206,22 @@ export class CampaignStories extends Context.Service<
                 yield* ensureCampaignWritable(sql, campaignId, actor);
                 const text = payload.text.trim();
                 const previously = proseColumn(payload.previously) ?? null;
-                const was = yield* current(campaignId);
+                const was = Option.getOrUndefined(yield* current(campaignId));
                 if (was !== undefined && was.text === text && was.previously === previously) {
-                  const rows = yield* sql<StoryRow>`
-                    update campaign_story
-                    set ${setClause(sql, defined({ visibility: payload.visibility }))}
-                    where campaign_story.id = ${was.id}
-                    returning *
-                  `;
-                  return toStory(rows[0]!);
+                  // The row was just read in this transaction; losing it now is a defect.
+                  return yield* reshare({
+                    id: was.id,
+                    columns: defined({ visibility: payload.visibility }),
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 }
+                // An aggregate answers with one row, always.
+                const ended = yield* newestEnded(campaignId).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
                 return yield* upsert(campaignId, {
                   text,
                   previously,
-                  after_session_number: yield* newestEnded(campaignId),
+                  after_session_number: ended.number,
                   visibility: payload.visibility,
                   origin: "authored",
                   assistant_turn_id: null,
@@ -221,7 +229,6 @@ export class CampaignStories extends Context.Service<
               }),
             ),
           ),
-
         remove: (campaignId) =>
           dieOnSqlError(
             Effect.gen(function* () {

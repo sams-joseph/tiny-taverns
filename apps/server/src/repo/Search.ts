@@ -1,22 +1,21 @@
 import {
   type Actor,
-  type BeatId,
-  type CampaignId,
-  type CharacterId,
-  type CreatureId,
+  BeatHit,
+  CampaignId,
+  CharacterHit,
+  CreatureHit,
   CurrentActor,
-  type NoteId,
-  type NpcId,
+  NoteHit,
   NotFound,
+  NpcHit,
   type SearchFilterValues,
   type SearchHit,
-  type SearchSource,
-  type SessionId,
+  SearchSource,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { BEATS } from "./Beats.js";
-import { dieOnSqlError, likeContains } from "./rows.js";
+import { dieOnSqlError, fromColumns, likeContains, timestampColumns } from "./rows.js";
 import {
   characterSeatedAt,
   containedRowReadable,
@@ -80,49 +79,24 @@ import {
 const BEAT = under(BEATS.table, BEATS.foreignKey, inCampaign(BEATS.parent));
 
 /**
- * The shape every arm of the union produces.
+ * A hit, decoded off the union by `SqlSchema`: each arm is its own member,
+ * picked by `source`.
  *
  * Heterogeneous by construction: `title` is null for a beat and `session_id` is
  * null for everything else, because those are the fields that genuinely do not
- * exist on those rows. The wire type is a union discriminated on `source`, so
- * the nullability stops at this boundary and never reaches a client.
+ * exist on those rows. Each member names only the columns its hit has, so the
+ * null one is dropped by the decode and never reaches a client. `rank` is
+ * `ts_rank`, which Postgres returns as `real`: zero for an `ILIKE`-only hit.
  */
-interface HitRow {
-  readonly source: SearchSource;
-  /** Carries whichever of the three brands `source` names. */
-  readonly id: string;
-  readonly title: string | null;
-  readonly session_id: SessionId | null;
-  readonly snippet: string;
-  /** `ts_rank`, which Postgres returns as `real`. Zero for an `ILIKE`-only hit. */
-  readonly rank: number;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
-
-const toHit = (row: HitRow): SearchHit => {
-  const common = {
-    rank: row.rank,
-    snippet: row.snippet,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  };
-  switch (row.source) {
-    // The casts are the union's cost, paid once and here: the id column holds
-    // one of three brands and the discriminant is the only thing that says
-    // which. Everything downstream gets the branded id it expects.
-    case "note":
-      return { source: "note", id: row.id as NoteId, title: row.title ?? "", ...common };
-    case "beat":
-      return { source: "beat", id: row.id as BeatId, sessionId: row.session_id!, ...common };
-    case "creature":
-      return { source: "creature", id: row.id as CreatureId, title: row.title ?? "", ...common };
-    case "character":
-      return { source: "character", id: row.id as CharacterId, title: row.title ?? "", ...common };
-    case "npc":
-      return { source: "npc", id: row.id as NpcId, title: row.title ?? "", ...common };
-  }
-};
+const hitRow = <Fields extends Schema.Struct.Fields>(hit: Schema.Struct<Fields>) =>
+  fromColumns(Schema.Struct({ ...hit.fields, ...timestampColumns }));
+const HitRow = Schema.Union([
+  hitRow(NoteHit),
+  hitRow(BeatHit),
+  hitRow(CreatureHit),
+  hitRow(CharacterHit),
+  hitRow(NpcHit),
+]);
 
 /**
  * The excerpt options, as one string because that is the interface
@@ -373,6 +347,49 @@ export class Search extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
+      const hits = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            query: Schema.String,
+            source: Schema.optionalKey(SearchSource),
+            limit: Schema.Number,
+          }),
+        ),
+        Result: HitRow,
+        execute: ({ campaignId, query, source, limit }) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const arms = [
+              source === undefined || source === "note"
+                ? noteArm(sql, campaignId, actor, query)
+                : undefined,
+              source === undefined || source === "beat"
+                ? beatArm(sql, campaignId, actor, query)
+                : undefined,
+              source === undefined || source === "creature"
+                ? creatureArm(sql, campaignId, actor, query)
+                : undefined,
+              source === undefined || source === "character"
+                ? characterArm(sql, campaignId, actor, query)
+                : undefined,
+              source === undefined || source === "npc"
+                ? npcArm(sql, campaignId, actor, query)
+                : undefined,
+            ].filter((fragment) => fragment !== undefined);
+
+            // Ordering is `rank` first and then recency, with the id as a
+            // total order — an unstable sort reads as the results reshuffling
+            // themselves when nothing changed. `created_at` and not
+            // `updated_at`: a beat's identity is the night it happened on,
+            // and correcting a typo should not move it to the top.
+            return sql`
+              ${sql.join(" union all ", false)(arms)}
+              order by rank desc, created_at desc, id asc
+              limit ${limit}
+            `;
+          }),
+      });
+
       return {
         search: (campaignId, filter) =>
           dieOnSqlError(
@@ -386,35 +403,12 @@ export class Search extends Context.Service<
               const query = filter.q.trim();
               if (query === "") return [];
 
-              const arms = [
-                filter.source === undefined || filter.source === "note"
-                  ? noteArm(sql, campaignId, actor, query)
-                  : undefined,
-                filter.source === undefined || filter.source === "beat"
-                  ? beatArm(sql, campaignId, actor, query)
-                  : undefined,
-                filter.source === undefined || filter.source === "creature"
-                  ? creatureArm(sql, campaignId, actor, query)
-                  : undefined,
-                filter.source === undefined || filter.source === "character"
-                  ? characterArm(sql, campaignId, actor, query)
-                  : undefined,
-                filter.source === undefined || filter.source === "npc"
-                  ? npcArm(sql, campaignId, actor, query)
-                  : undefined,
-              ].filter((fragment) => fragment !== undefined);
-
-              // Ordering is `rank` first and then recency, with the id as a
-              // total order — an unstable sort reads as the results reshuffling
-              // themselves when nothing changed. `created_at` and not
-              // `updated_at`: a beat's identity is the night it happened on,
-              // and correcting a typo should not move it to the top.
-              const rows = yield* sql<HitRow>`
-                ${sql.join(" union all ", false)(arms)}
-                order by rank desc, created_at desc, id asc
-                limit ${filter.limit ?? DEFAULT_LIMIT}
-              `;
-              return rows.map(toHit);
+              return yield* hits({
+                campaignId,
+                query,
+                ...(filter.source === undefined ? {} : { source: filter.source }),
+                limit: filter.limit ?? DEFAULT_LIMIT,
+              });
             }),
           ),
       };

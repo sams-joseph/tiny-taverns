@@ -1,10 +1,4 @@
-import {
-  type Actor,
-  type CampaignId,
-  CurrentActor,
-  type SharedWorldId,
-  NotFound,
-} from "@taverns/api";
+import { Actor, CampaignId, CurrentActor, type SharedWorldId, NotFound } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { dieOnSqlError } from "./rows.js";
@@ -81,6 +75,17 @@ export interface CampaignCreatorActor {
   /** That campaign's group — read in the same statement that proved the pair. */
   readonly group: SharedWorldId;
 }
+
+/**
+ * What a `SqlSchema` read under the proof is asked with: the proof's campaign
+ * and actor, which is what its predicates take. The proof itself stays in the
+ * method signatures; the request only carries what the statement binds.
+ */
+export const creatorFields = { campaign: CampaignId, actor: Actor } as const;
+export const asked = (creator: CampaignCreatorActor) => ({
+  campaign: creator.campaign,
+  actor: creator.actor,
+});
 
 /**
  * The one checked path to a `CampaignCreatorActor`.

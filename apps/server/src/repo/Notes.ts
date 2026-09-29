@@ -1,16 +1,15 @@
 import {
   type Actor,
-  type CampaignId,
+  CampaignId,
   type CreatedOrder,
+  createdPageFilter,
   type CreatedPageFilterValues,
   CurrentActor,
   type EncounterId,
   Note,
   type NoteAttachment,
-  type NoteCategory,
   type NoteCreate,
-  type NoteId,
-  type NoteKind,
+  NoteId,
   type NoteLink,
   type NoteLinkKind,
   type NoteUpdate,
@@ -18,19 +17,21 @@ import {
   type Page,
   PlayerNote,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { ensureLinkTarget, type LinkTargetId, linkColumn, linksAggregate } from "./links.js";
 import { createdOrdering, orderClause, pageClauses, pageLimit, pageOfRows } from "./paging.js";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
-  provenanceOf,
+  fromColumns,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   ensureCampaignReadable,
@@ -39,67 +40,43 @@ import {
   rowWritable,
 } from "./visibility.js";
 
-export interface NoteRow extends ProvenanceColumns {
-  readonly id: NoteId;
-  readonly campaign_id: CampaignId;
-  readonly title: string;
-  readonly body: string;
-  readonly kind: NoteKind;
-  readonly category: NoteCategory | null;
-  readonly encounter_id: EncounterId | null;
-  readonly pinned_at: Date | null;
-  /** `json`, which the pg driver parses: `noteColumns`' aggregate. */
-  readonly links: ReadonlyArray<NoteLink>;
-}
+/**
+ * The attachment as the wire spells it, built from the one nullable column
+ * that holds it: `null`, or the encounter it names.
+ */
+const attachment = (sql: SqlClient.SqlClient, encounterId: Statement.Fragment) =>
+  sql`case when ${encounterId} is not null
+        then json_build_object('kind', 'encounter', 'id', ${encounterId}) end`;
 
 /**
- * Every column of the creator's `Note`: the row, and its links as one `json`
- * array in the order they were added. The links need no predicate of their
- * own — a row reaches this select only through the note's, and every target
- * is in the note's campaign by key (`0069_note_links.ts`, `0074_npc_links.ts`).
- * Usable in a `returning`, where the subquery sees the note's links as they
- * stand.
+ * Every column of the creator's `Note`: the row, its attachment, and its links
+ * as one `json` array in the order they were added. The links need no
+ * predicate of their own — a row reaches this select only through the
+ * note's, and every target is in the note's campaign by key
+ * (`0069_note_links.ts`, `0074_npc_links.ts`). Usable in a `returning`, where
+ * the subquery sees the note's links as they stand.
  */
 export const noteColumns = (sql: SqlClient.SqlClient): Statement.Fragment =>
-  sql`note.*, ${linksAggregate(sql, "note_link", sql`note_link.note_id = note.id`)} as links`;
-
-export const toNote = (row: NoteRow): Note =>
-  new Note({
-    id: row.id,
-    campaignId: row.campaign_id,
-    title: row.title,
-    body: row.body,
-    kind: row.kind,
-    category: row.category,
-    attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
-    pinnedAt: row.pinned_at === null ? null : DateTime.fromDateUnsafe(row.pinned_at),
-    links: row.links,
-    ...provenanceOf(row),
-  });
+  sql`note.*, ${attachment(sql, sql`note.encounter_id`)} as attached_to,
+      ${linksAggregate(sql, "note_link", sql`note_link.note_id = note.id`)} as links`;
 
 /**
- * A note as a player is told it — only the columns `PlayerNote` has, and
- * `encounter_id` already narrowed to an encounter this reader may read.
- * `created_at` is selected for the page cursor and goes no further.
+ * A note as the creator reads it, decoded off `noteColumns` by `SqlSchema`.
+ * Exported for `Recap`, which reads the notes a night read out.
  */
-export interface PlayerNoteRow {
-  readonly id: NoteId;
-  readonly campaign_id: CampaignId;
-  readonly title: string;
-  readonly body: string;
-  readonly kind: NoteKind;
-  readonly category: NoteCategory | null;
-  readonly encounter_id: EncounterId | null;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
+export const NoteRow = classFromColumns(Note, {
+  ...Note.fields,
+  pinnedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+  ...timestampColumns,
+});
 
 /**
  * The select list of every player read of `note`: `listAsPlayer` and a
  * player's recap. None of the wide columns — no visibility, provenance or pin
  * — and the attachment kept only when the encounter it names passes the
  * encounter's own `rowReadable` (Shared and Ready for a player), so an
- * encounter the DM kept is not named, not even by id.
+ * encounter the DM kept is not named, not even by id. `created_at` is selected
+ * for the page cursor and goes no further.
  */
 export const playerNoteColumns = (
   sql: SqlClient.SqlClient,
@@ -108,24 +85,29 @@ export const playerNoteColumns = (
 ): Statement.Fragment => sql`
   note.id, note.campaign_id, note.title, note.body, note.kind, note.category,
   note.created_at, note.updated_at,
-  case when exists (
-    select 1 from encounter
-    where encounter.id = note.encounter_id
-      and ${rowReadable(sql, "encounter", campaignId, actor)}
-  ) then note.encounter_id end as encounter_id
+  ${attachment(
+    sql,
+    sql`case when exists (
+      select 1 from encounter
+      where encounter.id = note.encounter_id
+        and ${rowReadable(sql, "encounter", campaignId, actor)}
+    ) then note.encounter_id end`,
+  )} as attached_to
 `;
 
-export const toPlayerNote = (row: PlayerNoteRow): PlayerNote =>
-  new PlayerNote({
-    id: row.id,
-    campaignId: row.campaign_id,
-    title: row.title,
-    body: row.body,
-    kind: row.kind,
-    category: row.category,
-    attachedTo: row.encounter_id === null ? null : { kind: "encounter", id: row.encounter_id },
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  });
+/** A note as a player is told it, decoded off `playerNoteColumns`. Exported for `Recap`. */
+export const PlayerNoteRow = classFromColumns(PlayerNote, {
+  ...PlayerNote.fields,
+  updatedAt: timestampColumns.updatedAt,
+});
+
+/** The same, with the `created_at` a page's cursor keys on beside it. */
+const PlayerNotePageRow = fromColumns(Schema.Struct({ ...PlayerNote.fields, ...timestampColumns }));
+
+/** The written columns, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
+const PageFilter = Schema.Struct(createdPageFilter);
+const PageRequest = Schema.toType(Schema.Struct({ campaign: CampaignId, filter: PageFilter }));
 
 /**
  * The attachment, as the single nullable column that holds it.
@@ -239,58 +221,139 @@ export class Notes extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const ordering = createdOrdering<NoteRow>(sql, "note");
-      const playerOrdering = createdOrdering<PlayerNoteRow>(sql, "note");
+      const ordering = createdOrdering<Note>(sql, "note");
+      const playerOrdering = createdOrdering<typeof PlayerNotePageRow.Type>(sql, "note");
 
+      const readablePage = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, filter: PageFilter })),
+        Result: NoteRow,
+        execute: ({ campaign, actor, filter }) => sql`
+          select ${noteColumns(sql)} from note
+          where ${sql.and([
+            rowReadable(sql, "note", campaign, actor),
+            ...pageClauses(sql, ordering, filter.cursor),
+          ])}
+          order by ${orderClause(sql, ordering)}
+          limit ${pageLimit(filter.limit)}
+        `,
+      });
+      const readable = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: NoteId })),
+        Result: NoteRow,
+        execute: ({ campaign, actor, id }) => sql`
+          select ${noteColumns(sql)} from note
+          where note.id = ${id} and ${rowReadable(sql, "note", campaign, actor)}
+        `,
+      });
       const readNote = (creator: CampaignCreatorActor, id: NoteId) =>
-        Effect.gen(function* () {
-          const { campaign, actor } = creator;
-          const rows = yield* sql<NoteRow>`
-            select ${noteColumns(sql)} from note
-            where note.id = ${id} and ${rowReadable(sql, "note", campaign, actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
-          return toNote(rows[0]!);
-        });
+        readable({ ...asked(creator), id }).pipe(orNotFound("note", id));
+      // The player projection: the same `rowReadable` as every read here,
+      // and none of the wide columns (`playerNoteColumns`).
+      const playerPage = SqlSchema.findAll({
+        Request: PageRequest,
+        Result: PlayerNotePageRow,
+        execute: ({ campaign, filter }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${playerNoteColumns(sql, campaign, actor)}
+              from note
+              where ${sql.and([
+                rowReadable(sql, "note", campaign, actor),
+                ...pageClauses(sql, playerOrdering, filter.cursor),
+              ])}
+              order by ${orderClause(sql, playerOrdering)}
+              limit ${pageLimit(filter.limit)}
+            `,
+          ),
+      });
+      /** A new note. What reaches its campaign was checked by the method that built the columns. */
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: NoteRow,
+        execute: (columns) => sql`
+          insert into note ${sql.insert(columns)}
+          returning ${noteColumns(sql)}
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaign: CampaignId, id: NoteId, columns: Columns }),
+        ),
+        Result: NoteRow,
+        execute: ({ campaign, id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update note set ${setClause(sql, columns)}
+              where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
+              returning ${noteColumns(sql)}
+            `,
+          ),
+      });
+      // Not `setClause`: that stamps `updated_at`, and a pin is not an edit.
+      const pin = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaign: CampaignId, id: NoteId, pinned: Schema.Boolean }),
+        ),
+        Result: NoteRow,
+        execute: ({ campaign, id, pinned }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update note
+              set pinned_at = ${pinned ? sql`coalesce(note.pinned_at, now())` : sql`null`}
+              where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
+              returning ${noteColumns(sql)}
+            `,
+          ),
+      });
+      const erase = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaign: CampaignId, id: NoteId })),
+        Result: fromColumns(Schema.Struct({ id: NoteId })),
+        execute: ({ campaign, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from note
+              where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
+              returning note.id
+            `,
+          ),
+      });
+      /** The note the creator is linking or unlinking, if they may write it. */
+      const writable = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, id: NoteId })),
+        Result: fromColumns(Schema.Struct({ id: NoteId })),
+        execute: ({ campaign, actor, id }) => sql`
+          select note.id from note
+          where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
+        `,
+      });
 
       return {
         list: (creator, filter) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const { campaign, actor } = creator;
-              const rows = yield* sql<NoteRow>`
-                select ${noteColumns(sql)} from note
-                where ${sql.and([
-                  rowReadable(sql, "note", campaign, actor),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, "created", toNote);
-            }),
+            Effect.map(readablePage({ ...asked(creator), filter }), (rows) =>
+              pageOfRows(rows, filter.limit, ordering, "created", (note) => note),
+            ),
           ),
 
         findById: (creator, id) => dieOnSqlError(readNote(creator, id)),
 
-        // The player projection: the same `rowReadable` as every read here,
-        // and none of the wide columns (`playerNoteColumns`).
         listAsPlayer: (campaignId, filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<PlayerNoteRow>`
-                select ${playerNoteColumns(sql, campaignId, actor)}
-                from note
-                where ${sql.and([
-                  rowReadable(sql, "note", campaignId, actor),
-                  ...pageClauses(sql, playerOrdering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, playerOrdering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, playerOrdering, "created", toPlayerNote);
+              const rows = yield* playerPage({ campaign: campaignId, filter });
+              return pageOfRows(
+                rows,
+                filter.limit,
+                playerOrdering,
+                "created",
+                ({ createdAt: _, ...note }) => new PlayerNote(note, { disableChecks: true }),
+              );
             }),
           ),
 
@@ -301,22 +364,19 @@ export class Notes extends Context.Service<
                 const actor = yield* CurrentActor;
                 yield* ensureCampaignWritable(sql, campaignId, actor);
                 yield* ensureEncounterWritable(sql, campaignId, payload.attachedTo);
-                const rows = yield* sql<NoteRow>`
-                  insert into note ${sql.insert(
-                    defined({
-                      campaign_id: campaignId,
-                      title: payload.title,
-                      body: payload.body,
-                      kind: payload.kind,
-                      category: payload.category,
-                      encounter_id: attachmentColumn(payload.attachedTo),
-                      visibility: payload.visibility,
-                      ...assistantColumns(from),
-                    }),
-                  )}
-                  returning ${noteColumns(sql)}
-                `;
-                return toNote(rows[0]!);
+                // An insert answers with its row; not getting one is a defect.
+                return yield* insert(
+                  defined({
+                    campaign_id: campaignId,
+                    title: payload.title,
+                    body: payload.body,
+                    kind: payload.kind,
+                    category: payload.category,
+                    encounter_id: attachmentColumn(payload.attachedTo),
+                    visibility: payload.visibility,
+                    ...assistantColumns(from),
+                  }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
               }),
             ),
           ),
@@ -325,7 +385,6 @@ export class Notes extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
                 yield* ensureEncounterWritable(sql, campaignId, patch.attachedTo);
                 const columns = defined({
                   title: patch.title,
@@ -335,61 +394,31 @@ export class Notes extends Context.Service<
                   encounter_id: attachmentColumn(patch.attachedTo),
                   visibility: patch.visibility,
                 });
-                const rows = yield* sql<NoteRow>`
-                  update note set ${setClause(sql, columns)}
-                  where note.id = ${id} and ${rowWritable(sql, "note", campaignId, actor)}
-                  returning ${noteColumns(sql)}
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
-                return toNote(rows[0]!);
+                return yield* change({ campaign: campaignId, id, columns }).pipe(
+                  orNotFound("note", id),
+                );
               }),
             ),
           ),
 
         remove: (campaignId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: NoteId }>`
-                delete from note
-                where note.id = ${id} and ${rowWritable(sql, "note", campaignId, actor)}
-                returning note.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
-            }),
+            Effect.asVoid(erase({ campaign: campaignId, id }).pipe(orNotFound("note", id))),
           ),
 
-        // Not `setClause`: that stamps `updated_at`, and a pin is not an edit.
         setPinned: (campaignId, id, pinned) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<NoteRow>`
-                update note
-                set pinned_at = ${pinned ? sql`coalesce(note.pinned_at, now())` : sql`null`}
-                where note.id = ${id} and ${rowWritable(sql, "note", campaignId, actor)}
-                returning ${noteColumns(sql)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "note", id });
-              return toNote(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(pin({ campaign: campaignId, id, pinned }).pipe(orNotFound("note", id))),
 
         addLink: (creator, id, link) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const { campaign, actor } = creator;
-                const notes = yield* sql<{ readonly id: NoteId }>`
-                  select note.id from note
-                  where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
-                `;
-                if (notes.length === 0) return yield* new NotFound({ resource: "note", id });
+                yield* writable({ ...asked(creator), id }).pipe(orNotFound("note", id));
                 yield* ensureLinkTarget(sql, creator, link);
                 yield* sql`
                   insert into note_link ${sql.insert({
                     note_id: id,
-                    campaign_id: campaign,
+                    campaign_id: creator.campaign,
                     [linkColumn(link.kind)]: link.id,
                   })}
                   on conflict do nothing
@@ -403,12 +432,7 @@ export class Notes extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const { campaign, actor } = creator;
-                const notes = yield* sql<{ readonly id: NoteId }>`
-                  select note.id from note
-                  where note.id = ${id} and ${rowWritable(sql, "note", campaign, actor)}
-                `;
-                if (notes.length === 0) return yield* new NotFound({ resource: "note", id });
+                yield* writable({ ...asked(creator), id }).pipe(orNotFound("note", id));
                 yield* sql`
                   delete from note_link
                   where note_link.note_id = ${id}

@@ -1,6 +1,6 @@
 import {
   type AccountId,
-  Actor,
+  type Actor,
   CampaignId,
   Conflict,
   CurrentActor,
@@ -20,7 +20,7 @@ import {
 import { Array as Arr, Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { initiativeOrder } from "./liveTables.js";
 import {
   npcImageSigner,
@@ -90,16 +90,6 @@ const TurnRow = classFromColumns(
   },
   { text: "body" },
 );
-
-/**
- * What a creator read is asked with: the proof's campaign and actor, which is
- * what its predicates take. The proof itself stays in the method signatures.
- */
-const creatorFields = { campaign: CampaignId, actor: Actor } as const;
-const asked = (creator: CampaignCreatorActor) => ({
-  campaign: creator.campaign,
-  actor: creator.actor,
-});
 
 /** The written columns of an insert, as the method builds them. */
 const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));

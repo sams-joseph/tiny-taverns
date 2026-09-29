@@ -1,22 +1,27 @@
 import {
   BattleMap,
-  type BattleMapGrid,
-  type BattleMapId,
   BattleMapImages,
   type BattleMapUpdate,
-  type CampaignId,
-  type EncounterId,
+  EncounterId,
   EncounterRunBoard,
-  type EncounterRunId,
+  EncounterRunId,
   NotFound,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
-import type { CampaignCreatorActor } from "./CreatorActor.js";
+import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
-import { defined, dieOnSqlError, setClause } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  setClause,
+  timestampColumns,
+} from "./rows.js";
 import { nestedRowWritable, rowWritable } from "./visibility.js";
 
 /**
@@ -40,61 +45,59 @@ import { nestedRowWritable, rowWritable } from "./visibility.js";
  */
 
 /**
- * The picture's facts beside a map row, from {@link battleMapImageColumns};
- * `null` when the map has no picture record.
+ * The picture beside a map row, as one `json` column: its id, state and size,
+ * or `null` when the map has no picture record. **Every read that becomes a
+ * `BattleMap` names this fragment** — the decode refuses a row without it —
+ * and so does the player's board. `battle_map` must be in scope.
  */
-export interface BattleMapImageColumns {
-  readonly image_id: string | null;
-  readonly image_state: "generating" | "ready" | "failed" | null;
-  readonly image_width: number | null;
-  readonly image_height: number | null;
-}
-
-interface BattleMapRow extends BattleMapImageColumns {
-  readonly id: BattleMapId;
-  readonly encounter_id: EncounterId;
-  readonly campaign_id: CampaignId;
-  readonly setting: string | null;
-  readonly grid: BattleMapGrid;
-  readonly board_columns: number;
-  readonly board_rows: number;
-  readonly feet_per_cell: number;
-  readonly cell_px: number;
-  readonly offset_x_px: number;
-  readonly offset_y_px: number;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
-
-/** `encounter_run_board`, with its map's setting line and picture beside it. */
-interface RunBoardRow extends BattleMapImageColumns {
-  /** The map as joined — `null` when the board's map is gone. */
-  readonly map_id: BattleMapId | null;
-  readonly setting: string | null;
-  readonly grid: BattleMapGrid;
-  readonly board_columns: number;
-  readonly board_rows: number;
-  readonly feet_per_cell: number;
-  readonly cell_px: number;
-  readonly offset_x_px: number;
-  readonly offset_y_px: number;
-}
+export const battleMapPicture = (sql: SqlClient.SqlClient) => sql`
+  (select json_build_object(
+     'id', battle_map_image.id,
+     'state', battle_map_image.state,
+     'width', battle_map_image.width,
+     'height', battle_map_image.height
+   ) from battle_map_image
+   where battle_map_image.map_id = battle_map.id) as picture
+`;
 
 /**
- * The picture's facts beside a map row, over `battle_map` in scope. **Every
- * read that becomes a `BattleMap` names this fragment** — `toBattleMap` dies
- * on a row without it — and so does the player's board.
+ * Whether the map's picture is still being drawn, as one `boolean` column:
+ * `false` for a map with no picture record. `battle_map` must be in scope.
  */
-export const battleMapImageColumns = (sql: SqlClient.SqlClient) => sql`
-  (select battle_map_image.id from battle_map_image
-   where battle_map_image.map_id = battle_map.id) as image_id,
-  (select battle_map_image.state from battle_map_image
-   where battle_map_image.map_id = battle_map.id) as image_state,
-  (select battle_map_image.width from battle_map_image
-   where battle_map_image.map_id = battle_map.id) as image_width,
-  (select battle_map_image.height from battle_map_image
-   where battle_map_image.map_id = battle_map.id) as image_height
+const battleMapPending = (sql: SqlClient.SqlClient) => sql`
+  coalesce(
+    (select battle_map_image.state = 'generating' from battle_map_image
+     where battle_map_image.map_id = battle_map.id),
+    false
+  ) as image_pending
 `;
+
+/** `battleMapPicture`, decoded. */
+export const BattleMapPicture = Schema.NullOr(
+  Schema.Struct({
+    id: Schema.String,
+    state: Schema.Literals(["generating", "ready", "failed"]),
+    width: Schema.NullOr(Schema.Int),
+    height: Schema.NullOr(Schema.Int),
+  }),
+);
+export type BattleMapPicture = typeof BattleMapPicture.Type;
+
+/**
+ * A board's alignment as the wire spells it, from the three columns a
+ * `battle_map` and an `encounter_run_board` both carry. `table` is a constant
+ * from the repository, never anything a client supplies.
+ */
+export const alignmentColumn = (sql: SqlClient.SqlClient, table: string) => sql`
+  json_build_object(
+    'cellPx', ${sql(`${table}.cell_px`)},
+    'offsetXPx', ${sql(`${table}.offset_x_px`)},
+    'offsetYPx', ${sql(`${table}.offset_y_px`)}
+  ) as alignment
+`;
+
+/** A board's two dimensions, which the wire calls `columns` and `rows`. */
+export const boardColumns = { columns: "board_columns", rows: "board_rows" } as const;
 
 /**
  * **The only place a battle map's URL is minted**, for a row a gated read
@@ -103,70 +106,60 @@ export const battleMapImageColumns = (sql: SqlClient.SqlClient) => sql`
  * nothing, the same answer a server with no URL secret gives.
  */
 export const battleMapImages = (
-  row: BattleMapImageColumns,
+  picture: BattleMapPicture,
   sign: ImageSigner | undefined,
 ): BattleMap["image"] => {
   if (
-    row.image_state !== "ready" ||
-    row.image_id === null ||
-    row.image_width === null ||
-    row.image_height === null ||
+    picture === null ||
+    picture.state !== "ready" ||
+    picture.width === null ||
+    picture.height === null ||
     sign === undefined
   ) {
     return null;
   }
-  const paths = sign("battleMap", row.image_id);
+  const paths = sign("battleMap", picture.id);
   return paths === null
     ? null
     : new BattleMapImages({
         cardUrl: paths.card,
         fullUrl: paths.full,
-        width: row.image_width,
-        height: row.image_height,
+        width: picture.width,
+        height: picture.height,
       });
 };
 
-const toBattleMap = (row: BattleMapRow, sign: ImageSigner | undefined): BattleMap => {
-  if (row.image_state === undefined) {
-    throw new Error("a battle map read did not select battleMapImageColumns");
-  }
-  return new BattleMap({
-    id: row.id,
-    encounterId: row.encounter_id,
-    campaignId: row.campaign_id,
-    setting: row.setting,
-    grid: row.grid,
-    columns: row.board_columns,
-    rows: row.board_rows,
-    feetPerCell: row.feet_per_cell,
-    alignment: {
-      cellPx: row.cell_px,
-      offsetXPx: row.offset_x_px,
-      offsetYPx: row.offset_y_px,
-    },
-    image: battleMapImages(row, sign),
-    imagePending: row.image_state === "generating",
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  });
-};
+/**
+ * The `picture` column, decoded into the images the wire carries: the `image`
+ * of every read that selects {@link battleMapPicture}. Minting is the decode's
+ * last step, with the signer the reading repository was built with.
+ */
+export const pictureFromColumn = (sign: ImageSigner | undefined) =>
+  BattleMapPicture.pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(BattleMapImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((picture: BattleMapPicture) => battleMapImages(picture, sign)),
+        SchemaGetter.forbidden(() => "a battle map's picture is minted, never read back"),
+      ),
+    ),
+  );
 
-const toRunBoard = (row: RunBoardRow, sign: ImageSigner | undefined): EncounterRunBoard =>
-  new EncounterRunBoard({
-    mapId: row.map_id,
-    setting: row.setting,
-    grid: row.grid,
-    columns: row.board_columns,
-    rows: row.board_rows,
-    feetPerCell: row.feet_per_cell,
-    alignment: {
-      cellPx: row.cell_px,
-      offsetXPx: row.offset_x_px,
-      offsetYPx: row.offset_y_px,
-    },
-    image: battleMapImages(row, sign),
-    imagePending: row.image_state === "generating",
-  });
+/** A `battle_map` row as the creator reads it, its picture signed per read. */
+const battleMapRow = (sign: ImageSigner | undefined) =>
+  classFromColumns(
+    BattleMap,
+    { ...BattleMap.fields, ...timestampColumns, image: pictureFromColumn(sign) },
+    { ...boardColumns, image: "picture" },
+  );
+
+/** `encounter_run_board`, with its map's setting line and picture beside it. */
+const runBoardRow = (sign: ImageSigner | undefined) =>
+  classFromColumns(
+    EncounterRunBoard,
+    { ...EncounterRunBoard.fields, image: pictureFromColumn(sign) },
+    { ...boardColumns, image: "picture" },
+  );
 
 export class BattleMaps extends Context.Service<
   BattleMaps,
@@ -207,44 +200,107 @@ export class BattleMaps extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const sign = yield* imageSigner;
+      const BattleMapRow = battleMapRow(sign);
+      const RunBoardRow = runBoardRow(sign);
       const missing = (encounterId: EncounterId) =>
         new NotFound({ resource: "battle map", id: encounterId });
+
+      const MapRequest = Schema.toType(
+        Schema.Struct({ ...creatorFields, encounterId: EncounterId }),
+      );
+      const map = SqlSchema.findOne({
+        Request: MapRequest,
+        Result: BattleMapRow,
+        execute: ({ campaign, actor, encounterId }) => sql`
+          select battle_map.*, ${alignmentColumn(sql, "battle_map")},
+                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}
+          from battle_map
+          where battle_map.encounter_id = ${encounterId}
+            and ${rowWritable(sql, "battle_map", campaign, actor)}
+        `,
+      });
+      const types = SqlSchema.findAll({
+        Request: MapRequest,
+        Result: fromColumns(Schema.Struct({ type: Schema.String })),
+        execute: ({ campaign, actor, encounterId }) => sql`
+          select distinct lower(btrim(creature.type)) as type
+          from battle_map
+          join encounter_creature on encounter_creature.encounter_id = battle_map.encounter_id
+          join creature on creature.id = encounter_creature.creature_id
+          where battle_map.encounter_id = ${encounterId}
+            and ${rowWritable(sql, "battle_map", campaign, actor)}
+            and btrim(creature.type) <> ''
+          order by 1
+        `,
+      });
+      const change = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            ...creatorFields,
+            encounterId: EncounterId,
+            columns: Schema.Record(Schema.String, Schema.Unknown),
+          }),
+        ),
+        Result: BattleMapRow,
+        execute: ({ campaign, actor, encounterId, columns }) => sql`
+          update battle_map set ${setClause(sql, columns)}
+          where battle_map.encounter_id = ${encounterId}
+            and ${rowWritable(sql, "battle_map", campaign, actor)}
+          returning battle_map.*, ${alignmentColumn(sql, "battle_map")},
+                    ${battleMapPicture(sql)}, ${battleMapPending(sql)}
+        `,
+      });
+      const run = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, sessionId: SessionId, runId: EncounterRunId }),
+        ),
+        Result: fromColumns(Schema.Struct({ id: EncounterRunId })),
+        execute: ({ campaign, actor, sessionId, runId }) => sql`
+          select encounter_run.id from encounter_run
+          where encounter_run.id = ${runId}
+            and ${nestedRowWritable(sql, RUNS, sessionId, campaign, actor)}
+        `,
+      });
+      // The map is joined through the creator's own predicate again, so the
+      // board's pointer grants nothing a map read would not: a pointer that
+      // somehow named another table's map reads as none.
+      const board = SqlSchema.findOneOption({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, runId: EncounterRunId })),
+        Result: RunBoardRow,
+        execute: ({ campaign, actor, runId }) => sql`
+          select battle_map.id as map_id, battle_map.setting,
+                 encounter_run_board.grid, encounter_run_board.board_columns,
+                 encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
+                 ${alignmentColumn(sql, "encounter_run_board")},
+                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}
+          from encounter_run_board
+          left join battle_map on battle_map.id = encounter_run_board.map_id
+            and ${rowWritable(sql, "battle_map", campaign, actor)}
+          where encounter_run_board.run_id = ${runId}
+        `,
+      });
 
       return {
         forEncounter: (creator, encounterId) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<BattleMapRow>`
-                select battle_map.*, ${battleMapImageColumns(sql)} from battle_map
-                where battle_map.encounter_id = ${encounterId}
-                  and ${rowWritable(sql, "battle_map", creator.campaign, creator.actor)}
-              `;
-              if (rows.length === 0) return yield* missing(encounterId);
-              return toBattleMap(rows[0]!, sign);
-            }),
+            map({ ...asked(creator), encounterId }).pipe(
+              Effect.catchTag("NoSuchElementError", () => Effect.fail(missing(encounterId))),
+            ),
           ),
 
         rosterTypes: (creator, encounterId) =>
           dieOnSqlError(
-            Effect.map(
-              sql<{ readonly type: string }>`
-                select distinct lower(btrim(creature.type)) as type
-                from battle_map
-                join encounter_creature on encounter_creature.encounter_id = battle_map.encounter_id
-                join creature on creature.id = encounter_creature.creature_id
-                where battle_map.encounter_id = ${encounterId}
-                  and ${rowWritable(sql, "battle_map", creator.campaign, creator.actor)}
-                  and btrim(creature.type) <> ''
-                order by 1
-              `,
-              (rows) => rows.map((row) => row.type),
+            Effect.map(types({ ...asked(creator), encounterId }), (rows) =>
+              rows.map((row) => row.type),
             ),
           ),
 
         update: (creator, encounterId, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const columns = defined({
+            change({
+              ...asked(creator),
+              encounterId,
+              columns: defined({
                 grid: patch.grid,
                 board_columns: patch.columns,
                 board_rows: patch.rows,
@@ -252,45 +308,17 @@ export class BattleMaps extends Context.Service<
                 cell_px: patch.alignment?.cellPx,
                 offset_x_px: patch.alignment?.offsetXPx,
                 offset_y_px: patch.alignment?.offsetYPx,
-              });
-              const rows = yield* sql<BattleMapRow>`
-                update battle_map set ${setClause(sql, columns)}
-                where battle_map.encounter_id = ${encounterId}
-                  and ${rowWritable(sql, "battle_map", creator.campaign, creator.actor)}
-                returning battle_map.*, ${battleMapImageColumns(sql)}
-              `;
-              if (rows.length === 0) return yield* missing(encounterId);
-              return toBattleMap(rows[0]!, sign);
-            }),
+              }),
+            }).pipe(Effect.catchTag("NoSuchElementError", () => Effect.fail(missing(encounterId)))),
           ),
 
         forRun: (creator, sessionId, runId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const runs = yield* sql<{ readonly id: EncounterRunId }>`
-                select encounter_run.id from encounter_run
-                where encounter_run.id = ${runId}
-                  and ${nestedRowWritable(sql, RUNS, sessionId, creator.campaign, creator.actor)}
-              `;
-              if (runs.length === 0) {
-                return yield* new NotFound({ resource: "encounter_run", id: runId });
-              }
-              // The map is joined through the creator's own predicate again,
-              // so the board's pointer grants nothing a map read would not:
-              // a pointer that somehow named another table's map reads as none.
-              const rows = yield* sql<RunBoardRow>`
-                select battle_map.id as map_id, battle_map.setting,
-                       encounter_run_board.grid, encounter_run_board.board_columns,
-                       encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
-                       encounter_run_board.cell_px, encounter_run_board.offset_x_px,
-                       encounter_run_board.offset_y_px,
-                       ${battleMapImageColumns(sql)}
-                from encounter_run_board
-                left join battle_map on battle_map.id = encounter_run_board.map_id
-                  and ${rowWritable(sql, "battle_map", creator.campaign, creator.actor)}
-                where encounter_run_board.run_id = ${runId}
-              `;
-              return rows.length === 0 ? null : toRunBoard(rows[0]!, sign);
+              yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                orNotFound("encounter_run", runId),
+              );
+              return Option.getOrNull(yield* board({ ...asked(creator), runId }));
             }),
           ),
       };

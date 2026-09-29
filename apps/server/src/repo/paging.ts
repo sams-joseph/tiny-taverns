@@ -1,4 +1,5 @@
 import { DEFAULT_PAGE_SIZE, type CursorKey, type Page, type PageCursor } from "@taverns/api";
+import { DateTime } from "effect";
 import type { SqlClient, Statement } from "effect/unstable/sql";
 
 /**
@@ -108,11 +109,15 @@ export const timeColumn = <Row>(
  *
  * `table` is a constant from the repository, never anything a client supplies.
  */
-export const createdOrdering = <Row extends { readonly created_at: Date; readonly id: string }>(
+export const createdOrdering = <
+  Row extends { readonly createdAt: DateTime.Utc; readonly id: string },
+>(
   sql: SqlClient.SqlClient,
   table: string,
 ): Ordering<Row> => [
-  timeColumn<Row>(sql, sql.literal(`${table}.created_at`), (row) => row.created_at),
+  timeColumn<Row>(sql, sql.literal(`${table}.created_at`), (row) =>
+    DateTime.toDateUtc(row.createdAt),
+  ),
   orderColumn<Row>(sql, sql.literal(`${table}.id`), "uuid", (row) => row.id),
 ];
 

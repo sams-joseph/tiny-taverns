@@ -1,5 +1,6 @@
 import {
   Actor,
+  type Beat,
   CampaignId,
   ChronicleNight,
   CurrentActor,
@@ -9,6 +10,7 @@ import {
   PlayerChronicleNight,
   type PlayerCombatant,
   PlayerSessionRecap,
+  type PrepItem,
   RecapFight,
   RecapRunLink,
   RecapScene,
@@ -17,26 +19,19 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
-import { BEATS, type BeatRow, toBeat } from "./Beats.js";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
+import { BEATS, BeatRow } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
 import { combatantColumns, combatantRow } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { CheckRow, SceneRow } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
-import {
-  noteColumns,
-  type NoteRow,
-  playerNoteColumns,
-  type PlayerNoteRow,
-  toNote,
-  toPlayerNote,
-} from "./Notes.js";
+import { noteColumns, NoteRow, playerNoteColumns, PlayerNoteRow } from "./Notes.js";
 import { playerCombatantColumns, PlayerCombatantRow } from "./playerCombatant.js";
-import { PREP, type PrepItemRow, toPrepItem } from "./PrepItems.js";
-import { dieOnSqlError } from "./rows.js";
-import { type SessionRow, sessionColumns, toSession } from "./Sessions.js";
+import { PREP, PrepItemRow } from "./PrepItems.js";
+import { dieOnSqlError, fromColumns } from "./rows.js";
+import { SessionRow, sessionColumns } from "./Sessions.js";
 import {
   containedRowReadable,
   ensureCampaignReadable,
@@ -56,21 +51,14 @@ import {
  * see. The subquery's own `from session` is a separate scope from the one
  * inside the predicate, and both resolve to the row they mean.
  */
-interface LinkRow {
-  readonly id: EncounterRunId;
-  readonly session_id: SessionId;
-  readonly session_number: number;
-  readonly round: number;
-  readonly continued_from: EncounterRunId | null;
-}
+const LinkRow = fromColumns(
+  Schema.Struct({ ...RecapRunLink.fields, continuedFrom: Schema.NullOr(EncounterRunId) }),
+  { runId: "id" },
+);
+type LinkRow = typeof LinkRow.Type;
 
-const toLink = (row: LinkRow): RecapRunLink =>
-  new RecapRunLink({
-    runId: row.id,
-    sessionId: row.session_id,
-    sessionNumber: row.session_number,
-    round: row.round,
-  });
+const linkOf = ({ continuedFrom: _, ...link }: LinkRow): RecapRunLink =>
+  new RecapRunLink(link, { disableChecks: true });
 
 /** Rows filed under the night they belong to, each night's in the order read. */
 const groupBySession = <Row>(
@@ -86,9 +74,12 @@ const groupBySession = <Row>(
   return bySession;
 };
 
+/** Who is reading, and the campaign they read it in: what every read here is asked with. */
+const readerFields = { campaignId: CampaignId, actor: Actor } as const;
+
 /** What a read of some nights' runs is asked with: the reader, and the runs it was allowed. */
 const RunsRequest = Schema.toType(
-  Schema.Struct({ campaignId: CampaignId, actor: Actor, runIds: Schema.Array(EncounterRunId) }),
+  Schema.Struct({ ...readerFields, runIds: Schema.Array(EncounterRunId) }),
 );
 
 /**
@@ -101,13 +92,13 @@ interface NightRows {
   /** Oldest first, through `runColumns`. */
   readonly runs: ReadonlyArray<EncounterRun>;
   /** Oldest first. */
-  readonly beats: ReadonlyArray<BeatRow>;
+  readonly beats: ReadonlyArray<Beat>;
 }
 
 /**
- * Everything a recap is made of **except the initiative lists and the notes'
- * columns** — which are exactly the parts the two projections disagree about.
- * The notes are here as the `where` that picks them, so both projections read
+ * Everything a recap is made of **except the initiative lists and the notes**
+ * — which are exactly the parts the two projections disagree about. The notes
+ * are picked by one `where` (`readOut` in the layer), so both projections read
  * the same rows.
  *
  * The other sources are already narrowed row by row by `repo/visibility.ts`,
@@ -121,13 +112,7 @@ interface Night extends NightRows {
   readonly runIds: ReadonlyArray<EncounterRunId>;
   readonly predecessorById: ReadonlyMap<EncounterRunId, LinkRow>;
   readonly successorByPredecessor: ReadonlyMap<EncounterRunId, LinkRow>;
-  readonly prepDone: ReadonlyArray<PrepItemRow>;
-  /**
-   * Which notes were read out tonight, as a `where`: the two projections
-   * select different columns from the same rows — a player's are
-   * `PlayerNote`'s, with no visibility, provenance, pin or links.
-   */
-  readonly readOut: Statement.Fragment;
+  readonly prepDone: ReadonlyArray<PrepItem>;
 }
 
 /**
@@ -353,23 +338,116 @@ export class Recap extends Context.Service<
        * looking back matches the predecessor by id, looking forward matches
        * successors by their pointer.
        */
+      const linked = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            ...readerFields,
+            column: Schema.Literals(["encounter_run.id", "encounter_run.continued_from"]),
+            values: Schema.Array(EncounterRunId),
+          }),
+        ),
+        Result: LinkRow,
+        execute: ({ campaignId, actor, column, values }) => sql`
+          select encounter_run.id, encounter_run.session_id, encounter_run.round,
+                 encounter_run.continued_from,
+                 (select session.number from session
+                   where session.id = encounter_run.session_id) as session_number
+          from encounter_run
+          where ${sql.in(column, values)}
+            and ${containedRowReadable(sql, RUN, campaignId, actor)}
+        `,
+      });
       const links = (
         campaignId: CampaignId,
         actor: Actor,
-        column: string,
+        column: "encounter_run.id" | "encounter_run.continued_from",
         values: ReadonlyArray<EncounterRunId>,
       ): Effect.Effect<ReadonlyArray<LinkRow>, never, never> =>
         values.length === 0
           ? Effect.succeed([])
-          : sql<LinkRow>`
-              select encounter_run.id, encounter_run.session_id, encounter_run.round,
-                     encounter_run.continued_from,
-                     (select session.number from session
-                       where session.id = encounter_run.session_id) as session_number
-              from encounter_run
-              where ${sql.in(column, values)}
-                and ${containedRowReadable(sql, RUN, campaignId, actor)}
-            `.pipe(Effect.orDie);
+          : linked({ campaignId, actor, column, values }).pipe(Effect.orDie);
+
+      const readableNights = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            ...readerFields,
+            which: Schema.Union([SessionId, Schema.Literal("every")]),
+          }),
+        ),
+        Result: SessionRow,
+        execute: ({ campaignId, actor, which }) => sql`
+          select ${sessionColumns(sql, campaignId, actor)} from session
+          where ${sql.and([
+            ...(which === "every" ? [] : [sql`session.id = ${which}`]),
+            rowReadable(sql, "session", campaignId, actor),
+          ])}
+          order by session.number desc
+        `,
+      });
+      // Verbatim, and in the order the night happened in — the same order
+      // `Beats.list` returns them in, because it is the same question.
+      const nightsBeats = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ ...readerFields, sessionIds: Schema.Array(SessionId) }),
+        ),
+        Result: BeatRow,
+        execute: ({ campaignId, actor, sessionIds }) => sql`
+          select beat.* from beat
+          where ${nestedRowsReadable(sql, BEATS, sessionIds, campaignId, actor)}
+          order by beat.created_at asc, beat.id asc
+        `,
+      });
+      const NightRequest = Schema.toType(Schema.Struct({ ...readerFields, sessionId: SessionId }));
+      // Only the ticked ones. An unticked line is what the next night
+      // inherits, not a fact about this one.
+      const ticked = SqlSchema.findAll({
+        Request: NightRequest,
+        Result: PrepItemRow,
+        execute: ({ campaignId, actor, sessionId }) => sql`
+          select prep_item.* from prep_item
+          where prep_item.done
+            and ${nestedRowReadable(sql, PREP, sessionId, campaignId, actor)}
+          order by prep_item.created_at asc, prep_item.id asc
+        `,
+      });
+
+      /**
+       * The prose that was actually read out: a note attached to an encounter
+       * one of tonight's fights was started from. Structural rather than a
+       * timestamp heuristic — see `SessionRecap.notes`. The `exists`
+       * re-applies the run predicate rather than trusting the run ids, so this
+       * clause is safe read on its own terms. The two projections select
+       * different columns from the same rows — a player's are `PlayerNote`'s,
+       * with no visibility, provenance, pin or links.
+       */
+      const readOut = (campaignId: CampaignId, actor: Actor, sessionId: SessionId) =>
+        sql.and([
+          sql`note.encounter_id is not null`,
+          sql`exists (
+            select 1 from encounter_run
+            where encounter_run.session_id = ${sessionId}
+              and encounter_run.encounter_id = note.encounter_id
+              and ${containedRowReadable(sql, RUN, campaignId, actor)}
+          )`,
+          rowReadable(sql, "note", campaignId, actor),
+        ]);
+      const notesReadOut = SqlSchema.findAll({
+        Request: NightRequest,
+        Result: NoteRow,
+        execute: ({ campaignId, actor, sessionId }) => sql`
+          select ${noteColumns(sql)} from note where ${readOut(campaignId, actor, sessionId)}
+          order by note.created_at asc, note.id asc
+        `,
+      });
+      const notesReadOutToPlayer = SqlSchema.findAll({
+        Request: NightRequest,
+        Result: PlayerNoteRow,
+        execute: ({ campaignId, actor, sessionId }) => sql`
+          select ${playerNoteColumns(sql, campaignId, actor)} from note
+          where ${readOut(campaignId, actor, sessionId)}
+          order by note.created_at asc, note.id asc
+        `,
+      });
 
       /**
        * The nights this actor may read — one by id for a recap, or every one
@@ -388,14 +466,7 @@ export class Recap extends Context.Service<
       ): Effect.Effect<ReadonlyArray<NightRows>, SqlError.SqlError | Schema.SchemaError> =>
         Effect.gen(function* () {
           // The nights themselves, and the gate for everything below them.
-          const sessions = yield* sql<SessionRow>`
-            select ${sessionColumns(sql, campaignId, actor)} from session
-            where ${sql.and([
-              ...(which === "every" ? [] : [sql`session.id = ${which}`]),
-              rowReadable(sql, "session", campaignId, actor),
-            ])}
-            order by session.number desc
-          `;
+          const sessions = yield* readableNights({ campaignId, actor, which });
           if (sessions.length === 0) return [];
           const sessionIds = sessions.map((row) => row.id);
 
@@ -404,21 +475,14 @@ export class Recap extends Context.Service<
           // may not read is not named after it.
           const runs = yield* runsOf({ campaignId, actor, sessionIds });
 
-          // Verbatim, and in the order the night happened in — the same
-          // order `Beats.list` returns them in, because it is the same
-          // question.
-          const beats = yield* sql<BeatRow>`
-            select beat.* from beat
-            where ${nestedRowsReadable(sql, BEATS, sessionIds, campaignId, actor)}
-            order by beat.created_at asc, beat.id asc
-          `;
+          const beats = yield* nightsBeats({ campaignId, actor, sessionIds });
 
           const runsByNight = groupBySession(runs, (run) => run.sessionId);
-          const beatsOf = groupBySession(beats, (beat) => beat.session_id);
-          return sessions.map((row) => ({
-            session: toSession(row),
-            runs: runsByNight.get(row.id) ?? [],
-            beats: beatsOf.get(row.id) ?? [],
+          const beatsOf = groupBySession(beats, (beat) => beat.sessionId);
+          return sessions.map((session) => ({
+            session,
+            runs: runsByNight.get(session.id) ?? [],
+            beats: beatsOf.get(session.id) ?? [],
           }));
         });
 
@@ -451,42 +515,18 @@ export class Recap extends Context.Service<
             runIds,
           );
 
-          // Only the ticked ones. An unticked line is what the next night
-          // inherits, not a fact about this one.
-          const prepDone = yield* sql<PrepItemRow>`
-            select prep_item.* from prep_item
-            where prep_item.done
-              and ${nestedRowReadable(sql, PREP, sessionId, campaignId, actor)}
-            order by prep_item.created_at asc, prep_item.id asc
-          `;
-
-          // The prose that was actually read out: a note attached to an
-          // encounter one of tonight's fights was started from. Structural
-          // rather than a timestamp heuristic — see `SessionRecap.notes`.
-          // The `exists` re-applies the run predicate rather than trusting
-          // the ids above, so this clause is safe read on its own terms.
-          const readOut = sql.and([
-            sql`note.encounter_id is not null`,
-            sql`exists (
-              select 1 from encounter_run
-              where encounter_run.session_id = ${sessionId}
-                and encounter_run.encounter_id = note.encounter_id
-                and ${containedRowReadable(sql, RUN, campaignId, actor)}
-            )`,
-            rowReadable(sql, "note", campaignId, actor),
-          ]);
+          const prepDone = yield* ticked({ campaignId, actor, sessionId });
 
           return {
             ...rows,
             runIds,
-            predecessorById: new Map(predecessors.map((row) => [row.id, row])),
+            predecessorById: new Map(predecessors.map((row) => [row.runId, row])),
             successorByPredecessor: new Map(
               successors.flatMap((row) =>
-                row.continued_from === null ? [] : [[row.continued_from, row] as const],
+                row.continuedFrom === null ? [] : [[row.continuedFrom, row] as const],
               ),
             ),
             prepDone,
-            readOut,
           };
         });
 
@@ -508,8 +548,8 @@ export class Recap extends Context.Service<
           return {
             run,
             combatants: combatantsOf(run.id),
-            continuedFrom: previous === undefined ? null : toLink(previous),
-            continuedInto: next === undefined ? null : toLink(next),
+            continuedFrom: previous === undefined ? null : linkOf(previous),
+            continuedInto: next === undefined ? null : linkOf(next),
           };
         });
 
@@ -540,10 +580,7 @@ export class Recap extends Context.Service<
               // stages" are counted from. The creator's, as the checks are.
               const scenes = state.runIds.length === 0 ? [] : yield* scenesOf(asked);
 
-              const notes = yield* sql<NoteRow>`
-                select ${noteColumns(sql)} from note where ${state.readOut}
-                order by note.created_at asc, note.id asc
-              `;
+              const notes = yield* notesReadOut({ campaignId, actor, sessionId });
 
               return new SessionRecap({
                 session: state.session,
@@ -557,9 +594,9 @@ export class Recap extends Context.Service<
                       scene: sceneOf(scenes.find((scene) => scene.runId === fight.run.id)),
                     }),
                 ),
-                beats: state.beats.map(toBeat),
-                prepDone: state.prepDone.map(toPrepItem),
-                notes: notes.map(toNote),
+                beats: state.beats,
+                prepDone: state.prepDone,
+                notes,
               });
             }),
           ),
@@ -584,20 +621,16 @@ export class Recap extends Context.Service<
                   ? []
                   : yield* playerCombatantsOf({ campaignId, actor, runIds: state.runIds });
 
-              const notes = yield* sql<PlayerNoteRow>`
-                select ${playerNoteColumns(sql, campaignId, actor)} from note
-                where ${state.readOut}
-                order by note.created_at asc, note.id asc
-              `;
+              const notes = yield* notesReadOutToPlayer({ campaignId, actor, sessionId });
 
               return new PlayerSessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId): ReadonlyArray<PlayerCombatant> =>
                   combatants.filter((combatant) => combatant.encounterRunId === runId),
                 ),
-                beats: state.beats.map(toBeat),
-                prepDone: state.prepDone.map(toPrepItem),
-                notes: notes.map(toPlayerNote),
+                beats: state.beats,
+                prepDone: state.prepDone,
+                notes,
               });
             }),
           ),
@@ -610,7 +643,7 @@ export class Recap extends Context.Service<
                   new ChronicleNight({
                     session: rows.session,
                     runs: rows.runs,
-                    beats: rows.beats.map(toBeat),
+                    beats: rows.beats,
                   }),
               ),
             ),
@@ -630,7 +663,7 @@ export class Recap extends Context.Service<
                   new PlayerChronicleNight({
                     session: rows.session,
                     runs: rows.runs,
-                    beats: rows.beats.map(toBeat),
+                    beats: rows.beats,
                   }),
               );
             }),

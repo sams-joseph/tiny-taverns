@@ -1,6 +1,5 @@
 import {
   type Actor,
-  type BattleMapGrid,
   type CampaignCharacterId,
   CampaignId,
   type CharacterId,
@@ -16,21 +15,22 @@ import {
   PlayerLiveCombatantNpc,
   PlayerLiveCombatantYou,
   PlayerLiveTable,
-  type PlayerLiveBoard,
+  PlayerLiveBoard,
   type PlayerLiveCombatant,
   type PlayerLiveSeat,
   type PlayerLiveToken,
   type PlayerLiveTurn,
   SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
 import { SqlClient, SqlSchema } from "effect/unstable/sql";
-import { imageSigner } from "../images/ImageUrls.js";
+import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
-  type BattleMapImageColumns,
-  battleMapImageColumns,
-  battleMapImages,
+  alignmentColumn,
+  battleMapPicture,
+  boardColumns,
+  pictureFromColumn,
 } from "./BattleMaps.js";
 import {
   type PortraitSigner,
@@ -92,15 +92,14 @@ const liveCombatantRow = (sign: PortraitSigner | undefined) =>
   ]);
 
 /** The fight's board as a player may see it: the grid and the picture, no setting. */
-interface PlayerBoardRow extends BattleMapImageColumns {
-  readonly grid: BattleMapGrid;
-  readonly board_columns: number;
-  readonly board_rows: number;
-  readonly feet_per_cell: number;
-  readonly cell_px: number;
-  readonly offset_x_px: number;
-  readonly offset_y_px: number;
-}
+const playerBoardRow = (sign: ImageSigner | undefined) =>
+  fromColumns(
+    Schema.Struct({
+      ...Struct.omit(PlayerLiveBoard.fields, ["tokens"]),
+      image: pictureFromColumn(sign),
+    }),
+    { ...boardColumns, image: "picture" },
+  );
 
 /**
  * What is on one table right now, to somebody sitting at it.
@@ -162,7 +161,7 @@ export class PlayerTable extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
       const LiveCombatantRow = liveCombatantRow(yield* portraitSigner);
-      const signMap = yield* imageSigner;
+      const PlayerBoardRow = playerBoardRow(yield* imageSigner);
 
       /**
        * The fight on this table tonight, if there is one. `runColumns`, so the
@@ -258,6 +257,25 @@ export class PlayerTable extends Context.Service<
           ),
       });
 
+      // The picture is joined through the board's pointer only to a map in
+      // this campaign, so the pointer grants nothing outside it.
+      const boardOf = SqlSchema.findOneOption({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId })),
+        Result: PlayerBoardRow,
+        execute: ({ campaignId, runId }) => sql`
+          select encounter_run_board.grid, encounter_run_board.board_columns,
+                 encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
+                 ${alignmentColumn(sql, "encounter_run_board")},
+                 ${battleMapPicture(sql)}
+          from encounter_run_board
+          join encounter_run on encounter_run.id = encounter_run_board.run_id
+          left join battle_map on battle_map.id = encounter_run_board.map_id
+            and battle_map.campaign_id = ${campaignId}
+          where encounter_run_board.run_id = ${runId}
+            and ${boardShown(sql)}
+        `,
+      });
+
       const activeSeats = (campaignId: CampaignId, actor: Actor) =>
         sql<ActiveSeatRow>`
           select campaign_character.id, campaign_character.character_id
@@ -314,22 +332,7 @@ export class PlayerTable extends Context.Service<
               }
               const run = found.value;
 
-              // The picture is joined through the board's pointer only to a
-              // map in this campaign, so the pointer grants nothing outside it.
-              const boards = yield* sql<PlayerBoardRow>`
-                select encounter_run_board.grid, encounter_run_board.board_columns,
-                       encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
-                       encounter_run_board.cell_px, encounter_run_board.offset_x_px,
-                       encounter_run_board.offset_y_px,
-                       ${battleMapImageColumns(sql)}
-                from encounter_run_board
-                join encounter_run on encounter_run.id = encounter_run_board.run_id
-                left join battle_map on battle_map.id = encounter_run_board.map_id
-                  and battle_map.campaign_id = ${campaignId}
-                where encounter_run_board.run_id = ${run.id}
-                  and ${boardShown(sql)}
-              `;
-              const board = boards[0];
+              const board = yield* boardOf({ campaignId, runId: run.id });
 
               const rows = yield* liveOrder({ campaignId, runId: run.id, mode: run.mode });
               const tokens: ReadonlyArray<PlayerLiveToken> = rows.flatMap((row) =>
@@ -369,22 +372,10 @@ export class PlayerTable extends Context.Service<
                   upNext,
                   seats,
                   order,
-                  board:
-                    board === undefined
-                      ? null
-                      : ({
-                          grid: board.grid,
-                          columns: board.board_columns,
-                          rows: board.board_rows,
-                          feetPerCell: board.feet_per_cell,
-                          alignment: {
-                            cellPx: board.cell_px,
-                            offsetXPx: board.offset_x_px,
-                            offsetYPx: board.offset_y_px,
-                          },
-                          image: battleMapImages(board, signMap),
-                          tokens,
-                        } satisfies PlayerLiveBoard),
+                  board: Option.match(board, {
+                    onNone: () => null,
+                    onSome: (row) => ({ ...row, tokens }),
+                  }),
                 },
               });
             }),
