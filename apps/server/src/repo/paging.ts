@@ -62,7 +62,7 @@ export type Ordering<Row> = readonly [...ReadonlyArray<OrderColumn<Row>>, OrderC
 export const orderColumn = <Row>(
   sql: SqlClient.SqlClient,
   column: Statement.Fragment,
-  cast: "text" | "uuid" | "double precision",
+  cast: "text" | "uuid" | "double precision" | "integer",
   key: (row: Row) => CursorKey,
   direction: "asc" | "desc" = "asc",
 ): OrderColumn<Row> => ({
@@ -101,10 +101,10 @@ export const timeColumn = <Row>(
 /**
  * The ordering of a list that has exactly one: oldest first, then the id.
  *
- * A campaign's notes, its encounters and a night's beats are chronologies, and
- * all three ordered by `created_at` alone before they were paged. That is not a
- * position: a whole transaction's rows share `now()`, so the id is what makes
- * the key unique — see {@link Ordering}.
+ * A campaign's notes and a night's beats are chronologies, and both ordered
+ * by `created_at` alone before they were paged. That is not a position: a
+ * whole transaction's rows share `now()`, so the id is what makes the key
+ * unique — see {@link Ordering}.
  *
  * `table` is a constant from the repository, never anything a client supplies.
  */

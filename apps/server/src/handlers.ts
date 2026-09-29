@@ -615,6 +615,9 @@ const EncountersLive = HttpApiBuilder.group(
         .handle("update", ({ params, payload }) =>
           encounters.update(params.campaignId, params.encounterId, payload),
         )
+        .handle("move", ({ params, payload }) =>
+          encounters.move(params.campaignId, params.encounterId, payload),
+        )
         // The map's picture went with the encounter, and its row's trigger
         // queued the files; this drains them now rather than at the next sweep.
         .handle("remove", ({ params }) =>

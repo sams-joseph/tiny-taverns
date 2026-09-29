@@ -151,7 +151,7 @@ export const pageOf = <Item extends Schema.Top, Ordering extends Schema.Codec<st
 
 /**
  * The ordering of a list that has exactly one — oldest first, which is what a
- * campaign's notes, its encounters and a night's beats are.
+ * campaign's notes and a night's beats are.
  *
  * A literal rather than an absent field, so that a cursor for one of these lists
  * is the same shape as a cursor for the bestiary and the machinery is one
@@ -169,3 +169,20 @@ export const createdPageFilter = pageFilter(CreatedOrder);
 /** The decoded filter, as a repository sees it. */
 export type CreatedPageFilterValues = typeof CreatedPageFilterValues.Type;
 const CreatedPageFilterValues = Schema.Struct(createdPageFilter);
+
+/**
+ * The ordering of a campaign's encounters: the order the DM means to play
+ * them in, which they set by moving one before or after another
+ * (`encounters.move`). No position is a field on the wire — the array order
+ * is the answer. A cursor for this list keys on the stored slot, as every
+ * cursor keys on its ordering's columns; the list is the creator's alone.
+ */
+export const PlannedOrder = Schema.Literal("planned");
+export type PlannedOrder = typeof PlannedOrder.Type;
+
+/** The query parameters of a list in the DM's planned order. */
+export const plannedPageFilter = pageFilter(PlannedOrder);
+
+/** The decoded filter, as a repository sees it. */
+export type PlannedPageFilterValues = typeof PlannedPageFilterValues.Type;
+const PlannedPageFilterValues = Schema.Struct(plannedPageFilter);

@@ -286,3 +286,20 @@ export const EncounterUpdate = Schema.Struct({
   ready: Schema.optional(Schema.Boolean),
 }).check(challengeMatchesKind);
 export type EncounterUpdate = typeof EncounterUpdate.Type;
+
+/**
+ * Where to put an encounter in the DM's planned order: just before another of
+ * the campaign's encounters, or just after one.
+ *
+ * Relative rather than a number or a whole list, so a move names only the two
+ * encounters it is about. It cannot go stale when another tab or an accepted
+ * Hob proposal adds an encounter, and it means the same thing under a kind
+ * filter, where the DM sees only some of the list: "after the one I can see
+ * above it". An anchor the DM does not hold is `NotFound`. Moving an encounter
+ * relative to itself changes nothing.
+ */
+export const EncounterPlacement = Schema.Union([
+  Schema.Struct({ before: EncounterId }),
+  Schema.Struct({ after: EncounterId }),
+]);
+export type EncounterPlacement = typeof EncounterPlacement.Type;

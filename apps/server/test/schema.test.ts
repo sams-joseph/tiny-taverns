@@ -359,6 +359,44 @@ describe("the group architecture's removed columns stay removed", () => {
   });
 });
 
+describe("the DM's planned order", () => {
+  /**
+   * `encounter_prep_campaign_position_key` (`0078`): one encounter to a slot
+   * in a campaign, deferrable so a move's one-statement renumber is checked
+   * once every row has its new number.
+   */
+  it("holds one encounter to a slot per campaign, checked at the end of a statement", async () => {
+    const keys = await runtime.runPromise(
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        return yield* sql<{
+          readonly conname: string;
+          readonly definition: string;
+          readonly condeferrable: boolean;
+          readonly condeferred: boolean;
+        }>`
+          select con.conname, pg_get_constraintdef(con.oid) as definition,
+                 con.condeferrable, con.condeferred
+          from pg_constraint con
+          join pg_class rel on rel.oid = con.conrelid
+          where rel.relname = 'encounter_prep' and con.contype = 'u'
+        `;
+      }).pipe(Effect.orDie),
+    );
+    expect(keys).toEqual([
+      {
+        conname: "encounter_prep_campaign_position_key",
+        definition: 'UNIQUE (campaign_id, "position") DEFERRABLE',
+        condeferrable: true,
+        condeferred: false,
+      },
+    ]);
+    expect(columnFor("encounter_prep", "position")?.is_nullable).toBe("NO");
+    // The order is the DM's: never a column of the row a player reads.
+    expect(columnFor("encounter", "position")).toBeUndefined();
+  });
+});
+
 describe("an account must be reachable by something", () => {
   it("accepts either credential alone and refuses a row with neither", async () => {
     const insert = (values: Record<string, string | null>) =>

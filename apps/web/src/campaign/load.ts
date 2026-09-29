@@ -9,6 +9,7 @@ import type {
   EncounterId,
   EncounterRun,
   Note,
+  PlannedOrder,
   PrepItem,
   PartySeat,
   Session,
@@ -120,7 +121,7 @@ export const encountersAtom = Atom.family((campaignId: CampaignId) =>
       // Whole lists, followed to the end: the Encounters page groups and counts
       // what the frame loaded, and a count over one page is not a count of the
       // list. See `api/page.ts`.
-      collectPages((cursor: PageCursor<CreatedOrder> | undefined) =>
+      collectPages((cursor: PageCursor<PlannedOrder> | undefined) =>
         client.encounters.list({ params: { campaignId }, query: { limit: WHOLE_LIST, cursor } }),
       ),
     // Each encounter's difficulty is computed against the seated party, and
