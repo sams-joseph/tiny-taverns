@@ -1,24 +1,22 @@
 import {
   type Actor,
-  type CampaignId,
-  type CharacterId,
+  CampaignId,
+  CharacterId,
   Conflict,
   CurrentActor,
   type EncounterRunId,
   NotFound,
   Roll,
   type RollCreate,
-  type RollId,
+  RollId,
   type RollListFilterValues,
-  type RollMode,
-  type RollCritical,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer, Option } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, orNotFound, timestampColumns } from "./rows.js";
 import { RUN } from "./liveTables.js";
 import {
   campaignReadable,
@@ -28,25 +26,12 @@ import {
   rowReadable,
 } from "./visibility.js";
 
-interface RollRow extends ProvenanceColumns {
-  readonly id: RollId;
-  readonly campaign_id: CampaignId;
-  readonly session_id: SessionId;
-  readonly encounter_run_id: EncounterRunId | null;
-  readonly account_id: Actor["accountId"];
-  readonly account_name: string;
-  readonly character_id: CharacterId | null;
-  readonly character_name: string | null;
-  readonly label: string;
-  readonly notation: string;
-  readonly dice: ReadonlyArray<number>;
-  readonly kept: ReadonlyArray<number>;
-  readonly modifier: number;
-  readonly total: number;
-  readonly mode: RollMode;
-  readonly critical: RollCritical | null;
-  readonly request_id: string | null;
-}
+/**
+ * A `character_roll` row as the wire reads it, decoded off `selectRoll`: the
+ * roller's name and the character's are joined, and the run pointer is
+ * narrowed in SQL.
+ */
+const RollRow = classFromColumns(Roll, { ...Roll.fields, ...timestampColumns });
 
 interface CurrentNightRow {
   readonly session_id: SessionId | null;
@@ -54,28 +39,6 @@ interface CurrentNightRow {
   readonly session_visibility: "dm" | "shared" | null;
   readonly may_dm_roll: boolean;
 }
-
-const toRoll = (row: RollRow): Roll =>
-  new Roll({
-    id: row.id,
-    campaignId: row.campaign_id,
-    sessionId: row.session_id,
-    encounterRunId: row.encounter_run_id,
-    accountId: row.account_id,
-    accountName: row.account_name,
-    characterId: row.character_id,
-    characterName: row.character_name,
-    label: row.label,
-    notation: row.notation,
-    dice: row.dice,
-    kept: row.kept,
-    modifier: row.modifier,
-    total: row.total,
-    mode: row.mode,
-    critical: row.critical,
-    requestId: row.request_id,
-    ...provenanceOf(row),
-  });
 
 const noOpenNight = new Conflict({ message: "nobody is playing at that table right now" });
 
@@ -185,22 +148,98 @@ export class Rolls extends Context.Service<
         left join character on character.id = character_roll.character_id
       `;
 
-      const existing = (
-        campaignId: CampaignId,
-        actor: Actor,
-        sessionId: SessionId,
-        requestId: string,
-      ): Effect.Effect<Roll | undefined> =>
-        sql<RollRow>`
-          select ${selectRoll(campaignId, actor)}
-          where character_roll.session_id = ${sessionId}
-            and character_roll.account_id = ${actor.accountId}
-            and character_roll.request_id = ${requestId}
-          limit 1
-        `.pipe(
-          Effect.map((rows) => (rows[0] === undefined ? undefined : toRoll(rows[0]))),
-          Effect.orDie,
-        );
+      /** The roll a retried request made the first time, if it made one. */
+      const requested = SqlSchema.findOneOption({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, sessionId: SessionId, requestId: Schema.String }),
+        ),
+        Result: RollRow,
+        execute: ({ campaignId, sessionId, requestId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${selectRoll(campaignId, actor)}
+              where character_roll.session_id = ${sessionId}
+                and character_roll.account_id = ${actor.accountId}
+                and character_roll.request_id = ${requestId}
+              limit 1
+            `,
+          ),
+      });
+      const existing = (campaignId: CampaignId, sessionId: SessionId, requestId: string) =>
+        Effect.map(requested({ campaignId, sessionId, requestId }), Option.getOrUndefined);
+      /** A roll just made, by id: the insert beside it is the only gate it needs. */
+      const made = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: RollId })),
+        Result: RollRow,
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${selectRoll(campaignId, actor)}
+              where character_roll.id = ${id}
+            `,
+          ),
+      });
+      /** A night's rolls this actor may read, newest first. */
+      const ofNight = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, sessionId: SessionId, limit: Schema.Int }),
+        ),
+        Result: RollRow,
+        execute: ({ campaignId, sessionId, limit }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${selectRoll(campaignId, actor)}
+              where character_roll.session_id = ${sessionId}
+                and ${rollReadable(sql, campaignId, actor)}
+              order by character_roll.created_at desc, character_roll.id desc
+              limit ${limit}
+            `,
+          ),
+      });
+      /** A night's rolls of one of this actor's own seated characters, newest first. */
+      const ofCharacter = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            sessionId: SessionId,
+            characterId: CharacterId,
+            limit: Schema.Int,
+          }),
+        ),
+        Result: RollRow,
+        execute: ({ campaignId, sessionId, characterId, limit }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${selectRoll(campaignId, actor)}
+              where character_roll.campaign_id = ${campaignId}
+                and character_roll.session_id = ${sessionId}
+                and character_roll.character_id = ${characterId}
+                and character_roll.account_id = ${actor.accountId}
+              order by character_roll.created_at desc, character_roll.id desc
+              limit ${limit}
+            `,
+          ),
+      });
+      const readable = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, sessionId: SessionId, id: RollId }),
+        ),
+        Result: RollRow,
+        execute: ({ campaignId, sessionId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${selectRoll(campaignId, actor)}
+              where character_roll.id = ${id}
+                and character_roll.session_id = ${sessionId}
+                and ${rollReadable(sql, campaignId, actor)}
+            `,
+          ),
+      });
 
       return {
         create: (campaignId, payload) =>
@@ -231,16 +270,11 @@ export class Rolls extends Context.Service<
                   }
 
                   if (payload.requestId !== undefined) {
-                    const seen = yield* existing(
-                      campaignId,
-                      actor,
-                      night.session_id,
-                      payload.requestId,
-                    );
+                    const seen = yield* existing(campaignId, night.session_id, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
 
-                  const rows = yield* sql<RollRow>`
+                  const rows = yield* sql<{ readonly id: RollId }>`
                     insert into character_roll ${sql.insert(
                       defined({
                         campaign_id: campaignId,
@@ -261,22 +295,15 @@ export class Rolls extends Context.Service<
                       }),
                     )}
                     on conflict do nothing
-                    returning *
+                    returning character_roll.id
                   `;
                   if (rows.length === 0 && payload.requestId !== undefined) {
-                    const seen = yield* existing(
-                      campaignId,
-                      actor,
-                      night.session_id,
-                      payload.requestId,
-                    );
+                    const seen = yield* existing(campaignId, night.session_id, payload.requestId);
                     if (seen !== undefined) return { roll: seen, inserted: false };
                   }
-                  const fetched = yield* sql<RollRow>`
-                    select ${selectRoll(campaignId, actor)}
-                    where character_roll.id = ${rows[0]!.id}
-                  `;
-                  const roll = toRoll(fetched[0]!);
+                  const roll = yield* made({ campaignId, id: rows[0]!.id }).pipe(
+                    Effect.catchTag("NoSuchElementError", Effect.die),
+                  );
                   yield* appendEvent(sql, {
                     sessionId: night.session_id,
                     kind: "roll-made",
@@ -303,14 +330,7 @@ export class Rolls extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const rows = yield* sql<RollRow>`
-                select ${selectRoll(campaignId, actor)}
-                where character_roll.session_id = ${sessionId}
-                  and ${rollReadable(sql, campaignId, actor)}
-                order by character_roll.created_at desc, character_roll.id desc
-                limit ${filter.limit ?? 12}
-              `;
-              return rows.map(toRoll);
+              return yield* ofNight({ campaignId, sessionId, limit: filter.limit ?? 12 });
             }),
           ),
 
@@ -342,31 +362,21 @@ export class Rolls extends Context.Service<
               if (sessions.length === 0) {
                 return yield* new NotFound({ resource: "session", id: sessionId });
               }
-              const rows = yield* sql<RollRow>`
-                select ${selectRoll(campaignId, actor)}
-                where character_roll.campaign_id = ${campaignId}
-                  and character_roll.session_id = ${sessionId}
-                  and character_roll.character_id = ${characterId}
-                  and character_roll.account_id = ${actor.accountId}
-                order by character_roll.created_at desc, character_roll.id desc
-                limit ${filter.limit ?? 12}
-              `;
-              return rows.map(toRoll);
+              return yield* ofCharacter({
+                campaignId,
+                sessionId,
+                characterId,
+                limit: filter.limit ?? 12,
+              });
             }),
           ),
 
         findById: (campaignId, sessionId, rollId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<RollRow>`
-                select ${selectRoll(campaignId, actor)}
-                where character_roll.id = ${rollId}
-                  and character_roll.session_id = ${sessionId}
-                  and ${rollReadable(sql, campaignId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "roll", id: rollId });
-              return toRoll(rows[0]!);
+              return yield* readable({ campaignId, sessionId, id: rollId }).pipe(
+                orNotFound("roll", rollId),
+              );
             }),
           ),
       };

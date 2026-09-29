@@ -1,6 +1,4 @@
 import {
-  type AbilityKey,
-  type CheckOutcome,
   type CombatantId,
   Conflict,
   challengeTally,
@@ -10,60 +8,43 @@ import {
   EncounterRunCheck,
   type EncounterRunCheckCreate,
   type EncounterRunCheckId,
-  type EncounterRunId,
+  EncounterRunId,
   EncounterRunScene,
   type EncounterRunSceneUpdate,
   NotFound,
-  type SceneAttitude,
-  type SceneBeat,
   type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema, Struct } from "effect";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, RUNS } from "./liveTables.js";
-import { defined, dieOnSqlError, setClause } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, fromColumns, setClause } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import { containedChildWritable, nestedRowWritable } from "./visibility.js";
 
-export interface SceneRow {
-  readonly run_id: EncounterRunId;
-  readonly beats: ReadonlyArray<SceneBeat>;
-  readonly challenge: EncounterChallenge | null;
-  readonly attitude: SceneAttitude | null;
-  readonly stages: number | null;
-  readonly stage: number | null;
-}
+/**
+ * Where a scene stands, as `encounter_run_scene` holds it: everything a
+ * `EncounterRunScene` says but its checks, and the run it is keyed by.
+ * `repo/Recap.ts` reads a night's scenes through it too.
+ */
+export const SceneRow = fromColumns(
+  Schema.Struct(Struct.omit(EncounterRunScene.fields, ["checks"])),
+);
 
-export interface CheckRow {
-  readonly id: EncounterRunCheckId;
-  readonly encounter_run_id: EncounterRunId;
-  readonly combatant_id: CombatantId | null;
-  readonly display_name: string;
-  readonly skill: string | null;
-  readonly save_ability: AbilityKey | null;
-  readonly total: number | null;
-  readonly dc: number | null;
-  readonly outcome: CheckOutcome;
-  readonly stage: number | null;
-  readonly created_at: Date;
-}
+/**
+ * An `encounter_run_check` row as the wire reads it, decoded off
+ * `encounter_run_check.*`: the run is `encounter_run_id` and the save is
+ * `save_ability`. `repo/Recap.ts` reads a night's checks through it too.
+ */
+export const CheckRow = classFromColumns(
+  EncounterRunCheck,
+  { ...EncounterRunCheck.fields, createdAt: Schema.DateTimeUtcFromDate },
+  { runId: "encounter_run_id", save: "save_ability" },
+);
 
-export const toCheck = (row: CheckRow): EncounterRunCheck =>
-  new EncounterRunCheck({
-    id: row.id,
-    runId: row.encounter_run_id,
-    combatantId: row.combatant_id,
-    displayName: row.display_name,
-    skill: row.skill,
-    save: row.save_ability,
-    total: row.total,
-    dc: row.dc,
-    outcome: row.outcome,
-    stage: row.stage,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-  });
+/** A scene with nothing recorded: what a run whose scene row is missing reads as. */
+const emptyScene = { beats: [], challenge: null, attitude: null, stages: null, stage: null };
 
 interface RunRow {
   readonly id: EncounterRunId;
@@ -149,30 +130,52 @@ export class RunScenes extends Context.Service<
         );
 
       /** The checks, oldest first — the order they were made in. */
-      const checksOf = (runId: EncounterRunId) =>
-        sql<CheckRow>`
+      const checksOf = SqlSchema.findAll({
+        Request: Schema.toType(EncounterRunId),
+        Result: CheckRow,
+        execute: (runId) => sql`
           select encounter_run_check.* from encounter_run_check
           where encounter_run_check.encounter_run_id = ${runId}
           order by encounter_run_check.created_at asc, encounter_run_check.id asc
-        `;
+        `,
+      });
+      const sceneRow = SqlSchema.findOneOption({
+        Request: Schema.toType(EncounterRunId),
+        Result: SceneRow,
+        execute: (runId) => sql`
+          select encounter_run_scene.* from encounter_run_scene
+          where encounter_run_scene.run_id = ${runId}
+        `,
+      });
+      /** A double-tapped *Log check*: the row the first tap made. */
+      const requested = SqlSchema.findOneOption({
+        Request: Schema.toType(Schema.Struct({ runId: EncounterRunId, requestId: Schema.String })),
+        Result: CheckRow,
+        execute: ({ runId, requestId }) => sql`
+          select encounter_run_check.* from encounter_run_check
+          where encounter_run_check.encounter_run_id = ${runId}
+            and encounter_run_check.request_id = ${requestId}
+        `,
+      });
+      /** A new check. What reaches its run was checked by the method. */
+      const insertCheck = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Record(Schema.String, Schema.Unknown)),
+        Result: CheckRow,
+        execute: (columns) => sql`
+          insert into encounter_run_check ${sql.insert(columns)}
+          returning *
+        `,
+      });
 
       /** Beneath a `readRun`, which is the gate: the scene is keyed by the run it proved. */
       const sceneOf = (runId: EncounterRunId) =>
         Effect.gen(function* () {
-          const rows = yield* sql<SceneRow>`
-            select encounter_run_scene.* from encounter_run_scene
-            where encounter_run_scene.run_id = ${runId}
-          `;
+          const row = yield* sceneRow(runId);
           const checks = yield* checksOf(runId);
-          const row = rows[0];
           return new EncounterRunScene({
+            ...Option.getOrElse(row, () => emptyScene),
             runId,
-            beats: row?.beats ?? [],
-            challenge: row?.challenge ?? null,
-            attitude: row?.attitude ?? null,
-            stages: row?.stages ?? null,
-            stage: row?.stage ?? null,
-            checks: checks.map(toCheck),
+            checks,
           });
         });
 
@@ -254,16 +257,8 @@ export class RunScenes extends Context.Service<
           ),
 
         logCheck: (dm, sessionId, runId, payload) => {
-          /** A double-tapped *Log check*: the row the first tap made. */
           const already = (requestId: string) =>
-            Effect.map(
-              sql<CheckRow>`
-                select encounter_run_check.* from encounter_run_check
-                where encounter_run_check.encounter_run_id = ${runId}
-                  and encounter_run_check.request_id = ${requestId}
-              `,
-              (rows) => (rows.length === 0 ? undefined : toCheck(rows[0]!)),
-            );
+            Effect.map(requested({ runId, requestId }), Option.getOrUndefined);
           return dieOnSqlError(
             sql
               .withTransaction(
@@ -313,23 +308,20 @@ export class RunScenes extends Context.Service<
                     });
                   }
 
-                  const rows = yield* sql<CheckRow>`
-                    insert into encounter_run_check ${sql.insert({
-                      encounter_run_id: runId,
-                      combatant_id: combatant.id,
-                      display_name: combatant.display_name,
-                      skill: payload.skill?.trim() ?? null,
-                      save_ability: payload.save ?? null,
-                      total: payload.total ?? null,
-                      dc,
-                      outcome,
-                      // A hazard's save is made in the stage it is in.
-                      stage:
-                        run.mode === "hazard" && payload.save !== undefined ? scene.stage : null,
-                      request_id: payload.requestId ?? null,
-                    })}
-                    returning *
-                  `;
+                  // An insert answers with its row; not getting one is a defect.
+                  const check = yield* insertCheck({
+                    encounter_run_id: runId,
+                    combatant_id: combatant.id,
+                    display_name: combatant.display_name,
+                    skill: payload.skill?.trim() ?? null,
+                    save_ability: payload.save ?? null,
+                    total: payload.total ?? null,
+                    dc,
+                    outcome,
+                    // A hazard's save is made in the stage it is in.
+                    stage: run.mode === "hazard" && payload.save !== undefined ? scene.stage : null,
+                    request_id: payload.requestId ?? null,
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "check-logged",
@@ -337,7 +329,7 @@ export class RunScenes extends Context.Service<
                     combatantId: combatant.id,
                     payload: { outcome },
                   });
-                  return toCheck(rows[0]!);
+                  return check;
                 }),
               )
               .pipe(

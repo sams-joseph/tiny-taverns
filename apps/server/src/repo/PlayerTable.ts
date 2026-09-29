@@ -2,25 +2,29 @@ import {
   type Actor,
   type BattleMapGrid,
   type CampaignCharacterId,
-  type CampaignId,
+  CampaignId,
   type CharacterId,
   type CombatantId,
+  CombatantPosition,
   Conflict,
   CurrentActor,
-  type EncounterRunId,
+  EncounterKind,
+  EncounterRunId,
   type InitiativeSetBy,
   NotFound,
+  PlayerLiveCombatantAlly,
+  PlayerLiveCombatantNpc,
+  PlayerLiveCombatantYou,
   PlayerLiveTable,
   type PlayerLiveBoard,
   type PlayerLiveCombatant,
-  type PlayerLiveHpBand,
   type PlayerLiveSeat,
   type PlayerLiveToken,
   type PlayerLiveTurn,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
@@ -28,10 +32,15 @@ import {
   battleMapImageColumns,
   battleMapImages,
 } from "./BattleMaps.js";
-import { portraitImages, portraitSigner, seatedPortraitColumn } from "./Characters.js";
-import { type EncounterRunRow, runColumns } from "./EncounterRuns.js";
+import {
+  type PortraitSigner,
+  portraitFromId,
+  portraitSigner,
+  seatedPortraitColumn,
+} from "./Characters.js";
+import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { boardShown, COMBATANT, initiativeOrder, RUNS, tokenShown } from "./liveTables.js";
-import { dieOnSqlError } from "./rows.js";
+import { dieOnSqlError, fromColumns } from "./rows.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
   containedRowReadable,
@@ -46,31 +55,41 @@ interface ActiveSeatRow {
   readonly character_id: CharacterId;
 }
 
-interface LiveCombatantRow {
-  readonly id: CombatantId;
-  readonly character_id: CharacterId | null;
-  readonly campaign_character_id: CampaignCharacterId | null;
-  readonly own_campaign_character_id: CampaignCharacterId | null;
-  readonly display_name: string;
-  readonly subtitle: string | null;
-  readonly player_name: string | null;
-  readonly initiative: number | null;
-  /** Selected only for the asker's own row; `null` on every other. */
-  readonly initiative_bonus: number | null;
-  /** Selected only for the asker's own row; `null` on every other. */
-  readonly initiative_set_by: InitiativeSetBy | null;
-  readonly kind: "pc" | "npc";
-  readonly conditions: ReadonlyArray<string>;
-  readonly hp_current: number;
-  readonly hp_max: number;
-  readonly temp_hp: number;
-  readonly hp_band: PlayerLiveHpBand;
-  /** `seatedPortraitColumn`: the asker's own seat or a shared one, else `null`. */
-  readonly portrait_id: string | null;
-  /** Null together, and null unless this row's token is on the player's board. */
-  readonly token_column: number | null;
-  readonly token_row: number | null;
-}
+/** Where a row's token stands on the player's board, or `null` when it is not on it. */
+const token = { token: Schema.NullOr(CombatantPosition) } as const;
+
+/**
+ * A row of the player's order, as the union the wire carries — `kind` is
+ * worked out in SQL, from whose seat the row is — with its token beside it.
+ * The portrait is `seatedPortraitColumn`'s: the asker's own seat or a shared
+ * one, else `null`.
+ */
+const liveCombatantRow = (sign: PortraitSigner | undefined) =>
+  Schema.Union([
+    fromColumns(
+      Schema.Struct({
+        ...PlayerLiveCombatantYou.fields,
+        portrait: portraitFromId(sign),
+        ...token,
+      }),
+      {
+        combatantId: "id",
+        campaignCharacterId: "own_campaign_character_id",
+        portrait: "portrait_id",
+      },
+    ),
+    fromColumns(
+      Schema.Struct({
+        ...PlayerLiveCombatantAlly.fields,
+        portrait: portraitFromId(sign),
+        ...token,
+      }),
+      { combatantId: "id", portrait: "portrait_id" },
+    ),
+    fromColumns(Schema.Struct({ ...PlayerLiveCombatantNpc.fields, ...token }), {
+      combatantId: "id",
+    }),
+  ]);
 
 /** The fight's board as a player may see it: the grid and the picture, no setting. */
 interface PlayerBoardRow extends BattleMapImageColumns {
@@ -142,8 +161,102 @@ export class PlayerTable extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
-      const sign = yield* portraitSigner;
+      const LiveCombatantRow = liveCombatantRow(yield* portraitSigner);
       const signMap = yield* imageSigner;
+
+      /**
+       * The fight on this table tonight, if there is one. `runColumns`, so the
+       * fight names no encounter this player may not read — its id is how the
+       * screen finds the read-aloud.
+       */
+      const liveRun = SqlSchema.findOneOption({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, sessionId: SessionId })),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, sessionId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${runColumns(sql, campaignId, actor)}
+              from encounter_run
+              where encounter_run.ended_at is null
+                and ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
+              order by encounter_run.started_at desc, encounter_run.id desc
+              limit 1
+            `,
+          ),
+      });
+      /**
+       * The fight's rows as this player may know them: an NPC the DM shared
+       * or a PC that still has a live seat here, and the asker's own rows
+       * alone when the scene is not a fight.
+       */
+      const liveOrder = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId, mode: EncounterKind }),
+        ),
+        Result: LiveCombatantRow,
+        execute: ({ campaignId, runId, mode }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select combatant.id,
+                     case
+                       when combatant.kind = 'npc' then 'npc'
+                       when own_seated.id is not null then 'you'
+                       else 'ally'
+                     end as kind,
+                     combatant.character_id,
+                     own_seated.id as own_campaign_character_id,
+                     combatant.display_name,
+                     combatant.subtitle,
+                     combatant.player_name,
+                     combatant.initiative,
+                     case when own_seated.id is not null
+                       then combatant.initiative_bonus end as initiative_bonus,
+                     case when own_seated.id is not null
+                       then combatant.initiative_set_by end as initiative_set_by,
+                     combatant.conditions,
+                     combatant.hp_current,
+                     combatant.hp_max,
+                     coalesce(character.temp_hp, 0) as temp_hp,
+                     case
+                       when combatant.kind = 'pc' then 'unknown'
+                       when combatant.hp_max <= 0 then 'unknown'
+                       when combatant.hp_current <= 0 then 'down'
+                       when combatant.hp_current >= combatant.hp_max then 'unhurt'
+                       when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
+                       else 'hurt'
+                     end as hp_band,
+                     ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
+                     case when ${tokenShown(sql)}
+                       and combatant.board_column is not null and combatant.board_row is not null
+                       then jsonb_build_object(
+                         'column', combatant.board_column, 'row', combatant.board_row)
+                     end as token
+              from combatant
+              join encounter_run on encounter_run.id = combatant.encounter_run_id
+              left join character on character.id = combatant.character_id
+              left join campaign_character seated
+                on seated.campaign_id = ${campaignId}
+               and seated.character_id = combatant.character_id
+               and seated.left_at is null
+               and (seated.visibility = 'shared' or seated.account_id = ${actor.accountId})
+              left join campaign_character own_seated
+                on own_seated.campaign_id = ${campaignId}
+               and own_seated.character_id = combatant.character_id
+               and own_seated.account_id = ${actor.accountId}
+               and own_seated.left_at is null
+              where combatant.encounter_run_id = ${runId}
+                and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+                and (combatant.kind = 'npc' or seated.id is not null)
+                -- A conversation, a skill challenge or a hazard has no
+                -- initiative order to show: only the asker's own rows are
+                -- read, for their seats, and nobody else's at all.
+                and (${mode} = 'combat' or own_seated.id is not null)
+              ${initiativeOrder(sql)}
+            `,
+          ),
+      });
 
       const activeSeats = (campaignId: CampaignId, actor: Actor) =>
         sql<ActiveSeatRow>`
@@ -165,51 +278,6 @@ export class PlayerTable extends Context.Service<
             and ${rowReadable(sql, "session", campaignId, actor)}
           limit 1
         `.pipe(Effect.orDie);
-
-      const toOrder = (row: LiveCombatantRow): PlayerLiveCombatant | undefined => {
-        if (row.kind === "pc" && row.character_id === null) return undefined;
-        if (row.kind === "pc" && row.campaign_character_id === null) return undefined;
-        if (row.kind === "pc" && row.own_campaign_character_id !== null) {
-          return {
-            kind: "you",
-            combatantId: row.id,
-            characterId: row.character_id!,
-            campaignCharacterId: row.own_campaign_character_id,
-            displayName: row.display_name,
-            subtitle: row.subtitle,
-            initiative: row.initiative,
-            initiativeBonus: row.initiative_bonus,
-            initiativeSetBy: row.initiative_set_by,
-            hpCurrent: row.hp_current,
-            hpMax: row.hp_max,
-            tempHp: row.temp_hp,
-            conditions: row.conditions,
-            portrait: portraitImages(row.portrait_id, sign),
-          };
-        }
-        if (row.kind === "pc") {
-          return {
-            kind: "ally",
-            combatantId: row.id,
-            characterId: row.character_id!,
-            displayName: row.display_name,
-            subtitle: row.subtitle,
-            playerName: row.player_name,
-            initiative: row.initiative,
-            conditions: row.conditions,
-            portrait: portraitImages(row.portrait_id, sign),
-          };
-        }
-        return {
-          kind: "npc",
-          combatantId: row.id,
-          displayName: row.display_name,
-          subtitle: row.subtitle,
-          initiative: row.initiative,
-          hpBand: row.hp_band,
-          conditions: row.conditions,
-        };
-      };
 
       return {
         read: (campaignId) =>
@@ -235,18 +303,8 @@ export class PlayerTable extends Context.Service<
               const session = sessions[0];
               if (session === undefined) return null;
 
-              // `runColumns`, so the fight names no encounter this player may
-              // not read — its id is how the screen finds the read-aloud.
-              const runs = yield* sql<EncounterRunRow>`
-                select ${runColumns(sql, campaignId, actor)}
-                from encounter_run
-                where encounter_run.ended_at is null
-                  and ${nestedRowReadable(sql, RUNS, session.id, campaignId, actor)}
-                order by encounter_run.started_at desc, encounter_run.id desc
-                limit 1
-              `;
-              const run = runs[0];
-              if (run === undefined) {
+              const found = yield* liveRun({ campaignId, sessionId: session.id });
+              if (Option.isNone(found)) {
                 return new PlayerLiveTable({
                   campaignId,
                   sessionId: session.id,
@@ -254,6 +312,7 @@ export class PlayerTable extends Context.Service<
                   fight: null,
                 });
               }
+              const run = found.value;
 
               // The picture is joined through the board's pointer only to a
               // map in this campaign, so the pointer grants nothing outside it.
@@ -272,71 +331,15 @@ export class PlayerTable extends Context.Service<
               `;
               const board = boards[0];
 
-              const rows = yield* sql<LiveCombatantRow>`
-                select combatant.id,
-                       combatant.character_id,
-                       seated.id as campaign_character_id,
-                       own_seated.id as own_campaign_character_id,
-                       combatant.display_name,
-                       combatant.subtitle,
-                       combatant.player_name,
-                       combatant.initiative,
-                       case when own_seated.id is not null
-                         then combatant.initiative_bonus end as initiative_bonus,
-                       case when own_seated.id is not null
-                         then combatant.initiative_set_by end as initiative_set_by,
-                       combatant.kind,
-                       combatant.conditions,
-                       combatant.hp_current,
-                       combatant.hp_max,
-                       coalesce(character.temp_hp, 0) as temp_hp,
-                       case
-                         when combatant.kind = 'pc' then 'unknown'
-                         when combatant.hp_max <= 0 then 'unknown'
-                         when combatant.hp_current <= 0 then 'down'
-                         when combatant.hp_current >= combatant.hp_max then 'unhurt'
-                         when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
-                         else 'hurt'
-                       end as hp_band,
-                       ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
-                       case when ${tokenShown(sql)} then combatant.board_column end as token_column,
-                       case when ${tokenShown(sql)} then combatant.board_row end as token_row
-                from combatant
-                join encounter_run on encounter_run.id = combatant.encounter_run_id
-                left join character on character.id = combatant.character_id
-                left join campaign_character seated
-                  on seated.campaign_id = ${campaignId}
-                 and seated.character_id = combatant.character_id
-                 and seated.left_at is null
-                 and (seated.visibility = 'shared' or seated.account_id = ${actor.accountId})
-                left join campaign_character own_seated
-                  on own_seated.campaign_id = ${campaignId}
-                 and own_seated.character_id = combatant.character_id
-                 and own_seated.account_id = ${actor.accountId}
-                 and own_seated.left_at is null
-                where combatant.encounter_run_id = ${run.id}
-                  and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                  and (combatant.kind = 'npc' or seated.id is not null)
-                  -- A conversation, a skill challenge or a hazard has no
-                  -- initiative order to show: only the asker's own rows are
-                  -- read, for their seats, and nobody else's at all.
-                  and (${run.mode} = 'combat' or own_seated.id is not null)
-                ${initiativeOrder(sql)}
-              `;
-              const tokens: Array<PlayerLiveToken> = [];
-              const present = rows.flatMap((row) => {
-                const combatant = toOrder(row);
-                if (combatant === undefined) return [];
-                if (row.token_column !== null && row.token_row !== null) {
-                  tokens.push({
-                    combatantId: row.id,
-                    position: { column: row.token_column, row: row.token_row },
-                  });
-                }
-                return [combatant];
-              });
+              const rows = yield* liveOrder({ campaignId, runId: run.id, mode: run.mode });
+              const tokens: ReadonlyArray<PlayerLiveToken> = rows.flatMap((row) =>
+                row.token === null ? [] : [{ combatantId: row.combatantId, position: row.token }],
+              );
+              const present: ReadonlyArray<PlayerLiveCombatant> = rows.map(
+                ({ token: _token, ...combatant }) => combatant,
+              );
               const order = run.mode === "combat" ? present : [];
-              const upNextRow = order.find((row) => row.combatantId === run.active_combatant_id);
+              const upNextRow = order.find((row) => row.combatantId === run.activeCombatantId);
               const upNext: PlayerLiveTurn | null =
                 upNextRow === undefined
                   ? null
@@ -359,7 +362,7 @@ export class PlayerTable extends Context.Service<
                 sessionNumber: session.number,
                 fight: {
                   id: run.id,
-                  encounterId: run.encounter_id,
+                  encounterId: run.encounterId,
                   mode: run.mode,
                   round: run.round,
                   phase: run.phase,

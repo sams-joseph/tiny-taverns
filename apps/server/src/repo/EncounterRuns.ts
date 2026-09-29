@@ -1,7 +1,7 @@
 import {
-  type Actor,
+  Actor,
   type AssistantTurnId,
-  type CampaignId,
+  CampaignId,
   type CharacterId,
   type CharacterSheet,
   type CombatantId,
@@ -10,7 +10,7 @@ import {
   type CreatureId,
   EncounterRun,
   type EncounterRunEndedReason,
-  type EncounterRunId,
+  EncounterRunId,
   type EncounterRunPhase,
   type EncounterRunResume,
   type EncounterRunStart,
@@ -26,17 +26,24 @@ import {
   NotFound,
   type Origin,
   type RerollInitiative,
-  type SessionId,
+  SessionId,
   type StatBlock,
   statBlockInitiativeBonus,
   type Visibility,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  orNotFound,
+  setClause,
+  timestampColumns,
+} from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   campaignWritableById,
@@ -53,43 +60,24 @@ import {
   runEncounterReadable,
 } from "./visibility.js";
 
-export interface EncounterRunRow extends ProvenanceColumns {
-  readonly id: EncounterRunId;
-  readonly session_id: SessionId;
-  readonly encounter_id: EncounterId | null;
-  readonly encounter_name: string;
-  readonly mode: EncounterKind;
-  readonly round: number;
-  readonly phase: EncounterRunPhase;
-  readonly active_combatant_id: CombatantId | null;
-  readonly started_at: Date;
-  readonly ended_at: Date | null;
-  readonly ended_reason: EncounterRunEndedReason;
-  readonly allow_hob_direct_writes: boolean;
-  readonly map_shown: boolean;
-  readonly hostile_tokens_hidden: boolean;
-  readonly continued_from: EncounterRunId | null;
-}
+/**
+ * An `encounter_run` row as the wire reads it, decoded off `encounter_run.*` —
+ * or off {@link runColumns}, for a reader who may not be told the encounter —
+ * by `SqlSchema`. `repo/Recap.ts` and `repo/PlayerTable.ts` read runs through it
+ * too.
+ */
+export const EncounterRunRow = classFromColumns(EncounterRun, {
+  ...EncounterRun.fields,
+  ...timestampColumns,
+  startedAt: Schema.DateTimeUtcFromDate,
+  endedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+});
 
-export const toEncounterRun = (row: EncounterRunRow): EncounterRun =>
-  new EncounterRun({
-    id: row.id,
-    sessionId: row.session_id,
-    encounterId: row.encounter_id,
-    encounterName: row.encounter_name,
-    mode: row.mode,
-    round: row.round,
-    phase: row.phase,
-    activeCombatantId: row.active_combatant_id,
-    startedAt: DateTime.fromDateUnsafe(row.started_at),
-    endedAt: row.ended_at === null ? null : DateTime.fromDateUnsafe(row.ended_at),
-    endedReason: row.ended_reason,
-    allowHobDirectWrites: row.allow_hob_direct_writes,
-    mapShown: row.map_shown,
-    hostileTokensHidden: row.hostile_tokens_hidden,
-    continuedFrom: row.continued_from,
-    ...provenanceOf(row),
-  });
+/** What a read of one night's runs is asked with: the proof's campaign and actor, and the night. */
+const onNight = { campaignId: CampaignId, actor: Actor, sessionId: SessionId } as const;
+
+/** The written columns of an insert or an update, as the method builds them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * The correlated run's name to a reader for whom `named` says whether its
@@ -404,6 +392,102 @@ export class EncounterRuns extends Context.Service<
       const sql = yield* SqlClient.SqlClient;
       const live = yield* LiveEvents;
 
+      /** The run named by the path, through the writer's nested predicate. */
+      const writable = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...onNight, id: EncounterRunId })),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, sessionId, id }) => sql`
+          select encounter_run.* from encounter_run
+          where encounter_run.id = ${id}
+            and ${nestedRowWritable(sql, RUNS, sessionId, campaignId, actor)}
+        `,
+      });
+      /** The night's runs through the reader's nested predicate, newest first. */
+      const readable = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(onNight)),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, sessionId }) => sql`
+          select encounter_run.* from encounter_run
+          where ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
+          order by encounter_run.started_at desc
+        `,
+      });
+      const readableOne = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...onNight, id: EncounterRunId })),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, sessionId, id }) => sql`
+          select encounter_run.* from encounter_run
+          where encounter_run.id = ${id}
+            and ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
+        `,
+      });
+      /**
+       * A run in any of this campaign's nights, through the containment
+       * predicate: the fight `resume` picks up.
+       */
+      const contained = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, actor: Actor, id: EncounterRunId }),
+        ),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, id }) => sql`
+          select encounter_run.* from encounter_run
+          where encounter_run.id = ${id}
+            and ${containedRowReadable(sql, RUN, campaignId, actor)}
+        `,
+      });
+      /** A new run. What reaches its night was checked by the method. */
+      const insert = SqlSchema.findOne({
+        Request: Schema.toType(Columns),
+        Result: EncounterRunRow,
+        execute: (columns) => sql`insert into encounter_run ${sql.insert(columns)} returning *`,
+      });
+      /** The DM's PATCH, through the writer's predicate on the night in the path. */
+      const edit = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...onNight, id: EncounterRunId, columns: Columns })),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, sessionId, id, columns }) => sql`
+          update encounter_run set ${setClause(sql, columns)}
+          where encounter_run.id = ${id}
+            and ${containedChildWritable(sql, RUN, sessionId, campaignId, actor)}
+          returning *
+        `,
+      });
+      /** The run as a method has decided it now stands. Beneath that method's gate. */
+      const set = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: EncounterRunId, columns: Columns })),
+        Result: EncounterRunRow,
+        execute: ({ id, columns }) => sql`
+          update encounter_run set ${setClause(sql, columns)}
+          where encounter_run.id = ${id}
+          returning *
+        `,
+      });
+      // The row a gated method just read or wrote is there to set.
+      const setRun = (id: EncounterRunId, columns: Record<string, unknown>) =>
+        set({ id, columns }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+      /** A conversation turned fight, unless a second press got there first. */
+      const escalateRun = SqlSchema.findOneOption({
+        Request: Schema.toType(EncounterRunId),
+        Result: EncounterRunRow,
+        execute: (id) => sql`
+          update encounter_run
+          set mode = 'combat', phase = 'initiative', round = 1,
+              active_combatant_id = null, updated_at = now()
+          where encounter_run.id = ${id} and encounter_run.mode = 'social'
+          returning *
+        `,
+      });
+      const endRun = SqlSchema.findOne({
+        Request: Schema.toType(EncounterRunId),
+        Result: EncounterRunRow,
+        execute: (id) => sql`
+          update encounter_run set ended_at = now(), updated_at = now()
+          where encounter_run.id = ${id} and encounter_run.ended_at is null
+          returning *
+        `,
+      });
+
       /**
        * The run named by the path, for a writer.
        *
@@ -417,19 +501,7 @@ export class EncounterRuns extends Context.Service<
         sessionId: SessionId,
         id: EncounterRunId,
         actor: Actor,
-      ): Effect.Effect<EncounterRun, NotFound, never> =>
-        sql<EncounterRunRow>`
-          select encounter_run.* from encounter_run
-          where encounter_run.id = ${id}
-            and ${nestedRowWritable(sql, RUNS, sessionId, campaignId, actor)}
-        `.pipe(
-          Effect.orDie,
-          Effect.flatMap((rows) =>
-            rows.length === 0
-              ? new NotFound({ resource: "encounter_run", id })
-              : Effect.succeed(toEncounterRun(rows[0]!)),
-          ),
-        );
+      ) => writable({ campaignId, actor, sessionId, id }).pipe(orNotFound("encounter_run", id));
 
       /**
        * The turn marker's next resting place.
@@ -480,12 +552,7 @@ export class EncounterRuns extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
-              const rows = yield* sql<EncounterRunRow>`
-                select encounter_run.* from encounter_run
-                where ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
-                order by encounter_run.started_at desc
-              `;
-              return rows.map(toEncounterRun);
+              return yield* readable({ campaignId, actor, sessionId });
             }),
           ),
 
@@ -496,13 +563,9 @@ export class EncounterRuns extends Context.Service<
               // this run, so it is checked rather than trusted — naming another
               // table's session id must not reach this run.
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
-              const rows = yield* sql<EncounterRunRow>`
-                select encounter_run.* from encounter_run
-                where encounter_run.id = ${id}
-                  and ${nestedRowReadable(sql, RUNS, sessionId, campaignId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "encounter_run", id });
-              return toEncounterRun(rows[0]!);
+              return yield* readableOne({ campaignId, actor, sessionId, id }).pipe(
+                orNotFound("encounter_run", id),
+              );
             }),
           ),
 
@@ -557,20 +620,17 @@ export class EncounterRuns extends Context.Service<
                     const phase: EncounterRunPhase =
                       encounter.kind === "combat" ? "initiative" : "turns";
 
-                    const runs = yield* sql<EncounterRunRow>`
-                      insert into encounter_run ${sql.insert(
-                        defined({
-                          session_id: sessionId,
-                          encounter_id: encounter.id,
-                          encounter_name: encounter.name,
-                          mode: encounter.kind,
-                          phase,
-                          visibility: payload.visibility,
-                        }),
-                      )}
-                      returning *
-                    `;
-                    const run = runs[0]!;
+                    // An insert answers with its row; not getting one is a defect.
+                    const run = yield* insert(
+                      defined({
+                        session_id: sessionId,
+                        encounter_id: encounter.id,
+                        encounter_name: encounter.name,
+                        mode: encounter.kind,
+                        phase,
+                        visibility: payload.visibility,
+                      }),
+                    ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
                     // The fight's board: a copy of the encounter's grid, so a
                     // later edit to the encounter's map is the next fight's and
@@ -732,13 +792,7 @@ export class EncounterRuns extends Context.Service<
                     // opens rolling initiative and `begin` puts the marker on
                     // whoever is first; a conversation, a challenge or a hazard
                     // takes no turns until one turns into a fight (`escalate`).
-                    const activeCombatantId = null;
-                    const started = yield* sql<EncounterRunRow>`
-                      update encounter_run
-                      set active_combatant_id = ${activeCombatantId}, updated_at = now()
-                      where encounter_run.id = ${run.id}
-                      returning *
-                    `;
+                    const started = yield* setRun(run.id, { active_combatant_id: null });
                     yield* sql`
                       update session set active_encounter_run_id = ${run.id}, updated_at = now()
                       where session.id = ${sessionId}
@@ -756,7 +810,7 @@ export class EncounterRuns extends Context.Service<
                       visibility: run.visibility,
                     });
 
-                    return toEncounterRun(started[0]!);
+                    return started;
                   }),
                 )
                 .pipe(Effect.tap(() => live.touched(sessionId))),
@@ -802,45 +856,34 @@ export class EncounterRuns extends Context.Service<
                   Effect.gen(function* () {
                     yield* ensureNestedParentWritable(sql, RUNS, sessionId, campaignId, actor);
 
-                    const previous = yield* sql<EncounterRunRow>`
-                      select encounter_run.* from encounter_run
-                      where encounter_run.id = ${payload.continuedFrom}
-                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
-                    `;
-                    if (previous.length === 0) {
-                      return yield* new NotFound({
-                        resource: "encounter_run",
-                        id: payload.continuedFrom,
-                      });
-                    }
-                    const from = previous[0]!;
-                    if (from.ended_reason !== "carried") {
+                    const from = yield* contained({
+                      campaignId,
+                      actor,
+                      id: payload.continuedFrom,
+                    }).pipe(orNotFound("encounter_run", payload.continuedFrom));
+                    if (from.endedReason !== "carried") {
                       return yield* new Conflict({
                         message:
-                          from.ended_at === null
+                          from.endedAt === null
                             ? "that fight is still on the table"
                             : "that fight was ended rather than carried, and an encounter is played once",
                       });
                     }
 
-                    const runs = yield* sql<EncounterRunRow>`
-                      insert into encounter_run ${sql.insert({
-                        session_id: sessionId,
-                        encounter_id: from.encounter_id,
-                        encounter_name: from.encounter_name,
-                        mode: from.mode,
-                        round: from.round,
-                        phase: from.phase,
-                        visibility: from.visibility,
-                        map_shown: from.map_shown,
-                        hostile_tokens_hidden: from.hostile_tokens_hidden,
-                        origin: from.origin,
-                        assistant_turn_id: from.assistant_turn_id,
-                        continued_from: from.id,
-                      })}
-                      returning *
-                    `;
-                    const run = runs[0]!;
+                    const run = yield* insert({
+                      session_id: sessionId,
+                      encounter_id: from.encounterId,
+                      encounter_name: from.encounterName,
+                      mode: from.mode,
+                      round: from.round,
+                      phase: from.phase,
+                      visibility: from.visibility,
+                      map_shown: from.mapShown,
+                      hostile_tokens_hidden: from.hostileTokensHidden,
+                      origin: from.origin,
+                      assistant_turn_id: from.assistantTurnId,
+                      continued_from: from.id,
+                    }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
                     // The same fight on the same board: the predecessor's own
                     // copy, not the encounter's map as it stands tonight. The
@@ -953,15 +996,10 @@ export class EncounterRuns extends Context.Service<
                     // which cannot happen through the copy above, but the map
                     // lookup is the honest way to say "the same combatant".
                     const active =
-                      from.active_combatant_id === null
+                      from.activeCombatantId === null
                         ? null
-                        : (idFor.get(from.active_combatant_id) ?? null);
-                    const resumed = yield* sql<EncounterRunRow>`
-                      update encounter_run
-                      set active_combatant_id = ${active}, updated_at = now()
-                      where encounter_run.id = ${run.id}
-                      returning *
-                    `;
+                        : (idFor.get(from.activeCombatantId) ?? null);
+                    const resumed = yield* setRun(run.id, { active_combatant_id: active });
                     yield* sql`
                       update session set active_encounter_run_id = ${run.id}, updated_at = now()
                       where session.id = ${sessionId}
@@ -973,14 +1011,14 @@ export class EncounterRuns extends Context.Service<
                       encounterRunId: run.id,
                       payload: {
                         continuedFrom: from.id,
-                        encounterName: from.encounter_name,
+                        encounterName: from.encounterName,
                         round: from.round,
                         combatants: copies.length,
                       },
                       visibility: run.visibility,
                     });
 
-                    return toEncounterRun(resumed[0]!);
+                    return resumed;
                   }),
                 )
                 .pipe(Effect.tap(() => live.touched(sessionId))),
@@ -1013,16 +1051,9 @@ export class EncounterRuns extends Context.Service<
                     map_shown: patch.mapShown,
                     hostile_tokens_hidden: patch.hostileTokensHidden,
                   });
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run set ${setClause(sql, columns)}
-                    where encounter_run.id = ${id}
-                      and ${containedChildWritable(sql, RUN, sessionId, campaignId, actor)}
-                    returning *
-                  `;
-                  if (rows.length === 0) {
-                    return yield* new NotFound({ resource: "encounter_run", id });
-                  }
-                  const run = toEncounterRun(rows[0]!);
+                  const run = yield* edit({ campaignId, actor, sessionId, id, columns }).pipe(
+                    orNotFound("encounter_run", id),
+                  );
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",
@@ -1087,15 +1118,7 @@ export class EncounterRuns extends Context.Service<
                   if (activeCombatantId === null) return current;
 
                   const round = current.round + (wrapped ? 1 : 0);
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run
-                    set active_combatant_id = ${activeCombatantId},
-                        round = ${round},
-                        updated_at = now()
-                    where encounter_run.id = ${id}
-                    returning *
-                  `;
-                  const run = toEncounterRun(rows[0]!);
+                  const run = yield* setRun(id, { active_combatant_id: activeCombatantId, round });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "turn-advanced",
@@ -1144,17 +1167,12 @@ export class EncounterRuns extends Context.Service<
                       message: "only a conversation turns into a fight",
                     });
                   }
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run
-                    set mode = 'combat', phase = 'initiative', round = 1,
-                        active_combatant_id = null, updated_at = now()
-                    where encounter_run.id = ${id} and encounter_run.mode = 'social'
-                    returning *
-                  `;
+                  const escalated = yield* escalateRun(id);
                   // A second press raced past the check above and found the
                   // mode already moved: the answer is the fight it became.
-                  if (rows.length === 0) return yield* readRun(campaignId, sessionId, id, actor);
-                  const run = toEncounterRun(rows[0]!);
+                  if (Option.isNone(escalated))
+                    return yield* readRun(campaignId, sessionId, id, actor);
+                  const run = escalated.value;
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-escalated",
@@ -1210,14 +1228,10 @@ export class EncounterRuns extends Context.Service<
                   }
 
                   const { activeCombatantId } = yield* advance(campaignId, id, actor, null);
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run
-                    set phase = 'turns', active_combatant_id = ${activeCombatantId},
-                        updated_at = now()
-                    where encounter_run.id = ${id}
-                    returning *
-                  `;
-                  const run = toEncounterRun(rows[0]!);
+                  const run = yield* setRun(id, {
+                    phase: "turns",
+                    active_combatant_id: activeCombatantId,
+                  });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",
@@ -1262,13 +1276,7 @@ export class EncounterRuns extends Context.Service<
                   if (current.endedAt !== null || current.phase === "initiative") return current;
                   if (yield* requestAlreadyApplied(sql, id, payload.requestId)) return current;
 
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run
-                    set phase = 'initiative', active_combatant_id = null, updated_at = now()
-                    where encounter_run.id = ${id}
-                    returning *
-                  `;
-                  const run = toEncounterRun(rows[0]!);
+                  const run = yield* setRun(id, { phase: "initiative", active_combatant_id: null });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",
@@ -1309,11 +1317,11 @@ export class EncounterRuns extends Context.Service<
                   const current = yield* readRun(campaignId, sessionId, id, actor);
                   if (current.endedAt !== null) return current;
 
-                  const rows = yield* sql<EncounterRunRow>`
-                    update encounter_run set ended_at = now(), updated_at = now()
-                    where encounter_run.id = ${id} and encounter_run.ended_at is null
-                    returning *
-                  `;
+                  // Read beneath the gate just now and not yet ended, so the row
+                  // is there to end; not getting it back is a defect.
+                  const ended = yield* endRun(id).pipe(
+                    Effect.catchTag("NoSuchElementError", Effect.die),
+                  );
                   // Clearing the pointer is the same statement's job as setting
                   // `ended_at`, in the same transaction — that is what stops
                   // the session naming a fight that is over. The `and` on the
@@ -1331,7 +1339,7 @@ export class EncounterRuns extends Context.Service<
                     payload: { round: current.round },
                     visibility: current.visibility,
                   });
-                  return toEncounterRun(rows[0]!);
+                  return ended;
                 }),
               )
               .pipe(Effect.tap(() => live.touched(sessionId))),

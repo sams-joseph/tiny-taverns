@@ -1,35 +1,40 @@
 import {
-  type Actor,
-  type CampaignId,
+  Actor,
+  CampaignId,
   type CharacterId,
   Combatant,
   type CombatantCreate,
   type CombatantDamage,
-  type CombatantId,
-  type CombatantKind,
+  CombatantId,
   type CombatantMove,
-  type CombatantPosition,
+  CombatantPosition,
   type CombatantUpdate,
   Conflict,
-  type CreatureId,
-  type EncounterRunId,
+  EncounterRunId,
   type InitiativeSet,
-  type InitiativeSetBy,
   NotFound,
   type SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
   type PortraitSigner,
-  portraitImages,
+  portraitFromId,
   portraitSigner,
   seatedPortraitColumn,
 } from "./Characters.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  setClause,
+  timestampColumns,
+} from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { type CharacterVitals, clampedCombatantHp, writeThroughToCharacter } from "./vitals.js";
 import {
@@ -41,74 +46,42 @@ import {
   ensureNestedRowWritable,
 } from "./visibility.js";
 
-export interface CombatantRow extends ProvenanceColumns {
-  readonly id: CombatantId;
-  readonly encounter_run_id: EncounterRunId;
-  readonly character_id: CharacterId | null;
-  readonly creature_id: CreatureId | null;
-  readonly display_name: string;
-  readonly subtitle: string | null;
-  readonly player_name: string | null;
-  readonly initiative: number | null;
-  readonly initiative_bonus: number | null;
-  readonly initiative_set_by: InitiativeSetBy | null;
-  readonly hp_current: number;
-  readonly hp_max: number;
-  readonly ac: number | null;
-  readonly kind: CombatantKind;
-  /** `text[]`; the pg driver hands these back as a real JS array. */
-  readonly conditions: ReadonlyArray<string>;
-  /** Null together: the token is not on the board. See `0064_combatant_positions.ts`. */
-  readonly board_column: number | null;
-  readonly board_row: number | null;
-  /** From {@link combatantColumns}; `null` unless the character is seated where the reader sees it. */
-  readonly portrait_id: string | null;
-}
-
 /**
- * The combatant's own columns and its character's portrait id, gated by the
- * seat (`seatedPortraitColumn`). **Every read that becomes a `Combatant` names
- * this** — `toCombatant` dies on a row without `portrait_id`, as `toCharacter`
- * does, so a path that forgot fails a test rather than dropping the picture.
+ * The combatant's own columns, its square as one value (`position`, null while
+ * the token is off the board — `0064_combatant_positions.ts`), and its
+ * character's portrait id, gated by the seat (`seatedPortraitColumn`). **Every
+ * read that becomes a `Combatant` names this** — {@link combatantRow} requires
+ * `position` and `portrait_id`, as `characterRow` requires `portraitColumns`,
+ * so a path that forgot fails a test rather than dropping the picture.
  */
 export const combatantColumns = (
   sql: SqlClient.SqlClient,
   campaignId: CampaignId,
   actor: Actor,
 ): Statement.Fragment => sql`
-  combatant.*, ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
+  combatant.*,
+  case when combatant.board_column is not null and combatant.board_row is not null
+    then jsonb_build_object('column', combatant.board_column, 'row', combatant.board_row)
+  end as position,
+  ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
 `;
 
-const positionOf = (row: CombatantRow): CombatantPosition | null =>
-  row.board_column === null || row.board_row === null
-    ? null
-    : { column: row.board_column, row: row.board_row };
+const combatantFields = (sign: PortraitSigner | undefined) =>
+  ({ ...Combatant.fields, ...timestampColumns, portrait: portraitFromId(sign) }) as const;
 
-export const toCombatant = (row: CombatantRow, sign: PortraitSigner | undefined): Combatant => {
-  if (row.portrait_id === undefined) {
-    throw new Error("a combatant read did not select combatantColumns");
-  }
-  return new Combatant({
-    id: row.id,
-    encounterRunId: row.encounter_run_id,
-    characterId: row.character_id,
-    creatureId: row.creature_id,
-    displayName: row.display_name,
-    subtitle: row.subtitle,
-    playerName: row.player_name,
-    initiative: row.initiative,
-    initiativeBonus: row.initiative_bonus,
-    initiativeSetBy: row.initiative_set_by,
-    hpCurrent: row.hp_current,
-    hpMax: row.hp_max,
-    ac: row.ac,
-    kind: row.kind,
-    conditions: row.conditions,
-    position: positionOf(row),
-    portrait: portraitImages(row.portrait_id, sign),
-    ...provenanceOf(row),
-  });
-};
+/**
+ * A `combatant` row as the wire reads it, decoded off {@link combatantColumns}
+ * by `SqlSchema`, its portrait signed with the reading repository's signer.
+ * `repo/Recap.ts` reads a night's fights through it too.
+ */
+export const combatantRow = (sign: PortraitSigner | undefined) =>
+  classFromColumns(Combatant, combatantFields(sign), { portrait: "portrait_id" });
+
+/** What every read of one fight's list is asked with: the proof's campaign and actor, and the run. */
+const inFight = { campaignId: CampaignId, actor: Actor, runId: EncounterRunId } as const;
+
+/** The written columns of an insert or a PATCH, as the method builds them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * The initiative list.
@@ -182,6 +155,95 @@ export class Combatants extends Context.Service<
       // A combatant row is not a character read, but its portrait is one: the
       // seat gate in `combatantColumns` is what lets the id reach the signer.
       const sign = yield* portraitSigner;
+      const CombatantRow = combatantRow(sign);
+      /**
+       * A moved combatant, and whether its token is on a player's board — what
+       * the move's log line is shared under.
+       */
+      const MovedRow = fromColumns(
+        Schema.Struct({ ...combatantFields(sign), tokenShown: Schema.Boolean }),
+        { portrait: "portrait_id" },
+      );
+
+      /** One combatant of this fight, through the writer's predicate. */
+      const one = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...inFight, id: CombatantId })),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runId, id }) => sql`
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
+          where combatant.id = ${id}
+            and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+        `,
+      });
+      /** The whole list as the DM has it, in order. */
+      const order = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(inFight)),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runId }) => sql`
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
+          where ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+          ${initiativeOrder(sql)}
+        `,
+      });
+      /** The list through the reader's predicate, in order. */
+      const readable = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct(inFight)),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runId }) => sql`
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
+          where ${containedChildReadable(sql, COMBATANT, runId, campaignId, actor)}
+          ${initiativeOrder(sql)}
+        `,
+      });
+      /** A new combatant. What reaches its fight was checked by the method. */
+      const insert = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...inFight, columns: Columns })),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, columns }) => sql`
+          insert into combatant ${sql.insert(columns)}
+          returning ${combatantColumns(sql, campaignId, actor)}
+        `,
+      });
+      const edit = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...inFight, id: CombatantId, columns: Columns })),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runId, id, columns }) => sql`
+          update combatant set ${setClause(sql, columns)}
+          where combatant.id = ${id}
+            and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+          returning ${combatantColumns(sql, campaignId, actor)}
+        `,
+      });
+      /** Hit points moved by a delta, clamped in the statement that moves them. */
+      const hit = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...inFight, id: CombatantId, amount: Schema.Int })),
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runId, id, amount }) => sql`
+          update combatant
+          set hp_current = ${clampedCombatantHp(sql, amount)},
+              updated_at = now()
+          where combatant.id = ${id}
+            and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+          returning ${combatantColumns(sql, campaignId, actor)}
+        `,
+      });
+      const place = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...inFight, id: CombatantId, to: Schema.NullOr(CombatantPosition) }),
+        ),
+        Result: MovedRow,
+        execute: ({ campaignId, actor, runId, id, to }) => sql`
+          update combatant
+          set board_column = ${to?.column ?? null},
+              board_row = ${to?.row ?? null},
+              updated_at = now()
+          where combatant.id = ${id}
+            and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+          returning ${combatantColumns(sql, campaignId, actor)},
+            (select ${tokenShown(sql)} from encounter_run
+              where encounter_run.id = combatant.encounter_run_id) as token_shown
+        `,
+      });
 
       /**
        * Both claims in the path, checked together rather than one at a time.
@@ -238,30 +300,10 @@ export class Combatants extends Context.Service<
         runId: EncounterRunId,
         id: CombatantId,
         actor: Actor,
-      ): Effect.Effect<Combatant, NotFound, never> =>
-        sql<CombatantRow>`
-          select ${combatantColumns(sql, campaignId, actor)} from combatant
-          where combatant.id = ${id}
-            and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-        `.pipe(
-          Effect.orDie,
-          Effect.flatMap((rows) =>
-            rows.length === 0
-              ? new NotFound({ resource: "combatant", id })
-              : Effect.succeed(toCombatant(rows[0]!, sign)),
-          ),
-        );
+      ) => one({ campaignId, actor, runId, id }).pipe(orNotFound("combatant", id));
 
-      /** The whole list as the DM has it, in order. */
       const readOrder = (campaignId: CampaignId, runId: EncounterRunId, actor: Actor) =>
-        sql<CombatantRow>`
-          select ${combatantColumns(sql, campaignId, actor)} from combatant
-          where ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-          ${initiativeOrder(sql)}
-        `.pipe(
-          Effect.orDie,
-          Effect.map((rows) => rows.map((row) => toCombatant(row, sign))),
-        );
+        order({ campaignId, actor, runId });
 
       return {
         list: ({ actor, campaign: campaignId }, sessionId, runId) =>
@@ -269,12 +311,7 @@ export class Combatants extends Context.Service<
             Effect.gen(function* () {
               yield* ensureNestedParentReadable(sql, RUNS, sessionId, campaignId, actor);
               yield* ensureNestedRowReadable(sql, RUNS, runId, sessionId, campaignId, actor);
-              const rows = yield* sql<CombatantRow>`
-                select ${combatantColumns(sql, campaignId, actor)} from combatant
-                where ${containedChildReadable(sql, COMBATANT, runId, campaignId, actor)}
-                ${initiativeOrder(sql)}
-              `;
-              return rows.map((row) => toCombatant(row, sign));
+              return yield* readable({ campaignId, actor, runId });
             }),
           ),
 
@@ -362,27 +399,27 @@ export class Combatants extends Context.Service<
                 Effect.gen(function* () {
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   const hpMax = payload.hpMax ?? 0;
-                  const rows = yield* sql<CombatantRow>`
-                    insert into combatant ${sql.insert(
-                      defined({
-                        encounter_run_id: runId,
-                        display_name: payload.displayName,
-                        subtitle: payload.subtitle,
-                        player_name: payload.playerName,
-                        kind: payload.kind,
-                        initiative: payload.initiative,
-                        initiative_set_by: payload.initiative === undefined ? undefined : "dm",
-                        initiative_bonus: payload.initiativeBonus,
-                        hp_max: payload.hpMax,
-                        hp_current: payload.hpCurrent ?? hpMax,
-                        ac: payload.ac,
-                        conditions: payload.conditions,
-                        visibility: payload.visibility,
-                      }),
-                    )}
-                    returning ${combatantColumns(sql, campaignId, actor)}
-                  `;
-                  const combatant = toCombatant(rows[0]!, sign);
+                  // An insert answers with its row; not getting one is a defect.
+                  const combatant = yield* insert({
+                    campaignId,
+                    actor,
+                    runId,
+                    columns: defined({
+                      encounter_run_id: runId,
+                      display_name: payload.displayName,
+                      subtitle: payload.subtitle,
+                      player_name: payload.playerName,
+                      kind: payload.kind,
+                      initiative: payload.initiative,
+                      initiative_set_by: payload.initiative === undefined ? undefined : "dm",
+                      initiative_bonus: payload.initiativeBonus,
+                      hp_max: payload.hpMax,
+                      hp_current: payload.hpCurrent ?? hpMax,
+                      ac: payload.ac,
+                      conditions: payload.conditions,
+                      visibility: payload.visibility,
+                    }),
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-added",
@@ -417,14 +454,9 @@ export class Combatants extends Context.Service<
                     conditions: patch.conditions,
                     visibility: patch.visibility,
                   });
-                  const rows = yield* sql<CombatantRow>`
-                    update combatant set ${setClause(sql, columns)}
-                    where combatant.id = ${id}
-                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning ${combatantColumns(sql, campaignId, actor)}
-                  `;
-                  if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
-                  const combatant = toCombatant(rows[0]!, sign);
+                  const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
+                    orNotFound("combatant", id),
+                  );
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-updated",
@@ -478,16 +510,13 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
-                  const rows = yield* sql<CombatantRow>`
-                    update combatant
-                    set hp_current = ${clampedCombatantHp(sql, payload.amount)},
-                        updated_at = now()
-                    where combatant.id = ${id}
-                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning ${combatantColumns(sql, campaignId, actor)}
-                  `;
-                  if (rows.length === 0) return yield* new NotFound({ resource: "combatant", id });
-                  const combatant = toCombatant(rows[0]!, sign);
+                  const combatant = yield* hit({
+                    campaignId,
+                    actor,
+                    runId,
+                    id,
+                    amount: payload.amount,
+                  }).pipe(orNotFound("combatant", id));
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-damaged",
@@ -586,20 +615,14 @@ export class Combatants extends Context.Service<
                   const from = before[0];
                   if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
 
-                  const rows = yield* sql<CombatantRow & { readonly token_shown: boolean }>`
-                    update combatant
-                    set board_column = ${to?.column ?? null},
-                        board_row = ${to?.row ?? null},
-                        updated_at = now()
-                    where combatant.id = ${id}
-                      and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
-                    returning ${combatantColumns(sql, campaignId, actor)},
-                      (select ${tokenShown(sql)} from encounter_run
-                        where encounter_run.id = combatant.encounter_run_id) as token_shown
-                  `;
-                  const row = rows[0];
-                  if (row === undefined) return yield* new NotFound({ resource: "combatant", id });
-                  const combatant = toCombatant(row, sign);
+                  const { tokenShown: shown, ...moved } = yield* place({
+                    campaignId,
+                    actor,
+                    runId,
+                    id,
+                    to,
+                  }).pipe(orNotFound("combatant", id));
+                  const combatant = new Combatant(moved, { disableChecks: true });
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-moved",
@@ -613,8 +636,7 @@ export class Combatants extends Context.Service<
                       to,
                     },
                     requestId: payload.requestId,
-                    visibility:
-                      combatant.visibility === "shared" && row.token_shown ? "shared" : "dm",
+                    visibility: combatant.visibility === "shared" && shown ? "shared" : "dm",
                   });
                   return combatant;
                 }),

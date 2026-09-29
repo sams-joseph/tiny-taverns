@@ -1,9 +1,10 @@
 import {
-  type Actor,
-  type CampaignId,
+  Actor,
+  CampaignId,
   ChronicleNight,
   CurrentActor,
-  type EncounterRunId,
+  type EncounterRun,
+  EncounterRunId,
   NotFound,
   PlayerChronicleNight,
   type PlayerCombatant,
@@ -13,16 +14,16 @@ import {
   RecapScene,
   type Session,
   SessionRecap,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, SqlError, type Statement } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import { BEATS, type BeatRow, toBeat } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
-import { type CombatantRow, combatantColumns, toCombatant } from "./Combatants.js";
+import { combatantColumns, combatantRow } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { type EncounterRunRow, runColumns, toEncounterRun } from "./EncounterRuns.js";
-import { type CheckRow, type SceneRow, toCheck } from "./RunScenes.js";
+import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
+import { CheckRow, SceneRow } from "./RunScenes.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import {
   noteColumns,
@@ -32,11 +33,7 @@ import {
   toNote,
   toPlayerNote,
 } from "./Notes.js";
-import {
-  playerCombatantColumns,
-  type PlayerCombatantRow,
-  toPlayerCombatant,
-} from "./playerCombatant.js";
+import { playerCombatantColumns, PlayerCombatantRow } from "./playerCombatant.js";
 import { PREP, type PrepItemRow, toPrepItem } from "./PrepItems.js";
 import { dieOnSqlError } from "./rows.js";
 import { type SessionRow, sessionColumns, toSession } from "./Sessions.js";
@@ -76,17 +73,23 @@ const toLink = (row: LinkRow): RecapRunLink =>
   });
 
 /** Rows filed under the night they belong to, each night's in the order read. */
-const groupBySession = <Row extends { readonly session_id: SessionId }>(
+const groupBySession = <Row>(
   rows: ReadonlyArray<Row>,
+  sessionOf: (row: Row) => SessionId,
 ): ReadonlyMap<SessionId, ReadonlyArray<Row>> => {
   const bySession = new Map<SessionId, Array<Row>>();
   for (const row of rows) {
-    const filed = bySession.get(row.session_id);
-    if (filed === undefined) bySession.set(row.session_id, [row]);
+    const filed = bySession.get(sessionOf(row));
+    if (filed === undefined) bySession.set(sessionOf(row), [row]);
     else filed.push(row);
   }
   return bySession;
 };
+
+/** What a read of some nights' runs is asked with: the reader, and the runs it was allowed. */
+const RunsRequest = Schema.toType(
+  Schema.Struct({ campaignId: CampaignId, actor: Actor, runIds: Schema.Array(EncounterRunId) }),
+);
 
 /**
  * A night as every read of the record starts from: the session, its runs and
@@ -96,7 +99,7 @@ const groupBySession = <Row extends { readonly session_id: SessionId }>(
 interface NightRows {
   readonly session: Session;
   /** Oldest first, through `runColumns`. */
-  readonly runRows: ReadonlyArray<EncounterRunRow>;
+  readonly runs: ReadonlyArray<EncounterRun>;
   /** Oldest first. */
   readonly beats: ReadonlyArray<BeatRow>;
 }
@@ -253,7 +256,88 @@ export class Recap extends Context.Service<
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const sign = yield* portraitSigner;
+      const CombatantRow = combatantRow(yield* portraitSigner);
+
+      /** The runs of these nights this actor may read, oldest first, through `runColumns`. */
+      const runsOf = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            actor: Actor,
+            sessionIds: Schema.Array(SessionId),
+          }),
+        ),
+        Result: EncounterRunRow,
+        execute: ({ campaignId, actor, sessionIds }) => sql`
+          select ${runColumns(sql, campaignId, actor)} from encounter_run
+          where ${nestedRowsReadable(sql, RUNS, sessionIds, campaignId, actor)}
+          order by encounter_run.started_at asc, encounter_run.id asc
+        `,
+      });
+      /**
+       * Every fight's initiative list in one query rather than one per fight.
+       * The `in` narrows to runs this actor has already been allowed; the
+       * containment predicate is what actually authorises, and it walks
+       * combatant → run → session → campaign as it does for the runner.
+       */
+      const combatantsOf = SqlSchema.findAll({
+        Request: RunsRequest,
+        Result: CombatantRow,
+        execute: ({ campaignId, actor, runIds }) => sql`
+          select ${combatantColumns(sql, campaignId, actor)} from combatant
+          where ${sql.in("combatant.encounter_run_id", runIds)}
+            and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+          ${initiativeOrder(sql)}
+        `,
+      });
+      /**
+       * The checks and saves logged in these scenes. The run is joined back
+       * through the containment predicate rather than trusting the ids, as the
+       * combatants' query does.
+       */
+      const checksOf = SqlSchema.findAll({
+        Request: RunsRequest,
+        Result: CheckRow,
+        execute: ({ campaignId, actor, runIds }) => sql`
+          select encounter_run_check.* from encounter_run_check
+          join encounter_run on encounter_run.id = encounter_run_check.encounter_run_id
+          where ${sql.in("encounter_run_check.encounter_run_id", runIds)}
+            and ${containedRowReadable(sql, RUN, campaignId, actor)}
+          order by encounter_run_check.created_at asc, encounter_run_check.id asc
+        `,
+      });
+      /** Where each scene that is not a fight stood. */
+      const scenesOf = SqlSchema.findAll({
+        Request: RunsRequest,
+        Result: SceneRow,
+        execute: ({ campaignId, actor, runIds }) => sql`
+          select encounter_run_scene.* from encounter_run_scene
+          join encounter_run on encounter_run.id = encounter_run_scene.run_id
+          where ${sql.in("encounter_run_scene.run_id", runIds)}
+            and encounter_run.mode <> 'combat'
+            and ${containedRowReadable(sql, RUN, campaignId, actor)}
+        `,
+      });
+      /**
+       * The player projection of the fights' rows: the same predicate, a
+       * different select list, and only a fight's — a conversation, a skill
+       * challenge or a hazard had no initiative order at the table.
+       */
+      const playerCombatantsOf = SqlSchema.findAll({
+        Request: RunsRequest,
+        Result: PlayerCombatantRow,
+        execute: ({ campaignId, actor, runIds }) => sql`
+          select ${playerCombatantColumns(sql)} from combatant
+          where ${sql.in("combatant.encounter_run_id", runIds)}
+            and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+            and exists (
+              select 1 from encounter_run
+              where encounter_run.id = combatant.encounter_run_id
+                and encounter_run.mode = 'combat'
+            )
+          ${initiativeOrder(sql)}
+        `,
+      });
 
       /**
        * The runs on the far end of a carry-over, in whichever direction.
@@ -301,7 +385,7 @@ export class Recap extends Context.Service<
         campaignId: CampaignId,
         actor: Actor,
         which: SessionId | "every",
-      ): Effect.Effect<ReadonlyArray<NightRows>, SqlError.SqlError> =>
+      ): Effect.Effect<ReadonlyArray<NightRows>, SqlError.SqlError | Schema.SchemaError> =>
         Effect.gen(function* () {
           // The nights themselves, and the gate for everything below them.
           const sessions = yield* sql<SessionRow>`
@@ -318,11 +402,7 @@ export class Recap extends Context.Service<
           // Oldest first: a night is read forwards through the evening. The
           // columns are `runColumns`, so a fight whose encounter this reader
           // may not read is not named after it.
-          const runRows = yield* sql<EncounterRunRow>`
-            select ${runColumns(sql, campaignId, actor)} from encounter_run
-            where ${nestedRowsReadable(sql, RUNS, sessionIds, campaignId, actor)}
-            order by encounter_run.started_at asc, encounter_run.id asc
-          `;
+          const runs = yield* runsOf({ campaignId, actor, sessionIds });
 
           // Verbatim, and in the order the night happened in — the same
           // order `Beats.list` returns them in, because it is the same
@@ -333,11 +413,11 @@ export class Recap extends Context.Service<
             order by beat.created_at asc, beat.id asc
           `;
 
-          const runsOf = groupBySession(runRows);
-          const beatsOf = groupBySession(beats);
+          const runsByNight = groupBySession(runs, (run) => run.sessionId);
+          const beatsOf = groupBySession(beats, (beat) => beat.session_id);
           return sessions.map((row) => ({
             session: toSession(row),
-            runRows: runsOf.get(row.id) ?? [],
+            runs: runsByNight.get(row.id) ?? [],
             beats: beatsOf.get(row.id) ?? [],
           }));
         });
@@ -347,7 +427,7 @@ export class Recap extends Context.Service<
         campaignId: CampaignId,
         actor: Actor,
         sessionId: SessionId,
-      ): Effect.Effect<Night, NotFound | SqlError.SqlError> =>
+      ): Effect.Effect<Night, NotFound | SqlError.SqlError | Schema.SchemaError> =>
         Effect.gen(function* () {
           // An unreachable session is a 404 naming the session rather than
           // an empty recap, which would read as "nothing happened".
@@ -355,14 +435,14 @@ export class Recap extends Context.Service<
           if (rows === undefined) {
             return yield* new NotFound({ resource: "session", id: sessionId });
           }
-          const { runRows } = rows;
-          const runIds = runRows.map((row) => row.id);
+          const { runs } = rows;
+          const runIds = runs.map((run) => run.id);
 
           const predecessors = yield* links(
             campaignId,
             actor,
             "encounter_run.id",
-            runRows.flatMap((row) => (row.continued_from === null ? [] : [row.continued_from])),
+            runs.flatMap((run) => (run.continuedFrom === null ? [] : [run.continuedFrom])),
           );
           const successors = yield* links(
             campaignId,
@@ -421,19 +501,19 @@ export class Recap extends Context.Service<
         state: Night,
         combatantsOf: (runId: EncounterRunId) => ReadonlyArray<C>,
       ) =>
-        state.runRows.map((row) => {
+        state.runs.map((run) => {
           const previous =
-            row.continued_from === null ? undefined : state.predecessorById.get(row.continued_from);
-          const next = state.successorByPredecessor.get(row.id);
+            run.continuedFrom === null ? undefined : state.predecessorById.get(run.continuedFrom);
+          const next = state.successorByPredecessor.get(run.id);
           return {
-            run: toEncounterRun(row),
-            combatants: combatantsOf(row.id),
+            run,
+            combatants: combatantsOf(run.id),
             continuedFrom: previous === undefined ? null : toLink(previous),
             continuedInto: next === undefined ? null : toLink(next),
           };
         });
 
-      const sceneOf = (row: SceneRow | undefined): RecapScene | null =>
+      const sceneOf = (row: typeof SceneRow.Type | undefined): RecapScene | null =>
         row === undefined
           ? null
           : new RecapScene({
@@ -448,49 +528,17 @@ export class Recap extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const state = yield* night(campaignId, actor, sessionId);
+              const asked = { campaignId, actor, runIds: state.runIds };
 
-              // One query for every fight's initiative list rather than one per
-              // fight. The `in` narrows to runs this actor has already been
-              // allowed; the containment predicate is what actually authorises,
-              // and it walks combatant → run → session → campaign as it does
-              // for the runner.
-              const rows =
-                state.runIds.length === 0
-                  ? []
-                  : yield* sql<CombatantRow>`
-                      select ${combatantColumns(sql, campaignId, actor)} from combatant
-                      where ${sql.in("combatant.encounter_run_id", state.runIds)}
-                        and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                      ${initiativeOrder(sql)}
-                    `;
+              const combatants = state.runIds.length === 0 ? [] : yield* combatantsOf(asked);
 
               // The checks and saves logged in tonight's scenes — the
-              // creator's alone, so only this projection reads them. The run
-              // is joined back through the containment predicate rather than
-              // trusting the ids, as the combatants' query does.
-              const checks =
-                state.runIds.length === 0
-                  ? []
-                  : yield* sql<CheckRow>`
-                      select encounter_run_check.* from encounter_run_check
-                      join encounter_run on encounter_run.id = encounter_run_check.encounter_run_id
-                      where ${sql.in("encounter_run_check.encounter_run_id", state.runIds)}
-                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
-                      order by encounter_run_check.created_at asc, encounter_run_check.id asc
-                    `;
+              // creator's alone, so only this projection reads them.
+              const checks = state.runIds.length === 0 ? [] : yield* checksOf(asked);
 
               // Where each scene stood — what "they made it" and "lasted two
               // stages" are counted from. The creator's, as the checks are.
-              const scenes =
-                state.runIds.length === 0
-                  ? []
-                  : yield* sql<SceneRow>`
-                      select encounter_run_scene.* from encounter_run_scene
-                      join encounter_run on encounter_run.id = encounter_run_scene.run_id
-                      where ${sql.in("encounter_run_scene.run_id", state.runIds)}
-                        and encounter_run.mode <> 'combat'
-                        and ${containedRowReadable(sql, RUN, campaignId, actor)}
-                    `;
+              const scenes = state.runIds.length === 0 ? [] : yield* scenesOf(asked);
 
               const notes = yield* sql<NoteRow>`
                 select ${noteColumns(sql)} from note where ${state.readOut}
@@ -500,17 +548,13 @@ export class Recap extends Context.Service<
               return new SessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId) =>
-                  rows
-                    .filter((combatant) => combatant.encounter_run_id === runId)
-                    .map((row) => toCombatant(row, sign)),
+                  combatants.filter((combatant) => combatant.encounterRunId === runId),
                 ).map(
                   (fight) =>
                     new RecapFight({
                       ...fight,
-                      checks: checks
-                        .filter((check) => check.encounter_run_id === fight.run.id)
-                        .map(toCheck),
-                      scene: sceneOf(scenes.find((scene) => scene.run_id === fight.run.id)),
+                      checks: checks.filter((check) => check.runId === fight.run.id),
+                      scene: sceneOf(scenes.find((scene) => scene.runId === fight.run.id)),
                     }),
                 ),
                 beats: state.beats.map(toBeat),
@@ -527,7 +571,7 @@ export class Recap extends Context.Service<
               const state = yield* night(campaignId, actor, sessionId);
 
               // The same predicate as above, and a different select list. The
-              // narrowing is in the columns rather than in a mapper, so a
+              // narrowing is in the columns rather than in a decode, so a
               // monster's exact hit points and its armour class are never read
               // out of Postgres at all — see `repo/playerCombatant.ts`.
               //
@@ -535,20 +579,10 @@ export class Recap extends Context.Service<
               // had no initiative order at the table (`PlayerTable`), so its
               // recap names nobody in it either — who the party met, or what
               // the hazard's roster held, stays the creator's.
-              const rows =
+              const combatants =
                 state.runIds.length === 0
                   ? []
-                  : yield* sql<PlayerCombatantRow>`
-                      select ${playerCombatantColumns(sql)} from combatant
-                      where ${sql.in("combatant.encounter_run_id", state.runIds)}
-                        and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                        and exists (
-                          select 1 from encounter_run
-                          where encounter_run.id = combatant.encounter_run_id
-                            and encounter_run.mode = 'combat'
-                        )
-                      ${initiativeOrder(sql)}
-                    `;
+                  : yield* playerCombatantsOf({ campaignId, actor, runIds: state.runIds });
 
               const notes = yield* sql<PlayerNoteRow>`
                 select ${playerNoteColumns(sql, campaignId, actor)} from note
@@ -559,9 +593,7 @@ export class Recap extends Context.Service<
               return new PlayerSessionRecap({
                 session: state.session,
                 fights: fightsOf(state, (runId): ReadonlyArray<PlayerCombatant> =>
-                  rows
-                    .filter((combatant) => combatant.encounter_run_id === runId)
-                    .map(toPlayerCombatant),
+                  combatants.filter((combatant) => combatant.encounterRunId === runId),
                 ),
                 beats: state.beats.map(toBeat),
                 prepDone: state.prepDone.map(toPrepItem),
@@ -577,7 +609,7 @@ export class Recap extends Context.Service<
                 (rows) =>
                   new ChronicleNight({
                     session: rows.session,
-                    runs: rows.runRows.map(toEncounterRun),
+                    runs: rows.runs,
                     beats: rows.beats.map(toBeat),
                   }),
               ),
@@ -597,7 +629,7 @@ export class Recap extends Context.Service<
                 (rows) =>
                   new PlayerChronicleNight({
                     session: rows.session,
-                    runs: rows.runRows.map(toEncounterRun),
+                    runs: rows.runs,
                     beats: rows.beats.map(toBeat),
                   }),
               );

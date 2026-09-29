@@ -3,12 +3,13 @@ import {
   type Character,
   type CharacterId,
   Conflict,
+  type EncounterRunId,
   CurrentActor,
   NotFound,
   type PartySeat,
 } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Result } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, Statement } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -332,5 +333,32 @@ describe("the creator's party long rest", () => {
       select count(*) from character_resource_request where request_id = 'night-3'
     `);
     expect(Number(claims[0]!.count)).toBe(0);
+  });
+
+  it("checks the whole party for a live fight in one statement", async () => {
+    const { jo, saltRoad, saltNight } = fixture;
+    // End the fight the test above started, through the runner, so the rest
+    // goes ahead and every seat is checked.
+    const live = await run(sql<{ readonly id: EncounterRunId }>`
+      select id from encounter_run where session_id = ${saltNight.id} and ended_at is null
+    `);
+    const proof = await run(asDm(jo, saltRoad.id));
+    const runs = await run(EncounterRuns);
+    for (const { id } of live) await run(runs.end(proof, saltNight.id, id));
+
+    const statements: Array<string> = [];
+    const seats = await run(
+      withActor(jo)(party.rest(saltRoad.id, { kind: "long", requestId: "night-4" })).pipe(
+        Effect.provideService(Statement.CurrentTransformer, (statement) =>
+          Effect.sync(() => {
+            statements.push(statement.compile()[0]);
+            return statement;
+          }),
+        ),
+      ),
+    );
+    // Two live seats, and their fights read once — not once a character.
+    expect(seats).toHaveLength(2);
+    expect(statements.filter((text) => text.includes("ended_at is null"))).toHaveLength(1);
   });
 });
