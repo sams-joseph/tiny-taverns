@@ -7,3 +7,11 @@ import "@taverns/ui/testing/pointer-event-polyfill";
 // test environment supplies the no-op browsers effectively use when no scroll
 // position changes.
 window.scrollTo = () => undefined;
+
+// The drag library (`@dnd-kit/dom`) extends `ResizeObserver` as it loads, and
+// jsdom ships none. jsdom lays nothing out, so nothing is ever resized.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};

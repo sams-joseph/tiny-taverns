@@ -15,7 +15,13 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * widths the reorder plan names (a small phone, a tablet, a laptop): a target
  * a thumb can press, names starting at one edge whatever section they are in,
  * a press on a row landing on the row and not its handle, and the keyboard
- * path through the menu handing focus back.
+ * path through the menu handing focus back. Then a pointer dragging a grip:
+ * the row waits in place, dimmed, while a drop line in the focus ring's
+ * colour marks the gap; dropped, it slides to its new place on the layering
+ * scale's `lifted` rung and the motion tokens, and the order the stub was
+ * sent survives a reload — under a kind pill too, among the rows drawn. None
+ * of the drag library's own stacking (the top layer, `z-index:
+ * calc(infinity)`) or timing reaches the page.
  */
 
 const encounters = screens.find((screen) => screen.name === "encounters")!;
@@ -256,6 +262,71 @@ const takesMoves = async (page: Page) => {
   });
 };
 
+/** The unplayed rows' names, in the order their grips are drawn. */
+const gripOrder = (page: Page) =>
+  page
+    .locator('[data-slot="encounter-list"] [data-slot="move-handle"]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")!.replace(/^Move /, "")));
+
+/** The unplayed row an encounter is drawn in, grip and all. */
+const movableRow = (page: Page, name: string) =>
+  page.locator('[data-slot="movable-row"]').filter({ hasText: name });
+
+/**
+ * Presses `name`'s grip and drags it to the gap on `side` of `onto`'s row,
+ * in steps, leaving the button down so the drag can be measured. The pointer
+ * starts clear of the grip's edge, as a hand would.
+ */
+const dragGrip = async (page: Page, name: string, onto: string, side: "above" | "below") => {
+  const grip = page.getByRole("button", { name: `Move ${name}` });
+  const from = await box(grip);
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  const target = await box(movableRow(page, onto));
+  // The list's rows are 6px apart; this is the middle of the gap.
+  const y = side === "above" ? target.y - 3 : target.y + target.height + 3;
+  await page.mouse.move(from.x + from.width / 2, y, { steps: 12 });
+};
+
+/**
+ * Records, as it happens, what the row a drag let go settles on: the browser
+ * fires `transitionrun` when a transition is created, and its computed timing
+ * is read then rather than after a round trip that could outlast it.
+ */
+const recordSettle = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as { settle?: Record<string, string> };
+    delete w.settle;
+    document.addEventListener("transitionrun", (event) => {
+      const el = event.target as HTMLElement;
+      if (el.dataset.slot !== "movable-row" || w.settle !== undefined) return;
+      const style = getComputedStyle(el);
+      w.settle = {
+        property: event.propertyName,
+        duration: style.transitionDuration,
+        easing: style.transitionTimingFunction,
+        zIndex: style.zIndex,
+      };
+    });
+  });
+
+/** A token's computed value, resolved through a probe as a property would be. */
+const tokenAs = (page: Page, property: string, token: string) =>
+  page.evaluate(
+    ({ property, token }) => {
+      const probe = document.createElement("div");
+      probe.style.setProperty(property, `var(${token})`);
+      document.body.append(probe);
+      const value = getComputedStyle(probe).getPropertyValue(property);
+      probe.remove();
+      return value;
+    },
+    { property, token },
+  );
+
+const ms = (duration: string) =>
+  duration.endsWith("ms") ? Number.parseFloat(duration) : Number.parseFloat(duration) * 1000;
+
 /** The reorder plan's widths: a small phone, a tablet and a laptop. */
 const ORDER_WIDTHS = [360, 768, 1280] as const;
 
@@ -359,5 +430,351 @@ for (const width of ORDER_WIDTHS) {
         expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
       });
     });
+
+    test("dragging an encounter by its grip", async ({ app, page }) => {
+      await takesMoves(page);
+      await app.open(encounters);
+      await expect(page.locator('[data-slot="failure-notice"]')).toHaveCount(0);
+      expect(await gripOrder(page)).toEqual([
+        "Ambush in the reeds",
+        "Whatever is in the crate",
+        "The dry well",
+        "The hag's bargain",
+        "Salt-flat sandstorm",
+      ]);
+      // The section in the middle of the window: the auto-scroller stays still.
+      await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+
+      await test.step("the grabbed row waits in its place, dimmed", async () => {
+        const before = await box(movableRow(page, "Ambush in the reeds"));
+        await dragGrip(page, "Ambush in the reeds", "The dry well", "below");
+        const carried = page.locator('[data-slot="movable-row"][data-dragging]');
+        await expect(carried).toHaveCount(1);
+        await expect(carried).toContainText("Ambush in the reeds");
+        // Dimmed as a disabled control is, and not moved: nothing covers the gap.
+        expect.soft(await carried.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.5");
+        const now = await box(carried);
+        expect.soft(now.y, "still in its place").toBeCloseTo(before.y, 0);
+        const library = await page.evaluate(() => {
+          const rules = [...[...document.styleSheets], ...document.adoptedStyleSheets].flatMap(
+            (sheet) => {
+              try {
+                return [...sheet.cssRules].map((rule) => rule.cssText);
+              } catch {
+                return [];
+              }
+            },
+          );
+          return {
+            topLayer: document.querySelectorAll("[popover], :popover-open").length,
+            marked: document.querySelectorAll("[data-dnd-dragging], [data-dnd-placeholder]").length,
+            infinity: rules.filter((rule) => rule.includes("infinity")),
+          };
+        });
+        expect.soft(library.topLayer, "nothing in the top layer").toBe(0);
+        expect.soft(library.marked, "no library feedback on the row").toBe(0);
+        expect.soft(library.infinity, "no injected infinite z-index").toEqual([]);
+      });
+
+      await test.step("a line in the focus ring's colour marks the gap", async () => {
+        const line = page.locator('[data-slot="drop-line"]');
+        await expect(line).toHaveCount(1);
+        // In the middle of the gap between the dry well and the bargain, and
+        // drawn over whatever is there.
+        const well = await box(movableRow(page, "The dry well"));
+        const bargain = await box(movableRow(page, "The hag's bargain"));
+        const drawn = await box(line);
+        expect
+          .soft(drawn.y + drawn.height / 2, "in the gap")
+          .toBeCloseTo((well.y + well.height + bargain.y) / 2, 0);
+        const onTop = await line.evaluate((el) => {
+          // It takes no pointer, so hit testing passes through it: let it,
+          // for this one question of what is painted on top.
+          el.style.pointerEvents = "auto";
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          el.style.pointerEvents = "";
+          return hit === el;
+        });
+        expect.soft(onTop, "the line is drawn on top").toBe(true);
+        expect
+          .soft(await line.evaluate((el) => getComputedStyle(el).backgroundColor))
+          .toBe(await tokenAs(page, "background-color", "--focus-ring"));
+        await expect(page.getByRole("menu")).toHaveCount(0);
+      });
+
+      await test.step("let go, it settles on the motion tokens into its new place", async () => {
+        await recordSettle(page);
+        await page.mouse.up();
+        await expect
+          .poll(() => gripOrder(page))
+          .toEqual([
+            "Whatever is in the crate",
+            "The dry well",
+            "Ambush in the reeds",
+            "The hag's bargain",
+            "Salt-flat sandstorm",
+          ]);
+        await expect(page.getByText("Ambush in the reeds moved to 3 of 5")).toBeAttached();
+        const settle = await page.waitForFunction(
+          () => (window as unknown as { settle?: Record<string, string> }).settle,
+        );
+        const ran = (await settle.jsonValue()) as Record<string, string>;
+        expect.soft(ran.property, "what settles").toBe("translate");
+        expect
+          .soft(ms(ran.duration!), "settle duration")
+          .toBe(ms(await tokenAs(page, "transition-duration", "--dur-base")));
+        expect
+          .soft(ran.easing, "settle easing")
+          .toBe(await tokenAs(page, "transition-timing-function", "--ease-settle"));
+        expect
+          .soft(ran.zIndex, "settling on the lifted rung")
+          .toBe(
+            await page.evaluate(() =>
+              getComputedStyle(document.documentElement)
+                .getPropertyValue("--z-index-lifted")
+                .trim(),
+            ),
+          );
+        // At rest it is an ordinary row again, no longer lifted.
+        await expect
+          .poll(() =>
+            movableRow(page, "Ambush in the reeds").evaluate((el) => getComputedStyle(el).zIndex),
+          )
+          .toBe("auto");
+        await expect(page.getByRole("menu")).toHaveCount(0);
+        await expect(page.locator('[data-slot="drop-line"]')).toHaveCount(0);
+        const { scrollWidth, clientWidth } = await app.widths();
+        expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+      });
+
+      await test.step("the order the server was sent survives a reload", async () => {
+        await page.reload();
+        await app.settle();
+        expect(await gripOrder(page)).toEqual([
+          "Whatever is in the crate",
+          "The dry well",
+          "Ambush in the reeds",
+          "The hag's bargain",
+          "Salt-flat sandstorm",
+        ]);
+      });
+
+      await test.step("under a kind pill it moves among the rows drawn", async () => {
+        await page
+          .getByRole("group", { name: "Filter by kind" })
+          .getByRole("button", { name: /^Challenges & hazards/ })
+          .click();
+        await expect.poll(() => gripOrder(page)).toEqual(["The dry well", "Salt-flat sandstorm"]);
+        await movableRow(page, "The dry well").evaluate((el) =>
+          el.scrollIntoView({ block: "center", behavior: "instant" }),
+        );
+        await dragGrip(page, "Salt-flat sandstorm", "The dry well", "above");
+        await page.mouse.up();
+        await expect.poll(() => gripOrder(page)).toEqual(["Salt-flat sandstorm", "The dry well"]);
+        // Before the well, the row it passed; the bargain the pill hides keeps
+        // its place after the ambush.
+        await page
+          .getByRole("group", { name: "Filter by kind" })
+          .getByRole("button", { name: /^All/ })
+          .click();
+        await expect
+          .poll(() => gripOrder(page))
+          .toEqual([
+            "Whatever is in the crate",
+            "Salt-flat sandstorm",
+            "The dry well",
+            "Ambush in the reeds",
+            "The hag's bargain",
+          ]);
+      });
+
+      await test.step("a click on a grip still opens its menu", async () => {
+        const grip = page.getByRole("button", { name: "Move The dry well" });
+        await grip.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+        await grip.click();
+        const menu = page.getByRole("menu");
+        await expect(menu).toBeVisible();
+        await expect(menu.getByRole("menuitem", { name: "Move up" })).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeHidden();
+      });
+    });
   });
 }
+
+/**
+ * A finger, through Chromium's own touch input (`Input.dispatchTouchEvent`),
+ * so the browser decides between a scroll and a press as it would on a phone.
+ * This is emulation on a desktop engine: long-press dragging on a real iPhone
+ * and Android phone is a manual check this cannot stand in for.
+ */
+test.describe("touch", () => {
+  test.use({ viewport: { width: 360, height: HEIGHT }, hasTouch: true, isMobile: true });
+
+  test("a tap opens the menu, a long press drags, a swipe scrolls", async ({ app, page }) => {
+    await takesMoves(page);
+    await app.open(encounters);
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x: number, y: number) =>
+      cdp.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+      });
+    const start = [
+      "Ambush in the reeds",
+      "Whatever is in the crate",
+      "The dry well",
+      "The hag's bargain",
+      "Salt-flat sandstorm",
+    ];
+    await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+      el.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+
+    await test.step("a tap on a grip opens its menu", async () => {
+      await page.getByRole("button", { name: "Move The dry well" }).tap();
+      const menu = page.getByRole("menu");
+      await expect(menu).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+    });
+
+    await test.step("a swipe across a row scrolls the page", async () => {
+      // Only the grip takes no pan; the row beside it is the page.
+      const panning = (name: string | RegExp) =>
+        page.getByRole("button", { name }).evaluate((el) => getComputedStyle(el).touchAction);
+      expect.soft(await panning("Move Ambush in the reeds"), "the grip").toBe("none");
+      expect.soft(await panning(/^Ambush in the reeds/), "the row").toBe("auto");
+      const row = await box(page.getByRole("button", { name: /^Ambush in the reeds/ }));
+      const x = row.x + row.width / 2;
+      const y = row.y + row.height / 2;
+      const scrolled = await page.evaluate(() => window.scrollY);
+      await touch("touchStart", x, y);
+      for (let step = 1; step <= 8; step++) await touch("touchMove", x, y - step * 20);
+      await touch("touchEnd", x, y - 160);
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrolled);
+      // A fling carries on past the finger, and past a later `scrollIntoView`:
+      // wait until the window has fired no scroll for a while. Two reads of
+      // `scrollY` a moment apart can agree while the fling is still running,
+      // and the long press below would then land beside its grip.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            let quiet = setTimeout(done, 300);
+            function done() {
+              window.removeEventListener("scroll", moved);
+              resolve();
+            }
+            function moved() {
+              clearTimeout(quiet);
+              quiet = setTimeout(done, 300);
+            }
+            window.addEventListener("scroll", moved, { passive: true });
+          }),
+      );
+      await expect(page.locator("[data-dragging]")).toHaveCount(0);
+      await expect(page.getByRole("menu")).toHaveCount(0);
+      expect(await gripOrder(page)).toEqual(start);
+    });
+
+    await test.step("a long press on a grip picks the row up, and it drops", async () => {
+      await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      const grip = await box(page.getByRole("button", { name: "Move Ambush in the reeds" }));
+      const well = await box(movableRow(page, "The dry well"));
+      const x = grip.x + grip.width / 2;
+      const y = grip.y + grip.height / 2;
+      await touch("touchStart", x, y);
+      // Held still past the library's long press.
+      await page.waitForTimeout(400);
+      const to = well.y + well.height + 3;
+      for (let step = 1; step <= 10; step++)
+        await touch("touchMove", x, y + ((to - y) * step) / 10);
+      await expect(page.locator('[data-slot="drop-line"]')).toHaveCount(1);
+      await touch("touchEnd", x, to);
+      await expect
+        .poll(() => gripOrder(page))
+        .toEqual([
+          "Whatever is in the crate",
+          "The dry well",
+          "Ambush in the reeds",
+          "The hag's bargain",
+          "Salt-flat sandstorm",
+        ]);
+      await expect(page.getByRole("menu")).toHaveCount(0);
+      const { scrollWidth, clientWidth } = await app.widths();
+      expect.soft(scrollWidth, "document scrollWidth").toBe(clientWidth);
+    });
+  });
+});
+
+test.describe("reduced motion", () => {
+  test.use({ viewport: { width: 1280, height: HEIGHT }, reducedMotion: "reduce" });
+
+  test("a dropped encounter lands without moving", async ({ app, page }) => {
+    await takesMoves(page);
+    await app.open(encounters);
+    await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+      el.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+    expect(ms(await tokenAs(page, "transition-duration", "--dur-base")), "--dur-base").toBe(0);
+    await recordSettle(page);
+    await dragGrip(page, "The hag's bargain", "Ambush in the reeds", "above");
+    await page.mouse.up();
+    await expect
+      .poll(() => gripOrder(page))
+      .toEqual([
+        "The hag's bargain",
+        "Ambush in the reeds",
+        "Whatever is in the crate",
+        "The dry well",
+        "Salt-flat sandstorm",
+      ]);
+    // In its place at once, and an ordinary row: nothing ran and nothing is lifted.
+    await expect
+      .poll(() =>
+        movableRow(page, "The hag's bargain").evaluate((el) => getComputedStyle(el).zIndex),
+      )
+      .toBe("auto");
+    expect(
+      await page.evaluate(() => (window as unknown as { settle?: unknown }).settle),
+      "a transition ran",
+    ).toBeUndefined();
+  });
+});
+
+test.describe("refused drop", () => {
+  test.use({ viewport: { width: 1280, height: HEIGHT } });
+
+  test("a refusal inside the settle leaves an ordinary row", async ({ app, page }) => {
+    // Refused at once, well inside the 200ms settle: the row goes back while
+    // its slide is still running, which cancels the transition.
+    await page.route(/\/stub\/campaigns\/[^/]+\/encounters\/[^/]+\/move$/, (route) =>
+      route.fulfill({ status: 404, json: { _tag: "NotFound", resource: "encounter", id: "e2e" } }),
+    );
+    await app.open(encounters);
+    await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+      el.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+    const before = await gripOrder(page);
+    await dragGrip(page, "The hag's bargain", "Ambush in the reeds", "above");
+    await page.mouse.up();
+    await expect(page.getByRole("alert")).toContainText("That encounter is gone");
+    expect(await gripOrder(page)).toEqual(before);
+    await expect
+      .poll(() =>
+        movableRow(page, "The hag's bargain").evaluate((el) => {
+          const ordinary = el.parentElement!.firstElementChild!;
+          return {
+            zIndex: getComputedStyle(el).zIndex,
+            shadow: getComputedStyle(el).boxShadow === getComputedStyle(ordinary).boxShadow,
+          };
+        }),
+      )
+      .toEqual({ zIndex: "auto", shadow: true });
+  });
+});

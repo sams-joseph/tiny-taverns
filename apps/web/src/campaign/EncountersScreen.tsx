@@ -1,8 +1,10 @@
+import { DragDropProvider, useDraggable } from "@dnd-kit/react";
 import {
   encounterKindLabel,
   type CampaignId,
   type Encounter,
   type EncounterId,
+  type EncounterPlacement,
   type EncounterPlayed,
   type EncounterPrep,
 } from "@taverns/api";
@@ -18,8 +20,17 @@ import {
   Icon,
   SectionHeading,
   Toggle,
+  cn,
 } from "@taverns/ui";
-import { useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type TransitionEvent,
+} from "react";
 import { SaveFailure } from "../ui/form";
 import { CampaignChrome } from "./CampaignChrome";
 import { ReadyBadge } from "./ReadyBadge";
@@ -41,6 +52,7 @@ import {
   type KindFilter,
   type OrderMove,
 } from "./encounterList";
+import { useEncounterDrag } from "./encounterDrag";
 import { useEncounterOrder } from "./encounterOrder";
 import { EncounterPreview } from "./EncounterPreview";
 import { encounterPrepListAtom, type CampaignView } from "./load";
@@ -81,6 +93,12 @@ import { encounterPrepListAtom, type CampaignView } from "./load";
  * top, up, down or to the bottom. Under a kind pill the moves are among the
  * rows drawn (`placementFor`). The other sections keep the handle's gutter
  * empty so every name starts at one edge.
+ *
+ * **A pointer can drag the same grip** (`useEncounterDrag`): the grip is the
+ * one place a row is picked up, so the rest of the row still selects and a
+ * finger on the page still scrolls it. A drop lands before or after a row
+ * drawn, as the menu's moves do, and goes the menu's way to the server. The
+ * menu stays the keyboard's, the screen reader's and the phone's way to move.
  */
 export function EncountersScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
@@ -180,6 +198,23 @@ function EncounterBrowser({
   const ordered = sections.flatMap((section) => section.encounters);
   const selected = ordered.find((encounter) => encounter.id === chosen) ?? ordered[0];
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
+  /** The rows a move is among: *Not yet played* as drawn, under the pill. */
+  const movable = sections.find((section) => section.group === "unplayed")?.encounters ?? [];
+
+  /** Where the menu and a drop both send a row: the one move path. */
+  const moveTo = (encounterId: EncounterId, placement: EncounterPlacement) => {
+    if (order.busy) return;
+    const after = placed(movable, encounterId, placement);
+    setMoved(movedWords(after, encounterId) ?? "");
+    setRefocus(encounterId);
+    void order.move(encounterId, placement).then((ok) => {
+      if (!ok) {
+        setMoved("");
+        setRefocus(encounterId);
+      }
+    });
+  };
+  const drag = useEncounterDrag({ rows: movable, onDrop: moveTo });
 
   const choose = (encounterId: EncounterId | undefined) =>
     void navigate({
@@ -213,21 +248,9 @@ function EncounterBrowser({
     );
   }
 
-  /** The rows a move is among: *Not yet played* as drawn, under the pill. */
-  const movable = sections.find((section) => section.group === "unplayed")?.encounters ?? [];
-
   const moveRow = (encounter: Encounter, to: OrderMove) => {
     const placement = placementFor(movable, encounter.id, to);
-    if (placement === undefined || order.busy) return;
-    const after = placed(movable, encounter.id, placement);
-    setMoved(movedWords(after, encounter.id) ?? "");
-    setRefocus(encounter.id);
-    void order.move(encounter.id, placement).then((ok) => {
-      if (!ok) {
-        setMoved("");
-        setRefocus(encounter.id);
-      }
-    });
+    if (placement !== undefined) moveTo(encounter.id, placement);
   };
 
   const pickFilter = (next: KindFilter) => {
@@ -274,56 +297,85 @@ function EncounterBrowser({
             className="flex min-w-0 shrink grow basis-encounters-list-min flex-col gap-5 max-w-encounters-list"
           >
             {order.failure !== undefined && <SaveFailure failure={order.failure} />}
-            {sections.map((section) => (
-              <section
-                key={section.group}
-                aria-labelledby={`encounters-${section.group}`}
-                className="flex flex-col gap-1.5"
-              >
-                {/* Past the handle's gutter, the same 4px in from the rows'
-                    edge it always sat. */}
-                <SectionHeading id={`encounters-${section.group}`} className="pr-1 pb-1 pl-10">
-                  {section.title}
-                </SectionHeading>
-                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                  {section.encounters.map((encounter) => (
-                    <li key={encounter.id} className="flex items-center gap-2">
-                      {section.group === "unplayed" && movable.length > 1 ? (
-                        <MoveHandle
+            <DragDropProvider {...drag.provider}>
+              {sections.map((section) => (
+                <section
+                  key={section.group}
+                  ref={section.group === "unplayed" ? drag.list : undefined}
+                  aria-labelledby={`encounters-${section.group}`}
+                  className="relative flex flex-col gap-1.5"
+                >
+                  {/* Past the handle's gutter, the same 4px in from the rows'
+                      edge it always sat. */}
+                  <SectionHeading id={`encounters-${section.group}`} className="pr-1 pb-1 pl-10">
+                    {section.title}
+                  </SectionHeading>
+                  <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                    {section.encounters.map((encounter) => {
+                      const row = (
+                        <EncounterRow
                           encounter={encounter}
-                          rows={movable}
-                          disabled={order.busy}
-                          handleRef={(node) => {
-                            if (node === null) handles.current.delete(encounter.id);
-                            else handles.current.set(encounter.id, node);
+                          prep={prepOf.get(encounter.id)}
+                          selected={encounter.id === selected.id}
+                          onSelect={() => {
+                            if (encounter.id === selected.id) {
+                              bringPaneIntoView();
+                              return;
+                            }
+                            reveal.current = true;
+                            choose(encounter.id);
                           }}
-                          onMove={(to) => moveRow(encounter, to)}
                         />
+                      );
+                      return section.group === "unplayed" && movable.length > 1 ? (
+                        <MovableItem
+                          key={encounter.id}
+                          id={encounter.id}
+                          disabled={order.busy}
+                          drag={drag}
+                          handle={(handleRef) => (
+                            <MoveHandle
+                              encounter={encounter}
+                              rows={movable}
+                              disabled={order.busy}
+                              handleRef={(node) => {
+                                handleRef(node);
+                                if (node === null) handles.current.delete(encounter.id);
+                                else handles.current.set(encounter.id, node);
+                              }}
+                              onPress={drag.pressed}
+                              wasDragged={() => drag.wasDragged(encounter.id)}
+                              onMove={(to) => moveRow(encounter, to)}
+                            />
+                          )}
+                        >
+                          {row}
+                        </MovableItem>
                       ) : (
-                        <span
-                          aria-hidden="true"
-                          data-slot="move-gutter"
-                          className="size-7 shrink-0"
-                        />
-                      )}
-                      <EncounterRow
-                        encounter={encounter}
-                        prep={prepOf.get(encounter.id)}
-                        selected={encounter.id === selected.id}
-                        onSelect={() => {
-                          if (encounter.id === selected.id) {
-                            bringPaneIntoView();
-                            return;
-                          }
-                          reveal.current = true;
-                          choose(encounter.id);
-                        }}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+                        <li key={encounter.id} className="flex items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            data-slot="move-gutter"
+                            className="size-7 shrink-0"
+                          />
+                          {row}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {/* Where a dragged row would land, in the focus ring's
+                      colour, so the page keeps its one peach. */}
+                  {section.group === "unplayed" && drag.line !== undefined && (
+                    <span
+                      aria-hidden="true"
+                      data-slot="drop-line"
+                      style={{ top: drag.line }}
+                      className="pointer-events-none absolute right-0 left-9 h-0.5 -translate-y-1/2 rounded-pill bg-ring"
+                    />
+                  )}
+                </section>
+              ))}
+            </DragDropProvider>
           </div>
 
           <EncounterPreview
@@ -352,16 +404,89 @@ function EncounterBrowser({
 }
 
 /**
+ * An unplayed row a pointer can pick up by its grip (`useEncounterDrag`):
+ * dimmed while it is carried, as a disabled control is, and once dropped
+ * slid into its new place on the motion tokens, lifted on the layering scale
+ * over the rows it passes.
+ */
+function MovableItem({
+  id,
+  disabled,
+  drag,
+  handle,
+  children,
+}: {
+  readonly id: EncounterId;
+  readonly disabled: boolean;
+  readonly drag: ReturnType<typeof useEncounterDrag>;
+  readonly handle: (handleRef: (node: HTMLButtonElement | null) => void) => ReactNode;
+  readonly children: ReactNode;
+}) {
+  const draggable = useDraggable({ id, disabled });
+  const { ref } = draggable;
+  const { register } = drag;
+  const itemRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      ref(node);
+      register(id, node);
+    },
+    [ref, register, id],
+  );
+  const carried = drag.carried(id);
+  const shift = drag.shift(id);
+  const settling = drag.settling(id);
+  // React copies `propertyName` onto `transitionend` only; a `transitioncancel`
+  // arrives as a plain synthetic event, so read the native one.
+  const settled = (event: TransitionEvent<HTMLLIElement>) => {
+    if (event.target === event.currentTarget && event.nativeEvent.propertyName === "translate") {
+      drag.onSettled(id);
+    }
+  };
+  return (
+    <li
+      ref={itemRef}
+      data-slot="movable-row"
+      data-dragging={carried ? "" : undefined}
+      style={
+        shift === undefined ? undefined : ({ "--row-shift": `${String(shift)}px` } as CSSProperties)
+      }
+      onTransitionEnd={settled}
+      // A refusal inside the settle puts the row back mid-slide, which cancels
+      // the transition rather than ending it.
+      onTransitionCancel={settled}
+      className={cn(
+        "flex items-center gap-2 rounded-md",
+        carried && "opacity-50",
+        settling !== undefined && "z-lifted translate-y-(--row-shift) bg-surface-card shadow-2",
+        settling === "running" && "transition-settle",
+      )}
+    >
+      {handle(draggable.handleRef)}
+      {children}
+    </li>
+  );
+}
+
+/**
  * The grip beside an unplayed row, and the moves behind it. A move the row
  * cannot make — the first row going up — is there and disabled, so the menu is
  * the same four lines on every row. The menu gives focus back to the handle
  * when it closes.
+ *
+ * A pointer's press opens the menu on its click rather than as it goes down
+ * (Base UI's way): the press may yet become a drag, and a drag opens nothing.
+ * Enter and Space are Base UI's own. The grip alone takes no pan
+ * (`touch-none`): a finger held on it and then moved is dragging, where the
+ * browser would otherwise take the move for a scroll and cancel the drag. The
+ * row beside it, and the page, scroll under a finger as ever.
  */
 function MoveHandle({
   encounter,
   rows,
   disabled,
   handleRef,
+  onPress,
+  wasDragged,
   onMove,
 }: {
   readonly encounter: Encounter;
@@ -373,21 +498,41 @@ function MoveHandle({
    */
   readonly disabled: boolean;
   readonly handleRef: (node: HTMLButtonElement | null) => void;
+  /** A pointer went down on the grip. */
+  readonly onPress: () => void;
+  /** Whether that press became a drag. */
+  readonly wasDragged: () => boolean;
   readonly onMove: (to: OrderMove) => void;
 }) {
   const label = `Move ${encounter.name}`;
+  const [open, setOpen] = useState(false);
+  /** The last press was a pointer's, not a key's. */
+  const pointer = useRef(false);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         ref={handleRef}
         aria-label={label}
         title={label}
+        onPointerDown={() => {
+          pointer.current = true;
+          onPress();
+        }}
+        onKeyDown={() => {
+          pointer.current = false;
+        }}
+        onMouseDown={(event) => event.preventBaseUIHandler()}
+        onClick={(event) => {
+          if (!pointer.current) return;
+          event.preventBaseUIHandler();
+          if (!wasDragged()) setOpen((was) => !was);
+        }}
         render={
           <Button
             variant="ghost"
             size="icon"
             data-slot="move-handle"
-            className="size-7 shrink-0 text-muted-foreground"
+            className="size-7 shrink-0 touch-none text-muted-foreground"
           />
         }
       >

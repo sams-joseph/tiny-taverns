@@ -178,6 +178,38 @@ export const placed = <E extends Pick<Encounter, "id">>(
   return [...rest.slice(0, index), moving, ...rest.slice(index)];
 };
 
+/** A row drawn on the screen, from its top edge to its bottom one. */
+export interface RowSpan {
+  readonly id: EncounterId;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/**
+ * Where a dragged row lands, said the way a menu move says it: the gap between
+ * the other rows nearest the pointer's `y`, so before the first row whose
+ * middle is below it or after the last one above. `rows` is *Not yet played*
+ * as drawn, in order, the dragged row among them; its own span is not a
+ * target, since the carried row stays in its place, dimmed, until the drop.
+ * As with the menu, the anchors are the rows the DM can see under the pill.
+ *
+ * Nothing (`undefined`) when the drop leaves the order as it is — back in its
+ * own gap — which is when no drop line is drawn and a drop sends nothing.
+ */
+export const dropPlacement = (
+  rows: ReadonlyArray<RowSpan>,
+  encounterId: EncounterId,
+  y: number,
+): EncounterPlacement | undefined => {
+  const others = rows.filter((row) => row.id !== encounterId);
+  if (others.length === 0 || others.length === rows.length) return undefined;
+  const above = others.filter((row) => (row.top + row.bottom) / 2 < y).length;
+  const placement: EncounterPlacement =
+    above === 0 ? { before: others[0]!.id } : { after: others[above - 1]!.id };
+  const moved = placed(rows, encounterId, placement);
+  return moved.every((row, at) => row.id === rows[at]!.id) ? undefined : placement;
+};
+
 /**
  * What the live region says once a row has moved: *"Toll bridge standoff moved
  * to 2 of 5, after The drowned chapel."* — its place among the rows drawn, and
