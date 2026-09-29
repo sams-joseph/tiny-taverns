@@ -1589,7 +1589,7 @@ const DM_NOUNS: ReadonlyArray<string> = [
  * "world" is here because `proposeSharedWorld` makes one; *"make me a world"*
  * is a build ask.
  */
-const ACCOUNT_NOUNS: ReadonlyArray<string> = [
+export const ACCOUNT_NOUNS: ReadonlyArray<string> = [
   "campaign",
   "campaigns",
   "table",
@@ -1597,7 +1597,6 @@ const ACCOUNT_NOUNS: ReadonlyArray<string> = [
   "shared world",
   "world",
   "worlds",
-  "setting",
   "character",
   "characters",
   "hero",

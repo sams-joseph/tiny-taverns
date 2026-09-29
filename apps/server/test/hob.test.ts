@@ -13,7 +13,13 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
-import { aQuestionAboutIt, askedForABuild, Hob, printedTheCall } from "../src/assistant/Hob.js";
+import {
+  ACCOUNT_NOUNS,
+  aQuestionAboutIt,
+  askedForABuild,
+  Hob,
+  printedTheCall,
+} from "../src/assistant/Hob.js";
 import {
   HobToolkit,
   NO_VOCABULARY,
@@ -1675,6 +1681,20 @@ describe("what counts as asking for a build", () => {
 
   it.each(DM_ASKS)("%s", (asked, expected) => {
     expect(askedForABuild(asked)).toBe(expected);
+  });
+
+  const ACCOUNT_ASKS: ReadonlyArray<readonly [string, boolean]> = [
+    // A Shared World, which `proposeSharedWorld` drafts.
+    ["Make me a shared world", true],
+    ["build a world for my horror games", true],
+    ["create a campaign in the marshes", true],
+    // Not asked for: a setting is a thing to talk about, not a thing to keep.
+    ["suggest a setting for a horror one-shot", false],
+    ["What game should I run?", false],
+  ];
+
+  it.each(ACCOUNT_ASKS)("account: %s", (asked, expected) => {
+    expect(askedForABuild(asked, ACCOUNT_NOUNS)).toBe(expected);
   });
 
   const PLAYER_ASKS: ReadonlyArray<readonly [string, boolean]> = [
