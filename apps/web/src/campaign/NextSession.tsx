@@ -2,6 +2,8 @@ import type { Encounter, EncounterPlayed, EncounterPrep, Session } from "@tavern
 import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
+import { useState } from "react";
+import { DeletePlannedNightDialog } from "./DeletePlannedNightDialog";
 import type { CampaignView } from "./load";
 import { onDeckOf, playedLabel } from "./encounterList";
 import { encounterDetail, openingReadAloud } from "./overview";
@@ -175,6 +177,9 @@ function EncounterRow({
  * which opens the encounter builder, and *Run* stay above that link. *Run* is
  * only on an encounter never played; a played one has *View log*, and a carried
  * one *Pick up* (`playthroughOf` in `encounterList.ts`).
+ *
+ * A planned night can be deleted from here, behind a confirmation; one that
+ * was started cannot.
  */
 export function NextSession({
   view,
@@ -195,6 +200,7 @@ export function NextSession({
   // The night the card is about: the open one, or while none is open the
   // planned one, whose title and checklist *Start the night* will open.
   const night = session ?? view.planned;
+  const [deleting, setDeleting] = useState(false);
   const total = view.encounters.length;
   // What is still to be played, in the order the night reaches it: the one on
   // the table, a carried one, then the DM's order (`onDeckOf`).
@@ -306,6 +312,27 @@ export function NextSession({
             Finish the night
           </Button>
         </CardFooter>
+      )}
+
+      {session === undefined && view.planned !== undefined && (
+        <CardFooter className="justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => setDeleting(true)}
+          >
+            <Icon name="trash-2" size={14} />
+            Delete this night
+          </Button>
+        </CardFooter>
+      )}
+      {deleting && view.planned !== undefined && (
+        <DeletePlannedNightDialog
+          campaignId={view.campaign.id}
+          night={view.planned}
+          onClose={() => setDeleting(false)}
+        />
       )}
     </Card>
   );
