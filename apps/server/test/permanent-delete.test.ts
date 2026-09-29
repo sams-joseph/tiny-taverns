@@ -78,6 +78,7 @@ const runtime = ManagedRuntime.make(
     Party.layer.pipe(Layer.provide(live)),
     Proposals.layer.pipe(
       Layer.provide([
+        Groups.layer,
         CampaignCreatorActors.layer,
         NpcSheets.layer,
         Npcs.layer,

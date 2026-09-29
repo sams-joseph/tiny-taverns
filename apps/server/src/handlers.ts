@@ -495,7 +495,8 @@ const SharedWorldHistoryLive = HttpApiBuilder.group(
           history.fromRecap(params.worldId, creator, payload.sessionId),
         ),
       )
-      .handle("summary", ({ params }) => history.summary(params.worldId));
+      .handle("summary", ({ params }) => history.summary(params.worldId))
+      .handle("clearSummary", ({ params }) => history.clearSummary(params.worldId));
   }),
 );
 
@@ -1191,8 +1192,9 @@ const HobLive = HttpApiBuilder.group(
  * Hob with no campaign — `HobLive`'s five with one reach, the caller's own
  * account (`"account"`), so there is no proof to resolve and no two sets to
  * tell apart. A kept character starts its portrait after the accept commits,
- * as `createCoreCharacter` does, and a kept campaign its cover, as
- * `campaigns.create` does.
+ * as `createCoreCharacter` does, a kept campaign its cover, as
+ * `campaigns.create` does, and a kept Shared World its cover, as
+ * `sharedWorlds.create` does.
  */
 const MeHobLive = HttpApiBuilder.group(
   TavernsApi,
@@ -1233,6 +1235,13 @@ const MeHobLive = HttpApiBuilder.group(
                 return Effect.map(images.drawCampaign(accepted.campaign), (campaign) => ({
                   ...accepted,
                   campaign,
+                }));
+              // And a kept Shared World is the third way one is made, so it
+              // starts the cover as `sharedWorlds.create` does.
+              case "sharedWorld":
+                return Effect.map(images.drawSharedWorld(accepted.sharedWorld), (sharedWorld) => ({
+                  ...accepted,
+                  sharedWorld,
                 }));
               default:
                 return Effect.succeed(accepted);

@@ -6,7 +6,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { useShowHob } from "../shell/slots";
 import { TopBar } from "../shell/TopBar";
 import { SharedWorldChronicle } from "./SharedWorldChronicle";
-import { sharedWorldViewAtom } from "./load";
+import { sharedWorldsAtom, sharedWorldViewAtom } from "./load";
 
 /**
  * A Shared World's whole Chronicle: the Story So Far with its Hob draft, the
@@ -23,6 +23,11 @@ export function SharedWorldChronicleScreen({ worldId }: { readonly worldId: Shar
   // The panel is the layout's, and its Shared World scope is the route's.
   const askHob = useShowHob();
   const name = resource.state === "ready" ? resource.value.sharedWorld.name : undefined;
+  // The owner is the one who may clear the Story So Far; the list says who that is.
+  const [worlds] = useApiAtom(sharedWorldsAtom);
+  const owns =
+    worlds.state === "ready" &&
+    worlds.value.some((membership) => membership.sharedWorld.id === worldId && membership.isOwner);
 
   return (
     <>
@@ -34,7 +39,7 @@ export function SharedWorldChronicleScreen({ worldId }: { readonly worldId: Shar
       {resource.state === "failed" ? (
         <ApiFailureNotice failure={resource.failure} onRetry={retry} />
       ) : (
-        <SharedWorldChronicle worldId={worldId} onAskHob={askHob} />
+        <SharedWorldChronicle worldId={worldId} onAskHob={askHob} owns={owns} />
       )}
     </>
   );

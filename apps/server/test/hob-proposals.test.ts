@@ -86,6 +86,7 @@ const services = Layer.mergeAll(
   Options.layer,
   Proposals.layer.pipe(
     Layer.provide([
+      Groups.layer,
       CampaignCreatorActors.layer,
       NpcSheets.layer,
       Npcs.layer,
@@ -604,6 +605,74 @@ describe("accepting one", () => {
     const result = await accept(threadId, turnId);
     expect(result._tag).toBe("Failure");
     expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
+  }, 60_000);
+
+  it("founds a Shared World from the account's own thread, and nowhere else", async () => {
+    // The account panel's draft, kept through `acceptDraft`: the asker owns
+    // the world, and the row carries the turn it came from.
+    const model = scriptedModel({
+      model: "scripted-local",
+      maxTokens: MAX_TOKENS,
+      rounds: [
+        toolCallChunks("proposeSharedWorld", {
+          name: "The Salt Marches",
+          description: "Reed country, where the tide keeps its own calendar.",
+        }),
+        textChunks("A world of reeds."),
+      ] as never,
+    });
+    const { events } = await runtime.runPromise(
+      Effect.gen(function* () {
+        const hob = yield* Hob;
+        const stream = yield* hob.askDraft({ text: "Make me a Shared World of salt marshes." });
+        return { events: Array.from(yield* Stream.runCollect(stream)) };
+      }).pipe(
+        withActor(fixture.dm),
+        Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
+      ),
+    );
+    const { threadId, turnId } = begunIn(events);
+
+    // A campaign's accept cannot reach an account thread's turn.
+    const throughCampaign = await accept(threadId, turnId);
+    expect(throughCampaign._tag === "Failure" && throughCampaign.failure).toBeInstanceOf(NotFound);
+
+    const kept = await runtime.runPromise(
+      Effect.flatMap(Proposals, (proposals) => proposals.acceptDraft(threadId, turnId)).pipe(
+        withActor(fixture.dm),
+        Effect.orDie,
+      ),
+    );
+    if (kept.accepted !== "sharedWorld") throw new Error("not a Shared World");
+    expect(kept.sharedWorld).toMatchObject({
+      name: "The Salt Marches",
+      description: "Reed country, where the tide keeps its own calendar.",
+      ownerAccountId: fixture.dm.accountId,
+    });
+    const rows = await runtime.runPromise(
+      Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ readonly origin: string; readonly assistant_turn_id: string }>`
+          select origin, assistant_turn_id from play_group where id = ${kept.sharedWorld.id}
+        `,
+      ).pipe(Effect.orDie),
+    );
+    expect(rows).toEqual([{ origin: "assistant", assistant_turn_id: turnId }]);
+    const mine = await runtime.runPromise(
+      Effect.flatMap(Groups, (groups) => groups.mine).pipe(withActor(fixture.dm)),
+    );
+    expect(
+      mine.find((membership) => membership.sharedWorld.id === kept.sharedWorld.id)?.isOwner,
+    ).toBe(true);
+
+    // Kept once.
+    const again = await runtime.runPromise(
+      Effect.flatMap(Proposals, (proposals) => proposals.acceptDraft(threadId, turnId)).pipe(
+        withActor(fixture.dm),
+        Effect.result,
+      ),
+    );
+    expect(again._tag === "Failure" && again.failure).toBeInstanceOf(Conflict);
   }, 60_000);
 });
 

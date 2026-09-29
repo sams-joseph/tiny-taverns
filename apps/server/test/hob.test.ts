@@ -13,7 +13,13 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
-import { aQuestionAboutIt, askedForABuild, Hob, printedTheCall } from "../src/assistant/Hob.js";
+import {
+  ACCOUNT_NOUNS,
+  aQuestionAboutIt,
+  askedForABuild,
+  Hob,
+  printedTheCall,
+} from "../src/assistant/Hob.js";
 import {
   HobToolkit,
   NO_VOCABULARY,
@@ -1677,6 +1683,20 @@ describe("what counts as asking for a build", () => {
     expect(askedForABuild(asked)).toBe(expected);
   });
 
+  const ACCOUNT_ASKS: ReadonlyArray<readonly [string, boolean]> = [
+    // A Shared World, which `proposeSharedWorld` drafts.
+    ["Make me a shared world", true],
+    ["build a world for my horror games", true],
+    ["create a campaign in the marshes", true],
+    // Not asked for: a setting is a thing to talk about, not a thing to keep.
+    ["suggest a setting for a horror one-shot", false],
+    ["What game should I run?", false],
+  ];
+
+  it.each(ACCOUNT_ASKS)("account: %s", (asked, expected) => {
+    expect(askedForABuild(asked, ACCOUNT_NOUNS)).toBe(expected);
+  });
+
   const PLAYER_ASKS: ReadonlyArray<readonly [string, boolean]> = [
     // The composer's ordinary input: a description, with no verb anywhere.
     ["A wood elf who grew up in a river town. Quiet, terrible liar.", true],
@@ -1758,6 +1778,7 @@ describe("what counts as asking for a build", () => {
     expect(account.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
     // And nothing that builds is spelled another way: every remaining tool is a
     // read, by the list `the assistant seam` above pins.
@@ -1881,19 +1902,22 @@ describe("the assistant seam", () => {
     ]);
   });
 
-  it("counts the account panel's toolkit: the core drafting one plus proposeCampaign", () => {
-    // Outside any campaign Hob drafts the two things an account makes on its
-    // own. Campaign content needs a campaign; its tools are absent here.
+  it("counts the account panel's toolkit: the core drafting one plus campaigns and worlds", () => {
+    // Outside any campaign Hob drafts the three things an account makes on its
+    // own. Campaign content needs a campaign and a Chronicle entry a world;
+    // their tools are absent here.
     expect(Object.keys(accountToolkitOver(NO_VOCABULARY, []).tools).sort()).toEqual([
       "listStartingSpells",
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
     expect(Object.keys(accountToolkitListing(NO_VOCABULARY, []).tools).sort()).toEqual([
       "listOptions",
       "listStartingSpells",
       "proposeCampaign",
       "proposeCharacter",
+      "proposeSharedWorld",
     ]);
   });
 });

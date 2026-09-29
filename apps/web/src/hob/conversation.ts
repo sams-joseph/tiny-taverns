@@ -144,6 +144,7 @@ const ACTIVITY: Record<string, string> = {
   nightStory: "Reading back a played night",
   proposeSharedWorldEntry: "Writing a Chronicle entry",
   proposeCampaign: "Drafting a campaign",
+  proposeSharedWorld: "Drafting a Shared World",
   proposeCharacter: "Drafting a character",
   listStartingSpells: "Reading the starting spells",
   listOptions: "Reading the core rules",
@@ -353,18 +354,21 @@ const callsFor = (scope: HobScope): ScopeCalls => {
             }),
           ),
         turns: (client, threadId) => client.meHob.turns({ params: { threadId } }),
-        // No `intent`: this is the panel, which drafts a campaign or a
-        // character. The create screen's composer names its own.
+        // No `intent`: this is the panel, which drafts a campaign, a Shared
+        // World or a character. The create screen's composer names its own.
         ask: (client, payload) => client.meHob.ask({ payload }),
         accept: (client, threadId, turnId) =>
           client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
         // A kept campaign is a row on the Campaigns list, and a card in its
-        // Shared World's directory when it named one; a kept character is a
-        // card on the roster.
+        // Shared World's directory when it named one; a kept Shared World is
+        // a card on the Shared Worlds list (and a world the campaign forms can
+        // now name); a kept character is a card on the roster.
         keeps: (accepted) =>
           accepted.accepted === "campaign"
             ? [reads.myCampaigns, reads.sharedWorld(accepted.campaign.contextId)]
-            : [reads.myCharacters],
+            : accepted.accepted === "sharedWorld"
+              ? [reads.mySharedWorlds]
+              : [reads.myCharacters],
       };
   }
 };

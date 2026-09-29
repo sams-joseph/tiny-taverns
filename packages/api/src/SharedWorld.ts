@@ -60,6 +60,21 @@ export const SharedWorldCreate = Schema.Struct({
 });
 export type SharedWorldCreate = typeof SharedWorldCreate.Type;
 
+/**
+ * The create payload **both composers of a Shared World** write: the forms
+ * (`NewSharedWorldDialog`, and promoting a campaign's context) and Hob's
+ * accept (`Proposals.acceptDraft`). One function, so a form and a draft found
+ * a world the same way: the name trimmed, and a blank description omitted
+ * rather than sent, since optional keys are omitted.
+ */
+export const sharedWorldCreateFrom = (draft: {
+  readonly name: string;
+  readonly description?: string | null | undefined;
+}): SharedWorldCreate => {
+  const description = draft.description?.trim() ?? "";
+  return { name: draft.name.trim(), ...(description === "" ? {} : { description }) };
+};
+
 export const SharedWorldUpdate = Schema.Struct({
   name: Schema.optional(Schema.NonEmptyString),
   /** `null`, or a blank one, clears it. The cover is not redrawn. */

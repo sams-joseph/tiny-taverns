@@ -18,6 +18,7 @@ import {
 import { Note, NoteCategory, NoteKind } from "./Note.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
 import { Session } from "./Session.js";
+import { SharedWorld, SHARED_WORLD_DESCRIPTION_MAX } from "./SharedWorld.js";
 
 /**
  * Hob: the assistant, on the wire.
@@ -153,7 +154,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
  * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
- * an NPC's sheet (`npcSheet`), and a `campaign` (the asker's new table). The union is discriminated on `target` for the reason
+ * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table) and a
+ * `sharedWorld` (the asker's new world). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
  * the client renders anyway is the failure this schema style exists to
@@ -165,9 +167,10 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `proposeNpc` and `proposeNpcSheet`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
- * account's own panel has `proposeCharacter` and `proposeCampaign`. So the
- * halves of this union are reachable from disjoint conversations: a character
- * or a campaign proposal only ever lives in the asker's *own* thread and
+ * account's own panel has `proposeCharacter`, `proposeCampaign` and
+ * `proposeSharedWorld`. So the halves of this union are reachable from
+ * disjoint conversations: a character, a campaign or a Shared World proposal
+ * only ever lives in the asker's *own* thread and
  * materialises into their own ownership, and a member who cannot write the
  * campaign holds no thread an encounter could be accepted from. That is a set
  * of predicates, not a check anywhere. See `assistant/toolkit.ts` and
@@ -452,6 +455,22 @@ export const HobProposal = Schema.Union([
     description: Schema.NullOr(Schema.String.check(Schema.isMaxLength(CAMPAIGN_DESCRIPTION_MAX))),
     world: Schema.NullOr(Schema.Struct({ id: SharedWorldId, name: Schema.String })),
   }),
+  /**
+   * A new Shared World, drafted in the account's own conversation — the
+   * panel's other thing an account founds on its own.
+   *
+   * The fields are the two `NewSharedWorldDialog` writes, and both go through
+   * `sharedWorldCreateFrom`, so a form and a draft found a world the same way.
+   * The accept makes the asker its owner and first member, as the form does,
+   * and the one cover is drawn from `description` after it commits.
+   */
+  Schema.Struct({
+    target: Schema.Literal("sharedWorld"),
+    name: Schema.String,
+    description: Schema.NullOr(
+      Schema.String.check(Schema.isMaxLength(SHARED_WORLD_DESCRIPTION_MAX)),
+    ),
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -570,7 +589,8 @@ export type HobCampaignAsk = typeof HobCampaignAsk.Type;
  * create screen's drafting composer and the docked panel on every screen
  * outside a campaign or Shared World. `intent: "character"` is the composer
  * saying so, and it gets the character-drafting toolkit and nothing else.
- * Absent means the panel, whose toolkit drafts a character or a campaign.
+ * Absent means the panel, whose toolkit drafts a character, a campaign or a
+ * Shared World.
  */
 export const HobDraftAsk = Schema.Struct({
   threadId: Schema.optional(AssistantThreadId),
@@ -744,6 +764,12 @@ export const HobAccepted = Schema.Union([
    * cover started after the accept commits. The asker is its creator.
    */
   Schema.Struct({ accepted: Schema.Literal("campaign"), campaign: Campaign }),
+  /**
+   * The Shared World an account kept from its own conversation, founded by the
+   * same insert `POST /worlds` uses, with its cover started after the accept
+   * commits. The asker is its owner.
+   */
+  Schema.Struct({ accepted: Schema.Literal("sharedWorld"), sharedWorld: SharedWorld }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 
