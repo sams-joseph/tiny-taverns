@@ -30,6 +30,7 @@ import {
   timestampColumns,
 } from "./rows.js";
 import {
+  ensureCampaignReadable,
   ensureCampaignWritable,
   libraryRowReadable,
   libraryRowWritable,
@@ -680,7 +681,15 @@ export class Npcs extends Context.Service<
         libraryRemove: (id) =>
           dieOnSqlError(Effect.asVoid(sourceErase(id).pipe(orNotFound("npc", id)))),
 
-        playerList: (campaignId) => dieOnSqlError(playerCast(campaignId)),
+        playerList: (campaignId) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              // A campaign this actor cannot read is `NotFound`, not an empty
+              // cast, like `playerFindById` and `sessions.list`.
+              yield* ensureCampaignReadable(sql, campaignId, yield* CurrentActor);
+              return yield* playerCast(campaignId);
+            }),
+          ),
 
         playerFindById: (campaignId, id) =>
           dieOnSqlError(playerOne({ campaignId, id }).pipe(orNotFound("npc", id))),

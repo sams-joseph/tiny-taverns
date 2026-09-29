@@ -528,6 +528,47 @@ describe("player direct chat", () => {
     expect(seen.stranger._tag === "Failure" && seen.stranger.failure).toBeInstanceOf(NotFound);
   }, 60_000);
 
+  it("refuses a stranger both player lists with NotFound, as it refuses the one NPC", async () => {
+    const lists = (actor: Actor) =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const npcs = yield* Npcs;
+          const threads = yield* NpcThreads;
+          return {
+            cast: yield* Effect.result(npcs.playerList(fixture.campaign.id)),
+            threads: yield* Effect.result(
+              threads.playerList(fixture.campaign.id, fixture.cazril.id),
+            ),
+          };
+        }).pipe(withActor(actor)),
+      );
+
+    for (const refused of [fixture.stranger, fixture.scopedElsewhere]) {
+      const seen = await lists(refused);
+      expect(seen.cast._tag === "Failure" && seen.cast.failure).toMatchObject({
+        _tag: "NotFound",
+        resource: "campaign",
+      });
+      expect(seen.threads._tag === "Failure" && seen.threads.failure).toMatchObject({
+        _tag: "NotFound",
+        resource: "npc",
+      });
+    }
+
+    const player = await lists(fixture.player);
+    expect(player.cast._tag === "Success" && player.cast.success.map((npc) => npc.name)).toEqual([
+      "Cazril",
+    ]);
+    expect(player.threads._tag).toBe("Success");
+
+    const creator = await lists(fixture.dm);
+    // The creator's answer is unchanged: every live NPC at the table.
+    expect(
+      creator.cast._tag === "Success" && creator.cast.success.map((npc) => npc.name),
+    ).toContain("Cazril");
+    expect(creator.threads._tag).toBe("Success");
+  }, 60_000);
+
   it("prompts with player-safe material only and stores a private player transcript", async () => {
     const { events, requests } = await talk(
       fixture.player,

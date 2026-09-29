@@ -651,11 +651,12 @@ describe("who sees a portrait is who sees the NPC", () => {
   });
 
   it("gives a Shared World member who does not play, and a stranger, nothing", async () => {
-    // A stranger's player list of a table they do not sit at is empty.
-    const listed = await attempt(stranger.token, (client) =>
-      client.npcs.playerList({ params: { campaignId: table } }),
-    );
-    expect(listed.ok ? listed.value : []).toEqual([]);
+    // A stranger's player list of a table they do not sit at is refused.
+    expect(
+      await attempt(stranger.token, (client) =>
+        client.npcs.playerList({ params: { campaignId: table } }),
+      ),
+    ).toEqual({ ok: false, tag: "NotFound" });
     expect(
       await attempt(stranger.token, (client) =>
         client.npcs.playerFindById({ params: { campaignId: table, npcId: shown.id } }),
@@ -671,7 +672,7 @@ describe("who sees a portrait is who sees the NPC", () => {
         };
       }).pipe(Effect.provideService(CurrentActor, bystander)),
     );
-    expect(reads.listed._tag === "Success" ? reads.listed.success : []).toEqual([]);
+    expect(reads.listed._tag).toBe("Failure");
     expect(reads.shown._tag).toBe("Failure");
     expect(reads.hidden._tag).toBe("Failure");
     expect(JSON.stringify(reads)).not.toContain("/npc-images/");

@@ -1,5 +1,5 @@
-import { type AssistantTurnId, NotFound, type Origin, type Visibility } from "@taverns/api";
-import { type Cause, DateTime, Effect, Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { type AssistantTurnId, NotFound } from "@taverns/api";
+import { type Cause, Effect, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import type { SqlClient, Statement } from "effect/unstable/sql";
 
@@ -153,27 +153,6 @@ export const orNotFound =
     Effect.catchTag(effect, "NoSuchElementError", () =>
       Effect.fail(new NotFound({ resource, id })),
     );
-
-/**
- * The provenance/visibility tail every content row carries. Kept as one type so
- * a table that grows the columns without the mapper noticing does not compile.
- */
-export interface ProvenanceColumns {
-  readonly visibility: Visibility;
-  readonly origin: Origin;
-  readonly assistant_turn_id: AssistantTurnId | null;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
-
-/** The shared half of every row mapper. */
-export const provenanceOf = (row: ProvenanceColumns) => ({
-  visibility: row.visibility,
-  origin: row.origin,
-  assistantTurnId: row.assistant_turn_id,
-  createdAt: DateTime.fromDateUnsafe(row.created_at),
-  updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-});
 
 /**
  * Where an accepted proposal came from — the one thing that may set
