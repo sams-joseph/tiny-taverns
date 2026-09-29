@@ -43,7 +43,7 @@ interface TopBarProps {
   readonly framed?: boolean;
   /** A tab strip, on its own row below the title — never beside it. */
   readonly tabs?: ReactNode;
-  /** Centre the title row at `max-w-overview`, over a body drawn in that frame (`PageHeader`'s `centred`). */
+  /** Centre the title row and any tab strip at `max-w-overview`, over a body drawn in that frame (`PageHeader`'s `centred`). */
   readonly centred?: boolean;
   /** The screen's verbs; a `BackLink` first when the screen has a parent. */
   readonly children?: ReactNode;

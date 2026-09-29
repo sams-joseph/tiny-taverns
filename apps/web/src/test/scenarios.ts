@@ -9,7 +9,9 @@ import {
   sessionId,
   encounterShelf,
   fullCampaign,
+  goblin,
   grusk,
+  hag,
   hagsBargain,
   noteShelf,
   page,
@@ -17,6 +19,7 @@ import {
   tollBridge,
   type Answer,
 } from "../campaign/campaign.fixtures";
+import { libraryFacets, owlbear, sexton } from "../bestiary/bestiary.fixtures";
 import { playing, sharedBoard, tableOrder, twoTables } from "../characters/characters.fixtures";
 import {
   chronicle,
@@ -119,6 +122,14 @@ const creator = (): Map<string, Answer> => {
     status: 200,
     body: cazrilSheet,
   });
+  // The Library's creatures: two originals beside the bundled two, so the
+  // shelf's grid is measured over several columns of cards.
+  routes.set("GET /library/creatures", {
+    status: 200,
+    body: page([owlbear, sexton, goblin, hag]),
+  });
+  routes.set("GET /library/creatures/environments", { status: 200, body: ["Barrow", "Marsh"] });
+  routes.set("GET /library/creatures/facets", { status: 200, body: libraryFacets });
   // The Library's Cazril has the same sheet, so the shelf's card line and the
   // Library NPC page are measured over a written one.
   routes.set("GET /library/npcs/-/sheets", {

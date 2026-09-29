@@ -45,7 +45,7 @@ export interface Screen {
 
 const c = `/campaigns/${campaignId}`;
 
-/** The thirty-one screens. */
+/** The thirty-six screens. */
 export const screens: ReadonlyArray<Screen> = [
   { name: "campaigns", scenario: "creator", path: "/campaigns" },
   { name: "worlds", scenario: "creator", path: "/worlds" },
@@ -81,7 +81,12 @@ export const screens: ReadonlyArray<Screen> = [
     scenario: "creator-hazard",
     path: `${c}/sessions/${sessionId}/runs/${runId}`,
   },
+  { name: "library", scenario: "creator", path: "/library" },
+  { name: "library-rules", scenario: "creator", path: "/library/rules" },
+  { name: "compendium", scenario: "creator", path: "/library/compendium" },
   { name: "spells", scenario: "creator", path: "/library/spells" },
+  { name: "equipment", scenario: "creator", path: "/library/equipment" },
+  { name: "magic-items", scenario: "creator", path: "/library/magic-items" },
   { name: "library-npcs", scenario: "creator", path: "/library/npcs" },
   { name: "library-npc", scenario: "creator", path: `/library/npcs/${sourceNpcId}` },
   { name: "characters", scenario: "player", path: "/characters" },

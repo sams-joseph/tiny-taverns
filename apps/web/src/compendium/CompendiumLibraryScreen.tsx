@@ -36,57 +36,61 @@ export function CompendiumLibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={value === undefined ? undefined : summaryOf(value.articles)}
         tabs={<LibraryNav />}
       />
-      {resource.state === "loading" && value === undefined && (
-        <Loading label="Reading the compendium…" />
-      )}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-      {value !== undefined && resource.state !== "failed" && (
-        <div className="flex flex-col gap-6">
-          <RuleArticleFilters
-            list={list}
-            sort={sort}
-            onSort={setSort}
-            busy={resource.state === "loading"}
-            actions={
-              <Button size="sm" onClick={() => setWriting(true)}>
-                <Icon name="plus" size={13} />
-                Write an article
-              </Button>
-            }
-          />
-          {value.articles.length === 0 ? (
-            <EmptyState icon="book-open" title="No compendium articles">
-              {list.narrowed ? (
-                "Clear the search — the pinned 2014 compendium is in this list too."
-              ) : (
-                <>
-                  Write an article, or load the pinned 2014 rules with{" "}
-                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-                    pnpm -F server ruleset:import
-                  </code>
-                  .
-                </>
-              )}
-            </EmptyState>
-          ) : (
-            <RuleArticleGrid
-              articles={value.articles}
-              onOpen={setReading}
-              onRemove={(article) =>
-                isLibraryArticle(article) ? () => setRemoving(article) : undefined
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {resource.state === "loading" && value === undefined && (
+          <Loading label="Reading the compendium…" />
+        )}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
+        {value !== undefined && resource.state !== "failed" && (
+          <div className="flex flex-col gap-6">
+            <RuleArticleFilters
+              list={list}
+              sort={sort}
+              onSort={setSort}
+              busy={resource.state === "loading"}
+              actions={
+                <Button size="sm" onClick={() => setWriting(true)}>
+                  <Icon name="plus" size={13} />
+                  Write an article
+                </Button>
               }
             />
-          )}
-        </div>
-      )}
+            {value.articles.length === 0 ? (
+              <EmptyState icon="book-open" title="No compendium articles">
+                {list.narrowed ? (
+                  "Clear the search — the pinned 2014 compendium is in this list too."
+                ) : (
+                  <>
+                    Write an article, or load the pinned 2014 rules with{" "}
+                    <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                      pnpm -F server ruleset:import
+                    </code>
+                    .
+                  </>
+                )}
+              </EmptyState>
+            ) : (
+              <RuleArticleGrid
+                articles={value.articles}
+                onOpen={setReading}
+                onRemove={(article) =>
+                  isLibraryArticle(article) ? () => setRemoving(article) : undefined
+                }
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {reading !== undefined && (
         <RuleArticleReader

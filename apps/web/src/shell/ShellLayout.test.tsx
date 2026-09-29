@@ -223,10 +223,14 @@ describe("the persistent shell", () => {
     expect(sections().parentElement).toHaveClass("h-11");
     // Narrow, the bar's actions wrap on their own row rather than overlap;
     // `apps/web/e2e` measures that they do not.
-    expect(bar?.children[0]).toHaveClass("flex-wrap", "@4xl/app:h-19", "@4xl/app:flex-nowrap");
+    // The Library's header is centred, so each row sits inside a band-wide
+    // gutter wrapper: find them by their slots rather than by position.
+    const titleRow = bar?.querySelector("[data-slot=page-header-row]");
+    const tabs = bar?.querySelector("[data-slot=page-header-tabs]");
+    expect(titleRow).toHaveClass("flex-wrap", "@4xl/app:h-19", "@4xl/app:flex-nowrap");
     expect(bar?.querySelector("[data-slot=page-header-actions]")).toHaveClass("flex-wrap");
-    expect(bar?.children[1]).toHaveClass("h-10");
-    for (const row of [sections().parentElement, ...(bar?.children ?? [])])
+    expect(tabs?.parentElement).toHaveClass("h-10");
+    for (const row of [sections().parentElement, ...(bar?.children ?? []), titleRow, tabs])
       expect(row?.className).not.toMatch(/\bmin-h-/);
   });
 
