@@ -116,7 +116,7 @@ const SHIELD: KitEquipment = {
 
 /**
  * A Fighter with a structured kit and a class table — the shape the importer
- * writes and `optionDetailsFor` hydrates, cut down to what the form reads.
+ * writes and `optionDetailsReader` hydrates, cut down to what the form reads.
  */
 const FIGHTER: CharacterOption = {
   ...option("class", "Fighter", {

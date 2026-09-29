@@ -1338,18 +1338,18 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
                  'desc', coalesce(source_trait.body -> 'desc', '[]'::jsonb)
                )
              end as source_trait,
-             source.ordinal,
+             least(source.sort_key, 10000)::int as ordinal,
              source.subrace_id::text as subrace_id,
              character_option_subrace.name as subrace_name
       from (
-        select option_id, subrace_id, proficiency_id, ordinal, null::uuid as source_trait_id
+        select option_id, subrace_id, proficiency_id, ordinal::bigint as sort_key, null::uuid as source_trait_id
         from character_option_proficiency
         where option_id = any(${[...ids]})
         union all
         select character_option_trait.option_id,
                character_option_trait.subrace_id,
                racial_trait_proficiency.proficiency_id,
-               character_option_trait.ordinal * 1000 + racial_trait_proficiency.ordinal as ordinal,
+               character_option_trait.ordinal::bigint * 1000 + racial_trait_proficiency.ordinal as sort_key,
                character_option_trait.trait_id as source_trait_id
         from character_option_trait
         join racial_trait_proficiency on racial_trait_proficiency.trait_id = character_option_trait.trait_id
@@ -1358,7 +1358,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       join proficiency on proficiency.id = source.proficiency_id
       left join racial_trait as source_trait on source_trait.id = source.source_trait_id
       left join character_option_subrace on character_option_subrace.id = source.subrace_id
-      order by source.subrace_id nulls first, source.ordinal
+      order by source.subrace_id nulls first, source.sort_key
     `,
   });
   const traits = SqlSchema.findAll({

@@ -206,6 +206,47 @@ describe("an option list", () => {
     expect(own[4]?.languages.length).toBeGreaterThan(0);
   });
 
+  it("reads a race whose eleventh trait grants a proficiency", async () => {
+    const { dm } = fixture;
+    const { race, listed, found } = await run(
+      Effect.gen(function* () {
+        const options = yield* Options;
+        const vocabulary = yield* as(dm)(options.libraryVocabulary());
+        const keenSenses = vocabulary.traits.find((trait) => trait.name === "Keen Senses")!;
+        const fillers = vocabulary.traits
+          .filter((trait) => trait.id !== keenSenses.id)
+          .slice(0, 10)
+          .map((trait) => trait.id);
+        const race = yield* as(dm)(
+          options.libraryCreate({
+            kind: "race",
+            name: "Longshanks",
+            body: {
+              speed: 30,
+              size: "Medium",
+              abilityBonuses: [],
+              hpPerLevel: 0,
+              traits: [],
+              subraces: [],
+            },
+            relations: { traitIds: [...fillers, keenSenses.id] },
+          }),
+        );
+        const listed = yield* as(dm)(options.library({ kind: "race" }));
+        const found = yield* as(dm)(options.libraryFindById(race.id));
+        return { race, listed, found };
+      }),
+    );
+
+    const fromListed = listed.find((option) => option.id === race.id);
+    expect(fromListed).toEqual(found);
+    const granted = (found.details?.proficiencies ?? []).filter(
+      (grant) => grant.sourceTrait?.name === "Keen Senses",
+    );
+    expect(granted.map((grant) => grant.proficiency.name)).toEqual(["Skill: Perception"]);
+    expect(granted.map((grant) => grant.ordinal)).toEqual([10_000]);
+  });
+
   it("answers a creator and a player alike for every option both can read", async () => {
     const { dm, player, campaign } = fixture;
     const [creator, seated] = await run(
