@@ -1,11 +1,9 @@
 import {
-  type AccountId,
-  type CampaignId,
   CurrentActor,
   MagicItem,
   type MagicItemBody,
-  type MagicItemFilterValues,
-  type MagicItemId,
+  MagicItemFilterValues,
+  MagicItemId,
   type MagicItemLibraryCreate,
   type MagicItemLibraryUpdate,
   type MagicItemReference,
@@ -13,15 +11,17 @@ import {
   NotFound,
   type Page,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -34,56 +34,20 @@ import {
 } from "./paging.js";
 import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
-interface MagicItemRow extends ProvenanceColumns {
-  readonly id: MagicItemId;
-  readonly campaign_id: CampaignId | null;
-  readonly account_id: AccountId | null;
-  readonly derived_from: MagicItemId | null;
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  readonly name: string;
-  readonly category_index: string;
-  readonly category_name: string;
-  readonly rarity_index: string;
-  readonly rarity_name: string;
-  readonly rarity_sort: number;
-  readonly requires_attunement: boolean;
-  readonly attunement_requirement: string | null;
-  readonly is_variant: boolean;
-  readonly variant_count: number;
-  readonly base_item_id: MagicItemId | null;
-  readonly base_item_name: string | null;
-  readonly variant_ids: ReadonlyArray<MagicItemId>;
-  readonly variant_names: ReadonlyArray<string>;
-  readonly image: string | null;
-  readonly body: MagicItemBody;
-}
+/**
+ * A `magic_item` row as the wire reads it, with `selectExtras`'s base-item
+ * name and variant lists beside it, decoded by `SqlSchema`. The document is
+ * `body`; `source_*` columns are not on the wire and the decode drops them.
+ */
+const MagicItemRow = classFromColumns(
+  MagicItem,
+  { ...MagicItem.fields, ...timestampColumns },
+  { magicItem: "body" },
+);
 
-export const toMagicItem = (row: MagicItemRow): MagicItem =>
-  new MagicItem({
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    name: row.name,
-    categoryIndex: row.category_index,
-    categoryName: row.category_name,
-    rarityIndex: row.rarity_index,
-    rarityName: row.rarity_name,
-    raritySort: row.rarity_sort,
-    requiresAttunement: row.requires_attunement,
-    attunementRequirement: row.attunement_requirement,
-    isVariant: row.is_variant,
-    variantCount: row.variant_count,
-    baseItemId: row.base_item_id,
-    baseItemName: row.base_item_name,
-    variantIds: row.variant_ids,
-    variantNames: row.variant_names,
-    image: row.image,
-    magicItem: row.body,
-    ...provenanceOf(row),
-  });
+const MagicItemFilterRequest = Schema.toType(MagicItemFilterValues);
+/** The written columns, as `createColumns` and `updateColumns` build them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 const encodeBody = (body: MagicItemBody): string => JSON.stringify(body);
 
@@ -281,22 +245,27 @@ const narrowedBy = (
   return clauses;
 };
 
-const orderingsOf = (sql: SqlClient.SqlClient): Record<MagicItemSort, Ordering<MagicItemRow>> => {
-  const name = orderColumn<MagicItemRow>(sql, sql`magic_item.name`, "text", (row) => row.name);
-  const id = orderColumn<MagicItemRow>(sql, sql`magic_item.id`, "uuid", (row) => row.id);
+const orderingsOf = (sql: SqlClient.SqlClient): Record<MagicItemSort, Ordering<MagicItem>> => {
+  const name = orderColumn<MagicItem>(sql, sql`magic_item.name`, "text", (row) => row.name);
+  const id = orderColumn<MagicItem>(sql, sql`magic_item.id`, "uuid", (row) => row.id);
   return {
     name: [name, id],
     recent: [
-      timeColumn<MagicItemRow>(sql, sql`magic_item.created_at`, (row) => row.created_at, "desc"),
+      timeColumn<MagicItem>(
+        sql,
+        sql`magic_item.created_at`,
+        (row) => DateTime.toDateUtc(row.createdAt),
+        "desc",
+      ),
       name,
       id,
     ],
     rarity: [
-      orderColumn<MagicItemRow>(
+      orderColumn<MagicItem>(
         sql,
         sql`magic_item.rarity_sort`,
         "double precision",
-        (row) => row.rarity_sort,
+        (row) => row.raritySort,
       ),
       name,
       id,
@@ -372,88 +341,115 @@ export class MagicItems extends Context.Service<
       const libraryExtras = (actor: Parameters<typeof libraryRowReadable>[2]) =>
         selectExtras(sql, libraryRowReadable(sql, "magic_item_variant", actor));
 
+      const inLibraryPage = SqlSchema.findAll({
+        Request: MagicItemFilterRequest,
+        Result: MagicItemRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const [, ordering] = orderingFor(filter);
+            return sql`
+              select ${libraryExtras(actor)}
+              from magic_item
+              left join magic_item magic_item_base
+                on magic_item_base.id = magic_item.base_item_id
+               and ${libraryRowReadable(sql, "magic_item_base", actor)}
+              where ${sql.and([
+                libraryRowReadable(sql, "magic_item", actor),
+                ...narrowedBy(sql, filter),
+                ...pageClauses(sql, ordering, filter.cursor),
+              ])}
+              order by ${orderClause(sql, ordering)}
+              limit ${pageLimit(filter.limit)}
+            `;
+          }),
+      });
+      /** One item this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(MagicItemId),
+        Result: MagicItemRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${libraryExtras(actor)}
+              from magic_item
+              left join magic_item magic_item_base
+                on magic_item_base.id = magic_item.base_item_id
+               and ${libraryRowReadable(sql, "magic_item_base", actor)}
+              where magic_item.id = ${id}
+                and ${libraryRowReadable(sql, "magic_item", actor)}
+            `,
+          ),
+      });
+      /** A new original. `account_id` comes from the actor, in `createColumns`'s owner. */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Columns),
+        Result: MagicItemRow,
+        execute: (columns) => sql`
+          insert into magic_item ${sql.insert(columns)}
+          returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
+        `,
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: MagicItemId, columns: Columns })),
+        Result: MagicItemRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update magic_item set ${setClause(sql, columns)}
+              where magic_item.id = ${id}
+                and ${libraryRowWritable(sql, "magic_item", actor)}
+              returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(MagicItemId),
+        Result: fromColumns(Schema.Struct({ id: MagicItemId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from magic_item
+              where magic_item.id = ${id}
+                and ${libraryRowWritable(sql, "magic_item", actor)}
+              returning magic_item.id
+            `,
+          ),
+      });
+
       return {
         library: (filter) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
+            Effect.map(inLibraryPage(filter), (rows) => {
               const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<MagicItemRow>`
-                select ${libraryExtras(actor)}
-                from magic_item
-                left join magic_item magic_item_base
-                  on magic_item_base.id = magic_item.base_item_id
-                 and ${libraryRowReadable(sql, "magic_item_base", actor)}
-                where ${sql.and([
-                  libraryRowReadable(sql, "magic_item", actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toMagicItem);
+              return pageOfRows(rows, filter.limit, ordering, sort, (item) => item);
             }),
           ),
 
-        libraryFindById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<MagicItemRow>`
-                select ${libraryExtras(actor)}
-                from magic_item
-                left join magic_item magic_item_base
-                  on magic_item_base.id = magic_item.base_item_id
-                 and ${libraryRowReadable(sql, "magic_item_base", actor)}
-                where magic_item.id = ${id}
-                  and ${libraryRowReadable(sql, "magic_item", actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-              return toMagicItem(rows[0]!);
-            }),
-          ),
+        libraryFindById: (id) => dieOnSqlError(inLibrary(id).pipe(orNotFound("magic_item", id))),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<MagicItemRow>`
-                insert into magic_item ${sql.insert(createColumns(payload, { account_id: actor.accountId }))}
-                returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
-              `;
-              return toMagicItem(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertOriginal(
+                createColumns(payload, { account_id: actor.accountId }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         libraryUpdate: (id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<MagicItemRow>`
-                update magic_item set ${setClause(sql, updateColumns(patch))}
-                where magic_item.id = ${id}
-                  and ${libraryRowWritable(sql, "magic_item", actor)}
-                returning *, null::text as base_item_name, '{}'::uuid[] as variant_ids, '{}'::text[] as variant_names
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-              return toMagicItem(rows[0]!);
-            }),
+            updateOriginal({ id, columns: updateColumns(patch) }).pipe(
+              orNotFound("magic_item", id),
+            ),
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: MagicItemId }>`
-                delete from magic_item
-                where magic_item.id = ${id}
-                  and ${libraryRowWritable(sql, "magic_item", actor)}
-                returning magic_item.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "magic_item", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("magic_item", id)))),
       };
     }),
   );

@@ -1,12 +1,10 @@
 import {
-  type AccountId,
-  type CampaignId,
   CurrentActor,
   Equipment,
   type EquipmentBody,
   type EquipmentCost,
-  type EquipmentFilterValues,
-  type EquipmentId,
+  EquipmentFilterValues,
+  EquipmentId,
   type EquipmentLibraryCreate,
   type EquipmentLibraryUpdate,
   type EquipmentReference,
@@ -14,15 +12,17 @@ import {
   NotFound,
   type Page,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -35,90 +35,28 @@ import {
 } from "./paging.js";
 import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
-interface EquipmentRow extends ProvenanceColumns {
-  readonly id: EquipmentId;
-  readonly campaign_id: CampaignId | null;
-  readonly account_id: AccountId | null;
-  readonly derived_from: EquipmentId | null;
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  readonly name: string;
-  readonly category_index: string;
-  readonly category_name: string;
-  readonly cost_quantity: number;
-  readonly cost_unit: string;
-  readonly cost_gp: number;
-  readonly weight: number | null;
-  readonly weight_sort: number;
-  readonly gear_category_index: string | null;
-  readonly gear_category_name: string | null;
-  readonly armor_category: string | null;
-  readonly weapon_category: string | null;
-  readonly weapon_range: string | null;
-  readonly category_range: string | null;
-  readonly tool_category: string | null;
-  readonly vehicle_category: string | null;
-  readonly armor_class_base: number | null;
-  readonly armor_class_dex_bonus: boolean | null;
-  readonly armor_class_max_bonus: number | null;
-  readonly strength_minimum: number | null;
-  readonly stealth_disadvantage: boolean | null;
-  readonly damage_dice: string | null;
-  readonly damage_type_index: string | null;
-  readonly damage_type_name: string | null;
-  readonly two_handed_damage_dice: string | null;
-  readonly two_handed_damage_type_index: string | null;
-  readonly two_handed_damage_type_name: string | null;
-  readonly range_normal: number | null;
-  readonly range_long: number | null;
-  readonly throw_range_normal: number | null;
-  readonly throw_range_long: number | null;
-  readonly property_indexes: ReadonlyArray<string>;
-  readonly property_names: ReadonlyArray<string>;
-  readonly body: EquipmentBody;
-}
+/**
+ * An `equipment` row as the wire reads it, decoded off `select *` by
+ * `SqlSchema`: the document is `body`, and the `source_*` and denormalised
+ * damage-type columns the wire does not carry are dropped by the decode.
+ */
+const equipmentFields = { ...Equipment.fields, ...timestampColumns } as const;
+const EquipmentRow = classFromColumns(Equipment, equipmentFields, { equipment: "body" });
 
-export const toEquipment = (row: EquipmentRow): Equipment =>
-  new Equipment({
-    id: row.id,
-    sourceKey: row.source_key,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    name: row.name,
-    categoryIndex: row.category_index,
-    categoryName: row.category_name,
-    costQuantity: row.cost_quantity,
-    costUnit: row.cost_unit,
-    costGp: row.cost_gp,
-    weight: row.weight,
-    gearCategoryIndex: row.gear_category_index,
-    gearCategoryName: row.gear_category_name,
-    armorCategory: row.armor_category,
-    weaponCategory: row.weapon_category,
-    weaponRange: row.weapon_range,
-    categoryRange: row.category_range,
-    toolCategory: row.tool_category,
-    vehicleCategory: row.vehicle_category,
-    armorClassBase: row.armor_class_base,
-    armorClassDexBonus: row.armor_class_dex_bonus,
-    armorClassMaxBonus: row.armor_class_max_bonus,
-    strengthMinimum: row.strength_minimum,
-    stealthDisadvantage: row.stealth_disadvantage,
-    damageDice: row.damage_dice,
-    damageTypeIndex: row.damage_type_index,
-    damageTypeName: row.damage_type_name,
-    twoHandedDamageDice: row.two_handed_damage_dice,
-    rangeNormal: row.range_normal,
-    rangeLong: row.range_long,
-    throwRangeNormal: row.throw_range_normal,
-    throwRangeLong: row.throw_range_long,
-    propertyIndexes: row.property_indexes,
-    propertyNames: row.property_names,
-    equipment: row.body,
-    ...provenanceOf(row),
-  });
+/**
+ * A page's row: the same columns plus `weight_sort`, the `weight` ordering's
+ * key, which is not on the wire and is not always `weight` (a row with none
+ * sorts as 0). The page answers the `Equipment` built from the rest.
+ */
+const EquipmentPageRow = fromColumns(
+  Schema.Struct({ ...equipmentFields, weightSort: Schema.Number }),
+  { equipment: "body" },
+);
+type EquipmentPageRow = typeof EquipmentPageRow.Type;
+
+const EquipmentFilterRequest = Schema.toType(EquipmentFilterValues);
+/** The written columns, as `createColumns` and `updateColumns` build them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 const encodeBody = (body: EquipmentBody): string => JSON.stringify(body);
 
@@ -371,32 +309,39 @@ const narrowedBy = (
   return clauses;
 };
 
-const orderingsOf = (sql: SqlClient.SqlClient): Record<EquipmentSort, Ordering<EquipmentRow>> => {
-  const name = orderColumn<EquipmentRow>(sql, sql`equipment.name`, "text", (row) => row.name);
-  const id = orderColumn<EquipmentRow>(sql, sql`equipment.id`, "uuid", (row) => row.id);
+const orderingsOf = (
+  sql: SqlClient.SqlClient,
+): Record<EquipmentSort, Ordering<EquipmentPageRow>> => {
+  const name = orderColumn<EquipmentPageRow>(sql, sql`equipment.name`, "text", (row) => row.name);
+  const id = orderColumn<EquipmentPageRow>(sql, sql`equipment.id`, "uuid", (row) => row.id);
   return {
     name: [name, id],
     recent: [
-      timeColumn<EquipmentRow>(sql, sql`equipment.created_at`, (row) => row.created_at, "desc"),
+      timeColumn<EquipmentPageRow>(
+        sql,
+        sql`equipment.created_at`,
+        (row) => DateTime.toDateUtc(row.createdAt),
+        "desc",
+      ),
       name,
       id,
     ],
     cost: [
-      orderColumn<EquipmentRow>(
+      orderColumn<EquipmentPageRow>(
         sql,
         sql`equipment.cost_gp`,
         "double precision",
-        (row) => row.cost_gp,
+        (row) => row.costGp,
       ),
       name,
       id,
     ],
     weight: [
-      orderColumn<EquipmentRow>(
+      orderColumn<EquipmentPageRow>(
         sql,
         sql`equipment.weight_sort`,
         "double precision",
-        (row) => row.weight_sort,
+        (row) => row.weightSort,
       ),
       name,
       id,
@@ -459,13 +404,13 @@ export class EquipmentRepo extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      return {
-        library: (filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<EquipmentRow>`
+      const inLibraryPage = SqlSchema.findAll({
+        Request: EquipmentFilterRequest,
+        Result: EquipmentPageRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const [, ordering] = orderingFor(filter);
+            return sql`
               select * from equipment
               where ${sql.and([
                 libraryRowReadable(sql, "equipment", actor),
@@ -475,84 +420,116 @@ export class EquipmentRepo extends Context.Service<
               order by ${orderClause(sql, ordering)}
               limit ${pageLimit(filter.limit)}
             `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toEquipment);
-            }),
-          ),
-
-        bundledNamed: (names) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const wanted = [
-                ...new Set(names.map((name) => name.trim().toLowerCase()).filter((n) => n !== "")),
-              ];
-              if (wanted.length === 0) return [];
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<EquipmentRow>`
+          }),
+      });
+      const bundled = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(Schema.String)),
+        Result: EquipmentRow,
+        execute: (wanted) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
               select * from equipment
               where equipment.campaign_id is null
                 and equipment.account_id is null
-                and lower(equipment.name) = any(${wanted})
+                and lower(equipment.name) = any(${[...wanted]})
                 and ${libraryRowReadable(sql, "equipment", actor)}
               order by lower(equipment.name), equipment.id
-            `;
-              return rows.map(toEquipment);
-            }),
+            `,
           ),
-
-        libraryFindById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<EquipmentRow>`
+      });
+      /** One row this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(EquipmentId),
+        Result: EquipmentRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
               select * from equipment
               where equipment.id = ${id}
                 and ${libraryRowReadable(sql, "equipment", actor)}
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-              return toEquipment(rows[0]!);
+            `,
+          ),
+      });
+      /** A new original. `account_id` comes from the actor, in `createColumns`'s owner. */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Columns),
+        Result: EquipmentRow,
+        execute: (columns) => sql`insert into equipment ${sql.insert(columns)} returning *`,
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: EquipmentId, columns: Columns })),
+        Result: EquipmentRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update equipment set ${setClause(sql, columns)}
+              where equipment.id = ${id}
+                and ${libraryRowWritable(sql, "equipment", actor)}
+              returning *
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(EquipmentId),
+        Result: fromColumns(Schema.Struct({ id: EquipmentId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from equipment
+              where equipment.id = ${id}
+                and ${libraryRowWritable(sql, "equipment", actor)}
+              returning equipment.id
+            `,
+          ),
+      });
+
+      return {
+        library: (filter) =>
+          dieOnSqlError(
+            Effect.map(inLibraryPage(filter), (rows) => {
+              const [sort, ordering] = orderingFor(filter);
+              // The decode has checked every field; the key is all that is left over.
+              return pageOfRows(
+                rows,
+                filter.limit,
+                ordering,
+                sort,
+                ({ weightSort: _, ...fields }) => new Equipment(fields, { disableChecks: true }),
+              );
             }),
           ),
+
+        bundledNamed: (names) => {
+          const wanted = [
+            ...new Set(names.map((name) => name.trim().toLowerCase()).filter((n) => n !== "")),
+          ];
+          return wanted.length === 0 ? Effect.succeed([]) : dieOnSqlError(bundled(wanted));
+        },
+
+        libraryFindById: (id) => dieOnSqlError(inLibrary(id).pipe(orNotFound("equipment", id))),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<EquipmentRow>`
-              insert into equipment ${sql.insert(createColumns(payload, { account_id: actor.accountId }))}
-              returning *
-            `;
-              return toEquipment(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertOriginal(
+                createColumns(payload, { account_id: actor.accountId }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         libraryUpdate: (id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<EquipmentRow>`
-              update equipment set ${setClause(sql, updateColumns(patch))}
-              where equipment.id = ${id}
-                and ${libraryRowWritable(sql, "equipment", actor)}
-              returning *
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-              return toEquipment(rows[0]!);
-            }),
+            updateOriginal({ id, columns: updateColumns(patch) }).pipe(orNotFound("equipment", id)),
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: EquipmentId }>`
-              delete from equipment
-              where equipment.id = ${id}
-                and ${libraryRowWritable(sql, "equipment", actor)}
-              returning equipment.id
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "equipment", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("equipment", id)))),
       };
     }),
   );
