@@ -656,12 +656,23 @@ test.describe("touch", () => {
       for (let step = 1; step <= 8; step++) await touch("touchMove", x, y - step * 20);
       await touch("touchEnd", x, y - 160);
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrolled);
-      // A fling carries on past the finger: wait for the window to stop.
-      await page.waitForFunction(
+      // A fling carries on past the finger, and past a later `scrollIntoView`:
+      // wait until the window has fired no scroll for a while. Two reads of
+      // `scrollY` a moment apart can agree while the fling is still running,
+      // and the long press below would then land beside its grip.
+      await page.evaluate(
         () =>
-          new Promise<boolean>((resolve) => {
-            const from = window.scrollY;
-            setTimeout(() => resolve(window.scrollY === from), 150);
+          new Promise<void>((resolve) => {
+            let quiet = setTimeout(done, 300);
+            function done() {
+              window.removeEventListener("scroll", moved);
+              resolve();
+            }
+            function moved() {
+              clearTimeout(quiet);
+              quiet = setTimeout(done, 300);
+            }
+            window.addEventListener("scroll", moved, { passive: true });
           }),
       );
       await expect(page.locator("[data-dragging]")).toHaveCount(0);
