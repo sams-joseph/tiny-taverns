@@ -13,6 +13,8 @@ export interface PendingMove {
   readonly placement: EncounterPlacement;
   /** The frame's ids, in order, at the press. */
   readonly framed: ReadonlyArray<EncounterId>;
+  /** The server took it, and the frame's next read is its answer. */
+  readonly sent?: true;
 }
 
 const sameOrder = (
@@ -43,20 +45,25 @@ export const orderOver = <E extends Pick<Encounter, "id">>(
  * The move remembers the frame's order it was made on and applies only while
  * the frame still holds it (`orderOver`). A refused move drops it, so the row
  * goes back and the failure is said; a refused write re-reads nothing
- * (`useMutation`). One move at a time (`busy`), so an answer never lands over a
- * later move. The write names `reads.encounters`, which the list, the prep and
- * so the Overview and the start dialog all answer.
+ * (`useMutation`). One move at a time (`busy`), held until the frame has read
+ * again after the move, so an answer never lands over a later move. The write
+ * names `reads.encounters`, which the list, the prep and so the Overview and the
+ * start dialog all answer.
  */
 export const useEncounterOrder = (campaignId: CampaignId, encounters: ReadonlyArray<Encounter>) => {
   const { busy, failure, submit } = useMutation();
   const [pending, setPending] = useState<PendingMove | undefined>();
 
-  // A frame that has moved on has answered the move: forget it, so a later
-  // return to the old order is not mistaken for the moment it was made in.
-  const stale = pending !== undefined && !sameOrder(encounters, pending.framed);
+  // A frame that has moved on, or read again once the move was sent, has
+  // answered the move: forget it, so a later return to the old order is not
+  // mistaken for the moment it was made in.
   useEffect(() => {
-    if (stale) setPending(undefined);
-  }, [stale]);
+    setPending((current) =>
+      current === undefined || current.sent === true || !sameOrder(encounters, current.framed)
+        ? undefined
+        : current,
+    );
+  }, [encounters]);
 
   const move = async (encounterId: EncounterId, placement: EncounterPlacement) => {
     setPending({ encounterId, placement, framed: encounters.map((encounter) => encounter.id) });
@@ -70,9 +77,16 @@ export const useEncounterOrder = (campaignId: CampaignId, encounters: ReadonlyAr
           : client.encounters.move({ params, payload: { after: placement.after } }),
       [reads.encounters(campaignId)],
     );
-    if (Result.isFailure(done)) setPending(undefined);
+    setPending((current) =>
+      Result.isFailure(done) || current === undefined ? undefined : { ...current, sent: true },
+    );
     return Result.isSuccess(done);
   };
 
-  return { ordered: orderOver(encounters, pending), move, busy, failure };
+  return {
+    ordered: orderOver(encounters, pending),
+    move,
+    busy: busy || pending !== undefined,
+    failure,
+  };
 };

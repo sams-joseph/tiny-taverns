@@ -1489,6 +1489,8 @@ export interface Answer {
    * set, `body` is ignored.
    */
   readonly sse?: string;
+  /** Held until this settles, for a test that acts while the answer is on its way. */
+  readonly until?: Promise<unknown>;
 }
 
 export interface Call {
@@ -2075,12 +2077,12 @@ export const installStubServer = (): StubServer => {
       );
     }
     const body = typeof answer.body === "function" ? answer.body() : answer.body;
-    return Promise.resolve(
+    const respond = () =>
       new Response(answer.status === 204 ? null : JSON.stringify(body), {
         status: answer.status,
         headers: { "content-type": "application/json" },
-      }),
-    );
+      });
+    return answer.until === undefined ? Promise.resolve(respond()) : answer.until.then(respond);
   });
 
   return server;
