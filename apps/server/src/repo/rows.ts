@@ -1,5 +1,5 @@
 import { type AssistantTurnId, NotFound, type Origin, type Visibility } from "@taverns/api";
-import { type Cause, DateTime, Effect, Schema } from "effect";
+import { type Cause, DateTime, Effect, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import type { SqlClient, Statement } from "effect/unstable/sql";
 
@@ -17,16 +17,49 @@ import type { SqlClient, Statement } from "effect/unstable/sql";
  *
  * A column whose driver value differs from the wire's encoding needs its own
  * field: `timestampColumns` for the two every content row carries.
+ *
+ * A field whose column is not its snake_case spelling — the wire's
+ * `statBlock` is a creature's `body` — names that column in `columns`, so the
+ * query keeps selecting what the table holds and the rename is still made
+ * here and nowhere else.
  */
-export const fromColumns = <Fields extends Schema.Struct.Fields>(schema: Schema.Struct<Fields>) =>
+export const fromColumns = <Fields extends Schema.Struct.Fields>(
+  schema: Schema.Struct<Fields>,
+  columns: { readonly [K in keyof Fields]?: string } = {},
+) =>
   schema.pipe(
     Schema.encodeKeys(
       Object.fromEntries(
         Object.keys(schema.fields).map((field) => [
           field,
-          field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
+          columns[field] ?? field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
         ]),
       ) as { readonly [K in keyof Fields]: string },
+    ),
+  );
+
+/**
+ * `fromColumns` for a wire type that is a `Schema.Class`: the same decode,
+ * answering an instance of the class.
+ *
+ * The instance is the point. A class's encoder checks `instanceof`, so a plain
+ * struct with the right fields is refused at the `HttpApi` boundary. The
+ * decoded fields go to the class's own constructor with its checks off,
+ * because the decode has just run those same checks field by field. A row is
+ * only ever read, so the way back to columns is refused rather than written.
+ */
+export const classFromColumns = <Self, Fields extends Schema.Struct.Fields>(
+  Class: new (fields: Schema.Struct<Fields>["Type"], options?: Schema.MakeOptions) => Self,
+  fields: Fields,
+  columns: { readonly [K in keyof Fields]?: string } = {},
+) =>
+  fromColumns(Schema.Struct(fields), columns).pipe(
+    Schema.decodeTo(
+      Schema.instanceOf(Class),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((row) => new Class(row, { disableChecks: true })),
+        SchemaGetter.forbidden(() => "a row is read, never written back"),
+      ),
     ),
   );
 

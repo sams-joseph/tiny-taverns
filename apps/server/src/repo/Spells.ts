@@ -1,5 +1,4 @@
 import {
-  type AccountId,
   type CampaignId,
   type CharacterSheet,
   type CharacterSpellbook,
@@ -12,22 +11,24 @@ import {
   type Page,
   Spell,
   type SpellBody,
-  type SpellFilterValues,
-  type SpellId,
+  SpellFilterValues,
+  SpellId,
   type SpellLibraryCreate,
   type SpellLibraryUpdate,
   type SpellReference,
   type SpellSort,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -47,52 +48,26 @@ import {
   vocabularyAt,
 } from "./visibility.js";
 
-interface SpellRow extends ProvenanceColumns {
-  readonly id: SpellId;
-  readonly campaign_id: CampaignId | null;
-  readonly account_id: AccountId | null;
-  readonly derived_from: SpellId | null;
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  readonly name: string;
-  readonly level: number;
-  readonly school_index: string;
-  readonly school_name: string;
-  readonly ritual: boolean;
-  readonly concentration: boolean;
-  readonly casting_time: string;
-  readonly spell_range: string;
-  readonly duration: string;
-  readonly class_indexes: ReadonlyArray<string>;
-  readonly class_names: ReadonlyArray<string>;
-  readonly subclass_indexes: ReadonlyArray<string>;
-  readonly subclass_names: ReadonlyArray<string>;
-  readonly body: SpellBody;
-}
+/**
+ * A `spell` row as the wire reads it, decoded off `select *` by `SqlSchema`.
+ * The range and the document are the two columns not spelled like their
+ * fields; `source_*` columns are not on the wire and the decode drops them.
+ */
+const SpellRow = classFromColumns(
+  Spell,
+  { ...Spell.fields, ...timestampColumns },
+  { range: "spell_range", spell: "body" },
+);
 
-export const toSpell = (row: SpellRow): Spell =>
-  new Spell({
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    name: row.name,
-    level: row.level,
-    schoolIndex: row.school_index,
-    schoolName: row.school_name,
-    ritual: row.ritual,
-    concentration: row.concentration,
-    castingTime: row.casting_time,
-    range: row.spell_range,
-    duration: row.duration,
-    classIndexes: row.class_indexes,
-    classNames: row.class_names,
-    subclassIndexes: row.subclass_indexes,
-    subclassNames: row.subclass_names,
-    spell: row.body,
-    ...provenanceOf(row),
-  });
+const SpellFilterRequest = Schema.toType(SpellFilterValues);
+/** What `spellbookRulesFor` reads a class's list with, once the class table has spoken. */
+const SpellListRequest = Schema.toType(
+  Schema.Struct({
+    className: Schema.String,
+    subclassName: Schema.optional(Schema.String),
+    highestSlotLevel: Schema.Number,
+  }),
+);
 
 const encodeBody = (body: SpellBody): string => JSON.stringify(body);
 
@@ -200,18 +175,23 @@ const narrowedBy = (
   return clauses;
 };
 
-const orderingsOf = (sql: SqlClient.SqlClient): Record<SpellSort, Ordering<SpellRow>> => {
-  const name = orderColumn<SpellRow>(sql, sql`spell.name`, "text", (row) => row.name);
-  const id = orderColumn<SpellRow>(sql, sql`spell.id`, "uuid", (row) => row.id);
+const orderingsOf = (sql: SqlClient.SqlClient): Record<SpellSort, Ordering<Spell>> => {
+  const name = orderColumn<Spell>(sql, sql`spell.name`, "text", (row) => row.name);
+  const id = orderColumn<Spell>(sql, sql`spell.id`, "uuid", (row) => row.id);
   return {
     name: [name, id],
     recent: [
-      timeColumn<SpellRow>(sql, sql`spell.created_at`, (row) => row.created_at, "desc"),
+      timeColumn<Spell>(
+        sql,
+        sql`spell.created_at`,
+        (row) => DateTime.toDateUtc(row.createdAt),
+        "desc",
+      ),
       name,
       id,
     ],
     level: [
-      orderColumn<SpellRow>(sql, sql`spell.level`, "double precision", (row) => row.level),
+      orderColumn<Spell>(sql, sql`spell.level`, "double precision", (row) => row.level),
       name,
       id,
     ],
@@ -414,28 +394,33 @@ export const spellbookRulesFor = (sql: SqlClient.SqlClient, source: SpellbookSou
       return { ...rules, spells: [] };
     }
 
-    const spellRows = yield* sql<SpellRow>`
-      select * from spell
-      where ${sql.and([
-        source.vocabulary("spell"),
-        sql`(spell.level = 0 or spell.level <= ${highestSlotLevel})`,
-        subclassName === undefined || subclassName === ""
-          ? matchesClassList(sql, resolvedClassName)
-          : sql.or([
-              matchesClassList(sql, resolvedClassName),
-              matchesSubclassList(sql, subclassName),
-            ]),
-      ])}
-      order by spell.level asc, spell.name asc, spell.id asc
-    `;
+    const spells = yield* SqlSchema.findAll({
+      Request: SpellListRequest,
+      Result: SpellRow,
+      execute: ({ className, subclassName, highestSlotLevel }) => sql`
+        select * from spell
+        where ${sql.and([
+          source.vocabulary("spell"),
+          sql`(spell.level = 0 or spell.level <= ${highestSlotLevel})`,
+          subclassName === undefined
+            ? matchesClassList(sql, className)
+            : sql.or([matchesClassList(sql, className), matchesSubclassList(sql, subclassName)]),
+        ])}
+        order by spell.level asc, spell.name asc, spell.id asc
+      `,
+    })({
+      className: resolvedClassName,
+      highestSlotLevel,
+      ...(subclassName === undefined || subclassName === "" ? {} : { subclassName }),
+    });
     return {
       ...rules,
-      spells: spellRows.map((row) => {
+      spells: spells.map((spell) => {
         const subclass =
           subclassName !== undefined &&
-          row.subclass_names.some((name) => name.toLowerCase() === subclassName.toLowerCase());
+          spell.subclassNames.some((name) => name.toLowerCase() === subclassName.toLowerCase());
         return {
-          spell: toSpell(row),
+          spell,
           list: subclass ? ("subclass" as const) : ("class" as const),
         };
       }),
@@ -502,13 +487,13 @@ export class Spells extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      return {
-        library: (filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<SpellRow>`
+      const inLibraryPage = SqlSchema.findAll({
+        Request: SpellFilterRequest,
+        Result: SpellRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const [, ordering] = orderingFor(filter);
+            return sql`
               select * from spell
               where ${sql.and([
                 libraryRowReadable(sql, "spell", actor),
@@ -518,7 +503,68 @@ export class Spells extends Context.Service<
               order by ${orderClause(sql, ordering)}
               limit ${pageLimit(filter.limit)}
             `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toSpell);
+          }),
+      });
+      /** One spell this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(SpellId),
+        Result: SpellRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select * from spell
+              where spell.id = ${id}
+                and ${libraryRowReadable(sql, "spell", actor)}
+            `,
+          ),
+      });
+      /**
+       * A new original in this account's Library. `account_id` comes from the
+       * actor and from nothing a caller supplied.
+       */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Record(Schema.String, Schema.Unknown)),
+        Result: SpellRow,
+        execute: (columns) => sql`insert into spell ${sql.insert(columns)} returning *`,
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ id: SpellId, columns: Schema.Record(Schema.String, Schema.Unknown) }),
+        ),
+        Result: SpellRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update spell set ${setClause(sql, columns)}
+              where spell.id = ${id}
+                and ${libraryRowWritable(sql, "spell", actor)}
+              returning *
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(SpellId),
+        Result: fromColumns(Schema.Struct({ id: SpellId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from spell
+              where spell.id = ${id}
+                and ${libraryRowWritable(sql, "spell", actor)}
+              returning spell.id
+            `,
+          ),
+      });
+
+      return {
+        library: (filter) =>
+          dieOnSqlError(
+            Effect.map(inLibraryPage(filter), (rows) => {
+              const [sort, ordering] = orderingFor(filter);
+              return pageOfRows(rows, filter.limit, ordering, sort, (spell) => spell);
             }),
           ),
 
@@ -559,60 +605,26 @@ export class Spells extends Context.Service<
             }),
           ),
 
-        libraryFindById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<SpellRow>`
-              select * from spell
-              where spell.id = ${id}
-                and ${libraryRowReadable(sql, "spell", actor)}
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-              return toSpell(rows[0]!);
-            }),
-          ),
+        libraryFindById: (id) => dieOnSqlError(inLibrary(id).pipe(orNotFound("spell", id))),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<SpellRow>`
-              insert into spell ${sql.insert(createColumns(payload, { account_id: actor.accountId }))}
-              returning *
-            `;
-              return toSpell(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertOriginal(
+                createColumns(payload, { account_id: actor.accountId }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         libraryUpdate: (id, patch) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<SpellRow>`
-              update spell set ${setClause(sql, updateColumns(patch))}
-              where spell.id = ${id}
-                and ${libraryRowWritable(sql, "spell", actor)}
-              returning *
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-              return toSpell(rows[0]!);
-            }),
+            updateOriginal({ id, columns: updateColumns(patch) }).pipe(orNotFound("spell", id)),
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: SpellId }>`
-              delete from spell
-              where spell.id = ${id}
-                and ${libraryRowWritable(sql, "spell", actor)}
-              returning spell.id
-            `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "spell", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("spell", id)))),
       };
     }),
   );

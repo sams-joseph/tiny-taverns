@@ -1,10 +1,10 @@
 import {
-  type AccountId,
-  type CampaignId,
+  CampaignId,
   Creature,
   CreatureFacets,
+  CreatureFilter,
   type CreatureFilterValues,
-  type CreatureId,
+  CreatureId,
   type CreatureLibraryCreate,
   type CreatureLibraryUpdate,
   type CreatureSort,
@@ -14,15 +14,17 @@ import {
   type Page,
   type StatBlock,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -41,65 +43,24 @@ import {
   libraryRowWritable,
 } from "./visibility.js";
 
-interface CreatureRow extends ProvenanceColumns {
-  readonly id: CreatureId;
-  /** Null for a Library entity and for the bundled `system` corpus. */
-  readonly campaign_id: CampaignId | null;
-  /** Whose Library this is in; null for a campaign copy and for the bundle. */
-  readonly account_id: AccountId | null;
-  readonly derived_from: CreatureId | null;
-  readonly name: string;
-  readonly size: string | null;
-  readonly type: string;
-  readonly subtype: string | null;
-  readonly alignment: string | null;
-  readonly cr: string;
-  readonly cr_sort: number;
-  readonly ac: number;
-  readonly hp: number;
-  /** `text[]`; the pg driver hands these back as a real JS array. */
-  readonly environments: ReadonlyArray<string>;
-  readonly damage_vulnerabilities: ReadonlyArray<string>;
-  readonly damage_resistances: ReadonlyArray<string>;
-  readonly damage_immunities: ReadonlyArray<string>;
-  readonly condition_immunities: ReadonlyArray<string>;
-  readonly movement_modes: ReadonlyArray<string>;
-  readonly spellcaster: boolean;
-  readonly legendary: boolean;
-  /** Minimal source key this row snapshots, when it came from an imported source. */
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  /** `jsonb`; the pg driver parses it, so this arrives as the document itself. */
-  readonly body: StatBlock;
-}
+/**
+ * A `creature` row as the wire reads it, decoded off `select *` by
+ * `SqlSchema`. The stat block is `body`; `source_*` columns are not on the
+ * wire and the decode drops them.
+ */
+const CreatureRow = classFromColumns(
+  Creature,
+  { ...Creature.fields, ...timestampColumns },
+  { statBlock: "body" },
+);
 
-const toCreature = (row: CreatureRow): Creature =>
-  new Creature({
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    name: row.name,
-    size: row.size,
-    type: row.type,
-    subtype: row.subtype,
-    alignment: row.alignment,
-    cr: row.cr,
-    crSort: row.cr_sort,
-    ac: row.ac,
-    hp: row.hp,
-    environments: row.environments,
-    damageVulnerabilities: row.damage_vulnerabilities,
-    damageResistances: row.damage_resistances,
-    damageImmunities: row.damage_immunities,
-    conditionImmunities: row.condition_immunities,
-    movementModes: row.movement_modes,
-    spellcaster: row.spellcaster,
-    legendary: row.legendary,
-    statBlock: row.body,
-    ...provenanceOf(row),
-  });
+/** The Library's filter and the campaign picker's are one set of fields. */
+const LibraryFilterRequest = Schema.toType(Schema.Struct(CreatureFilter));
+const CampaignFilterRequest = Schema.toType(
+  Schema.Struct({ campaignId: CampaignId, ...CreatureFilter }),
+);
+/** The written columns, as `libraryCreate` and `libraryUpdate` build them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * The numeric sort key for a challenge rating written the way DMs write it.
@@ -353,23 +314,23 @@ const facetsIn = (
  * non-unique key names a position several rows wide, so a page boundary either
  * repeats a row or loses one. See `repo/paging.ts`.
  */
-const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<CreatureRow>> => {
-  const name = orderColumn<CreatureRow>(sql, sql`creature.name`, "text", (row) => row.name);
-  const id = orderColumn<CreatureRow>(sql, sql`creature.id`, "uuid", (row) => row.id);
+const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<Creature>> => {
+  const name = orderColumn<Creature>(sql, sql`creature.name`, "text", (row) => row.name);
+  const id = orderColumn<Creature>(sql, sql`creature.id`, "uuid", (row) => row.id);
   return {
     name: [name, id],
     recent: [
-      timeColumn<CreatureRow>(sql, sql`creature.created_at`, (row) => row.created_at, "desc"),
+      timeColumn<Creature>(
+        sql,
+        sql`creature.created_at`,
+        (row) => DateTime.toDateUtc(row.createdAt),
+        "desc",
+      ),
       name,
       id,
     ],
     cr: [
-      orderColumn<CreatureRow>(
-        sql,
-        sql`creature.cr_sort`,
-        "double precision",
-        (row) => row.cr_sort,
-      ),
+      orderColumn<Creature>(sql, sql`creature.cr_sort`, "double precision", (row) => row.crSort),
       name,
       id,
     ],
@@ -492,23 +453,25 @@ export class Creatures extends Context.Service<
        * that is simply wrong, and the ordering name is on the cursor precisely
        * so this lookup is total.
        */
-      const orderingFor = (filter: LibraryFilterValues): [CreatureSort, Ordering<CreatureRow>] => {
+      const orderingFor = (filter: LibraryFilterValues): [CreatureSort, Ordering<Creature>] => {
         const sort = filter.cursor?.o ?? filter.sort ?? "cr";
         return [sort, orderings[sort]];
       };
 
       /** For the Library: this account's own entities and the bundle. */
-      const inLibrary = (id: CreatureId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<CreatureRow>`
-            select * from creature
-            where creature.id = ${id}
-              and ${libraryRowReadable(sql, "creature", actor)}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-          return rows[0]!;
-        });
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(CreatureId),
+        Result: CreatureRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select * from creature
+              where creature.id = ${id}
+                and ${libraryRowReadable(sql, "creature", actor)}
+            `,
+          ),
+      });
 
       /**
        * What a campaign context may name by id: anything the picker lists
@@ -523,20 +486,97 @@ export class Creatures extends Context.Service<
        * on a read reached by path — a player would read a bundled stat block,
        * and a stranger's campaign id would answer instead of 404ing.
        */
-      const reachable = (campaignId: CampaignId, id: CreatureId) =>
-        Effect.gen(function* () {
-          const actor = yield* CurrentActor;
-          const rows = yield* sql<CreatureRow>`
-            select * from creature
-            where creature.id = ${id}
-              and ${sql.or([
-                corpusRowReadable(sql, "creature", campaignId, actor),
-                usableInCampaign(sql, "creature", campaignId, actor),
-              ])}
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-          return rows[0]!;
-        });
+      const reachable = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, id: CreatureId })),
+        Result: CreatureRow,
+        execute: ({ campaignId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select * from creature
+              where creature.id = ${id}
+                and ${sql.or([
+                  corpusRowReadable(sql, "creature", campaignId, actor),
+                  usableInCampaign(sql, "creature", campaignId, actor),
+                ])}
+            `,
+          ),
+      });
+
+      /**
+       * One page under the caller's reach clause. Every clause is part of the
+       * *same* `where`: the visibility predicate, what the client narrowed, and
+       * where the previous page stopped. Nothing is filtered after the query,
+       * which is what makes a paged read neither a leak nor a short page — see
+       * `repo/paging.ts`.
+       */
+      const page = (reach: Statement.Fragment, filter: LibraryFilterValues) => {
+        const [, ordering] = orderingFor(filter);
+        return sql`
+          select * from creature
+          where ${sql.and([reach, ...narrowedBy(sql, filter), ...pageClauses(sql, ordering, filter.cursor)])}
+          order by ${orderClause(sql, ordering)}
+          limit ${pageLimit(filter.limit)}
+        `;
+      };
+      const usablePage = SqlSchema.findAll({
+        Request: CampaignFilterRequest,
+        Result: CreatureRow,
+        execute: ({ campaignId, ...filter }) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+            page(usableInCampaign(sql, "creature", campaignId, actor), filter),
+          ),
+      });
+      const inLibraryPage = SqlSchema.findAll({
+        Request: LibraryFilterRequest,
+        Result: CreatureRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+            page(libraryRowReadable(sql, "creature", actor), filter),
+          ),
+      });
+      /**
+       * A new original. `account_id` comes from the actor and from nothing a
+       * caller supplied; `campaign_id` is not named, so it takes the column
+       * default, null.
+       */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Columns),
+        Result: CreatureRow,
+        execute: (columns) => sql`insert into creature ${sql.insert(columns)} returning *`,
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: CreatureId, columns: Columns })),
+        Result: CreatureRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update creature set ${setClause(sql, columns)}
+              where creature.id = ${id}
+                and ${libraryRowWritable(sql, "creature", actor)}
+              returning *
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(CreatureId),
+        Result: fromColumns(Schema.Struct({ id: CreatureId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from creature
+              where creature.id = ${id}
+                and ${libraryRowWritable(sql, "creature", actor)}
+              returning creature.id
+            `,
+          ),
+      });
+      const asPage = (filter: LibraryFilterValues) => (rows: ReadonlyArray<Creature>) => {
+        const [sort, ordering] = orderingFor(filter);
+        return pageOfRows(rows, filter.limit, ordering, sort, (creature) => creature);
+      };
 
       return {
         list: (campaignId, filter) =>
@@ -546,45 +586,11 @@ export class Creatures extends Context.Service<
               // A 404 rather than an empty list, so an unreachable campaign
               // does not read as "nothing to pick from".
               yield* ensureCampaignReadable(sql, campaignId, actor);
-              const [sort, ordering] = orderingFor(filter);
-              // Every one of these is a clause of the *same* `where`: the
-              // visibility predicate, what the client narrowed, and where the
-              // previous page stopped. Nothing is filtered after the query,
-              // which is what makes a paged read neither a leak nor a short
-              // page — see `repo/paging.ts`.
-              const clauses = [
-                usableInCampaign(sql, "creature", campaignId, actor),
-                ...narrowedBy(sql, filter),
-                ...pageClauses(sql, ordering, filter.cursor),
-              ];
-              const rows = yield* sql<CreatureRow>`
-                select * from creature
-                where ${sql.and(clauses)}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toCreature);
+              return asPage(filter)(yield* usablePage({ campaignId, ...filter }));
             }),
           ),
 
-        library: (filter) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<CreatureRow>`
-                select * from creature
-                where ${sql.and([
-                  libraryRowReadable(sql, "creature", actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toCreature);
-            }),
-          ),
+        library: (filter) => dieOnSqlError(Effect.map(inLibraryPage(filter), asPage(filter))),
 
         libraryEnvironments: () =>
           dieOnSqlError(
@@ -602,7 +608,7 @@ export class Creatures extends Context.Service<
             }),
           ),
 
-        libraryFindById: (id) => dieOnSqlError(Effect.map(inLibrary(id), toCreature)),
+        libraryFindById: (id) => dieOnSqlError(inLibrary(id).pipe(orNotFound("creature", id))),
 
         /**
          * Author a monster into this account's Library.
@@ -621,40 +627,36 @@ export class Creatures extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const rows = yield* sql<CreatureRow>`
-                insert into creature ${sql.insert(
-                  defined({
-                    account_id: actor.accountId,
-                    name: payload.name,
-                    size: payload.size,
-                    type: payload.type,
-                    subtype: payload.subtype,
-                    alignment: payload.alignment,
-                    cr: payload.cr,
-                    cr_sort: payload.crSort ?? crSortFor(payload.cr),
-                    ac: payload.ac,
-                    hp: payload.hp,
-                    environments: payload.environments,
-                    damage_vulnerabilities: payload.damageVulnerabilities,
-                    damage_resistances: payload.damageResistances,
-                    damage_immunities: payload.damageImmunities,
-                    condition_immunities: payload.conditionImmunities,
-                    movement_modes: payload.movementModes,
-                    spellcaster: payload.spellcaster,
-                    legendary: payload.legendary,
-                    body: payload.statBlock && encodeStatBlock(payload.statBlock),
-                  }),
-                )}
-                returning *
-              `;
-              return toCreature(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertOriginal(
+                defined({
+                  account_id: actor.accountId,
+                  name: payload.name,
+                  size: payload.size,
+                  type: payload.type,
+                  subtype: payload.subtype,
+                  alignment: payload.alignment,
+                  cr: payload.cr,
+                  cr_sort: payload.crSort ?? crSortFor(payload.cr),
+                  ac: payload.ac,
+                  hp: payload.hp,
+                  environments: payload.environments,
+                  damage_vulnerabilities: payload.damageVulnerabilities,
+                  damage_resistances: payload.damageResistances,
+                  damage_immunities: payload.damageImmunities,
+                  condition_immunities: payload.conditionImmunities,
+                  movement_modes: payload.movementModes,
+                  spellcaster: payload.spellcaster,
+                  legendary: payload.legendary,
+                  body: payload.statBlock && encodeStatBlock(payload.statBlock),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
         libraryUpdate: (id, patch) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
               const columns = defined({
                 name: patch.name,
                 size: patch.size,
@@ -675,17 +677,10 @@ export class Creatures extends Context.Service<
                 legendary: patch.legendary,
                 body: patch.statBlock && encodeStatBlock(patch.statBlock),
               });
-              const rows = yield* sql<CreatureRow>`
-                update creature set ${setClause(sql, columns)}
-                where creature.id = ${id}
-                  and ${libraryRowWritable(sql, "creature", actor)}
-                returning *
-              `;
               // A bundled creature lands here — readable in this Library and
               // owned by nobody — and so does another account's entity. Both get
               // the same refusal as "no such creature", on purpose.
-              if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-              return toCreature(rows[0]!);
+              return yield* updateOriginal({ id, columns }).pipe(orNotFound("creature", id));
             }),
           ),
 
@@ -704,21 +699,10 @@ export class Creatures extends Context.Service<
          * copy being a snapshot means.
          */
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: CreatureId }>`
-                delete from creature
-                where creature.id = ${id}
-                  and ${libraryRowWritable(sql, "creature", actor)}
-                returning creature.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "creature", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("creature", id)))),
 
         findById: (campaignId, id) =>
-          dieOnSqlError(Effect.map(reachable(campaignId, id), toCreature)),
+          dieOnSqlError(reachable({ campaignId, id }).pipe(orNotFound("creature", id))),
       };
     }),
   );

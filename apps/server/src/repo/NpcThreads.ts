@@ -1,25 +1,24 @@
 import {
   type AccountId,
-  type Actor,
-  type CampaignId,
+  Actor,
+  CampaignId,
   Conflict,
   CurrentActor,
-  type NpcChannel,
-  type NpcId,
+  NpcId,
   NpcSessionMonitor,
   type NpcSessionState,
   NpcThread,
-  type NpcThreadId,
+  NpcThreadId,
   NpcTurn,
   type NpcTurnId,
   type NpcWho,
   NotFound,
   PlayerNpc,
   RateLimited,
-  type SessionId,
+  SessionId,
 } from "@taverns/api";
-import { Context, Effect, Layer, Option } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { Array as Arr, Context, Effect, Layer, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { initiativeOrder } from "./liveTables.js";
@@ -30,7 +29,14 @@ import {
   playerNpcReadable,
   toPlayerNpc,
 } from "./Npcs.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import {
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  fromColumns,
+  orNotFound,
+  timestampColumns,
+} from "./rows.js";
 import {
   type Containment,
   campaignWritableById,
@@ -65,51 +71,38 @@ export const NPC: Containment = inCampaign("npc");
 export const NPC_THREADS: Containment = under("npc_thread", "npc_id", NPC);
 export const NPC_TURNS: Containment = under("npc_turn", "thread_id", NPC_THREADS);
 
-interface ThreadRow extends ProvenanceColumns {
-  readonly id: NpcThreadId;
-  readonly npc_id: NpcId;
-  readonly channel: NpcChannel;
-  readonly account_id: AccountId | null;
-  readonly session_id: SessionId | null;
-  readonly session_state: NpcSessionState;
-  readonly title: string;
-}
+/** An `npc_thread` row as the wire reads it, decoded off `npc_thread.*` by `SqlSchema`. */
+const ThreadRow = classFromColumns(NpcThread, { ...NpcThread.fields, ...timestampColumns });
 
-interface TurnRow extends ProvenanceColumns {
-  readonly id: NpcTurnId;
-  readonly thread_id: NpcThreadId;
-  readonly who: NpcWho;
-  readonly body: string;
-  readonly template_version: string | null;
-  readonly prompt_tokens: number | null;
-  readonly speaker_name?: string | null;
-}
+/**
+ * An `npc_turn` row as the wire reads it: the line is `body`, and
+ * `speaker_name` is there only where a query joins the speaker's account —
+ * everywhere else the turn names no speaker.
+ */
+const TurnRow = classFromColumns(
+  NpcTurn,
+  {
+    ...NpcTurn.fields,
+    speakerName: Schema.NullOr(Schema.String).pipe(
+      Schema.withDecodingDefaultKey(Effect.succeed(null)),
+    ),
+    createdAt: timestampColumns.createdAt,
+  },
+  { text: "body" },
+);
 
-const toThread = (row: ThreadRow): NpcThread => {
-  const { createdAt, updatedAt } = provenanceOf(row);
-  return new NpcThread({
-    id: row.id,
-    npcId: row.npc_id,
-    channel: row.channel,
-    sessionId: row.session_id,
-    sessionState: row.session_state,
-    title: row.title,
-    createdAt,
-    updatedAt,
-  });
-};
+/**
+ * What a creator read is asked with: the proof's campaign and actor, which is
+ * what its predicates take. The proof itself stays in the method signatures.
+ */
+const creatorFields = { campaign: CampaignId, actor: Actor } as const;
+const asked = (creator: CampaignCreatorActor) => ({
+  campaign: creator.campaign,
+  actor: creator.actor,
+});
 
-export const toNpcTurn = (row: TurnRow): NpcTurn =>
-  new NpcTurn({
-    id: row.id,
-    threadId: row.thread_id,
-    who: row.who,
-    speakerName: row.speaker_name ?? null,
-    text: row.body,
-    templateVersion: row.template_version,
-    promptTokens: row.prompt_tokens,
-    createdAt: provenanceOf(row).createdAt,
-  });
+/** The written columns of an insert, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /** A thread's name is the line that started it, shortened rather than cut mid-word. */
 const titleFrom = (text: string): string => {
@@ -299,7 +292,10 @@ export class NpcThreads extends Context.Service<
       const sign = yield* npcImageSigner;
       const live = yield* Effect.serviceOption(LiveEvents);
 
-      const threadReachable = (creator: CampaignCreatorActor, npcId: NpcId) =>
+      const threadReachable = (
+        creator: Pick<CampaignCreatorActor, "campaign" | "actor">,
+        npcId: NpcId,
+      ) =>
         sql.and([
           containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor),
           sql`npc_thread.channel = 'rehearsal'`,
@@ -426,42 +422,74 @@ export class NpcThreads extends Context.Service<
           return actor;
         });
 
+      const SessionNpcRequest = Schema.toType(
+        Schema.Struct({ campaignId: CampaignId, sessionId: SessionId, npcId: NpcId }),
+      );
+      /** This NPC's table chat for this night, as the caller may reach it. */
+      const sessionThread = SqlSchema.findOne({
+        Request: SessionNpcRequest,
+        Result: ThreadRow,
+        execute: ({ campaignId, sessionId, npcId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select npc_thread.* from npc_thread
+              where ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
+              limit 1
+            `,
+          ),
+      });
       const ensureSessionThread = (campaignId: CampaignId, sessionId: SessionId, npcId: NpcId) =>
         Effect.gen(function* () {
           const actor = yield* CurrentActor;
-          const rows = yield* sql<ThreadRow>`
-            select npc_thread.* from npc_thread
-            where ${sessionThreadReachable(campaignId, sessionId, npcId, actor)}
-            limit 1
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id: npcId });
-          return { actor, thread: toThread(rows[0]!) };
+          const thread = yield* sessionThread({ campaignId, sessionId, npcId }).pipe(
+            orNotFound("npc_thread", npcId),
+          );
+          return { actor, thread };
         });
 
+      const creatorSessionThread = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ ...creatorFields, npcId: NpcId, sessionId: SessionId }),
+        ),
+        Result: ThreadRow,
+        execute: ({ campaign, actor, npcId, sessionId }) => sql`
+          select npc_thread.* from npc_thread
+          join npc on npc.id = npc_thread.npc_id
+          join session on session.id = npc_thread.session_id
+          join campaign on campaign.id = session.campaign_id
+          where npc_thread.npc_id = ${npcId}
+            and npc_thread.channel = 'session_shared'
+            and npc_thread.session_id = ${sessionId}
+            and npc.campaign_id = ${campaign}
+            and npc.archived_at is null
+            and campaign.id = ${campaign}
+            and campaign.current_session_id = session.id
+            and ${containedChildWritable(sql, NPC_THREADS, npcId, campaign, actor)}
+          limit 1
+        `,
+      });
       const ensureCreatorSessionThread = (
         creator: CampaignCreatorActor,
         npcId: NpcId,
         sessionId: SessionId,
       ) =>
-        Effect.gen(function* () {
-          const rows = yield* sql<ThreadRow>`
-            select npc_thread.* from npc_thread
-            join npc on npc.id = npc_thread.npc_id
-            join session on session.id = npc_thread.session_id
-            join campaign on campaign.id = session.campaign_id
-            where npc_thread.npc_id = ${npcId}
-              and npc_thread.channel = 'session_shared'
-              and npc_thread.session_id = ${sessionId}
-              and npc.campaign_id = ${creator.campaign}
-              and npc.archived_at is null
-              and campaign.id = ${creator.campaign}
-              and campaign.current_session_id = session.id
-              and ${containedChildWritable(sql, NPC_THREADS, npcId, creator.campaign, creator.actor)}
-            limit 1
-          `;
-          if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id: npcId });
-          return toThread(rows[0]!);
-        });
+        creatorSessionThread({ ...asked(creator), npcId, sessionId }).pipe(
+          orNotFound("npc_thread", npcId),
+        );
+
+      const setThreadState = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ id: NpcThreadId, state: NpcThread.fields.sessionState }),
+        ),
+        Result: ThreadRow,
+        execute: ({ id, state }) => sql`
+          update npc_thread
+          set session_state = ${state}, updated_at = now()
+          where npc_thread.id = ${id}
+          returning *
+        `,
+      });
 
       const setSessionState = (
         creator: CampaignCreatorActor,
@@ -473,13 +501,10 @@ export class NpcThreads extends Context.Service<
           const current = yield* ensureCreatorSessionThread(creator, npcId, sessionId);
           if (current.sessionState === "closed") return yield* alreadyClosed;
           if (current.sessionState === state) return current;
-          const rows = yield* sql<ThreadRow>`
-            update npc_thread
-            set session_state = ${state}, updated_at = now()
-            where npc_thread.id = ${current.id}
-            returning *
-          `;
-          const changed = toThread(rows[0]!);
+          // The row was just read under the creator's predicate; losing it now is a defect.
+          const changed = yield* setThreadState({ id: current.id, state }).pipe(
+            Effect.catchTag("NoSuchElementError", Effect.die),
+          );
           yield* Option.match(live, {
             onNone: () => Effect.void,
             onSome: (events) => events.touched(sessionId),
@@ -487,30 +512,219 @@ export class NpcThreads extends Context.Service<
           return changed;
         });
 
+      const CreatorNpcRequest = Schema.toType(Schema.Struct({ ...creatorFields, npcId: NpcId }));
+      const PlayerNpcRequest = Schema.toType(
+        Schema.Struct({ campaignId: CampaignId, npcId: NpcId }),
+      );
+
+      /** A creator's rehearsal threads with one NPC, newest first. */
+      const rehearsals = SqlSchema.findAll({
+        Request: CreatorNpcRequest,
+        Result: ThreadRow,
+        execute: ({ npcId, ...creator }) => sql`
+          select npc_thread.* from npc_thread
+          where ${threadReachable(creator, npcId)}
+          order by npc_thread.updated_at desc, npc_thread.id desc
+        `,
+      });
+      const rehearsal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, npcId: NpcId, id: NpcThreadId })),
+        Result: ThreadRow,
+        execute: ({ npcId, id, ...creator }) => sql`
+          select npc_thread.* from npc_thread
+          where npc_thread.id = ${id} and ${threadReachable(creator, npcId)}
+        `,
+      });
+      const rehearsalTurns = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ ...creatorFields, threadId: NpcThreadId })),
+        Result: TurnRow,
+        execute: ({ campaign, actor, threadId }) => sql`
+          select npc_turn.* from npc_turn
+          where ${containedChildWritable(sql, NPC_TURNS, threadId, campaign, actor)}
+          order by npc_turn.created_at asc, npc_turn.id asc
+        `,
+      });
+      /** A player's own private threads with one NPC, newest first. */
+      const privateThreads = SqlSchema.findAll({
+        Request: PlayerNpcRequest,
+        Result: ThreadRow,
+        execute: ({ campaignId, npcId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select npc_thread.* from npc_thread
+              where ${playerThreadReachable(campaignId, npcId, actor)}
+              order by npc_thread.updated_at desc, npc_thread.id desc
+            `,
+          ),
+      });
+      const privateThread = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, npcId: NpcId, id: NpcThreadId }),
+        ),
+        Result: ThreadRow,
+        execute: ({ campaignId, npcId, id }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select npc_thread.* from npc_thread
+              where npc_thread.id = ${id} and ${playerThreadReachable(campaignId, npcId, actor)}
+            `,
+          ),
+      });
+      const privateTurns = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, npcId: NpcId, threadId: NpcThreadId }),
+        ),
+        Result: TurnRow,
+        execute: ({ campaignId, npcId, threadId }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select npc_turn.* from npc_turn
+              where npc_turn.thread_id = ${threadId}
+                and exists (select 1 from npc_thread where npc_thread.id = npc_turn.thread_id and ${playerThreadReachable(campaignId, npcId, actor)})
+              order by npc_turn.created_at asc, npc_turn.id asc
+            `,
+          ),
+      });
+      /** A new thread. What reaches it was checked by the method that built the columns. */
+      const insertThread = SqlSchema.findOne({
+        Request: Columns,
+        Result: ThreadRow,
+        execute: (columns) => sql`insert into npc_thread ${sql.insert(columns)} returning *`,
+      });
+      /**
+       * A turn of a rehearsal or a private chat. The turn id is minted before
+       * the reply, so a second write of the same id is the finished reply
+       * replacing the streamed one.
+       */
+      const upsertTurn = SqlSchema.findOne({
+        Request: Columns,
+        Result: TurnRow,
+        execute: (columns) => sql`
+          insert into npc_turn ${sql.insert(columns)}
+          on conflict (id) do update
+          set body = excluded.body,
+              finish_reason = excluded.finish_reason,
+              updated_at = now()
+          returning *
+        `,
+      });
+      /** The night's table chat, opened or found as it is. */
+      const openTableThread = SqlSchema.findOne({
+        Request: Columns,
+        Result: ThreadRow,
+        execute: (columns) => sql`
+          insert into npc_thread ${sql.insert(columns)}
+          on conflict (npc_id, session_id) where channel = 'session_shared'
+          do update set updated_at = npc_thread.updated_at
+          returning *
+        `,
+      });
+      /** A table chat's lines, each user line with who said it. */
+      const tableTurns = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(NpcThreadId)),
+        Result: TurnRow,
+        execute: (threadIds) => sql`
+          select npc_turn.*, account.name as speaker_name
+          from npc_turn
+          left join account on account.id = npc_turn.account_id
+          where npc_turn.thread_id = any(${[...threadIds]})
+          order by npc_turn.thread_id, npc_turn.created_at asc, npc_turn.id asc
+        `,
+      });
+      /**
+       * A player's line at the table, unless this request already wrote it:
+       * the request id is what makes a retried send land once. `None` is the
+       * retry.
+       */
+      const insertTableTurn = SqlSchema.findOneOption({
+        Request: Columns,
+        Result: TurnRow,
+        execute: (columns) => sql`
+          insert into npc_turn ${sql.insert(columns)}
+          on conflict (thread_id, account_id, request_id) where who = 'user' and request_id is not null and account_id is not null
+          do nothing
+          returning *
+        `,
+      });
+      /** The line a retried request wrote the first time. */
+      const requestedTurn = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            threadId: NpcThreadId,
+            accountId: Schema.String,
+            requestId: Schema.String,
+          }),
+        ),
+        Result: TurnRow,
+        execute: ({ threadId, accountId, requestId }) => sql`
+          select npc_turn.*, account.name as speaker_name
+          from npc_turn
+          left join account on account.id = npc_turn.account_id
+          where npc_turn.thread_id = ${threadId}
+            and npc_turn.account_id = ${accountId}
+            and npc_turn.request_id = ${requestId}
+            and npc_turn.who = 'user'
+          limit 1
+        `,
+      });
+
+      /** Every table chat of this night, newest first — what the creator's monitor lists. */
+      const tableThreads = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ campaign: CampaignId, sessionId: SessionId })),
+        Result: ThreadRow,
+        execute: ({ campaign, sessionId }) => sql`
+          select npc_thread.*
+          from npc_thread
+          join npc on npc.id = npc_thread.npc_id
+          where npc_thread.channel = 'session_shared'
+            and npc_thread.session_id = ${sessionId}
+            and npc.campaign_id = ${campaign}
+            and npc.archived_at is null
+          order by npc_thread.updated_at desc, npc_thread.id desc
+        `,
+      });
+      /** How many proposals each thread has waiting; a thread with none has no row. */
+      const pendingProposals = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(NpcThreadId)),
+        Result: fromColumns(Schema.Struct({ threadId: NpcThreadId, count: Schema.Int })),
+        execute: (threadIds) => sql`
+          select npc_proposal.thread_id, count(*)::int as count
+          from npc_proposal
+          where npc_proposal.thread_id = any(${[...threadIds]})
+            and npc_proposal.state = 'pending'
+          group by npc_proposal.thread_id
+        `,
+      });
+      /** How each thread's latest NPC line ended; a thread the NPC has not spoken in has no row. */
+      const lastFinishes = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(NpcThreadId)),
+        Result: fromColumns(
+          Schema.Struct({ threadId: NpcThreadId, finishReason: Schema.NullOr(Schema.String) }),
+        ),
+        execute: (threadIds) => sql`
+          select distinct on (npc_turn.thread_id) npc_turn.thread_id, npc_turn.finish_reason
+          from npc_turn
+          where npc_turn.thread_id = any(${[...threadIds]})
+            and npc_turn.who = 'npc'
+          order by npc_turn.thread_id, npc_turn.created_at desc, npc_turn.id desc
+        `,
+      });
+
       return {
         list: (creator, npcId) =>
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureContainedRowWritable(sql, NPC, npcId, creator.campaign, creator.actor);
-              const rows = yield* sql<ThreadRow>`
-                select npc_thread.* from npc_thread
-                where ${threadReachable(creator, npcId)}
-                order by npc_thread.updated_at desc, npc_thread.id desc
-              `;
-              return rows.map(toThread);
+              return yield* rehearsals({ ...asked(creator), npcId });
             }),
           ),
 
         findById: (creator, npcId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const rows = yield* sql<ThreadRow>`
-                select npc_thread.* from npc_thread
-                where npc_thread.id = ${id} and ${threadReachable(creator, npcId)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id });
-              return toThread(rows[0]!);
-            }),
+            rehearsal({ ...asked(creator), npcId, id }).pipe(orNotFound("npc_thread", id)),
           ),
 
         start: (creator, npcId, firstLine) =>
@@ -524,15 +738,12 @@ export class NpcThreads extends Context.Service<
                   and ${containedChildWritable(sql, NPC, npcId, creator.campaign, creator.actor)}
               `;
               if (live.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
-              const rows = yield* sql<ThreadRow>`
-                insert into npc_thread ${sql.insert({
-                  npc_id: npcId,
-                  channel: "rehearsal",
-                  title: titleFrom(firstLine),
-                })}
-                returning *
-              `;
-              return toThread(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insertThread({
+                npc_id: npcId,
+                channel: "rehearsal",
+                title: titleFrom(firstLine),
+              }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
 
@@ -540,12 +751,7 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               yield* ensureThread(creator, npcId, threadId);
-              const rows = yield* sql<TurnRow>`
-                select npc_turn.* from npc_turn
-                where ${containedChildWritable(sql, NPC_TURNS, threadId, creator.campaign, creator.actor)}
-                order by npc_turn.created_at asc, npc_turn.id asc
-              `;
-              return rows.map(toNpcTurn);
+              return yield* rehearsalTurns({ ...asked(creator), threadId });
             }),
           ),
 
@@ -554,61 +760,35 @@ export class NpcThreads extends Context.Service<
             sql.withTransaction(
               Effect.gen(function* () {
                 yield* ensureThread(creator, npcId, threadId);
-                const rows = yield* sql<TurnRow>`
-                  insert into npc_turn ${sql.insert(
-                    defined({
-                      id: draft.id,
-                      thread_id: threadId,
-                      who: draft.who,
-                      body: draft.text,
-                      template_version: draft.templateVersion,
-                      prompt_tokens: draft.promptTokens,
-                      model: draft.model,
-                      finish_reason: draft.finishReason,
-                      // The NPC's own line is generated content. It points at
-                      // no Hob turn because it is not Hob's — see 0037.
-                      ...(draft.who === "npc" ? { origin: "assistant" } : {}),
-                    }),
-                  )}
-                  on conflict (id) do update
-                  set body = excluded.body,
-                      finish_reason = excluded.finish_reason,
-                      updated_at = now()
-                  returning *
-                `;
+                const turn = yield* upsertTurn(
+                  defined({
+                    id: draft.id,
+                    thread_id: threadId,
+                    who: draft.who,
+                    body: draft.text,
+                    template_version: draft.templateVersion,
+                    prompt_tokens: draft.promptTokens,
+                    model: draft.model,
+                    finish_reason: draft.finishReason,
+                    // The NPC's own line is generated content. It points at
+                    // no Hob turn because it is not Hob's — see 0037.
+                    ...(draft.who === "npc" ? { origin: "assistant" } : {}),
+                  }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 yield* sql`
                   update npc_thread set updated_at = now()
                   where npc_thread.id = ${threadId} and ${threadReachable(creator, npcId)}
                 `;
-                return toNpcTurn(rows[0]!);
+                return turn;
               }),
             ),
           ),
 
-        playerList: (campaignId, npcId) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<ThreadRow>`
-                select npc_thread.* from npc_thread
-                where ${playerThreadReachable(campaignId, npcId, actor)}
-                order by npc_thread.updated_at desc, npc_thread.id desc
-              `;
-              return rows.map(toThread);
-            }),
-          ),
+        playerList: (campaignId, npcId) => dieOnSqlError(privateThreads({ campaignId, npcId })),
 
         playerFindById: (campaignId, npcId, id) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<ThreadRow>`
-                select npc_thread.* from npc_thread
-                where npc_thread.id = ${id} and ${playerThreadReachable(campaignId, npcId, actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "npc_thread", id });
-              return toThread(rows[0]!);
-            }),
+            privateThread({ campaignId, npcId, id }).pipe(orNotFound("npc_thread", id)),
           ),
 
         playerStart: (campaignId, npcId, firstLine, limits) =>
@@ -621,16 +801,12 @@ export class NpcThreads extends Context.Service<
                 `;
                 if (live.length === 0) return yield* new NotFound({ resource: "npc", id: npcId });
                 yield* checkPlayerRate(campaignId, actor, limits);
-                const rows = yield* sql<ThreadRow>`
-                  insert into npc_thread ${sql.insert({
-                    npc_id: npcId,
-                    account_id: actor.accountId,
-                    channel: "player_direct",
-                    title: titleFrom(firstLine),
-                  })}
-                  returning *
-                `;
-                return toThread(rows[0]!);
+                return yield* insertThread({
+                  npc_id: npcId,
+                  account_id: actor.accountId,
+                  channel: "player_direct",
+                  title: titleFrom(firstLine),
+                }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
               }),
             ),
           ),
@@ -638,14 +814,8 @@ export class NpcThreads extends Context.Service<
         playerTurns: (campaignId, npcId, threadId) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* ensurePlayerThread(campaignId, npcId, threadId);
-              const rows = yield* sql<TurnRow>`
-                select npc_turn.* from npc_turn
-                where npc_turn.thread_id = ${threadId}
-                  and exists (select 1 from npc_thread where npc_thread.id = npc_turn.thread_id and ${playerThreadReachable(campaignId, npcId, actor)})
-                order by npc_turn.created_at asc, npc_turn.id asc
-              `;
-              return rows.map(toNpcTurn);
+              yield* ensurePlayerThread(campaignId, npcId, threadId);
+              return yield* privateTurns({ campaignId, npcId, threadId });
             }),
           ),
 
@@ -657,31 +827,24 @@ export class NpcThreads extends Context.Service<
                 if (draft.who === "user" && limits !== undefined) {
                   yield* checkPlayerRate(campaignId, actor, limits);
                 }
-                const rows = yield* sql<TurnRow>`
-                  insert into npc_turn ${sql.insert(
-                    defined({
-                      id: draft.id,
-                      thread_id: threadId,
-                      who: draft.who,
-                      body: draft.text,
-                      template_version: draft.templateVersion,
-                      prompt_tokens: draft.promptTokens,
-                      model: draft.model,
-                      finish_reason: draft.finishReason,
-                      ...(draft.who === "npc" ? { origin: "assistant" } : {}),
-                    }),
-                  )}
-                  on conflict (id) do update
-                  set body = excluded.body,
-                      finish_reason = excluded.finish_reason,
-                      updated_at = now()
-                  returning *
-                `;
+                const turn = yield* upsertTurn(
+                  defined({
+                    id: draft.id,
+                    thread_id: threadId,
+                    who: draft.who,
+                    body: draft.text,
+                    template_version: draft.templateVersion,
+                    prompt_tokens: draft.promptTokens,
+                    model: draft.model,
+                    finish_reason: draft.finishReason,
+                    ...(draft.who === "npc" ? { origin: "assistant" } : {}),
+                  }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 yield* sql`
                   update npc_thread set updated_at = now()
                   where npc_thread.id = ${threadId} and ${playerThreadReachable(campaignId, npcId, actor)}
                 `;
-                return toNpcTurn(rows[0]!);
+                return turn;
               }),
             ),
           ),
@@ -703,20 +866,14 @@ export class NpcThreads extends Context.Service<
                   `;
                   if (reachable.length === 0)
                     return yield* new NotFound({ resource: "npc", id: npcId });
-                  const rows = yield* sql<ThreadRow>`
-                    insert into npc_thread ${sql.insert({
-                      npc_id: npcId,
-                      session_id: sessionId,
-                      channel: "session_shared",
-                      visibility: "shared",
-                      session_state: "open",
-                      title: "At the table",
-                    })}
-                    on conflict (npc_id, session_id) where channel = 'session_shared'
-                    do update set updated_at = npc_thread.updated_at
-                    returning *
-                  `;
-                  const row = toThread(rows[0]!);
+                  const row = yield* openTableThread({
+                    npc_id: npcId,
+                    session_id: sessionId,
+                    channel: "session_shared",
+                    visibility: "shared",
+                    session_state: "open",
+                    title: "At the table",
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                   if (row.sessionState === "closed") return yield* blockedSessionState("closed");
                   return row;
                 }),
@@ -753,68 +910,46 @@ export class NpcThreads extends Context.Service<
               if (sessionRows.length === 0)
                 return yield* new NotFound({ resource: "session", id: sessionId });
 
-              const threadRows = yield* sql<ThreadRow>`
-                select npc_thread.*
-                from npc_thread
-                join npc on npc.id = npc_thread.npc_id
-                where npc_thread.channel = 'session_shared'
-                  and npc_thread.session_id = ${sessionId}
-                  and npc.campaign_id = ${creator.campaign}
-                  and npc.archived_at is null
-                order by npc_thread.updated_at desc, npc_thread.id desc
-              `;
+              const threads = yield* tableThreads({ campaign: creator.campaign, sessionId });
+              if (threads.length === 0) return [];
+              const threadIds = threads.map((thread) => thread.id);
 
-              return yield* Effect.all(
-                threadRows.map((threadRow) =>
-                  Effect.gen(function* () {
-                    const npcRows = yield* sql<PlayerNpcRow>`
-                      select ${playerNpcColumns(sql)}, npc_thread.session_state
-                      from npc
-                      join npc_thread on npc_thread.npc_id = npc.id
-                      where npc_thread.id = ${threadRow.id}
-                    `;
-                    const turns = (yield* sql<TurnRow>`
-                      select npc_turn.*, account.name as speaker_name
-                      from npc_turn
-                      left join account on account.id = npc_turn.account_id
-                      where npc_turn.thread_id = ${threadRow.id}
-                      order by npc_turn.created_at asc, npc_turn.id asc
-                    `).map(toNpcTurn);
-                    const proposalRows = yield* sql<{ readonly count: number }>`
-                      select count(*)::int as count
-                      from npc_proposal
-                      where npc_proposal.thread_id = ${threadRow.id}
-                        and npc_proposal.state = 'pending'
-                    `;
-                    const lastRows = yield* sql<{ readonly finish_reason: string | null }>`
-                      select npc_turn.finish_reason
-                      from npc_turn
-                      where npc_turn.thread_id = ${threadRow.id}
-                        and npc_turn.who = 'npc'
-                      order by npc_turn.created_at desc, npc_turn.id desc
-                      limit 1
-                    `;
-                    const thread = toThread(threadRow);
-                    const finish = lastRows[0]?.finish_reason ?? null;
-                    const lastFailure =
-                      finish === null || finish === "stop"
-                        ? null
-                        : `Last reply ended with ${finish}.`;
-                    return new NpcSessionMonitor({
-                      npc: toPlayerNpc(npcRows[0]!, sign),
-                      thread,
-                      turns,
-                      pendingProposals: proposalRows[0]?.count ?? 0,
-                      available: configured && thread.sessionState === "open",
-                      model,
-                      lastFailure: configured
-                        ? lastFailure
-                        : "No model is configured behind NPC chat.",
-                    });
-                  }),
-                ),
-                { concurrency: 4 },
+              // Everything below is one statement per kind of child for every
+              // open thread at once, filed back by thread id: the monitor is
+              // re-read on every doorbell during play, and it used to cost four
+              // statements per thread. `npc-session-monitor.test.ts` holds the
+              // count. The ids came out of the creator's query above, so these
+              // need no predicate of their own.
+              // A night has one table chat per NPC, so the NPC's id names its thread here.
+              const npcRows = yield* sql<PlayerNpcRow>`
+                select ${playerNpcColumns(sql)}, npc_thread.session_state
+                from npc
+                join npc_thread on npc_thread.npc_id = npc.id
+                where npc_thread.id = any(${threadIds})
+              `;
+              const npcOf = new Map(npcRows.map((row) => [row.id, row]));
+              const turnsOf = Arr.groupBy(yield* tableTurns(threadIds), (turn) => turn.threadId);
+              const pendingOf = new Map(
+                (yield* pendingProposals(threadIds)).map((row) => [row.threadId, row.count]),
               );
+              const finishOf = new Map(
+                (yield* lastFinishes(threadIds)).map((row) => [row.threadId, row.finishReason]),
+              );
+
+              return threads.map((thread) => {
+                const finish = finishOf.get(thread.id) ?? null;
+                const lastFailure =
+                  finish === null || finish === "stop" ? null : `Last reply ended with ${finish}.`;
+                return new NpcSessionMonitor({
+                  npc: toPlayerNpc(npcOf.get(thread.npcId)!, sign),
+                  thread,
+                  turns: turnsOf[thread.id] ?? [],
+                  pendingProposals: pendingOf.get(thread.id) ?? 0,
+                  available: configured && thread.sessionState === "open",
+                  model,
+                  lastFailure: configured ? lastFailure : "No model is configured behind NPC chat.",
+                });
+              });
             }),
           ),
 
@@ -858,14 +993,7 @@ export class NpcThreads extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const { thread } = yield* ensureSessionThread(campaignId, sessionId, npcId);
-              const rows = yield* sql<TurnRow>`
-                select npc_turn.*, account.name as speaker_name
-                from npc_turn
-                left join account on account.id = npc_turn.account_id
-                where npc_turn.thread_id = ${thread.id}
-                order by npc_turn.created_at asc, npc_turn.id asc
-              `;
-              return rows.map(toNpcTurn);
+              return yield* tableTurns([thread.id]);
             }),
           ),
 
@@ -882,47 +1010,33 @@ export class NpcThreads extends Context.Service<
                   if (draft.who === "user" && thread.sessionState !== "open") {
                     return yield* blockedSessionState(thread.sessionState);
                   }
-                  const insertedRows = yield* sql<TurnRow & { readonly inserted: boolean }>`
-                    insert into npc_turn ${sql.insert(
-                      defined({
-                        id: draft.id,
-                        thread_id: thread.id,
-                        who: draft.who,
-                        body: draft.text,
-                        account_id:
-                          draft.who === "user" ? (draft.accountId ?? actor.accountId) : undefined,
-                        request_id: draft.who === "user" ? draft.requestId : undefined,
-                        template_version: draft.templateVersion,
-                        prompt_tokens: draft.promptTokens,
-                        model: draft.model,
-                        finish_reason: draft.finishReason,
-                        ...(draft.who === "npc" ? { origin: "assistant" } : {}),
-                      }),
-                    )}
-                    on conflict (thread_id, account_id, request_id) where who = 'user' and request_id is not null and account_id is not null
-                    do nothing
-                    returning *, true as inserted
-                  `;
-                  const rows =
-                    insertedRows.length > 0
-                      ? insertedRows
-                      : yield* sql<TurnRow & { readonly inserted: boolean }>`
-                    select npc_turn.*, account.name as speaker_name, false as inserted
-                    from npc_turn
-                    left join account on account.id = npc_turn.account_id
-                    where npc_turn.thread_id = ${thread.id}
-                      and npc_turn.account_id = ${draft.accountId ?? actor.accountId}
-                      and npc_turn.request_id = ${draft.requestId ?? ""}
-                      and npc_turn.who = 'user'
-                    limit 1
-                  `;
-                  const row = rows[0];
-                  if (row === undefined)
-                    return yield* new NotFound({ resource: "npc_turn", id: draft.id });
-                  if (row.inserted) {
-                    yield* sql`update npc_thread set updated_at = now() where npc_thread.id = ${thread.id}`;
+                  const accountId = draft.accountId ?? actor.accountId;
+                  const inserted = yield* insertTableTurn(
+                    defined({
+                      id: draft.id,
+                      thread_id: thread.id,
+                      who: draft.who,
+                      body: draft.text,
+                      account_id: draft.who === "user" ? accountId : undefined,
+                      request_id: draft.who === "user" ? draft.requestId : undefined,
+                      template_version: draft.templateVersion,
+                      prompt_tokens: draft.promptTokens,
+                      model: draft.model,
+                      finish_reason: draft.finishReason,
+                      ...(draft.who === "npc" ? { origin: "assistant" } : {}),
+                    }),
+                  );
+                  if (Option.isNone(inserted)) {
+                    // A retry: answer with the line the first attempt wrote.
+                    const turn = yield* requestedTurn({
+                      threadId: thread.id,
+                      accountId,
+                      requestId: draft.requestId ?? "",
+                    }).pipe(orNotFound("npc_turn", draft.id));
+                    return { turn, inserted: false };
                   }
-                  return { turn: toNpcTurn(row), inserted: row.inserted };
+                  yield* sql`update npc_thread set updated_at = now() where npc_thread.id = ${thread.id}`;
+                  return { turn: inserted.value, inserted: true };
                 }),
               );
               if (written.inserted) {

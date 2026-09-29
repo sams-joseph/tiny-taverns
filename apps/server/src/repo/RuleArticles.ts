@@ -1,30 +1,29 @@
 import {
-  type AccountId,
-  type CampaignId,
   CurrentActor,
   NotFound,
   type Page,
   RuleArticle,
   type RuleArticleDetail,
-  type RuleArticleFilterValues,
-  type RuleArticleId,
+  RuleArticleFilterValues,
+  RuleArticleId,
   type RuleArticleLibraryCreate,
   type RuleArticleLibraryUpdate,
   type RuleArticleSort,
   RuleSection,
-  type RuleSectionId,
   type RuleSectionDraft,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { encodeRuleBlocks, sectionDraftsFrom } from "../ruleset/rules.js";
 import {
+  classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -37,52 +36,24 @@ import {
 } from "./paging.js";
 import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
-interface RuleArticleRow extends ProvenanceColumns {
-  readonly id: RuleArticleId;
-  readonly campaign_id: CampaignId | null;
-  readonly account_id: AccountId | null;
-  readonly derived_from: RuleArticleId | null;
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  readonly name: string;
-  readonly body: RuleArticle["intro"];
-  readonly section_count: number;
-}
+/**
+ * A `rule_article` row with its `section_count`, as `articleColumns` selects
+ * it, decoded by `SqlSchema`. The intro is `body` and the bundle's key is
+ * `source_key`.
+ */
+const RuleArticleRow = classFromColumns(
+  RuleArticle,
+  { ...RuleArticle.fields, ...timestampColumns },
+  { sourceIndex: "source_key", intro: "body" },
+);
+const RuleSectionRow = classFromColumns(RuleSection, RuleSection.fields, {
+  sourceIndex: "source_key",
+  blocks: "body",
+});
 
-interface RuleSectionRow {
-  readonly id: RuleSectionId;
-  readonly article_id: RuleArticleId;
-  readonly parent_section_id: RuleSectionId | null;
-  readonly source_key: string | null;
-  readonly title: string;
-  readonly body: RuleSection["blocks"];
-  readonly ordinal: number;
-}
-
-const toArticle = (row: RuleArticleRow): RuleArticle =>
-  new RuleArticle({
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    sourceIndex: row.source_key,
-    name: row.name,
-    intro: row.body,
-    sectionCount: row.section_count,
-    ...provenanceOf(row),
-  });
-
-const toSection = (row: RuleSectionRow): RuleSection =>
-  new RuleSection({
-    id: row.id,
-    articleId: row.article_id,
-    parentSectionId: row.parent_section_id,
-    sourceIndex: row.source_key,
-    title: row.title,
-    ordinal: row.ordinal,
-    blocks: row.body,
-  });
+const RuleArticleFilterRequest = Schema.toType(RuleArticleFilterValues);
+/** The written columns, as `createColumns` and `updateColumns` build them. */
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 const articleColumns = (table = "rule_article"): string => `
   ${table}.*,
@@ -113,20 +84,18 @@ const narrowedBy = (
 ): ReadonlyArray<Statement.Fragment> =>
   filter.q === undefined || filter.q.trim() === "" ? [] : [matchesQuery(sql, filter.q.trim())];
 
-const orderingsOf = (
-  sql: SqlClient.SqlClient,
-): Record<RuleArticleSort, Ordering<RuleArticleRow>> => {
-  const name = orderColumn<RuleArticleRow>(sql, sql`lower(rule_article.name)`, "text", (row) =>
+const orderingsOf = (sql: SqlClient.SqlClient): Record<RuleArticleSort, Ordering<RuleArticle>> => {
+  const name = orderColumn<RuleArticle>(sql, sql`lower(rule_article.name)`, "text", (row) =>
     row.name.toLowerCase(),
   );
-  const id = orderColumn<RuleArticleRow>(sql, sql`rule_article.id`, "uuid", (row) => row.id);
+  const id = orderColumn<RuleArticle>(sql, sql`rule_article.id`, "uuid", (row) => row.id);
   return {
     name: [name, id],
     recent: [
-      timeColumn<RuleArticleRow>(
+      timeColumn<RuleArticle>(
         sql,
         sql`rule_article.created_at`,
-        (row) => row.created_at,
+        (row) => DateTime.toDateUtc(row.createdAt),
         "desc",
       ),
       name,
@@ -204,73 +173,136 @@ export class RuleArticles extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      const sectionsFor = (articleId: RuleArticleId) =>
-        sql<RuleSectionRow>`
+      const sectionsOf = SqlSchema.findAll({
+        Request: Schema.toType(RuleArticleId),
+        Result: RuleSectionRow,
+        execute: (articleId) => sql`
           select id, article_id, parent_section_id, source_key, title, body, ordinal
           from rule_section
           where article_id = ${articleId}
           order by ordinal, title, id
-        `;
+        `,
+      });
 
-      const detail = (row: RuleArticleRow): Effect.Effect<RuleArticleDetail, never> =>
-        Effect.map(sectionsFor(row.id).pipe(dieOnSqlError), (sections) => ({
-          article: toArticle(row),
-          sections: sections.map(toSection),
+      const detail = (article: RuleArticle): Effect.Effect<RuleArticleDetail, never> =>
+        Effect.map(sectionsOf(article.id).pipe(dieOnSqlError), (sections) => ({
+          article,
+          sections,
         }));
+
+      const inLibraryPage = SqlSchema.findAll({
+        Request: RuleArticleFilterRequest,
+        Result: RuleArticleRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const [, ordering] = orderingFor(filter);
+            return sql`
+              select ${sql.unsafe(articleColumns())}
+              from rule_article
+              where ${sql.and([
+                libraryRowReadable(sql, "rule_article", actor),
+                ...narrowedBy(sql, filter),
+                ...pageClauses(sql, ordering, filter.cursor),
+              ])}
+              order by ${orderClause(sql, ordering)}
+              limit ${pageLimit(filter.limit)}
+            `;
+          }),
+      });
+      /** One article this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(RuleArticleId),
+        Result: RuleArticleRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select ${sql.unsafe(articleColumns())}
+              from rule_article
+              where rule_article.id = ${id}
+                and ${libraryRowReadable(sql, "rule_article", actor)}
+            `,
+          ),
+      });
+      /**
+       * The article a write just made or changed, read again inside its
+       * transaction so `section_count` counts the sections it wrote.
+       */
+      const reread = SqlSchema.findOne({
+        Request: Schema.toType(RuleArticleId),
+        Result: RuleArticleRow,
+        execute: (id) => sql`
+          select ${sql.unsafe(articleColumns())}
+          from rule_article
+          where id = ${id}
+        `,
+      });
+      /** A new original. `account_id` comes from the actor, in `createColumns`'s owner. */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Columns),
+        Result: fromColumns(Schema.Struct({ id: RuleArticleId })),
+        execute: (columns) => sql`
+          insert into rule_article ${sql.insert(columns)}
+          returning rule_article.id
+        `,
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: RuleArticleId, columns: Columns })),
+        Result: fromColumns(Schema.Struct({ id: RuleArticleId })),
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update rule_article
+              set ${setClause(sql, columns)}
+              where rule_article.id = ${id}
+                and ${libraryRowWritable(sql, "rule_article", actor)}
+              returning rule_article.id
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(RuleArticleId),
+        Result: fromColumns(Schema.Struct({ id: RuleArticleId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from rule_article
+              where rule_article.id = ${id}
+                and ${libraryRowWritable(sql, "rule_article", actor)}
+              returning rule_article.id
+            `,
+          ),
+      });
+      /** An article just written, with the sections it now has; not finding it is a defect. */
+      const written = (id: RuleArticleId) =>
+        Effect.flatMap(reread(id).pipe(Effect.catchTag("NoSuchElementError", Effect.die)), detail);
 
       return {
         library: (filter) =>
           dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
+            Effect.map(inLibraryPage(filter), (rows) => {
               const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<RuleArticleRow>`
-                select ${sql.unsafe(articleColumns())}
-                from rule_article
-                where ${sql.and([
-                  libraryRowReadable(sql, "rule_article", actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              return pageOfRows(rows, filter.limit, ordering, sort, toArticle);
+              return pageOfRows(rows, filter.limit, ordering, sort, (article) => article);
             }),
           ),
 
         libraryFindById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<RuleArticleRow>`
-                select ${sql.unsafe(articleColumns())}
-                from rule_article
-                where rule_article.id = ${id}
-                  and ${libraryRowReadable(sql, "rule_article", actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-              return yield* detail(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(Effect.flatMap(inLibrary(id).pipe(orNotFound("rule_article", id)), detail)),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
                 const actor = yield* CurrentActor;
-                const rows = yield* sql<RuleArticleRow>`
-                  insert into rule_article ${sql.insert(createColumns(payload, { account_id: actor.accountId }))}
-                  returning ${sql.unsafe(articleColumns())}
-                `;
+                // An insert answers with its row; not getting one is a defect.
+                const { id } = yield* insertOriginal(
+                  createColumns(payload, { account_id: actor.accountId }),
+                ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
                 if (payload.sections !== undefined)
-                  yield* insertDraftSections(sql, rows[0]!.id, payload.sections);
-                const reread = yield* sql<RuleArticleRow>`
-                  select ${sql.unsafe(articleColumns())}
-                  from rule_article
-                  where id = ${rows[0]!.id}
-                `;
-                return yield* detail(reread[0]!);
+                  yield* insertDraftSections(sql, id, payload.sections);
+                return yield* written(id);
               }),
             ),
           ),
@@ -279,40 +311,18 @@ export class RuleArticles extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<RuleArticleRow>`
-                  update rule_article
-                  set ${setClause(sql, updateColumns(patch))}
-                  where rule_article.id = ${id}
-                    and ${libraryRowWritable(sql, "rule_article", actor)}
-                  returning ${sql.unsafe(articleColumns())}
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
+                yield* updateOriginal({ id, columns: updateColumns(patch) }).pipe(
+                  orNotFound("rule_article", id),
+                );
                 if (patch.sections !== undefined)
-                  yield* insertDraftSections(sql, rows[0]!.id, patch.sections);
-                const reread = yield* sql<RuleArticleRow>`
-                  select ${sql.unsafe(articleColumns())}
-                  from rule_article
-                  where id = ${rows[0]!.id}
-                `;
-                return yield* detail(reread[0]!);
+                  yield* insertDraftSections(sql, id, patch.sections);
+                return yield* written(id);
               }),
             ),
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: RuleArticleId }>`
-                delete from rule_article
-                where rule_article.id = ${id}
-                  and ${libraryRowWritable(sql, "rule_article", actor)}
-                returning rule_article.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "rule_article", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("rule_article", id)))),
       };
     }),
   );

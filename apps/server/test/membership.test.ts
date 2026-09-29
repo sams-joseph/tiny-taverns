@@ -218,7 +218,6 @@ describe("the reach seam, enforced rather than asserted", () => {
       "equipment/import.ts",
       "magic-items/import.ts",
       "repo/Characters.ts",
-      "repo/ClassProgression.ts",
       "repo/Creatures.ts",
       // The point-of-use instancing seam (2026-09-02): a roster add reads the
       // source's owner columns to decide whether an owned original needs an
@@ -532,6 +531,7 @@ const makeFixture = Effect.gen(function* () {
       account_id: dm.accountId,
       class_option_id: homebrew.id,
       name: "Oathkept",
+      body: JSON.stringify({ desc: ["Sworn on the salt road."] }),
       visibility: "shared",
     })}
     returning id::text
@@ -542,6 +542,7 @@ const makeFixture = Effect.gen(function* () {
       class_option_id: homebrew.id,
       subclass_id: subclass[0]!.id,
       level: 1,
+      body: JSON.stringify({ features: [] }),
       visibility: "shared",
     })}
     returning id::text
@@ -554,6 +555,7 @@ const makeFixture = Effect.gen(function* () {
       class_level_id: level[0]!.id,
       name: "Blood vow",
       level: 1,
+      body: JSON.stringify({ desc: ["Spill it and keep it."], prerequisites: [] }),
       visibility: "shared",
     })}
   `;

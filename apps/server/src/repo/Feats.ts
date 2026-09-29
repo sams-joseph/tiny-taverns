@@ -1,29 +1,28 @@
 import {
-  type AccountId,
-  type CampaignId,
   CurrentActor,
   Feat,
-  type FeatFilterValues,
-  type FeatId,
+  FeatFilterValues,
+  FeatId,
   type FeatLibraryCreate,
   type FeatLibraryUpdate,
-  type FeatPrerequisiteAbility,
+  FeatPrerequisiteAbility,
   type FeatPrerequisiteAbilityInput,
   type FeatPrerequisiteGroupId,
   type FeatSort,
   NotFound,
   type Page,
-  type RuleAbilityScore,
 } from "@taverns/api";
-import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect";
+import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
   defined,
   dieOnSqlError,
+  fileUnder,
+  fromColumns,
   likeContains,
-  type ProvenanceColumns,
-  provenanceOf,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import {
   orderClause,
@@ -36,66 +35,29 @@ import {
 } from "./paging.js";
 import { libraryRowReadable, libraryRowWritable } from "./visibility.js";
 
-interface FeatRow extends ProvenanceColumns {
-  readonly id: FeatId;
-  readonly campaign_id: CampaignId | null;
-  readonly account_id: AccountId | null;
-  readonly derived_from: FeatId | null;
-  readonly source_corpus: string | null;
-  readonly source_family: string | null;
-  readonly source_key: string | null;
-  readonly name: string;
-}
+/**
+ * A `feat` row as the wire reads it — everything but the description and the
+ * prerequisites, which are hydrated from their own tables — decoded off
+ * `select feat.*` by `SqlSchema`. The bundle's key is `source_key`.
+ */
+const FeatRow = fromColumns(
+  Schema.Struct({
+    ...Struct.omit(Feat.fields, ["description", "prerequisites"]),
+    ...timestampColumns,
+  }),
+  { sourceIndex: "source_key" },
+);
+type FeatRow = typeof FeatRow.Type;
 
-interface DescriptionRow {
-  readonly text: string;
-}
+/** A feat's children, each beside the feat it was read for. */
+const DescriptionRow = fromColumns(Schema.Struct({ featId: FeatId, text: Schema.String }));
+const PrerequisiteRow = fromColumns(
+  Schema.Struct({ featId: FeatId, ...FeatPrerequisiteAbility.fields }),
+);
+const FeatIds = Schema.toType(Schema.Array(FeatId));
 
-interface PrerequisiteRow {
-  readonly ability_score_id: RuleAbilityScore["id"];
-  readonly ability_index: string;
-  readonly ability_name: string;
-  readonly ability_full_name: string | null;
-  readonly ability_body: { readonly desc?: ReadonlyArray<string> };
-  readonly minimum_score: number;
-  readonly group_id: FeatPrerequisiteGroupId;
-  readonly group_ordinal: number;
-  readonly ordinal: number;
-}
-
-const toAbility = (row: PrerequisiteRow): RuleAbilityScore => ({
-  id: row.ability_score_id,
-  index: row.ability_index,
-  name: row.ability_name,
-  fullName: row.ability_full_name ?? row.ability_name,
-  desc: row.ability_body.desc ?? [],
-});
-
-const toFeat = (
-  row: FeatRow,
-  description: ReadonlyArray<string>,
-  prerequisites: ReadonlyArray<PrerequisiteRow>,
-): Feat =>
-  new Feat({
-    id: row.id,
-    campaignId: row.campaign_id,
-    accountId: row.account_id,
-    derivedFrom: row.derived_from,
-    sourceIndex: row.source_key,
-    name: row.name,
-    description,
-    prerequisites: prerequisites.map((prerequisite): FeatPrerequisiteAbility => ({
-      abilityScoreId: prerequisite.ability_score_id,
-      ability: toAbility(prerequisite),
-      minimumScore: prerequisite.minimum_score,
-      groupId: prerequisite.group_id,
-      groupOrdinal: prerequisite.group_ordinal,
-      ordinal: prerequisite.ordinal,
-    })),
-    ...provenanceOf(row),
-  });
-
-const featColumns = (table = "feat"): string => `${table}.*`;
+const FeatFilterRequest = Schema.toType(FeatFilterValues);
+const Columns = Schema.Record(Schema.String, Schema.Unknown);
 
 const matchesQuery = (sql: SqlClient.SqlClient, query: string): Statement.Fragment =>
   sql.or([
@@ -121,7 +83,12 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<FeatSort, Ordering<FeatRo
   return {
     name: [name, id],
     recent: [
-      timeColumn<FeatRow>(sql, sql`feat.created_at`, (row) => row.created_at, "desc"),
+      timeColumn<FeatRow>(
+        sql,
+        sql`feat.created_at`,
+        (row) => DateTime.toDateUtc(row.createdAt),
+        "desc",
+      ),
       name,
       id,
     ],
@@ -210,17 +177,29 @@ export class Feats extends Context.Service<
         return [sort, orderings[sort]] as const;
       };
 
-      const descriptionsFor = (featId: FeatId) =>
-        sql<DescriptionRow>`select text from feat_description where feat_id = ${featId} order by ordinal, id`;
-
-      const prerequisitesFor = (featId: FeatId) =>
-        sql<PrerequisiteRow>`
+      const descriptions = SqlSchema.findAll({
+        Request: FeatIds,
+        Result: DescriptionRow,
+        execute: (ids) => sql`
+          select feat_id, text from feat_description
+          where feat_id = any(${[...ids]})
+          order by feat_id, ordinal, id
+        `,
+      });
+      const prerequisites = SqlSchema.findAll({
+        Request: FeatIds,
+        Result: PrerequisiteRow,
+        execute: (ids) => sql`
           select
+            feat_prerequisite_group.feat_id,
             ability_score.id::text as ability_score_id,
-            ability_score.source_key as ability_index,
-            ability_score.name as ability_name,
-            ability_score.full_name as ability_full_name,
-            ability_score.body as ability_body,
+            jsonb_build_object(
+              'id', ability_score.id::text,
+              'index', ability_score.source_key,
+              'name', ability_score.name,
+              'fullName', coalesce(ability_score.full_name, ability_score.name),
+              'desc', coalesce(ability_score.body -> 'desc', '[]'::jsonb)
+            ) as ability,
             feat_prerequisite_ability_score.minimum_score,
             feat_prerequisite_group.id::text as group_id,
             feat_prerequisite_group.ordinal as group_ordinal,
@@ -229,72 +208,143 @@ export class Feats extends Context.Service<
           join feat_prerequisite_ability_score
             on feat_prerequisite_ability_score.group_id = feat_prerequisite_group.id
           join ability_score on ability_score.id = feat_prerequisite_ability_score.ability_score_id
-          where feat_prerequisite_group.feat_id = ${featId}
-          order by feat_prerequisite_group.ordinal, feat_prerequisite_ability_score.ordinal,
-            feat_prerequisite_ability_score.id
-        `;
+          where feat_prerequisite_group.feat_id = any(${[...ids]})
+          order by feat_prerequisite_group.feat_id, feat_prerequisite_group.ordinal,
+            feat_prerequisite_ability_score.ordinal, feat_prerequisite_ability_score.id
+        `,
+      });
 
-      const hydrate = (row: FeatRow): Effect.Effect<Feat, never> =>
+      /**
+       * Rows with their description and prerequisites: **three statements for
+       * a page of any size** — the rows, then each child table once with
+       * `= any($1)` over every id, filed back under its feat. It used to be two
+       * statements per feat. The children need no predicate of their own: every
+       * id came out of a query that applied one. `feats-hydration.test.ts`
+       * holds the count.
+       */
+      const hydrateAll = (rows: ReadonlyArray<FeatRow>) =>
         Effect.gen(function* () {
-          const descriptions = yield* descriptionsFor(row.id).pipe(dieOnSqlError);
-          const prerequisites = yield* prerequisitesFor(row.id).pipe(dieOnSqlError);
-          return toFeat(
-            row,
-            descriptions.map((description) => description.text),
-            prerequisites,
+          if (rows.length === 0) return [];
+          const ids = rows.map((row) => row.id);
+          const textOf = fileUnder(yield* descriptions(ids), "featId");
+          const prerequisitesOf = fileUnder(yield* prerequisites(ids), "featId");
+          return rows.map(
+            (row) =>
+              new Feat({
+                ...row,
+                description: (textOf.get(row.id) ?? []).map((line) => line.text),
+                prerequisites: prerequisitesOf.get(row.id) ?? [],
+              }),
           );
         });
+      const hydrate = (row: FeatRow) => Effect.map(hydrateAll([row]), (feats) => feats[0]!);
+
+      const inLibraryPage = SqlSchema.findAll({
+        Request: FeatFilterRequest,
+        Result: FeatRow,
+        execute: (filter) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) => {
+            const [, ordering] = orderingFor(filter);
+            return sql`
+              select feat.*
+              from feat
+              where ${sql.and([
+                libraryRowReadable(sql, "feat", actor),
+                ...narrowedBy(sql, filter),
+                ...pageClauses(sql, ordering, filter.cursor),
+              ])}
+              order by ${orderClause(sql, ordering)}
+              limit ${pageLimit(filter.limit)}
+            `;
+          }),
+      });
+      /** One feat this Library reads — its own originals and the bundle — by id. */
+      const inLibrary = SqlSchema.findOne({
+        Request: Schema.toType(FeatId),
+        Result: FeatRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select feat.*
+              from feat
+              where feat.id = ${id}
+                and ${libraryRowReadable(sql, "feat", actor)}
+            `,
+          ),
+      });
+      /**
+       * A new original in this account's Library. `account_id` comes from the
+       * actor and from nothing a caller supplied.
+       */
+      const insertOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ name: Schema.String })),
+        Result: FeatRow,
+        execute: ({ name }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              insert into feat ${sql.insert({ account_id: actor.accountId, name })}
+              returning feat.*
+            `,
+          ),
+      });
+      const updateOriginal = SqlSchema.findOne({
+        Request: Schema.toType(Schema.Struct({ id: FeatId, columns: Columns })),
+        Result: FeatRow,
+        execute: ({ id, columns }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update feat
+              set ${setClause(sql, columns)}
+              where feat.id = ${id}
+                and ${libraryRowWritable(sql, "feat", actor)}
+              returning feat.*
+            `,
+          ),
+      });
+      const removeOriginal = SqlSchema.findOne({
+        Request: Schema.toType(FeatId),
+        Result: fromColumns(Schema.Struct({ id: FeatId })),
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              delete from feat
+              where feat.id = ${id}
+                and ${libraryRowWritable(sql, "feat", actor)}
+              returning feat.id
+            `,
+          ),
+      });
 
       return {
         library: (filter) =>
           dieOnSqlError(
             Effect.gen(function* () {
-              const actor = yield* CurrentActor;
+              const rows = yield* inLibraryPage(filter);
               const [sort, ordering] = orderingFor(filter);
-              const rows = yield* sql<FeatRow>`
-                select ${sql.unsafe(featColumns())}
-                from feat
-                where ${sql.and([
-                  libraryRowReadable(sql, "feat", actor),
-                  ...narrowedBy(sql, filter),
-                  ...pageClauses(sql, ordering, filter.cursor),
-                ])}
-                order by ${orderClause(sql, ordering)}
-                limit ${pageLimit(filter.limit)}
-              `;
-              const hydrated = yield* Effect.all(rows.map(hydrate), { concurrency: "unbounded" });
-              const byId = new Map(hydrated.map((feat) => [feat.id, feat]));
-              return pageOfRows(rows, filter.limit, ordering, sort, (row) => byId.get(row.id)!);
+              // Hydrate the page only, never the probe row that answers "is there more".
+              const page = pageOfRows(rows, filter.limit, ordering, sort, (row) => row);
+              return { ...page, items: yield* hydrateAll(page.items) };
             }),
           ),
 
         libraryFindById: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<FeatRow>`
-                select ${sql.unsafe(featColumns())}
-                from feat
-                where feat.id = ${id}
-                  and ${libraryRowReadable(sql, "feat", actor)}
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-              return yield* hydrate(rows[0]!);
-            }),
-          ),
+          dieOnSqlError(Effect.flatMap(inLibrary(id).pipe(orNotFound("feat", id)), hydrate)),
 
         libraryCreate: (payload) =>
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<FeatRow>`
-                  insert into feat ${sql.insert({ account_id: actor.accountId, name: payload.name })}
-                  returning ${sql.unsafe(featColumns())}
-                `;
-                yield* syncDescription(sql, rows[0]!.id, payload.description ?? []);
-                yield* syncPrerequisites(sql, rows[0]!.id, payload.prerequisites ?? []);
-                return yield* hydrate(rows[0]!);
+                // An insert answers with its row; not getting one is a defect.
+                const row = yield* insertOriginal({ name: payload.name }).pipe(
+                  Effect.catchTag("NoSuchElementError", Effect.die),
+                );
+                yield* syncDescription(sql, row.id, payload.description ?? []);
+                yield* syncPrerequisites(sql, row.id, payload.prerequisites ?? []);
+                return yield* hydrate(row);
               }),
             ),
           ),
@@ -303,37 +353,20 @@ export class Feats extends Context.Service<
           dieOnSqlError(
             sql.withTransaction(
               Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const rows = yield* sql<FeatRow>`
-                  update feat
-                  set ${setClause(sql, patchColumns(patch))}
-                  where feat.id = ${id}
-                    and ${libraryRowWritable(sql, "feat", actor)}
-                  returning ${sql.unsafe(featColumns())}
-                `;
-                if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
+                const row = yield* updateOriginal({ id, columns: patchColumns(patch) }).pipe(
+                  orNotFound("feat", id),
+                );
                 if (patch.description !== undefined)
-                  yield* syncDescription(sql, rows[0]!.id, patch.description);
+                  yield* syncDescription(sql, row.id, patch.description);
                 if (patch.prerequisites !== undefined)
-                  yield* syncPrerequisites(sql, rows[0]!.id, patch.prerequisites);
-                return yield* hydrate(rows[0]!);
+                  yield* syncPrerequisites(sql, row.id, patch.prerequisites);
+                return yield* hydrate(row);
               }),
             ),
           ),
 
         libraryRemove: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const rows = yield* sql<{ readonly id: FeatId }>`
-                delete from feat
-                where feat.id = ${id}
-                  and ${libraryRowWritable(sql, "feat", actor)}
-                returning feat.id
-              `;
-              if (rows.length === 0) return yield* new NotFound({ resource: "feat", id });
-            }),
-          ),
+          dieOnSqlError(Effect.asVoid(removeOriginal(id).pipe(orNotFound("feat", id)))),
       };
     }),
   );
