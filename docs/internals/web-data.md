@@ -59,7 +59,7 @@ Four facts the library does not advertise:
 
 ## The campaign view: several atoms, one value
 
-`campaign/load.ts` splits a read only where a write wants to refresh part of it: `campaignViewAtom` is eight atoms (five campaign-keyed, three night-keyed on the session id) assembled in one `Atom.readable` through `combine`, so a destination renders three states while adding a checklist line refreshes the checklist alone. While no night is open it reads the nights instead (`preparingNightAtom`), to hang the checklist off the planned night when there is one. `combine` is what stops the screen blanking when a night opens and three atoms keyed on a new session id come into being. Most screens are one atom over one composed `Effect`, because every write on them changes all of it.
+`campaign/load.ts` splits a read only where a write wants to refresh part of it: `campaignViewAtom` is eight atoms (five campaign-keyed, three night-keyed on the session id) assembled in one `Atom.readable` through `combine`, so a destination renders three states while adding a checklist line refreshes the checklist alone. While no night is open it reads the nights instead (`preparingNightAtom`), to hang a checklist off each planned night, when there are any. `combine` is what stops the screen blanking when a night opens and three atoms keyed on a new session id come into being. Most screens are one atom over one composed `Effect`, because every write on them changes all of it.
 
 ## The runner
 

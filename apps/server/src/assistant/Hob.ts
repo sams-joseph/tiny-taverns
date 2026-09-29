@@ -2160,7 +2160,7 @@ const offered = (turn: HobTurn): string | undefined => {
         proposal.prep.length === 0 ? undefined : `prep: ${proposal.prep.join(" / ")}`,
         proposal.actTitle === null ? undefined : `actTitle "${proposal.actTitle}"`,
       ].filter((part) => part !== undefined);
-      return `[You offered the DM the next session, planned — ${kept}: ${parts.join("; ")}]`;
+      return `[You offered the DM a planned session — ${kept}: ${parts.join("; ")}]`;
     }
     case "act":
       return `[You offered the DM the act "${proposal.title}", starting at session ${String(

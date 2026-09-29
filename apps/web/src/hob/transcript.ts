@@ -161,7 +161,12 @@ export type HobArtifact =
       /** The sheet's seeded numbers, as `npcSheet`'s are; empty with no sheet. */
       readonly stats: ReadonlyArray<readonly [string, string]>;
     })
-  | (ArtifactBase & { readonly kind: "checklist"; readonly items: ReadonlyArray<HobChecklistItem> })
+  | (ArtifactBase & {
+      readonly kind: "checklist";
+      readonly items: ReadonlyArray<HobChecklistItem>;
+      /** The session number a planned night was kept as, once this conversation kept it. */
+      readonly plannedAs?: number;
+    })
   | (ArtifactBase & {
       /** A new act on the Chronicle; its title is the card's, its first night the meta. */
       readonly kind: "act";

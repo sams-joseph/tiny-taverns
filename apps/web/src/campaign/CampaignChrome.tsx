@@ -230,7 +230,7 @@ export function CampaignChrome<Extra = undefined>({
    * *Try again*, and it is the only re-read-everything left in the campaign.
    *
    * **The night's id comes from the campaign atom rather than from the view**
-   * (through `preparingNightAtom`, which is the planned night's while none is
+   * (through `preparingNightAtom`, which is the planned nights' while none is
    * open),
    * and that is the whole reason this line exists: when the *checklist* is what
    * failed, the view is a failure and has no session to name — so a retry built
@@ -242,18 +242,21 @@ export function CampaignChrome<Extra = undefined>({
    * refreshed directly, because the frame does not know what it reads.
    */
   const preparing = useAtomValue(preparingNightAtom(campaignId));
-  const nightId =
-    AsyncResult.isSuccess(preparing) && preparing.value !== undefined
-      ? "open" in preparing.value
-        ? preparing.value.open
-        : preparing.value.planned.id
-      : undefined;
+  const nightIds = useMemo(
+    () =>
+      AsyncResult.isSuccess(preparing)
+        ? "open" in preparing.value
+          ? [preparing.value.open]
+          : preparing.value.planned.map((night) => night.id)
+        : [],
+    [preparing],
+  );
   const invalidate = useInvalidate();
   const refreshExtra = useAtomRefresh(extraAtom);
   const retry = useCallback(() => {
-    invalidate(campaignViewKeys(campaignId, nightId));
+    invalidate(campaignViewKeys(campaignId, nightIds));
     refreshExtra();
-  }, [invalidate, campaignId, nightId, refreshExtra]);
+  }, [invalidate, campaignId, nightIds, refreshExtra]);
   const { run, pickUp, dialogs } = useCampaignAct(campaignId);
   const [editing, setEditing] = useState<CampaignEditing | undefined>();
   /** Whether the "end the night" confirmation is up. */

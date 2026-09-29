@@ -1441,7 +1441,7 @@ describe("a planned night and an act", () => {
       ]),
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
-    expect(screen.getByText("Planned as the next session")).toBeInTheDocument();
+    expect(screen.getByText("Planned as session 13")).toBeInTheDocument();
   });
 
   it("reads a night with no title as the next session", async () => {

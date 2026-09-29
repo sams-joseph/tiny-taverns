@@ -532,8 +532,10 @@ export function ArtifactCard({
                               ? "On the NPC’s sheet"
                               : npc
                                 ? "In the Cast"
-                                : night
-                                  ? "Planned as the next session"
+                                : artifact.kind === "checklist"
+                                  ? artifact.plannedAs === undefined
+                                    ? "Planned, not yet started"
+                                    : `Planned as session ${String(artifact.plannedAs)}`
                                   : act
                                     ? "In the Chronicle"
                                     : "In tonight’s session"}

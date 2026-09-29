@@ -182,6 +182,15 @@ export const plannedSession = {
   assistantTurnId: "5d6e7f80-91a2-4b3c-9d4e-5f6071829304",
 };
 
+/** A second kept plan, numbered past {@link plannedSession}. */
+export const laterPlannedSessionId = "5d6e7f80-91a2-4b3c-8d4e-5f6071829315";
+export const laterPlannedSession = {
+  ...plannedSession,
+  id: laterPlannedSessionId,
+  number: 14,
+  title: "The ferry",
+};
+
 export const encounter = {
   id: encounterId,
   campaignId,

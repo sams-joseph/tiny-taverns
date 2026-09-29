@@ -645,6 +645,18 @@ export function useHobConversation(
         if (Result.isSuccess(result)) {
           setSaved((done) => [...done, turnId]);
           setKept((made) => ({ ...made, [turnId]: result.success }));
+          const accepted = result.success;
+          if (accepted.accepted === "night") {
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.who === "artifact" &&
+                turn.artifact.id === turnId &&
+                turn.artifact.kind === "checklist"
+                  ? { ...turn, artifact: { ...turn.artifact, plannedAs: accepted.session.number } }
+                  : turn,
+              ),
+            );
+          }
           invalidate(calls.keeps(result.success));
           onKeptRef.current?.(result.success);
           return;

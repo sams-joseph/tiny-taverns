@@ -50,21 +50,21 @@ export interface NightToOpen {
 }
 
 /**
- * The planned night, if the campaign has one: the lowest-numbered night that
- * has neither started nor ended. Hob's kept night is one (`proposeNight`); the
- * Next session card shows it and its checklist while no night is open, and
- * *Start the night* opens it. Both read it here so they cannot disagree.
+ * The planned nights, earliest first: every night that has neither started nor
+ * ended. Hob's kept nights are these (`proposeNight`); the Next session card
+ * lists each with its checklist while no night is open.
+ */
+export const plannedNightsOf = (sessions: ReadonlyArray<Session>): ReadonlyArray<Session> =>
+  sessions
+    .filter((row) => row.startedAt === null && row.endedAt === null)
+    .sort((a, b) => a.number - b.number);
+
+/**
+ * The planned night *Start the night* opens: the earliest of
+ * {@link plannedNightsOf}, so the card and the opening cannot disagree.
  */
 export const plannedNightOf = (sessions: ReadonlyArray<Session>): Session | undefined =>
-  sessions.reduce<Session | undefined>(
-    (earliest, row) =>
-      row.startedAt === null &&
-      row.endedAt === null &&
-      (earliest === undefined || row.number < earliest.number)
-        ? row
-        : earliest,
-    undefined,
-  );
+  plannedNightsOf(sessions)[0];
 
 /**
  * The night opening would open: the planned one, or one past the highest

@@ -16,6 +16,8 @@ import {
   renderScreen,
   seatId,
   begunSession,
+  laterPlannedSession,
+  laterPlannedSessionId,
   plannedSession,
   plannedSessionId,
   session,
@@ -409,15 +411,19 @@ describe("starting a session", () => {
     );
   });
 
-  it("opens the planned night rather than making another, checklist and all", async () => {
-    // A night kept from Hob's plan: numbered, titled, its checklist written,
-    // and nothing points at it. Starting the night opens that one.
+  it("opens the earliest planned night rather than making another, checklist and all", async () => {
+    // Nights kept from Hob's plan: numbered, titled, their checklists written,
+    // and nothing points at them. Starting the night opens the earliest.
     coldCampaign();
     server.routes.set(`GET /campaigns/${campaignId}/sessions`, {
       status: 200,
-      body: [plannedSession, begunSession],
+      body: [laterPlannedSession, plannedSession, begunSession],
     });
     server.routes.set(`GET /campaigns/${campaignId}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: [],
+    });
+    server.routes.set(`GET /campaigns/${campaignId}/sessions/${laterPlannedSessionId}/prep`, {
       status: 200,
       body: [],
     });
@@ -443,7 +449,10 @@ describe("starting a session", () => {
     expect(
       (bodyOf(server, "PATCH", `/sessions/${plannedSessionId}`) as { startedAt: string }).startedAt,
     ).toMatch(/^\d{4}-/);
-    // No second night: the planned one is the one opened.
+    // No second night: the earliest planned one is the one opened.
+    expect(
+      server.calls.some((call) => call.pathname.endsWith(`/sessions/${laterPlannedSessionId}`)),
+    ).toBe(false);
     expect(
       server.calls.some((call) => call.method === "POST" && call.pathname.endsWith("/sessions")),
     ).toBe(false);

@@ -243,7 +243,7 @@ describe("the creator's Hob plans the next night", () => {
       threadId,
     });
     const shown = JSON.stringify(requests[0]?.messages);
-    expect(shown).toContain("[You offered the DM the next session, planned");
+    expect(shown).toContain("[You offered the DM a planned session");
     expect(shown).toContain(`prep: ${PREP.join(" / ")}`);
   }, 60_000);
 
@@ -310,6 +310,22 @@ describe("the creator's Hob plans the next night", () => {
   it("gives a player at the table nothing of it", async () => {
     expect((await nights(ilse.token)).map((night) => night.number)).toEqual([1]);
     expect(await acts(ilse.token)).toEqual([]);
+  }, 60_000);
+
+  it("tells the model which nights are planned already when it plans another", async () => {
+    const before = await nights();
+    const { requests } = await ask(jo.token, [
+      toolCallChunks(
+        "proposeNight",
+        { title: "The ferry", prep: null, actTitle: null },
+        "call_more",
+      ),
+      textChunks("Session 4 is planned."),
+    ]);
+    const told = JSON.stringify(requests[1]?.messages);
+    expect(told).toContain("Offered the DM session 4,");
+    expect(told).toContain("Sessions 2, 3 are already planned and not started");
+    expect(await nights()).toEqual(before);
   }, 60_000);
 
   it("is opened by Start the night's own writes, checklist and all", async () => {

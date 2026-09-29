@@ -1043,22 +1043,24 @@ export const ProposeNightSummary = Tool.make("proposeNightSummary", {
 const NIGHT_PREP_MAX = 12;
 
 /**
- * The next night, planned: its title, the lines of its "Before you sit down"
+ * A night, planned: its title, the lines of its "Before you sit down"
  * checklist, and an act it starts when the DM asked for one.
  *
  * The creator's toolkit alone has it, for `proposeNightSummary`'s reason:
  * only the creator makes a night. There is no number parameter: the night is
- * the next one, numbered one past the highest the campaign has when the DM
- * keeps it, and a kept night is planned, not open, until *Start the night*
- * opens it. A night already on `listSessions` is never edited by this tool.
+ * numbered one past the highest the campaign has when the DM keeps it, so
+ * after any night already planned, and a kept night is planned, not open,
+ * until *Start the night* opens it (the earliest planned first). A night
+ * already on `listSessions` is never edited by this tool.
  */
 export const ProposeNight = Tool.make("proposeNight", {
   description:
-    "Offer the DM the next session, planned: a short title when there is one, and the " +
+    "Offer the DM a new planned session: a short title when there is one, and the " +
     "prep checklist for it — each line one thing to do or have ready before the party " +
     'sits down ("Reread the ferryman\'s note", "Print the salt road map"). Set ' +
-    "actTitle only when the DM asked for this session to start a new act. It is always " +
-    "the next session; nothing already on listSessions changes. Only a suggestion: " +
+    "actTitle only when the DM asked for this session to start a new act. It is numbered " +
+    "after every session on listSessions, including any already planned and not started; " +
+    "nothing already on listSessions changes. Only a suggestion: " +
     "nothing is saved unless the DM accepts it. Say one short line about it and stop.",
   parameters: Schema.Struct({
     title: optionalText(120),
@@ -2802,15 +2804,25 @@ export const dmHandlersFor = (
           );
         }
         // The creator's own read of the nights, only to tell the model which
-        // number the night would take today; the accept numbers it again.
+        // number the night would take today and which are planned already;
+        // the accept numbers it again.
         const nights = yield* as(repositories.sessions.list(campaignId));
         const number = nights.reduce((highest, night) => Math.max(highest, night.number), 0) + 1;
+        const planned = nights
+          .filter((night) => night.startedAt === null && night.endedAt === null)
+          .map((night) => night.number)
+          .sort((a, b) => a - b);
         return yield* offer(
           { target: "night", title: named ?? null, prep: lines, actTitle: act ?? null },
           `Offered the DM session ${String(number)}${named === undefined ? "" : `, "${named}"`}` +
             `${lines.length === 0 ? "" : `, with ${String(lines.length)} prep ${lines.length === 1 ? "line" : "lines"}`}` +
-            `${act === undefined ? "" : `, starting the act "${act}"`}. Nothing is saved unless ` +
-            "they accept it; say one short line about it and stop.",
+            `${act === undefined ? "" : `, starting the act "${act}"`}. ` +
+            (planned.length === 0
+              ? ""
+              : `${planned.length === 1 ? "Session" : "Sessions"} ${planned.join(", ")} ` +
+                `${planned.length === 1 ? "is" : "are"} already planned and not started, and ` +
+                "Start the night opens the earliest first; this one would come after. ") +
+            "Nothing is saved unless they accept it; say one short line about it and stop.",
         );
       }),
 
