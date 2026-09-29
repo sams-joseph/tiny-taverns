@@ -7,6 +7,7 @@ import {
   CurrentActor,
   type SharedWorldId,
   type HobAccepted,
+  keptFrom,
   type CharacterOwnCreate,
   type HobProposal,
   NotFound,
@@ -25,7 +26,7 @@ import { CampaignCreatorActors } from "./CreatorActor.js";
 import { Encounters } from "./Encounters.js";
 import { GroupHistory } from "./GroupHistory.js";
 import { Groups } from "./Groups.js";
-import { lockTurnForAccept, markAccepted } from "./HobThreads.js";
+import { discardedConflict, lockTurnForAccept, markAccepted } from "./HobThreads.js";
 import { Notes } from "./Notes.js";
 import { NpcPreps } from "./NpcPrep.js";
 import { NpcSheets } from "./NpcSheets.js";
@@ -485,11 +486,12 @@ export class Proposals extends Context.Service<
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.acceptedAt !== null) return yield* alreadyAccepted;
+                if (turn.discardedAt !== null) return yield* discardedConflict;
 
                 const accepted = yield* materialise(campaignId, turn.proposal, {
                   assistantTurnId: turnId,
                 });
-                yield* markAccepted(sql, turnId);
+                yield* markAccepted(sql, turnId, keptFrom(accepted));
                 return accepted;
               }),
             ),
@@ -511,6 +513,7 @@ export class Proposals extends Context.Service<
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.acceptedAt !== null) return yield* alreadyKept;
+                if (turn.discardedAt !== null) return yield* discardedConflict;
                 const from = { assistantTurnId: turnId };
                 const proposal = turn.proposal;
                 const accepted: HobAccepted | undefined =
@@ -556,7 +559,7 @@ export class Proposals extends Context.Service<
                     message: "that belongs to a campaign or a Shared World — accept it there",
                   });
                 }
-                yield* markAccepted(sql, turnId);
+                yield* markAccepted(sql, turnId, keptFrom(accepted));
                 return accepted;
               }),
             ),
@@ -577,6 +580,7 @@ export class Proposals extends Context.Service<
                   return yield* new NotFound({ resource: "proposal", id: turnId });
                 }
                 if (turn.acceptedAt !== null) return yield* alreadyAccepted;
+                if (turn.discardedAt !== null) return yield* discardedConflict;
                 if (
                   turn.proposal.target !== "sharedWorldHistory" &&
                   turn.proposal.target !== "sharedWorldSummary"
@@ -610,7 +614,7 @@ export class Proposals extends Context.Service<
                           { assistantTurnId: turnId },
                         ),
                       };
-                yield* markAccepted(sql, turnId);
+                yield* markAccepted(sql, turnId, keptFrom(accepted));
                 return accepted;
               }),
             ),

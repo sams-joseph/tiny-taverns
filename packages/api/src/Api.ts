@@ -2312,7 +2312,7 @@ class SearchGroup extends HttpApiGroup.make("search")
  * needed the campaign in the payload, which is a client claim, or in a tool
  * parameter, which is a model claim.
  *
- * Two endpoints and no more:
+ * Its endpoints:
  *
  * - `status` says whether a model endpoint is configured. The panel asks
  *   before it offers a composer, so an unconfigured server produces the honest
@@ -2334,9 +2334,13 @@ class SearchGroup extends HttpApiGroup.make("search")
  *   `origin = 'assistant'`. It takes no content payload at all, and that is the
  *   point: the row is materialised from the proposal the *server* stored on
  *   that turn, so a client cannot mint assistant provenance for prose it wrote
- *   itself. `Conflict` is a proposal already accepted, or a beat with no
- *   session in progress to file it against; `NotFound` is everything else,
- *   including a turn that proposed nothing.
+ *   itself. `Conflict` is a proposal already accepted or discarded, or a beat
+ *   with no session in progress to file it against; `NotFound` is everything
+ *   else, including a turn that proposed nothing.
+ * - `discard` is the card's other answer: it marks the proposal turned down,
+ *   so it is no longer an offer, and writes nothing else. Discarding twice is
+ *   one discard; `Conflict` is a proposal already kept. Every Hob group has
+ *   the same pair.
  *
  * The accept path names campaign, thread *and* turn for the reason every nested
  * endpoint here does: a parent id is a client claim, and binding the foreign key
@@ -2376,6 +2380,16 @@ class HobGroup extends HttpApiGroup.make("hob")
       success: HobAccepted,
       error: [NotFound, Conflict],
     }),
+    HttpApiEndpoint.post("discard", "/threads/:threadId/turns/:turnId/discard", {
+      params: {
+        campaignId: CampaignId,
+        threadId: AssistantThreadId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HttpApiSchema.NoContent,
+      error: [NotFound, Conflict],
+    }),
   )
   .prefix("/campaigns/:campaignId/hob")
   .middleware(Authorization) {}
@@ -2385,7 +2399,7 @@ class HobGroup extends HttpApiGroup.make("hob")
  * every screen outside a campaign or Shared World, and the character create
  * screen's drafting composer.
  *
- * `HobGroup`'s five, under `/me/hob` rather than a campaign. Nothing in any
+ * `HobGroup`'s six, under `/me/hob` rather than a campaign. Nothing in any
  * path names a scope because the scope is the caller: a thread here belongs to
  * the account that started it and to no campaign or Shared World
  * (`conversationReachable`'s `"account"` arm), so another account's thread id
@@ -2420,6 +2434,12 @@ class MeHobGroup extends HttpApiGroup.make("meHob")
       params: { threadId: AssistantThreadId, turnId: AssistantTurnId },
       payload: Schema.Struct({}),
       success: HobAccepted,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("discard", "/threads/:threadId/turns/:turnId/discard", {
+      params: { threadId: AssistantThreadId, turnId: AssistantTurnId },
+      payload: Schema.Struct({}),
+      success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),
   )
@@ -2867,6 +2887,16 @@ class SharedWorldHobGroup extends HttpApiGroup.make("sharedWorldHob")
       },
       payload: Schema.Struct({}),
       success: HobAccepted,
+      error: [NotFound, Conflict],
+    }),
+    HttpApiEndpoint.post("discard", "/threads/:threadId/turns/:turnId/discard", {
+      params: {
+        worldId: SharedWorldId,
+        threadId: AssistantThreadId,
+        turnId: AssistantTurnId,
+      },
+      payload: Schema.Struct({}),
+      success: HttpApiSchema.NoContent,
       error: [NotFound, Conflict],
     }),
   )

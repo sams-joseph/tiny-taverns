@@ -1,5 +1,5 @@
 import { HostedSessionScope } from "../auth/AuthProvider";
-import type { CampaignId, HobAccepted, NpcId, SharedWorldId } from "@taverns/api";
+import type { CampaignId, HobAccepted, HobKept, NpcId, SharedWorldId } from "@taverns/api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -305,6 +305,7 @@ const renderHob = (options?: {
   readonly world?: boolean;
   readonly account?: boolean;
   readonly onKept?: (accepted: HobAccepted) => void;
+  readonly onOpen?: (kept: HobKept) => void;
 }): void => {
   const hob = panelState(options?.open ?? true);
   render(
@@ -321,6 +322,7 @@ const renderHob = (options?: {
                 : campaignScope
         }
         {...(options?.onKept === undefined ? {} : { onKept: options.onKept })}
+        {...(options?.onOpen === undefined ? {} : { onOpen: options.onOpen })}
       />
     </HostedSessionScope>,
   );
@@ -577,6 +579,8 @@ describe("the conversation is still there", () => {
         text: "Who is the ferryman?",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
       {
@@ -586,6 +590,8 @@ describe("the conversation is still there", () => {
         text: "Cazril, and he takes only a name.",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -610,6 +616,8 @@ describe("the conversation is still there", () => {
         text: "Cazril.",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -633,6 +641,8 @@ describe("the conversation is still there", () => {
         text: "Six of them, in the reeds.",
         proposal: anEncounter,
         acceptedAt: stamp,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -657,6 +667,8 @@ describe("the conversation is still there", () => {
         text: "Six of them, in the reeds.",
         proposal: { ...anEncounter, setting: "A flooded causeway between two stone huts" },
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -690,6 +702,8 @@ describe("the conversation is still there", () => {
           treasure: "A lost strongbox",
         },
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -732,6 +746,8 @@ describe("the conversation is still there", () => {
         text: "The crossing is watched.",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
       {
@@ -741,6 +757,8 @@ describe("the conversation is still there", () => {
         text: "Six of them, in the reeds.",
         proposal: anEncounter,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -780,6 +798,8 @@ describe("the conversation is still there", () => {
         text: "Cazril.",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -989,6 +1009,47 @@ describe("what Hob offers, and the one thing that writes", () => {
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(screen.getByText("On the night in the Chronicle")).toBeInTheDocument();
+  });
+});
+
+describe("a card's other answers", () => {
+  it("offers Discard but no Try again while no model is behind the panel", async () => {
+    server.available = false;
+    server.threads = [aThread("Build me an ambush")];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Six of them, in the reeds.",
+        proposal: anEncounter,
+        acceptedAt: null,
+        discardedAt: null,
+        kept: null,
+        createdAt: stamp,
+      },
+    ];
+    renderHob();
+
+    expect(await screen.findByText("Song in the reeds")).toBeInTheDocument();
+    // Turning it down needs no model; asking for another does.
+    expect(screen.getByRole("button", { name: "Discard" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("holds Try again while an answer is still arriving, and lets it go once it lands", async () => {
+    server.hold = true;
+    server.frames = [began(threadId, turnId), proposed(turnId, anEncounter)];
+    renderHob();
+    await waitFor(() => expect(composer()).not.toBeNull());
+    await userEvent.type(composer()!, "Build me an ambush.{Enter}");
+
+    expect(await screen.findByText("Song in the reeds")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled();
+
+    server.push(done());
+    server.close();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled());
   });
 });
 
@@ -1525,6 +1586,8 @@ describe("a change of scope under an open panel", () => {
       text,
       proposal: null,
       acceptedAt: null,
+      discardedAt: null,
+      kept: null,
       createdAt: stamp,
     });
     server.threads = [aThread("Who is the ferryman?")];
@@ -1568,6 +1631,8 @@ describe("Shared World Hob", () => {
         text: "Every road passed through the lantern district.",
         proposal: null,
         acceptedAt: null,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
@@ -1707,8 +1772,13 @@ describe("the account's own Hob, outside any campaign", () => {
 
   it("draws a campaign card, keeps it with ids alone, and opens what it made", async () => {
     const kept: Array<HobAccepted> = [];
+    const opened: Array<HobKept> = [];
     server.frames = [began(threadId, turnId), proposed(turnId, campaignProposal), done()];
-    renderHob({ account: true, onKept: (accepted) => kept.push(accepted) });
+    renderHob({
+      account: true,
+      onKept: (accepted) => kept.push(accepted),
+      onOpen: (made) => opened.push(made),
+    });
     await waitFor(() => expect(composer()).not.toBeNull());
 
     await userEvent.type(composer()!, "Draft me a campaign.{Enter}");
@@ -1732,9 +1802,9 @@ describe("the account's own Hob, outside any campaign", () => {
     // The screen is told what was made, which is how the shell opens it.
     expect(kept.map((accepted) => accepted.accepted)).toEqual(["campaign"]);
 
-    // And *Open it* opens it again.
+    // And *Open it* opens it again, by the pointer the keep answered.
     await userEvent.click(screen.getByRole("button", { name: "Open it" }));
-    expect(kept).toHaveLength(2);
+    expect(opened).toEqual([{ accepted: "campaign", id: aCampaignRow.id }]);
   });
 
   it("draws a Shared World card, keeps it with ids alone, and opens what it made", async () => {
@@ -1787,7 +1857,7 @@ describe("the account's own Hob, outside any campaign", () => {
     expect(screen.getByRole("button", { name: "Keep it" })).toBeEnabled();
   });
 
-  it("cannot open a card kept on an earlier visit, so does not offer to", async () => {
+  it("cannot open a card kept before its keep was recorded, so does not offer to", async () => {
     server.threads = [
       {
         id: threadId,
@@ -1806,12 +1876,14 @@ describe("the account's own Hob, outside any campaign", () => {
         text: "Here it is.",
         proposal: campaignProposal,
         acceptedAt: stamp,
+        discardedAt: null,
+        kept: null,
         createdAt: stamp,
       },
     ];
-    renderHob({ account: true });
+    renderHob({ account: true, onOpen: () => undefined });
 
     expect(await screen.findByText("In your campaigns")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open it" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Open it" })).toBeNull();
   });
 });

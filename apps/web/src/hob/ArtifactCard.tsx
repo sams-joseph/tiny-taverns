@@ -10,10 +10,13 @@ import { ARTIFACT_KINDS, type HobArtifact } from "./transcript";
  * judgement call, **a quick-action chip** for the predictable 80%, and **click
  * the title** when you only want to rename the thing.
  *
- * Every handler is optional, and the card disables what it is not given rather
- * than offering a control that does nothing. That is not defensive typing: with
- * no assistant behind the panel there is no *Try again*, and there is nothing
- * for *Save to session* to write into — see `conversation.ts`.
+ * Every handler is optional, and the card leaves out *Discard*, *Try again*
+ * and *Open it* when it is not given them rather than drawing a control that
+ * does nothing: with no model behind the panel there is no *Try again*, and a
+ * card kept before its keep was recorded has nothing to *Open* — see
+ * `conversation.ts`. *Try again* is drawn but held while another answer is
+ * arriving (`retryWaits`), because it asks a question and the panel asks one
+ * at a time.
  */
 
 /**
@@ -391,6 +394,7 @@ export function ArtifactCard({
   onSave,
   onDiscard,
   onRetry,
+  retryWaits = false,
   onRename,
   onRefine,
   onOpen,
@@ -400,6 +404,8 @@ export function ArtifactCard({
   readonly onSave?: (artifact: HobArtifact) => void;
   readonly onDiscard?: (artifact: HobArtifact) => void;
   readonly onRetry?: (artifact: HobArtifact) => void;
+  /** Another answer is on its way, so *Try again* is held until it lands. */
+  readonly retryWaits?: boolean;
   readonly onRename?: (artifact: HobArtifact, title: string) => void;
   /** A quick-action chip: the same channel as typing "make it harder", pre-written. */
   readonly onRefine?: (artifact: HobArtifact, chip: string) => void;
@@ -505,14 +511,11 @@ export function ArtifactCard({
       <div className="flex items-center gap-2 border-t border-hairline bg-surface-card px-card py-2.5">
         {saved ? (
           <>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={onOpen === undefined}
-              onClick={() => onOpen?.(artifact)}
-            >
-              Open it
-            </Button>
+            {onOpen !== undefined && (
+              <Button size="sm" variant="secondary" onClick={() => onOpen(artifact)}>
+                Open it
+              </Button>
+            )}
             <span className="ml-auto text-caption leading-none text-faint">
               {story
                 ? "Current for this Shared World"
@@ -558,23 +561,22 @@ export function ArtifactCard({
                           : "Save to session"}
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={onDiscard === undefined}
-              onClick={() => onDiscard?.(artifact)}
-            >
-              Discard
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="ml-auto"
-              disabled={onRetry === undefined}
-              onClick={() => onRetry?.(artifact)}
-            >
-              Try again
-            </Button>
+            {onDiscard !== undefined && (
+              <Button size="sm" variant="ghost" onClick={() => onDiscard(artifact)}>
+                Discard
+              </Button>
+            )}
+            {onRetry !== undefined && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto"
+                disabled={retryWaits}
+                onClick={() => onRetry(artifact)}
+              >
+                Try again
+              </Button>
+            )}
           </>
         )}
       </div>

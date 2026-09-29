@@ -10,10 +10,18 @@ import { SharedWorldHistoryEntry, SharedWorldHistorySummary } from "./SharedWorl
 import {
   AssistantThreadId,
   AssistantTurnId,
+  BeatId,
+  CampaignActId,
   CampaignId,
+  CampaignStoryId,
+  CharacterId,
   CreatureId,
+  EncounterId,
+  NoteId,
   NpcId,
   SessionId,
+  SharedWorldHistoryEntryId,
+  SharedWorldHistorySummaryId,
   SharedWorldId,
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
@@ -536,6 +544,43 @@ export class HobThread extends Schema.Class<HobThread>("HobThread")({
 }) {}
 
 /**
+ * What a kept proposal made, as a pointer: the kind `HobAccepted` names and
+ * the ids its screen is addressed by. It is what a kept card's *Open it*
+ * opens, and it is stored on the turn by the accept, so the card still opens
+ * after a reload or a move to another scope — the panel reads the turn back
+ * and has nothing else to go on.
+ *
+ * A pointer and never an access path: the screen it opens reads the row
+ * through its own actor-scoped read, so a row deleted since is that screen's
+ * ordinary `NotFound`. `keptFrom` is the one way to make one.
+ */
+export const HobKept = Schema.Union([
+  Schema.Struct({ accepted: Schema.Literal("note"), id: NoteId }),
+  Schema.Struct({ accepted: Schema.Literal("beat"), id: BeatId, sessionId: SessionId }),
+  Schema.Struct({ accepted: Schema.Literal("nightSummary"), sessionId: SessionId }),
+  Schema.Struct({ accepted: Schema.Literal("night"), sessionId: SessionId }),
+  Schema.Struct({ accepted: Schema.Literal("act"), id: CampaignActId }),
+  Schema.Struct({ accepted: Schema.Literal("encounter"), id: EncounterId }),
+  Schema.Struct({ accepted: Schema.Literal("character"), id: CharacterId }),
+  Schema.Struct({
+    accepted: Schema.Literal("sharedWorldHistory"),
+    id: SharedWorldHistoryEntryId,
+    worldId: SharedWorldId,
+  }),
+  Schema.Struct({
+    accepted: Schema.Literal("sharedWorldSummary"),
+    id: SharedWorldHistorySummaryId,
+    worldId: SharedWorldId,
+  }),
+  Schema.Struct({ accepted: Schema.Literal("campaignStory"), id: CampaignStoryId }),
+  Schema.Struct({ accepted: Schema.Literal("npc"), id: NpcId }),
+  Schema.Struct({ accepted: Schema.Literal("npcSheet"), npcId: NpcId }),
+  Schema.Struct({ accepted: Schema.Literal("campaign"), id: CampaignId }),
+  Schema.Struct({ accepted: Schema.Literal("sharedWorld"), id: SharedWorldId }),
+]);
+export type HobKept = typeof HobKept.Type;
+
+/**
  * One line of a persisted conversation.
  *
  * `proposal` is null on every user turn and on most of Hob's — it is set only
@@ -544,6 +589,13 @@ export class HobThread extends Schema.Class<HobThread>("HobThread")({
  * row in the campaign, which is the whole safety property: an unkept proposal
  * is a turn with a `proposal` and no `acceptedAt`, and no note, beat, encounter
  * or character anywhere.
+ *
+ * `discardedAt` is the other answer a person can give a card: no. A discarded
+ * proposal stays on its turn — the record keeps what was offered, and Hob is
+ * told it was turned down — but it is no longer an offer, so it cannot be
+ * accepted and the panel no longer draws it. A turn is kept or discarded,
+ * never both (`0080`). `kept` is what the accept made, for *Open it*; null on
+ * everything unkept and on turns kept before it was recorded.
  *
  * There is no `origin` or `visibility` on the wire though the columns exist. A
  * turn's origin is `who` said it, and a conversation is DM-only by the column
@@ -557,6 +609,9 @@ export class HobTurn extends Schema.Class<HobTurn>("HobTurn")({
   proposal: Schema.NullOr(HobProposal),
   /** When the DM accepted it into the campaign, or null. */
   acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  /** When a person discarded the proposal, or null. */
+  discardedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
+  kept: Schema.NullOr(HobKept),
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
 
@@ -823,6 +878,48 @@ export const HobAccepted = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), sharedWorld: SharedWorld }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
+
+/** The pointer an accept stores on its turn: what it made, by the ids its screen needs. */
+export const keptFrom = (accepted: HobAccepted): HobKept => {
+  switch (accepted.accepted) {
+    case "note":
+      return { accepted: "note", id: accepted.note.id };
+    case "beat":
+      return { accepted: "beat", id: accepted.beat.id, sessionId: accepted.beat.sessionId };
+    case "nightSummary":
+      return { accepted: "nightSummary", sessionId: accepted.session.id };
+    case "night":
+      return { accepted: "night", sessionId: accepted.session.id };
+    case "act":
+      return { accepted: "act", id: accepted.act.id };
+    case "encounter":
+      return { accepted: "encounter", id: accepted.encounter.id };
+    case "character":
+      return { accepted: "character", id: accepted.character.id };
+    case "sharedWorldHistory":
+      return {
+        accepted: "sharedWorldHistory",
+        id: accepted.entry.id,
+        worldId: accepted.entry.worldId,
+      };
+    case "sharedWorldSummary":
+      return {
+        accepted: "sharedWorldSummary",
+        id: accepted.summary.id,
+        worldId: accepted.summary.worldId,
+      };
+    case "campaignStory":
+      return { accepted: "campaignStory", id: accepted.story.id };
+    case "npc":
+      return { accepted: "npc", id: accepted.npc.id };
+    case "npcSheet":
+      return { accepted: "npcSheet", npcId: accepted.sheet.npcId };
+    case "campaign":
+      return { accepted: "campaign", id: accepted.campaign.id };
+    case "sharedWorld":
+      return { accepted: "sharedWorld", id: accepted.sharedWorld.id };
+  }
+};
 
 /**
  * No model endpoint is configured, so there is nothing to ask.

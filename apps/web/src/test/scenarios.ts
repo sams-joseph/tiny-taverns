@@ -36,7 +36,8 @@ import {
 } from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
 import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
-import { brannocId } from "./ids";
+import { sseFrames } from "../characters/characters.fixtures";
+import { brannocId, hobThreadId, hobTurnId } from "./ids";
 import type { Scenario } from "./screens";
 
 // The campaign's reads, with `twoTables`' memberships seating this account as a
@@ -186,8 +187,47 @@ const linkedGrusk = {
 const creatorScene = (mode: SceneMode) => (): Map<string, Answer> =>
   new Map([...creator(), ...liveScene(mode)]);
 
+/**
+ * The creator's wire with Hob configured, offering Grusk's note on every ask.
+ * The stub keeps no state, so every ask is the same offer on the same turn,
+ * and its discard and its accept answer as the server does — the accept with
+ * Grusk's row, so *Open it* opens a note the Notes tab holds.
+ */
+const creatorHob = (): Map<string, Answer> => {
+  const routes = creator();
+  const hob = `/campaigns/${campaignId}/hob`;
+  const turn = `${hob}/threads/${hobThreadId}/turns/${hobTurnId}`;
+  routes.set(`GET ${hob}`, {
+    status: 200,
+    body: { available: true, model: "scripted-local", campaign: campaign.name },
+  });
+  routes.set(`GET ${hob}/threads`, { status: 200, body: [] });
+  routes.set(`POST ${hob}/ask`, {
+    status: 200,
+    sse: sseFrames([
+      { event: "began", data: { threadId: hobThreadId, turnId: hobTurnId } },
+      { event: "delta", data: { text: "Here is the toll-keeper." } },
+      {
+        event: "proposal",
+        data: {
+          turnId: hobTurnId,
+          proposal: { target: "note", title: grusk.title, body: grusk.body, kind: "note" },
+        },
+      },
+      { event: "done", data: { reason: "stop" } },
+    ]),
+  });
+  routes.set(`POST ${turn}/discard`, { status: 204 });
+  routes.set(`POST ${turn}/accept`, {
+    status: 200,
+    body: { accepted: "note", note: { ...grusk, origin: "assistant", assistantTurnId: hobTurnId } },
+  });
+  return routes;
+};
+
 export const scenarios = {
   creator,
+  "creator-hob": creatorHob,
   // Cazril with no sheet yet: the Stats tab's empty state and its quick
   // starts, over the campaign's bestiary.
   "creator-unsheeted": () =>

@@ -40,6 +40,8 @@ export interface HobPanelProps {
   readonly turns: ReadonlyArray<HobTurn>;
   /** An answer on its way. */
   readonly thinking?: boolean;
+  /** A question is in flight, words or not: *Try again* waits for it. */
+  readonly answering?: boolean;
   /** What Hob is doing while it is doing it, when there is something to say. */
   readonly activity?: string;
   /**
@@ -65,9 +67,9 @@ export interface HobPanelProps {
   readonly onRefine?: (artifact: HobArtifact, chip: string) => void;
   readonly onOpenArtifact?: (artifact: HobArtifact) => void;
   /**
-   * Which saved cards *Open it* can open. A card kept in an earlier visit has
-   * no row id on its turn to open, so the button is disabled there rather than
-   * doing nothing.
+   * Which saved cards *Open it* can open: those whose turn says what the keep
+   * made. A card kept before that was recorded has nothing to open, so it
+   * offers no *Open it* rather than one that does nothing.
    */
   readonly openableArtifactIds?: ReadonlyArray<string>;
   /** Start over. Absent while there is no thread to start over from. */
@@ -78,6 +80,7 @@ export interface HobPanelProps {
 export function HobPanel({
   turns,
   thinking = false,
+  answering = false,
   activity,
   context,
   savedArtifactIds = [],
@@ -174,6 +177,7 @@ export function HobPanel({
                     onSave={onSave}
                     onDiscard={onDiscard}
                     onRetry={onRetry}
+                    retryWaits={answering}
                     onRename={onRename}
                     onRefine={onRefine}
                     onOpen={

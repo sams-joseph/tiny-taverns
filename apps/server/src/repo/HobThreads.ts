@@ -5,7 +5,9 @@ import {
   AssistantTurnId,
   CampaignId,
   CurrentActor,
+  Conflict,
   SharedWorldId,
+  type HobKept,
   HobProposal,
   HobThread,
   HobTurn,
@@ -94,17 +96,22 @@ const TurnRow = classFromColumns(
   {
     ...HobTurn.fields,
     acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    discardedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
     createdAt: Schema.DateTimeUtcFromDate,
   },
   { text: "body" },
 );
 
-/** What an accept reads off the turn it locks: its proposal, and whether it was already kept. */
+/**
+ * What an accept or a discard reads off the turn it locks: its proposal, and
+ * whether a person already answered it.
+ */
 const LockedTurnRow = fromColumns(
   Schema.Struct({
     id: AssistantTurnId,
     proposal: Schema.NullOr(HobProposal),
     acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
+    discardedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
   }),
 );
 
@@ -196,6 +203,19 @@ export class HobThreads extends Context.Service<
       threadId: AssistantThreadId,
       draft: TurnDraft,
     ) => Effect.Effect<HobTurn, NotFound, CurrentActor>;
+    /**
+     * A person turning a proposal down: it stays on its turn and stops being
+     * an offer (`0080`). Writes nothing else, so it needs no more than the
+     * reach every read of the turn needs. Discarding twice is one discard;
+     * a turn with no proposal is `NotFound` about the proposal, as the accept
+     * answers it, and one already kept is a `Conflict`.
+     */
+    readonly discard: (
+      reach: ConversationReach,
+      scopeId: ConversationScope,
+      threadId: AssistantThreadId,
+      turnId: AssistantTurnId,
+    ) => Effect.Effect<void, NotFound | Conflict, CurrentActor>;
   }
 >()("HobThreads") {
   static readonly layer = Layer.effect(this)(
@@ -401,6 +421,28 @@ export class HobThreads extends Context.Service<
               }),
             ),
           ),
+
+        discard: (reach, scopeId, threadId, turnId) =>
+          dieOnSqlError(
+            sql.withTransaction(
+              Effect.gen(function* () {
+                // The accept's lock, so a keep and a discard pressed together
+                // are one answer and one `Conflict`, never both.
+                const turn = yield* lockTurnForAccept(sql, reach, scopeId, threadId, turnId);
+                if (turn.proposal === null) {
+                  return yield* new NotFound({ resource: "proposal", id: turnId });
+                }
+                if (turn.acceptedAt !== null) {
+                  return yield* new Conflict({ message: "that is already kept" });
+                }
+                if (turn.discardedAt !== null) return;
+                yield* sql`
+                  update assistant_turn set discarded_at = now(), updated_at = now()
+                  where assistant_turn.id = ${turnId}
+                `;
+              }),
+            ),
+          ),
       };
     }),
   );
@@ -458,6 +500,16 @@ export const lockTurnForAccept = (
     })(turnId).pipe(orNotFound("assistant_turn", turnId)),
   );
 
-/** Records that a human said yes, in the transaction that made the row. */
-export const markAccepted = (sql: SqlClient.SqlClient, turnId: AssistantTurnId) =>
-  sql`update assistant_turn set accepted_at = now(), updated_at = now() where assistant_turn.id = ${turnId}`;
+/**
+ * Records that a human said yes, in the transaction that made the row, and
+ * what it made — the pointer a kept card's *Open it* follows (`HobKept`).
+ */
+export const markAccepted = (sql: SqlClient.SqlClient, turnId: AssistantTurnId, kept: HobKept) =>
+  sql`
+    update assistant_turn
+    set accepted_at = now(), kept = ${JSON.stringify(kept)}, updated_at = now()
+    where assistant_turn.id = ${turnId}
+  `;
+
+/** A discarded proposal is no longer an offer, so there is nothing to accept. */
+export const discardedConflict = new Conflict({ message: "that was discarded" });

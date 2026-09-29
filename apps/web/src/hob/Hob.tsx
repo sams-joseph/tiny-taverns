@@ -1,4 +1,4 @@
-import type { HobAccepted } from "@taverns/api";
+import type { HobAccepted, HobKept } from "@taverns/api";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useEffect } from "react";
@@ -103,7 +103,8 @@ function useHobPlace(scope: HobScope | undefined, open: boolean): HobPlace {
  * Four things, and no more: it asks `conversation.ts` for a conversation, it
  * hands `HobDock` the open/inline decision the shell already owns, it passes on
  * the scope in view and the starters `suggestions.ts` picks for that place, and
- * it opens what a kept card made. Everything else — the parts,
+ * it opens what a kept card made — on the keep for a campaign, a Shared World or
+ * a character, and on *Open it* for anything kept. Everything else — the parts,
  * the states, the 1020px threshold, the layering — lives below it, and the
  * shell needs to know none of it.
  *
@@ -160,7 +161,89 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
     [close, inline, navigate],
   );
 
-  return <ScopedHob hob={hob} scope={scope} place={useHobPlace(scope, hob.open)} onKept={onKept} />;
+  /**
+   * *Open it*: the screen a kept card's pointer names — the row itself where
+   * it has a screen, and otherwise the page it landed on, which is what the
+   * card's footer says (*In the Chronicle*, *In the Cast*). Campaign kinds are
+   * addressed under the campaign in view, which is the only one whose
+   * conversation holds them.
+   */
+  const onOpen = useCallback(
+    (kept: HobKept) => {
+      const campaignId = scope?.type === "campaign" ? scope.id : undefined;
+      const go = (): Promise<void> | undefined => {
+        switch (kept.accepted) {
+          case "campaign":
+            return navigate({ to: "/campaigns/$campaignId", params: { campaignId: kept.id } });
+          case "sharedWorld":
+            return navigate({ to: "/worlds/$worldId", params: { worldId: kept.id } });
+          case "character":
+            return navigate({
+              to: "/characters/$characterId",
+              params: { characterId: kept.id },
+            });
+          case "sharedWorldHistory":
+            return navigate({
+              to: "/worlds/$worldId/chronicle",
+              params: { worldId: kept.worldId },
+            });
+          // The Story So Far is the world's page's own card.
+          case "sharedWorldSummary":
+            return navigate({ to: "/worlds/$worldId", params: { worldId: kept.worldId } });
+        }
+        if (campaignId === undefined) return undefined;
+        switch (kept.accepted) {
+          case "note":
+            return navigate({
+              to: "/campaigns/$campaignId/notes",
+              params: { campaignId },
+              search: { note: kept.id },
+            });
+          case "encounter":
+            return navigate({
+              to: "/campaigns/$campaignId/encounters/$encounterId",
+              params: { campaignId, encounterId: kept.id },
+            });
+          case "npc":
+            return navigate({
+              to: "/campaigns/$campaignId/cast",
+              params: { campaignId },
+              search: { npc: kept.id },
+            });
+          case "npcSheet":
+            return navigate({
+              to: "/campaigns/$campaignId/cast",
+              params: { campaignId },
+              search: { npc: kept.npcId },
+            });
+          case "beat":
+          case "nightSummary":
+          case "night":
+            return navigate({
+              to: "/campaigns/$campaignId/chronicle",
+              params: { campaignId },
+              search: { session: kept.sessionId },
+            });
+          case "act":
+          case "campaignStory":
+            return navigate({ to: "/campaigns/$campaignId/chronicle", params: { campaignId } });
+        }
+      };
+      // Overlaid, the panel covers the screen being opened.
+      if (go() !== undefined && !inline) close();
+    },
+    [close, inline, navigate, scope],
+  );
+
+  return (
+    <ScopedHob
+      hob={hob}
+      scope={scope}
+      place={useHobPlace(scope, hob.open)}
+      onKept={onKept}
+      onOpen={onOpen}
+    />
+  );
 }
 
 /**
@@ -173,13 +256,16 @@ export function ScopedHob({
   scope,
   place,
   onKept,
+  onOpen,
 }: {
   readonly hob: HobPanelState;
   readonly scope: HobScope | undefined;
   readonly place?: HobPlace;
   readonly onKept?: (accepted: HobAccepted) => void;
+  /** *Open it* on a kept card. Absent, no card offers to open. */
+  readonly onOpen?: (kept: HobKept) => void;
 }) {
-  const conversation = useHobConversation(scope, hob.open, onKept);
+  const conversation = useHobConversation(scope, hob.open, onKept, onOpen);
   const { asked, forgetAsked } = hob;
   const { send, asking } = conversation;
   // A question a screen asked (`hob.ask`) goes as soon as the conversation can
@@ -206,6 +292,7 @@ export function ScopedHob({
       onClose={hob.close}
       turns={conversation.turns}
       thinking={conversation.thinking}
+      answering={conversation.asking}
       activity={conversation.activity}
       context={conversation.context}
       savedArtifactIds={conversation.savedArtifactIds}
