@@ -1,11 +1,11 @@
 import {
-  type Actor,
+  Actor,
   CampaignCharacter,
-  type CampaignCharacterId,
-  type CampaignId,
-  Character,
+  CampaignCharacterId,
+  CampaignId,
+  type Character,
   type CharacterDamage,
-  type CharacterId,
+  CharacterId,
   Conflict,
   CurrentActor,
   NotFound,
@@ -15,20 +15,18 @@ import {
   type PartySeatUpdate,
   type SessionId,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient, SqlError } from "effect/unstable/sql";
+import { Context, Effect, Layer, Schema } from "effect";
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
-  type CharacterRow,
+  characterRow,
   claimCharacterRequest,
-  liveFightOf,
-  type PortraitSigner,
+  liveFightsOf,
   portraitColumns,
   portraitSigner,
   restCharacterRow,
-  toCharacter,
 } from "./Characters.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, orNotFound, timestampColumns } from "./rows.js";
 import { requestAlreadyApplied, sessionRequestAlreadyApplied } from "./SessionEvents.js";
 import {
   appendCharacterUpdated,
@@ -71,99 +69,12 @@ import {
  * requires `left_at is null` — so a retired seat is inert everywhere at once.
  */
 
-interface SeatRow extends ProvenanceColumns {
-  readonly id: CampaignCharacterId;
-  readonly campaign_id: CampaignId;
-  readonly character_id: CharacterId | null;
-  readonly account_id: string;
-  readonly display_name: string;
-  readonly player_display_name: string | null;
-  readonly joined_at: Date;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-}
-
-const toSeat = (row: SeatRow): CampaignCharacter =>
-  new CampaignCharacter({
-    id: row.id,
-    campaignId: row.campaign_id,
-    characterId: row.character_id,
-    accountId: row.account_id as CampaignCharacter["accountId"],
-    displayName: row.display_name,
-    playerDisplayName: row.player_display_name,
-    ...provenanceOf(row),
-    joinedAt: DateTime.fromDateUnsafe(row.joined_at),
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  });
-
-/** A seat row with its character alongside, when the character still exists. */
-type SeatWithCharacterRow = SeatRow & {
-  readonly [K in keyof CharacterRow as `character_${K & string}`]: CharacterRow[K] | null;
-};
-
-/**
- * The character's columns, prefixed so they can share a row object with the
- * seat's. The character's own `id` needs no alias: the seat's `character_id`
- * *is* the pointer, and the join condition makes the two one value.
- */
-const characterColumns = (sql: SqlClient.SqlClient) => sql`
-  character.account_id as character_account_id,
-  character.name as character_name, character.player_name as character_player_name,
-  character.level as character_level, character.race as character_race,
-  character.subrace as character_subrace, character.class_name as character_class_name,
-  character.descriptor as character_descriptor, character.ac as character_ac,
-  character.hp_max as character_hp_max, character.hp_current as character_hp_current,
-  character.temp_hp as character_temp_hp, character.conditions as character_conditions,
-  character.inspiration as character_inspiration,
-  character.sheet_url as character_sheet_url, character.body as character_body,
-  character.version as character_version, character.visibility as character_visibility,
-  character.origin as character_origin,
-  character.assistant_turn_id as character_assistant_turn_id,
-  character.created_at as character_created_at, character.updated_at as character_updated_at,
-  ${portraitColumns(sql, "character_")}
-`;
-
-const characterOf = (row: SeatWithCharacterRow, sign?: PortraitSigner): Character | null => {
-  if (row.character_id === null || row.character_name === null) return null;
-  return toCharacter(
-    {
-      id: row.character_id,
-      account_id: row.character_account_id!,
-      name: row.character_name,
-      player_name: row.character_player_name,
-      level: row.character_level,
-      race: row.character_race,
-      subrace: row.character_subrace,
-      class_name: row.character_class_name,
-      descriptor: row.character_descriptor,
-      ac: row.character_ac,
-      hp_max: row.character_hp_max,
-      hp_current: row.character_hp_current,
-      temp_hp: row.character_temp_hp!,
-      conditions: row.character_conditions!,
-      inspiration: row.character_inspiration!,
-      sheet_url: row.character_sheet_url,
-      body: row.character_body!,
-      version: row.character_version!,
-      visibility: row.character_visibility!,
-      origin: row.character_origin!,
-      assistant_turn_id: row.character_assistant_turn_id,
-      created_at: row.character_created_at!,
-      updated_at: row.character_updated_at!,
-      // `undefined` survives to `toCharacter`'s check when the read forgot
-      // `portraitColumns`; `null` is the seat read's own "no portrait".
-      portrait_id: row.character_portrait_id as string | null,
-      portrait_state: row.character_portrait_state as CharacterRow["portrait_state"],
-      banner_id: row.character_banner_id as string | null,
-      banner_state: row.character_banner_state as CharacterRow["banner_state"],
-    },
-    sign,
-  );
-};
-
-const toPartySeat = (row: SeatWithCharacterRow, sign?: PortraitSigner): PartySeat =>
-  new PartySeat({ seat: toSeat(row), character: characterOf(row, sign) });
+/** A `campaign_character` row as the wire reads it, decoded off `campaign_character.*`. */
+const SeatRow = classFromColumns(CampaignCharacter, {
+  ...CampaignCharacter.fields,
+  ...timestampColumns,
+  joinedAt: Schema.DateTimeUtcFromDate,
+});
 
 export class Party extends Context.Service<
   Party,
@@ -232,43 +143,94 @@ export class Party extends Context.Service<
       const live = yield* LiveEvents;
       // The seat read is a character read, so it signs portraits exactly as the
       // owner's does: whoever may see the character sees its picture.
-      const sign = yield* portraitSigner;
+      const CharacterRow = characterRow(yield* portraitSigner);
 
       const ring = ({ sessionId }: { readonly sessionId: SessionId | undefined }) =>
         sessionId === undefined ? Effect.void : live.touched(sessionId);
 
-      /** One seat with its character, through the reader's own predicate. */
-      const readSeat = (
-        campaignId: CampaignId,
-        id: CampaignCharacterId,
-        actor: Actor,
-      ): Effect.Effect<PartySeat, NotFound> =>
-        sql<SeatWithCharacterRow>`
-          select campaign_character.*, ${characterColumns(sql)}
-          from campaign_character
-          left join character on character.id = campaign_character.character_id
+      /** One live seat, through the reader's own predicate. */
+      const seat = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ campaignId: CampaignId, id: CampaignCharacterId, actor: Actor }),
+        ),
+        Result: SeatRow,
+        execute: ({ campaignId, id, actor }) => sql`
+          select campaign_character.* from campaign_character
           where campaign_character.id = ${id}
             and campaign_character.left_at is null
             and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
-        `.pipe(
-          Effect.orDie,
-          Effect.flatMap((rows) =>
-            rows.length === 0
-              ? new NotFound({ resource: "campaign_character", id })
-              : Effect.succeed(toPartySeat(rows[0]!, sign)),
-          ),
+        `,
+      });
+      /** Every live seat this actor may see, in the order they sat down. */
+      const seats = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, actor: Actor })),
+        Result: SeatRow,
+        execute: ({ campaignId, actor }) => sql`
+          select campaign_character.* from campaign_character
+          where campaign_character.left_at is null
+            and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+          order by campaign_character.joined_at asc, campaign_character.id asc
+        `,
+      });
+      /**
+       * The characters these seats hold. No predicate of its own: the reach is
+       * the seat, and every id came out of a seat read that applied one.
+       */
+      const seated = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Array(CharacterId)),
+        Result: CharacterRow,
+        execute: (ids) => sql`
+          select character.*, ${portraitColumns(sql)} from character
+          where character.id = any(${[...ids]})
+        `,
+      });
+
+      /**
+       * Seats with the character each holds, when it still exists: the seats,
+       * then one statement for every seat's character, filed back by id.
+       */
+      const withCharacters = (read: ReadonlyArray<CampaignCharacter>) =>
+        Effect.gen(function* () {
+          const ids = read.flatMap((one) => (one.characterId === null ? [] : [one.characterId]));
+          const characters = ids.length === 0 ? [] : yield* seated(ids);
+          const byId = new Map(characters.map((character) => [character.id, character]));
+          return read.map(
+            (one) =>
+              new PartySeat({
+                seat: one,
+                character: one.characterId === null ? null : (byId.get(one.characterId) ?? null),
+              }),
+          );
+        });
+
+      /** One seat with its character, through the reader's own predicate. */
+      const readSeat = (campaignId: CampaignId, id: CampaignCharacterId, actor: Actor) =>
+        seat({ campaignId, id, actor }).pipe(
+          orNotFound("campaign_character", id),
+          Effect.flatMap((one) => withCharacters([one])),
+          Effect.map((read) => read[0]!),
         );
 
       /** Every live seat this actor may see, with its character. */
       const readSeats = (campaignId: CampaignId, actor: Actor) =>
-        sql<SeatWithCharacterRow>`
-          select campaign_character.*, ${characterColumns(sql)}
-          from campaign_character
-          left join character on character.id = campaign_character.character_id
-          where campaign_character.left_at is null
-            and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
-          order by campaign_character.joined_at asc, campaign_character.id asc
-        `.pipe(Effect.map((rows) => rows.map((row) => toPartySeat(row, sign))));
+        Effect.flatMap(seats({ campaignId, actor }), withCharacters);
+
+      /**
+       * Every character at a live seat here, locked in id order so two rests
+       * (or a rest and a seat write) queue rather than interleave. The reach is
+       * the seat-side vitals predicate, the same one the delta and conditions
+       * use.
+       */
+      const party = SqlSchema.findAll({
+        Request: Schema.toType(Schema.Struct({ campaignId: CampaignId, actor: Actor })),
+        Result: CharacterRow,
+        execute: ({ campaignId, actor }) => sql`
+          select character.*, ${portraitColumns(sql)} from character
+          where ${characterVitalsWritable(sql, campaignId, actor)}
+          order by character.id
+          for update
+        `,
+      });
 
       return {
         list: (campaignId) =>
@@ -429,42 +391,47 @@ export class Party extends Context.Service<
                       return yield* new NotFound({ resource: "campaign", id: campaignId });
                     }
 
-                    // Every character at a live seat here, locked in id order
-                    // so two rests (or a rest and a seat write) queue rather
-                    // than interleave. The reach is the seat-side vitals
-                    // predicate, the same one the delta and conditions use.
                     const reach = characterVitalsWritable(sql, campaignId, actor);
-                    const before = yield* sql<CharacterRow>`
-                      select character.*, ${portraitColumns(sql)} from character
-                      where ${reach}
-                      order by character.id
-                      for update
-                    `;
+                    const before = yield* party({ campaignId, actor });
 
                     // The owner's rule refuses a rest mid-fight anywhere; so
-                    // does this, before anything is written. Another table's
-                    // fight is not named — its campaign is not this creator's.
-                    for (const row of before) {
-                      const fight = yield* liveFightOf(sql, row.id);
+                    // does this, before anything is written, with one read for
+                    // the whole party. Another table's fight is not named — its
+                    // campaign is not this creator's.
+                    const fights = yield* liveFightsOf(
+                      sql,
+                      before.map((character) => character.id),
+                    );
+                    for (const character of before) {
+                      const fight = fights.get(character.id);
                       if (fight === undefined) continue;
                       return yield* new Conflict({
                         message:
-                          fight.campaign_id === campaignId
+                          fight.campaignId === campaignId
                             ? "Rest after the fight; the party is on the table."
-                            : `Rest after the fight; ${row.name} is on another table right now.`,
+                            : `Rest after the fight; ${character.name} is on another table right now.`,
                       });
                     }
 
                     const sessionId = yield* currentSessionOf(sql, campaignId, actor);
                     let rested = 0;
-                    for (const row of before) {
-                      if (!(yield* claimCharacterRequest(sql, row.id, payload.requestId))) continue;
-                      const { detail } = yield* restCharacterRow(sql, row, payload.kind, 0, reach);
+                    for (const character of before) {
+                      if (!(yield* claimCharacterRequest(sql, character.id, payload.requestId))) {
+                        continue;
+                      }
+                      const { detail } = yield* restCharacterRow(
+                        sql,
+                        CharacterRow,
+                        character,
+                        payload.kind,
+                        0,
+                        reach,
+                      );
                       rested += 1;
                       if (sessionId !== undefined) {
                         yield* appendCharacterUpdated(sql, {
                           sessionId,
-                          characterId: row.id,
+                          characterId: character.id,
                           live: undefined,
                           detail,
                         });
@@ -511,19 +478,11 @@ export class Party extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
 
-              const characterBehind = (
-                characterId: CharacterId,
-              ): Effect.Effect<Character, NotFound> =>
-                sql<CharacterRow>`
-                  select character.*, ${portraitColumns(sql)} from character
-                  where character.id = ${characterId}
-                `.pipe(
-                  Effect.orDie,
-                  Effect.flatMap((rows) =>
-                    rows.length === 0
-                      ? new NotFound({ resource: "character", id: characterId })
-                      : Effect.succeed(toCharacter(rows[0]!, sign)),
-                  ),
+              const characterBehind = (characterId: CharacterId) =>
+                Effect.flatMap(seated([characterId]), ([character]) =>
+                  character === undefined
+                    ? Effect.fail(new NotFound({ resource: "character", id: characterId }))
+                    : Effect.succeed(character),
                 );
 
               return yield* sql

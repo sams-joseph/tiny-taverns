@@ -1,9 +1,9 @@
 import { randomInt } from "node:crypto";
 import {
   type Actor,
-  type CampaignId,
+  CampaignId,
   Character,
-  type CharacterId,
+  CharacterId,
   CharacterBannerImages,
   CharacterPortraitImages,
   type CharacterOwnCreate,
@@ -21,17 +21,21 @@ import {
   type SessionId,
   type SheetResource,
 } from "@taverns/api";
-import { Context, DateTime, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { SqlClient, type SqlError, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
   type AssistantOrigin,
   assistantColumns,
+  classFromColumns,
   defined,
   dieOnSqlError,
-  type ProvenanceColumns,
+  fileUnder,
+  fromColumns,
+  orNotFound,
   setClause,
+  timestampColumns,
 } from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
@@ -75,56 +79,28 @@ import {
  * `campaign_character.character_id` are `on delete set null`).
  */
 
-interface CharacterRow extends ProvenanceColumns {
-  readonly id: CharacterId;
-  readonly account_id: string;
-  readonly name: string;
-  readonly player_name: string | null;
-  readonly level: number | null;
-  readonly race: string | null;
-  readonly subrace: string | null;
-  readonly class_name: string | null;
-  /** `generated always as … stored` — refused by Postgres on the way in. */
-  readonly descriptor: string | null;
-  readonly ac: number | null;
-  readonly hp_max: number | null;
-  /** Null until somebody says. Not zero, and not full. See `0014`. */
-  readonly hp_current: number | null;
-  readonly temp_hp: number;
-  readonly conditions: ReadonlyArray<string>;
-  readonly inspiration: boolean;
-  readonly sheet_url: string | null;
-  readonly body: CharacterSheet;
-  readonly version: number;
-  readonly created_at: Date;
-  readonly updated_at: Date;
-  /** From {@link portraitColumns}; `null` when the character has no portrait record. */
-  readonly portrait_id: string | null;
-  readonly portrait_state: "generating" | "ready" | "failed" | null;
-  /** From {@link portraitColumns}; `null` when the character has no banner record. */
-  readonly banner_id: string | null;
-  readonly banner_state: "generating" | "ready" | "failed" | null;
-}
-
 /**
- * The portrait's two facts beside a character row, `portrait_id` and
- * `portrait_state`, and its banner's, `banner_id` and `banner_state`, as
- * scalar subqueries so they fit a `select`, a `returning` and a column list
- * alike. **Every read that becomes a `Character` names this
- * fragment** — `toCharacter` dies on a row without it, so a path that forgot is
- * a failed test rather than a character whose portrait silently vanished.
- *
- * @param prefix `"character_"` inside a seat read, whose columns are prefixed.
+ * The portrait's and banner's facts beside a character row, as scalar
+ * subqueries so they fit a `select` and a `returning` alike: each picture's id
+ * once it is ready (`portrait_id`, `banner_id`), and whether either is still
+ * being drawn (`portrait_pending`). **Every read that becomes a `Character`
+ * names this fragment** — {@link characterRow} requires all three columns, so a
+ * path that forgot is a failed test rather than a character whose portrait
+ * silently vanished.
  */
-export const portraitColumns = (sql: SqlClient.SqlClient, prefix = "") => sql`
+export const portraitColumns = (sql: SqlClient.SqlClient) => sql`
   (select character_portrait.id from character_portrait
-   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_id`)},
-  (select character_portrait.state from character_portrait
-   where character_portrait.character_id = character.id) as ${sql(`${prefix}portrait_state`)},
+   where character_portrait.character_id = character.id
+     and character_portrait.state = 'ready') as portrait_id,
   (select character_banner.id from character_banner
-   where character_banner.character_id = character.id) as ${sql(`${prefix}banner_id`)},
-  (select character_banner.state from character_banner
-   where character_banner.character_id = character.id) as ${sql(`${prefix}banner_state`)}
+   where character_banner.character_id = character.id
+     and character_banner.state = 'ready') as banner_id,
+  (exists (select 1 from character_portrait
+           where character_portrait.character_id = character.id
+             and character_portrait.state = 'generating')
+   or exists (select 1 from character_banner
+              where character_banner.character_id = character.id
+                and character_banner.state = 'generating')) as portrait_pending
 `;
 
 /**
@@ -205,54 +181,64 @@ export const portraitImages = (
 ): Character["portrait"] => (portraitId !== null && sign !== undefined ? sign(portraitId) : null);
 
 /**
- * One mapper per table — `repo/Party.ts` imports it rather than restating.
- *
- * Every read that returns a character returns it through here, after its own
- * predicate, so whoever can load the character gets its picture and nobody
- * else gets a URL.
+ * A ready portrait's id, decoded into the images the wire carries: the
+ * `portrait` of every row that selects {@link portraitColumns} or
+ * {@link seatedPortraitColumn}. Minting is the decode's last step, so the id a
+ * predicate let through is the only thing a URL is made from.
  */
-export const toCharacter = (row: CharacterRow, sign?: PortraitSigner): Character => {
-  if (row.portrait_state === undefined || row.banner_state === undefined) {
-    throw new Error("a character read did not select portraitColumns");
-  }
-  return new Character({
-    id: row.id,
-    accountId: row.account_id as Character["accountId"],
-    name: row.name,
-    playerName: row.player_name,
-    level: row.level,
-    race: row.race,
-    subrace: row.subrace,
-    className: row.class_name,
-    descriptor: row.descriptor,
-    ac: row.ac,
-    hpMax: row.hp_max,
-    hpCurrent: row.hp_current,
-    tempHp: row.temp_hp,
-    conditions: row.conditions,
-    inspiration: row.inspiration,
-    sheetUrl: row.sheet_url,
-    sheet: row.body,
-    version: row.version,
-    portrait: portraitImages(row.portrait_state === "ready" ? row.portrait_id : null, sign),
-    banner:
-      row.banner_state === "ready" && row.banner_id !== null && sign !== undefined
-        ? sign.banner(row.banner_id)
-        : null,
-    portraitPending: row.portrait_state === "generating" || row.banner_state === "generating",
-    // Not `provenanceOf`: the shared character carries no `visibility` — who
-    // at a table may see it is the seat's question now — so the row's inert
-    // column must not reach the wire.
-    origin: row.origin,
-    assistantTurnId: row.assistant_turn_id,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-  });
-};
+export const portraitFromId = (sign: PortraitSigner | undefined) =>
+  Schema.NullOr(Schema.String).pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(CharacterPortraitImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((id: string | null) => portraitImages(id, sign)),
+        SchemaGetter.forbidden(() => "a portrait is minted, never read back"),
+      ),
+    ),
+  );
 
-export type { CharacterRow };
+/** A ready banner's id, decoded into its images: the banner's {@link portraitFromId}. */
+const bannerFromId = (sign: PortraitSigner | undefined) =>
+  Schema.NullOr(Schema.String).pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.instanceOf(CharacterBannerImages)),
+      new SchemaTransformation.Transformation(
+        SchemaGetter.transform((id: string | null) =>
+          id !== null && sign !== undefined ? sign.banner(id) : null,
+        ),
+        SchemaGetter.forbidden(() => "a banner is minted, never read back"),
+      ),
+    ),
+  );
+
+/**
+ * A `character` row as the wire reads it, decoded off `character.*` and
+ * {@link portraitColumns} by `SqlSchema`: the sheet is `body`, and the pictures
+ * are signed with the signer the reading repository was built with.
+ *
+ * **One decode per table** — `repo/Party.ts` reads its seats' characters
+ * through it rather than restating. Every read that returns a character returns
+ * it through here, after its own predicate, so whoever can load the character
+ * gets its picture and nobody else gets a URL. The row's `visibility` column is
+ * inert — who at a table may see a character is the seat's question — and the
+ * decode drops it, as `Character` has no field for it.
+ */
+export const characterRow = (sign: PortraitSigner | undefined) =>
+  classFromColumns(
+    Character,
+    {
+      ...Character.fields,
+      ...timestampColumns,
+      portrait: portraitFromId(sign),
+      banner: bannerFromId(sign),
+    },
+    { sheet: "body", portrait: "portrait_id", banner: "banner_id" },
+  );
 
 const encodeSheet = (sheet: CharacterSheet): string => JSON.stringify(sheet);
+
+/** The written columns of an insert or a PATCH, as the method builds them. */
+const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 
 /** Where a character's subrace is checked, as a refusal names it. */
 const CHARACTER_RULES = "in a campaign this character is at";
@@ -262,12 +248,15 @@ const staleVersion = (expected: number, actual: number): Conflict =>
     message: `the sheet moved on while you were editing (version ${String(actual)}, you read ${String(expected)}). Reload it and make the change again.`,
   });
 
-interface SeatRefRow {
-  readonly character_id: CharacterId;
-  readonly id: string;
-  readonly campaign_id: CampaignId;
-  readonly joined_at: Date;
-}
+/** Where one of the reader's characters sits, beside the character it is for. */
+const SeatRefRow = fromColumns(
+  Schema.Struct({
+    characterId: CharacterId,
+    ...CharacterSeatRef.fields,
+    joinedAt: Schema.DateTimeUtcFromDate,
+  }),
+  { campaignCharacterId: "id" },
+);
 
 interface OpenSeatSessionRow {
   readonly session_id: SessionId;
@@ -275,10 +264,11 @@ interface OpenSeatSessionRow {
   readonly run_id: EncounterRunId | null;
 }
 
-interface LiveFightRow {
-  readonly campaign_id: CampaignId;
-  readonly campaign_name: string;
-}
+/** The live fight a character is on the table in: which campaign's, and what it is called. */
+const LiveFightRow = fromColumns(
+  Schema.Struct({ characterId: CharacterId, campaignId: CampaignId, campaignName: Schema.String }),
+);
+const CharacterIds = Schema.toType(Schema.Array(CharacterId));
 
 const resourceMissing = (resourceId: string): NotFound =>
   new NotFound({ resource: "character_resource", id: resourceId });
@@ -366,27 +356,30 @@ export const claimCharacterRequest = (
       );
 
 /**
- * The live fight this character is on the table in, at any campaign. A rest
- * is refused while there is one: the combatant holds the fight's copy of the
+ * The live fight each of these characters is on the table in, at any campaign,
+ * keyed by character: one statement however many are asked about. A rest is
+ * refused while there is one: the combatant holds the fight's copy of the
  * character's hit points and conditions, and a rest would leave the two apart.
+ * A character in two live fights answers the newest.
  */
-export const liveFightOf = (
-  sql: SqlClient.SqlClient,
-  characterId: CharacterId,
-): Effect.Effect<LiveFightRow | undefined> =>
-  sql<LiveFightRow>`
-    select campaign.id as campaign_id, campaign.name as campaign_name
-    from combatant
-    join encounter_run on encounter_run.id = combatant.encounter_run_id
-    join session on session.id = encounter_run.session_id
-    join campaign on campaign.id = session.campaign_id
-    where combatant.character_id = ${characterId}
-      and encounter_run.ended_at is null
-    order by encounter_run.created_at desc, encounter_run.id desc
-    limit 1
-  `.pipe(
-    Effect.map((rows) => rows[0]),
-    Effect.orDie,
+export const liveFightsOf = (sql: SqlClient.SqlClient, characterIds: ReadonlyArray<CharacterId>) =>
+  Effect.map(
+    SqlSchema.findAll({
+      Request: CharacterIds,
+      Result: LiveFightRow,
+      execute: (ids) => sql`
+        select distinct on (combatant.character_id)
+               combatant.character_id, campaign.id as campaign_id, campaign.name as campaign_name
+        from combatant
+        join encounter_run on encounter_run.id = combatant.encounter_run_id
+        join session on session.id = encounter_run.session_id
+        join campaign on campaign.id = session.campaign_id
+        where combatant.character_id = any(${[...ids]})
+          and encounter_run.ended_at is null
+        order by combatant.character_id, encounter_run.created_at desc, encounter_run.id desc
+      `,
+    })(characterIds),
+    (fights) => new Map(fights.map((fight) => [fight.characterId, fight])),
   );
 
 /**
@@ -401,27 +394,30 @@ export const liveFightOf = (
  * requested hit dice on rolled healing.
  *
  * Runs inside the caller's transaction, after its fight check and retry claim.
- * `before` is the row the caller read under the same reach.
+ * `before` is the character the caller read under the same reach, and
+ * `CharacterRow` the caller's own {@link characterRow}, which the rested
+ * character is read back through.
  */
 export const restCharacterRow = (
   sql: SqlClient.SqlClient,
-  before: CharacterRow,
+  CharacterRow: ReturnType<typeof characterRow>,
+  before: Character,
   kind: CharacterRest["kind"],
   hitDiceRequested: number,
   reach: Statement.Fragment,
 ): Effect.Effect<
   {
-    readonly row: CharacterRow;
+    readonly character: Character;
     readonly detail: {
       readonly rest: CharacterRest["kind"];
       readonly hitDiceSpent: number;
       readonly healing: number;
     };
   },
-  SqlError.SqlError
+  SqlError.SqlError | Schema.SchemaError
 > =>
   Effect.gen(function* () {
-    const resources = before.body.resources ?? [];
+    const resources = before.sheet.resources ?? [];
     const { resources: nextResources, hitDiceSpent } = nextResourcesForRest(
       resources,
       kind,
@@ -432,29 +428,38 @@ export const restCharacterRow = (
       kind === "short"
         ? rollHitDiceHealing(
             hitDiceSpent,
-            hitDieSides(hitDiceResource, before.body),
-            conModifier(before.body),
+            hitDieSides(hitDiceResource, before.sheet),
+            conModifier(before.sheet),
           )
         : 0;
-    const nextSheet: CharacterSheet = { ...before.body, resources: nextResources };
+    const nextSheet: CharacterSheet = { ...before.sheet, resources: nextResources };
     const nextConditions =
       kind === "long" ? withoutConcentration(before.conditions) : before.conditions;
     const hpCurrent =
       kind === "long" ? sql`character.hp_max` : clampedCharacterHp(sql, healing > 0 ? -healing : 0);
     const tempHp = kind === "long" ? sql`0` : sql`character.temp_hp`;
-    const rows = yield* sql<CharacterRow>`
-      update character
-      set body = ${encodeSheet(nextSheet)}::jsonb,
-          hp_current = ${hpCurrent},
-          temp_hp = ${tempHp},
-          conditions = ${nextConditions},
-          version = character.version + 1,
-          updated_at = now()
-      where character.id = ${before.id}
-        and ${reach}
-      returning character.*, ${portraitColumns(sql)}
-    `;
-    return { row: rows[0]!, detail: { rest: kind, hitDiceSpent, healing } };
+    const rested = SqlSchema.findOne({
+      Request: Schema.toType(CharacterId),
+      Result: CharacterRow,
+      execute: (id) => sql`
+        update character
+        set body = ${encodeSheet(nextSheet)}::jsonb,
+            hp_current = ${hpCurrent},
+            temp_hp = ${tempHp},
+            conditions = ${nextConditions},
+            version = character.version + 1,
+            updated_at = now()
+        where character.id = ${id}
+          and ${reach}
+        returning character.*, ${portraitColumns(sql)}
+      `,
+    });
+    // The caller read `before` under the same reach in this transaction, so
+    // not getting the row back is a defect.
+    const character = yield* rested(before.id).pipe(
+      Effect.catchTag("NoSuchElementError", Effect.die),
+    );
+    return { character, detail: { rest: kind, hitDiceSpent, healing } };
   });
 
 export class Characters extends Context.Service<
@@ -527,8 +532,139 @@ export class Characters extends Context.Service<
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       const live = yield* Effect.serviceOption(LiveEvents);
-      const sign = yield* portraitSigner;
-      const asCharacter = (row: CharacterRow): Character => toCharacter(row, sign);
+      const CharacterRow = characterRow(yield* portraitSigner);
+
+      /** One of this account's characters, by id. */
+      const own = SqlSchema.findOne({
+        Request: Schema.toType(CharacterId),
+        Result: CharacterRow,
+        execute: (id) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select character.*, ${portraitColumns(sql)} from character
+              where character.id = ${id} and ${ownCharacter(sql, actor)}
+            `,
+          ),
+      });
+      const readOwn = (id: CharacterId) => own(id).pipe(orNotFound("character", id));
+      /** Every character this account owns, oldest first. */
+      const owned = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: CharacterRow,
+        execute: () =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select character.*, ${portraitColumns(sql)} from character
+              where ${ownCharacter(sql, actor)}
+              order by character.created_at asc, character.id asc
+            `,
+          ),
+      });
+      /** Where this account's characters sit, earliest seat first. */
+      const seatRefs = SqlSchema.findAll({
+        Request: Schema.Void,
+        Result: SeatRefRow,
+        execute: () =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              select campaign_character.character_id, campaign_character.id,
+                     campaign_character.campaign_id, campaign_character.joined_at
+              from campaign_character
+              where campaign_character.account_id = ${actor.accountId}
+                and campaign_character.left_at is null
+                and campaign_character.character_id is not null
+              order by campaign_character.joined_at asc
+            `,
+          ),
+      });
+      /**
+       * A new character of this account's. `account_id` comes from the actor
+       * and from nothing a caller supplied.
+       */
+      const insert = SqlSchema.findOne({
+        Request: Columns,
+        Result: CharacterRow,
+        execute: (columns) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              insert into character ${sql.insert({ ...columns, account_id: actor.accountId })}
+              returning character.*, ${portraitColumns(sql)}
+            `,
+          ),
+      });
+      /**
+       * The owner's PATCH. `version = version + 1` rides in the same statement
+       * as the check, so two racing writers cannot both pass one read: the
+       * second UPDATE's `where` no longer matches the expected version and
+       * returns no row.
+       */
+      const updateOwnRow = SqlSchema.findOneOption({
+        Request: Schema.toType(
+          Schema.Struct({
+            id: CharacterId,
+            columns: Columns,
+            expectedVersion: Schema.optional(Schema.Int),
+          }),
+        ),
+        Result: CharacterRow,
+        execute: ({ id, columns, expectedVersion }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              update character
+              set ${setClause(sql, columns)}, version = character.version + 1
+              where character.id = ${id}
+                and ${ownCharacter(sql, actor)}
+                and ${
+                  expectedVersion === undefined
+                    ? sql`true`
+                    : sql`character.version = ${expectedVersion}`
+                }
+              returning character.*, ${portraitColumns(sql)}
+            `,
+          ),
+      });
+      /** One counted resource moved by a clamped delta, in one statement. */
+      const spend = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({ id: CharacterId, resourceId: Schema.String, amount: Schema.Int }),
+        ),
+        Result: CharacterRow,
+        execute: ({ id, resourceId, amount }) =>
+          Effect.flatMap(
+            Effect.service(CurrentActor),
+            (actor) => sql`
+              with located as (
+                select character.id,
+                       (resource.value ->> 'used')::integer as used,
+                       (resource.value ->> 'max')::integer as max,
+                       resource.ordinality - 1 as index
+                from character
+                cross join lateral jsonb_array_elements(coalesce(character.body -> 'resources', '[]'::jsonb))
+                  with ordinality as resource(value, ordinality)
+                where character.id = ${id}
+                  and ${ownCharacter(sql, actor)}
+                  and resource.value ->> 'id' = ${resourceId}
+              )
+              update character
+              set body = jsonb_set(
+                    character.body,
+                    array['resources', located.index::text, 'used'],
+                    to_jsonb(greatest(0, least(located.max, located.used + ${amount}))),
+                    false
+                  ),
+                  version = character.version + 1,
+                  updated_at = now()
+              from located
+              where character.id = located.id
+              returning character.*, ${portraitColumns(sql)}
+            `,
+          ),
+      });
 
       /**
        * The one insert both creates make — `createOwn` against a campaign's
@@ -553,39 +689,23 @@ export class Characters extends Context.Service<
                 payload.subrace,
                 CHARACTER_RULES,
               );
-              const rows = yield* sql<CharacterRow>`
-                insert into character ${sql.insert(
-                  defined({
-                    account_id: actor.accountId,
-                    name: payload.name,
-                    player_name: payload.playerName,
-                    level: payload.level,
-                    race: payload.race,
-                    subrace: payload.subrace,
-                    class_name: payload.className,
-                    ac: payload.ac,
-                    hp_max: payload.hpMax,
-                    sheet_url: payload.sheetUrl,
-                    body: payload.sheet && encodeSheet(payload.sheet),
-                    ...assistantColumns(from),
-                  }),
-                )}
-                returning character.*, ${portraitColumns(sql)}
-              `;
-              return asCharacter(rows[0]!);
+              // An insert answers with its row; not getting one is a defect.
+              return yield* insert(
+                defined({
+                  name: payload.name,
+                  player_name: payload.playerName,
+                  level: payload.level,
+                  race: payload.race,
+                  subrace: payload.subrace,
+                  class_name: payload.className,
+                  ac: payload.ac,
+                  hp_max: payload.hpMax,
+                  sheet_url: payload.sheetUrl,
+                  body: payload.sheet && encodeSheet(payload.sheet),
+                  ...assistantColumns(from),
+                }),
+              ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
-          ),
-        );
-
-      const readOwn = (id: CharacterId, actor: Actor): Effect.Effect<CharacterRow, NotFound> =>
-        sql<CharacterRow>`
-          select character.*, ${portraitColumns(sql)} from character where character.id = ${id} and ${ownCharacter(sql, actor)}
-        `.pipe(
-          Effect.orDie,
-          Effect.flatMap((rows) =>
-            rows.length === 0
-              ? new NotFound({ resource: "character", id })
-              : Effect.succeed(rows[0]!),
           ),
         );
 
@@ -649,36 +769,16 @@ export class Characters extends Context.Service<
       return {
         mine: dieOnSqlError(
           Effect.gen(function* () {
-            const actor = yield* CurrentActor;
-            const rows = yield* sql<CharacterRow>`
-              select character.*, ${portraitColumns(sql)} from character
-              where ${ownCharacter(sql, actor)}
-              order by character.created_at asc, character.id asc
-            `;
-            if (rows.length === 0) return [];
-            const seats = yield* sql<SeatRefRow>`
-              select campaign_character.character_id, campaign_character.id,
-                     campaign_character.campaign_id, campaign_character.joined_at
-              from campaign_character
-              where campaign_character.account_id = ${actor.accountId}
-                and campaign_character.left_at is null
-                and campaign_character.character_id is not null
-              order by campaign_character.joined_at asc
-            `;
-            return rows.map(
-              (row) =>
+            const characters = yield* owned();
+            if (characters.length === 0) return [];
+            const seatsOf = fileUnder(yield* seatRefs(), "characterId");
+            return characters.map(
+              (character) =>
                 new OwnedCharacter({
-                  character: asCharacter(row),
-                  seats: seats
-                    .filter((seat) => seat.character_id === row.id)
-                    .map(
-                      (seat) =>
-                        new CharacterSeatRef({
-                          campaignCharacterId: seat.id as CharacterSeatRef["campaignCharacterId"],
-                          campaignId: seat.campaign_id,
-                          joinedAt: DateTime.fromDateUnsafe(seat.joined_at),
-                        }),
-                    ),
+                  character,
+                  seats: (seatsOf.get(character.id) ?? []).map(
+                    (seat) => new CharacterSeatRef(seat),
+                  ),
                 }),
             );
           }),
@@ -709,12 +809,7 @@ export class Characters extends Context.Service<
           dieOnSqlError(
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
-              const before = yield* sql<CharacterRow>`
-                select character.*, ${portraitColumns(sql)} from character
-                where character.id = ${id} and ${ownCharacter(sql, actor)}
-              `;
-              if (before.length === 0) return yield* new NotFound({ resource: "character", id });
-              const rowBefore = before[0]!;
+              const rowBefore = yield* readOwn(id);
               if (
                 patch.expectedVersion !== undefined &&
                 patch.expectedVersion !== rowBefore.version
@@ -737,9 +832,9 @@ export class Characters extends Context.Service<
                 patch.sheet === undefined &&
                 (patch.level !== undefined || patch.className !== undefined)
                   ? yield* recomputeForLevel(sql, {
-                      body: rowBefore.body,
+                      body: rowBefore.sheet,
                       level: patch.level ?? rowBefore.level,
-                      className: patch.className ?? rowBefore.class_name,
+                      className: patch.className ?? rowBefore.className,
                       vocabulary: yield* characterVocabulary(sql, id, actor),
                     })
                   : undefined;
@@ -760,23 +855,12 @@ export class Characters extends Context.Service<
                       : encodeSheet(recomputedSheet)
                     : encodeSheet(patch.sheet),
               });
-              // `version = version + 1` rides in the same statement as the
-              // check, so two racing writers cannot both pass one read: the
-              // second UPDATE's `where` no longer matches the expected
-              // version and returns no row.
-              const rows = yield* sql<CharacterRow>`
-                update character
-                set ${setClause(sql, columns)}, version = character.version + 1
-                where character.id = ${id}
-                  and ${ownCharacter(sql, actor)}
-                  and ${
-                    patch.expectedVersion === undefined
-                      ? sql`true`
-                      : sql`character.version = ${patch.expectedVersion}`
-                  }
-                returning character.*, ${portraitColumns(sql)}
-              `;
-              if (rows.length === 0) {
+              const updated = yield* updateOwnRow(
+                patch.expectedVersion === undefined
+                  ? { id, columns }
+                  : { id, columns, expectedVersion: patch.expectedVersion },
+              );
+              if (Option.isNone(updated)) {
                 if (patch.expectedVersion !== undefined) {
                   const now = yield* sql<{ readonly version: number }>`
                     select version from character
@@ -788,7 +872,7 @@ export class Characters extends Context.Service<
                 }
                 return yield* new NotFound({ resource: "character", id });
               }
-              return asCharacter(rows[0]!);
+              return updated.value;
             }),
           ),
 
@@ -799,39 +883,21 @@ export class Characters extends Context.Service<
               return yield* sql
                 .withTransaction(
                   Effect.gen(function* () {
-                    yield* readOwn(id, actor);
+                    yield* readOwn(id);
                     const claimed = yield* claimCharacterRequest(sql, id, payload.requestId);
                     if (!claimed) {
-                      return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
+                      return { character: yield* readOwn(id), sessions: [] };
                     }
 
-                    const rows = yield* sql<CharacterRow>`
-                      with located as (
-                        select character.id,
-                               (resource.value ->> 'used')::integer as used,
-                               (resource.value ->> 'max')::integer as max,
-                               resource.ordinality - 1 as index
-                        from character
-                        cross join lateral jsonb_array_elements(coalesce(character.body -> 'resources', '[]'::jsonb))
-                          with ordinality as resource(value, ordinality)
-                        where character.id = ${id}
-                          and ${ownCharacter(sql, actor)}
-                          and resource.value ->> 'id' = ${payload.resourceId}
-                      )
-                      update character
-                      set body = jsonb_set(
-                            character.body,
-                            array['resources', located.index::text, 'used'],
-                            to_jsonb(greatest(0, least(located.max, located.used + ${payload.amount}))),
-                            false
-                          ),
-                          version = character.version + 1,
-                          updated_at = now()
-                      from located
-                      where character.id = located.id
-                      returning character.*, ${portraitColumns(sql)}
-                    `;
-                    if (rows.length === 0) return yield* resourceMissing(payload.resourceId);
+                    const character = yield* spend({
+                      id,
+                      resourceId: payload.resourceId,
+                      amount: payload.amount,
+                    }).pipe(
+                      Effect.catchTag("NoSuchElementError", () =>
+                        Effect.fail(resourceMissing(payload.resourceId)),
+                      ),
+                    );
                     const sessions = yield* openSeatSessions(id, actor);
                     yield* appendTouched(
                       id,
@@ -839,7 +905,7 @@ export class Characters extends Context.Service<
                       { resourceId: payload.resourceId, amount: payload.amount },
                       payload.requestId,
                     );
-                    return { character: asCharacter(rows[0]!), sessions };
+                    return { character, sessions };
                   }),
                 )
                 .pipe(
@@ -856,18 +922,19 @@ export class Characters extends Context.Service<
               return yield* sql
                 .withTransaction(
                   Effect.gen(function* () {
-                    const before = yield* readOwn(id, actor);
-                    const liveFight = yield* liveFightOf(sql, id);
+                    const before = yield* readOwn(id);
+                    const liveFight = (yield* liveFightsOf(sql, [id])).get(id);
                     if (liveFight !== undefined) {
-                      return yield* restWhileFighting(liveFight.campaign_name);
+                      return yield* restWhileFighting(liveFight.campaignName);
                     }
                     const claimed = yield* claimCharacterRequest(sql, id, payload.requestId);
                     if (!claimed) {
-                      return { character: asCharacter(yield* readOwn(id, actor)), sessions: [] };
+                      return { character: yield* readOwn(id), sessions: [] };
                     }
 
                     const rested = yield* restCharacterRow(
                       sql,
+                      CharacterRow,
                       before,
                       payload.kind,
                       payload.hitDice ?? 0,
@@ -875,7 +942,7 @@ export class Characters extends Context.Service<
                     );
                     const sessions = yield* openSeatSessions(id, actor);
                     yield* appendTouched(id, sessions, rested.detail, payload.requestId);
-                    return { character: asCharacter(rested.row), sessions };
+                    return { character: rested.character, sessions };
                   }),
                 )
                 .pipe(
