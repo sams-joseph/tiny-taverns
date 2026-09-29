@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, Card, CardFooter, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
 import { DateTime } from "effect";
 import type { CampaignView } from "./load";
-import { playedLabel, playthroughOf } from "./encounterList";
+import { onDeckOf, playedLabel } from "./encounterList";
 import { encounterDetail, openingReadAloud } from "./overview";
 import { sectionLink } from "./OverviewParts";
 import { PrepChecklist } from "./PrepChecklist";
@@ -161,7 +161,8 @@ function EncounterRow({
  * stubbed: a scheduled date (a session has when it *ran*, not when it is
  * planned for) and encounters assigned to a night (encounters are the
  * campaign's). A played encounter is left off: what is on deck is what is
- * still to be played. Each row's *Ready* or *Draft* is the encounter's prep, and a
+ * still to be played, the fight on the table first, then a carried one, then
+ * the DM's own order, which the Encounters tab sets and this card only shows. Each row's *Ready* or *Draft* is the encounter's prep, and a
  * played one says when it was played instead. *Open prep* is gone because the prep is here:
  * the checklist the drawing dropped is this card's own section, and so is
  * ending the night when no fight is running. *All encounters* is the way to the
@@ -191,15 +192,12 @@ export function NextSession({
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
   const { session, run: live } = view;
   const total = view.encounters.length;
-  // A played encounter is over (an encounter is played once), so it is not on
-  // deck. One on the table and one carried and not yet picked up are still to
-  // be played, so they stay.
-  const toPlay = view.encounters.filter(
-    (encounter) => playthroughOf(encounter, live?.encounterId ?? undefined)._tag !== "played",
-  );
+  // What is still to be played, in the order the night reaches it: the one on
+  // the table, a carried one, then the DM's order (`onDeckOf`).
+  const toPlay = onDeckOf(view.encounters, live?.encounterId ?? undefined);
   const count = toPlay.length;
   const onDeck = toPlay.slice(0, ON_DECK);
-  const opening = openingReadAloud(view.encounters, view.notes);
+  const opening = openingReadAloud(toPlay, view.notes);
 
   return (
     <Card className="overflow-hidden border-t-3 border-t-accent">

@@ -36,6 +36,7 @@ import {
   Gem,
   Grid3x3,
   GitBranch,
+  GripVertical,
   HandHelping,
   Hash,
   HeartPulse,
@@ -148,6 +149,10 @@ import {
  * on the battle map's *Grid* toggle. Its Notes screen adds `pin`, on a pinned
  * row and the pane's *Pin*. Its Chronicle adds `chevrons-up-down` and
  * `chevrons-down-up`, on the header's *Expand all* and *Collapse all*.
+ *
+ * `grip-vertical` is another captain's request (2026-09-28): the handle on an
+ * unplayed encounter's row that opens its *Move to top / up / down / bottom*
+ * menu, and later the one a pointer drags.
  */
 export const icons = {
   archive: Archive,
@@ -185,6 +190,7 @@ export const icons = {
   gem: Gem,
   "grid-3x3": Grid3x3,
   "git-branch": GitBranch,
+  "grip-vertical": GripVertical,
   "hand-helping": HandHelping,
   hash: Hash,
   "heart-pulse": HeartPulse,

@@ -7,8 +7,20 @@ import {
   type EncounterPrep,
 } from "@taverns/api";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Badge, Button, EmptyState, Icon, SectionHeading, Toggle } from "@taverns/ui";
-import { useRef, useState } from "react";
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  EmptyState,
+  Icon,
+  SectionHeading,
+  Toggle,
+} from "@taverns/ui";
+import { useLayoutEffect, useRef, useState } from "react";
+import { SaveFailure } from "../ui/form";
 import { CampaignChrome } from "./CampaignChrome";
 import { ReadyBadge } from "./ReadyBadge";
 import {
@@ -19,11 +31,17 @@ import {
   KIND_FILTERS,
   KIND_ICON,
   matchesKind,
+  movedWords,
+  ORDER_MOVES,
+  placed,
+  placementFor,
   playedLabel,
   ratingOf,
   sectionsOf,
   type KindFilter,
+  type OrderMove,
 } from "./encounterList";
+import { useEncounterOrder } from "./encounterOrder";
 import { EncounterPreview } from "./EncounterPreview";
 import { encounterPrepListAtom, type CampaignView } from "./load";
 
@@ -55,6 +73,14 @@ import { encounterPrepListAtom, type CampaignView } from "./load";
  * whatever narrows it. Stacked, the preview is under the whole list, so
  * choosing a row scrolls it into view — the drawing's own narrow layout left
  * the change a screen below with nothing to say it happened.
+ *
+ * **The DM puts *Not yet played* in the order the table will play it**, and
+ * nowhere else: live and played rows are ordered by what happened, and the
+ * Overview only shows the order. Each unplayed row has a grip handle beside
+ * its button (a sibling: a button cannot hold one) whose menu moves it to the
+ * top, up, down or to the bottom. Under a kind pill the moves are among the
+ * rows drawn (`placementFor`). The other sections keep the handle's gutter
+ * empty so every name starts at one edge.
  */
 export function EncountersScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
@@ -132,9 +158,24 @@ function EncounterBrowser({
    * short to bring it up and it lands half way down when the roster arrives.
    */
   const reveal = useRef(chosen !== undefined);
+  const order = useEncounterOrder(campaignId, view.encounters);
+  /** What the live region last said about a move. */
+  const [moved, setMoved] = useState("");
+  const handles = useRef(new Map<EncounterId, HTMLButtonElement>());
+  /**
+   * The handle whose move just redrew the list. Moving its row can move the
+   * handle's node, and a node that moves loses focus, so it is given back once
+   * the list is drawn in its new order.
+   */
+  const [refocus, setRefocus] = useState<EncounterId | undefined>();
+  useLayoutEffect(() => {
+    if (refocus === undefined) return;
+    handles.current.get(refocus)?.focus();
+    setRefocus(undefined);
+  }, [refocus, order.ordered]);
 
   const liveId = view.run?.encounterId ?? undefined;
-  const shown = view.encounters.filter((encounter) => matchesKind(encounter, filter));
+  const shown = order.ordered.filter((encounter) => matchesKind(encounter, filter));
   const sections = sectionsOf(shown, liveId);
   const ordered = sections.flatMap((section) => section.encounters);
   const selected = ordered.find((encounter) => encounter.id === chosen) ?? ordered[0];
@@ -172,6 +213,23 @@ function EncounterBrowser({
     );
   }
 
+  /** The rows a move is among: *Not yet played* as drawn, under the pill. */
+  const movable = sections.find((section) => section.group === "unplayed")?.encounters ?? [];
+
+  const moveRow = (encounter: Encounter, to: OrderMove) => {
+    const placement = placementFor(movable, encounter.id, to);
+    if (placement === undefined || order.busy) return;
+    const after = placed(movable, encounter.id, placement);
+    setMoved(movedWords(after, encounter.id) ?? "");
+    setRefocus(encounter.id);
+    void order.move(encounter.id, placement).then((ok) => {
+      if (!ok) {
+        setMoved("");
+        setRefocus(encounter.id);
+      }
+    });
+  };
+
   const pickFilter = (next: KindFilter) => {
     setFilter(next);
     // Keep the address honest: a choice the new pill hides gives way to the
@@ -182,6 +240,10 @@ function EncounterBrowser({
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Said once a row has moved; always drawn, so the first move is heard. */}
+      <p aria-live="polite" className="sr-only">
+        {moved}
+      </p>
       <div role="group" aria-label="Filter by kind" className="flex flex-wrap items-center gap-1.5">
         {KIND_FILTERS.map(([value, label]) => (
           <Toggle
@@ -211,18 +273,39 @@ function EncounterBrowser({
             data-slot="encounter-list"
             className="flex min-w-0 shrink grow basis-encounters-list-min flex-col gap-5 max-w-encounters-list"
           >
+            {order.failure !== undefined && <SaveFailure failure={order.failure} />}
             {sections.map((section) => (
               <section
                 key={section.group}
                 aria-labelledby={`encounters-${section.group}`}
                 className="flex flex-col gap-1.5"
               >
-                <SectionHeading id={`encounters-${section.group}`} className="px-1 pb-1">
+                {/* Past the handle's gutter, the same 4px in from the rows'
+                    edge it always sat. */}
+                <SectionHeading id={`encounters-${section.group}`} className="pr-1 pb-1 pl-10">
                   {section.title}
                 </SectionHeading>
                 <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                   {section.encounters.map((encounter) => (
-                    <li key={encounter.id}>
+                    <li key={encounter.id} className="flex items-center gap-2">
+                      {section.group === "unplayed" && movable.length > 1 ? (
+                        <MoveHandle
+                          encounter={encounter}
+                          rows={movable}
+                          disabled={order.busy}
+                          handleRef={(node) => {
+                            if (node === null) handles.current.delete(encounter.id);
+                            else handles.current.set(encounter.id, node);
+                          }}
+                          onMove={(to) => moveRow(encounter, to)}
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          data-slot="move-gutter"
+                          className="size-7 shrink-0"
+                        />
+                      )}
                       <EncounterRow
                         encounter={encounter}
                         prep={prepOf.get(encounter.id)}
@@ -269,6 +352,63 @@ function EncounterBrowser({
 }
 
 /**
+ * The grip beside an unplayed row, and the moves behind it. A move the row
+ * cannot make — the first row going up — is there and disabled, so the menu is
+ * the same four lines on every row. The menu gives focus back to the handle
+ * when it closes.
+ */
+function MoveHandle({
+  encounter,
+  rows,
+  disabled,
+  handleRef,
+  onMove,
+}: {
+  readonly encounter: Encounter;
+  /** The rows it moves among, as drawn. */
+  readonly rows: ReadonlyArray<Encounter>;
+  /**
+   * A move is already in flight: its items are disabled, and the handle is
+   * not, so focus can come back to it.
+   */
+  readonly disabled: boolean;
+  readonly handleRef: (node: HTMLButtonElement | null) => void;
+  readonly onMove: (to: OrderMove) => void;
+}) {
+  const label = `Move ${encounter.name}`;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        ref={handleRef}
+        aria-label={label}
+        title={label}
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            data-slot="move-handle"
+            className="size-7 shrink-0 text-muted-foreground"
+          />
+        }
+      >
+        <Icon name="grip-vertical" size={16} className="pointer-events-none" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {ORDER_MOVES.map(([to, words]) => (
+          <DropdownMenuItem
+            key={to}
+            disabled={disabled || placementFor(rows, encounter.id, to) === undefined}
+            onClick={() => onMove(to)}
+          >
+            {words}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
  * One encounter in the list, as the drawing draws it: its kind's glyph, the
  * name, "Combat · Medium" under it and *Ready* or *Draft* at its end — plus
  * what the captain kept from the old card, the creature count and *Shared*,
@@ -294,7 +434,7 @@ function EncounterRow({
       type="button"
       aria-current={selected ? "true" : undefined}
       onClick={onSelect}
-      className="flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-md border border-transparent bg-transparent px-3.5 py-2.5 text-left font-sans transition-control outline-none hover:bg-surface-card focus-visible:ring-focus aria-current:border-accent aria-current:bg-surface-card"
+      className="flex min-h-14 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md border border-transparent bg-transparent px-3.5 py-2.5 text-left font-sans transition-control outline-none hover:bg-surface-card focus-visible:ring-focus aria-current:border-accent aria-current:bg-surface-card"
     >
       <Icon name={KIND_ICON[encounter.kind]} size={16} className="shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">

@@ -1796,7 +1796,8 @@ export const sketchRoster = [
 
 /**
  * Every route the shelf reads: the list, the prep, and each encounter's map,
- * roster and own prep. Only the ambush's map has a picture.
+ * roster and own prep, and the move each takes. Only the ambush's map has a
+ * picture.
  */
 export const encounterShelf = (): Map<string, Answer> => {
   const c = `/campaigns/${campaignId}`;
@@ -1826,6 +1827,11 @@ export const encounterShelf = (): Map<string, Answer> => {
   });
   routes.set(`GET ${c}/encounters/${bargainId}/creatures`, { status: 200, body: bargainRoster });
   routes.set(`GET ${c}/encounters/${sketchId}/creatures`, { status: 200, body: sketchRoster });
+  // A move is taken; the list is read back in the order it was, so a move on
+  // the page stays laid over it (`useEncounterOrder`).
+  for (const row of shelf) {
+    routes.set(`POST ${c}/encounters/${row.id}/move`, { status: 204, body: null });
+  }
   return routes;
 };
 

@@ -1,10 +1,11 @@
-import { Encounter, EncounterPrep } from "@taverns/api";
+import { Encounter, EncounterPrep, Note } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   dryWell,
   encounter,
   hagsBargain,
+  readAloud,
   sandstorm,
   sketch,
   tollBridge,
@@ -14,9 +15,15 @@ import {
   creatureWords,
   encountersSummary,
   matchesKind,
+  movedWords,
+  onDeckOf,
+  placed,
+  placementFor,
   ratingOf,
   sectionsOf,
 } from "./encounterList";
+import { orderOver } from "./encounterOrder";
+import { openingReadAloud } from "./overview";
 
 const decode = Schema.decodeUnknownSync(Encounter);
 const prep = Schema.decodeUnknownSync(EncounterPrep);
@@ -95,5 +102,142 @@ describe("creatureWords", () => {
     expect(creatureWords(crate)).toBe("1 creature");
     expect(creatureWords(decode({ ...encounter, creatureCount: 0 }))).toBe("No creatures yet");
     expect(creatureWords(well)).toBeUndefined();
+  });
+});
+
+const names = (rows: ReadonlyArray<Encounter>) => rows.map((row) => row.name);
+
+describe("placementFor", () => {
+  // The unplayed rows, in the list's order.
+  const rows = [ambush, crate, well, bargain, storm];
+
+  it("anchors each move on the row it passes", () => {
+    expect(placementFor(rows, well.id, "top")).toEqual({ before: ambush.id });
+    expect(placementFor(rows, well.id, "up")).toEqual({ before: crate.id });
+    expect(placementFor(rows, well.id, "down")).toEqual({ after: bargain.id });
+    expect(placementFor(rows, well.id, "bottom")).toEqual({ after: storm.id });
+  });
+
+  it("has nowhere to send the first row up or the last row down", () => {
+    expect(placementFor(rows, ambush.id, "top")).toBeUndefined();
+    expect(placementFor(rows, ambush.id, "up")).toBeUndefined();
+    expect(placementFor(rows, storm.id, "down")).toBeUndefined();
+    expect(placementFor(rows, storm.id, "bottom")).toBeUndefined();
+    expect(placementFor(rows, pack.id, "up")).toBeUndefined();
+  });
+
+  it("anchors on the rows a kind pill shows, not the ones it hides", () => {
+    const combat = rows.filter((row) => matchesKind(row, "combat"));
+    expect(names(combat)).toEqual(["Ambush in the reeds", "Whatever is in the crate"]);
+    // Up past the ambush, though the list has nothing hidden between them…
+    expect(placementFor(combat, crate.id, "up")).toEqual({ before: ambush.id });
+    const other = rows.filter((row) => matchesKind(row, "other"));
+    // …and down past the sandstorm, over the bargain the pill hides.
+    expect(placementFor(other, well.id, "down")).toEqual({ after: storm.id });
+    expect(placementFor(other, well.id, "bottom")).toEqual({ after: storm.id });
+    expect(placementFor(other, storm.id, "top")).toEqual({ before: well.id });
+  });
+});
+
+describe("placed", () => {
+  it("moves one row before or after its anchor and leaves the rest in order", () => {
+    expect(names(placed(shelf, storm.id, { before: ambush.id }))[0]).toBe("Salt-flat sandstorm");
+    expect(names(placed(shelf, ambush.id, { after: well.id }))).toEqual([
+      "Whatever is in the crate",
+      "The dry well",
+      "Ambush in the reeds",
+      "The hag's bargain",
+      "Salt-flat sandstorm",
+      "Toll bridge standoff",
+      "Wolves at the caravan",
+    ]);
+  });
+
+  it("keeps a row the pill hides in its place among the rest", () => {
+    // The pill shows the well and the sandstorm; the bargain between them stays
+    // where it was relative to the rest.
+    expect(names(placed(shelf, well.id, { after: storm.id })).slice(0, 5)).toEqual([
+      "Ambush in the reeds",
+      "Whatever is in the crate",
+      "The hag's bargain",
+      "Salt-flat sandstorm",
+      "The dry well",
+    ]);
+  });
+
+  it("changes nothing for itself as anchor, or an anchor it does not hold", () => {
+    expect(placed(shelf, well.id, { before: well.id })).toBe(shelf);
+    expect(placed([ambush, crate], well.id, { before: ambush.id })).toEqual([ambush, crate]);
+    expect(placed([ambush, crate], ambush.id, { after: well.id })).toEqual([ambush, crate]);
+  });
+});
+
+describe("movedWords", () => {
+  it("says the row's place among those drawn and the neighbour that places it", () => {
+    const rows = [ambush, well, crate];
+    expect(movedWords(rows, well.id)).toBe(
+      "The dry well moved to 2 of 3, after Ambush in the reeds.",
+    );
+    expect(movedWords(rows, ambush.id)).toBe(
+      "Ambush in the reeds moved to 1 of 3, before The dry well.",
+    );
+    expect(movedWords(rows, pack.id)).toBeUndefined();
+  });
+});
+
+describe("orderOver", () => {
+  const framed = shelf.map((row) => row.id);
+  const pending = { encounterId: storm.id, placement: { before: ambush.id }, framed };
+
+  it("lays the move over the order it was made on", () => {
+    expect(names(orderOver(shelf, pending))[0]).toBe("Salt-flat sandstorm");
+    expect(orderOver(shelf, undefined)).toBe(shelf);
+  });
+
+  it("gives way to any other order the frame reads", () => {
+    const reread = placed(shelf, storm.id, { before: ambush.id });
+    expect(orderOver(reread, pending)).toBe(reread);
+    // Somebody else's move landed first: theirs is what the frame says.
+    const theirs = placed(shelf, pack.id, { before: ambush.id });
+    expect(orderOver(theirs, pending)).toBe(theirs);
+    // An encounter added in another tab changes the frame too.
+    expect(orderOver(shelf.slice(1), pending)).toEqual(shelf.slice(1));
+  });
+});
+
+describe("onDeckOf", () => {
+  const carried = decode({
+    ...wolves,
+    lastPlayed: { ...wolves.lastPlayed, endedReason: "carried" },
+  });
+
+  it("puts the fight on the table first, then a carried one, then the DM's order", () => {
+    expect(names(onDeckOf([crate, well, carried, bridge, ambush], ambush.id))).toEqual([
+      "Ambush in the reeds",
+      "Wolves at the caravan",
+      "Whatever is in the crate",
+      "The dry well",
+    ]);
+  });
+
+  it("leaves a played encounter off", () => {
+    expect(names(onDeckOf([bridge, well], undefined))).toEqual(["The dry well"]);
+  });
+});
+
+describe("openingReadAloud", () => {
+  const note = Schema.decodeUnknownSync(Note);
+
+  it("opens on the first encounter still to play, not the first ever written", () => {
+    const bridgeProse = note({
+      ...readAloud,
+      id: "2b1f2a1e-0000-4000-8000-00000000a0a1",
+      attachedTo: { kind: "encounter", id: bridge.id },
+    });
+    const notes = [bridgeProse, note(readAloud)];
+    // The toll bridge is first in the list but played; the ambush is next.
+    expect(openingReadAloud(onDeckOf([bridge, ambush], undefined), notes)?.body).toBe(
+      readAloud.body,
+    );
   });
 });
