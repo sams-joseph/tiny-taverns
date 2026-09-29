@@ -29,6 +29,7 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
+  type TransitionEvent,
 } from "react";
 import { SaveFailure } from "../ui/form";
 import { CampaignChrome } from "./CampaignChrome";
@@ -434,6 +435,11 @@ function MovableItem({
   const carried = drag.carried(id);
   const shift = drag.shift(id);
   const settling = drag.settling(id);
+  const settled = (event: TransitionEvent<HTMLLIElement>) => {
+    if (event.target === event.currentTarget && event.propertyName === "translate") {
+      drag.onSettled(id);
+    }
+  };
   return (
     <li
       ref={itemRef}
@@ -442,11 +448,10 @@ function MovableItem({
       style={
         shift === undefined ? undefined : ({ "--row-shift": `${String(shift)}px` } as CSSProperties)
       }
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === "translate") {
-          drag.onSettled(id);
-        }
-      }}
+      onTransitionEnd={settled}
+      // A refusal inside the settle puts the row back mid-slide, which cancels
+      // the transition rather than ending it.
+      onTransitionCancel={settled}
       className={cn(
         "flex items-center gap-2 rounded-md",
         carried && "opacity-50",

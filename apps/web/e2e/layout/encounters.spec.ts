@@ -746,3 +746,35 @@ test.describe("reduced motion", () => {
     ).toBeUndefined();
   });
 });
+
+test.describe("refused drop", () => {
+  test.use({ viewport: { width: 1280, height: HEIGHT } });
+
+  test("a refusal inside the settle leaves an ordinary row", async ({ app, page }) => {
+    // Refused at once, well inside the 200ms settle: the row goes back while
+    // its slide is still running, which cancels the transition.
+    await page.route(/\/stub\/campaigns\/[^/]+\/encounters\/[^/]+\/move$/, (route) =>
+      route.fulfill({ status: 404, json: { _tag: "NotFound", resource: "encounter", id: "e2e" } }),
+    );
+    await app.open(encounters);
+    await movableRow(page, "Whatever is in the crate").evaluate((el) =>
+      el.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+    const before = await gripOrder(page);
+    await dragGrip(page, "The hag's bargain", "Ambush in the reeds", "above");
+    await page.mouse.up();
+    await expect(page.getByRole("alert")).toContainText("That encounter is gone");
+    expect(await gripOrder(page)).toEqual(before);
+    await expect
+      .poll(() =>
+        movableRow(page, "The hag's bargain").evaluate((el) => {
+          const ordinary = el.parentElement!.firstElementChild!;
+          return {
+            zIndex: getComputedStyle(el).zIndex,
+            shadow: getComputedStyle(el).boxShadow === getComputedStyle(ordinary).boxShadow,
+          };
+        }),
+      )
+      .toEqual({ zIndex: "auto", shadow: true });
+  });
+});
