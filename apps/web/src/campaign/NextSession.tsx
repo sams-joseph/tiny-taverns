@@ -149,7 +149,8 @@ function EncounterRow({
 
 /**
  * The night being prepared: what it is called, what it opens on, what is on
- * deck and what is still to do.
+ * deck and what is still to do. While no night is open that is the planned
+ * one (`CampaignView.planned`), when there is one.
  *
  * The one card on the page about the next thing to happen, so it wears the
  * accent rule. The press that starts the night is not on it: it is the
@@ -191,6 +192,9 @@ export function NextSession({
 }) {
   const prepOf = new Map(prep.map((row) => [row.encounterId, row]));
   const { session, run: live } = view;
+  // The night the card is about: the open one, or while none is open the
+  // planned one, whose title and checklist *Start the night* will open.
+  const night = session ?? view.planned;
   const total = view.encounters.length;
   // What is still to be played, in the order the night reaches it: the one on
   // the table, a carried one, then the DM's order (`onDeckOf`).
@@ -205,9 +209,9 @@ export function NextSession({
         <div className="min-w-0 flex-1">
           <div className="text-label leading-none font-medium text-accent-ink">Next session</div>
           <SectionHeading size="display" className="mt-2.5">
-            {session === undefined
+            {night === undefined
               ? "Nothing is running yet"
-              : (session.title ?? `Session ${String(session.number)}`)}
+              : (night.title ?? `Session ${String(night.number)}`)}
           </SectionHeading>
           <p className="mt-1.5 mb-0 text-body-s leading-body text-muted-foreground">
             {count === 0
@@ -285,12 +289,20 @@ export function NextSession({
 
       <div className="border-t border-hairline">
         <PrepChecklist
-          key={session?.id ?? view.campaign.id}
+          key={night?.id ?? view.campaign.id}
           campaignId={view.campaign.id}
-          sessionId={session?.id}
+          sessionId={night?.id}
           items={view.prep}
         />
       </div>
+
+      {session === undefined && view.planned !== undefined && (
+        <CardFooter>
+          <p className="mb-0 text-body-s leading-body text-muted-foreground">
+            Planned. Starting the night opens it, checklist and all.
+          </p>
+        </CardFooter>
+      )}
 
       {session !== undefined && live === undefined && (
         <CardFooter className="flex-wrap justify-between">

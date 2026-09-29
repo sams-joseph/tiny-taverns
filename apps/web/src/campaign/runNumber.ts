@@ -3,11 +3,12 @@ import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
-import { nextSessionNumber } from "../session/start";
+import { nightToOpen, type NightToOpen } from "../session/start";
 
 /**
- * The number the night a fight goes on will carry — `StartRunDialog`'s and
- * `PickUpRunDialog`'s, which may each have to open one.
+ * The night a fight goes on, and the number it will carry — `StartRunDialog`'s
+ * and `PickUpRunDialog`'s, which may each have to open one (the planned night
+ * when there is one, `nightToOpen`).
  *
  * **Read from the server only when a session has to be invented**, because that
  * is the only thing the answer is for; with one already open it is that
@@ -25,7 +26,9 @@ export const runNumberAtom = Atom.family(
   }) =>
     apiAtom(
       (client) =>
-        known === undefined ? nextSessionNumber(campaignId)(client) : Effect.succeed<number>(known),
+        known === undefined
+          ? nightToOpen(campaignId)(client)
+          : Effect.succeed<NightToOpen>({ number: known }),
       [reads.sessions(campaignId)],
     ),
 );

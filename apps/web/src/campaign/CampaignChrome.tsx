@@ -15,7 +15,7 @@ import { DeleteCampaignDialog } from "./DeleteCampaignDialog";
 import { FinishSessionDialog } from "./FinishSessionDialog";
 import { InviteDialog } from "./InviteDialog";
 import {
-  campaignAtom,
+  preparingNightAtom,
   campaignViewAtom,
   campaignViewKeys,
   membershipsAtom,
@@ -229,7 +229,9 @@ export function CampaignChrome<Extra = undefined>({
   /**
    * *Try again*, and it is the only re-read-everything left in the campaign.
    *
-   * **The night's id comes from the campaign atom rather than from the view**,
+   * **The night's id comes from the campaign atom rather than from the view**
+   * (through `preparingNightAtom`, which is the planned night's while none is
+   * open),
    * and that is the whole reason this line exists: when the *checklist* is what
    * failed, the view is a failure and has no session to name — so a retry built
    * from `view.session` would refresh everything except the read that broke.
@@ -239,10 +241,13 @@ export function CampaignChrome<Extra = undefined>({
    * (`campaignViewKeys`); the screen's own `extra` is a real atom and is
    * refreshed directly, because the frame does not know what it reads.
    */
-  const campaignResult = useAtomValue(campaignAtom(campaignId));
-  const nightId = AsyncResult.isSuccess(campaignResult)
-    ? (campaignResult.value.currentSessionId ?? undefined)
-    : undefined;
+  const preparing = useAtomValue(preparingNightAtom(campaignId));
+  const nightId =
+    AsyncResult.isSuccess(preparing) && preparing.value !== undefined
+      ? "open" in preparing.value
+        ? preparing.value.open
+        : preparing.value.planned.id
+      : undefined;
   const invalidate = useInvalidate();
   const refreshExtra = useAtomRefresh(extraAtom);
   const retry = useCallback(() => {

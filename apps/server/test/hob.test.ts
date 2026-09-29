@@ -31,6 +31,8 @@ import {
   playerToolkitOver,
 } from "../src/assistant/toolkit.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { PrepItems } from "../src/repo/PrepItems.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
@@ -120,6 +122,8 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Acts.layer,
+  PrepItems.layer,
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob")));
 
@@ -446,11 +450,15 @@ describe("answering", () => {
       "getNpc",
       "listCreatures",
       "listSessions",
+      // Planning: an act on the Chronicle at a night the campaign has, and
+      // the next night with its checklist. The creator's alone.
+      "proposeAct",
       "proposeBeat",
       // The campaign's own story so far: drafted from the one reader below,
       // kept only by the creator's accept. No other toolkit has either.
       "proposeCampaignStory",
       "proposeEncounter",
+      "proposeNight",
       "proposeNightSummary",
       "proposeNote",
       // A new NPC for the Cast, with an optional sheet composed as
@@ -1370,6 +1378,8 @@ describe("with no model configured", () => {
               Search.layer,
               SessionEvents.layer,
               Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+              Acts.layer,
+              PrepItems.layer,
             ]),
           ),
         ),
@@ -1659,6 +1669,11 @@ describe("what counts as asking for a build", () => {
     ["Make an NPC for the ferry crossing", true],
     ["add a blacksmith to the cast", true],
     ["create a villain for the reeds", true],
+    // The next night and its checklist, which `proposeNight` drafts, and an
+    // act, `proposeAct`'s.
+    ["Plan next session", true],
+    ["prep the next night for me", true],
+    ["add an act for the heist", true],
     // Not asked for. Every one of these is a question this panel really gets.
     ["Who is the ferryman?", false],
     ["Who wrote this note?", false],
@@ -1672,6 +1687,8 @@ describe("what counts as asking for a build", () => {
     ["give me something to read about the ferryman", false],
     ["Who is in the cast?", false],
     ["Did I already make an NPC for the ferry?", false],
+    ["What happened last session?", false],
+    ["Which act are we in?", false],
     // Misses, kept visible: each is a build ask the rule lets past, because
     // erring towards silence is the instruction.
     ["Give me a name for the ferryman", false],
@@ -1764,9 +1781,11 @@ describe("what counts as asking for a build", () => {
     const dm = Object.keys(HobToolkit.tools);
     const player = Object.keys(playerToolkitListing(NO_VOCABULARY).tools);
     expect(dm.filter((name) => /^propose[A-Z]/.test(name)).sort()).toEqual([
+      "proposeAct",
       "proposeBeat",
       "proposeCampaignStory",
       "proposeEncounter",
+      "proposeNight",
       "proposeNightSummary",
       "proposeNote",
       "proposeNpc",
@@ -1840,11 +1859,13 @@ describe("the assistant seam", () => {
       "getNpc",
       "listCreatures",
       "listSessions",
+      "proposeAct",
       "proposeBeat",
       // The campaign's own story so far: drafted from the one reader below,
       // kept only by the creator's accept. No other toolkit has either.
       "proposeCampaignStory",
       "proposeEncounter",
+      "proposeNight",
       "proposeNightSummary",
       "proposeNote",
       // A new NPC for the Cast, with an optional sheet composed as

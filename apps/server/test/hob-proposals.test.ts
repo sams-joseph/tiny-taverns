@@ -15,6 +15,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { PrepItems } from "../src/repo/PrepItems.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
@@ -100,12 +102,16 @@ const services = Layer.mergeAll(
       GroupHistory.layer,
       Notes.layer,
       Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+      Acts.layer,
+      PrepItems.layer,
     ]),
   ),
   Recap.layer,
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Acts.layer,
+  PrepItems.layer,
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_proposals")));
 
@@ -231,18 +237,29 @@ const counts = (campaignId: CampaignId) =>
         readonly notes: string;
         readonly beats: string;
         readonly encounters: string;
+        readonly nights: string;
+        readonly prep: string;
+        readonly acts: string;
       }>`
         select
           (select count(*) from note where note.campaign_id = ${campaignId}) as notes,
           (select count(*) from beat
              join session on session.id = beat.session_id
              where session.campaign_id = ${campaignId}) as beats,
-          (select count(*) from encounter where encounter.campaign_id = ${campaignId}) as encounters
+          (select count(*) from encounter where encounter.campaign_id = ${campaignId}) as encounters,
+          (select count(*) from session where session.campaign_id = ${campaignId}) as nights,
+          (select count(*) from prep_item
+             join session on session.id = prep_item.session_id
+             where session.campaign_id = ${campaignId}) as prep,
+          (select count(*) from campaign_act where campaign_act.campaign_id = ${campaignId}) as acts
       `;
       return {
         notes: Number(rows[0]!.notes),
         beats: Number(rows[0]!.beats),
         encounters: Number(rows[0]!.encounters),
+        nights: Number(rows[0]!.nights),
+        prep: Number(rows[0]!.prep),
+        acts: Number(rows[0]!.acts),
       };
     }).pipe(Effect.orDie),
   );
@@ -595,6 +612,83 @@ describe("accepting one", () => {
     expect(hits.map((hit) => hit.id)).toContain(accepted.success.beat.id);
   }, 60_000);
 
+  it("makes the next night with its checklist and its act, planned rather than open", async () => {
+    const before = await counts(fixture.campaign.id);
+    const { events } = await ask({
+      text: "Plan next session.",
+      rounds: [
+        toolCallChunks("proposeNight", {
+          title: "The reed maze",
+          prep: ["Sketch the reed maze", "Name the frog envoy"],
+          actTitle: "Act II · Under the reeds",
+        }),
+        textChunks("Planned."),
+      ],
+    });
+    // Offered, and still nothing in the campaign.
+    expect(proposedIn(events)?.proposal.target).toBe("night");
+    expect(await counts(fixture.campaign.id)).toEqual(before);
+
+    const { threadId, turnId } = begunIn(events);
+    const accepted = await accept(threadId, turnId);
+    if (accepted._tag !== "Success" || accepted.success.accepted !== "night") {
+      throw new Error("expected a night");
+    }
+    const { session, prep, act } = accepted.success;
+    // One past the highest the campaign has, and never the night it is running.
+    expect(session.number).toBe(fixture.night.number + 1);
+    expect(session.origin).toBe("assistant");
+    expect(session.assistantTurnId).toBe(turnId);
+    expect(prep.map((item) => [item.label, item.origin, item.assistantTurnId])).toEqual([
+      ["Sketch the reed maze", "assistant", turnId],
+      ["Name the frog envoy", "assistant", turnId],
+    ]);
+    expect(act?.firstSessionNumber).toBe(session.number);
+    expect(act?.origin).toBe("assistant");
+    expect(await counts(fixture.campaign.id)).toEqual({
+      ...before,
+      nights: before.nights + 1,
+      prep: before.prep + 2,
+      acts: before.acts + 1,
+    });
+
+    // The campaign still points at the night it is running.
+    const campaign = await runtime.runPromise(
+      Effect.flatMap(Campaigns, (repo) => repo.findById(fixture.campaign.id)).pipe(
+        withActor(fixture.dm),
+        Effect.orDie,
+      ),
+    );
+    expect(campaign.currentSessionId).toBe(fixture.night.id);
+  }, 60_000);
+
+  it("makes an act at a night the campaign has", async () => {
+    const before = await counts(fixture.campaign.id);
+    const { events } = await ask({
+      text: "Add an act starting tonight.",
+      rounds: [
+        toolCallChunks("proposeAct", {
+          title: "Act I · The ferry",
+          sessionNumber: fixture.night.number,
+        }),
+        textChunks("Started."),
+      ],
+    });
+    expect(await counts(fixture.campaign.id)).toEqual(before);
+    const { threadId, turnId } = begunIn(events);
+    const accepted = await accept(threadId, turnId);
+    if (accepted._tag !== "Success" || accepted.success.accepted !== "act") {
+      throw new Error("expected an act");
+    }
+    expect(accepted.success.act).toMatchObject({
+      title: "Act I · The ferry",
+      firstSessionNumber: fixture.night.number,
+      origin: "assistant",
+      assistantTurnId: turnId,
+    });
+    expect(await counts(fixture.campaign.id)).toEqual({ ...before, acts: before.acts + 1 });
+  }, 60_000);
+
   it("refuses a turn that offered nothing", async () => {
     const { events } = await ask({
       text: "Just answer me.",
@@ -715,6 +809,24 @@ describe("the boundary, on both halves", () => {
 
     // The turn is real and the proposal is real; the campaign in the path is
     // not the one it belongs to. Accepting must not write into either.
+    const result = await accept(threadId, turnId, { campaignId: fixture.otherTable.id });
+
+    expect(result._tag).toBe("Failure");
+    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
+    expect(await counts(fixture.otherTable.id)).toEqual(before);
+  }, 60_000);
+
+  it("refuses a planned night accepted into another campaign", async () => {
+    const { events } = await ask({
+      text: "Plan next session.",
+      rounds: [
+        toolCallChunks("proposeNight", { title: "Elsewhere", prep: ["Not yours"] }),
+        textChunks("Planned."),
+      ],
+    });
+    const { threadId, turnId } = begunIn(events);
+    const before = await counts(fixture.otherTable.id);
+
     const result = await accept(threadId, turnId, { campaignId: fixture.otherTable.id });
 
     expect(result._tag).toBe("Failure");

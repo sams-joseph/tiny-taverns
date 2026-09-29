@@ -171,7 +171,7 @@ export function StartRunDialog({
           <DialogDescription>
             {needsSession
               ? number.state === "ready"
-                ? `This starts session ${String(number.value)} and opens the runner.`
+                ? `This starts session ${String(number.value.number)} and opens the runner.`
                 : "This starts a new session and opens the runner."
               : `This runs in session ${String(session.number)} and opens the runner.`}
           </DialogDescription>

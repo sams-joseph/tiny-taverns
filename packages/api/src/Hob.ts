@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
+import { CampaignAct } from "./CampaignAct.js";
 import { CampaignStory } from "./CampaignStory.js";
 import { Character, CharacterSheet, SheetBody } from "./Character.js";
 import { Encounter, EncounterChallenge, EncounterKind } from "./Encounter.js";
@@ -17,6 +18,7 @@ import {
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
+import { PrepItem } from "./PrepItem.js";
 import { Session } from "./Session.js";
 import { SharedWorld, SHARED_WORLD_DESCRIPTION_MAX } from "./SharedWorld.js";
 
@@ -150,7 +152,9 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  *
  * **One member per accept target**, each one a shipped table: a `note` (prep
  * prose or read-aloud), a `beat` (the DM's line about what happened), a
- * `nightSummary` (a played night's summary, kept on the night), an
+ * `nightSummary` (a played night's summary, kept on the night), a `night`
+ * (the next session, with its prep checklist), an `act` (a named run of
+ * nights on the Chronicle), an
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
  * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
@@ -163,8 +167,8 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  *
  * **Which of these can be offered is decided by which toolkit answered, not by
  * anything here.** A campaign's panel has `proposeNote`, `proposeBeat`,
- * `proposeNightSummary`, `proposeEncounter`, `proposeCampaignStory`,
- * `proposeNpc` and `proposeNpcSheet`; the drafting
+ * `proposeNightSummary`, `proposeNight`, `proposeAct`, `proposeEncounter`,
+ * `proposeCampaignStory`, `proposeNpc` and `proposeNpcSheet`; the drafting
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter`, `proposeCampaign` and
@@ -210,6 +214,40 @@ export const HobProposal = Schema.Union([
     sessionId: SessionId,
     sessionNumber: Schema.Int,
     text: Schema.String,
+  }),
+  /**
+   * The next night, planned: its title, the lines of its "Before you sit
+   * down" checklist, and optionally an act that starts at it. Offered to the
+   * campaign's creator by the campaign's own Hob — the creator's toolkit alone
+   * has `proposeNight`.
+   *
+   * No number: the accept numbers the night one past the highest the campaign
+   * has at that moment, as *Start the night* would. Accepting creates the
+   * session, each prep line and the act in one transaction, every row stamped
+   * `origin = 'assistant'` with the turn and none shared with the table. The
+   * night is planned, not open: the campaign does not point at it, so nothing
+   * goes live until *Start the night* opens it.
+   */
+  Schema.Struct({
+    target: Schema.Literal("night"),
+    /** Null when Hob gave none, and the night reads as *Session N*. */
+    title: Schema.NullOr(Schema.String),
+    /** The checklist's lines, in the order Hob wrote them; each is one prep item. */
+    prep: Schema.Array(Schema.String),
+    /** The title of an act that starts at this night, when Hob named one. */
+    actTitle: Schema.NullOr(Schema.String),
+  }),
+  /**
+   * A new act on the Chronicle, starting at a night the campaign already has
+   * and running until the next act. Offered to the campaign's creator by the
+   * campaign's own Hob (`proposeAct`). Accepting is `Acts.create`, the
+   * creator's own write, stamped with the turn; a night that has started an
+   * act since is that create's `Conflict`.
+   */
+  Schema.Struct({
+    target: Schema.Literal("act"),
+    title: Schema.String,
+    firstSessionNumber: Schema.Int,
   }),
   Schema.Struct({
     target: Schema.Literal("encounter"),
@@ -731,6 +769,19 @@ export const HobAccepted = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("beat"), beat: Beat }),
   /** The night whose summary the DM kept, carrying the summary's provenance. */
   Schema.Struct({ accepted: Schema.Literal("nightSummary"), session: Session }),
+  /**
+   * The night a campaign's creator kept from their Hob: the session, the prep
+   * lines made under it in order, and the act that starts at it when the
+   * draft named one.
+   */
+  Schema.Struct({
+    accepted: Schema.Literal("night"),
+    session: Session,
+    prep: Schema.Array(PrepItem),
+    act: Schema.NullOr(CampaignAct),
+  }),
+  /** The act a campaign's creator kept from their Hob. */
+  Schema.Struct({ accepted: Schema.Literal("act"), act: CampaignAct }),
   Schema.Struct({ accepted: Schema.Literal("encounter"), encounter: Encounter }),
   /**
    * The character a player accepted, owned by them and carrying

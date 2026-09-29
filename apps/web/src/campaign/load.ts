@@ -21,6 +21,7 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";
+import { plannedNightOf } from "../session/start";
 
 /** Everything the campaign view renders, in one shape. */
 export interface CampaignView {
@@ -32,8 +33,14 @@ export interface CampaignView {
    * so the chrome and the body cannot disagree about whose screen this is.
    */
   readonly relation: CampaignRelation;
-  /** The session the DM is preparing, or `undefined` when there is not one yet. */
+  /** The night that is open, or `undefined` when none is. */
   readonly session: Session | undefined;
+  /**
+   * The planned night while no night is open: one kept from Hob's plan, made
+   * but neither started nor pointed at (`plannedNightOf`). *Start the night*
+   * opens it. `undefined` while a night is open, or when nothing is planned.
+   */
+  readonly planned: Session | undefined;
   readonly encounters: ReadonlyArray<Encounter>;
   readonly notes: ReadonlyArray<Note>;
   /**
@@ -43,7 +50,10 @@ export interface CampaignView {
    * error.
    */
   readonly party: ReadonlyArray<PartySeat>;
-  /** The "Before you sit down" checklist. Empty when there is no session. */
+  /**
+   * The "Before you sit down" checklist: the open night's, or the planned
+   * night's while none is open. Empty when there is neither.
+   */
   readonly prep: ReadonlyArray<PrepItem>;
   /**
    * The fight on the table right now — the fixtures' `active: true`
@@ -154,6 +164,46 @@ const sessionAtom = Atom.family((night: Night) =>
 
 const prepAtom = Atom.family((night: Night) =>
   apiAtom((client) => client.prep.list({ params: night }), [reads.prep(night.sessionId)]),
+);
+
+/**
+ * The campaign's nights, read only to find the planned one while no night is
+ * open. `sessions.list` answers the creator every night, newest first.
+ */
+const campaignSessionsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom(
+    (client) => client.sessions.list({ params: { campaignId } }),
+    [reads.sessions(campaignId)],
+  ),
+);
+
+/**
+ * The night the checklist hangs off, and whether it is open: the campaign's
+ * open night, or while there is none the planned one. The nights are read
+ * only in the second case, so a campaign with a night open pays nothing for
+ * the planned one. The view and the frame's *Try again* both read it, so the
+ * retry names the checklist the view was showing.
+ */
+export const preparingNightAtom = Atom.family((campaignId: CampaignId) =>
+  Atom.readable((get: Atom.AtomContext) =>
+    AsyncResult.flatMap(
+      get(campaignAtom(campaignId)),
+      (
+        campaign,
+      ): AsyncResult.AsyncResult<
+        { readonly open: SessionId } | { readonly planned: Session } | undefined,
+        unknown
+      > => {
+        if (campaign.currentSessionId !== null) {
+          return AsyncResult.success({ open: campaign.currentSessionId });
+        }
+        return AsyncResult.map(get(campaignSessionsAtom(campaignId)), (sessions) => {
+          const planned = plannedNightOf(sessions);
+          return planned === undefined ? undefined : { planned };
+        });
+      },
+    ),
+  ),
 );
 
 const runsAtom = Atom.family((night: Night) =>
@@ -321,10 +371,26 @@ const assemble = (
 
     const sessionId = round.campaign.currentSessionId;
     if (sessionId === null) {
-      return AsyncResult.success<CampaignView, unknown>(
-        { ...settled, session: undefined, prep: [], run: undefined },
-        { waiting: previous.waiting },
-      );
+      // No night is open, so the checklist is the planned night's, if any.
+      return AsyncResult.flatMap(get(preparingNightAtom(campaignId)), (preparing, before) => {
+        if (preparing === undefined || !("planned" in preparing)) {
+          return AsyncResult.success<CampaignView, unknown>(
+            { ...settled, session: undefined, planned: undefined, prep: [], run: undefined },
+            { waiting: previous.waiting || before.waiting },
+          );
+        }
+        const planned = preparing.planned;
+        return AsyncResult.map(
+          get(prepAtom({ campaignId, sessionId: planned.id })),
+          (prep): CampaignView => ({
+            ...settled,
+            session: undefined,
+            planned,
+            prep,
+            run: undefined,
+          }),
+        );
+      }) as AsyncResult.AsyncResult<CampaignView, unknown>;
     }
 
     const night: Night = { campaignId, sessionId };
@@ -336,6 +402,7 @@ const assemble = (
     return AsyncResult.map(live, (tonight) => ({
       ...settled,
       session: tonight.session,
+      planned: undefined,
       prep: tonight.prep,
       run: liveRun(tonight.runs),
     })) as AsyncResult.AsyncResult<CampaignView, unknown>;

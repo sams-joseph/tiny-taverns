@@ -14,6 +14,8 @@ import { SqlClient } from "effect/unstable/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { PrepItems } from "../src/repo/PrepItems.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
@@ -92,9 +94,13 @@ const runtime = ManagedRuntime.make(
         GroupHistory.layer,
         Notes.layer,
         Sessions.layer.pipe(Layer.provide(live)),
+        Acts.layer,
+        PrepItems.layer,
       ]),
     ),
     Sessions.layer.pipe(Layer.provide(live)),
+    Acts.layer,
+    PrepItems.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_permanent_delete"))),
 );
 afterAll(() => runtime.dispose());

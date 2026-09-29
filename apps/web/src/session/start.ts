@@ -1,4 +1,4 @@
-import type { CampaignId } from "@taverns/api";
+import type { CampaignId, Session, SessionId } from "@taverns/api";
 import { DateTime, Effect } from "effect";
 import type { TavernsClient } from "../api/client";
 
@@ -21,7 +21,11 @@ import type { TavernsClient } from "../api/client";
  *
  * ### Three statements, in this order, and only the last is best effort
  *
- * 1. **The session**, numbered one past the highest that exists.
+ * 1. **The session**: the planned night when there is one (a night Hob planned
+ *    and the DM kept, which nothing points at and nobody has played), or else
+ *    a new one, numbered one past the highest that exists. A planned night is
+ *    opened, never passed over, so its checklist is the one the DM sits down
+ *    with.
  * 2. **`campaign.currentSessionId`**, pointed at it. Fatal on purpose: the prep
  *    checklist, the session card and the campaign row all read the night off the
  *    campaign, so a session nothing points at is a night the DM cannot find
@@ -36,16 +40,46 @@ import type { TavernsClient } from "../api/client";
  */
 
 /**
- * One past the highest session this campaign has had.
+ * The night *Start the night* opens: its number, and its id when it already
+ * exists because it was planned.
+ */
+export interface NightToOpen {
+  readonly number: number;
+  /** The planned night this opens; absent when opening makes a new one. */
+  readonly planned?: SessionId;
+}
+
+/**
+ * The planned night, if the campaign has one: the lowest-numbered night that
+ * has neither started nor ended. Hob's kept night is one (`proposeNight`); the
+ * Next session card shows it and its checklist while no night is open, and
+ * *Start the night* opens it. Both read it here so they cannot disagree.
+ */
+export const plannedNightOf = (sessions: ReadonlyArray<Session>): Session | undefined =>
+  sessions.reduce<Session | undefined>(
+    (earliest, row) =>
+      row.startedAt === null &&
+      row.endedAt === null &&
+      (earliest === undefined || row.number < earliest.number)
+        ? row
+        : earliest,
+    undefined,
+  );
+
+/**
+ * The night opening would open: the planned one, or one past the highest
+ * session this campaign has had.
  *
  * The only thing `sessions.list` is read for, on either surface — which is why
  * it is a function here rather than a line in both dialogs.
  */
-export const nextSessionNumber = (campaignId: CampaignId) => (client: TavernsClient) =>
-  Effect.map(
-    client.sessions.list({ params: { campaignId } }),
-    (rows) => rows.reduce((highest, row) => Math.max(highest, row.number), 0) + 1,
-  );
+export const nightToOpen = (campaignId: CampaignId) => (client: TavernsClient) =>
+  Effect.map(client.sessions.list({ params: { campaignId } }), (rows): NightToOpen => {
+    const planned = plannedNightOf(rows);
+    return planned === undefined
+      ? { number: rows.reduce((highest, row) => Math.max(highest, row.number), 0) + 1 }
+      : { number: planned.number, planned: planned.id };
+  });
 
 /**
  * Open a night, and hand back the id of it.
@@ -54,25 +88,29 @@ export const nextSessionNumber = (campaignId: CampaignId) => (client: TavernsCli
  * because the stamp is the request after it, so returning the row would hand
  * every caller a session that says it has not started.
  */
-export const startSession = (campaignId: CampaignId, number: number) => (client: TavernsClient) =>
-  Effect.gen(function* () {
-    const session = yield* client.sessions.create({
-      params: { campaignId },
-      payload: { number },
+export const startSession =
+  (campaignId: CampaignId, night: NightToOpen) => (client: TavernsClient) =>
+    Effect.gen(function* () {
+      const session =
+        night.planned === undefined
+          ? yield* client.sessions.create({
+              params: { campaignId },
+              payload: { number: night.number },
+            })
+          : { id: night.planned };
+
+      yield* client.campaigns.update({
+        params: { campaignId },
+        payload: { currentSessionId: session.id },
+      });
+
+      const now = yield* DateTime.now;
+      yield* Effect.ignore(
+        client.sessions.update({
+          params: { campaignId, sessionId: session.id },
+          payload: { startedAt: now },
+        }),
+      );
+
+      return session.id;
     });
-
-    yield* client.campaigns.update({
-      params: { campaignId },
-      payload: { currentSessionId: session.id },
-    });
-
-    const now = yield* DateTime.now;
-    yield* Effect.ignore(
-      client.sessions.update({
-        params: { campaignId, sessionId: session.id },
-        payload: { startedAt: now },
-      }),
-    );
-
-    return session.id;
-  });

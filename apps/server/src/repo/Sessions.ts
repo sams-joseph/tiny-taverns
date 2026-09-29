@@ -19,6 +19,7 @@ import { LiveEvents } from "../live/LiveEvents.js";
 import { RUN } from "./liveTables.js";
 import {
   type AssistantOrigin,
+  assistantColumns,
   defined,
   dieOnSqlError,
   type ProvenanceColumns,
@@ -125,9 +126,11 @@ export class Sessions extends Context.Service<
       campaignId: CampaignId,
       id: SessionId,
     ) => Effect.Effect<Session, NotFound, CurrentActor>;
+    /** `from` is the accept path's, and only its — see `Notes.create`. */
     readonly create: (
       campaignId: CampaignId,
       payload: SessionCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<Session, NotFound | Conflict, CurrentActor>;
     /**
      * `from` is set only by `repo/Proposals.ts`, when the DM keeps a summary
@@ -318,7 +321,7 @@ export class Sessions extends Context.Service<
             }),
           ),
 
-        create: (campaignId, payload) =>
+        create: (campaignId, payload, from) =>
           dieOnSqlError(
             asConflict(
               sql.withTransaction(
@@ -332,6 +335,7 @@ export class Sessions extends Context.Service<
                         number: payload.number,
                         title: payload.title,
                         visibility: payload.visibility,
+                        ...assistantColumns(from),
                       }),
                     )}
                     returning *

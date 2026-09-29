@@ -11,7 +11,15 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { defined, dieOnSqlError, type ProvenanceColumns, provenanceOf, setClause } from "./rows.js";
+import {
+  type AssistantOrigin,
+  assistantColumns,
+  defined,
+  dieOnSqlError,
+  type ProvenanceColumns,
+  provenanceOf,
+  setClause,
+} from "./rows.js";
 import { ensureCampaignReadable, rowReadable, rowWritable } from "./visibility.js";
 
 interface ActRow extends ProvenanceColumns {
@@ -55,8 +63,10 @@ const asConflict = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E
  * starts at through that night's own creator predicate, so an act can only be
  * started at a night of this campaign that exists.
  *
- * Nothing else reads this table: no toolkit has an act tool, search does not
- * index it, and a Shared World is told nothing of it.
+ * Nothing else reads this table but the creator's Hob, whose `proposeAct`
+ * reads the list to say which night already starts one; its accept writes
+ * through `create`. Search does not index it, and a Shared World is told
+ * nothing of it.
  */
 export class Acts extends Context.Service<
   Acts,
@@ -67,11 +77,13 @@ export class Acts extends Context.Service<
     ) => Effect.Effect<ReadonlyArray<CampaignAct>, NotFound, CurrentActor>;
     /**
      * Starts an act at a night. `NotFound` for a night this campaign does not
-     * have; `Conflict` for a night that already starts one.
+     * have; `Conflict` for a night that already starts one. `from` is the
+     * accept path's, and only its — see `Notes.create`.
      */
     readonly create: (
       creator: CampaignCreatorActor,
       payload: CampaignActCreate,
+      from?: AssistantOrigin,
     ) => Effect.Effect<CampaignAct, NotFound | Conflict>;
     /** Renames, shares or unshares one. */
     readonly update: (
@@ -107,7 +119,7 @@ export class Acts extends Context.Service<
             }),
           ),
 
-        create: (creator, payload) =>
+        create: (creator, payload, from) =>
           dieOnSqlError(
             asConflict(
               sql.withTransaction(
@@ -134,6 +146,7 @@ export class Acts extends Context.Service<
                         title: payload.title.trim(),
                         first_session_number: payload.firstSessionNumber,
                         visibility: payload.visibility,
+                        ...assistantColumns(from),
                       }),
                     )}
                     returning *

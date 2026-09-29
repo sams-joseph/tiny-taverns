@@ -9,12 +9,14 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Nine kinds of artifact are produced here.** `encounter`, `note`
- * (and read-aloud), `beat`, `npc` and `npcSheet` are what campaign Hob can materialise; `chronicle`
+ * **Eleven kinds of artifact are produced here.** `encounter`, `note`
+ * (and read-aloud), `beat`, `npc`, `npcSheet`, `checklist` (the next night
+ * Hob planned, drawn as the delivered prep list) and `act` are what campaign
+ * Hob can materialise; `chronicle`
  * and `story` are Shared World Hob's; `campaign` and `character` are what the
  * account's own panel drafts outside any campaign. The rest of the union is the
  * delivered specimen set, held by `hob.fixtures.ts` for the tests: nothing
- * produces a `checklist` or a `rules` card, because there is no table
+ * produces a `rules` card, because there is no table
  * for one to be saved into and a *Save to session* button that could only fail
  * is worse than a kind that cannot be expressed.
  *
@@ -34,12 +36,13 @@ import type { IconName } from "@taverns/ui";
  * cannot express them is better than a card that renders a badge over an empty
  * body. They come back when the designers draw them.
  *
- * **`note`, `beat`, `summary`, `campaign`, `sharedWorld`, `character` and
- * `npcSheet` are ours.** The delivery has no entry for any of them, and each
- * is something Hob can actually offer to keep. All seven take glyphs the
- * delivery already asked for (`pencil`, `flag`, `history` — the Chronicle's
- * own —, `layers` — the Campaigns item on the global row —, `map` — a Shared
- * World's own in the bar —, `user-round` and `shield-half`, the sheet's armour
+ * **`note`, `beat`, `summary`, `campaign`, `sharedWorld`, `character`,
+ * `npcSheet` and `act` are ours.** The delivery has no entry for any of them,
+ * and each is something Hob can actually offer to keep. All eight take glyphs
+ * the delivery already asked for (`pencil`, `flag` — the beat's, and the
+ * Chronicle's *Start a new act here* —, `history` — the Chronicle's own —,
+ * `layers` — the Campaigns item on the global row —, `map` — a Shared World's
+ * own in the bar —, `user-round` and `shield-half`, the sheet's armour
  * class), so the icon table did not grow.
  */
 export const ARTIFACT_KINDS = {
@@ -53,6 +56,7 @@ export const ARTIFACT_KINDS = {
   campaignStory: { icon: "book-open", label: "Story so far", variant: "info" },
   npc: { icon: "user-round", label: "NPC", variant: "magic" },
   checklist: { icon: "list-checks", label: "Prep list", variant: "success" },
+  act: { icon: "flag", label: "Act", variant: "secondary" },
   rules: { icon: "book-open", label: "Rules", variant: "secondary" },
   campaign: { icon: "layers", label: "Campaign", variant: "default" },
   sharedWorld: { icon: "map", label: "Shared World", variant: "default" },
@@ -158,6 +162,10 @@ export type HobArtifact =
       readonly stats: ReadonlyArray<readonly [string, string]>;
     })
   | (ArtifactBase & { readonly kind: "checklist"; readonly items: ReadonlyArray<HobChecklistItem> })
+  | (ArtifactBase & {
+      /** A new act on the Chronicle; its title is the card's, its first night the meta. */
+      readonly kind: "act";
+    })
   | (ArtifactBase & {
       readonly kind: "campaign";
       /** The Shared World it will be made in; absent is a standalone campaign. */
@@ -312,6 +320,32 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
         meta: "For the Chronicle",
         chips: [],
         text: proposal.text,
+      };
+    /**
+     * The next night the creator's Hob planned, as the delivered prep list:
+     * its title (or *Next session*, as a night with none reads), each line
+     * unticked, and the act it starts when it names one. No number: the keep
+     * numbers the night one past the highest the campaign has then.
+     */
+    case "night":
+      return {
+        id: turnId,
+        kind: "checklist",
+        title: proposal.title ?? "Next session",
+        meta: [
+          `${String(proposal.prep.length)} prep ${proposal.prep.length === 1 ? "line" : "lines"}`,
+          ...(proposal.actTitle === null ? [] : [`Starts ${proposal.actTitle}`]),
+        ].join(" · "),
+        chips: [],
+        items: proposal.prep.map((text) => ({ text, done: false })),
+      };
+    case "act":
+      return {
+        id: turnId,
+        kind: "act",
+        title: proposal.title,
+        meta: `From session ${String(proposal.firstSessionNumber)}`,
+        chips: [],
       };
     case "sharedWorldHistory":
       return {

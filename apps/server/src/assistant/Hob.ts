@@ -34,6 +34,7 @@ import {
   type Tool,
   type Toolkit,
 } from "effect/unstable/ai";
+import { Acts } from "../repo/Acts.js";
 import { Campaigns } from "../repo/Campaigns.js";
 import { CampaignStories } from "../repo/CampaignStories.js";
 import { GroupHistory } from "../repo/GroupHistory.js";
@@ -227,6 +228,7 @@ export class Hob extends Context.Service<
   }): Layer.Layer<
     Hob,
     never,
+    | Acts
     | Campaigns
     | CampaignStories
     | Creatures
@@ -259,6 +261,9 @@ export class Hob extends Context.Service<
         const repositories = {
           search: yield* Search,
           sessions: yield* Sessions,
+          // The campaign's acts, which `proposeAct` reads so it never offers
+          // a second act at a night that already starts one.
+          acts: yield* Acts,
           recap: yield* Recap,
           creatures: yield* Creatures,
           npcs: yield* Npcs,
@@ -1517,6 +1522,7 @@ const MAKE_VERBS: ReadonlyArray<string> = [
   "design",
   "sketch",
   "compose",
+  "plan",
   "prep",
   "prepare",
   "come up with",
@@ -1568,6 +1574,18 @@ const DM_NOUNS: ReadonlyArray<string> = [
   "boxed text",
   "beat",
   "beats",
+  // The next night with its checklist, which `proposeNight` drafts — "plan
+  // next session", "prep the next night" — and an act, `proposeAct`'s. Only
+  // the next or a new night: "a summary of last session" is chat.
+  "next session",
+  "next night",
+  "new session",
+  "new night",
+  "prep list",
+  "prep checklist",
+  "checklist",
+  "act",
+  "acts",
   // A new member of the Cast, which `proposeNpc` drafts — "make an NPC",
   // "add a blacksmith to the cast".
   "npc",
@@ -1880,6 +1898,10 @@ const dmPrompt = (
     "offer it with proposeEncounter, proposeNote, proposeBeat or proposeNightSummary.",
     "When the DM asks for the story so far or a Previously, call readCampaignStorySources,",
     "write both from that result alone, and offer them with proposeCampaignStory.",
+    "When the DM asks you to plan the next session or its prep, offer it with proposeNight:",
+    "a title and the checklist of things to do or have ready before the party sits down.",
+    "When the DM asks for a new act, offer it with proposeAct at a session from listSessions,",
+    "or, when the act starts at the session being planned, with proposeNight's actTitle.",
     "When the DM asks for a new NPC or to add someone to the Cast, offer them with",
     "proposeNpc, with a sheet only when the DM asked for stats.",
     "When the DM asks you to give an NPC stats or a sheet, find the NPC with searchCampaign",
@@ -2109,6 +2131,20 @@ const offered = (turn: HobTurn): string | undefined => {
       } — ${kept}: ${proposal.body}]`;
     case "beat":
       return `[You offered the DM a beat — ${kept}: ${proposal.body}]`;
+    // Read back in the tool's own words, so "add a line about the map" or
+    // "call it The Heist" redrafts the night offered rather than a new one.
+    case "night": {
+      const parts = [
+        proposal.title === null ? undefined : `title "${proposal.title}"`,
+        proposal.prep.length === 0 ? undefined : `prep: ${proposal.prep.join(" / ")}`,
+        proposal.actTitle === null ? undefined : `actTitle "${proposal.actTitle}"`,
+      ].filter((part) => part !== undefined);
+      return `[You offered the DM the next session, planned — ${kept}: ${parts.join("; ")}]`;
+    }
+    case "act":
+      return `[You offered the DM the act "${proposal.title}", starting at session ${String(
+        proposal.firstSessionNumber,
+      )} — ${kept}]`;
     case "encounter": {
       const kind = proposal.kind ?? "combat";
       const tags = proposal.tags.length === 0 ? "" : `, tagged ${proposal.tags.join(", ")}`;

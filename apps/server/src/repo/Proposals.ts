@@ -16,6 +16,7 @@ import {
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
+import { Acts } from "./Acts.js";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
 import { CampaignStories } from "./CampaignStories.js";
@@ -29,6 +30,7 @@ import { Notes } from "./Notes.js";
 import { NpcPreps } from "./NpcPrep.js";
 import { NpcSheets } from "./NpcSheets.js";
 import { Npcs } from "./Npcs.js";
+import { PrepItems } from "./PrepItems.js";
 import { Sessions } from "./Sessions.js";
 import type { AssistantOrigin } from "./rows.js";
 import { dieOnSqlError } from "./rows.js";
@@ -59,6 +61,8 @@ import type { ConversationReach } from "./visibility.js";
  * `Notes.create`, `Beats.create`, `Encounters.create` (whose roster goes
  * through `EncounterCreatures.create`, as a builder's does),
  * `Characters.createOwn`, for a night's summary `Sessions.update`, for a
+ * planned night `Sessions.create`, then `PrepItems.create` line by line and
+ * `Acts.create` for the act it starts, for an act `Acts.create`, for a
  * campaign's story so far `CampaignStories.accept` (which shares the creator's
  * own write's upsert), for an NPC's sheet `NpcSheets.put` (the creator's
  * own PUT, behind the creator proof), and for a new NPC the cast's
@@ -232,6 +236,8 @@ export class Proposals extends Context.Service<
       const npcSheets = yield* NpcSheets;
       const npcs = yield* Npcs;
       const npcPreps = yield* NpcPreps;
+      const prepItems = yield* PrepItems;
+      const acts = yield* Acts;
 
       const materialise = (
         campaignId: CampaignId,
@@ -279,6 +285,58 @@ export class Proposals extends Context.Service<
               sessions.update(campaignId, proposal.sessionId, { summary: proposal.text }, from),
               (session) => ({ accepted: "nightSummary" as const, session }),
             );
+
+          case "night":
+            // The night through the create a person's night takes, numbered
+            // one past the highest the campaign has now, as *Start the night*
+            // numbers one; the campaign does not point at it, so it is
+            // planned rather than open, and nothing goes live. Its checklist
+            // follows line by line through the checklist's own create, and
+            // the act it starts through the creator's, behind the proof the
+            // accept asks for again, all in the accept's transaction, so a
+            // refused act keeps no night either. Nothing names `visibility`:
+            // every row lands kept to the DM.
+            return Effect.gen(function* () {
+              const nights = yield* sessions.list(campaignId);
+              const session = yield* sessions.create(
+                campaignId,
+                {
+                  number: nights.reduce((highest, night) => Math.max(highest, night.number), 0) + 1,
+                  ...(proposal.title === null ? {} : { title: proposal.title }),
+                },
+                from,
+              );
+              const prep = yield* Effect.forEach(proposal.prep, (label) =>
+                prepItems.create(campaignId, session.id, { label }, from),
+              );
+              const actTitle = proposal.actTitle;
+              const act =
+                actTitle === null
+                  ? null
+                  : yield* Effect.flatMap(creators.of(campaignId), (creator) =>
+                      acts.create(
+                        creator,
+                        { title: actTitle, firstSessionNumber: session.number },
+                        from,
+                      ),
+                    );
+              return { accepted: "night" as const, session, prep, act };
+            });
+
+          case "act":
+            // The creator's own write, behind the proof, at a night the
+            // campaign has; a night that has started an act since the offer
+            // is `Acts.create`'s `Conflict`, and one deleted since its
+            // `NotFound`.
+            return Effect.gen(function* () {
+              const creator = yield* creators.of(campaignId);
+              const act = yield* acts.create(
+                creator,
+                { title: proposal.title, firstSessionNumber: proposal.firstSessionNumber },
+                from,
+              );
+              return { accepted: "act" as const, act };
+            });
 
           case "encounter":
             return Effect.map(

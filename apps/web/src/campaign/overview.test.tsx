@@ -20,6 +20,11 @@ import {
   partySeat,
   readAloud,
   renderScreen,
+  begunSession,
+  bodyOf,
+  plannedSession,
+  plannedSessionId,
+  prepItem,
   session,
   sessionId,
   sketch,
@@ -327,6 +332,7 @@ describe("the next session card", () => {
       status: 200,
       body: { ...campaign, currentSessionId: null },
     });
+    server.routes.set(`GET ${base}/sessions`, { status: 200, body: [begunSession] });
     server.routes.set(`GET ${base}/encounters`, { status: 200, body: page([]) });
     await renderScreen(mintingSession());
     const card = await cardOf("Nothing is running yet");
@@ -340,6 +346,51 @@ describe("the next session card", () => {
     expect(within(card).getByText(/No session in the works/)).toBeInTheDocument();
     // Nothing is open, so there is nothing to finish.
     expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
+  });
+
+  it("shows the planned night and its checklist while no night is open", async () => {
+    server.routes.set(`GET ${base}`, {
+      status: 200,
+      body: { ...campaign, currentSessionId: null },
+    });
+    server.routes.set(`GET ${base}/sessions`, {
+      status: 200,
+      body: [plannedSession, begunSession],
+    });
+    server.routes.set(`GET ${base}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: [
+        {
+          ...prepItem,
+          id: "6e7f8091-a2b3-4c4d-8e5f-607182930415",
+          sessionId: plannedSessionId,
+          label: "Print the salt road map",
+          done: false,
+        },
+      ],
+    });
+    server.routes.set(`POST ${base}/sessions/${plannedSessionId}/prep`, {
+      status: 200,
+      body: { ...prepItem, sessionId: plannedSessionId, label: "Name the toll-keeper" },
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    expect(within(card).getByText("Print the salt road map")).toBeInTheDocument();
+    expect(within(card).getByText(/Planned\. Starting the night opens it/)).toBeInTheDocument();
+    // Planned is not open: nothing to finish, and the row still starts it.
+    expect(screen.queryByRole("button", { name: "Finish the night" })).toBeNull();
+    expect(
+      within(campaignRow()).getByRole("button", { name: "Start session" }),
+    ).toBeInTheDocument();
+
+    // The checklist is the planned night's own, and takes a line as it does tonight.
+    await userEvent.type(within(card).getByRole("textbox"), "Name the toll-keeper{Enter}");
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", `/sessions/${plannedSessionId}/prep`)).toEqual({
+        label: "Name the toll-keeper",
+      }),
+    );
   });
 });
 

@@ -97,7 +97,7 @@ export function PickUpRunDialog({
           <DialogDescription>
             {session === undefined
               ? number.state === "ready"
-                ? `This starts session ${String(number.value)} and picks the ${noun} up where ${from} left it.`
+                ? `This starts session ${String(number.value.number)} and picks the ${noun} up where ${from} left it.`
                 : `This starts a new session and picks the ${noun} up where ${from} left it.`
               : `This picks the ${noun} up in session ${String(session.number)}, where ${from} left it.`}
           </DialogDescription>

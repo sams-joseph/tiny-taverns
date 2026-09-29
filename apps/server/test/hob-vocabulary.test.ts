@@ -12,6 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { PrepItems } from "../src/repo/PrepItems.js";
+import { Acts } from "../src/repo/Acts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
@@ -91,6 +93,8 @@ const services = Layer.mergeAll(
   Search.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Acts.layer,
+  PrepItems.layer,
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_vocabulary")));
 
@@ -486,9 +490,11 @@ describe("the boundary — one table's words are in no other table's schema", ()
       "getNpc",
       "listCreatures",
       "listSessions",
+      "proposeAct",
       "proposeBeat",
       "proposeCampaignStory",
       "proposeEncounter",
+      "proposeNight",
       "proposeNightSummary",
       "proposeNote",
       // Its sheet's labels are free text too, resolved by the same handler
@@ -669,6 +675,8 @@ describe("a campaign with nothing written down", () => {
     Search.layer,
     SessionEvents.layer,
     Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+    Acts.layer,
+    PrepItems.layer,
     Spells.layer,
   ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_bare")));
 
