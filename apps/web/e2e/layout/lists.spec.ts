@@ -5,8 +5,9 @@ import { HEIGHT, box, expect, screens, test } from "../support/app";
  * The Campaigns and Shared Worlds lists draw their body in the Overview's
  * centred frame (`max-w-overview`): their cards, their empty state and their
  * load all share the campaign Overview's edges, and a phone never scrolls
- * sideways. Their header is the chrome's bar, which spans the window. jsdom
- * has no boxes, so only a browser can say so.
+ * sideways. Their header's band spans the window, but its title row is
+ * centred in the same frame, so the title and its actions stand over the
+ * cards' edges. jsdom has no boxes, so only a browser can say so.
  *
  * The empty lists are the creator's wire with the list answered `[]`; the load
  * is held open by leaving the list's read unanswered.
@@ -50,6 +51,15 @@ for (const width of [1280, 768] as const) {
           await expect(page.locator('[data-slot="failure-notice"]')).toHaveCount(0);
           await expect(page.locator('main [data-slot="card"]').first()).toBeVisible();
           expectEdges(await edges(page), reference, "frame");
+          const grid = await box(page.locator('main [data-slot="card"]').first().locator(".."));
+          const row = await box(
+            page.locator('[data-slot="page-header"] [data-slot="page-header-row"]'),
+          );
+          expectEdges(
+            { left: row.x, right: row.x + row.width },
+            { left: grid.x, right: grid.x + grid.width },
+            "header row over the grid",
+          );
         });
 
         await test.step("empty", async () => {

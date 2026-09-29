@@ -114,7 +114,11 @@ export function CampaignsScreen() {
 
   return (
     <>
-      <TopBar title="Campaigns" subtitle="The stories you run and the tables where you play.">
+      <TopBar
+        centred
+        title="Campaigns"
+        subtitle="The stories you run and the tables where you play."
+      >
         <Button size="sm" onClick={() => setCreating(true)}>
           <Icon name="plus" size={14} />
           New campaign

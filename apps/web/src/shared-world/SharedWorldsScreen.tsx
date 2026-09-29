@@ -109,6 +109,7 @@ export function SharedWorldsScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Shared Worlds"
         subtitle="Connected campaigns with one history and a shared memory for Hob."
       >
