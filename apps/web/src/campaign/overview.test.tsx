@@ -3,7 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DateTime, Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { recap11, session11, sessions } from "../chronicle/chronicle.fixtures";
+import { recap11, saltRoad, session11, sessions } from "../chronicle/chronicle.fixtures";
 import { dayOf } from "../chronicle/format";
 import { liveFight, runningSession } from "../run/run.fixtures";
 import {
@@ -403,6 +403,7 @@ describe("the next session card", () => {
       body: [plannedSession, begunSession],
     });
     server.routes.set(`GET ${base}/sessions/${plannedSessionId}/prep`, { status: 200, body: [] });
+    server.routes.set(`GET ${base}/acts`, { status: 200, body: [] });
     server.routes.set(`DELETE ${base}/sessions/${plannedSessionId}`, {
       status: 204,
       body: undefined,
@@ -419,7 +420,8 @@ describe("the next session card", () => {
     await userEvent.click(within(card).getByRole("button", { name: "Delete this night" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
     expect(within(dialog).getByText(/its checklist are deleted/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/act that starts at session 13 is kept/)).toBeInTheDocument();
+    // No act starts at night 13, so the dialog names none.
+    expect(within(dialog).queryByText(/act that starts at/)).toBeNull();
     expect(deletes()).toEqual([]);
 
     server.routes.set(`GET ${base}/sessions`, { status: 200, body: [begunSession] });
@@ -430,6 +432,34 @@ describe("the next session card", () => {
     expect(await cardOf("Nothing is running yet")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Delete The toll bridge?" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete this night" })).toBeNull();
+  });
+
+  it("names the act that starts at the planned night, which the delete keeps", async () => {
+    plannedOnly();
+    server.routes.set(`GET ${base}/acts`, {
+      status: 200,
+      body: [
+        { ...saltRoad, firstSessionNumber: 12 },
+        {
+          ...saltRoad,
+          id: "2b1f2a1e-0000-4000-8000-000000000a13",
+          title: "Act III · The toll bridge",
+          firstSessionNumber: 13,
+        },
+      ],
+    });
+    await renderScreen(mintingSession());
+    const card = await cardOf("The toll bridge");
+
+    await userEvent.click(within(card).getByRole("button", { name: "Delete this night" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete The toll bridge?" });
+    expect(
+      await within(dialog).findByText(
+        "Act III · The toll bridge, the act that starts at session 13, is kept.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/its checklist are deleted/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Act II ·/)).toBeNull();
   });
 
   it("keeps the planned night when the delete is cancelled", async () => {

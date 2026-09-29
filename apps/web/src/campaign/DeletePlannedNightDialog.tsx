@@ -9,9 +9,15 @@ import {
   DialogTitle,
 } from "@taverns/ui";
 import { Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { SaveFailure } from "../ui/form";
+
+const actsAtom = Atom.family((campaignId: CampaignId) =>
+  apiAtom((client) => client.acts.list({ params: { campaignId } }), [reads.acts(campaignId)]),
+);
 
 /**
  * Deleting a planned night: `DELETE /campaigns/:c/sessions/:s`, for a night
@@ -20,9 +26,10 @@ import { SaveFailure } from "../ui/form";
  *
  * The copy says what goes and what stays in the server's terms
  * (`repo/Sessions.ts`, `remove`): the checklist cascades with the night; an act
- * names its night by number, not by row, so it stays with its title. The
- * nights move, and with them the planned night and what *Start the night*
- * opens; so does the night's own checklist.
+ * names its night by number, not by row, so one starting there stays with its
+ * title, and is named only when there is one. The nights move, and with them
+ * the planned night and what *Start the night* opens; so does the night's own
+ * checklist.
  */
 export function DeletePlannedNightDialog({
   campaignId,
@@ -35,6 +42,11 @@ export function DeletePlannedNightDialog({
 }) {
   const { busy, failure, submit } = useMutation();
   const name = night.title ?? `Session ${String(night.number)}`;
+  const [acts] = useApiAtom(actsAtom(campaignId));
+  const act =
+    acts.state === "ready"
+      ? acts.value.find((row) => row.firstSessionNumber === night.number)
+      : undefined;
 
   const remove = async () => {
     const done = await submit(
@@ -56,9 +68,11 @@ export function DeletePlannedNightDialog({
           <p className="text-body-s leading-body text-muted-foreground">
             The planned night and its checklist are deleted. Start the night makes a new one.
           </p>
-          <p className="text-body-s leading-body text-muted-foreground">
-            An act that starts at session {night.number} is kept, with its title.
-          </p>
+          {act !== undefined && (
+            <p className="text-body-s leading-body text-muted-foreground">
+              {act.title}, the act that starts at session {night.number}, is kept.
+            </p>
+          )}
         </div>
 
         <DialogFooter>
