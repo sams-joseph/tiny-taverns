@@ -109,6 +109,7 @@ export function SharedWorldsScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Shared Worlds"
         subtitle="Connected campaigns with one history and a shared memory for Hob."
       >
@@ -117,7 +118,8 @@ export function SharedWorldsScreen() {
           New Shared World
         </Button>
       </TopBar>
-      <div className="flex flex-col gap-6">
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
         {resource.state === "loading" && <Loading label="Looking for your Shared Worlds…" />}
         {resource.state === "failed" && (
           <ApiFailureNotice failure={resource.failure} onRetry={retry} />

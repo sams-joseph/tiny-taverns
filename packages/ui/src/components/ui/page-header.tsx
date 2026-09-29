@@ -82,12 +82,58 @@ function PageHeader({
   tabs,
   placement = "bar",
   framed = false,
+  centred = false,
 }: PageHeaderProps) {
   const bar = placement === "bar";
+  const gutters = "px-page-sm @3xl/app:px-page";
   const heading = (
     <h1 className="min-w-0 truncate font-display text-display-s leading-tight font-semibold tracking-display text-heading">
       {title}
     </h1>
+  );
+  const row = (
+    <div
+      data-slot="page-header-row"
+      className={cn(
+        "flex flex-wrap items-center gap-x-gutter gap-y-2.5 @4xl/app:flex-nowrap",
+        bar && "py-3.5 @4xl/app:h-19 @4xl/app:py-0",
+        bar && !centred && gutters,
+        centred && "mx-auto w-full max-w-overview",
+      )}
+    >
+      {/* `h-12` is the reserved pair of lines; see above. The title block is
+          top-aligned inside it so the `h1` sits at the same y whether a
+          subtitle follows it or not. */}
+      <div className="h-12 min-w-32 flex-1 basis-full @4xl/app:basis-0">
+        {badge === undefined ? (
+          heading
+        ) : (
+          <div className="flex min-w-0 items-center gap-2.5">
+            {heading}
+            <span className="shrink-0">{badge}</span>
+          </div>
+        )}
+        {subtitle !== undefined && (
+          <p className="mt-1 mb-0 truncate text-body-s leading-body text-muted-foreground">
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {/* The header is not a scrolling surface. `min-w-32` on the title is
+          the floor that makes its arbitrary text give way first; wide, the
+          controls are one ordinary flex row, and narrow they wrap on their
+          own row. If a screen cannot fit its controls at a wide width, that
+          screen must simplify its composition rather than handing the
+          header a second scrollbar. */}
+      {actions !== undefined && (
+        <div
+          data-slot="page-header-actions"
+          className="flex min-w-0 flex-wrap items-center gap-2.5 not-has-[>:not(:empty)]:hidden @4xl/app:flex-nowrap"
+        >
+          {actions}
+        </div>
+      )}
+    </div>
   );
   return (
     <header
@@ -98,45 +144,9 @@ function PageHeader({
           "rounded-card border border-t-3 border-hairline border-t-accent bg-surface-card px-5 py-3.5 shadow-1",
       )}
     >
-      <div
-        className={cn(
-          "flex flex-wrap items-center gap-x-gutter gap-y-2.5 @4xl/app:flex-nowrap",
-          bar && "px-page-sm py-3.5 @3xl/app:px-page @4xl/app:h-19 @4xl/app:py-0",
-        )}
-      >
-        {/* `h-12` is the reserved pair of lines; see above. The title block is
-            top-aligned inside it so the `h1` sits at the same y whether a
-            subtitle follows it or not. */}
-        <div className="h-12 min-w-32 flex-1 basis-full @4xl/app:basis-0">
-          {badge === undefined ? (
-            heading
-          ) : (
-            <div className="flex min-w-0 items-center gap-2.5">
-              {heading}
-              <span className="shrink-0">{badge}</span>
-            </div>
-          )}
-          {subtitle !== undefined && (
-            <p className="mt-1 mb-0 truncate text-body-s leading-body text-muted-foreground">
-              {subtitle}
-            </p>
-          )}
-        </div>
-        {/* The header is not a scrolling surface. `min-w-32` on the title is
-            the floor that makes its arbitrary text give way first; wide, the
-            controls are one ordinary flex row, and narrow they wrap on their
-            own row. If a screen cannot fit its controls at a wide width, that
-            screen must simplify its composition rather than handing the
-            header a second scrollbar. */}
-        {actions !== undefined && (
-          <div
-            data-slot="page-header-actions"
-            className="flex min-w-0 flex-wrap items-center gap-2.5 not-has-[>:not(:empty)]:hidden @4xl/app:flex-nowrap"
-          >
-            {actions}
-          </div>
-        )}
-      </div>
+      {/* Centred, the gutters move to a band-wide wrapper and the row is
+          capped inside them, as `main`'s padding holds a centred body. */}
+      {bar && centred ? <div className={gutters}>{row}</div> : row}
       {tabs !== undefined && (
         // `items-stretch` with no bottom padding: the strip's items reach the
         // hairline, exactly as the campaign row's do. In the bar that is the
@@ -180,6 +190,12 @@ interface PageHeaderProps {
    * the bar, which is already a band.
    */
   readonly framed?: boolean;
+  /**
+   * Centre the bar's title row at the Overview's width (`max-w-overview`), so
+   * its edges are those of a body drawn in that frame; the band itself still
+   * spans the window. The Campaigns and Shared Worlds lists use it.
+   */
+  readonly centred?: boolean;
 }
 
 export { PageHeader };

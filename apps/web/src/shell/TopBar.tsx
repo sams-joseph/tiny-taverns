@@ -43,6 +43,8 @@ interface TopBarProps {
   readonly framed?: boolean;
   /** A tab strip, on its own row below the title — never beside it. */
   readonly tabs?: ReactNode;
+  /** Centre the title row at `max-w-overview`, over a body drawn in that frame (`PageHeader`'s `centred`). */
+  readonly centred?: boolean;
   /** The screen's verbs; a `BackLink` first when the screen has a parent. */
   readonly children?: ReactNode;
 }
@@ -53,6 +55,7 @@ function ScreenHeader({
   badge,
   framed,
   tabs,
+  centred,
   children,
   placement,
 }: TopBarProps & { readonly placement: "bar" | "content" }) {
@@ -63,6 +66,7 @@ function ScreenHeader({
       {...(subtitle !== undefined && { subtitle })}
       {...(badge !== undefined && { badge })}
       framed={framed === true && placement === "content"}
+      centred={centred === true}
       {...(tabs !== undefined && { tabs })}
       actions={
         <div className="flex min-w-0 flex-wrap items-center gap-2.5 empty:hidden @4xl/app:shrink-0 @4xl/app:flex-nowrap">
