@@ -12,8 +12,11 @@ jobs:
 
     # The server's repository and migration tests run against a real Postgres —
     # the schema is Postgres dialect, and they fail loudly rather than skipping
-    # when it is missing. Port 5433 matches the committed dev default so no
-    # DATABASE_URL is needed here.
+    # when it is missing. The suite refuses to run without DATABASE_URL, and
+    # turbo passes it through to `test` (turbo.json), so it is named here.
+    env:
+      DATABASE_URL: postgres://taverns:taverns@127.0.0.1:5433/taverns
+
     services:
       postgres:
         image: postgres:18
