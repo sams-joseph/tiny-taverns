@@ -208,11 +208,15 @@ export class ImageRecords extends Context.Service<
     readonly fail: (job: ImageJob, failure: ImageFailure) => Effect.Effect<void>;
     /**
      * Rows of any kind still `generating` `olderThanSeconds` after they were
-     * created or last got a permit (`updated_at`) belong to a process that
-     * died; mark them `interrupted` and enqueue their prefixes. Answers how
-     * many.
+     * created or last got a permit (`updated_at`), and not among `held` (the
+     * rows this process's worker still has queued or drawing), belong to a
+     * process that died; mark them `interrupted` and enqueue their prefixes.
+     * Answers how many.
      */
-    readonly sweepStale: (olderThanSeconds: number) => Effect.Effect<number>;
+    readonly sweepStale: (
+      olderThanSeconds: number,
+      held: ReadonlySet<string>,
+    ) => Effect.Effect<number>;
     /** Deletions whose time has come, oldest first. */
     readonly dueDeletions: (
       limit: number,
@@ -364,7 +368,7 @@ export class ImageRecords extends Context.Service<
             )
             .pipe(Effect.orDie),
 
-        sweepStale: (olderThanSeconds) =>
+        sweepStale: (olderThanSeconds, held) =>
           Effect.forEach(ALL_IMAGE_KINDS, (kind) =>
             sql<{ readonly count: number }>`
               with swept as (
@@ -372,6 +376,7 @@ export class ImageRecords extends Context.Service<
                   state = 'failed', failure = 'interrupted', finished_at = now(), updated_at = now()
                 where state = 'generating'
                   and updated_at < now() - make_interval(secs => ${olderThanSeconds})
+                  and id <> all(${[...held]})
                 returning storage_prefix
               ), enqueued as (
                 insert into storage_deletion (prefix) select storage_prefix from swept

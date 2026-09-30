@@ -966,17 +966,28 @@ describe("when there is no portrait", () => {
     expect(drawn[0]).toMatchObject({ state: "ready", failure: null });
   });
 
-  it("draws nothing for a job swept while it queued, and sends no request", async () => {
+  it("never sweeps a job its live worker holds, however long it queues, and still sweeps an orphan", async () => {
     // The portrait holds the one permit until it is released; the banner
-    // queues behind it long enough (backdated here) for the sweep to call it
-    // `interrupted`.
+    // queues behind it past the stale age (backdated here). Another NPC's
+    // portrait, left `generating` with no job holding it, is what a process
+    // that died leaves behind.
     const slow = scriptedImages({ apiUrl: OPENAI, model: MODEL });
     const portrait = await run(Deferred.make<void>());
-    slow.next({ kind: "held", release: portrait }, { kind: "hang" });
-    const npc = await addNpc(stranger, theirs, { name: "Forgotten", role: "a lamplighter" });
+    slow.next({ kind: "held", release: portrait });
+    const npc = await addNpc(stranger, theirs, { name: "Patient", role: "a lamplighter" });
+    const orphan = await addNpc(stranger, theirs, { name: "Orphan", role: "a ditch-digger" });
     await settled();
     await sql((sql) => sql`delete from npc_image where npc_id = ${npc.id}`);
     await sql((sql) => sql`delete from npc_banner where npc_id = ${npc.id}`);
+    await sql(
+      (sql) => sql`
+        update npc_image set
+          state = 'generating', failure = null, finished_at = null,
+          created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
+        where npc_id = ${orphan.id}
+      `,
+    );
 
     const swept = await run(
       Effect.scoped(
@@ -1009,11 +1020,13 @@ describe("when there is no portrait", () => {
       ).pipe(Effect.provideService(CurrentActor, stranger.actor)),
     );
 
-    // Only the banner was swept: the portrait drawing under its permit was not.
+    // Only the orphan was swept: the drawing portrait and the queued banner
+    // were both held, and the banner still sent its request.
     expect(swept).toBe(1);
-    expect(slow.requests().map((request) => request.size)).toEqual(["1024x1024"]);
+    expect(slow.requests().map((request) => request.size)).toEqual(["1024x1024", "1536x1024"]);
     expect((await recordOf(npc.id))?.state).toBe("ready");
-    expect((await bannerOf(npc.id))?.failure).toBe("interrupted");
+    expect(await bannerOf(npc.id)).toMatchObject({ state: "ready", failure: null });
+    expect((await recordOf(orphan.id))?.failure).toBe("interrupted");
   });
 
   it("spends the one daily budget portraits, banners and covers spend", async () => {
