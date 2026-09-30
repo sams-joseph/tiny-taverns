@@ -1,14 +1,12 @@
+import { describe, expect } from "@effect/vitest";
 import {
   type Actor,
-  type Campaign,
   CurrentActor,
   type SharedWorldId,
   type HobEvent,
   NotFound,
-  type SessionId,
 } from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Context, DateTime, Effect, Layer, Stream } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -45,6 +43,7 @@ import { Spells } from "../src/repo/Spells.js";
 import { aGroupMemberAt, anAccount, aPlayerAt, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./support/model.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * Group Hob, measured at the provider wire — the group-Hob boundary decision
@@ -114,9 +113,6 @@ const services = Layer.mergeAll(
   PrepItems.layer,
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_group")));
-
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 const withActor =
   (actor: Actor) =>
@@ -253,25 +249,13 @@ const makeFixture = Effect.gen(function* () {
   yield* Effect.flatMap(GroupHistory, (h) => asWren(h.fromRecap(groupId, wrenDm, played.id)));
 
   return { jo, wren, pim, fen, groupId, saltRoad, hagsBargain, elsewhere, played, planned };
-});
+}).pipe(Effect.orDie);
 
-interface Fixture {
-  readonly jo: Actor;
-  readonly wren: Actor;
-  readonly pim: Actor;
-  readonly fen: Actor;
-  readonly groupId: SharedWorldId;
-  readonly saltRoad: Campaign;
-  readonly hagsBargain: Campaign;
-  readonly elsewhere: Campaign;
-  readonly played: { readonly id: SessionId };
-  readonly planned: { readonly id: SessionId };
-}
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hob-group.test/Fixture",
+) {}
 
-let fixture: Fixture;
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture.pipe(Effect.orDie));
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 interface Asked {
   readonly events: ReadonlyArray<HobEvent>;
@@ -287,7 +271,7 @@ const askSharedWorld = (
     readonly text?: string;
     readonly threadId?: Asked["events"] extends never ? never : string;
   },
-): Promise<Asked> => {
+) => {
   const model = scriptedModel({
     model: "scripted-local",
     maxTokens: 4096,
@@ -296,19 +280,17 @@ const askSharedWorld = (
       textChunks("Two nights have been played."),
     ],
   });
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const hob = yield* Hob;
-      const stream = yield* hob.askSharedWorld(groupId, {
-        text: options?.text ?? "What has happened across the group so far?",
-        ...(options?.threadId === undefined ? {} : { threadId: options.threadId as never }),
-      });
-      const events = yield* Stream.runCollect(stream);
-      return { events: Array.from(events), requests: model.requests() };
-    }).pipe(
-      withActor(actor),
-      Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
-    ),
+  return Effect.gen(function* () {
+    const hob = yield* Hob;
+    const stream = yield* hob.askSharedWorld(groupId, {
+      text: options?.text ?? "What has happened across the group so far?",
+      ...(options?.threadId === undefined ? {} : { threadId: options.threadId as never }),
+    });
+    const events = yield* Stream.runCollect(stream);
+    return { events: Array.from(events), requests: model.requests() } satisfies Asked;
+  }).pipe(
+    withActor(actor),
+    Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
   );
 };
 
@@ -317,376 +299,372 @@ const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify
 /** What Wren kept to the table inside the played night — see the fixture. */
 const TABLE_SECRETS = ["HIDDENFIGHT", "RUNNINGFIGHT", "DMBEAT", "DMSETTLED", "DMSUMMARY"] as const;
 
-describe("what the model is shown", () => {
-  it("carries the other table's canonical night and not one byte of its prep", async () => {
-    // Jo asks — a member who did NOT create the Hag's Bargain — and the
-    // scripted model walks the whole canonical surface: the timeline, the
-    // night's story, the chronicle.
-    const { requests } = await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [
-        toolCallChunks("listPlayedNights", {}),
-        toolCallChunks("nightStory", {
-          campaignId: fixture.hagsBargain.id,
-          sessionId: fixture.played.id,
-        }),
-        toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
-        textChunks("The hag took the lantern, and the reeds ambush was fought to a finish."),
-      ],
-    });
-    const shown = shownTo(requests);
-
-    // Canonical, present: the beat verbatim (from nightStory and from the
-    // shared recap copy) and the fight by name.
-    expect(shown).toContain("CANONBEAT");
-    expect(shown).toContain("CANONFIGHT");
-
-    // Unplayed prep, absent — zero occurrences, any request, any round. This
-    // is the decision's boundary measured rather than argued.
-    expect(shown).not.toContain("SECRETNOTE");
-    expect(shown).not.toContain("SECRETPREP");
-    expect(shown).not.toContain("SECRETENCOUNTER");
-    expect(shown).not.toContain("SECRETDRAFT");
-
-    // What the DM kept hidden in the played night: absent too, from the
-    // night's story and from the Chronicle's copy of it alike.
-    for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
-
-    // Another group's record: just as absent.
-    expect(shown).not.toContain("OTHERGROUP");
-
-    // The structural half: the group is closed over from the path, so a model
-    // that hallucinated another group's id has nowhere to put it.
-    const tools = requests[0]?.tools ?? [];
-    expect(JSON.stringify(tools).toLowerCase()).not.toContain("groupid");
-  }, 60_000);
-
-  it("tells every member only what the night's DM shared, whoever asks", async () => {
-    // Pim, a player at the *other* table; Jo, that table's creator; and Wren,
-    // who ran this night. The world's account of a night is the world's, not
-    // the asker's: its own DM gets the same narrowed story through world Hob.
-    for (const asker of [fixture.pim, fixture.jo, fixture.wren]) {
-      const { requests } = await askSharedWorld(asker, fixture.groupId, {
-        rounds: [
-          toolCallChunks("listPlayedNights", {}),
-          toolCallChunks("nightStory", {
-            campaignId: fixture.hagsBargain.id,
-            sessionId: fixture.played.id,
-          }),
-          toolCallChunks("searchSharedWorldHistory", { query: "Session 1" }),
-          textChunks("The reeds ambush was fought to a finish."),
-        ],
-      });
-      const shown = shownTo(requests);
-      expect(shown).toContain("CANONBEAT");
-      expect(shown).toContain("CANONFIGHT");
-      for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
-    }
-
-    // The repository answer the tool is built from, exactly: one shared beat,
-    // one shared fight that ended — not the hidden one, not the running one.
-    const story = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (history) =>
-        history.nightStory(fixture.groupId, fixture.hagsBargain.id, fixture.played.id),
-      ).pipe(withActor(fixture.pim)),
-    );
-    expect(story.beats).toEqual(["CANONBEAT the hag took the lantern."]);
-    expect(story.fights).toEqual([
-      { name: "CANONFIGHT ambush in the reeds", mode: "combat", round: 1, outcome: "resolved" },
-    ]);
-  }, 60_000);
-
-  it("refuses the planned night through the tool, as the ordinary not-found", async () => {
-    // The model asks for the *unplayed* session's story — the exact probe the
-    // boundary exists for — and gets a NotFound it can read, never the prep.
-    const { requests } = await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [
-        toolCallChunks("nightStory", {
-          campaignId: fixture.hagsBargain.id,
-          sessionId: fixture.planned.id,
-        }),
-        textChunks("That night has not been played."),
-      ],
-    });
-    const shown = shownTo(requests);
-    expect(shown).not.toContain("SECRETPREP");
-    expect(shown).toContain("NotFound");
-  }, 60_000);
-
-  it("is a 404 for a stranger before the model is ever called", async () => {
-    const refused = await runtime.runPromise(
+describeLayer("hob-group", shared, (it) => {
+  describe("what the model is shown", () => {
+    it.effect("carries the other table's canonical night and not one byte of its prep", () =>
       Effect.gen(function* () {
-        const hob = yield* Hob;
-        return yield* Effect.flip(hob.askSharedWorld(fixture.groupId, { text: "anything" }));
-      }).pipe(
-        withActor(fixture.fen),
-        Effect.provide(
-          Hob.layer({ model: "scripted-local" }).pipe(
-            Layer.provide(
-              scriptedModel({ model: "scripted-local", maxTokens: 4096, rounds: [] }).layer,
+        const fixture = yield* Fixture;
+        // Jo asks — a member who did NOT create the Hag's Bargain — and the
+        // scripted model walks the whole canonical surface: the timeline, the
+        // night's story, the chronicle.
+        const { requests } = yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [
+            toolCallChunks("listPlayedNights", {}),
+            toolCallChunks("nightStory", {
+              campaignId: fixture.hagsBargain.id,
+              sessionId: fixture.played.id,
+            }),
+            toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
+            textChunks("The hag took the lantern, and the reeds ambush was fought to a finish."),
+          ],
+        });
+        const shown = shownTo(requests);
+
+        // Canonical, present: the beat verbatim (from nightStory and from the
+        // shared recap copy) and the fight by name.
+        expect(shown).toContain("CANONBEAT");
+        expect(shown).toContain("CANONFIGHT");
+
+        // Unplayed prep, absent — zero occurrences, any request, any round. This
+        // is the decision's boundary measured rather than argued.
+        expect(shown).not.toContain("SECRETNOTE");
+        expect(shown).not.toContain("SECRETPREP");
+        expect(shown).not.toContain("SECRETENCOUNTER");
+        expect(shown).not.toContain("SECRETDRAFT");
+
+        // What the DM kept hidden in the played night: absent too, from the
+        // night's story and from the Chronicle's copy of it alike.
+        for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
+
+        // Another group's record: just as absent.
+        expect(shown).not.toContain("OTHERGROUP");
+
+        // The structural half: the group is closed over from the path, so a model
+        // that hallucinated another group's id has nowhere to put it.
+        const tools = requests[0]?.tools ?? [];
+        expect(JSON.stringify(tools).toLowerCase()).not.toContain("groupid");
+      }),
+    );
+
+    it.effect("tells every member only what the night's DM shared, whoever asks", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Pim, a player at the *other* table; Jo, that table's creator; and Wren,
+        // who ran this night. The world's account of a night is the world's, not
+        // the asker's: its own DM gets the same narrowed story through world Hob.
+        for (const asker of [fixture.pim, fixture.jo, fixture.wren]) {
+          const { requests } = yield* askSharedWorld(asker, fixture.groupId, {
+            rounds: [
+              toolCallChunks("listPlayedNights", {}),
+              toolCallChunks("nightStory", {
+                campaignId: fixture.hagsBargain.id,
+                sessionId: fixture.played.id,
+              }),
+              toolCallChunks("searchSharedWorldHistory", { query: "Session 1" }),
+              textChunks("The reeds ambush was fought to a finish."),
+            ],
+          });
+          const shown = shownTo(requests);
+          expect(shown).toContain("CANONBEAT");
+          expect(shown).toContain("CANONFIGHT");
+          for (const secret of TABLE_SECRETS) expect(shown).not.toContain(secret);
+        }
+
+        // The repository answer the tool is built from, exactly: one shared beat,
+        // one shared fight that ended — not the hidden one, not the running one.
+        const story = yield* Effect.flatMap(GroupHistory, (history) =>
+          history.nightStory(fixture.groupId, fixture.hagsBargain.id, fixture.played.id),
+        ).pipe(withActor(fixture.pim));
+        expect(story.beats).toEqual(["CANONBEAT the hag took the lantern."]);
+        expect(story.fights).toEqual([
+          { name: "CANONFIGHT ambush in the reeds", mode: "combat", round: 1, outcome: "resolved" },
+        ]);
+      }),
+    );
+
+    it.effect("refuses the planned night through the tool, as the ordinary not-found", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The model asks for the *unplayed* session's story — the exact probe the
+        // boundary exists for — and gets a NotFound it can read, never the prep.
+        const { requests } = yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [
+            toolCallChunks("nightStory", {
+              campaignId: fixture.hagsBargain.id,
+              sessionId: fixture.planned.id,
+            }),
+            textChunks("That night has not been played."),
+          ],
+        });
+        const shown = shownTo(requests);
+        expect(shown).not.toContain("SECRETPREP");
+        expect(shown).toContain("NotFound");
+      }),
+    );
+
+    it.effect("is a 404 for a stranger before the model is ever called", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const refused = yield* Effect.gen(function* () {
+          const hob = yield* Hob;
+          return yield* Effect.flip(hob.askSharedWorld(fixture.groupId, { text: "anything" }));
+        }).pipe(
+          withActor(fixture.fen),
+          Effect.provide(
+            Hob.layer({ model: "scripted-local" }).pipe(
+              Layer.provide(
+                scriptedModel({ model: "scripted-local", maxTokens: 4096, rounds: [] }).layer,
+              ),
             ),
           ),
-        ),
-      ),
+        );
+        expect(refused).toBeInstanceOf(NotFound);
+      }),
     );
-    expect(refused).toBeInstanceOf(NotFound);
-  }, 60_000);
-});
+  });
 
-describe("the group's one shared conversation", () => {
-  it("is resumable by another member, and partitioned from every campaign thread", async () => {
-    const first = await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [textChunks("Noted.")],
-      text: "Remember the lantern.",
-    });
-    const began = first.events.find((event) => event.event === "began");
-    if (began?.event !== "began") throw new Error("no began event");
-    const threadId = began.data.threadId;
-
-    // Wren resumes Jo's thread: the group's conversation is the group's.
-    const listed = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.list("sharedWorld", fixture.groupId)).pipe(
-        withActor(fixture.wren),
-      ),
-    );
-    expect(listed.map((thread) => thread.id)).toContain(threadId);
-    expect(listed[0]?.worldId).toBe(fixture.groupId);
-    expect(listed[0]?.campaignId).toBeNull();
-
-    // ...and Pim, a mere player at one table, reads it too — group membership
-    // is the whole gate, the chronicle's own audience.
-    const forPim = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) =>
-        threads.turns("sharedWorld", fixture.groupId, threadId),
-      ).pipe(withActor(fixture.pim)),
-    );
-    expect(forPim.some((turn) => turn.text === "Remember the lantern.")).toBe(true);
-
-    // The partition: the campaign's own panel never lists the group thread,
-    // and the group list never carries Wren's campaign draft.
-    const campaignThreads = await runtime.runPromise(
-      Effect.flatMap(HobThreads, (threads) => threads.list("dm", fixture.saltRoad.id)).pipe(
-        withActor(fixture.jo),
-      ),
-    );
-    expect(campaignThreads.map((thread) => thread.id)).not.toContain(threadId);
-    expect(listed.some((thread) => thread.title.includes("SECRETDRAFT"))).toBe(false);
-
-    // A stranger gets the ordinary 404.
-    const refused = await runtime.runPromise(
-      Effect.flip(
-        Effect.flatMap(HobThreads, (threads) => threads.list("sharedWorld", fixture.groupId)),
-      ).pipe(withActor(fixture.fen)),
-    );
-    expect(refused).toBeInstanceOf(NotFound);
-  }, 60_000);
-});
-
-describe("the chronicle proposal", () => {
-  it("is offered by the model, kept by a different member, and once only", async () => {
-    const asked = await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [
-        toolCallChunks("proposeSharedWorldEntry", {
-          title: "The lantern",
-          body: "Both tables now know the hag holds the lantern.",
-        }),
-        textChunks("Offered a line for the chronicle."),
-      ],
-      text: "Write that down for the group.",
-    });
-    const proposed = asked.events.find((event) => event.event === "proposal");
-    if (proposed?.event !== "proposal") throw new Error("no proposal event");
-    const began = asked.events.find((event) => event.event === "began");
-    if (began?.event !== "began") throw new Error("no began event");
-
-    // Wren accepts what Jo's question produced — any live member may, the
-    // same audience a hand-written entry has.
-    const accepted = await runtime.runPromise(
-      Effect.flatMap(Proposals, (proposals) =>
-        proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
-      ).pipe(withActor(fixture.wren)),
-    );
-    if (accepted.accepted !== "sharedWorldHistory") throw new Error("wrong accept arm");
-    expect(accepted.entry.origin).toBe("assistant");
-    expect(accepted.entry.assistantTurnId).toBe(began.data.turnId);
-    expect(accepted.entry.body).toContain("the hag holds the lantern");
-
-    // In the chronicle now, by the ordinary read.
-    const listed = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (h) => h.list(fixture.groupId)).pipe(withActor(fixture.jo)),
-    );
-    expect(listed.some((entry) => entry.id === accepted.entry.id)).toBe(true);
-
-    // The second tap is a conflict; a stranger's accept is the ordinary 404.
-    const again = await runtime.runPromise(
-      Effect.flip(
-        Effect.flatMap(Proposals, (proposals) =>
-          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
-        ),
-      ).pipe(withActor(fixture.jo)),
-    );
-    expect(again._tag).toBe("Conflict");
-    const stranger = await runtime.runPromise(
-      Effect.flip(
-        Effect.flatMap(Proposals, (proposals) =>
-          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
-        ),
-      ).pipe(withActor(fixture.fen)),
-    );
-    expect(stranger).toBeInstanceOf(NotFound);
-  }, 60_000);
-});
-
-describe("Story So Far", () => {
-  it("uses only accepted memory and keeps the exact proposal-time coverage boundary", async () => {
-    const asked = await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [
-        toolCallChunks("readStorySoFarSources", {}),
-        toolCallChunks("proposeStorySoFar", {
-          text: "The hag took the lantern, and the reeds ambush was resolved.",
-        }),
-        textChunks("I offered a Story So Far for the world to review."),
-      ],
-      text: "Refresh our Story So Far.",
-    });
-    const proposed = asked.events.find((event) => event.event === "proposal");
-    if (proposed?.event !== "proposal") throw new Error("no proposal event");
-    if (proposed.data.proposal.target !== "sharedWorldSummary") {
-      throw new Error("wrong proposal target");
-    }
-    const began = asked.events.find((event) => event.event === "began");
-    if (began?.event !== "began") throw new Error("no began event");
-
-    // The source tool is a provider-wire boundary: canonical copies are in;
-    // every planted kind of unshared preparation is absent.
-    const shown = shownTo(asked.requests);
-    expect(shown).toContain("CANONBEAT");
-    expect(shown).not.toContain("SECRETNOTE");
-    expect(shown).not.toContain("SECRETPREP");
-    expect(shown).not.toContain("SECRETENCOUNTER");
-    expect(shown).not.toContain("SECRETDRAFT");
-
-    const coveredWhenProposed = proposed.data.proposal.lastWorldSeq;
-    const concurrent = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (history) =>
-        history.create(fixture.groupId, { body: "A bell rang after Hob finished drafting." }),
-      ).pipe(withActor(fixture.jo)),
-    );
-    expect(concurrent.worldSeq).toBeGreaterThan(coveredWhenProposed);
-
-    // Another live member can approve it. The concurrent line is deliberately
-    // not claimed: the accepted text stays intact and is immediately stale.
-    const accepted = await runtime.runPromise(
-      Effect.flatMap(Proposals, (proposals) =>
-        proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
-      ).pipe(withActor(fixture.wren)),
-    );
-    if (accepted.accepted !== "sharedWorldSummary") throw new Error("wrong accept arm");
-    expect(accepted.summary.lastWorldSeq).toBe(coveredWhenProposed);
-    expect(accepted.summary.text).toContain("hag took the lantern");
-
-    const current = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
-        withActor(fixture.jo),
-      ),
-    );
-    expect(current?.id).toBe(accepted.summary.id);
-    expect(current?.lastWorldSeq).toBeLessThan(concurrent.worldSeq);
-
-    // A later accepted proposal replaces the current row and advances only to
-    // the source batch it actually read.
-    const refreshed = await askSharedWorld(fixture.wren, fixture.groupId, {
-      rounds: [
-        toolCallChunks("readStorySoFarSources", {}),
-        toolCallChunks("proposeStorySoFar", {
-          text: "The hag took the lantern; later, a bell rang across the marsh.",
-        }),
-        textChunks("I offered the refreshed Story So Far."),
-      ],
-      text: "Bring the Story So Far up to date.",
-    });
-    const refreshedProposal = refreshed.events.find((event) => event.event === "proposal");
-    const refreshedBegan = refreshed.events.find((event) => event.event === "began");
-    if (
-      refreshedProposal?.event !== "proposal" ||
-      refreshedProposal.data.proposal.target !== "sharedWorldSummary" ||
-      refreshedBegan?.event !== "began"
-    ) {
-      throw new Error("no refreshed summary proposal");
-    }
-    expect(shownTo(refreshed.requests)).toContain(accepted.summary.text);
-    expect(refreshedProposal.data.proposal.lastWorldSeq).toBe(concurrent.worldSeq);
-    const replacement = await runtime.runPromise(
-      Effect.flatMap(Proposals, (proposals) =>
-        proposals.acceptSharedWorld(
-          fixture.groupId,
-          refreshedBegan.data.threadId,
-          refreshedBegan.data.turnId,
-        ),
-      ).pipe(withActor(fixture.jo)),
-    );
-    if (replacement.accepted !== "sharedWorldSummary") throw new Error("wrong replacement arm");
-    expect(replacement.summary.id).not.toBe(accepted.summary.id);
-    expect(replacement.summary.lastWorldSeq).toBe(concurrent.worldSeq);
-    const afterReplacement = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
-        withActor(fixture.jo),
-      ),
-    );
-    expect(afterReplacement?.id).toBe(replacement.summary.id);
-
-    // An abandoned proposal remains transcript only and changes no accepted
-    // world memory.
-    await askSharedWorld(fixture.jo, fixture.groupId, {
-      rounds: [
-        toolCallChunks("readStorySoFarSources", {}),
-        toolCallChunks("proposeStorySoFar", { text: "An unapproved rewrite." }),
-        textChunks("This is waiting for review."),
-      ],
-      text: "Try another version.",
-    });
-    const afterAbandon = await runtime.runPromise(
-      Effect.flatMap(GroupHistory, (history) => history.summary(fixture.groupId)).pipe(
-        withActor(fixture.wren),
-      ),
-    );
-    expect(afterAbandon?.id).toBe(replacement.summary.id);
-  }, 60_000);
-});
-
-describe("the campaign panel's group context", () => {
-  it("reads the chronicle and the summary, and still cannot name another table's prep", async () => {
-    // Jo asks their own campaign's Hob; the model reaches for the two group
-    // tools the DM toolkit gained.
-    const model = scriptedModel({
-      model: "scripted-local",
-      maxTokens: 4096,
-      rounds: [
-        toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
-        toolCallChunks("readSharedWorldSummary", {}),
-        textChunks("The group's record has the lantern night."),
-      ] as never,
-    });
-    const { requests } = await runtime.runPromise(
+  describe("the group's one shared conversation", () => {
+    it.effect("is resumable by another member, and partitioned from every campaign thread", () =>
       Effect.gen(function* () {
-        const hob = yield* Hob;
-        const stream = yield* hob.ask(fixture.saltRoad.id, {
-          text: "What happened at the other table?",
+        const fixture = yield* Fixture;
+        const first = yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [textChunks("Noted.")],
+          text: "Remember the lantern.",
         });
-        yield* Stream.runCollect(stream);
-        return { requests: model.requests() };
-      }).pipe(
-        withActor(fixture.jo),
-        Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
-      ),
+        const began = first.events.find((event) => event.event === "began");
+        if (began?.event !== "began") throw new Error("no began event");
+        const threadId = began.data.threadId;
+
+        // Wren resumes Jo's thread: the group's conversation is the group's.
+        const listed = yield* Effect.flatMap(HobThreads, (threads) =>
+          threads.list("sharedWorld", fixture.groupId),
+        ).pipe(withActor(fixture.wren));
+        expect(listed.map((thread) => thread.id)).toContain(threadId);
+        expect(listed[0]?.worldId).toBe(fixture.groupId);
+        expect(listed[0]?.campaignId).toBeNull();
+
+        // ...and Pim, a mere player at one table, reads it too — group membership
+        // is the whole gate, the chronicle's own audience.
+        const forPim = yield* Effect.flatMap(HobThreads, (threads) =>
+          threads.turns("sharedWorld", fixture.groupId, threadId),
+        ).pipe(withActor(fixture.pim));
+        expect(forPim.some((turn) => turn.text === "Remember the lantern.")).toBe(true);
+
+        // The partition: the campaign's own panel never lists the group thread,
+        // and the group list never carries Wren's campaign draft.
+        const campaignThreads = yield* Effect.flatMap(HobThreads, (threads) =>
+          threads.list("dm", fixture.saltRoad.id),
+        ).pipe(withActor(fixture.jo));
+        expect(campaignThreads.map((thread) => thread.id)).not.toContain(threadId);
+        expect(listed.some((thread) => thread.title.includes("SECRETDRAFT"))).toBe(false);
+
+        // A stranger gets the ordinary 404.
+        const refused = yield* Effect.flip(
+          Effect.flatMap(HobThreads, (threads) => threads.list("sharedWorld", fixture.groupId)),
+        ).pipe(withActor(fixture.fen));
+        expect(refused).toBeInstanceOf(NotFound);
+      }),
     );
-    const shown = shownTo(requests);
-    // The shared night's copy answers — canonical context on the campaign
-    // panel — while the sentinel set stays at zero: the toolkit has no tool
-    // that reaches another campaign's tables, so the boundary is structural.
-    expect(shown).toContain("CANONBEAT");
-    expect(shown).not.toContain("SECRETNOTE");
-    expect(shown).not.toContain("SECRETENCOUNTER");
-    expect(shown).not.toContain("SECRETDRAFT");
-    expect(shown).not.toContain("OTHERGROUP");
-  }, 60_000);
+  });
+
+  describe("the chronicle proposal", () => {
+    it.effect("is offered by the model, kept by a different member, and once only", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const asked = yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [
+            toolCallChunks("proposeSharedWorldEntry", {
+              title: "The lantern",
+              body: "Both tables now know the hag holds the lantern.",
+            }),
+            textChunks("Offered a line for the chronicle."),
+          ],
+          text: "Write that down for the group.",
+        });
+        const proposed = asked.events.find((event) => event.event === "proposal");
+        if (proposed?.event !== "proposal") throw new Error("no proposal event");
+        const began = asked.events.find((event) => event.event === "began");
+        if (began?.event !== "began") throw new Error("no began event");
+
+        // Wren accepts what Jo's question produced — any live member may, the
+        // same audience a hand-written entry has.
+        const accepted = yield* Effect.flatMap(Proposals, (proposals) =>
+          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
+        ).pipe(withActor(fixture.wren));
+        if (accepted.accepted !== "sharedWorldHistory") throw new Error("wrong accept arm");
+        expect(accepted.entry.origin).toBe("assistant");
+        expect(accepted.entry.assistantTurnId).toBe(began.data.turnId);
+        expect(accepted.entry.body).toContain("the hag holds the lantern");
+
+        // In the chronicle now, by the ordinary read.
+        const listed = yield* Effect.flatMap(GroupHistory, (h) => h.list(fixture.groupId)).pipe(
+          withActor(fixture.jo),
+        );
+        expect(listed.some((entry) => entry.id === accepted.entry.id)).toBe(true);
+
+        // The second tap is a conflict; a stranger's accept is the ordinary 404.
+        const again = yield* Effect.flip(
+          Effect.flatMap(Proposals, (proposals) =>
+            proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
+          ),
+        ).pipe(withActor(fixture.jo));
+        expect(again._tag).toBe("Conflict");
+        const stranger = yield* Effect.flip(
+          Effect.flatMap(Proposals, (proposals) =>
+            proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
+          ),
+        ).pipe(withActor(fixture.fen));
+        expect(stranger).toBeInstanceOf(NotFound);
+      }),
+    );
+  });
+
+  describe("Story So Far", () => {
+    it.effect("uses only accepted memory and keeps the exact proposal-time coverage boundary", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const asked = yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [
+            toolCallChunks("readStorySoFarSources", {}),
+            toolCallChunks("proposeStorySoFar", {
+              text: "The hag took the lantern, and the reeds ambush was resolved.",
+            }),
+            textChunks("I offered a Story So Far for the world to review."),
+          ],
+          text: "Refresh our Story So Far.",
+        });
+        const proposed = asked.events.find((event) => event.event === "proposal");
+        if (proposed?.event !== "proposal") throw new Error("no proposal event");
+        if (proposed.data.proposal.target !== "sharedWorldSummary") {
+          throw new Error("wrong proposal target");
+        }
+        const began = asked.events.find((event) => event.event === "began");
+        if (began?.event !== "began") throw new Error("no began event");
+
+        // The source tool is a provider-wire boundary: canonical copies are in;
+        // every planted kind of unshared preparation is absent.
+        const shown = shownTo(asked.requests);
+        expect(shown).toContain("CANONBEAT");
+        expect(shown).not.toContain("SECRETNOTE");
+        expect(shown).not.toContain("SECRETPREP");
+        expect(shown).not.toContain("SECRETENCOUNTER");
+        expect(shown).not.toContain("SECRETDRAFT");
+
+        const coveredWhenProposed = proposed.data.proposal.lastWorldSeq;
+        const concurrent = yield* Effect.flatMap(GroupHistory, (history) =>
+          history.create(fixture.groupId, { body: "A bell rang after Hob finished drafting." }),
+        ).pipe(withActor(fixture.jo));
+        expect(concurrent.worldSeq).toBeGreaterThan(coveredWhenProposed);
+
+        // Another live member can approve it. The concurrent line is deliberately
+        // not claimed: the accepted text stays intact and is immediately stale.
+        const accepted = yield* Effect.flatMap(Proposals, (proposals) =>
+          proposals.acceptSharedWorld(fixture.groupId, began.data.threadId, began.data.turnId),
+        ).pipe(withActor(fixture.wren));
+        if (accepted.accepted !== "sharedWorldSummary") throw new Error("wrong accept arm");
+        expect(accepted.summary.lastWorldSeq).toBe(coveredWhenProposed);
+        expect(accepted.summary.text).toContain("hag took the lantern");
+
+        const current = yield* Effect.flatMap(GroupHistory, (history) =>
+          history.summary(fixture.groupId),
+        ).pipe(withActor(fixture.jo));
+        expect(current?.id).toBe(accepted.summary.id);
+        expect(current?.lastWorldSeq).toBeLessThan(concurrent.worldSeq);
+
+        // A later accepted proposal replaces the current row and advances only to
+        // the source batch it actually read.
+        const refreshed = yield* askSharedWorld(fixture.wren, fixture.groupId, {
+          rounds: [
+            toolCallChunks("readStorySoFarSources", {}),
+            toolCallChunks("proposeStorySoFar", {
+              text: "The hag took the lantern; later, a bell rang across the marsh.",
+            }),
+            textChunks("I offered the refreshed Story So Far."),
+          ],
+          text: "Bring the Story So Far up to date.",
+        });
+        const refreshedProposal = refreshed.events.find((event) => event.event === "proposal");
+        const refreshedBegan = refreshed.events.find((event) => event.event === "began");
+        if (
+          refreshedProposal?.event !== "proposal" ||
+          refreshedProposal.data.proposal.target !== "sharedWorldSummary" ||
+          refreshedBegan?.event !== "began"
+        ) {
+          throw new Error("no refreshed summary proposal");
+        }
+        expect(shownTo(refreshed.requests)).toContain(accepted.summary.text);
+        expect(refreshedProposal.data.proposal.lastWorldSeq).toBe(concurrent.worldSeq);
+        const replacement = yield* Effect.flatMap(Proposals, (proposals) =>
+          proposals.acceptSharedWorld(
+            fixture.groupId,
+            refreshedBegan.data.threadId,
+            refreshedBegan.data.turnId,
+          ),
+        ).pipe(withActor(fixture.jo));
+        if (replacement.accepted !== "sharedWorldSummary") throw new Error("wrong replacement arm");
+        expect(replacement.summary.id).not.toBe(accepted.summary.id);
+        expect(replacement.summary.lastWorldSeq).toBe(concurrent.worldSeq);
+        const afterReplacement = yield* Effect.flatMap(GroupHistory, (history) =>
+          history.summary(fixture.groupId),
+        ).pipe(withActor(fixture.jo));
+        expect(afterReplacement?.id).toBe(replacement.summary.id);
+
+        // An abandoned proposal remains transcript only and changes no accepted
+        // world memory.
+        yield* askSharedWorld(fixture.jo, fixture.groupId, {
+          rounds: [
+            toolCallChunks("readStorySoFarSources", {}),
+            toolCallChunks("proposeStorySoFar", { text: "An unapproved rewrite." }),
+            textChunks("This is waiting for review."),
+          ],
+          text: "Try another version.",
+        });
+        const afterAbandon = yield* Effect.flatMap(GroupHistory, (history) =>
+          history.summary(fixture.groupId),
+        ).pipe(withActor(fixture.wren));
+        expect(afterAbandon?.id).toBe(replacement.summary.id);
+      }),
+    );
+  });
+
+  describe("the campaign panel's group context", () => {
+    it.effect(
+      "reads the chronicle and the summary, and still cannot name another table's prep",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          // Jo asks their own campaign's Hob; the model reaches for the two group
+          // tools the DM toolkit gained.
+          const model = scriptedModel({
+            model: "scripted-local",
+            maxTokens: 4096,
+            rounds: [
+              toolCallChunks("searchSharedWorldHistory", { query: "lantern" }),
+              toolCallChunks("readSharedWorldSummary", {}),
+              textChunks("The group's record has the lantern night."),
+            ] as never,
+          });
+          const { requests } = yield* Effect.gen(function* () {
+            const hob = yield* Hob;
+            const stream = yield* hob.ask(fixture.saltRoad.id, {
+              text: "What happened at the other table?",
+            });
+            yield* Stream.runCollect(stream);
+            return { requests: model.requests() };
+          }).pipe(
+            withActor(fixture.jo),
+            Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
+          );
+          const shown = shownTo(requests);
+          // The shared night's copy answers — canonical context on the campaign
+          // panel — while the sentinel set stays at zero: the toolkit has no tool
+          // that reaches another campaign's tables, so the boundary is structural.
+          expect(shown).toContain("CANONBEAT");
+          expect(shown).not.toContain("SECRETNOTE");
+          expect(shown).not.toContain("SECRETENCOUNTER");
+          expect(shown).not.toContain("SECRETDRAFT");
+          expect(shown).not.toContain("OTHERGROUP");
+        }),
+    );
+  });
 });

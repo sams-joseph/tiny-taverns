@@ -1,14 +1,7 @@
-import {
-  Actor,
-  type CampaignId,
-  CurrentActor,
-  type HobEvent,
-  type NpcId,
-  NotFound,
-} from "@taverns/api";
-import { Effect, Layer, ManagedRuntime, Stream } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { type Actor, type CampaignId, CurrentActor, type NpcId, NotFound } from "@taverns/api";
+import { Context, Effect, Layer, Stream } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -17,7 +10,7 @@ import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
-import { CampaignCreatorActors, type CampaignCreatorActor } from "../src/repo/CreatorActor.js";
+import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { EquipmentRepo } from "../src/repo/Equipment.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";
@@ -40,6 +33,7 @@ import { Spells } from "../src/repo/Spells.js";
 import { anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type ChatRequest, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * Hob and campaign NPCs.
@@ -86,26 +80,12 @@ const services = Layer.mergeAll(
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_npcs")));
 
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
-
 const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
 const shownTo = (requests: ReadonlyArray<ChatRequest>): string => JSON.stringify(requests);
-
-interface Fixture {
-  readonly dm: Actor;
-  readonly scopedDm: Actor;
-  readonly player: Actor;
-  readonly campaignId: CampaignId;
-  readonly otherCampaignId: CampaignId;
-  readonly creator: CampaignCreatorActor;
-  readonly directNpcId: NpcId;
-  readonly copiedNpcId: NpcId;
-}
 
 const makeFixture = Effect.gen(function* () {
   const npcs = yield* Npcs;
@@ -211,21 +191,13 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Fixture;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hob-npcs.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-const askAboutNpc = (
-  actor: Actor,
-  campaignId: CampaignId,
-  npcId: NpcId,
-  text: string,
-): Promise<{
-  readonly events: ReadonlyArray<HobEvent>;
-  readonly requests: ReadonlyArray<ChatRequest>;
-}> => {
+const askAboutNpc = (actor: Actor, campaignId: CampaignId, npcId: NpcId, text: string) => {
   const model = scriptedModel({
     model: "scripted-local",
     maxTokens: MAX_TOKENS,
@@ -238,102 +210,110 @@ const askAboutNpc = (
     ],
   });
 
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const hob = yield* Hob;
-      const stream = yield* hob.ask(campaignId, { text });
-      const events = yield* Stream.runCollect(stream);
-      return { events: Array.from(events), requests: model.requests() };
-    }).pipe(
-      withActor(actor),
-      Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
-    ),
+  return Effect.gen(function* () {
+    const hob = yield* Hob;
+    const stream = yield* hob.ask(campaignId, { text });
+    const events = yield* Stream.runCollect(stream);
+    return { events: Array.from(events), requests: model.requests() };
+  }).pipe(
+    withActor(actor),
+    Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
   );
 };
 
-describe("campaign NPC context", () => {
-  it("discovers a directly-created campaign NPC through search, then reads bounded creator context", async () => {
-    const { events, requests } = await askAboutNpc(
-      fixture.dm,
-      fixture.campaignId,
-      fixture.directNpcId,
-      "What do we know about Cazril?",
+describeLayer("hob-npcs", shared, (it) => {
+  describe("campaign NPC context", () => {
+    it.effect(
+      "discovers a directly-created campaign NPC through search, then reads bounded creator context",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const { events, requests } = yield* askAboutNpc(
+            fixture.dm,
+            fixture.campaignId,
+            fixture.directNpcId,
+            "What do we know about Cazril?",
+          );
+
+          expect(
+            events.flatMap((event) => (event.event === "tool" ? [event.data.name] : [])),
+          ).toEqual(["searchCampaign", "searchCampaign", "getNpc", "getNpc"]);
+
+          const searchResult = shownTo(requests.slice(1, 2));
+          expect(searchResult).toContain('\\"source\\":\\"npc\\"');
+          expect(searchResult).toContain(fixture.directNpcId);
+          expect(searchResult).toContain("tollhouse broker");
+          expect(searchResult).not.toContain("Sixpence");
+          expect(searchResult).not.toContain("SIXPENCE_CROSS_CAMPAIGN_SECRET");
+
+          const npcContext = shownTo(requests.slice(2));
+          expect(npcContext).toContain("Keeper of the eastern ford");
+          expect(npcContext).toContain("glass queen");
+          expect(npcContext).toContain("glass river");
+          expect(npcContext).toContain("Brannoc threatened Cazril");
+          // The DM's own prep, beside the persona: the creator's toolkit is the one
+          // with `getNpc`, and searching never reached it.
+          expect(npcContext).toContain("PREP_WHEREABOUTS_SENTINEL");
+          expect(npcContext).toContain('\\"attitude\\":\\"hostile\\"');
+          expect(npcContext).toContain('\\"status\\":\\"captive\\"');
+          expect(searchResult).not.toContain("PREP_WHEREABOUTS_SENTINEL");
+          expect(npcContext).not.toContain("PLAYER_DIRECT_TRANSCRIPT_SENTINEL");
+        }),
     );
 
-    expect(events.flatMap((event) => (event.event === "tool" ? [event.data.name] : []))).toEqual([
-      "searchCampaign",
-      "searchCampaign",
-      "getNpc",
-      "getNpc",
-    ]);
+    it.effect(
+      "uses the campaign snapshot copied from a Library NPC source, not the live source",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const { requests } = yield* askAboutNpc(
+            fixture.dm,
+            fixture.campaignId,
+            fixture.copiedNpcId,
+            "What do we know about Marta Vale?",
+          );
 
-    const searchResult = shownTo(requests.slice(1, 2));
-    expect(searchResult).toContain('\\"source\\":\\"npc\\"');
-    expect(searchResult).toContain(fixture.directNpcId);
-    expect(searchResult).toContain("tollhouse broker");
-    expect(searchResult).not.toContain("Sixpence");
-    expect(searchResult).not.toContain("SIXPENCE_CROSS_CAMPAIGN_SECRET");
+          const searchResult = shownTo(requests.slice(1, 2));
+          expect(searchResult).toContain('\\"source\\":\\"npc\\"');
+          expect(searchResult).toContain(fixture.copiedNpcId);
+          expect(searchResult).toContain("Marta Vale");
 
-    const npcContext = shownTo(requests.slice(2));
-    expect(npcContext).toContain("Keeper of the eastern ford");
-    expect(npcContext).toContain("glass queen");
-    expect(npcContext).toContain("glass river");
-    expect(npcContext).toContain("Brannoc threatened Cazril");
-    // The DM's own prep, beside the persona: the creator's toolkit is the one
-    // with `getNpc`, and searching never reached it.
-    expect(npcContext).toContain("PREP_WHEREABOUTS_SENTINEL");
-    expect(npcContext).toContain('\\"attitude\\":\\"hostile\\"');
-    expect(npcContext).toContain('\\"status\\":\\"captive\\"');
-    expect(searchResult).not.toContain("PREP_WHEREABOUTS_SENTINEL");
-    expect(npcContext).not.toContain("PLAYER_DIRECT_TRANSCRIPT_SENTINEL");
-  }, 60_000);
-
-  it("uses the campaign snapshot copied from a Library NPC source, not the live source", async () => {
-    const { requests } = await askAboutNpc(
-      fixture.dm,
-      fixture.campaignId,
-      fixture.copiedNpcId,
-      "What do we know about Marta Vale?",
+          const npcContext = shownTo(requests.slice(2));
+          expect(npcContext).toContain("library informant");
+          expect(npcContext).toContain("source-only clue");
+          expect(npcContext).toContain("amber key before she was copied");
+          expect(npcContext).toContain("derivedFromName");
+          expect(npcContext).not.toContain("changed after copy");
+          expect(npcContext).not.toContain("CHANGED_SOURCE_SECRET_AFTER_COPY");
+        }),
     );
 
-    const searchResult = shownTo(requests.slice(1, 2));
-    expect(searchResult).toContain('\\"source\\":\\"npc\\"');
-    expect(searchResult).toContain(fixture.copiedNpcId);
-    expect(searchResult).toContain("Marta Vale");
-
-    const npcContext = shownTo(requests.slice(2));
-    expect(npcContext).toContain("library informant");
-    expect(npcContext).toContain("source-only clue");
-    expect(npcContext).toContain("amber key before she was copied");
-    expect(npcContext).toContain("derivedFromName");
-    expect(npcContext).not.toContain("changed after copy");
-    expect(npcContext).not.toContain("CHANGED_SOURCE_SECRET_AFTER_COPY");
-  }, 60_000);
-
-  it("does not leak an NPC to a credential after campaign access is revoked", async () => {
-    const model = scriptedModel({
-      model: "scripted-local",
-      maxTokens: MAX_TOKENS,
-      rounds: [toolCallChunks("searchCampaign", { query: "Cazril" })],
-    });
-
-    const result = await runtime.runPromise(
+    it.effect("does not leak an NPC to a credential after campaign access is revoked", () =>
       Effect.gen(function* () {
-        const invites = yield* Invites;
-        const hob = yield* Hob;
-        const rows = yield* invites.listForCampaign(fixture.creator);
-        const pim = rows.find((row) => row.redeemedByName === "Pim");
-        if (pim === undefined) throw new Error("missing invitation to revoke");
-        yield* invites.revokeForCampaign(fixture.creator, pim.id);
-        return yield* Effect.result(hob.ask(fixture.campaignId, { text: "Who is Cazril?" }));
-      }).pipe(
-        withActor(fixture.player),
-        Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
-      ),
-    );
+        const fixture = yield* Fixture;
+        const model = scriptedModel({
+          model: "scripted-local",
+          maxTokens: MAX_TOKENS,
+          rounds: [toolCallChunks("searchCampaign", { query: "Cazril" })],
+        });
 
-    expect(result._tag).toBe("Failure");
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-    expect(model.requests()).toHaveLength(0);
-  }, 60_000);
+        const result = yield* Effect.gen(function* () {
+          const invites = yield* Invites;
+          const hob = yield* Hob;
+          const rows = yield* invites.listForCampaign(fixture.creator);
+          const pim = rows.find((row) => row.redeemedByName === "Pim");
+          if (pim === undefined) throw new Error("missing invitation to revoke");
+          yield* invites.revokeForCampaign(fixture.creator, pim.id);
+          return yield* Effect.result(hob.ask(fixture.campaignId, { text: "Who is Cazril?" }));
+        }).pipe(
+          withActor(fixture.player),
+          Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
+        );
+
+        expect(result._tag).toBe("Failure");
+        expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
+        expect(model.requests()).toHaveLength(0);
+      }),
+    );
+  });
 });

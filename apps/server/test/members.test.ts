@@ -1,7 +1,7 @@
+import { describe, expect } from "@effect/vitest";
 import { type CampaignId, CurrentActor, NotFound } from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -20,6 +20,7 @@ import {
   scopedTo,
 } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * `GET /campaigns/:c/members` — the roster, and **the answer to whether the
@@ -54,8 +55,6 @@ const services = Layer.mergeAll(
   Invites.layer,
   Memberships.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_members")));
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 const as =
   (actor: (typeof CurrentActor)["Service"]) =>
@@ -109,226 +108,261 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "members.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 /** The read exactly as `handlers.ts` performs it: a path segment, then a proof. */
 const roster = (actor: (typeof CurrentActor)["Service"], campaignId: CampaignId) =>
-  runtime.runPromise(
-    Effect.flatMap(asDm(actor, campaignId), (dm) =>
-      Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
-    ).pipe(Effect.result),
-  );
+  Effect.flatMap(asDm(actor, campaignId), (dm) =>
+    Effect.flatMap(Memberships, (memberships) => memberships.list(dm)),
+  ).pipe(Effect.result);
 
-describe("the gate", () => {
-  it("refuses a player of this very campaign, with a NotFound", async () => {
-    // The whole reason `Memberships` is gated. A player at the table has an
-    // ordinary, live membership and reads the campaign fine; what they do not
-    // get is the roster — other people's account names, who was invited and
-    // when. And the refusal is the same 404 every denial in the product
-    // answers with, because "it exists but is not yours" is a disclosure.
-    const refused = await roster(fixture.playing, fixture.campaign.id);
-
-    expect(refused._tag).toBe("Failure");
-    expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
-    expect(refused._tag === "Failure" && (refused.failure as NotFound).resource).toBe("campaign");
-  }, 60_000);
-
-  it("refuses a DM of another table asking about this one", async () => {
-    // Being a DM somewhere is not being a DM here: the proof is a fact about a
-    // pair, and there is no campaign-less version of it to spend.
-    const refused = await roster(fixture.stranger, fixture.campaign.id);
-
-    expect(refused._tag).toBe("Failure");
-    expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
-  }, 60_000);
-
-  it("refuses a credential scoped to another table, though the account is its DM", async () => {
-    // Membership and credential scope narrow independently and both apply. Ada
-    // is the DM of both campaigns; a credential minted for the second reaches
-    // only the second.
-    const scoped = scopedTo(fixture.dm, fixture.otherTable.id);
-
-    const here = await roster(scoped, fixture.campaign.id);
-    const there = await roster(scoped, fixture.otherTable.id);
-
-    expect(here._tag).toBe("Failure");
-    expect(there._tag).toBe("Success");
-  }, 60_000);
-
-  it("refuses a campaign that does not exist, the same way", async () => {
-    const nothing = await roster(fixture.dm, crypto.randomUUID() as CampaignId);
-
-    expect(nothing._tag).toBe("Failure");
-  }, 60_000);
-
-  it("gives the campaign's own DM the whole table", async () => {
-    const mine = await roster(fixture.dm, fixture.campaign.id);
-
-    expect(mine._tag).toBe("Success");
-    expect(mine._tag === "Success" ? mine.success.map((member) => member.name) : []).toEqual([
-      "Ada",
-      "Ilse",
-      "Marta",
-    ]);
-  }, 60_000);
-});
-
-describe("what a member row carries", () => {
-  it("names the account, the role and when they joined, and nothing else", async () => {
-    const listed = await roster(fixture.dm, fixture.campaign.id);
-    const members = listed._tag === "Success" ? listed.success : [];
-
-    // Four fields. A wider row here would be the place a leak lands, since
-    // this is the one read in the product that is about *other people*.
-    expect(Object.keys(members[0]!).sort()).toEqual(["accountId", "joinedAt", "name", "relation"]);
-
-    expect(members.map((member) => member.relation)).toEqual(["creator", "player", "player"]);
-    // `accountId` is the join key the whole party screen hangs off — it is what
-    // `Character.accountId` is matched against, and what a write that assigns
-    // one will name.
-    expect(members.map((member) => member.accountId)).toEqual([
-      fixture.dm.accountId,
-      fixture.playing.accountId,
-      fixture.seated.accountId,
-    ]);
-    // The DM's own row is the campaign's creation, so the roster is never
-    // empty and there is always somebody to attribute the table to.
-    expect(members[0]!.joinedAt).toBeDefined();
-  }, 60_000);
-
-  it("puts the DM first and then the order people arrived", async () => {
-    // Ordered on the role explicitly rather than relying on the DM's row being
-    // written first: it is today (`Campaigns.create` writes it in the campaign's
-    // own transaction), and that is an accident of insert order rather than a
-    // guarantee — a co-DM invited later must still sort above the players.
-    const listed = await roster(fixture.dm, fixture.campaign.id);
-    const members = listed._tag === "Success" ? listed.success : [];
-
-    expect(members.map((member) => member.relation)[0]).toBe("creator");
-    const joined = members.slice(1).map((member) => DateTime.toEpochMillis(member.joinedAt));
-    expect([...joined].sort((a, b) => a - b)).toEqual(joined);
-  }, 60_000);
-});
-
-describe("what the list leaves out", () => {
-  it("drops a member whose invitation was revoked after they took it", async () => {
-    // Revoking a spent invitation takes the membership back, and the roster is
-    // live members only — every predicate in the product tests
-    // `revoked_at is null`. A withdrawal is legible on the *invitation*, which
-    // reads `revoked` and names who took it, so listing the dead row here would
-    // be a second and worse answer to the same question.
-    const gone = await runtime.runPromise(
+describeLayer("members", shared, (it) => {
+  describe("the gate", () => {
+    it.effect("refuses a player of this very campaign, with a NotFound", () =>
       Effect.gen(function* () {
-        const invites = yield* Invites;
-        const campaign = yield* as(fixture.dm)(createCampaign({ name: "A table to leave" }));
-        const guest = yield* aPlayerAt(campaign.id, "Pim");
+        const fixture = yield* Fixture;
+        // The whole reason `Memberships` is gated. A player at the table has an
+        // ordinary, live membership and reads the campaign fine; what they do not
+        // get is the roster — other people's account names, who was invited and
+        // when. And the refusal is the same 404 every denial in the product
+        // answers with, because "it exists but is not yours" is a disclosure.
+        const refused = yield* roster(fixture.playing, fixture.campaign.id);
 
-        const creator = yield* asDm(fixture.dm, campaign.id);
-        const before = yield* Effect.flatMap(Memberships, (memberships) =>
-          memberships.list(creator),
+        expect(refused._tag).toBe("Failure");
+        expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
+        expect(refused._tag === "Failure" && (refused.failure as NotFound).resource).toBe(
+          "campaign",
         );
-        const issued = yield* invites.listForCampaign(creator);
-        yield* invites.revokeForCampaign(creator, issued[0]!.id);
-        const after = yield* Effect.flatMap(Memberships, (memberships) =>
-          memberships.list(creator),
-        );
-
-        return {
-          before: before.map((member) => member.name),
-          after: after.map((member) => member.name),
-          guest: guest.accountId,
-          // The invitation is still there and still says what happened.
-          status: (yield* invites.listForCampaign(creator))[0]!.status,
-        };
-      }).pipe(Effect.orDie),
+      }),
     );
 
-    expect(gone.before).toEqual(["Ada", "Pim"]);
-    expect(gone.after).toEqual(["Ada"]);
-    expect(gone.status).toBe("revoked");
-  }, 60_000);
-
-  it("stops at this campaign, though the DM runs two", async () => {
-    const here = await roster(fixture.dm, fixture.campaign.id);
-    const there = await roster(fixture.dm, fixture.otherTable.id);
-
-    expect(here._tag === "Success" ? here.success.length : 0).toBe(3);
-    // The second table has only its DM — the proof carries the campaign, so
-    // there is no id for the read to be pointed at the wrong one.
-    expect(there._tag === "Success" ? there.success.map((member) => member.name) : []).toEqual([
-      "Ada",
-    ]);
-  }, 60_000);
-});
-
-describe("the seat vocabulary, derived", () => {
-  it("answers three of the drawn statuses from three shipped reads, and cannot answer the fourth", async () => {
-    // The decision, exercised. `Party.jsx` draws `playing` / `no-character` /
-    // `invited` / `open`; this is all four of them computed from the roster,
-    // `invites.list` and `Party.list` — the live seats — with no fourth
-    // source and no empty chair anywhere.
-    const derived = await runtime.runPromise(
+    it.effect("refuses a DM of another table asking about this one", () =>
       Effect.gen(function* () {
-        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
-        const members = yield* Effect.flatMap(Memberships, (m) => m.list(dm));
-        const seats = yield* as(fixture.dm)(
-          Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
-        );
-        const invites = yield* Effect.flatMap(Invites, (i) => i.listForCampaign(dm));
+        const fixture = yield* Fixture;
+        // Being a DM somewhere is not being a DM here: the proof is a fact about a
+        // pair, and there is no campaign-less version of it to spend.
+        const refused = yield* roster(fixture.stranger, fixture.campaign.id);
 
-        const owned = new Set(seats.map((row) => row.seat.accountId));
-        const players = members.filter((member) => member.relation === "player");
-
-        return {
-          playing: players
-            .filter((member) => owned.has(member.accountId))
-            .map((member) => member.name),
-          noCharacter: players
-            .filter((member) => !owned.has(member.accountId))
-            .map((member) => member.name),
-          invited: invites
-            .filter((invite) => invite.status === "live")
-            .map((invite) => invite.label),
-          // The subtitle the report replaces *"N of M seats"* with: what is
-          // true, rather than a capacity nothing stores.
-          subtitle: `${players.length} players, ${invites.filter((i) => i.status === "live").length} invitation outstanding`,
-        };
-      }).pipe(Effect.orDie),
+        expect(refused._tag).toBe("Failure");
+        expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
+      }),
     );
 
-    expect(derived.playing).toEqual(["Ilse"]);
-    expect(derived.noCharacter).toEqual(["Marta"]);
-    expect(derived.invited).toEqual(["Pell"]);
-    expect(derived.subtitle).toBe("2 players, 1 invitation outstanding");
-  }, 60_000);
-
-  it("has nowhere to put an empty chair", async () => {
-    // The negative half, and the reason it is a schema property rather than a
-    // convention: a membership cannot precede the account it names, and a
-    // seat cannot either — `account_id` is `not null` and a real foreign key
-    // on both `campaign_member` and `campaign_character`. So *"Add seat"* is
-    // not a button somebody declined to build, it is one with nothing behind
-    // it: every chair the roster can draw has a person in it.
-    const nullable = await runtime.runPromise(
+    it.effect("refuses a credential scoped to another table, though the account is its DM", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const rows = yield* sql<{
-          readonly table_name: string;
-          readonly is_nullable: string;
-        }>`
+        const fixture = yield* Fixture;
+        // Membership and credential scope narrow independently and both apply. Ada
+        // is the DM of both campaigns; a credential minted for the second reaches
+        // only the second.
+        const scoped = scopedTo(fixture.dm, fixture.otherTable.id);
+
+        const here = yield* roster(scoped, fixture.campaign.id);
+        const there = yield* roster(scoped, fixture.otherTable.id);
+
+        expect(here._tag).toBe("Failure");
+        expect(there._tag).toBe("Success");
+      }),
+    );
+
+    it.effect("refuses a campaign that does not exist, the same way", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const nothing = yield* roster(fixture.dm, crypto.randomUUID() as CampaignId);
+
+        expect(nothing._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("gives the campaign's own DM the whole table", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const mine = yield* roster(fixture.dm, fixture.campaign.id);
+
+        expect(mine._tag).toBe("Success");
+        expect(mine._tag === "Success" ? mine.success.map((member) => member.name) : []).toEqual([
+          "Ada",
+          "Ilse",
+          "Marta",
+        ]);
+      }),
+    );
+  });
+
+  describe("what a member row carries", () => {
+    it.effect("names the account, the role and when they joined, and nothing else", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const listed = yield* roster(fixture.dm, fixture.campaign.id);
+        const members = listed._tag === "Success" ? listed.success : [];
+
+        // Four fields. A wider row here would be the place a leak lands, since
+        // this is the one read in the product that is about *other people*.
+        expect(Object.keys(members[0]!).sort()).toEqual([
+          "accountId",
+          "joinedAt",
+          "name",
+          "relation",
+        ]);
+
+        expect(members.map((member) => member.relation)).toEqual(["creator", "player", "player"]);
+        // `accountId` is the join key the whole party screen hangs off — it is what
+        // `Character.accountId` is matched against, and what a write that assigns
+        // one will name.
+        expect(members.map((member) => member.accountId)).toEqual([
+          fixture.dm.accountId,
+          fixture.playing.accountId,
+          fixture.seated.accountId,
+        ]);
+        // The DM's own row is the campaign's creation, so the roster is never
+        // empty and there is always somebody to attribute the table to.
+        expect(members[0]!.joinedAt).toBeDefined();
+      }),
+    );
+
+    it.effect("puts the DM first and then the order people arrived", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Ordered on the role explicitly rather than relying on the DM's row being
+        // written first: it is today (`Campaigns.create` writes it in the campaign's
+        // own transaction), and that is an accident of insert order rather than a
+        // guarantee — a co-DM invited later must still sort above the players.
+        const listed = yield* roster(fixture.dm, fixture.campaign.id);
+        const members = listed._tag === "Success" ? listed.success : [];
+
+        expect(members.map((member) => member.relation)[0]).toBe("creator");
+        const joined = members.slice(1).map((member) => DateTime.toEpochMillis(member.joinedAt));
+        expect([...joined].sort((a, b) => a - b)).toEqual(joined);
+      }),
+    );
+  });
+
+  describe("what the list leaves out", () => {
+    it.effect("drops a member whose invitation was revoked after they took it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Revoking a spent invitation takes the membership back, and the roster is
+        // live members only — every predicate in the product tests
+        // `revoked_at is null`. A withdrawal is legible on the *invitation*, which
+        // reads `revoked` and names who took it, so listing the dead row here would
+        // be a second and worse answer to the same question.
+        const gone = yield* Effect.gen(function* () {
+          const invites = yield* Invites;
+          const campaign = yield* as(fixture.dm)(createCampaign({ name: "A table to leave" }));
+          const guest = yield* aPlayerAt(campaign.id, "Pim");
+
+          const creator = yield* asDm(fixture.dm, campaign.id);
+          const before = yield* Effect.flatMap(Memberships, (memberships) =>
+            memberships.list(creator),
+          );
+          const issued = yield* invites.listForCampaign(creator);
+          yield* invites.revokeForCampaign(creator, issued[0]!.id);
+          const after = yield* Effect.flatMap(Memberships, (memberships) =>
+            memberships.list(creator),
+          );
+
+          return {
+            before: before.map((member) => member.name),
+            after: after.map((member) => member.name),
+            guest: guest.accountId,
+            // The invitation is still there and still says what happened.
+            status: (yield* invites.listForCampaign(creator))[0]!.status,
+          };
+        }).pipe(Effect.orDie);
+
+        expect(gone.before).toEqual(["Ada", "Pim"]);
+        expect(gone.after).toEqual(["Ada"]);
+        expect(gone.status).toBe("revoked");
+      }),
+    );
+
+    it.effect("stops at this campaign, though the DM runs two", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const here = yield* roster(fixture.dm, fixture.campaign.id);
+        const there = yield* roster(fixture.dm, fixture.otherTable.id);
+
+        expect(here._tag === "Success" ? here.success.length : 0).toBe(3);
+        // The second table has only its DM — the proof carries the campaign, so
+        // there is no id for the read to be pointed at the wrong one.
+        expect(there._tag === "Success" ? there.success.map((member) => member.name) : []).toEqual([
+          "Ada",
+        ]);
+      }),
+    );
+  });
+
+  describe("the seat vocabulary, derived", () => {
+    it.effect(
+      "answers three of the drawn statuses from three shipped reads, and cannot answer the fourth",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          // The decision, exercised. `Party.jsx` draws `playing` / `no-character` /
+          // `invited` / `open`; this is all four of them computed from the roster,
+          // `invites.list` and `Party.list` — the live seats — with no fourth
+          // source and no empty chair anywhere.
+          const derived = yield* Effect.gen(function* () {
+            const dm = yield* asDm(fixture.dm, fixture.campaign.id);
+            const members = yield* Effect.flatMap(Memberships, (m) => m.list(dm));
+            const seats = yield* as(fixture.dm)(
+              Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
+            );
+            const invites = yield* Effect.flatMap(Invites, (i) => i.listForCampaign(dm));
+
+            const owned = new Set(seats.map((row) => row.seat.accountId));
+            const players = members.filter((member) => member.relation === "player");
+
+            return {
+              playing: players
+                .filter((member) => owned.has(member.accountId))
+                .map((member) => member.name),
+              noCharacter: players
+                .filter((member) => !owned.has(member.accountId))
+                .map((member) => member.name),
+              invited: invites
+                .filter((invite) => invite.status === "live")
+                .map((invite) => invite.label),
+              // The subtitle the report replaces *"N of M seats"* with: what is
+              // true, rather than a capacity nothing stores.
+              subtitle: `${players.length} players, ${invites.filter((i) => i.status === "live").length} invitation outstanding`,
+            };
+          }).pipe(Effect.orDie);
+
+          expect(derived.playing).toEqual(["Ilse"]);
+          expect(derived.noCharacter).toEqual(["Marta"]);
+          expect(derived.invited).toEqual(["Pell"]);
+          expect(derived.subtitle).toBe("2 players, 1 invitation outstanding");
+        }),
+    );
+
+    it.effect("has nowhere to put an empty chair", () =>
+      Effect.gen(function* () {
+        // The negative half, and the reason it is a schema property rather than a
+        // convention: a membership cannot precede the account it names, and a
+        // seat cannot either — `account_id` is `not null` and a real foreign key
+        // on both `campaign_member` and `campaign_character`. So *"Add seat"* is
+        // not a button somebody declined to build, it is one with nothing behind
+        // it: every chair the roster can draw has a person in it.
+        const nullable = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const rows = yield* sql<{
+            readonly table_name: string;
+            readonly is_nullable: string;
+          }>`
           select table_name, is_nullable from information_schema.columns
           where table_name in ('campaign_member', 'campaign_character')
             and column_name = 'account_id'
           order by table_name
         `;
-        return rows.map((row) => `${row.table_name}:${row.is_nullable}`);
-      }).pipe(Effect.orDie),
-    );
+          return rows.map((row) => `${row.table_name}:${row.is_nullable}`);
+        }).pipe(Effect.orDie);
 
-    expect(nullable).toEqual(["campaign_character:NO", "campaign_member:NO"]);
-  }, 60_000);
+        expect(nullable).toEqual(["campaign_character:NO", "campaign_member:NO"]);
+      }),
+    );
+  });
 });

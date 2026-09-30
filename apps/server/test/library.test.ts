@@ -1,9 +1,9 @@
+import { describe, expect } from "@effect/vitest";
 import { Actor, type Creature, type CreatureId, CurrentActor, TavernsApi } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
@@ -12,6 +12,7 @@ import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
 import { testServer } from "./support/http.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * The Library: **where a monster is authored**, and the originals a campaign
@@ -51,14 +52,11 @@ const services = servicesOver(database);
  * assertions. `Layer` memoises by identity, so it is still one pool and one
  * migration run.
  */
-const runtime = ManagedRuntime.make(
-  applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(testServer),
-    Layer.provideMerge(services),
-    Layer.provideMerge(database),
-  ),
+const application = applicationOver(services, { quiet: true }).pipe(
+  Layer.provideMerge(testServer),
+  Layer.provideMerge(services),
+  Layer.provideMerge(database),
 );
-afterAll(() => runtime.dispose());
 
 const clientFor = (token: string) =>
   HttpApiClient.make(TavernsApi, {
@@ -71,11 +69,11 @@ const anonymous = HttpApiClient.make(TavernsApi);
 type Client = Effect.Success<ReturnType<typeof clientFor>>;
 
 const as = <A, E>(token: string, call: (client: Client) => Effect.Effect<A, E>) =>
-  runtime.runPromise(Effect.flatMap(clientFor(token), call).pipe(Effect.orDie));
+  Effect.flatMap(clientFor(token), call).pipe(Effect.orDie);
 
 /** The same, for a call that is expected to be refused. */
 const refused = <A, E>(token: string, call: (client: Client) => Effect.Effect<A, E>) =>
-  runtime.runPromise(Effect.flatMap(clientFor(token), call).pipe(Effect.flip, Effect.orDie));
+  Effect.flatMap(clientFor(token), call).pipe(Effect.flip, Effect.orDie);
 
 interface LibraryQuery {
   readonly q?: string;
@@ -91,7 +89,7 @@ const named = (creatures: ReadonlyArray<Creature>): ReadonlyArray<string> =>
   creatures.map((creature) => creature.name);
 
 const sql = <A>(run: (client: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
-  runtime.runPromise(Effect.flatMap(SqlClient.SqlClient, run).pipe(Effect.result, Effect.orDie));
+  Effect.flatMap(SqlClient.SqlClient, run).pipe(Effect.result, Effect.orDie);
 
 /** One creature per interesting position, so an absence is never accidental. */
 const CREATURES = {
@@ -201,634 +199,720 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "library.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(application));
 
-describe("the Library shows originals only", () => {
-  it("needs a credential, like every read but the invitation preview", async () => {
-    // `HttpApiSecurity.bearer` answers no 401 of its own — it hands the
-    // middleware an empty credential and runs it anyway — so this passes
-    // because `Authorization` is on the group and rejects it explicitly.
-    const result = await runtime.runPromise(
-      Effect.flatMap(anonymous, (client) => client.library.list({ query: {} })).pipe(Effect.result),
-    );
-
-    expect(result._tag).toBe("Failure");
-  });
-
-  it("gives an account the bundle and its own entities, and nothing else", async () => {
-    const seen = await libraryFor(fixture.jo.token);
-
-    expect(named(seen)).toContain(CREATURES.hers);
-    expect(named(seen)).toContain(CREATURES.herOther);
-    expect(named(seen)).toContain("Goblin Boss");
-
-    // Every row is an original: in no campaign, and either hers or nobody's.
-    expect(seen.every((creature) => creature.campaignId === null)).toBe(true);
-    expect(
-      seen.every(
-        (creature) => creature.accountId === null || creature.accountId === fixture.jo.accountId,
-      ),
-    ).toBe(true);
-  });
-
-  it("shows a DM none of their campaigns' instances, which is the reversal met again", async () => {
-    // **The statement this whole change is about, twice over.** The Library
-    // shows the raw entity, never a campaign's copied state — and since the
-    // instancing decision of 2026-09-02 the campaign's copied state shows up
-    // *nowhere*: not in the Library, and not in the campaign's usable list
-    // either. The instance is reachable by id (its roster names it) and is
-    // otherwise plumbing.
-    const library = await libraryFor(fixture.jo.token);
-    const usable = await as(fixture.jo.token, (client) =>
-      Effect.map(
-        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
-        (page) => page.items,
-      ),
-    );
-
-    expect(named(library)).not.toContain(CREATURES.inHerCampaign);
-    expect(named(usable)).not.toContain(CREATURES.inHerCampaign);
-    expect(fixture.inHerCampaign.campaignId).toBe(fixture.saltRoad.id);
-  });
-
-  it("gives an account nothing from another account's Library", async () => {
-    // **The case that matters most.** There is no campaign in the path, so
-    // nothing but the predicate stops one account's Library showing another's
-    // monsters — and there is no visibility, no membership and no sharing
-    // involved: the row's owner is the entire question.
-    const hers = await libraryFor(fixture.jo.token);
-    const theirs = await libraryFor(fixture.bo.token);
-
-    expect(named(hers)).not.toContain(CREATURES.theirs);
-    expect(named(theirs)).not.toContain(CREATURES.hers);
-    expect(named(theirs)).not.toContain(CREATURES.herOther);
-
-    // Each really has something for the other to miss, otherwise "nothing" is
-    // trivially true and this proves less than it appears to.
-    expect(named(theirs)).toContain(CREATURES.theirs);
-  });
-
-  it("cannot be talked into another account's entities by searching for them", async () => {
-    // The search box is a client-varied clause beside the reach predicate, never
-    // instead of it — which is what `narrowedBy` being separate from the gate
-    // makes structural rather than careful.
-    const byName = await libraryFor(fixture.jo.token, { q: CREATURES.theirs });
-    const byFragment = await libraryFor(fixture.jo.token, { q: "wraith" });
-
-    expect(named(byName)).toEqual([]);
-    expect(named(byFragment)).toEqual([]);
-  });
-
-  it("refuses another account's entity by id, as a plain NotFound", async () => {
-    const failure = await refused(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: fixture.theirs.id } }),
-    );
-
-    // Not `Forbidden`: "it exists but is not yours" is itself a disclosure.
-    expect(failure).toMatchObject({ _tag: "NotFound", resource: "creature" });
-  });
-
-  it("belongs to an account that is at no table anywhere", async () => {
-    // **The outcome that changed for a reader.** Under the superseded rule this
-    // answered `[]`, because the Library was a gathering over the campaigns a
-    // credential reached and this account reaches none. Authoring is not an act
-    // inside a campaign, so it cannot require one — and a Library that were
-    // empty until somebody invited you would make it one.
-    const seen = await libraryFor(fixture.uninvited.token);
-
-    expect(named(seen)).toContain(CREATURES.theUninvited);
-    expect(named(seen)).toContain("Goblin Boss");
-    expect(named(seen)).not.toContain(CREATURES.hers);
-  });
-
-  it("is not narrowed by the credential's scope either, which is a decision", async () => {
-    // Nothing mints a campaign-scoped credential over HTTP yet, so this is the
-    // one case that reaches past the wire: the actor is built by hand and the
-    // read goes to the repository.
-    //
-    // **The standing rule is that membership and credential scope narrow
-    // independently and both apply to every read** — and this read is where
-    // scope has nothing to say. `Actor.campaignId` names the campaign a
-    // credential was minted for, and every predicate that uses it answers "may
-    // this credential reach campaign C"; there is no campaign here for it to be
-    // about, so applying it would mean inventing a second meaning for the field.
-    // What scope does not narrow is the credential's *account*, and the Library
-    // is the account's.
-    //
-    // Pinned rather than left implicit so that whatever mints the first scoped
-    // credential meets this decision instead of inheriting it silently. It is on
-    // `AGENTS.md`'s list of what the captain has not been asked.
-    const scoped = new Actor({
-      accountId: fixture.jo.accountId,
-      scope: { _tag: "campaign", campaignId: fixture.saltRoad.id },
-    });
-    const seen = await runtime.runPromise(
-      Effect.flatMap(Creatures, (creatures) => items(creatures.library({}))).pipe(
-        Effect.provideService(CurrentActor, scoped),
-        Effect.orDie,
-      ),
-    );
-
-    expect(named(seen)).toContain(CREATURES.hers);
-    expect(named(seen)).toContain("Goblin Boss");
-    // Still no campaign row, including from the very campaign the credential was
-    // minted for — the anchor is the row being in no campaign, not the reader.
-    expect(named(seen)).not.toContain(CREATURES.inHerCampaign);
-    expect(named(seen)).not.toContain(CREATURES.theirs);
-  });
-
-  it("is not narrowed by a role, because there is no campaign to have one in", async () => {
-    // A player's Library is the same shape as anybody's: the bundle, plus what
-    // they have authored. `visibility` is a statement about players at a *table*
-    // and there is no table here, so this read does not ask it — which is a
-    // deliberate consequence of the model and not an oversight. What a player at
-    // Jo's table may see of the corpus *through that campaign* is still
-    // `corpusRowReadable`'s question and is unchanged; `bestiary.test.ts` pins
-    // it, and the assertion below is the pair.
-    const library = await libraryFor(fixture.pim.token);
-    const bestiary = await as(fixture.pim.token, (client) =>
-      Effect.map(
-        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
-        (page) => page.items,
-      ),
-    );
-
-    expect(named(library)).toContain("Goblin Boss");
-    expect(named(library)).not.toContain(CREATURES.hers);
-    expect(named(library)).not.toContain(CREATURES.inHerCampaign);
-    // The bundle is `dm` as the import leaves it, so through a campaign a player
-    // still gets none of it.
-    expect(named(bestiary)).not.toContain("Goblin Boss");
-  });
-});
-
-describe("authoring, with no campaign anywhere in the path", () => {
-  it("creates an original owned by the account that asked", async () => {
-    const made = await as(fixture.jo.token, (client) =>
-      client.library.create({ payload: aCreature("The Lamplighter") }),
-    );
-
-    expect(made.campaignId).toBeNull();
-    expect(made.accountId).toBe(fixture.jo.accountId);
-    expect(made.origin).toBe("authored");
-    // The column default decides, exactly as it does for a campaign row: the
-    // Library payload has no `visibility` field at all, because a row in no
-    // campaign has no players to narrow against.
-    expect(made.visibility).toBe("dm");
-    expect(made.crSort).toBe(5);
-    expect(made.derivedFrom).toBeNull();
-
-    const readBack = await as(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: made.id } }),
-    );
-    expect(readBack.name).toBe("The Lamplighter");
-  });
-
-  it("cannot be talked into a provenance, however the body is written", async () => {
-    // A create payload carries no `origin` on any path, so a client cannot claim
-    // `system` or `assistant` provenance. `Schema.Struct` drops the excess keys
-    // on decode, which means this is not even a refusal — the fields never reach
-    // the insert. Driven over a raw request because the derived client would not
-    // encode them in the first place, and the question is what the *server* does
-    // with a client that is not ours.
-    const body = await runtime.runPromise(
+describeLayer("library", shared, (it) => {
+  describe("the Library shows originals only", () => {
+    it.effect("needs a credential, like every read but the invitation preview", () =>
       Effect.gen(function* () {
-        const http = yield* HttpClient.HttpClient;
-        const response = yield* http.execute(
-          HttpClientRequest.post("/library/creatures", {
-            headers: { authorization: `Bearer ${fixture.jo.token}` },
-          }).pipe(
-            HttpClientRequest.bodyJsonUnsafe({
-              ...aCreature("A Forgery"),
-              origin: "system",
-              assistantTurnId: "00000000-0000-0000-0000-000000000000",
-              accountId: fixture.bo.accountId,
-              campaignId: fixture.saltRoad.id,
-              visibility: "shared",
-            }),
+        // `HttpApiSecurity.bearer` answers no 401 of its own — it hands the
+        // middleware an empty credential and runs it anyway — so this passes
+        // because `Authorization` is on the group and rejects it explicitly.
+        const result = yield* Effect.flatMap(anonymous, (client) =>
+          client.library.list({ query: {} }),
+        ).pipe(Effect.result);
+
+        expect(result._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("gives an account the bundle and its own entities, and nothing else", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const seen = yield* libraryFor(fixture.jo.token);
+
+        expect(named(seen)).toContain(CREATURES.hers);
+        expect(named(seen)).toContain(CREATURES.herOther);
+        expect(named(seen)).toContain("Goblin Boss");
+
+        // Every row is an original: in no campaign, and either hers or nobody's.
+        expect(seen.every((creature) => creature.campaignId === null)).toBe(true);
+        expect(
+          seen.every(
+            (creature) =>
+              creature.accountId === null || creature.accountId === fixture.jo.accountId,
+          ),
+        ).toBe(true);
+      }),
+    );
+
+    it.effect(
+      "shows a DM none of their campaigns' instances, which is the reversal met again",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          // **The statement this whole change is about, twice over.** The Library
+          // shows the raw entity, never a campaign's copied state — and since the
+          // instancing decision of 2026-09-02 the campaign's copied state shows up
+          // *nowhere*: not in the Library, and not in the campaign's usable list
+          // either. The instance is reachable by id (its roster names it) and is
+          // otherwise plumbing.
+          const library = yield* libraryFor(fixture.jo.token);
+          const usable = yield* as(fixture.jo.token, (client) =>
+            Effect.map(
+              client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+              (page) => page.items,
+            ),
+          );
+
+          expect(named(library)).not.toContain(CREATURES.inHerCampaign);
+          expect(named(usable)).not.toContain(CREATURES.inHerCampaign);
+          expect(fixture.inHerCampaign.campaignId).toBe(fixture.saltRoad.id);
+        }),
+    );
+
+    it.effect("gives an account nothing from another account's Library", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // **The case that matters most.** There is no campaign in the path, so
+        // nothing but the predicate stops one account's Library showing another's
+        // monsters — and there is no visibility, no membership and no sharing
+        // involved: the row's owner is the entire question.
+        const hers = yield* libraryFor(fixture.jo.token);
+        const theirs = yield* libraryFor(fixture.bo.token);
+
+        expect(named(hers)).not.toContain(CREATURES.theirs);
+        expect(named(theirs)).not.toContain(CREATURES.hers);
+        expect(named(theirs)).not.toContain(CREATURES.herOther);
+
+        // Each really has something for the other to miss, otherwise "nothing" is
+        // trivially true and this proves less than it appears to.
+        expect(named(theirs)).toContain(CREATURES.theirs);
+      }),
+    );
+
+    it.effect("cannot be talked into another account's entities by searching for them", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The search box is a client-varied clause beside the reach predicate, never
+        // instead of it — which is what `narrowedBy` being separate from the gate
+        // makes structural rather than careful.
+        const byName = yield* libraryFor(fixture.jo.token, { q: CREATURES.theirs });
+        const byFragment = yield* libraryFor(fixture.jo.token, { q: "wraith" });
+
+        expect(named(byName)).toEqual([]);
+        expect(named(byFragment)).toEqual([]);
+      }),
+    );
+
+    it.effect("refuses another account's entity by id, as a plain NotFound", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const failure = yield* refused(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: fixture.theirs.id } }),
+        );
+
+        // Not `Forbidden`: "it exists but is not yours" is itself a disclosure.
+        expect(failure).toMatchObject({ _tag: "NotFound", resource: "creature" });
+      }),
+    );
+
+    it.effect("belongs to an account that is at no table anywhere", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // **The outcome that changed for a reader.** Under the superseded rule this
+        // answered `[]`, because the Library was a gathering over the campaigns a
+        // credential reached and this account reaches none. Authoring is not an act
+        // inside a campaign, so it cannot require one — and a Library that were
+        // empty until somebody invited you would make it one.
+        const seen = yield* libraryFor(fixture.uninvited.token);
+
+        expect(named(seen)).toContain(CREATURES.theUninvited);
+        expect(named(seen)).toContain("Goblin Boss");
+        expect(named(seen)).not.toContain(CREATURES.hers);
+      }),
+    );
+
+    it.effect("is not narrowed by the credential's scope either, which is a decision", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Nothing mints a campaign-scoped credential over HTTP yet, so this is the
+        // one case that reaches past the wire: the actor is built by hand and the
+        // read goes to the repository.
+        //
+        // **The standing rule is that membership and credential scope narrow
+        // independently and both apply to every read** — and this read is where
+        // scope has nothing to say. `Actor.campaignId` names the campaign a
+        // credential was minted for, and every predicate that uses it answers "may
+        // this credential reach campaign C"; there is no campaign here for it to be
+        // about, so applying it would mean inventing a second meaning for the field.
+        // What scope does not narrow is the credential's *account*, and the Library
+        // is the account's.
+        //
+        // Pinned rather than left implicit so that whatever mints the first scoped
+        // credential meets this decision instead of inheriting it silently. It is on
+        // `AGENTS.md`'s list of what the captain has not been asked.
+        const scoped = new Actor({
+          accountId: fixture.jo.accountId,
+          scope: { _tag: "campaign", campaignId: fixture.saltRoad.id },
+        });
+        const seen = yield* Effect.flatMap(Creatures, (creatures) =>
+          items(creatures.library({})),
+        ).pipe(Effect.provideService(CurrentActor, scoped), Effect.orDie);
+
+        expect(named(seen)).toContain(CREATURES.hers);
+        expect(named(seen)).toContain("Goblin Boss");
+        // Still no campaign row, including from the very campaign the credential was
+        // minted for — the anchor is the row being in no campaign, not the reader.
+        expect(named(seen)).not.toContain(CREATURES.inHerCampaign);
+        expect(named(seen)).not.toContain(CREATURES.theirs);
+      }),
+    );
+
+    it.effect("is not narrowed by a role, because there is no campaign to have one in", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // A player's Library is the same shape as anybody's: the bundle, plus what
+        // they have authored. `visibility` is a statement about players at a *table*
+        // and there is no table here, so this read does not ask it — which is a
+        // deliberate consequence of the model and not an oversight. What a player at
+        // Jo's table may see of the corpus *through that campaign* is still
+        // `corpusRowReadable`'s question and is unchanged; `bestiary.test.ts` pins
+        // it, and the assertion below is the pair.
+        const library = yield* libraryFor(fixture.pim.token);
+        const bestiary = yield* as(fixture.pim.token, (client) =>
+          Effect.map(
+            client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+            (page) => page.items,
           ),
         );
-        return yield* response.json;
-      }).pipe(Effect.orDie),
-    );
-    const made = body as unknown as Creature;
 
-    expect(made.origin).toBe("authored");
-    expect(made.assistantTurnId).toBeNull();
-    // Not Bo's, and not the campaign's: both come from the server, and there is
-    // nowhere in the declaration for a client to state either.
-    expect(made.accountId).toBe(fixture.jo.accountId);
-    expect(made.campaignId).toBeNull();
-    expect(made.visibility).toBe("dm");
-  });
-
-  it("edits and deletes an entity the account owns", async () => {
-    const made = await as(fixture.jo.token, (client) =>
-      client.library.create({ payload: aCreature("The Tollkeeper") }),
-    );
-
-    const edited = await as(fixture.jo.token, (client) =>
-      client.library.update({ params: { creatureId: made.id }, payload: { hp: 40, cr: "1/4" } }),
-    );
-    expect(edited.hp).toBe(40);
-    // A new rating re-derives the sort key, the same rule the campaign path has.
-    expect(edited.crSort).toBe(0.25);
-
-    await as(fixture.jo.token, (client) =>
-      client.library.remove({ params: { creatureId: made.id } }),
-    );
-
-    const gone = await refused(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: made.id } }),
-    );
-    expect(gone._tag).toBe("NotFound");
-  });
-
-  it("refuses to edit or delete another account's entity", async () => {
-    const patched = await refused(fixture.bo.token, (client) =>
-      client.library.update({
-        params: { creatureId: fixture.hers.id },
-        payload: { name: "Mine now" },
+        expect(named(library)).toContain("Goblin Boss");
+        expect(named(library)).not.toContain(CREATURES.hers);
+        expect(named(library)).not.toContain(CREATURES.inHerCampaign);
+        // The bundle is `dm` as the import leaves it, so through a campaign a player
+        // still gets none of it.
+        expect(named(bestiary)).not.toContain("Goblin Boss");
       }),
     );
-    const deleted = await refused(fixture.bo.token, (client) =>
-      client.library.remove({ params: { creatureId: fixture.hers.id } }),
-    );
-
-    expect(patched._tag).toBe("NotFound");
-    expect(deleted._tag).toBe("NotFound");
-
-    // And it is still there, unchanged — the refusals are refusals rather than
-    // writes that happened to answer 404.
-    const still = await as(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: fixture.hers.id } }),
-    );
-    expect(still.name).toBe(CREATURES.hers);
   });
 
-  it("resolves through the campaign path for its owner, and for nobody else", async () => {
-    // Since the instancing decision the campaign by-id read reaches what the
-    // campaign can *use* — which includes the reader's own originals — so a
-    // DM's Library row resolves at their table. What it must never do is
-    // resolve somebody else's, or answer through a campaign the credential
-    // cannot read.
-    const found = await as(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.saltRoad.id, creatureId: fixture.hers.id },
-      }),
-    );
-    const theirs = await refused(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.saltRoad.id, creatureId: fixture.theirs.id },
-      }),
-    );
-    const throughTheirTable = await refused(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.theirTable.id, creatureId: fixture.hers.id },
+  describe("authoring, with no campaign anywhere in the path", () => {
+    it.effect("creates an original owned by the account that asked", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const made = yield* as(fixture.jo.token, (client) =>
+          client.library.create({ payload: aCreature("The Lamplighter") }),
+        );
+
+        expect(made.campaignId).toBeNull();
+        expect(made.accountId).toBe(fixture.jo.accountId);
+        expect(made.origin).toBe("authored");
+        // The column default decides, exactly as it does for a campaign row: the
+        // Library payload has no `visibility` field at all, because a row in no
+        // campaign has no players to narrow against.
+        expect(made.visibility).toBe("dm");
+        expect(made.crSort).toBe(5);
+        expect(made.derivedFrom).toBeNull();
+
+        const readBack = yield* as(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: made.id } }),
+        );
+        expect(readBack.name).toBe("The Lamplighter");
       }),
     );
 
-    expect(found.name).toBe(CREATURES.hers);
-    expect(theirs._tag).toBe("NotFound");
-    expect(throughTheirTable._tag).toBe("NotFound");
-  });
-});
+    it.effect("cannot be talked into a provenance, however the body is written", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // A create payload carries no `origin` on any path, so a client cannot claim
+        // `system` or `assistant` provenance. `Schema.Struct` drops the excess keys
+        // on decode, which means this is not even a refusal — the fields never reach
+        // the insert. Driven over a raw request because the derived client would not
+        // encode them in the first place, and the question is what the *server* does
+        // with a client that is not ours.
+        const body = yield* Effect.gen(function* () {
+          const http = yield* HttpClient.HttpClient;
+          const response = yield* http.execute(
+            HttpClientRequest.post("/library/creatures", {
+              headers: { authorization: `Bearer ${fixture.jo.token}` },
+            }).pipe(
+              HttpClientRequest.bodyJsonUnsafe({
+                ...aCreature("A Forgery"),
+                origin: "system",
+                assistantTurnId: "00000000-0000-0000-0000-000000000000",
+                accountId: fixture.bo.accountId,
+                campaignId: fixture.saltRoad.id,
+                visibility: "shared",
+              }),
+            ),
+          );
+          return yield* response.json;
+        }).pipe(Effect.orDie);
+        const made = body as unknown as Creature;
 
-describe("the shared corpus is still immutable by construction", () => {
-  it("is readable in every Library and writable from none of them", async () => {
-    const readable = await as(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: fixture.goblinBoss } }),
-    );
-    const patched = await refused(fixture.jo.token, (client) =>
-      client.library.update({
-        params: { creatureId: fixture.goblinBoss },
-        payload: { name: "Goblin Under-Boss" },
+        expect(made.origin).toBe("authored");
+        expect(made.assistantTurnId).toBeNull();
+        // Not Bo's, and not the campaign's: both come from the server, and there is
+        // nowhere in the declaration for a client to state either.
+        expect(made.accountId).toBe(fixture.jo.accountId);
+        expect(made.campaignId).toBeNull();
+        expect(made.visibility).toBe("dm");
       }),
     );
-    const deleted = await refused(fixture.jo.token, (client) =>
-      client.library.remove({ params: { creatureId: fixture.goblinBoss } }),
+
+    it.effect("edits and deletes an entity the account owns", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const made = yield* as(fixture.jo.token, (client) =>
+          client.library.create({ payload: aCreature("The Tollkeeper") }),
+        );
+
+        const edited = yield* as(fixture.jo.token, (client) =>
+          client.library.update({
+            params: { creatureId: made.id },
+            payload: { hp: 40, cr: "1/4" },
+          }),
+        );
+        expect(edited.hp).toBe(40);
+        // A new rating re-derives the sort key, the same rule the campaign path has.
+        expect(edited.crSort).toBe(0.25);
+
+        yield* as(fixture.jo.token, (client) =>
+          client.library.remove({ params: { creatureId: made.id } }),
+        );
+
+        const gone = yield* refused(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: made.id } }),
+        );
+        expect(gone._tag).toBe("NotFound");
+      }),
     );
 
-    expect(readable.accountId).toBeNull();
-    expect(readable.origin).toBe("system");
-    expect(patched._tag).toBe("NotFound");
-    expect(deleted._tag).toBe("NotFound");
+    it.effect("refuses to edit or delete another account's entity", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const patched = yield* refused(fixture.bo.token, (client) =>
+          client.library.update({
+            params: { creatureId: fixture.hers.id },
+            payload: { name: "Mine now" },
+          }),
+        );
+        const deleted = yield* refused(fixture.bo.token, (client) =>
+          client.library.remove({ params: { creatureId: fixture.hers.id } }),
+        );
 
-    // **The write predicate is the whole mechanism.** `libraryRowWritable`
-    // compares `account_id` to the account the credential resolved to, a bundled
-    // row's is null, and a null never equals a uuid. No handler checks `origin`,
-    // and none needs to.
-    const unchanged = await as(fixture.jo.token, (client) =>
-      client.library.findById({ params: { creatureId: fixture.goblinBoss } }),
+        expect(patched._tag).toBe("NotFound");
+        expect(deleted._tag).toBe("NotFound");
+
+        // And it is still there, unchanged — the refusals are refusals rather than
+        // writes that happened to answer 404.
+        const still = yield* as(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: fixture.hers.id } }),
+        );
+        expect(still.name).toBe(CREATURES.hers);
+      }),
     );
-    expect(unchanged.name).toBe("Goblin Boss");
+
+    it.effect("resolves through the campaign path for its owner, and for nobody else", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Since the instancing decision the campaign by-id read reaches what the
+        // campaign can *use* — which includes the reader's own originals — so a
+        // DM's Library row resolves at their table. What it must never do is
+        // resolve somebody else's, or answer through a campaign the credential
+        // cannot read.
+        const found = yield* as(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.saltRoad.id, creatureId: fixture.hers.id },
+          }),
+        );
+        const theirs = yield* refused(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.saltRoad.id, creatureId: fixture.theirs.id },
+          }),
+        );
+        const throughTheirTable = yield* refused(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.theirTable.id, creatureId: fixture.hers.id },
+          }),
+        );
+
+        expect(found.name).toBe(CREATURES.hers);
+        expect(theirs._tag).toBe("NotFound");
+        expect(throughTheirTable._tag).toBe("NotFound");
+      }),
+    );
   });
 
-  it("cannot be given an owner, and an owned row cannot be made bundled", async () => {
-    // **The pin the guarantee rests on, and the one that fails if it goes.**
-    // "A bundled row's `account_id` is null" has to be a fact about the schema
-    // rather than about how the importer happens to be written, because the
-    // write predicate leans on it. `creature_system_is_unowned` is what makes it
-    // one: `origin = 'system'` and *owned by nobody* are the same statement.
-    const owned = await sql(
-      (client) => client`
+  describe("the shared corpus is still immutable by construction", () => {
+    it.effect("is readable in every Library and writable from none of them", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const readable = yield* as(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: fixture.goblinBoss } }),
+        );
+        const patched = yield* refused(fixture.jo.token, (client) =>
+          client.library.update({
+            params: { creatureId: fixture.goblinBoss },
+            payload: { name: "Goblin Under-Boss" },
+          }),
+        );
+        const deleted = yield* refused(fixture.jo.token, (client) =>
+          client.library.remove({ params: { creatureId: fixture.goblinBoss } }),
+        );
+
+        expect(readable.accountId).toBeNull();
+        expect(readable.origin).toBe("system");
+        expect(patched._tag).toBe("NotFound");
+        expect(deleted._tag).toBe("NotFound");
+
+        // **The write predicate is the whole mechanism.** `libraryRowWritable`
+        // compares `account_id` to the account the credential resolved to, a bundled
+        // row's is null, and a null never equals a uuid. No handler checks `origin`,
+        // and none needs to.
+        const unchanged = yield* as(fixture.jo.token, (client) =>
+          client.library.findById({ params: { creatureId: fixture.goblinBoss } }),
+        );
+        expect(unchanged.name).toBe("Goblin Boss");
+      }),
+    );
+
+    it.effect("cannot be given an owner, and an owned row cannot be made bundled", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // **The pin the guarantee rests on, and the one that fails if it goes.**
+        // "A bundled row's `account_id` is null" has to be a fact about the schema
+        // rather than about how the importer happens to be written, because the
+        // write predicate leans on it. `creature_system_is_unowned` is what makes it
+        // one: `origin = 'system'` and *owned by nobody* are the same statement.
+        const owned = yield* sql(
+          (client) => client`
         update creature set account_id = ${fixture.jo.accountId}
         where id = ${fixture.goblinBoss}
       `,
-    );
-    const promoted = await sql(
-      (client) => client`
+        );
+        const promoted = yield* sql(
+          (client) => client`
         update creature set origin = 'system' where id = ${fixture.hers.id}
       `,
-    );
-    const disowned = await sql(
-      (client) => client`
+        );
+        const disowned = yield* sql(
+          (client) => client`
         update creature set account_id = null where id = ${fixture.hers.id}
       `,
+        );
+
+        expect(owned._tag).toBe("Failure");
+        expect(promoted._tag).toBe("Failure");
+        // An ownerless non-system row is refused by the same check from the other
+        // side, which is what stops a write path minting one by omission.
+        expect(disowned._tag).toBe("Failure");
+      }),
     );
 
-    expect(owned._tag).toBe("Failure");
-    expect(promoted._tag).toBe("Failure");
-    // An ownerless non-system row is refused by the same check from the other
-    // side, which is what stops a write path minting one by omission.
-    expect(disowned._tag).toBe("Failure");
-  });
-
-  it("refuses a creature that is a campaign's and an account's at once", async () => {
-    // `creature_one_owner`. Without it, `account_id = me` would be a way to
-    // write a row inside a campaign the actor does not DM — the predicate would
-    // still say what it says and would no longer mean it.
-    const both = await sql(
-      (client) => client`
+    it.effect("refuses a creature that is a campaign's and an account's at once", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // `creature_one_owner`. Without it, `account_id = me` would be a way to
+        // write a row inside a campaign the actor does not DM — the predicate would
+        // still say what it says and would no longer mean it.
+        const both = yield* sql(
+          (client) => client`
         update creature set campaign_id = ${fixture.saltRoad.id}
         where id = ${fixture.hers.id}
       `,
-    );
-    const inserted = await sql(
-      (client) => client`
+        );
+        const inserted = yield* sql(
+          (client) => client`
         insert into creature (campaign_id, account_id, name, type, cr, ac, hp)
         values (${fixture.saltRoad.id}, ${fixture.jo.accountId}, 'Two owners', 'Ooze', '1', 10, 10)
       `,
+        );
+
+        expect(both._tag).toBe("Failure");
+        expect(inserted._tag).toBe("Failure");
+      }),
     );
 
-    expect(both._tag).toBe("Failure");
-    expect(inserted._tag).toBe("Failure");
-  });
-
-  it("has no bundled row anywhere with an owner, after everything above", async () => {
-    const rows = await runtime.runPromise(
-      Effect.flatMap(
-        SqlClient.SqlClient,
-        (client) => client<{ readonly count: string }>`
+    it.effect("has no bundled row anywhere with an owner, after everything above", () =>
+      Effect.gen(function* () {
+        const rows = yield* Effect.flatMap(
+          SqlClient.SqlClient,
+          (client) => client<{ readonly count: string }>`
           select count(*) as count from creature
           where origin = 'system' and (campaign_id is not null or account_id is not null)
         `,
-      ).pipe(Effect.orDie),
-    );
+        ).pipe(Effect.orDie);
 
-    expect(rows[0]!.count).toBe("0");
-  });
-});
-
-describe("a campaign takes an instance, at the point of use", () => {
-  it("mints the internal instance when a Library entity goes on a roster", async () => {
-    const encounter = await as(fixture.jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: fixture.saltRoad.id },
-        payload: { name: "By the weir" },
+        expect(rows[0]!.count).toBe("0");
       }),
     );
-    const line = await as(fixture.jo.token, (client) =>
-      client.encounterCreatures.create({
-        params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
-        payload: { creatureId: fixture.hers.id, count: 2 },
-      }),
-    );
-    const instance = await as(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
-      }),
-    );
-
-    expect(line.creatureId).not.toBe(fixture.hers.id);
-    expect(line.name).toBe(CREATURES.hers);
-    expect(instance.campaignId).toBe(fixture.saltRoad.id);
-    // Not hers any more — the instance has left the Library, and
-    // `creature_one_owner` is what says a row cannot be in both places.
-    expect(instance.accountId).toBeNull();
-    expect(instance.derivedFrom).toBe(fixture.hers.id);
-    // A new row fails closed rather than inheriting anything.
-    expect(instance.origin).toBe("authored");
-    expect(instance.visibility).toBe("dm");
-
-    // The original is still an original, still in the Library — and the
-    // instance never is, nor in the campaign's usable list: it is plumbing.
-    const library = await libraryFor(fixture.jo.token);
-    expect(library.filter((creature) => creature.name === CREATURES.hers)).toHaveLength(1);
-    const usable = await as(fixture.jo.token, (client) =>
-      Effect.map(
-        client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
-        (page) => page.items,
-      ),
-    );
-    expect(usable.map((creature) => creature.id)).toContain(fixture.hers.id);
-    expect(usable.map((creature) => creature.id)).not.toContain(line.creatureId);
   });
 
-  it("does not move the instance when the original is edited", async () => {
-    // **"The campaign is a copied state of the entity."** The instance is a
-    // snapshot: nothing is ever read through `derived_from`, so this is a
-    // property of there being no join rather than of anybody remembering not to
-    // write one — the same rule `combatant` already follows for a fight.
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.create({ payload: aCreature("The Weir Warden") }),
-    );
-    const encounter = await as(fixture.jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: fixture.saltRoad.id },
-        payload: { name: "The warden's toll" },
-      }),
-    );
-    const line = await as(fixture.jo.token, (client) =>
-      client.encounterCreatures.create({
-        params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
-        payload: { creatureId: original.id },
-      }),
-    );
-
-    await as(fixture.jo.token, (client) =>
-      client.library.update({
-        params: { creatureId: original.id },
-        payload: { name: "The Weir Warden, Drowned", hp: 12, ac: 9 },
-      }),
-    );
-
-    const after = await as(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
-      }),
-    );
-
-    expect(after.name).toBe("The Weir Warden");
-    expect(after.hp).toBe(82);
-    expect(after.ac).toBe(17);
-  });
-
-  it("leaves the instance standing when the original is deleted", async () => {
-    const original = await as(fixture.jo.token, (client) =>
-      client.library.create({ payload: aCreature("The Lockkeeper") }),
-    );
-    const encounter = await as(fixture.jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: fixture.saltRoad.id },
-        payload: { name: "At the lock" },
-      }),
-    );
-    const line = await as(fixture.jo.token, (client) =>
-      client.encounterCreatures.create({
-        params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
-        payload: { creatureId: original.id },
-      }),
-    );
-
-    // No 409: the roster is holding the campaign's own snapshot, so the
-    // Library delete is an ordinary act and the built encounter stands.
-    await as(fixture.jo.token, (client) =>
-      client.library.remove({ params: { creatureId: original.id } }),
-    );
-
-    const after = await as(fixture.jo.token, (client) =>
-      client.creatures.findById({
-        params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
-      }),
-    );
-
-    expect(after.name).toBe("The Lockkeeper");
-    // `derived_from` is `on delete set null` and is read through by nothing, so
-    // it is provenance rather than an access path.
-    expect(after.derivedFrom).toBeNull();
-  });
-
-  it("refuses another account's Library entity as a source", async () => {
-    // The usable set is the caller's own Library, the bundle, and the group's
-    // shares — and no further.
-    const encounter = await as(fixture.bo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: fixture.theirTable.id },
-        payload: { name: "Not theirs to use" },
-      }),
-    );
-    const failure = await refused(fixture.bo.token, (client) =>
-      client.encounterCreatures.create({
-        params: { campaignId: fixture.theirTable.id, encounterId: encounter.id },
-        payload: { creatureId: fixture.hers.id },
-      }),
-    );
-
-    expect(failure._tag).toBe("NotFound");
-  });
-
-  it("references the bundle directly, with no snapshot to mint", async () => {
-    const encounter = await as(fixture.jo.token, (client) =>
-      client.encounters.create({
-        params: { campaignId: fixture.saltRoad.id },
-        payload: { name: "Straight from the corpus" },
-      }),
-    );
-    const line = await as(fixture.jo.token, (client) =>
-      client.encounterCreatures.create({
-        params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
-        payload: { creatureId: fixture.goblinBoss },
-      }),
-    );
-
-    // A bundled row is immutable and never deleted, so the line points at it
-    // as it stands — the one source that needs no snapshot.
-    expect(line.creatureId).toBe(fixture.goblinBoss);
-    expect(line.name).toBe("Goblin Boss");
-  });
-});
-
-describe("the controls", () => {
-  it("search the name and the stat block, the way the bestiary does", async () => {
-    // `ILIKE` on the name, mid-type — the half full text cannot do, because
-    // "gob" is no lexeme of "Goblin".
-    const byName = await libraryFor(fixture.jo.token, { q: "gob" });
-    // And full text over the document, which no column holds.
-    const byTrait = await libraryFor(fixture.jo.token, { q: "nimble escape" });
-
-    expect(named(byName)).toContain("Goblin Boss");
-    expect(named(byTrait)).toEqual(["Goblin Boss"]);
-  });
-
-  it("order by challenge rating and by name", async () => {
-    const byCr = await libraryFor(fixture.jo.token, { sort: "cr" });
-    const byName = await libraryFor(fixture.jo.token, { sort: "name" });
-
-    expect(byCr.map((creature) => creature.crSort)).toEqual(
-      [...byCr.map((creature) => creature.crSort)].sort((a, b) => a - b),
-    );
-    expect(named(byName)).toEqual([...named(byName)].sort());
-  });
-
-  it("narrow by environment, any-of", async () => {
-    const narrowed = await libraryFor(fixture.jo.token, { environments: ["Cave", "Night"] });
-
-    expect(narrowed.length).toBeGreaterThan(0);
-    for (const creature of narrowed) {
-      expect(
-        creature.environments.some((environment) => ["Cave", "Night"].includes(environment)),
-        `${creature.name} lives in neither`,
-      ).toBe(true);
-    }
-  });
-
-  it("takes a one-element environment filter, exactly as the bestiary does", async () => {
-    // **The defect this list used to pin, now the other way round.** The derived
-    // client encodes `["Cave"]` as a single `?environments=Cave`; the server's
-    // query decoder reads one occurrence of a key as a scalar, and a bare
-    // `Schema.Array` refused it — a 400 on the commonest case there is, one chip
-    // pressed. `LibraryFilter` inherited it by being the same fields, which was
-    // the point: one contract, one bug, one fix. The fix is `queryArray` in
-    // `packages/api`, not a client-side workaround and not a special case here.
-    const narrowed = await libraryFor(fixture.jo.token, { environments: ["Cave"] });
-
-    expect(narrowed.length).toBeGreaterThan(0);
-    for (const creature of narrowed) {
-      expect(creature.environments, `${creature.name} does not live in a cave`).toContain("Cave");
-    }
-  });
-
-  it("answers an empty list for an environment nothing wears", async () => {
-    expect(await libraryFor(fixture.jo.token, { environments: ["Moon"] })).toEqual([]);
-  });
-
-  it("has no scope, and naming one anyway reaches nothing", async () => {
-    // `CreatureFilter` carries `scope`; `LibraryFilter` deliberately does not.
-    // Every row this list can return is `campaign_id is null`, so a `scope` here
-    // would be a filter whose only live value is `system` — which is `origin`
-    // read as a filter. The derived client will not send one, which is why this
-    // goes over a raw request: the question is what the *server* does when a
-    // client that is not ours names one.
-    const body = await runtime.runPromise(
+  describe("a campaign takes an instance, at the point of use", () => {
+    it.effect("mints the internal instance when a Library entity goes on a roster", () =>
       Effect.gen(function* () {
-        const http = yield* HttpClient.HttpClient;
-        const response = yield* http.get(
-          `/library/creatures?scope=campaign&campaignId=${fixture.saltRoad.id}`,
-          { headers: { authorization: `Bearer ${fixture.jo.token}` } },
+        const fixture = yield* Fixture;
+        const encounter = yield* as(fixture.jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: fixture.saltRoad.id },
+            payload: { name: "By the weir" },
+          }),
         );
-        return yield* response.json;
-      }).pipe(Effect.orDie),
-    );
-    const names = (body as { readonly items: ReadonlyArray<{ readonly name: string }> }).items.map(
-      (creature) => creature.name,
+        const line = yield* as(fixture.jo.token, (client) =>
+          client.encounterCreatures.create({
+            params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
+            payload: { creatureId: fixture.hers.id, count: 2 },
+          }),
+        );
+        const instance = yield* as(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
+          }),
+        );
+
+        expect(line.creatureId).not.toBe(fixture.hers.id);
+        expect(line.name).toBe(CREATURES.hers);
+        expect(instance.campaignId).toBe(fixture.saltRoad.id);
+        // Not hers any more — the instance has left the Library, and
+        // `creature_one_owner` is what says a row cannot be in both places.
+        expect(instance.accountId).toBeNull();
+        expect(instance.derivedFrom).toBe(fixture.hers.id);
+        // A new row fails closed rather than inheriting anything.
+        expect(instance.origin).toBe("authored");
+        expect(instance.visibility).toBe("dm");
+
+        // The original is still an original, still in the Library — and the
+        // instance never is, nor in the campaign's usable list: it is plumbing.
+        const library = yield* libraryFor(fixture.jo.token);
+        expect(library.filter((creature) => creature.name === CREATURES.hers)).toHaveLength(1);
+        const usable = yield* as(fixture.jo.token, (client) =>
+          Effect.map(
+            client.creatures.list({ params: { campaignId: fixture.saltRoad.id }, query: {} }),
+            (page) => page.items,
+          ),
+        );
+        expect(usable.map((creature) => creature.id)).toContain(fixture.hers.id);
+        expect(usable.map((creature) => creature.id)).not.toContain(line.creatureId);
+      }),
     );
 
-    expect(names).not.toContain(CREATURES.inHerCampaign);
-    expect(names).toContain(CREATURES.hers);
+    it.effect("does not move the instance when the original is edited", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // **"The campaign is a copied state of the entity."** The instance is a
+        // snapshot: nothing is ever read through `derived_from`, so this is a
+        // property of there being no join rather than of anybody remembering not to
+        // write one — the same rule `combatant` already follows for a fight.
+        const original = yield* as(fixture.jo.token, (client) =>
+          client.library.create({ payload: aCreature("The Weir Warden") }),
+        );
+        const encounter = yield* as(fixture.jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: fixture.saltRoad.id },
+            payload: { name: "The warden's toll" },
+          }),
+        );
+        const line = yield* as(fixture.jo.token, (client) =>
+          client.encounterCreatures.create({
+            params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
+            payload: { creatureId: original.id },
+          }),
+        );
+
+        yield* as(fixture.jo.token, (client) =>
+          client.library.update({
+            params: { creatureId: original.id },
+            payload: { name: "The Weir Warden, Drowned", hp: 12, ac: 9 },
+          }),
+        );
+
+        const after = yield* as(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
+          }),
+        );
+
+        expect(after.name).toBe("The Weir Warden");
+        expect(after.hp).toBe(82);
+        expect(after.ac).toBe(17);
+      }),
+    );
+
+    it.effect("leaves the instance standing when the original is deleted", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const original = yield* as(fixture.jo.token, (client) =>
+          client.library.create({ payload: aCreature("The Lockkeeper") }),
+        );
+        const encounter = yield* as(fixture.jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: fixture.saltRoad.id },
+            payload: { name: "At the lock" },
+          }),
+        );
+        const line = yield* as(fixture.jo.token, (client) =>
+          client.encounterCreatures.create({
+            params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
+            payload: { creatureId: original.id },
+          }),
+        );
+
+        // No 409: the roster is holding the campaign's own snapshot, so the
+        // Library delete is an ordinary act and the built encounter stands.
+        yield* as(fixture.jo.token, (client) =>
+          client.library.remove({ params: { creatureId: original.id } }),
+        );
+
+        const after = yield* as(fixture.jo.token, (client) =>
+          client.creatures.findById({
+            params: { campaignId: fixture.saltRoad.id, creatureId: line.creatureId },
+          }),
+        );
+
+        expect(after.name).toBe("The Lockkeeper");
+        // `derived_from` is `on delete set null` and is read through by nothing, so
+        // it is provenance rather than an access path.
+        expect(after.derivedFrom).toBeNull();
+      }),
+    );
+
+    it.effect("refuses another account's Library entity as a source", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The usable set is the caller's own Library, the bundle, and the group's
+        // shares — and no further.
+        const encounter = yield* as(fixture.bo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: fixture.theirTable.id },
+            payload: { name: "Not theirs to use" },
+          }),
+        );
+        const failure = yield* refused(fixture.bo.token, (client) =>
+          client.encounterCreatures.create({
+            params: { campaignId: fixture.theirTable.id, encounterId: encounter.id },
+            payload: { creatureId: fixture.hers.id },
+          }),
+        );
+
+        expect(failure._tag).toBe("NotFound");
+      }),
+    );
+
+    it.effect("references the bundle directly, with no snapshot to mint", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const encounter = yield* as(fixture.jo.token, (client) =>
+          client.encounters.create({
+            params: { campaignId: fixture.saltRoad.id },
+            payload: { name: "Straight from the corpus" },
+          }),
+        );
+        const line = yield* as(fixture.jo.token, (client) =>
+          client.encounterCreatures.create({
+            params: { campaignId: fixture.saltRoad.id, encounterId: encounter.id },
+            payload: { creatureId: fixture.goblinBoss },
+          }),
+        );
+
+        // A bundled row is immutable and never deleted, so the line points at it
+        // as it stands — the one source that needs no snapshot.
+        expect(line.creatureId).toBe(fixture.goblinBoss);
+        expect(line.name).toBe("Goblin Boss");
+      }),
+    );
+  });
+
+  describe("the controls", () => {
+    it.effect("search the name and the stat block, the way the bestiary does", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // `ILIKE` on the name, mid-type — the half full text cannot do, because
+        // "gob" is no lexeme of "Goblin".
+        const byName = yield* libraryFor(fixture.jo.token, { q: "gob" });
+        // And full text over the document, which no column holds.
+        const byTrait = yield* libraryFor(fixture.jo.token, { q: "nimble escape" });
+
+        expect(named(byName)).toContain("Goblin Boss");
+        expect(named(byTrait)).toEqual(["Goblin Boss"]);
+      }),
+    );
+
+    it.effect("order by challenge rating and by name", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const byCr = yield* libraryFor(fixture.jo.token, { sort: "cr" });
+        const byName = yield* libraryFor(fixture.jo.token, { sort: "name" });
+
+        expect(byCr.map((creature) => creature.crSort)).toEqual(
+          [...byCr.map((creature) => creature.crSort)].sort((a, b) => a - b),
+        );
+        expect(named(byName)).toEqual([...named(byName)].sort());
+      }),
+    );
+
+    it.effect("narrow by environment, any-of", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const narrowed = yield* libraryFor(fixture.jo.token, { environments: ["Cave", "Night"] });
+
+        expect(narrowed.length).toBeGreaterThan(0);
+        for (const creature of narrowed) {
+          expect(
+            creature.environments.some((environment) => ["Cave", "Night"].includes(environment)),
+            `${creature.name} lives in neither`,
+          ).toBe(true);
+        }
+      }),
+    );
+
+    it.effect("takes a one-element environment filter, exactly as the bestiary does", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // **The defect this list used to pin, now the other way round.** The derived
+        // client encodes `["Cave"]` as a single `?environments=Cave`; the server's
+        // query decoder reads one occurrence of a key as a scalar, and a bare
+        // `Schema.Array` refused it — a 400 on the commonest case there is, one chip
+        // pressed. `LibraryFilter` inherited it by being the same fields, which was
+        // the point: one contract, one bug, one fix. The fix is `queryArray` in
+        // `packages/api`, not a client-side workaround and not a special case here.
+        const narrowed = yield* libraryFor(fixture.jo.token, { environments: ["Cave"] });
+
+        expect(narrowed.length).toBeGreaterThan(0);
+        for (const creature of narrowed) {
+          expect(creature.environments, `${creature.name} does not live in a cave`).toContain(
+            "Cave",
+          );
+        }
+      }),
+    );
+
+    it.effect("answers an empty list for an environment nothing wears", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        expect(yield* libraryFor(fixture.jo.token, { environments: ["Moon"] })).toEqual([]);
+      }),
+    );
+
+    it.effect("has no scope, and naming one anyway reaches nothing", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // `CreatureFilter` carries `scope`; `LibraryFilter` deliberately does not.
+        // Every row this list can return is `campaign_id is null`, so a `scope` here
+        // would be a filter whose only live value is `system` — which is `origin`
+        // read as a filter. The derived client will not send one, which is why this
+        // goes over a raw request: the question is what the *server* does when a
+        // client that is not ours names one.
+        const body = yield* Effect.gen(function* () {
+          const http = yield* HttpClient.HttpClient;
+          const response = yield* http.get(
+            `/library/creatures?scope=campaign&campaignId=${fixture.saltRoad.id}`,
+            { headers: { authorization: `Bearer ${fixture.jo.token}` } },
+          );
+          return yield* response.json;
+        }).pipe(Effect.orDie);
+        const names = (
+          body as { readonly items: ReadonlyArray<{ readonly name: string }> }
+        ).items.map((creature) => creature.name);
+
+        expect(names).not.toContain(CREATURES.inHerCampaign);
+        expect(names).toContain(CREATURES.hers);
+      }),
+    );
   });
 });

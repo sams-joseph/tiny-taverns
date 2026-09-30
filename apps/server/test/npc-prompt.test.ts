@@ -1,3 +1,4 @@
+import { describe, expect, it } from "@effect/vitest";
 import {
   type CampaignId,
   Npc,
@@ -11,7 +12,6 @@ import {
   type NpcTurnId,
 } from "@taverns/api";
 import { DateTime } from "effect";
-import { describe, expect, it } from "vitest";
 import {
   assembleNpcPrompt,
   NPC_PROMPT_TEMPLATE_VERSION,

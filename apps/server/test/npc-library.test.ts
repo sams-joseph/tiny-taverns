@@ -1,7 +1,7 @@
+import { describe, expect } from "@effect/vitest";
 import { type Actor, CurrentActor, NotFound } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -15,32 +15,26 @@ import { Npcs } from "../src/repo/Npcs.js";
 import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { aGroupMemberAt, anAccount, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    CampaignCreatorActors.layer,
-    Groups.layer,
-    Invites.layer,
-    LibraryShares.layer,
-    Npcs.layer,
-    NpcKnowledge.layer,
-    NpcMemories.layer,
-    NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
-    NpcThreads.layer,
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npc_library"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  CampaignCreatorActors.layer,
+  Groups.layer,
+  Invites.layer,
+  LibraryShares.layer,
+  Npcs.layer,
+  NpcKnowledge.layer,
+  NpcMemories.layer,
+  NpcAwareness.layer.pipe(Layer.provide([NpcKnowledge.layer, NpcMemories.layer])),
+  NpcThreads.layer,
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npc_library")));
 
 const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const run: <A, E>(effect: Effect.Effect<A, E, any>) => Promise<A> = (effect) =>
-  runtime.runPromise(effect as never);
 
 const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
@@ -133,151 +127,163 @@ const makeFixture = Effect.gen(function* () {
     sharedFact,
     privateFact,
   };
-});
+}).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture.pipe(Effect.orDie));
-}, 60_000);
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "npc-library.test/Fixture",
+) {}
 
-describe("NPC Library sources", () => {
-  it("keeps Libraries account-owned and does not leak group-shared originals into a groupmate's shelf", async () => {
-    const seen = await run(
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
+
+describeLayer("npc-library", shared, (it) => {
+  describe("NPC Library sources", () => {
+    it.effect(
+      "keeps Libraries account-owned and does not leak group-shared originals into a groupmate's shelf",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const seen = yield* Effect.gen(function* () {
+            const npcs = yield* Npcs;
+            const jo = yield* withActor(fixture.jo)(npcs.library({}));
+            const wren = yield* withActor(fixture.wren)(npcs.library({}));
+            const fen = yield* withActor(fixture.fen)(npcs.library({}));
+            return { jo, wren, fen };
+          });
+
+          expect(seen.jo.map((npc) => npc.name)).toEqual(["Cazril"]);
+          expect(seen.wren.map((npc) => npc.name)).toEqual(["Unshared Wren"]);
+          expect(seen.fen).toEqual([]);
+        }),
+    );
+
+    it.effect("copies a shared source into two campaigns as independent snapshots", () =>
       Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const jo = yield* withActor(fixture.jo)(npcs.library({}));
-        const wren = yield* withActor(fixture.wren)(npcs.library({}));
-        const fen = yield* withActor(fixture.fen)(npcs.library({}));
-        return { jo, wren, fen };
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const npcs = yield* Npcs;
+          const knowledge = yield* NpcKnowledge;
+          const memories = yield* NpcMemories;
+          const joCopy = yield* npcs.copyFromSource(fixture.joCreator, fixture.source.id);
+          const wrenCopy = yield* npcs.copyFromSource(fixture.wrenCreator, fixture.source.id);
+          yield* withActor(fixture.jo)(
+            npcs.libraryUpdate(fixture.source.id, { name: "Cazril changed" }),
+          );
+          const joAfter = yield* npcs.findById(fixture.joCreator, joCopy.id);
+          const wrenAfter = yield* npcs.findById(fixture.wrenCreator, wrenCopy.id);
+          const joFacts = yield* knowledge.list(fixture.joCreator, joCopy.id);
+          const wrenFacts = yield* knowledge.list(fixture.wrenCreator, wrenCopy.id);
+          const joMemories = yield* memories.list(fixture.joCreator, joCopy.id);
+          const wrenMemories = yield* memories.list(fixture.wrenCreator, wrenCopy.id);
+          return { joAfter, wrenAfter, joFacts, wrenFacts, joMemories, wrenMemories };
+        });
+
+        expect(seen.joAfter.name).toBe("Cazril");
+        expect(seen.wrenAfter.name).toBe("Cazril");
+        expect(seen.joAfter.derivedFrom).toBe(fixture.source.id);
+        expect(seen.joAfter.derivedFromVersion).toBe(fixture.source.version);
+        expect(seen.wrenAfter.derivedFromVersion).toBe(fixture.source.version);
+        expect(seen.joAfter.privateMaterial).toEqual({ secrets: "SOURCE-SECRET" });
+        expect(seen.wrenAfter.privateMaterial).toEqual({});
+        expect(seen.joFacts.map((fact) => fact.body).sort()).toEqual([
+          "PRIVATE-FACT keeps a hag's coin.",
+          "SHARED-FACT knows the old ford.",
+        ]);
+        expect(seen.wrenFacts.map((fact) => fact.body)).toEqual([
+          "SHARED-FACT knows the old ford.",
+        ]);
+        expect(seen.joMemories.map((memory) => memory.body).sort()).toEqual([
+          "PRIVATE-MEMORY owes years.",
+          "SHARED-MEMORY the party promised a name.",
+        ]);
+        expect(seen.wrenMemories.map((memory) => memory.body)).toEqual([
+          "SHARED-MEMORY the party promised a name.",
+        ]);
       }),
     );
 
-    expect(seen.jo.map((npc) => npc.name)).toEqual(["Cazril"]);
-    expect(seen.wren.map((npc) => npc.name)).toEqual(["Unshared Wren"]);
-    expect(seen.fen).toEqual([]);
-  });
-
-  it("copies a shared source into two campaigns as independent snapshots", async () => {
-    const seen = await run(
+    it.effect("withdrawal, archive and delete affect future copies only", () =>
       Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const knowledge = yield* NpcKnowledge;
-        const memories = yield* NpcMemories;
-        const joCopy = yield* npcs.copyFromSource(fixture.joCreator, fixture.source.id);
-        const wrenCopy = yield* npcs.copyFromSource(fixture.wrenCreator, fixture.source.id);
-        yield* withActor(fixture.jo)(
-          npcs.libraryUpdate(fixture.source.id, { name: "Cazril changed" }),
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const npcs = yield* Npcs;
+          const shares = yield* LibraryShares;
+          const renamed = yield* withActor(fixture.jo)(
+            npcs.libraryUpdate(fixture.source.id, { name: "Cazril before deletion" }),
+          );
+          const before = yield* npcs.copyFromSource(fixture.wrenCreator, renamed.id);
+          yield* withActor(fixture.jo)(
+            shares.unshare(fixture.groupId, { kind: "npc", resourceId: renamed.id }),
+          );
+          const afterUnshare = yield* Effect.result(
+            npcs.copyFromSource(fixture.wrenCreator, renamed.id),
+          );
+          const ownerCopy = yield* npcs.copyFromSource(fixture.joCreator, renamed.id);
+          yield* withActor(fixture.jo)(npcs.libraryArchive(renamed.id));
+          const afterArchive = yield* Effect.result(
+            npcs.copyFromSource(fixture.joCreator, renamed.id),
+          );
+          yield* withActor(fixture.jo)(npcs.libraryRemove(renamed.id));
+          const surviving = yield* npcs.findById(fixture.wrenCreator, before.id);
+          const ownerSurviving = yield* npcs.findById(fixture.joCreator, ownerCopy.id);
+          return { afterUnshare, afterArchive, surviving, ownerSurviving };
+        });
+
+        expect(seen.afterUnshare._tag).toBe("Failure");
+        expect(seen.afterUnshare._tag === "Failure" && seen.afterUnshare.failure).toBeInstanceOf(
+          NotFound,
         );
-        const joAfter = yield* npcs.findById(fixture.joCreator, joCopy.id);
-        const wrenAfter = yield* npcs.findById(fixture.wrenCreator, wrenCopy.id);
-        const joFacts = yield* knowledge.list(fixture.joCreator, joCopy.id);
-        const wrenFacts = yield* knowledge.list(fixture.wrenCreator, wrenCopy.id);
-        const joMemories = yield* memories.list(fixture.joCreator, joCopy.id);
-        const wrenMemories = yield* memories.list(fixture.wrenCreator, wrenCopy.id);
-        return { joAfter, wrenAfter, joFacts, wrenFacts, joMemories, wrenMemories };
+        expect(seen.afterArchive._tag).toBe("Failure");
+        expect(seen.surviving.name).toBe("Cazril before deletion");
+        expect(seen.surviving.derivedFrom).toBeNull();
+        expect(seen.surviving.derivedFromName).toBe("Cazril before deletion");
+        expect(seen.ownerSurviving.name).toBe("Cazril before deletion");
       }),
     );
 
-    expect(seen.joAfter.name).toBe("Cazril");
-    expect(seen.wrenAfter.name).toBe("Cazril");
-    expect(seen.joAfter.derivedFrom).toBe(fixture.source.id);
-    expect(seen.joAfter.derivedFromVersion).toBe(fixture.source.version);
-    expect(seen.wrenAfter.derivedFromVersion).toBe(fixture.source.version);
-    expect(seen.joAfter.privateMaterial).toEqual({ secrets: "SOURCE-SECRET" });
-    expect(seen.wrenAfter.privateMaterial).toEqual({});
-    expect(seen.joFacts.map((fact) => fact.body).sort()).toEqual([
-      "PRIVATE-FACT keeps a hag's coin.",
-      "SHARED-FACT knows the old ford.",
-    ]);
-    expect(seen.wrenFacts.map((fact) => fact.body)).toEqual(["SHARED-FACT knows the old ford."]);
-    expect(seen.joMemories.map((memory) => memory.body).sort()).toEqual([
-      "PRIVATE-MEMORY owes years.",
-      "SHARED-MEMORY the party promised a name.",
-    ]);
-    expect(seen.wrenMemories.map((memory) => memory.body)).toEqual([
-      "SHARED-MEMORY the party promised a name.",
-    ]);
-  });
-
-  it("withdrawal, archive and delete affect future copies only", async () => {
-    const seen = await run(
+    it.effect("refuses cross-account and unshared sources", () =>
       Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const shares = yield* LibraryShares;
-        const renamed = yield* withActor(fixture.jo)(
-          npcs.libraryUpdate(fixture.source.id, { name: "Cazril before deletion" }),
-        );
-        const before = yield* npcs.copyFromSource(fixture.wrenCreator, renamed.id);
-        yield* withActor(fixture.jo)(
-          shares.unshare(fixture.groupId, { kind: "npc", resourceId: renamed.id }),
-        );
-        const afterUnshare = yield* Effect.result(
-          npcs.copyFromSource(fixture.wrenCreator, renamed.id),
-        );
-        const ownerCopy = yield* npcs.copyFromSource(fixture.joCreator, renamed.id);
-        yield* withActor(fixture.jo)(npcs.libraryArchive(renamed.id));
-        const afterArchive = yield* Effect.result(
-          npcs.copyFromSource(fixture.joCreator, renamed.id),
-        );
-        yield* withActor(fixture.jo)(npcs.libraryRemove(renamed.id));
-        const surviving = yield* npcs.findById(fixture.wrenCreator, before.id);
-        const ownerSurviving = yield* npcs.findById(fixture.joCreator, ownerCopy.id);
-        return { afterUnshare, afterArchive, surviving, ownerSurviving };
+        const fixture = yield* Fixture;
+        const refused = yield* Effect.gen(function* () {
+          const npcs = yield* Npcs;
+          const directFind = yield* withActor(fixture.fen)(
+            Effect.result(npcs.libraryFindById(fixture.source.id)),
+          );
+          const strangerCopy = yield* Effect.result(
+            npcs.copyFromSource(fixture.fenCreator, fixture.source.id),
+          );
+          const groupmateUnshared = yield* Effect.result(
+            npcs.copyFromSource(fixture.joCreator, fixture.unshared.id),
+          );
+          return { directFind, strangerCopy, groupmateUnshared };
+        });
+
+        expect(refused.directFind._tag).toBe("Failure");
+        expect(refused.strangerCopy._tag).toBe("Failure");
+        expect(refused.groupmateUnshared._tag).toBe("Failure");
       }),
     );
 
-    expect(seen.afterUnshare._tag).toBe("Failure");
-    expect(seen.afterUnshare._tag === "Failure" && seen.afterUnshare.failure).toBeInstanceOf(
-      NotFound,
-    );
-    expect(seen.afterArchive._tag).toBe("Failure");
-    expect(seen.surviving.name).toBe("Cazril before deletion");
-    expect(seen.surviving.derivedFrom).toBeNull();
-    expect(seen.surviving.derivedFromName).toBe("Cazril before deletion");
-    expect(seen.ownerSurviving.name).toBe("Cazril before deletion");
-  });
-
-  it("refuses cross-account and unshared sources", async () => {
-    const refused = await run(
+    it.effect("keeps source conversations out of campaign snapshots", () =>
       Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const directFind = yield* withActor(fixture.fen)(
-          Effect.result(npcs.libraryFindById(fixture.source.id)),
-        );
-        const strangerCopy = yield* Effect.result(
-          npcs.copyFromSource(fixture.fenCreator, fixture.source.id),
-        );
-        const groupmateUnshared = yield* Effect.result(
-          npcs.copyFromSource(fixture.joCreator, fixture.unshared.id),
-        );
-        return { directFind, strangerCopy, groupmateUnshared };
+        const fixture = yield* Fixture;
+        const counts = yield* Effect.gen(function* () {
+          const npcs = yield* Npcs;
+          const threads = yield* NpcThreads;
+          const sql = yield* SqlClient.SqlClient;
+          const source = yield* withActor(fixture.jo)(
+            npcs.libraryCreate({ name: "Threaded source" }),
+          );
+          yield* sql`insert into npc_thread ${sql.insert({ npc_id: source.id, channel: "rehearsal", title: "source rehearsal" })}`;
+          const copy = yield* npcs.copyFromSource(fixture.joCreator, source.id);
+          const rows = yield* sql<{
+            readonly count: number;
+          }>`select count(*)::int as count from npc_thread where npc_id = ${copy.id}`;
+          const listed = yield* threads.list(fixture.joCreator, copy.id);
+          return { raw: rows[0]!.count, listed: listed.length };
+        });
+
+        expect(counts).toEqual({ raw: 0, listed: 0 });
       }),
     );
-
-    expect(refused.directFind._tag).toBe("Failure");
-    expect(refused.strangerCopy._tag).toBe("Failure");
-    expect(refused.groupmateUnshared._tag).toBe("Failure");
-  });
-
-  it("keeps source conversations out of campaign snapshots", async () => {
-    const counts = await run(
-      Effect.gen(function* () {
-        const npcs = yield* Npcs;
-        const threads = yield* NpcThreads;
-        const sql = yield* SqlClient.SqlClient;
-        const source = yield* withActor(fixture.jo)(
-          npcs.libraryCreate({ name: "Threaded source" }),
-        );
-        yield* sql`insert into npc_thread ${sql.insert({ npc_id: source.id, channel: "rehearsal", title: "source rehearsal" })}`;
-        const copy = yield* npcs.copyFromSource(fixture.joCreator, source.id);
-        const rows = yield* sql<{
-          readonly count: number;
-        }>`select count(*)::int as count from npc_thread where npc_id = ${copy.id}`;
-        const listed = yield* threads.list(fixture.joCreator, copy.id);
-        return { raw: rows[0]!.count, listed: listed.length };
-      }),
-    );
-
-    expect(counts).toEqual({ raw: 0, listed: 0 });
   });
 });
