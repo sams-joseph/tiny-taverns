@@ -1413,13 +1413,11 @@ describe("a new NPC for the Cast", () => {
       const [sheets] = useApiAtom(npcSheetsAtom(campaignId as CampaignId));
       return <p>{`${rows.state} ${prep.state} ${sheets.state}`}</p>;
     }
-    const castReads = () =>
-      server.paths.filter(
-        (path) =>
-          path === `/campaigns/${campaignId}/npcs` ||
-          path === `/campaigns/${campaignId}/npcs/-/prep` ||
-          path === `/campaigns/${campaignId}/npcs/-/sheets`,
-      ).length;
+    const castPaths = [
+      `/campaigns/${campaignId}/npcs`,
+      `/campaigns/${campaignId}/npcs/-/prep`,
+      `/campaigns/${campaignId}/npcs/-/sheets`,
+    ];
     server.acceptBody = { accepted: "npc", npc: keptNpc };
     server.frames = [began(threadId, turnId), proposed(turnId, npcProposal), done()];
     render(
@@ -1432,14 +1430,20 @@ describe("a new NPC for the Cast", () => {
     await waitFor(() => expect(composer()).not.toBeNull());
     await userEvent.type(composer()!, "Add a blacksmith to the cast.{Enter}");
     await screen.findByText("Mara Vell");
-    // Not a fixed three: an earlier test in this file may have left the
-    // campaign's sheet shelf warm, and a warm atom is not read again on mount.
-    const before = castReads();
 
     await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
     expect(await screen.findByText("Saved")).toBeInTheDocument();
-    // All three go back to the wire, so the Cast shows the new NPC at once.
-    await waitFor(() => expect(castReads()).toBe(before + 3));
+    // All three go back to the wire after the accept, so the Cast shows the new
+    // NPC at once. "At least once" rather than an exact count, on purpose: one
+    // invalidation can refresh an atom twice when the runner is starved (the
+    // atom library's reactivity wiring, measured in `SharedWorldsScreen.test`),
+    // so a count fails on load rather than on a regression.
+    const acceptPath = `/campaigns/${campaignId}/hob/threads/${threadId}/turns/${turnId}/accept`;
+    await waitFor(() => {
+      const afterAccept = server.paths.slice(server.paths.indexOf(acceptPath) + 1);
+      expect(server.paths).toContain(acceptPath);
+      for (const path of castPaths) expect(afterAccept).toContain(path);
+    });
   });
 });
 
