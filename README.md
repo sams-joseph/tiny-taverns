@@ -394,7 +394,10 @@ Vitest runs in every workspace project. Each has at least one real, passing test
 
 **The server's database tests need a Postgres and `DATABASE_URL` naming it** — for the
 Docker one, `pnpm db:up`, then
-`DATABASE_URL=postgres://taverns:taverns@127.0.0.1:5433/taverns pnpm -F server test`. They
+`DATABASE_URL=postgres://taverns:taverns@127.0.0.1:5433/taverns pnpm -F server test`.
+`scripts/with-private-postgres.sh pnpm -F server test` runs them on that same server without
+touching the `taverns` database: in a throwaway database of its own, with the per-file
+databases named under it (`TAVERNS_TEST_DATABASE_PREFIX`), all dropped afterwards. They
 run against a real Postgres — the schema is Postgres dialect and a stand-in would not
 exercise it — and each test file creates its own throwaway database. Unlike `pnpm dev`, the
 suite has no default database: each file force-drops a database of a fixed name, so it
@@ -426,4 +429,7 @@ runs the server suite against a Postgres service; `web-test` runs the web, `@tav
 when they fail. A newer push to a pull request cancels that pull request's older run; a
 push to `main` always runs to the end. The authenticated suite reads the
 `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
-without them (a fork's pull request) it is skipped with a notice.
+without them (a fork's pull request) it is skipped with a notice. `.no-mistakes.yaml` pins
+the same commands for the no-mistakes gate, with its tests under
+`scripts/with-private-postgres.sh` so they never touch the `taverns` database; a change
+to what CI runs changes both.

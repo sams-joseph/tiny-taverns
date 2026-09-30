@@ -15,3 +15,5 @@ test-results/
 playwright-report/
 test-results-auth/
 playwright-report-auth/
+# Agents' and gate runs' throwaway files.
+.scratch/

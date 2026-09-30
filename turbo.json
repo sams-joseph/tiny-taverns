@@ -14,7 +14,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "passThroughEnv": ["DATABASE_URL"]
+      "passThroughEnv": ["DATABASE_URL", "TAVERNS_TEST_DATABASE_PREFIX"]
     },
     "dev": {
       "cache": false,

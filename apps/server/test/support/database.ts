@@ -37,6 +37,31 @@ const urlFor = (database: string): string => {
   return url.toString();
 };
 
+/**
+ * The database one test file gets: `name`, or `<prefix>_<name>` when
+ * `TAVERNS_TEST_DATABASE_PREFIX` is set.
+ *
+ * Every file force-drops its database before creating it, so two runs on one
+ * Postgres server with the same names destroy each other's. A run that shares
+ * the development server (`scripts/with-private-postgres.sh`) sets a prefix of
+ * its own, so its databases can neither collide with the maintainer's nor
+ * outlive the run: the script drops everything under its prefix afterwards.
+ */
+export const testDatabaseName = (name: string, prefix: string | undefined): string => {
+  if (prefix === undefined || prefix === "") return name;
+  if (!/^[a-z][a-z0-9_]*$/.test(prefix)) {
+    throw new Error(
+      `TAVERNS_TEST_DATABASE_PREFIX must be lower-case letters, digits and _; got ${JSON.stringify(prefix)}`,
+    );
+  }
+  const database = `${prefix}_${name}`;
+  // Postgres silently truncates longer identifiers, and two truncated names can collide.
+  if (database.length > 63) {
+    throw new Error(`Test database name ${database} is longer than Postgres's 63 characters`);
+  }
+  return database;
+};
+
 /** Where the tests are pointed, with any password removed. */
 const describeTarget = (): string => `${base.host}${base.pathname}`;
 
@@ -72,10 +97,11 @@ export const freshDatabase = (name: string): Layer.Layer<SqlClient.SqlClient | P
   Layer.unwrap(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const quoted = `"${name.replaceAll('"', '""')}"`;
+      const database = testDatabaseName(name, process.env.TAVERNS_TEST_DATABASE_PREFIX);
+      const quoted = `"${database.replaceAll('"', '""')}"`;
       yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
       yield* sql.unsafe(`create database ${quoted}`);
-      return PgClient.layer({ url: Redacted.make(urlFor(name)) });
+      return PgClient.layer({ url: Redacted.make(urlFor(database)) });
     }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
   ).pipe(Layer.orDie);
 
@@ -95,10 +121,11 @@ export const provisionDatabase = (name: string): Promise<string> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const quoted = `"${name.replaceAll('"', '""')}"`;
+      const database = testDatabaseName(name, process.env.TAVERNS_TEST_DATABASE_PREFIX);
+      const quoted = `"${database.replaceAll('"', '""')}"`;
       yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
       yield* sql.unsafe(`create database ${quoted}`);
-      return urlFor(name);
+      return urlFor(database);
     }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
   );
 
