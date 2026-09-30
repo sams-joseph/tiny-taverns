@@ -198,7 +198,8 @@ export class ImageRecords extends Context.Service<
      * A queued job got its permit: stamp the row's `updated_at`, which the
      * stale sweep measures from, while it is still `generating`. `false`
      * when the row is gone or no longer drawing (a delete, or another
-     * instance's sweep while it queued); the job then draws nothing and spends nothing.
+     * instance's sweep while it queued); the job then draws nothing and
+     * spends nothing.
      */
     readonly drawing: (job: ImageJob) => Effect.Effect<boolean>;
     /**
