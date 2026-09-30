@@ -1,6 +1,6 @@
+import { expect } from "@effect/vitest";
 import { Conflict, CurrentActor, NotFound, type Actor, type CharacterId } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -16,6 +16,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aCampaignBy, aCharacterAt, aPlayerAt, anAccount, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 const services = Layer.mergeAll(
   Accounts.layer,
@@ -32,8 +33,6 @@ const services = Layer.mergeAll(
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("rolls")));
-
-const runtime = ManagedRuntime.make(services);
 
 const as = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R | CurrentActor>) =>
   Effect.provideService(effect, CurrentActor, actor);
@@ -64,48 +63,47 @@ const fixture = Effect.gen(function* () {
   return { dm, player, other, campaign, character, sessionId: session.id };
 });
 
-describe("rolls", () => {
-  beforeAll(async () => void (await runtime.runPromise(Effect.void)), 60_000);
-  afterAll(async () => void (await runtime.dispose()), 60_000);
-
-  it("persists a player's browser roll, emits a doorbell marker, and is idempotent by request", async () => {
-    const seen = await runtime.runPromise(
+describeLayer("rolls", services, (it) => {
+  it.effect(
+    "persists a player's browser roll, emits a doorbell marker, and is idempotent by request",
+    () =>
       Effect.gen(function* () {
-        const f = yield* fixture;
-        const rolls = yield* Rolls;
-        const events = yield* SessionEvents;
-        const dm = yield* asDm(f.dm, f.campaign.id);
-        const first = yield* as(
-          f.player,
-          rolls.create(f.campaign.id, payload(f.character.id, "swing-1")),
-        );
-        const repeat = yield* as(
-          f.player,
-          rolls.create(f.campaign.id, payload(f.character.id, "swing-1")),
-        );
-        const listed = yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, { limit: 10 }));
-        const ownLog = yield* as(
-          f.player,
-          rolls.listForCharacter(f.campaign.id, f.sessionId, f.character.id, { limit: 10 }),
-        );
-        const log = yield* events.list(dm, f.sessionId, { since: 0, limit: 10 });
-        return { first, repeat, listed, ownLog, log };
+        const seen = yield* Effect.gen(function* () {
+          const f = yield* fixture;
+          const rolls = yield* Rolls;
+          const events = yield* SessionEvents;
+          const dm = yield* asDm(f.dm, f.campaign.id);
+          const first = yield* as(
+            f.player,
+            rolls.create(f.campaign.id, payload(f.character.id, "swing-1")),
+          );
+          const repeat = yield* as(
+            f.player,
+            rolls.create(f.campaign.id, payload(f.character.id, "swing-1")),
+          );
+          const listed = yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, { limit: 10 }));
+          const ownLog = yield* as(
+            f.player,
+            rolls.listForCharacter(f.campaign.id, f.sessionId, f.character.id, { limit: 10 }),
+          );
+          const log = yield* events.list(dm, f.sessionId, { since: 0, limit: 10 });
+          return { first, repeat, listed, ownLog, log };
+        });
+
+        expect(seen.repeat.id).toBe(seen.first.id);
+        expect(seen.listed.map((roll) => roll.id)).toEqual([seen.first.id]);
+        expect(seen.first.encounterRunId).toBeNull();
+        expect(seen.first.accountName).toBe("Brannoc");
+        expect(seen.first.characterName).toBe("Brannoc");
+        expect(seen.first.visibility).toBe("shared");
+        expect(seen.ownLog.map((roll) => roll.id)).toEqual([seen.first.id]);
+        expect(seen.log.map((event) => event.kind)).toEqual(["roll-made"]);
       }),
-    );
+  );
 
-    expect(seen.repeat.id).toBe(seen.first.id);
-    expect(seen.listed.map((roll) => roll.id)).toEqual([seen.first.id]);
-    expect(seen.first.encounterRunId).toBeNull();
-    expect(seen.first.accountName).toBe("Brannoc");
-    expect(seen.first.characterName).toBe("Brannoc");
-    expect(seen.first.visibility).toBe("shared");
-    expect(seen.ownLog.map((roll) => roll.id)).toEqual([seen.first.id]);
-    expect(seen.log.map((event) => event.kind)).toEqual(["roll-made"]);
-  });
-
-  it("uses the active run at append time, without trusting a payload", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
+  it.effect("uses the active run at append time, without trusting a payload", () =>
+    Effect.gen(function* () {
+      const seen = yield* Effect.gen(function* () {
         const f = yield* fixture;
         const encounters = yield* Encounters;
         const runs = yield* EncounterRuns;
@@ -116,18 +114,18 @@ describe("rolls", () => {
         const roll = yield* as(f.player, rolls.create(f.campaign.id, payload(f.character.id)));
         const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, roll.id));
         return { run, roll, asCreator };
-      }),
-    );
+      });
 
-    // Stamped with the fight on the table. That fight's Share switch is off,
-    // so only the creator is told which it was (`hidden-run-pointer.test.ts`).
-    expect(seen.asCreator.encounterRunId).toBe(seen.run.id);
-    expect(seen.roll.encounterRunId).toBeNull();
-  });
+      // Stamped with the fight on the table. That fight's Share switch is off,
+      // so only the creator is told which it was (`hidden-run-pointer.test.ts`).
+      expect(seen.asCreator.encounterRunId).toBe(seen.run.id);
+      expect(seen.roll.encounterRunId).toBeNull();
+    }),
+  );
 
-  it("refuses a player's table roll when the night is not shared", async () => {
-    const refused = await runtime.runPromise(
-      Effect.gen(function* () {
+  it.effect("refuses a player's table roll when the night is not shared", () =>
+    Effect.gen(function* () {
+      const refused = yield* Effect.gen(function* () {
         const campaigns = yield* Campaigns;
         const sessions = yield* Sessions;
         const rolls = yield* Rolls;
@@ -141,15 +139,15 @@ describe("rolls", () => {
         );
         yield* as(dm, campaigns.update(campaign.id, { currentSessionId: session.id }));
         return yield* as(player, Effect.flip(rolls.create(campaign.id, payload(character.id))));
-      }),
-    );
+      });
 
-    expect(refused).toBeInstanceOf(Conflict);
-  });
+      expect(refused).toBeInstanceOf(Conflict);
+    }),
+  );
 
-  it("refuses no-open-night and somebody else's character", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
+  it.effect("refuses no-open-night and somebody else's character", () =>
+    Effect.gen(function* () {
+      const seen = yield* Effect.gen(function* () {
         const rolls = yield* Rolls;
         const f = yield* fixture;
         const otherCharacter = yield* aCharacterAt(f.campaign.id, f.other, { name: "Wren" });
@@ -167,10 +165,10 @@ describe("rolls", () => {
           Effect.flip(rolls.create(f.campaign.id, payload(otherCharacter.character.id))),
         );
         return { noNight, wrongOwner };
-      }),
-    );
+      });
 
-    expect(seen.noNight).toBeInstanceOf(Conflict);
-    expect(seen.wrongOwner).toBeInstanceOf(NotFound);
-  });
+      expect(seen.noNight).toBeInstanceOf(Conflict);
+      expect(seen.wrongOwner).toBeInstanceOf(NotFound);
+    }),
+  );
 });

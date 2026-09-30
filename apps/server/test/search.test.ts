@@ -1,3 +1,4 @@
+import { describe, expect } from "@effect/vitest";
 import {
   Actor,
   type CampaignId,
@@ -7,9 +8,8 @@ import {
   type SearchHit,
   type SearchSource,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
@@ -26,6 +26,7 @@ import { Search } from "../src/repo/Search.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aCharacterAt, aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * Campaign search: the retrieval index the assistant will consume.
@@ -59,8 +60,6 @@ const services = Layer.mergeAll(
   Search.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_search")));
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 const withActor =
   (actor: Actor) =>
@@ -268,304 +267,371 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
-let search: (typeof Search)["Service"];
-let notes: (typeof Notes)["Service"];
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "search.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-  search = await runtime.runPromise(Search);
-  notes = await runtime.runPromise(Notes);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 /** The result, failure included, for the cases where the refusal is the point. */
 const run = (actor: Actor, campaignId: CampaignId, filter: SearchFilterValues) =>
-  runtime.runPromise(withActor(actor)(search.search(campaignId, filter)).pipe(Effect.result));
+  Effect.flatMap(Search, (search) =>
+    withActor(actor)(search.search(campaignId, filter)).pipe(Effect.result),
+  );
 
 const found = (
   actor: Actor,
   campaignId: CampaignId,
   q: string,
   source?: SearchSource,
-): Promise<ReadonlyArray<SearchHit>> =>
-  runtime.runPromise(withActor(actor)(search.search(campaignId, { q, source })));
+): Effect.Effect<ReadonlyArray<SearchHit>, NotFound, Search> =>
+  Effect.flatMap(Search, (search) => withActor(actor)(search.search(campaignId, { q, source })));
 
 /** What a hit points at, in a form a `toEqual` can read. */
 const keys = (hits: ReadonlyArray<SearchHit>): ReadonlyArray<string> =>
   hits.map((hit) => `${hit.source}:${hit.id}`);
 
-describe("the corpus", () => {
-  it("finds the DM's own words across notes, beats, the bestiary and the party at once", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "ferryman");
+describeLayer("search", shared, (it) => {
+  describe("the corpus", () => {
+    it.effect(
+      "finds the DM's own words across notes, beats, the bestiary and the party at once",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const hits = yield* found(fixture.dm, fixture.campaign.id, "ferryman");
 
-    expect(new Set(hits.map((hit) => hit.source))).toEqual(
-      new Set(["note", "beat", "creature", "character", "npc"]),
-    );
-    expect(keys(hits)).toContain(`note:${fixture.ferrymanNote.id}`);
-    expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
-    expect(keys(hits)).toContain(`creature:${fixture.shade.id}`);
-    expect(keys(hits)).toContain(`character:${fixture.brannoc.id}`);
-    expect(keys(hits)).toContain(`npc:${fixture.cazril.id}`);
-  });
-
-  it("returns an excerpt with no markup in it", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "Cazril");
-    const beat = hits.find((hit) => hit.source === "beat");
-
-    expect(beat?.snippet).toContain("Cazril");
-    // Postgres would wrap the match in `<b>` given half a chance, and a JSON
-    // string carrying HTML is a rendering contract nobody agreed to.
-    expect(beat?.snippet).not.toContain("<");
-    expect(beat?.snippet).not.toContain("StopSel");
-  });
-
-  it("carries the night a beat belongs to, and only on a beat", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "crate");
-    const beat = hits.find((hit) => hit.source === "beat");
-    const note = hits.find((hit) => hit.source === "note");
-
-    expect(beat).toMatchObject({ source: "beat", sessionId: fixture.night.id });
-    // The union is what keeps this off the members that have no session — a
-    // nullable field here would be one the API does not have, rendered anyway.
-    expect(note).not.toHaveProperty("sessionId");
-    expect(beat).not.toHaveProperty("title");
-  });
-
-  it("narrows to one arm when asked, and to all five when not", async () => {
-    const everything = await found(fixture.dm, fixture.campaign.id, "ferryman");
-    const onlyBeats = await found(fixture.dm, fixture.campaign.id, "ferryman", "beat");
-
-    expect(onlyBeats.every((hit) => hit.source === "beat")).toBe(true);
-    expect(onlyBeats.length).toBeGreaterThan(0);
-    expect(onlyBeats.length).toBeLessThan(everything.length);
-  });
-
-  it("has no arm over the session log", async () => {
-    // The captain's decision, pinned rather than described: `session_event` is
-    // not indexed, so a query phrased at the log's own vocabulary finds
-    // nothing. Combat is reached by name, by recap, or by reading the log.
-    const hits = await found(fixture.dm, fixture.campaign.id, "beat-added");
-    expect(hits).toEqual([]);
-  });
-});
-
-describe("two matchers, because one is not enough", () => {
-  it("finds a word the DM is still halfway through typing", async () => {
-    // `ILIKE`, not full text: "ferry" is not a lexeme of "ferryman".
-    const hits = await found(fixture.dm, fixture.campaign.id, "ferry");
-    expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
-  });
-
-  it("finds a creature by a trait that is in no column", async () => {
-    // Full text, not `ILIKE`: "nimble escape" is inside the `jsonb` document.
-    const hits = await found(fixture.dm, fixture.campaign.id, "nimble escape");
-    expect(keys(hits)).toEqual([`creature:${fixture.shade.id}`]);
-  });
-
-  it("finds a character by a feature that is only on their sheet", async () => {
-    // The same property one table over: "lay on hands" is in the document and
-    // in no column, which is the whole reason the sheet is indexed rather than
-    // merely stored.
-    const hits = await found(fixture.dm, fixture.campaign.id, "lay on hands");
-    expect(keys(hits)).toEqual([`character:${fixture.brannoc.id}`]);
-  });
-
-  it("finds an NPC by public persona, without indexing creator-only secrets", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "eastern ford", "npc");
-    expect(keys(hits)).toEqual([`npc:${fixture.cazril.id}`]);
-    expect(hits[0]?.snippet).toContain("eastern ford");
-
-    // `private_material` belongs to Hob's creator-only `getNpc` tool, not to
-    // campaign search: this same tool is also offered to player Hob.
-    expect(await found(fixture.dm, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
-  });
-
-  it("finds a character by the player running them", async () => {
-    // "Who is Dara running" is a question a DM asks out loud, so `player_name`
-    // is a matcher and is indexed at weight B beside the race and the class.
-    const hits = await found(fixture.dm, fixture.campaign.id, "Dara");
-    expect(keys(hits)).toEqual([`character:${fixture.pell.id}`]);
-  });
-
-  it("gives a character with an unwritten sheet its derived line as the excerpt", async () => {
-    // `ts_headline` over an empty document is an empty string, and an empty
-    // snippet renders as nothing at all on the screen. The fallback is the
-    // generated descriptor — the same substitution the creature arm makes to
-    // its meta line, and for the same reason.
-    const hits = await found(fixture.dm, fixture.campaign.id, "Brannoc");
-    const character = hits.find((hit) => hit.source === "character");
-
-    expect(character?.snippet).toContain("ferryman");
-
-    // Wren was written in a hurry and has no sheet, so the excerpt is the line
-    // the three columns derive — not an empty string, which renders as nothing.
-    const bare = await found(fixture.dm, fixture.campaign.id, "Wren");
-    expect(bare.find((hit) => hit.source === "character")?.snippet).toBe("Tiefling Bard");
-  });
-
-  it("survives whatever is in the search box", async () => {
-    // `to_tsquery` raises a syntax error on this and turns a search field into
-    // a 500. `websearch_to_tsquery` does not, and that is why it is used.
-    for (const q of ["&", "ferryman & ", "100%", "a_b", "\\", '"unclosed']) {
-      const result = await run(fixture.dm, fixture.campaign.id, { q });
-      expect(result._tag, `search for ${JSON.stringify(q)} failed`).toBe("Success");
-    }
-  });
-
-  it("does not read a wildcard out of the DM's search box", async () => {
-    // Unescaped, `%` in an `ILIKE` matches everything. Escaped, it matches the
-    // rows that contain a literal percent sign — of which there are none.
-    const hits = await found(fixture.dm, fixture.campaign.id, "%");
-    expect(hits).toEqual([]);
-  });
-});
-
-describe("scoping — proven, not reasoned about", () => {
-  it("refuses another account's campaign outright", async () => {
-    const result = await run(fixture.dm, fixture.outsiderCampaign.id, { q: "ferryman" });
-
-    expect(result._tag).toBe("Failure");
-    // `NotFound`, not `Forbidden`: saying "it exists but is not yours" is
-    // itself a disclosure.
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-  });
-
-  it("refuses a campaign the credential was not minted for", async () => {
-    // Same account, same DM, a campaign they really do own — and still a 404,
-    // because `Actor.campaignId` is the reach of the credential and not a
-    // question about the role. Without `campaignInScope` this is the query that
-    // returns another table's record.
-    const result = await run(fixture.scopedDm, fixture.otherTable.id, { q: "ferryman" });
-
-    expect(result._tag).toBe("Failure");
-    expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
-  });
-
-  it("returns nothing of another campaign's from inside the one it may read", async () => {
-    // The leak that would look like a feature: the other table's note and beat
-    // contain the same word, and neither may appear here.
-    const hits = await found(fixture.scopedDm, fixture.campaign.id, "ferryman");
-
-    expect(hits.length).toBeGreaterThan(0);
-    for (const hit of hits) {
-      expect(hit.snippet).not.toContain("Sixpence");
-      expect(hit.source === "character" && hit.title).not.toBe("Sixpence Brannoc");
-      expect(hit.source === "npc" && hit.title).not.toBe("Sixpence Cazril");
-      if (hit.source === "beat") expect(hit.sessionId).toBe(fixture.night.id);
-    }
-  });
-
-  it("gives a campaign-scoped player only the shared rows, in both tables", async () => {
-    const here = await found(fixture.player, fixture.campaign.id, "ferryman");
-    const crate = await found(fixture.player, fixture.campaign.id, "crate");
-    const elsewhere = await run(fixture.player, fixture.otherTable.id, { q: "ferryman" });
-
-    // The shared note and the shared beat — and not the DM-only ones, which
-    // is the row's own `visibility` applying inside every arm of the union.
-    // (The shade is the DM's Library original now, so a player does not find
-    // it at all: `usableInCampaign`'s own-Library half is per reader, and
-    // nothing has been shared to the group.)
-    expect(keys(here)).toContain(`note:${fixture.ferrymanNote.id}`);
-    expect(keys(here)).toContain(`beat:${fixture.ferrymanBeat.id}`);
-    expect(keys(crate)).not.toContain(`note:${fixture.crateNote.id}`);
-    expect(keys(crate)).not.toContain(`beat:${fixture.crateBeat.id}`);
-
-    // The party arm obeys the seat's rule with no clause of its own:
-    // Brannoc's seat is `shared` and Sister Pell's is not, so a player finds
-    // one of them and the crate line on the other's sheet is not a way to
-    // reach her.
-    expect(keys(here)).toContain(`character:${fixture.brannoc.id}`);
-    expect(keys(crate)).not.toContain(`character:${fixture.pell.id}`);
-
-    // Shared NPCs are discoverable by their public profile; DM-only NPCs and
-    // creator-only private material are not exposed through the shared search tool.
-    expect(keys(here)).toContain(`npc:${fixture.cazril.id}`);
-    expect(keys(crate)).not.toContain(`npc:${fixture.privateNpc.id}`);
-    expect(await found(fixture.player, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
-
-    // And the other table is a 404, not a shorter list.
-    expect(elsewhere._tag).toBe("Failure");
-  });
-});
-
-describe("a generated column cannot go stale", () => {
-  it("reflects an edit made through the repository with no reindex step", async () => {
-    const before = await found(fixture.dm, fixture.campaign.id, "lamplighter");
-    expect(before).toEqual([]);
-
-    await runtime.runPromise(
-      withActor(fixture.dm)(
-        notes.update(fixture.campaign.id, fixture.crateNote.id, {
-          body: "A ledger, three teeth, and a lamplighter's badge.",
+          expect(new Set(hits.map((hit) => hit.source))).toEqual(
+            new Set(["note", "beat", "creature", "character", "npc"]),
+          );
+          expect(keys(hits)).toContain(`note:${fixture.ferrymanNote.id}`);
+          expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
+          expect(keys(hits)).toContain(`creature:${fixture.shade.id}`);
+          expect(keys(hits)).toContain(`character:${fixture.brannoc.id}`);
+          expect(keys(hits)).toContain(`npc:${fixture.cazril.id}`);
         }),
-      ),
     );
 
-    const after = await found(fixture.dm, fixture.campaign.id, "lamplighter");
-    expect(keys(after)).toEqual([`note:${fixture.crateNote.id}`]);
+    it.effect("returns an excerpt with no markup in it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "Cazril");
+        const beat = hits.find((hit) => hit.source === "beat");
+
+        expect(beat?.snippet).toContain("Cazril");
+        // Postgres would wrap the match in `<b>` given half a chance, and a JSON
+        // string carrying HTML is a rendering contract nobody agreed to.
+        expect(beat?.snippet).not.toContain("<");
+        expect(beat?.snippet).not.toContain("StopSel");
+      }),
+    );
+
+    it.effect("carries the night a beat belongs to, and only on a beat", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "crate");
+        const beat = hits.find((hit) => hit.source === "beat");
+        const note = hits.find((hit) => hit.source === "note");
+
+        expect(beat).toMatchObject({ source: "beat", sessionId: fixture.night.id });
+        // The union is what keeps this off the members that have no session — a
+        // nullable field here would be one the API does not have, rendered anyway.
+        expect(note).not.toHaveProperty("sessionId");
+        expect(beat).not.toHaveProperty("title");
+      }),
+    );
+
+    it.effect("narrows to one arm when asked, and to all five when not", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const everything = yield* found(fixture.dm, fixture.campaign.id, "ferryman");
+        const onlyBeats = yield* found(fixture.dm, fixture.campaign.id, "ferryman", "beat");
+
+        expect(onlyBeats.every((hit) => hit.source === "beat")).toBe(true);
+        expect(onlyBeats.length).toBeGreaterThan(0);
+        expect(onlyBeats.length).toBeLessThan(everything.length);
+      }),
+    );
+
+    it.effect("has no arm over the session log", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The captain's decision, pinned rather than described: `session_event` is
+        // not indexed, so a query phrased at the log's own vocabulary finds
+        // nothing. Combat is reached by name, by recap, or by reading the log.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "beat-added");
+        expect(hits).toEqual([]);
+      }),
+    );
   });
 
-  it("reflects an edit made behind every line of TypeScript", async () => {
-    // This is the whole argument for a generated column over a denormalised
-    // `search_document` table: there is no write path to forget, because there
-    // is no second copy. `psql` is a write path too.
-    await runtime.runPromise(
+  describe("two matchers, because one is not enough", () => {
+    it.effect("finds a word the DM is still halfway through typing", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
+        const fixture = yield* Fixture;
+        // `ILIKE`, not full text: "ferry" is not a lexeme of "ferryman".
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "ferry");
+        expect(keys(hits)).toContain(`beat:${fixture.ferrymanBeat.id}`);
+      }),
+    );
+
+    it.effect("finds a creature by a trait that is in no column", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Full text, not `ILIKE`: "nimble escape" is inside the `jsonb` document.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "nimble escape");
+        expect(keys(hits)).toEqual([`creature:${fixture.shade.id}`]);
+      }),
+    );
+
+    it.effect("finds a character by a feature that is only on their sheet", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The same property one table over: "lay on hands" is in the document and
+        // in no column, which is the whole reason the sheet is indexed rather than
+        // merely stored.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "lay on hands");
+        expect(keys(hits)).toEqual([`character:${fixture.brannoc.id}`]);
+      }),
+    );
+
+    it.effect("finds an NPC by public persona, without indexing creator-only secrets", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "eastern ford", "npc");
+        expect(keys(hits)).toEqual([`npc:${fixture.cazril.id}`]);
+        expect(hits[0]?.snippet).toContain("eastern ford");
+
+        // `private_material` belongs to Hob's creator-only `getNpc` tool, not to
+        // campaign search: this same tool is also offered to player Hob.
+        expect(yield* found(fixture.dm, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
+      }),
+    );
+
+    it.effect("finds a character by the player running them", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // "Who is Dara running" is a question a DM asks out loud, so `player_name`
+        // is a matcher and is indexed at weight B beside the race and the class.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "Dara");
+        expect(keys(hits)).toEqual([`character:${fixture.pell.id}`]);
+      }),
+    );
+
+    it.effect("gives a character with an unwritten sheet its derived line as the excerpt", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // `ts_headline` over an empty document is an empty string, and an empty
+        // snippet renders as nothing at all on the screen. The fallback is the
+        // generated descriptor — the same substitution the creature arm makes to
+        // its meta line, and for the same reason.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "Brannoc");
+        const character = hits.find((hit) => hit.source === "character");
+
+        expect(character?.snippet).toContain("ferryman");
+
+        // Wren was written in a hurry and has no sheet, so the excerpt is the line
+        // the three columns derive — not an empty string, which renders as nothing.
+        const bare = yield* found(fixture.dm, fixture.campaign.id, "Wren");
+        expect(bare.find((hit) => hit.source === "character")?.snippet).toBe("Tiefling Bard");
+      }),
+    );
+
+    it.effect("survives whatever is in the search box", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // `to_tsquery` raises a syntax error on this and turns a search field into
+        // a 500. `websearch_to_tsquery` does not, and that is why it is used.
+        for (const q of ["&", "ferryman & ", "100%", "a_b", "\\", '"unclosed']) {
+          const result = yield* run(fixture.dm, fixture.campaign.id, { q });
+          expect(result._tag, `search for ${JSON.stringify(q)} failed`).toBe("Success");
+        }
+      }),
+    );
+
+    it.effect("does not read a wildcard out of the DM's search box", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Unescaped, `%` in an `ILIKE` matches everything. Escaped, it matches the
+        // rows that contain a literal percent sign — of which there are none.
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "%");
+        expect(hits).toEqual([]);
+      }),
+    );
+  });
+
+  describe("scoping — proven, not reasoned about", () => {
+    it.effect("refuses another account's campaign outright", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const result = yield* run(fixture.dm, fixture.outsiderCampaign.id, { q: "ferryman" });
+
+        expect(result._tag).toBe("Failure");
+        // `NotFound`, not `Forbidden`: saying "it exists but is not yours" is
+        // itself a disclosure.
+        expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
+      }),
+    );
+
+    it.effect("refuses a campaign the credential was not minted for", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Same account, same DM, a campaign they really do own — and still a 404,
+        // because `Actor.campaignId` is the reach of the credential and not a
+        // question about the role. Without `campaignInScope` this is the query that
+        // returns another table's record.
+        const result = yield* run(fixture.scopedDm, fixture.otherTable.id, { q: "ferryman" });
+
+        expect(result._tag).toBe("Failure");
+        expect(result._tag === "Failure" && result.failure).toBeInstanceOf(NotFound);
+      }),
+    );
+
+    it.effect("returns nothing of another campaign's from inside the one it may read", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The leak that would look like a feature: the other table's note and beat
+        // contain the same word, and neither may appear here.
+        const hits = yield* found(fixture.scopedDm, fixture.campaign.id, "ferryman");
+
+        expect(hits.length).toBeGreaterThan(0);
+        for (const hit of hits) {
+          expect(hit.snippet).not.toContain("Sixpence");
+          expect(hit.source === "character" && hit.title).not.toBe("Sixpence Brannoc");
+          expect(hit.source === "npc" && hit.title).not.toBe("Sixpence Cazril");
+          if (hit.source === "beat") expect(hit.sessionId).toBe(fixture.night.id);
+        }
+      }),
+    );
+
+    it.effect("gives a campaign-scoped player only the shared rows, in both tables", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const here = yield* found(fixture.player, fixture.campaign.id, "ferryman");
+        const crate = yield* found(fixture.player, fixture.campaign.id, "crate");
+        const elsewhere = yield* run(fixture.player, fixture.otherTable.id, { q: "ferryman" });
+
+        // The shared note and the shared beat — and not the DM-only ones, which
+        // is the row's own `visibility` applying inside every arm of the union.
+        // (The shade is the DM's Library original now, so a player does not find
+        // it at all: `usableInCampaign`'s own-Library half is per reader, and
+        // nothing has been shared to the group.)
+        expect(keys(here)).toContain(`note:${fixture.ferrymanNote.id}`);
+        expect(keys(here)).toContain(`beat:${fixture.ferrymanBeat.id}`);
+        expect(keys(crate)).not.toContain(`note:${fixture.crateNote.id}`);
+        expect(keys(crate)).not.toContain(`beat:${fixture.crateBeat.id}`);
+
+        // The party arm obeys the seat's rule with no clause of its own:
+        // Brannoc's seat is `shared` and Sister Pell's is not, so a player finds
+        // one of them and the crate line on the other's sheet is not a way to
+        // reach her.
+        expect(keys(here)).toContain(`character:${fixture.brannoc.id}`);
+        expect(keys(crate)).not.toContain(`character:${fixture.pell.id}`);
+
+        // Shared NPCs are discoverable by their public profile; DM-only NPCs and
+        // creator-only private material are not exposed through the shared search tool.
+        expect(keys(here)).toContain(`npc:${fixture.cazril.id}`);
+        expect(keys(crate)).not.toContain(`npc:${fixture.privateNpc.id}`);
+        expect(yield* found(fixture.player, fixture.campaign.id, "glass queen", "npc")).toEqual([]);
+
+        // And the other table is a 404, not a shorter list.
+        expect(elsewhere._tag).toBe("Failure");
+      }),
+    );
+  });
+
+  describe("a generated column cannot go stale", () => {
+    it.effect("reflects an edit made through the repository with no reindex step", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const before = yield* found(fixture.dm, fixture.campaign.id, "lamplighter");
+        expect(before).toEqual([]);
+
+        yield* withActor(fixture.dm)(
+          Effect.flatMap(Notes, (notes) =>
+            notes.update(fixture.campaign.id, fixture.crateNote.id, {
+              body: "A ledger, three teeth, and a lamplighter's badge.",
+            }),
+          ),
+        ).pipe(Effect.orDie);
+
+        const after = yield* found(fixture.dm, fixture.campaign.id, "lamplighter");
+        expect(keys(after)).toEqual([`note:${fixture.crateNote.id}`]);
+      }),
+    );
+
+    it.effect("reflects an edit made behind every line of TypeScript", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // This is the whole argument for a generated column over a denormalised
+        // `search_document` table: there is no write path to forget, because there
+        // is no second copy. `psql` is a write path too.
+        yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
           update note set body = 'The tollhouse keeper remembers the ferryman.'
           where note.id = ${fixture.crateNote.id}
         `;
-      }).pipe(Effect.orDie),
+        }).pipe(Effect.orDie);
+
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "tollhouse");
+        expect(keys(hits)).toEqual([`note:${fixture.crateNote.id}`]);
+
+        // And the words that are gone are gone from the index too.
+        expect(yield* found(fixture.dm, fixture.campaign.id, "lamplighter")).toEqual([]);
+      }),
     );
 
-    const hits = await found(fixture.dm, fixture.campaign.id, "tollhouse");
-    expect(keys(hits)).toEqual([`note:${fixture.crateNote.id}`]);
-
-    // And the words that are gone are gone from the index too.
-    expect(await found(fixture.dm, fixture.campaign.id, "lamplighter")).toEqual([]);
-  });
-
-  it("indexes a row inserted with no repository involved at all", async () => {
-    await runtime.runPromise(
+    it.effect("indexes a row inserted with no repository involved at all", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
+        const fixture = yield* Fixture;
+        yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
           insert into beat (session_id, body)
           values (${fixture.night.id}, 'The reeve knew about the weir all along.')
         `;
-      }).pipe(Effect.orDie),
+        }).pipe(Effect.orDie);
+
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "weir");
+        expect(hits.map((hit) => hit.source)).toEqual(["beat"]);
+      }),
+    );
+  });
+
+  describe("ranking", () => {
+    it.effect("puts a title match above a body match, and orders the whole union at once", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "ferryman");
+        const ranks = hits.map((hit) => hit.rank);
+
+        // One ordering over one result set, applied by the database — not three
+        // lists concatenated.
+        expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
+        // Weight A (a note title, a creature name) beats weight B (a body), which
+        // is what makes `ts_rank` comparable across arms rather than three scales
+        // that only look like one number.
+        expect(hits[0]?.source === "note" || hits[0]?.source === "creature").toBe(true);
+      }),
     );
 
-    const hits = await found(fixture.dm, fixture.campaign.id, "weir");
-    expect(hits.map((hit) => hit.source)).toEqual(["beat"]);
-  });
-});
-
-describe("ranking", () => {
-  it("puts a title match above a body match, and orders the whole union at once", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "ferryman");
-    const ranks = hits.map((hit) => hit.rank);
-
-    // One ordering over one result set, applied by the database — not three
-    // lists concatenated.
-    expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
-    // Weight A (a note title, a creature name) beats weight B (a body), which
-    // is what makes `ts_rank` comparable across arms rather than three scales
-    // that only look like one number.
-    expect(hits[0]?.source === "note" || hits[0]?.source === "creature").toBe(true);
-  });
-
-  it("ranks an ILIKE-only hit at zero rather than pretending to score it", async () => {
-    const hits = await found(fixture.dm, fixture.campaign.id, "ferry");
-    expect(hits.length).toBeGreaterThan(0);
-    expect(hits.every((hit) => hit.rank === 0)).toBe(true);
-  });
-
-  it("honours a limit", async () => {
-    const hits = await runtime.runPromise(
-      withActor(fixture.dm)(search.search(fixture.campaign.id, { q: "ferryman", limit: 1 })),
+    it.effect("ranks an ILIKE-only hit at zero rather than pretending to score it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* found(fixture.dm, fixture.campaign.id, "ferry");
+        expect(hits.length).toBeGreaterThan(0);
+        expect(hits.every((hit) => hit.rank === 0)).toBe(true);
+      }),
     );
-    expect(hits).toHaveLength(1);
+
+    it.effect("honours a limit", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const hits = yield* Effect.flatMap(Search, (search) =>
+          withActor(fixture.dm)(search.search(fixture.campaign.id, { q: "ferryman", limit: 1 })),
+        );
+        expect(hits).toHaveLength(1);
+      }),
+    );
   });
 });

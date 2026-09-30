@@ -1,3 +1,4 @@
+import { describe, expect } from "@effect/vitest";
 import {
   type Actor,
   type Beat,
@@ -15,8 +16,7 @@ import {
   type PlannedOrder,
   type SessionId,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Context, Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
@@ -31,6 +31,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * Pagination, end to end at the repository: the boundaries, the ordering, and
@@ -61,12 +62,7 @@ const services = Layer.mergeAll(
   Notes.layer,
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
-);
-
-const runtime = ManagedRuntime.make(
-  services.pipe(Layer.provideMerge(migratedDatabase("taverns_test_paging"))),
-);
-afterAll(() => runtime.dispose());
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_paging")));
 
 const withActor =
   (actor: Actor) =>
@@ -145,12 +141,13 @@ const makeFixture = Effect.gen(function* () {
   const player = yield* aPlayerAt(campaign.id, "Sova");
 
   return { dm, player, campaign, night };
-});
+}).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "paging.test/Fixture",
+) {}
+
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 /**
  * Walk a paged list to the end, one page at a time, collecting the rows and the
@@ -188,312 +185,317 @@ const creaturesOf = (actor: Actor, campaignId: CampaignId) =>
     ),
   );
 
-describe("walking a paged list", () => {
-  it.each(["cr", "name", "recent"] as const)(
-    "returns every row exactly once, in the unpaged order — sorted by %s",
-    async (sort) => {
-      const seen = await runtime.runPromise(
+describeLayer("paging", shared, (it) => {
+  describe("walking a paged list", () => {
+    it.effect.each(["cr", "name", "recent"] as const)(
+      "returns every row exactly once, in the unpaged order — sorted by %s",
+      (sort) =>
         Effect.gen(function* () {
-          const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
-          // The whole list in one answer, which is what a walk has to reproduce.
-          const whole = yield* list(sort, MAX_PAGE_SIZE, undefined);
-          const walked = yield* walk<Creature, CreatureSort>((cursor) => list(sort, 3, cursor));
-          return { whole, walked };
+          const fixture = yield* Fixture;
+          const seen = yield* Effect.gen(function* () {
+            const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
+            // The whole list in one answer, which is what a walk has to reproduce.
+            const whole = yield* list(sort, MAX_PAGE_SIZE, undefined);
+            const walked = yield* walk<Creature, CreatureSort>((cursor) => list(sort, 3, cursor));
+            return { whole, walked };
+          });
+
+          expect(seen.whole.items.length).toBe(COUNT);
+          expect(seen.whole.nextCursor).toBeNull();
+          expect(seen.walked.rows.map((creature) => creature.id)).toEqual(
+            seen.whole.items.map((creature) => creature.id),
+          );
+          // 3 + 3 + 3 + 2 — the last page short, and no page repeated.
+          expect(seen.walked.sizes).toEqual([3, 3, 3, 2]);
         }),
-      );
+    );
 
-      expect(seen.whole.items.length).toBe(COUNT);
-      expect(seen.whole.nextCursor).toBeNull();
-      expect(seen.walked.rows.map((creature) => creature.id)).toEqual(
-        seen.whole.items.map((creature) => creature.id),
-      );
-      // 3 + 3 + 3 + 2 — the last page short, and no page repeated.
-      expect(seen.walked.sizes).toEqual([3, 3, 3, 2]);
-    },
-    60_000,
-  );
-
-  it("ends with a null cursor even when the page size divides the list exactly", async () => {
-    // The `limit + 1` probe row is the whole of this: without it a list of
-    // eleven read eleven at a time would hand back a cursor, and the page after
-    // it would be empty.
-    const seen = await runtime.runPromise(
+    it.effect("ends with a null cursor even when the page size divides the list exactly", () =>
       Effect.gen(function* () {
-        const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
-        return {
-          exact: yield* list("name", COUNT, undefined),
-          oneShort: yield* list("name", COUNT - 1, undefined),
-        };
+        const fixture = yield* Fixture;
+        // The `limit + 1` probe row is the whole of this: without it a list of
+        // eleven read eleven at a time would hand back a cursor, and the page after
+        // it would be empty.
+        const seen = yield* Effect.gen(function* () {
+          const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
+          return {
+            exact: yield* list("name", COUNT, undefined),
+            oneShort: yield* list("name", COUNT - 1, undefined),
+          };
+        });
+
+        expect(seen.exact.items.length).toBe(COUNT);
+        expect(seen.exact.nextCursor).toBeNull();
+        expect(seen.oneShort.items.length).toBe(COUNT - 1);
+        expect(seen.oneShort.nextCursor).not.toBeNull();
       }),
     );
 
-    expect(seen.exact.items.length).toBe(COUNT);
-    expect(seen.exact.nextCursor).toBeNull();
-    expect(seen.oneShort.items.length).toBe(COUNT - 1);
-    expect(seen.oneShort.nextCursor).not.toBeNull();
-  }, 60_000);
-
-  it("carries on from the cursor rather than from a count", async () => {
-    // The property an offset does not have. A row inserted *before* the cursor's
-    // position between two pages shifts every offset by one; a keyset names the
-    // last row it returned, so page two is unaffected either way.
-    const seen = await runtime.runPromise(
+    it.effect("carries on from the cursor rather than from a count", () =>
       Effect.gen(function* () {
-        const creatures = yield* Creatures;
-        const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
-        const first = yield* list("name", 4, undefined);
-        yield* withActor(fixture.dm)(
-          creatures.libraryCreate({
-            // Sorts first by name, so an offset walk would repeat a row here.
-            name: "Aardvark",
-            type: "Beast",
-            cr: "0",
-            ac: 10,
-            hp: 4,
-          }),
-        ).pipe(Effect.orDie);
-        const second = yield* list("name", 4, first.nextCursor ?? undefined);
-        yield* Effect.promise(() =>
-          runtime.runPromise(
-            Effect.flatMap(Creatures, (repo) =>
-              withActor(fixture.dm)(
-                repo.list(fixture.campaign.id, { q: "Aardvark", limit: 1 }),
-              ).pipe(
-                Effect.flatMap((page) =>
-                  withActor(fixture.dm)(repo.libraryRemove(page.items[0]!.id)),
-                ),
-                Effect.orDie,
-              ),
-            ),
-          ),
-        );
-        return { first, second };
-      }),
-    );
-
-    const overlap = seen.second.items.filter((creature) =>
-      seen.first.items.some((earlier) => earlier.id === creature.id),
-    );
-    expect(overlap).toEqual([]);
-    expect(seen.second.items.length).toBe(4);
-  }, 60_000);
-});
-
-describe("visibility on a paged read", () => {
-  it("gives a player none of the DM's Library, and the DM the whole of it", async () => {
-    // The campaign creature list is `usableInCampaign` since the instancing
-    // decision of 2026-09-02: the bundle under its visibility rule, the
-    // *reader's* own Library, and the group's shares. This corpus is the DM's
-    // Library with nothing shared to the group, so the DM pages through all of
-    // it and a member at the same table honestly reads nothing — the
-    // per-reader half of the predicate, not a filter on the answer.
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const list = yield* creaturesOf(fixture.player, fixture.campaign.id);
-        const asDm = yield* creaturesOf(fixture.dm, fixture.campaign.id);
-        const walked = yield* walk<Creature, CreatureSort>((cursor) => list("name", 2, cursor));
-        const whole = yield* asDm("name", MAX_PAGE_SIZE, undefined);
-        return { walked, whole };
-      }),
-    );
-
-    expect(seen.whole.items.length).toBe(COUNT);
-    expect(seen.walked.rows).toEqual([]);
-  }, 60_000);
-
-  // Not encounters: their paged read is the creator's alone, and a player's
-  // (`Encounters.listAsPlayer`) is unpaged. A player's notes are their own
-  // projection, paged the same way, so they carry no `visibility` to check:
-  // the walk is checked against the titles the fixture shared.
-  it("holds for notes and beats too", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const notes = yield* Notes;
-        const beats = yield* Beats;
-        const campaignId: CampaignId = fixture.campaign.id;
-        const nightId: SessionId = fixture.night.id;
-        const player = withActor(fixture.player);
-        return {
-          notes: yield* walk<PlayerNote, CreatedOrder>((cursor) =>
-            player(notes.listAsPlayer(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
-          ),
-          beats: yield* walk<Beat, CreatedOrder>((cursor) =>
-            player(beats.list(campaignId, nightId, { limit: 2, cursor })).pipe(Effect.orDie),
-          ),
-        };
-      }),
-    );
-
-    for (const [name, walked] of Object.entries(seen)) {
-      expect(walked.sizes, name).toEqual([2, 2, 2]);
-      expect(walked.rows.length, name).toBe(6);
-    }
-    expect(seen.notes.rows.map((note) => note.title)).toEqual(
-      [0, 2, 4, 6, 8, 10].map((index) => `Note ${String(index)}`),
-    );
-    expect(seen.beats.rows.every((row) => row.visibility === "shared")).toBe(true);
-  }, 60_000);
-
-  it("pages the creator's encounters, every one of them, in the planned order", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const encounters = yield* Encounters;
-        const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
-        return yield* walk<Encounter, PlannedOrder>((cursor) =>
-          encounters.list(dm, { limit: 4, cursor }),
-        );
-      }),
-    );
-
-    expect(seen.sizes).toEqual([4, 4, 3]);
-    expect(seen.rows.map((encounter) => encounter.name)).toEqual(
-      Array.from({ length: COUNT }, (_, index) => `Encounter ${String(index)}`),
-    );
-  }, 60_000);
-
-  it("walks the three chronologies in the order they happened", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const notes = yield* Notes;
-        const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
-        const whole = yield* notes.list(dm, { limit: MAX_PAGE_SIZE });
-        const walked = yield* walk<Note, CreatedOrder>((cursor) =>
-          notes.list(dm, { limit: 4, cursor }),
-        );
-        return { whole, walked };
-      }),
-    );
-
-    expect(seen.whole.items.map((note) => note.title)).toEqual(
-      Array.from({ length: COUNT }, (_, index) => `Note ${String(index)}`),
-    );
-    expect(seen.walked.rows.map((note) => note.title)).toEqual(
-      seen.whole.items.map((note) => note.title),
-    );
-  }, 60_000);
-});
-
-describe("the filters, against the paged query", () => {
-  it("narrows to one environment — the case the wire used to refuse", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const creatures = yield* Creatures;
-        const dm = withActor(fixture.dm);
-        const oneChip = yield* dm(
-          creatures.list(fixture.campaign.id, { environments: ["Cave"], sort: "name" }),
-        ).pipe(Effect.orDie);
-        const twoChips = yield* dm(
-          creatures.list(fixture.campaign.id, {
-            environments: ["Cave", "Marsh"],
-            sort: "name",
-          }),
-        ).pipe(Effect.orDie);
-        const noChips = yield* dm(
-          creatures.list(fixture.campaign.id, { environments: [], sort: "name" }),
-        ).pipe(Effect.orDie);
-        const nothing = yield* dm(
-          creatures.list(fixture.campaign.id, { environments: ["Moon"], sort: "name" }),
-        ).pipe(Effect.orDie);
-        const walked = yield* walk<Creature, CreatureSort>((cursor) =>
-          dm(
-            creatures.list(fixture.campaign.id, {
-              environments: ["Cave"],
-              sort: "name",
-              limit: 2,
-              cursor,
+        const fixture = yield* Fixture;
+        // The property an offset does not have. A row inserted *before* the cursor's
+        // position between two pages shifts every offset by one; a keyset names the
+        // last row it returned, so page two is unaffected either way.
+        const seen = yield* Effect.gen(function* () {
+          const creatures = yield* Creatures;
+          const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
+          const first = yield* list("name", 4, undefined);
+          yield* withActor(fixture.dm)(
+            creatures.libraryCreate({
+              // Sorts first by name, so an offset walk would repeat a row here.
+              name: "Aardvark",
+              type: "Beast",
+              cr: "0",
+              ac: 10,
+              hp: 4,
             }),
-          ).pipe(Effect.orDie),
+          ).pipe(Effect.orDie);
+          const second = yield* list("name", 4, first.nextCursor ?? undefined);
+          yield* Effect.flatMap(Creatures, (repo) =>
+            withActor(fixture.dm)(repo.list(fixture.campaign.id, { q: "Aardvark", limit: 1 })).pipe(
+              Effect.flatMap((page) =>
+                withActor(fixture.dm)(repo.libraryRemove(page.items[0]!.id)),
+              ),
+              Effect.orDie,
+            ),
+          );
+          return { first, second };
+        });
+
+        const overlap = seen.second.items.filter((creature) =>
+          seen.first.items.some((earlier) => earlier.id === creature.id),
         );
-        return { oneChip, twoChips, noChips, nothing, walked };
+        expect(overlap).toEqual([]);
+        expect(seen.second.items.length).toBe(4);
       }),
     );
+  });
 
-    // Every third of eleven — 0, 3, 6, 9.
-    expect(seen.oneChip.items.length).toBe(4);
-    expect(seen.oneChip.items.every((creature) => creature.environments.includes("Cave"))).toBe(
-      true,
-    );
-    // Any-of, so the two chips together are the whole corpus.
-    expect(seen.twoChips.items.length).toBe(COUNT);
-    // No chips is not a filter at all.
-    expect(seen.noChips.items.length).toBe(COUNT);
-    // A chip nothing wears narrows to nothing, and says so with a null cursor
-    // rather than an error.
-    expect(seen.nothing.items).toEqual([]);
-    expect(seen.nothing.nextCursor).toBeNull();
-    // And the narrowing survives a page boundary, which is the point of doing
-    // the two together: it is the *query* that is narrow, so page two of a
-    // filtered list is page two of the filtered list.
-    expect(seen.walked.rows.map((creature) => creature.id)).toEqual(
-      seen.oneChip.items.map((creature) => creature.id),
-    );
-    expect(seen.walked.sizes).toEqual([2, 2]);
-  }, 60_000);
-
-  it("offers the chip vocabulary over the same predicate the list uses", async () => {
-    // The campaign environments read went with the campaign bestiary screen;
-    // the Library's is the one chip vocabulary left, and it is per reader
-    // exactly as the list is: the DM's Library wears both tags, and a player
-    // whose Library holds nothing gets an honest empty row.
-    const seen = await runtime.runPromise(
+  describe("visibility on a paged read", () => {
+    it.effect("gives a player none of the DM's Library, and the DM the whole of it", () =>
       Effect.gen(function* () {
-        const creatures = yield* Creatures;
-        return {
-          dm: yield* withActor(fixture.dm)(creatures.libraryEnvironments()).pipe(Effect.orDie),
-          player: yield* withActor(fixture.player)(creatures.libraryEnvironments()).pipe(
-            Effect.orDie,
-          ),
-        };
+        const fixture = yield* Fixture;
+        // The campaign creature list is `usableInCampaign` since the instancing
+        // decision of 2026-09-02: the bundle under its visibility rule, the
+        // *reader's* own Library, and the group's shares. This corpus is the DM's
+        // Library with nothing shared to the group, so the DM pages through all of
+        // it and a member at the same table honestly reads nothing — the
+        // per-reader half of the predicate, not a filter on the answer.
+        const seen = yield* Effect.gen(function* () {
+          const list = yield* creaturesOf(fixture.player, fixture.campaign.id);
+          const asDm = yield* creaturesOf(fixture.dm, fixture.campaign.id);
+          const walked = yield* walk<Creature, CreatureSort>((cursor) => list("name", 2, cursor));
+          const whole = yield* asDm("name", MAX_PAGE_SIZE, undefined);
+          return { walked, whole };
+        });
+
+        expect(seen.whole.items.length).toBe(COUNT);
+        expect(seen.walked.rows).toEqual([]);
       }),
     );
 
-    expect(seen.dm).toEqual(["Cave", "Marsh"]);
-    expect(seen.player).toEqual([]);
-  }, 60_000);
-});
-
-describe("the cursor", () => {
-  it("decides the ordering, whatever sort is sent beside it", async () => {
-    // Otherwise a key taken in one order is compared against the columns of
-    // another, which is a coherent-looking answer that is simply wrong.
-    const seen = await runtime.runPromise(
+    // Not encounters: their paged read is the creator's alone, and a player's
+    // (`Encounters.listAsPlayer`) is unpaged. A player's notes are their own
+    // projection, paged the same way, so they carry no `visibility` to check:
+    // the walk is checked against the titles the fixture shared.
+    it.effect("holds for notes and beats too", () =>
       Effect.gen(function* () {
-        const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
-        const byName = yield* list("name", 4, undefined);
-        const creatures = yield* Creatures;
-        const contradicted = yield* withActor(fixture.dm)(
-          creatures.list(fixture.campaign.id, {
-            sort: "recent",
-            limit: 4,
-            cursor: byName.nextCursor ?? undefined,
-          }),
-        ).pipe(Effect.orDie);
-        const honest = yield* list("name", 4, byName.nextCursor ?? undefined);
-        return { contradicted, honest };
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const notes = yield* Notes;
+          const beats = yield* Beats;
+          const campaignId: CampaignId = fixture.campaign.id;
+          const nightId: SessionId = fixture.night.id;
+          const player = withActor(fixture.player);
+          return {
+            notes: yield* walk<PlayerNote, CreatedOrder>((cursor) =>
+              player(notes.listAsPlayer(campaignId, { limit: 2, cursor })).pipe(Effect.orDie),
+            ),
+            beats: yield* walk<Beat, CreatedOrder>((cursor) =>
+              player(beats.list(campaignId, nightId, { limit: 2, cursor })).pipe(Effect.orDie),
+            ),
+          };
+        });
+
+        for (const [name, walked] of Object.entries(seen)) {
+          expect(walked.sizes, name).toEqual([2, 2, 2]);
+          expect(walked.rows.length, name).toBe(6);
+        }
+        expect(seen.notes.rows.map((note) => note.title)).toEqual(
+          [0, 2, 4, 6, 8, 10].map((index) => `Note ${String(index)}`),
+        );
+        expect(seen.beats.rows.every((row) => row.visibility === "shared")).toBe(true);
       }),
     );
 
-    expect(seen.contradicted.items.map((creature) => creature.name)).toEqual(
-      seen.honest.items.map((creature) => creature.name),
-    );
-  }, 60_000);
-
-  it("continues from nowhere when it was not minted here", async () => {
-    // A forged cursor whose key has the wrong number of columns cannot name a
-    // position, and answering the first page instead would silently restart a
-    // walk. An empty page is the answer that cannot be mistaken for progress.
-    const seen = await runtime.runPromise(
+    it.effect("pages the creator's encounters, every one of them, in the planned order", () =>
       Effect.gen(function* () {
-        const creatures = yield* Creatures;
-        return yield* withActor(fixture.dm)(
-          creatures.list(fixture.campaign.id, {
-            cursor: { o: "name", k: ["Goblin Boss"] } as PageCursor<CreatureSort>,
-          }),
-        ).pipe(Effect.orDie);
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const encounters = yield* Encounters;
+          const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
+          return yield* walk<Encounter, PlannedOrder>((cursor) =>
+            encounters.list(dm, { limit: 4, cursor }),
+          );
+        });
+
+        expect(seen.sizes).toEqual([4, 4, 3]);
+        expect(seen.rows.map((encounter) => encounter.name)).toEqual(
+          Array.from({ length: COUNT }, (_, index) => `Encounter ${String(index)}`),
+        );
       }),
     );
 
-    expect(seen.items).toEqual([]);
-    expect(seen.nextCursor).toBeNull();
-  }, 60_000);
+    it.effect("walks the three chronologies in the order they happened", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const notes = yield* Notes;
+          const dm = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
+          const whole = yield* notes.list(dm, { limit: MAX_PAGE_SIZE });
+          const walked = yield* walk<Note, CreatedOrder>((cursor) =>
+            notes.list(dm, { limit: 4, cursor }),
+          );
+          return { whole, walked };
+        });
+
+        expect(seen.whole.items.map((note) => note.title)).toEqual(
+          Array.from({ length: COUNT }, (_, index) => `Note ${String(index)}`),
+        );
+        expect(seen.walked.rows.map((note) => note.title)).toEqual(
+          seen.whole.items.map((note) => note.title),
+        );
+      }),
+    );
+  });
+
+  describe("the filters, against the paged query", () => {
+    it.effect("narrows to one environment — the case the wire used to refuse", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const creatures = yield* Creatures;
+          const dm = withActor(fixture.dm);
+          const oneChip = yield* dm(
+            creatures.list(fixture.campaign.id, { environments: ["Cave"], sort: "name" }),
+          ).pipe(Effect.orDie);
+          const twoChips = yield* dm(
+            creatures.list(fixture.campaign.id, {
+              environments: ["Cave", "Marsh"],
+              sort: "name",
+            }),
+          ).pipe(Effect.orDie);
+          const noChips = yield* dm(
+            creatures.list(fixture.campaign.id, { environments: [], sort: "name" }),
+          ).pipe(Effect.orDie);
+          const nothing = yield* dm(
+            creatures.list(fixture.campaign.id, { environments: ["Moon"], sort: "name" }),
+          ).pipe(Effect.orDie);
+          const walked = yield* walk<Creature, CreatureSort>((cursor) =>
+            dm(
+              creatures.list(fixture.campaign.id, {
+                environments: ["Cave"],
+                sort: "name",
+                limit: 2,
+                cursor,
+              }),
+            ).pipe(Effect.orDie),
+          );
+          return { oneChip, twoChips, noChips, nothing, walked };
+        });
+
+        // Every third of eleven — 0, 3, 6, 9.
+        expect(seen.oneChip.items.length).toBe(4);
+        expect(seen.oneChip.items.every((creature) => creature.environments.includes("Cave"))).toBe(
+          true,
+        );
+        // Any-of, so the two chips together are the whole corpus.
+        expect(seen.twoChips.items.length).toBe(COUNT);
+        // No chips is not a filter at all.
+        expect(seen.noChips.items.length).toBe(COUNT);
+        // A chip nothing wears narrows to nothing, and says so with a null cursor
+        // rather than an error.
+        expect(seen.nothing.items).toEqual([]);
+        expect(seen.nothing.nextCursor).toBeNull();
+        // And the narrowing survives a page boundary, which is the point of doing
+        // the two together: it is the *query* that is narrow, so page two of a
+        // filtered list is page two of the filtered list.
+        expect(seen.walked.rows.map((creature) => creature.id)).toEqual(
+          seen.oneChip.items.map((creature) => creature.id),
+        );
+        expect(seen.walked.sizes).toEqual([2, 2]);
+      }),
+    );
+
+    it.effect("offers the chip vocabulary over the same predicate the list uses", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // The campaign environments read went with the campaign bestiary screen;
+        // the Library's is the one chip vocabulary left, and it is per reader
+        // exactly as the list is: the DM's Library wears both tags, and a player
+        // whose Library holds nothing gets an honest empty row.
+        const seen = yield* Effect.gen(function* () {
+          const creatures = yield* Creatures;
+          return {
+            dm: yield* withActor(fixture.dm)(creatures.libraryEnvironments()).pipe(Effect.orDie),
+            player: yield* withActor(fixture.player)(creatures.libraryEnvironments()).pipe(
+              Effect.orDie,
+            ),
+          };
+        });
+
+        expect(seen.dm).toEqual(["Cave", "Marsh"]);
+        expect(seen.player).toEqual([]);
+      }),
+    );
+  });
+
+  describe("the cursor", () => {
+    it.effect("decides the ordering, whatever sort is sent beside it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Otherwise a key taken in one order is compared against the columns of
+        // another, which is a coherent-looking answer that is simply wrong.
+        const seen = yield* Effect.gen(function* () {
+          const list = yield* creaturesOf(fixture.dm, fixture.campaign.id);
+          const byName = yield* list("name", 4, undefined);
+          const creatures = yield* Creatures;
+          const contradicted = yield* withActor(fixture.dm)(
+            creatures.list(fixture.campaign.id, {
+              sort: "recent",
+              limit: 4,
+              cursor: byName.nextCursor ?? undefined,
+            }),
+          ).pipe(Effect.orDie);
+          const honest = yield* list("name", 4, byName.nextCursor ?? undefined);
+          return { contradicted, honest };
+        });
+
+        expect(seen.contradicted.items.map((creature) => creature.name)).toEqual(
+          seen.honest.items.map((creature) => creature.name),
+        );
+      }),
+    );
+
+    it.effect("continues from nowhere when it was not minted here", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // A forged cursor whose key has the wrong number of columns cannot name a
+        // position, and answering the first page instead would silently restart a
+        // walk. An empty page is the answer that cannot be mistaken for progress.
+        const seen = yield* Effect.gen(function* () {
+          const creatures = yield* Creatures;
+          return yield* withActor(fixture.dm)(
+            creatures.list(fixture.campaign.id, {
+              cursor: { o: "name", k: ["Goblin Boss"] } as PageCursor<CreatureSort>,
+            }),
+          ).pipe(Effect.orDie);
+        });
+
+        expect(seen.items).toEqual([]);
+        expect(seen.nextCursor).toBeNull();
+      }),
+    );
+  });
 });

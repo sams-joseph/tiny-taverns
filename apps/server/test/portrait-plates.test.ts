@@ -1,3 +1,4 @@
+import { describe, expect } from "@effect/vitest";
 import {
   type Actor,
   type CharacterId,
@@ -5,9 +6,8 @@ import {
   type PlayerLiveTable,
   type Visibility,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime, Redacted } from "effect";
+import { Context, Effect, Layer, Redacted } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { ImageUrls } from "../src/images/ImageUrls.js";
@@ -27,6 +27,7 @@ import { Recap } from "../src/repo/Recap.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aCharacterAt, aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **A portrait on a plate other than the character's own is the character's
@@ -58,8 +59,6 @@ const services = Layer.mergeAll(
   Recap.layer,
   Sessions.layer.pipe(Layer.provide(live)),
 ).pipe(Layer.provide(urls), Layer.provideMerge(migratedDatabase("taverns_test_portrait_plates")));
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 const withActor =
   (actor: Actor) =>
@@ -182,16 +181,14 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "portrait-plates.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-const run = <A, E, R extends Layer.Success<typeof services>>(
-  actor: Actor,
-  effect: Effect.Effect<A, E, R | CurrentActor>,
-) => runtime.runPromise(withActor(actor)(effect).pipe(Effect.orDie));
+const run = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R | CurrentActor>) =>
+  withActor(actor)(effect).pipe(Effect.orDie);
 
 /** Every portrait id a value mentions, once each, from the signed paths it carries. */
 const portraitIdsIn = (value: unknown): ReadonlyArray<string> => [
@@ -203,133 +200,176 @@ const portraitIdsIn = (value: unknown): ReadonlyArray<string> => [
 const idOf = (thumbUrl: string | undefined) => thumbUrl?.match(/^\/portraits\/([^/]+)\//)?.[1];
 
 /** The character's portrait as the party read hands it to this reader. */
-const partyPortrait = async (actor: Actor, characterId: CharacterId) => {
-  const seats = await run(
-    actor,
-    Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
-  );
-  return seats.find((seat) => seat.character?.id === characterId)?.character?.portrait;
-};
+const partyPortrait = (actor: Actor, characterId: CharacterId) =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const seats = yield* run(
+      actor,
+      Effect.flatMap(Party, (party) => party.list(fixture.campaign.id)),
+    );
+    return seats.find((seat) => seat.character?.id === characterId)?.character?.portrait;
+  });
 
 const runner = () =>
-  run(
-    fixture.dm,
-    Effect.flatMap(Combatants, (combatants) =>
-      combatants.list(fixture.creator, fixture.session.id, fixture.run.id),
+  Effect.flatMap(Fixture, (fixture) =>
+    run(
+      fixture.dm,
+      Effect.flatMap(Combatants, (combatants) =>
+        combatants.list(fixture.creator, fixture.session.id, fixture.run.id),
+      ),
     ),
   );
 
-const tableAs = (actor: Actor): Promise<PlayerLiveTable | null> =>
-  run(
-    actor,
-    Effect.flatMap(PlayerTable, (table) => table.read(fixture.campaign.id)),
+const tableAs = (
+  actor: Actor,
+): Effect.Effect<PlayerLiveTable | null, never, Fixture | PlayerTable> =>
+  Effect.flatMap(Fixture, (fixture) =>
+    run(
+      actor,
+      Effect.flatMap(PlayerTable, (table) => table.read(fixture.campaign.id)),
+    ),
   );
 
-const setSeat = (seat: typeof fixture.nessaSeat, visibility: Visibility) =>
-  run(
-    fixture.dm,
-    Effect.flatMap(Party, (party) => party.update(fixture.campaign.id, seat, { visibility })),
-  );
-
-describe("the runner's rows", () => {
-  it("carry a seated character's portrait, the same URLs the party read gives the creator", async () => {
-    const rows = await runner();
-    const brannoc = rows.find((row) => row.characterId === fixture.brannoc.id);
-    const nessa = rows.find((row) => row.characterId === fixture.nessa.id);
-
-    expect(brannoc?.portrait).toEqual(await partyPortrait(fixture.dm, fixture.brannoc.id));
-    expect(idOf(brannoc?.portrait?.thumbUrl)).toBe(fixture.portraits.brannoc);
-    // The creator reads every seat at their table, hidden or not.
-    expect(idOf(nessa?.portrait?.thumbUrl)).toBe(fixture.portraits.nessa);
-  });
-
-  it("carry none for a monster, and none for a character with no seat here", async () => {
-    const rows = await runner();
-    expect(rows.find((row) => row.kind === "npc")?.portrait).toBeNull();
-    expect(rows.find((row) => row.characterId === fixture.unseated.id)?.portrait).toBeNull();
-    expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.unseated);
-  });
-
-  it("carry it on a write's answer, so the row the client swaps in keeps its picture", async () => {
-    const row = (await runner()).find((entry) => entry.characterId === fixture.brannoc.id)!;
-    const damaged = await run(
+const setSeat = (seat: Effect.Success<typeof makeFixture>["nessaSeat"], visibility: Visibility) =>
+  Effect.flatMap(Fixture, (fixture) =>
+    run(
       fixture.dm,
-      Effect.flatMap(Combatants, (combatants) =>
-        combatants.damage(fixture.creator, fixture.session.id, fixture.run.id, row.id, {
-          amount: 0,
+      Effect.flatMap(Party, (party) => party.update(fixture.campaign.id, seat, { visibility })),
+    ),
+  );
+
+describeLayer("portrait-plates", shared, (it) => {
+  describe("the runner's rows", () => {
+    it.effect(
+      "carry a seated character's portrait, the same URLs the party read gives the creator",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const rows = yield* runner();
+          const brannoc = rows.find((row) => row.characterId === fixture.brannoc.id);
+          const nessa = rows.find((row) => row.characterId === fixture.nessa.id);
+
+          expect(brannoc?.portrait).toEqual(yield* partyPortrait(fixture.dm, fixture.brannoc.id));
+          expect(idOf(brannoc?.portrait?.thumbUrl)).toBe(fixture.portraits.brannoc);
+          // The creator reads every seat at their table, hidden or not.
+          expect(idOf(nessa?.portrait?.thumbUrl)).toBe(fixture.portraits.nessa);
         }),
-      ),
     );
-    expect(damaged.portrait).toEqual(row.portrait);
+
+    it.effect("carry none for a monster, and none for a character with no seat here", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const rows = yield* runner();
+        expect(rows.find((row) => row.kind === "npc")?.portrait).toBeNull();
+        expect(rows.find((row) => row.characterId === fixture.unseated.id)?.portrait).toBeNull();
+        expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.unseated);
+      }),
+    );
+
+    it.effect(
+      "carry it on a write's answer, so the row the client swaps in keeps its picture",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const row = (yield* runner()).find((entry) => entry.characterId === fixture.brannoc.id)!;
+          const damaged = yield* run(
+            fixture.dm,
+            Effect.flatMap(Combatants, (combatants) =>
+              combatants.damage(fixture.creator, fixture.session.id, fixture.run.id, row.id, {
+                amount: 0,
+              }),
+            ),
+          );
+          expect(damaged.portrait).toEqual(row.portrait);
+        }),
+    );
+
+    it.effect("carry it into the creator's recap of the night", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const recap = yield* run(
+          fixture.dm,
+          Effect.flatMap(Recap, (recap) => recap.read(fixture.creator, fixture.session.id)),
+        );
+        const rows = recap.fights.flatMap((fight) => fight.combatants);
+        expect(
+          idOf(rows.find((row) => row.characterId === fixture.brannoc.id)?.portrait?.thumbUrl),
+        ).toBe(fixture.portraits.brannoc);
+        expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.unseated);
+      }),
+    );
   });
 
-  it("carry it into the creator's recap of the night", async () => {
-    const recap = await run(
-      fixture.dm,
-      Effect.flatMap(Recap, (recap) => recap.read(fixture.creator, fixture.session.id)),
+  describe("the player table's order", () => {
+    it.effect("gives your own row your portrait", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const answer = yield* tableAs(fixture.pim);
+        const you = answer?.fight?.order.find((row) => row.kind === "you");
+        expect(you?.characterId).toBe(fixture.brannoc.id);
+        expect(you?.kind === "you" && you.portrait).toEqual(
+          yield* partyPortrait(fixture.pim, fixture.brannoc.id),
+        );
+      }),
     );
-    const rows = recap.fights.flatMap((fight) => fight.combatants);
-    expect(
-      idOf(rows.find((row) => row.characterId === fixture.brannoc.id)?.portrait?.thumbUrl),
-    ).toBe(fixture.portraits.brannoc);
-    expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.unseated);
-  });
-});
 
-describe("the player table's order", () => {
-  it("gives your own row your portrait", async () => {
-    const answer = await tableAs(fixture.pim);
-    const you = answer?.fight?.order.find((row) => row.kind === "you");
-    expect(you?.characterId).toBe(fixture.brannoc.id);
-    expect(you?.kind === "you" && you.portrait).toEqual(
-      await partyPortrait(fixture.pim, fixture.brannoc.id),
+    it.effect(
+      "gives an ally on a shared seat the portrait the party read gives the same reader",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const answer = yield* tableAs(fixture.wren);
+          const ally = answer?.fight?.order.find(
+            (row) => row.kind === "ally" && row.characterId === fixture.brannoc.id,
+          );
+          expect(ally?.kind === "ally" && ally.portrait).toEqual(
+            yield* partyPortrait(fixture.wren, fixture.brannoc.id),
+          );
+          expect(idOf(ally?.kind === "ally" ? ally.portrait?.thumbUrl : undefined)).toBe(
+            fixture.portraits.brannoc,
+          );
+        }),
+    );
+
+    it.effect("leaks no URL for a hidden seat's character, nor for one seated nowhere here", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const answer = yield* tableAs(fixture.pim);
+        const ids = portraitIdsIn(answer);
+        expect(ids).toEqual([fixture.portraits.brannoc]);
+        expect(ids).not.toContain(fixture.portraits.nessa);
+        expect(ids).not.toContain(fixture.portraits.unseated);
+        expect(yield* partyPortrait(fixture.pim, fixture.nessa.id)).toBeUndefined();
+      }),
+    );
+
+    it.effect("follows the seat: shared, the ally's picture appears; hidden again, it goes", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        yield* setSeat(fixture.nessaSeat, "shared");
+        yield* Effect.gen(function* () {
+          const shared = yield* tableAs(fixture.pim);
+          expect(portraitIdsIn(shared)).toContain(fixture.portraits.nessa);
+        }).pipe(Effect.ensuring(setSeat(fixture.nessaSeat, "dm")));
+        expect(portraitIdsIn(yield* tableAs(fixture.pim))).not.toContain(fixture.portraits.nessa);
+      }),
     );
   });
 
-  it("gives an ally on a shared seat the portrait the party read gives the same reader", async () => {
-    const answer = await tableAs(fixture.wren);
-    const ally = answer?.fight?.order.find(
-      (row) => row.kind === "ally" && row.characterId === fixture.brannoc.id,
+  describe("a retired seat", () => {
+    it.effect("takes the picture off the runner's row, which stays as the fight's snapshot", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        yield* run(
+          fixture.dm,
+          Effect.flatMap(Party, (party) => party.leave(fixture.campaign.id, fixture.nessaSeat)),
+        );
+        const rows = yield* runner();
+        const nessa = rows.find((row) => row.displayName === "Nessa");
+        expect(nessa).toBeDefined();
+        expect(nessa?.portrait).toBeNull();
+        expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.nessa);
+      }),
     );
-    expect(ally?.kind === "ally" && ally.portrait).toEqual(
-      await partyPortrait(fixture.wren, fixture.brannoc.id),
-    );
-    expect(idOf(ally?.kind === "ally" ? ally.portrait?.thumbUrl : undefined)).toBe(
-      fixture.portraits.brannoc,
-    );
-  });
-
-  it("leaks no URL for a hidden seat's character, nor for one seated nowhere here", async () => {
-    const answer = await tableAs(fixture.pim);
-    const ids = portraitIdsIn(answer);
-    expect(ids).toEqual([fixture.portraits.brannoc]);
-    expect(ids).not.toContain(fixture.portraits.nessa);
-    expect(ids).not.toContain(fixture.portraits.unseated);
-    expect(await partyPortrait(fixture.pim, fixture.nessa.id)).toBeUndefined();
-  });
-
-  it("follows the seat: shared, the ally's picture appears; hidden again, it goes", async () => {
-    await setSeat(fixture.nessaSeat, "shared");
-    try {
-      const shared = await tableAs(fixture.pim);
-      expect(portraitIdsIn(shared)).toContain(fixture.portraits.nessa);
-    } finally {
-      await setSeat(fixture.nessaSeat, "dm");
-    }
-    expect(portraitIdsIn(await tableAs(fixture.pim))).not.toContain(fixture.portraits.nessa);
-  });
-});
-
-describe("a retired seat", () => {
-  it("takes the picture off the runner's row, which stays as the fight's snapshot", async () => {
-    await run(
-      fixture.dm,
-      Effect.flatMap(Party, (party) => party.leave(fixture.campaign.id, fixture.nessaSeat)),
-    );
-    const rows = await runner();
-    const nessa = rows.find((row) => row.displayName === "Nessa");
-    expect(nessa).toBeDefined();
-    expect(nessa?.portrait).toBeNull();
-    expect(portraitIdsIn(rows)).not.toContain(fixture.portraits.nessa);
   });
 });

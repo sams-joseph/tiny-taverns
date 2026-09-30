@@ -1,7 +1,7 @@
+import { describe, expect } from "@effect/vitest";
 import { Actor, type CharacterOption, CurrentActor, type OptionVocabulary } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { Statement } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -12,6 +12,7 @@ import { Options } from "../src/repo/Options.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { aCampaignBy, anAccount, aPlayerAt } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **An option list costs the same number of statements whatever its length.**
@@ -33,17 +34,14 @@ import { migratedDatabase } from "./support/database.js";
  *      carrying that trait — so every option in the list is compared with the
  *      same option read on its own.
  */
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    CampaignCreatorActors.layer,
-    Groups.layer,
-    Invites.layer,
-    Options.layer,
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_options_hydration"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  CampaignCreatorActors.layer,
+  Groups.layer,
+  Invites.layer,
+  Options.layer,
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_options_hydration")));
 
 const as =
   (actor: Actor) =>
@@ -62,9 +60,6 @@ const counted = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     );
     return { value, statements };
   });
-
-const run = <A, E>(effect: Effect.Effect<A, E, Options>) =>
-  runtime.runPromise(Effect.orDie(effect));
 
 /**
  * The bundle, a creator whose Library adds a homebrew race, and a player at
@@ -122,145 +117,147 @@ const makeFixture = Effect.gen(function* () {
   return { dm, player, campaign, homebrew };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "options-hydration.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-describe("an option list", () => {
-  it("runs the same statements for one option as for every option", async () => {
-    const { dm, player, campaign } = fixture;
-    const [core, library, creator, seated] = await run(
+describeLayer("options-hydration", shared, (it) => {
+  describe("an option list", () => {
+    it.effect("runs the same statements for one option as for every option", () =>
       Effect.gen(function* () {
-        const options = yield* Options;
-        const sizes = <A, E, R>(read: (kind?: "background") => Effect.Effect<A, E, R>) =>
-          Effect.all([counted(read("background")), counted(read())]);
-        return [
-          yield* as(dm)(sizes((kind) => options.core(kind === undefined ? {} : { kind }))),
-          yield* as(dm)(sizes((kind) => options.library(kind === undefined ? {} : { kind }))),
-          yield* as(dm)(
-            sizes((kind) => options.list(campaign.id, kind === undefined ? {} : { kind })),
-          ),
-          yield* as(player)(
-            sizes((kind) => options.list(campaign.id, kind === undefined ? {} : { kind })),
-          ),
-        ] as const;
+        const { dm, player, campaign } = yield* Fixture;
+        const [core, library, creator, seated] = yield* Effect.gen(function* () {
+          const options = yield* Options;
+          const sizes = <A, E, R>(read: (kind?: "background") => Effect.Effect<A, E, R>) =>
+            Effect.all([counted(read("background")), counted(read())]);
+          return [
+            yield* as(dm)(sizes((kind) => options.core(kind === undefined ? {} : { kind }))),
+            yield* as(dm)(sizes((kind) => options.library(kind === undefined ? {} : { kind }))),
+            yield* as(dm)(
+              sizes((kind) => options.list(campaign.id, kind === undefined ? {} : { kind })),
+            ),
+            yield* as(player)(
+              sizes((kind) => options.list(campaign.id, kind === undefined ? {} : { kind })),
+            ),
+          ] as const;
+        });
+
+        for (const [one, all] of [core, library, creator, seated]) {
+          expect(one.value).toHaveLength(1);
+          expect(all.value.length).toBeGreaterThanOrEqual(22);
+          // The text differs — the kind filter, and one arm per kit category in
+          // the equipment read — but not how many round trips it takes.
+          expect(all.statements).toHaveLength(one.statements.length);
+        }
+        // One read of the rows and fifteen of their children: eleven keyed by
+        // option, four by choice group — and, for a campaign's list, the gate that
+        // makes an unreachable campaign a 404 rather than an empty picker.
+        expect(core[1].statements).toHaveLength(1 + 15);
+        expect(library[1].statements).toHaveLength(1 + 15);
+        expect(creator[1].statements).toHaveLength(2 + 15);
+        expect(seated[1].statements).toHaveLength(2 + 15);
       }),
     );
 
-    for (const [one, all] of [core, library, creator, seated]) {
-      expect(one.value).toHaveLength(1);
-      expect(all.value.length).toBeGreaterThanOrEqual(22);
-      // The text differs — the kind filter, and one arm per kit category in
-      // the equipment read — but not how many round trips it takes.
-      expect(all.statements).toHaveLength(one.statements.length);
-    }
-    // One read of the rows and fifteen of their children: eleven keyed by
-    // option, four by choice group — and, for a campaign's list, the gate that
-    // makes an unreachable campaign a 404 rather than an empty picker.
-    expect(core[1].statements).toHaveLength(1 + 15);
-    expect(library[1].statements).toHaveLength(1 + 15);
-    expect(creator[1].statements).toHaveLength(2 + 15);
-    expect(seated[1].statements).toHaveLength(2 + 15);
-  });
-
-  it("answers for each option what reading that option alone does", async () => {
-    const { dm, homebrew } = fixture;
-    const [listed, alone] = await run(
+    it.effect("answers for each option what reading that option alone does", () =>
       Effect.gen(function* () {
-        const options = yield* Options;
-        const listed = yield* as(dm)(options.library({}));
-        const alone = yield* Effect.forEach(listed, (option) =>
-          as(dm)(options.libraryFindById(option.id)),
+        const { dm, homebrew } = yield* Fixture;
+        const [listed, alone] = yield* Effect.gen(function* () {
+          const options = yield* Options;
+          const listed = yield* as(dm)(options.library({}));
+          const alone = yield* Effect.forEach(listed, (option) =>
+            as(dm)(options.libraryFindById(option.id)),
+          );
+          return [listed, alone] as const;
+        });
+
+        expect(listed.map((option) => option.id)).toContain(homebrew.id);
+        expect(listed).toEqual(alone);
+
+        const choices = (option: CharacterOption | undefined) =>
+          (option?.details?.choices ?? []).map((group) => `${group.owner}:${group.kind}`);
+        const byName = (name: string) => listed.find((option) => option.name === name);
+        // The trait's group is offered by both options that carry the trait.
+        expect(choices(byName("Elf"))).toContain("trait:language");
+        expect(choices(byName("Tidewalker"))).toEqual([
+          "option:ability-score",
+          "option:language",
+          "option:proficiency",
+          "option:trait",
+          "trait:language",
+        ]);
+        // Its own groups carry the members it was written with, and the trait's
+        // group is the Elf's, members and all.
+        const own = byName("Tidewalker")?.details?.choices ?? [];
+        expect(own.slice(0, 4).map((group) => group.abilities.length)).toEqual([1, 0, 0, 0]);
+        expect(own.slice(0, 4).map((group) => group.languages.length)).toEqual([0, 1, 0, 0]);
+        expect(own.slice(0, 4).map((group) => group.proficiencies.length)).toEqual([0, 0, 1, 0]);
+        expect(own.slice(0, 4).map((group) => group.traits.length)).toEqual([0, 0, 0, 1]);
+        expect(own[4]).toEqual(
+          byName("Elf")?.details?.choices.find((group) => group.owner === "trait"),
         );
-        return [listed, alone] as const;
+        expect(own[4]?.languages.length).toBeGreaterThan(0);
       }),
     );
 
-    expect(listed.map((option) => option.id)).toContain(homebrew.id);
-    expect(listed).toEqual(alone);
-
-    const choices = (option: CharacterOption | undefined) =>
-      (option?.details?.choices ?? []).map((group) => `${group.owner}:${group.kind}`);
-    const byName = (name: string) => listed.find((option) => option.name === name);
-    // The trait's group is offered by both options that carry the trait.
-    expect(choices(byName("Elf"))).toContain("trait:language");
-    expect(choices(byName("Tidewalker"))).toEqual([
-      "option:ability-score",
-      "option:language",
-      "option:proficiency",
-      "option:trait",
-      "trait:language",
-    ]);
-    // Its own groups carry the members it was written with, and the trait's
-    // group is the Elf's, members and all.
-    const own = byName("Tidewalker")?.details?.choices ?? [];
-    expect(own.slice(0, 4).map((group) => group.abilities.length)).toEqual([1, 0, 0, 0]);
-    expect(own.slice(0, 4).map((group) => group.languages.length)).toEqual([0, 1, 0, 0]);
-    expect(own.slice(0, 4).map((group) => group.proficiencies.length)).toEqual([0, 0, 1, 0]);
-    expect(own.slice(0, 4).map((group) => group.traits.length)).toEqual([0, 0, 0, 1]);
-    expect(own[4]).toEqual(
-      byName("Elf")?.details?.choices.find((group) => group.owner === "trait"),
-    );
-    expect(own[4]?.languages.length).toBeGreaterThan(0);
-  });
-
-  it("reads a race whose twelfth trait grants a proficiency", async () => {
-    const { dm } = fixture;
-    const { race, listed, found } = await run(
+    it.effect("reads a race whose twelfth trait grants a proficiency", () =>
       Effect.gen(function* () {
-        const options = yield* Options;
-        const vocabulary = yield* as(dm)(options.libraryVocabulary());
-        const keenSenses = vocabulary.traits.find((trait) => trait.name === "Keen Senses")!;
-        const fillers = vocabulary.traits
-          .filter((trait) => trait.id !== keenSenses.id)
-          .slice(0, 11)
-          .map((trait) => trait.id);
-        const race = yield* as(dm)(
-          options.libraryCreate({
-            kind: "race",
-            name: "Longshanks",
-            body: {
-              speed: 30,
-              size: "Medium",
-              abilityBonuses: [],
-              hpPerLevel: 0,
-              traits: [],
-              subraces: [],
-            },
-            relations: { traitIds: [...fillers, keenSenses.id] },
-          }),
+        const { dm } = yield* Fixture;
+        const { race, listed, found } = yield* Effect.gen(function* () {
+          const options = yield* Options;
+          const vocabulary = yield* as(dm)(options.libraryVocabulary());
+          const keenSenses = vocabulary.traits.find((trait) => trait.name === "Keen Senses")!;
+          const fillers = vocabulary.traits
+            .filter((trait) => trait.id !== keenSenses.id)
+            .slice(0, 11)
+            .map((trait) => trait.id);
+          const race = yield* as(dm)(
+            options.libraryCreate({
+              kind: "race",
+              name: "Longshanks",
+              body: {
+                speed: 30,
+                size: "Medium",
+                abilityBonuses: [],
+                hpPerLevel: 0,
+                traits: [],
+                subraces: [],
+              },
+              relations: { traitIds: [...fillers, keenSenses.id] },
+            }),
+          );
+          const listed = yield* as(dm)(options.library({ kind: "race" }));
+          const found = yield* as(dm)(options.libraryFindById(race.id));
+          return { race, listed, found };
+        });
+
+        const fromListed = listed.find((option) => option.id === race.id);
+        expect(fromListed).toEqual(found);
+        const granted = (found.details?.proficiencies ?? []).filter(
+          (grant) => grant.sourceTrait?.name === "Keen Senses",
         );
-        const listed = yield* as(dm)(options.library({ kind: "race" }));
-        const found = yield* as(dm)(options.libraryFindById(race.id));
-        return { race, listed, found };
+        expect(granted.map((grant) => grant.proficiency.name)).toEqual(["Skill: Perception"]);
+        expect(granted.map((grant) => grant.ordinal)).toEqual([10_000]);
       }),
     );
 
-    const fromListed = listed.find((option) => option.id === race.id);
-    expect(fromListed).toEqual(found);
-    const granted = (found.details?.proficiencies ?? []).filter(
-      (grant) => grant.sourceTrait?.name === "Keen Senses",
-    );
-    expect(granted.map((grant) => grant.proficiency.name)).toEqual(["Skill: Perception"]);
-    expect(granted.map((grant) => grant.ordinal)).toEqual([10_000]);
-  });
-
-  it("answers a creator and a player alike for every option both can read", async () => {
-    const { dm, player, campaign } = fixture;
-    const [creator, seated] = await run(
+    it.effect("answers a creator and a player alike for every option both can read", () =>
       Effect.gen(function* () {
-        const options = yield* Options;
-        return [
-          yield* as(dm)(options.list(campaign.id, {})),
-          yield* as(player)(options.list(campaign.id, {})),
-        ] as const;
+        const { dm, player, campaign } = yield* Fixture;
+        const [creator, seated] = yield* Effect.gen(function* () {
+          const options = yield* Options;
+          return [
+            yield* as(dm)(options.list(campaign.id, {})),
+            yield* as(player)(options.list(campaign.id, {})),
+          ] as const;
+        });
+
+        const ids = new Set(seated.map((option) => option.id));
+        expect(ids.size).toBeGreaterThanOrEqual(22);
+        expect(creator.filter((option) => ids.has(option.id))).toEqual(seated);
       }),
     );
-
-    const ids = new Set(seated.map((option) => option.id));
-    expect(ids.size).toBeGreaterThanOrEqual(22);
-    expect(creator.filter((option) => ids.has(option.id))).toEqual(seated);
   });
 });

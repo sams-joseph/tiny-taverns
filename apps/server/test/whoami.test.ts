@@ -1,7 +1,6 @@
+import { describe, expect } from "@effect/vitest";
 import { Actor, CurrentActor } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import { afterAll, describe, expect, it } from "vitest";
+import { Effect, Layer } from "effect";
 import { Accounts, DEFAULT_ACCOUNT_NAME } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
@@ -9,6 +8,7 @@ import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aPlayerAt, anAccount, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * `GET /me` — who the credential belongs to.
@@ -24,139 +24,130 @@ import { migratedDatabase } from "./support/database.js";
  * the declaration itself.
  */
 
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    CampaignCreatorActors.layer,
-    Groups.layer,
-    Invites.layer,
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_whoami"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  CampaignCreatorActors.layer,
+  Groups.layer,
+  Invites.layer,
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_whoami")));
 
 const asActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
-const run = <A, E>(
-  effect: Effect.Effect<
-    A,
-    E,
-    Accounts | Campaigns | CampaignCreatorActors | Groups | Invites | SqlClient.SqlClient
-  >,
-) => runtime.runPromise(effect as Effect.Effect<A, E, never>);
-
-describe("who am I", () => {
-  it("answers the account the credential resolved to", async () => {
-    const identity = await run(
+describeLayer("whoami", services, (it) => {
+  describe("who am I", () => {
+    it.effect("answers the account the credential resolved to", () =>
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const actor = yield* anAccount("Ilse Vantar");
-        return { actor, me: yield* asActor(actor)(accounts.identity) };
+        const identity = yield* Effect.gen(function* () {
+          const accounts = yield* Accounts;
+          const actor = yield* anAccount("Ilse Vantar");
+          return { actor, me: yield* asActor(actor)(accounts.identity) };
+        });
+
+        expect(identity.me.name).toBe("Ilse Vantar");
+        // The id is the account's own — the same value `Character.accountId` and
+        // `CampaignMember.accountId` already carry about this person.
+        expect(identity.me.id).toBe(identity.actor.accountId);
       }),
     );
 
-    expect(identity.me.name).toBe("Ilse Vantar");
-    // The id is the account's own — the same value `Character.accountId` and
-    // `CampaignMember.accountId` already carry about this person.
-    expect(identity.me.id).toBe(identity.actor.accountId);
-  });
-
-  /**
-   * Two accounts, and each gets exactly its own — the property a lookup
-   * endpoint would not have. There is no parameter to swap, so this is a check
-   * that the `where` clause names the actor rather than anything else.
-   */
-  it("never answers about anybody else", async () => {
-    const both = await run(
+    /**
+     * Two accounts, and each gets exactly its own — the property a lookup
+     * endpoint would not have. There is no parameter to swap, so this is a check
+     * that the `where` clause names the actor rather than anything else.
+     */
+    it.effect("never answers about anybody else", () =>
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const ilse = yield* anAccount("Ilse Vantar");
-        const bram = yield* anAccount("Bram Colley");
-        return {
-          ilse: { actor: ilse, me: yield* asActor(ilse)(accounts.identity) },
-          bram: { actor: bram, me: yield* asActor(bram)(accounts.identity) },
-        };
+        const both = yield* Effect.gen(function* () {
+          const accounts = yield* Accounts;
+          const ilse = yield* anAccount("Ilse Vantar");
+          const bram = yield* anAccount("Bram Colley");
+          return {
+            ilse: { actor: ilse, me: yield* asActor(ilse)(accounts.identity) },
+            bram: { actor: bram, me: yield* asActor(bram)(accounts.identity) },
+          };
+        });
+
+        expect(both.ilse.me.name).toBe("Ilse Vantar");
+        expect(both.bram.me.name).toBe("Bram Colley");
+        expect(both.ilse.me.id).not.toBe(both.bram.me.id);
+        expect(both.bram.me.id).toBe(both.bram.actor.accountId);
       }),
     );
 
-    expect(both.ilse.me.name).toBe("Ilse Vantar");
-    expect(both.bram.me.name).toBe("Bram Colley");
-    expect(both.ilse.me.id).not.toBe(both.bram.me.id);
-    expect(both.bram.me.id).toBe(both.bram.actor.accountId);
-  });
-
-  /**
-   * The two narrowings that apply to every other read do not apply here, and
-   * that is correct rather than an omission.
-   *
-   * A credential minted for one table still belongs to the whole account, so
-   * `campaignId` narrows which *campaign* it reaches and says nothing about who
-   * is holding it. There is no campaign in this read for it to narrow. Same
-   * answer for a player at somebody else's table: membership decides what an
-   * account may see of a campaign, and this read is about no campaign.
-   */
-  it("answers the same account however far its credential reaches", async () => {
-    const answers = await run(
+    /**
+     * The two narrowings that apply to every other read do not apply here, and
+     * that is correct rather than an omission.
+     *
+     * A credential minted for one table still belongs to the whole account, so
+     * `campaignId` narrows which *campaign* it reaches and says nothing about who
+     * is holding it. There is no campaign in this read for it to narrow. Same
+     * answer for a player at somebody else's table: membership decides what an
+     * account may see of a campaign, and this read is about no campaign.
+     */
+    it.effect("answers the same account however far its credential reaches", () =>
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const dm = yield* anAccount("Ilse Vantar");
-        const campaign = yield* asActor(dm)(createCampaign({ name: "The Salt Road" }));
+        const answers = yield* Effect.gen(function* () {
+          const accounts = yield* Accounts;
+          const dm = yield* anAccount("Ilse Vantar");
+          const campaign = yield* asActor(dm)(createCampaign({ name: "The Salt Road" }));
 
-        const player = yield* aPlayerAt(campaign.id, "Bram Colley");
-        return {
-          wide: yield* asActor(dm)(accounts.identity),
-          scoped: yield* asActor(scopedTo(dm, campaign.id))(accounts.identity),
-          player: yield* asActor(player)(accounts.identity),
-          playerActor: player,
-        };
+          const player = yield* aPlayerAt(campaign.id, "Bram Colley");
+          return {
+            wide: yield* asActor(dm)(accounts.identity),
+            scoped: yield* asActor(scopedTo(dm, campaign.id))(accounts.identity),
+            player: yield* asActor(player)(accounts.identity),
+            playerActor: player,
+          };
+        });
+
+        expect(answers.scoped).toEqual(answers.wide);
+        // A player's credential is scoped to the one table; the answer is still
+        // their own account, not the DM's and not the campaign's owner.
+        expect(answers.player.name).toBe("Bram Colley");
+        expect(answers.player.id).toBe(answers.playerActor.accountId);
+        expect(answers.player.id).not.toBe(answers.wide.id);
       }),
     );
 
-    expect(answers.scoped).toEqual(answers.wide);
-    // A player's credential is scoped to the one table; the answer is still
-    // their own account, not the DM's and not the campaign's owner.
-    expect(answers.player.name).toBe("Bram Colley");
-    expect(answers.player.id).toBe(answers.playerActor.accountId);
-    expect(answers.player.id).not.toBe(answers.wide.id);
-  });
-
-  /**
-   * An account that is a member of nothing still has a name — which is the
-   * whole reason this read is in the `me` group rather than under a campaign.
-   * `GET /me/campaigns` is honestly `[]` for the same person.
-   */
-  it("answers an account that belongs to no campaign", async () => {
-    const me = await run(
+    /**
+     * An account that is a member of nothing still has a name — which is the
+     * whole reason this read is in the `me` group rather than under a campaign.
+     * `GET /me/campaigns` is honestly `[]` for the same person.
+     */
+    it.effect("answers an account that belongs to no campaign", () =>
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const nobody = yield* anAccount(DEFAULT_ACCOUNT_NAME);
-        return yield* asActor(nobody)(accounts.identity);
+        const me = yield* Effect.gen(function* () {
+          const accounts = yield* Accounts;
+          const nobody = yield* anAccount(DEFAULT_ACCOUNT_NAME);
+          return yield* asActor(nobody)(accounts.identity);
+        });
+
+        expect(me.name).toBe(DEFAULT_ACCOUNT_NAME);
       }),
     );
 
-    expect(me.name).toBe(DEFAULT_ACCOUNT_NAME);
-  });
-
-  /**
-   * It answers two columns and no more.
-   *
-   * `token_hash` is the credential itself, `clerk_user_id` is the vendor's
-   * subject and lives below the identity seam, and `created_at` has no reader.
-   * A field arriving here later should be a deliberate edit to this list rather
-   * than a `select *` quietly widening.
-   */
-  it("carries the display name and the join key, and nothing else", async () => {
-    const me = await run(
+    /**
+     * It answers two columns and no more.
+     *
+     * `token_hash` is the credential itself, `clerk_user_id` is the vendor's
+     * subject and lives below the identity seam, and `created_at` has no reader.
+     * A field arriving here later should be a deliberate edit to this list rather
+     * than a `select *` quietly widening.
+     */
+    it.effect("carries the display name and the join key, and nothing else", () =>
       Effect.gen(function* () {
-        const accounts = yield* Accounts;
-        const actor = yield* anAccount("Ilse Vantar");
-        return yield* asActor(actor)(accounts.identity);
+        const me = yield* Effect.gen(function* () {
+          const accounts = yield* Accounts;
+          const actor = yield* anAccount("Ilse Vantar");
+          return yield* asActor(actor)(accounts.identity);
+        });
+
+        expect(Object.keys({ ...me }).sort()).toEqual(["id", "name"]);
       }),
     );
-
-    expect(Object.keys({ ...me }).sort()).toEqual(["id", "name"]);
   });
 });
