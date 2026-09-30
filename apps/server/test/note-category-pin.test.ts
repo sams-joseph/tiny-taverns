@@ -1,21 +1,14 @@
-import {
-  Actor,
-  type CampaignId,
-  CurrentActor,
-  type Note,
-  type NoteId,
-  TavernsApi,
-} from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { CurrentActor, type Note, type NoteId, TavernsApi } from "@taverns/api";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
-import { admittedTo, campaignVia } from "./support/actors.js";
+import { aPerson, admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testServer } from "./support/http.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **A note's category and its pin.**
@@ -32,14 +25,11 @@ import { testServer } from "./support/http.js";
 const database = migratedDatabase("taverns_test_note_category_pin");
 const services = servicesOver(database);
 
-const runtime = ManagedRuntime.make(
-  applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(testServer),
-    Layer.provideMerge(services),
-    Layer.provideMerge(database),
-  ),
+const application = applicationOver(services, { quiet: true }).pipe(
+  Layer.provideMerge(testServer),
+  Layer.provideMerge(services),
+  Layer.provideMerge(database),
 );
-afterAll(() => runtime.dispose());
 
 const clientFor = (token: string) =>
   HttpApiClient.make(TavernsApi, {
@@ -49,255 +39,266 @@ const clientFor = (token: string) =>
 type Client = Effect.Success<ReturnType<typeof clientFor>>;
 
 const as = <A, E>(token: string, call: (client: Client) => Effect.Effect<A, E>) =>
-  runtime.runPromise(Effect.flatMap(clientFor(token), call).pipe(Effect.orDie));
-
-const run = <A, E>(
-  effect: Effect.Effect<A, E, ManagedRuntime.ManagedRuntime.Services<typeof runtime>>,
-) => runtime.runPromise(effect.pipe(Effect.orDie));
+  Effect.flatMap(clientFor(token), call).pipe(Effect.orDie);
 
 /** A request as it goes over the wire: the status and the body, undecoded. */
 const wire = (token: string, request: HttpClientRequest.HttpClientRequest) =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const response = yield* HttpClient.execute(
-        request.pipe(HttpClientRequest.bearerToken(token)),
-      );
-      return { status: response.status, body: yield* response.text };
-    }).pipe(Effect.orDie),
+  Effect.gen(function* () {
+    const response = yield* HttpClient.execute(request.pipe(HttpClientRequest.bearerToken(token)));
+    return { status: response.status, body: yield* response.text };
+  }).pipe(Effect.orDie);
+
+const makeFixture = Effect.gen(function* () {
+  const jo = yield* aPerson("Jo");
+  const ilse = yield* aPerson("Ilse");
+  const wren = yield* aPerson("Wren");
+  const stranger = yield* aPerson("Bo");
+  const campaign = yield* as(jo.token, (client) =>
+    campaignVia(client, { name: "The Salt Road", visibility: "shared" }),
   );
+  const table = campaign.id;
+  yield* admittedTo(table, ilse.actor, "Ilse");
 
-interface Person {
-  readonly token: string;
-  readonly actor: Actor;
-}
+  // Another table in the same Shared World, with Wren playing at it.
+  const otherTable = yield* Effect.provideService(
+    Effect.flatMap(Campaigns, (campaigns) =>
+      campaigns.create(campaign.contextId, { name: "Rook's Rest", visibility: "shared" }),
+    ),
+    CurrentActor,
+    jo.actor,
+  );
+  yield* admittedTo(otherTable.id, wren.actor, "Wren");
+  return { jo, ilse, wren, stranger, table };
+}).pipe(Effect.orDie);
 
-const person = async (name: string): Promise<Person> => {
-  const issued = await run(Effect.flatMap(Accounts, (accounts) => accounts.issue(name)));
-  return {
-    token: issued.token,
-    actor: new Actor({ accountId: issued.accountId, scope: { _tag: "account" } }),
-  };
-};
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "note-category-pin.test/Fixture",
+) {}
 
-let jo: Person;
-let ilse: Person;
-let wren: Person;
-let stranger: Person;
-let table: CampaignId;
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(application));
 
-const notesPath = () => `/campaigns/${table}/notes`;
+const notesPath = Effect.map(Fixture, ({ table }) => `/campaigns/${table}/notes`);
 
 const find = (noteId: NoteId) =>
-  as(jo.token, (client) => client.notes.findById({ params: { campaignId: table, noteId } }));
+  Effect.flatMap(Fixture, ({ jo, table }) =>
+    as(jo.token, (client) => client.notes.findById({ params: { campaignId: table, noteId } })),
+  );
 
 const pin = (noteId: NoteId) =>
-  as(jo.token, (client) => client.notes.pin({ params: { campaignId: table, noteId } }));
+  Effect.flatMap(Fixture, ({ jo, table }) =>
+    as(jo.token, (client) => client.notes.pin({ params: { campaignId: table, noteId } })),
+  );
 
 const unpin = (noteId: NoteId) =>
-  as(jo.token, (client) => client.notes.unpin({ params: { campaignId: table, noteId } }));
+  Effect.flatMap(Fixture, ({ jo, table }) =>
+    as(jo.token, (client) => client.notes.unpin({ params: { campaignId: table, noteId } })),
+  );
 
 const millis = (note: Note) => DateTime.toEpochMillis(note.updatedAt);
 
-beforeAll(async () => {
-  jo = await person("Jo");
-  ilse = await person("Ilse");
-  wren = await person("Wren");
-  stranger = await person("Bo");
-  const campaign = await as(jo.token, (client) =>
-    campaignVia(client, { name: "The Salt Road", visibility: "shared" }),
-  );
-  table = campaign.id;
-  await run(admittedTo(table, ilse.actor, "Ilse"));
+describeLayer("note-category-pin", shared, (it) => {
+  describe("the category", () => {
+    it.effect("is null until chosen, and a note keeps it through edits that do not name it", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const plain = yield* as(jo.token, (client) =>
+          client.notes.create({ params: { campaignId: table }, payload: { title: "Loose end" } }),
+        );
+        expect(plain.category).toBeNull();
 
-  // Another table in the same Shared World, with Wren playing at it.
-  const otherTable = await run(
-    Effect.provideService(
-      Effect.flatMap(Campaigns, (campaigns) =>
-        campaigns.create(campaign.contextId, { name: "Rook's Rest", visibility: "shared" }),
-      ),
-      CurrentActor,
-      jo.actor,
-    ),
-  );
-  await run(admittedTo(otherTable.id, wren.actor, "Wren"));
-}, 60_000);
+        const ferryman = yield* as(jo.token, (client) =>
+          client.notes.create({
+            params: { campaignId: table },
+            payload: { title: "Cazril", kind: "read_aloud", category: "npc" },
+          }),
+        );
+        // Independent of the register: a read-aloud about an NPC.
+        expect(ferryman).toMatchObject({ category: "npc", kind: "read_aloud" });
 
-describe("the category", () => {
-  it("is null until chosen, and a note keeps it through edits that do not name it", async () => {
-    const plain = await as(jo.token, (client) =>
-      client.notes.create({ params: { campaignId: table }, payload: { title: "Loose end" } }),
-    );
-    expect(plain.category).toBeNull();
+        const retitled = yield* as(jo.token, (client) =>
+          client.notes.update({
+            params: { campaignId: table, noteId: ferryman.id },
+            payload: { title: "Cazril the ferryman" },
+          }),
+        );
+        expect(retitled.category).toBe("npc");
 
-    const ferryman = await as(jo.token, (client) =>
-      client.notes.create({
-        params: { campaignId: table },
-        payload: { title: "Cazril", kind: "read_aloud", category: "npc" },
+        const moved = yield* as(jo.token, (client) =>
+          client.notes.update({
+            params: { campaignId: table, noteId: ferryman.id },
+            payload: { category: "lore" },
+          }),
+        );
+        expect(moved.category).toBe("lore");
+
+        const cleared = yield* as(jo.token, (client) =>
+          client.notes.update({
+            params: { campaignId: table, noteId: ferryman.id },
+            payload: { category: null },
+          }),
+        );
+        expect(cleared.category).toBeNull();
+        expect((yield* find(ferryman.id)).category).toBeNull();
       }),
     );
-    // Independent of the register: a read-aloud about an NPC.
-    expect(ferryman).toMatchObject({ category: "npc", kind: "read_aloud" });
 
-    const retitled = await as(jo.token, (client) =>
-      client.notes.update({
-        params: { campaignId: table, noteId: ferryman.id },
-        payload: { title: "Cazril the ferryman" },
+    it.effect("refuses a category that is not one of the five, on create and on update", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const created = yield* wire(
+          jo.token,
+          HttpClientRequest.post(yield* notesPath).pipe(
+            HttpClientRequest.bodyJsonUnsafe({ title: "SENTINEL-MONSTER", category: "monster" }),
+          ),
+        );
+        expect(created.status).toBe(400);
+
+        const note = yield* as(jo.token, (client) =>
+          client.notes.create({
+            params: { campaignId: table },
+            payload: { title: "House rule", category: "rules" },
+          }),
+        );
+        const updated = yield* wire(
+          jo.token,
+          HttpClientRequest.patch(`${yield* notesPath}/${note.id}`).pipe(
+            HttpClientRequest.bodyJsonUnsafe({ category: "Rules" }),
+          ),
+        );
+        expect(updated.status).toBe(400);
+        expect((yield* find(note.id)).category).toBe("rules");
+
+        const listed = yield* as(jo.token, (client) =>
+          client.notes.list({ params: { campaignId: table }, query: {} }),
+        );
+        expect(listed.items.map((row) => row.title)).not.toContain("SENTINEL-MONSTER");
       }),
     );
-    expect(retitled.category).toBe("npc");
-
-    const moved = await as(jo.token, (client) =>
-      client.notes.update({
-        params: { campaignId: table, noteId: ferryman.id },
-        payload: { category: "lore" },
-      }),
-    );
-    expect(moved.category).toBe("lore");
-
-    const cleared = await as(jo.token, (client) =>
-      client.notes.update({
-        params: { campaignId: table, noteId: ferryman.id },
-        payload: { category: null },
-      }),
-    );
-    expect(cleared.category).toBeNull();
-    expect((await find(ferryman.id)).category).toBeNull();
   });
 
-  it("refuses a category that is not one of the five, on create and on update", async () => {
-    const created = await wire(
-      jo.token,
-      HttpClientRequest.post(notesPath()).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ title: "SENTINEL-MONSTER", category: "monster" }),
-      ),
-    );
-    expect(created.status).toBe(400);
+  describe("the pin", () => {
+    it.effect("pins and unpins without touching updatedAt, and both are idempotent", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const note = yield* as(jo.token, (client) =>
+          client.notes.create({ params: { campaignId: table }, payload: { title: "Grusk" } }),
+        );
+        expect(note.pinnedAt).toBeNull();
 
-    const note = await as(jo.token, (client) =>
-      client.notes.create({
-        params: { campaignId: table },
-        payload: { title: "House rule", category: "rules" },
+        const pinned = yield* pin(note.id);
+        expect(pinned.pinnedAt).not.toBeNull();
+        expect(millis(pinned)).toBe(millis(note));
+
+        // Pinning a pinned note keeps the time it was first pinned.
+        const again = yield* pin(note.id);
+        expect(again.pinnedAt).toEqual(pinned.pinnedAt);
+        expect(millis(again)).toBe(millis(note));
+
+        // An edit is an edit: it moves `updatedAt` and leaves the pin alone.
+        const edited = yield* as(jo.token, (client) =>
+          client.notes.update({
+            params: { campaignId: table, noteId: note.id },
+            payload: { body: "Speaks only in questions." },
+          }),
+        );
+        expect(millis(edited)).toBeGreaterThan(millis(note));
+        expect(edited.pinnedAt).toEqual(pinned.pinnedAt);
+
+        const unpinned = yield* unpin(note.id);
+        expect(unpinned.pinnedAt).toBeNull();
+        expect(millis(unpinned)).toBe(millis(edited));
+        const unpinnedAgain = yield* unpin(note.id);
+        expect(unpinnedAgain.pinnedAt).toBeNull();
+        expect(millis(unpinnedAgain)).toBe(millis(edited));
       }),
     );
-    const updated = await wire(
-      jo.token,
-      HttpClientRequest.patch(`${notesPath()}/${note.id}`).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ category: "Rules" }),
-      ),
-    );
-    expect(updated.status).toBe(400);
-    expect((await find(note.id)).category).toBe("rules");
 
-    const listed = await as(jo.token, (client) =>
-      client.notes.list({ params: { campaignId: table }, query: {} }),
-    );
-    expect(listed.items.map((row) => row.title)).not.toContain("SENTINEL-MONSTER");
-  });
-});
-
-describe("the pin", () => {
-  it("pins and unpins without touching updatedAt, and both are idempotent", async () => {
-    const note = await as(jo.token, (client) =>
-      client.notes.create({ params: { campaignId: table }, payload: { title: "Grusk" } }),
-    );
-    expect(note.pinnedAt).toBeNull();
-
-    const pinned = await pin(note.id);
-    expect(pinned.pinnedAt).not.toBeNull();
-    expect(millis(pinned)).toBe(millis(note));
-
-    // Pinning a pinned note keeps the time it was first pinned.
-    const again = await pin(note.id);
-    expect(again.pinnedAt).toEqual(pinned.pinnedAt);
-    expect(millis(again)).toBe(millis(note));
-
-    // An edit is an edit: it moves `updatedAt` and leaves the pin alone.
-    const edited = await as(jo.token, (client) =>
-      client.notes.update({
-        params: { campaignId: table, noteId: note.id },
-        payload: { body: "Speaks only in questions." },
-      }),
-    );
-    expect(millis(edited)).toBeGreaterThan(millis(note));
-    expect(edited.pinnedAt).toEqual(pinned.pinnedAt);
-
-    const unpinned = await unpin(note.id);
-    expect(unpinned.pinnedAt).toBeNull();
-    expect(millis(unpinned)).toBe(millis(edited));
-    const unpinnedAgain = await unpin(note.id);
-    expect(unpinnedAgain.pinnedAt).toBeNull();
-    expect(millis(unpinnedAgain)).toBe(millis(edited));
-  });
-
-  it("is NotFound for a note that is not there", async () => {
-    const note = await as(jo.token, (client) =>
-      client.notes.create({ params: { campaignId: table }, payload: { title: "Brief" } }),
-    );
-    await as(jo.token, (client) =>
-      client.notes.remove({ params: { campaignId: table, noteId: note.id } }),
-    );
-    for (const request of [
-      HttpClientRequest.put(`${notesPath()}/${note.id}/pin`),
-      HttpClientRequest.delete(`${notesPath()}/${note.id}/pin`),
-    ]) {
-      expect((await wire(jo.token, request)).status).toBe(404);
-    }
-  });
-
-  it("is refused to a seated player, a Shared World member and a stranger, shared note or not", async () => {
-    const shared = await as(jo.token, (client) =>
-      client.notes.create({
-        params: { campaignId: table },
-        payload: { title: "SENTINEL-SHARED", visibility: "shared" },
-      }),
-    );
-    const kept = await as(jo.token, (client) =>
-      client.notes.create({ params: { campaignId: table }, payload: { title: "SENTINEL-KEPT" } }),
-    );
-    const pinnedShared = await pin(shared.id);
-
-    for (const who of [ilse, wren, stranger]) {
-      for (const noteId of [shared.id, kept.id]) {
+    it.effect("is NotFound for a note that is not there", () =>
+      Effect.gen(function* () {
+        const { jo, table } = yield* Fixture;
+        const notes = yield* notesPath;
+        const note = yield* as(jo.token, (client) =>
+          client.notes.create({ params: { campaignId: table }, payload: { title: "Brief" } }),
+        );
+        yield* as(jo.token, (client) =>
+          client.notes.remove({ params: { campaignId: table, noteId: note.id } }),
+        );
         for (const request of [
-          HttpClientRequest.put(`${notesPath()}/${noteId}/pin`),
-          HttpClientRequest.delete(`${notesPath()}/${noteId}/pin`),
+          HttpClientRequest.put(`${notes}/${note.id}/pin`),
+          HttpClientRequest.delete(`${notes}/${note.id}/pin`),
         ]) {
-          const answer = await wire(who.token, request);
-          expect({ url: request.url, status: answer.status }).toEqual({
-            url: request.url,
-            status: 404,
-          });
-          expect(answer.body).not.toContain("SENTINEL");
+          expect((yield* wire(jo.token, request)).status).toBe(404);
         }
-      }
-    }
-
-    // Nothing moved.
-    expect((await find(shared.id)).pinnedAt).toEqual(pinnedShared.pinnedAt);
-    expect((await find(kept.id)).pinnedAt).toBeNull();
-  });
-});
-
-describe("a seated player's read", () => {
-  it("carries a shared note's category and never its pin", async () => {
-    const note = await as(jo.token, (client) =>
-      client.notes.create({
-        params: { campaignId: table },
-        payload: { title: "The salt flats", category: "place", visibility: "shared" },
       }),
     );
-    await pin(note.id);
 
-    const listed = await wire(
-      ilse.token,
-      HttpClientRequest.get(`/campaigns/${table}/player-notes`),
-    );
-    expect(listed.status).toBe(200);
-    expect(listed.body).not.toContain('"pinnedAt"');
+    it.effect(
+      "is refused to a seated player, a Shared World member and a stranger, shared note or not",
+      () =>
+        Effect.gen(function* () {
+          const { jo, ilse, wren, stranger, table } = yield* Fixture;
+          const notes = yield* notesPath;
+          const shared = yield* as(jo.token, (client) =>
+            client.notes.create({
+              params: { campaignId: table },
+              payload: { title: "SENTINEL-SHARED", visibility: "shared" },
+            }),
+          );
+          const kept = yield* as(jo.token, (client) =>
+            client.notes.create({
+              params: { campaignId: table },
+              payload: { title: "SENTINEL-KEPT" },
+            }),
+          );
+          const pinnedShared = yield* pin(shared.id);
 
-    const decoded = await as(ilse.token, (client) =>
-      client.playerNotes.list({ params: { campaignId: table }, query: {} }),
+          for (const who of [ilse, wren, stranger]) {
+            for (const noteId of [shared.id, kept.id]) {
+              for (const request of [
+                HttpClientRequest.put(`${notes}/${noteId}/pin`),
+                HttpClientRequest.delete(`${notes}/${noteId}/pin`),
+              ]) {
+                const answer = yield* wire(who.token, request);
+                expect({ url: request.url, status: answer.status }).toEqual({
+                  url: request.url,
+                  status: 404,
+                });
+                expect(answer.body).not.toContain("SENTINEL");
+              }
+            }
+          }
+
+          // Nothing moved.
+          expect((yield* find(shared.id)).pinnedAt).toEqual(pinnedShared.pinnedAt);
+          expect((yield* find(kept.id)).pinnedAt).toBeNull();
+        }),
     );
-    expect(decoded.items.find((row) => row.id === note.id)?.category).toBe("place");
+  });
+
+  describe("a seated player's read", () => {
+    it.effect("carries a shared note's category and never its pin", () =>
+      Effect.gen(function* () {
+        const { jo, ilse, table } = yield* Fixture;
+        const note = yield* as(jo.token, (client) =>
+          client.notes.create({
+            params: { campaignId: table },
+            payload: { title: "The salt flats", category: "place", visibility: "shared" },
+          }),
+        );
+        yield* pin(note.id);
+
+        const listed = yield* wire(
+          ilse.token,
+          HttpClientRequest.get(`/campaigns/${table}/player-notes`),
+        );
+        expect(listed.status).toBe(200);
+        expect(listed.body).not.toContain('"pinnedAt"');
+
+        const decoded = yield* as(ilse.token, (client) =>
+          client.playerNotes.list({ params: { campaignId: table }, query: {} }),
+        );
+        expect(decoded.items.find((row) => row.id === note.id)?.category).toBe("place");
+      }),
+    );
   });
 });

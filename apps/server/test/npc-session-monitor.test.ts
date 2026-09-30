@@ -7,9 +7,9 @@ import {
   type NpcSessionMonitor,
   type NpcTurnId,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { Context, Effect, Layer } from "effect";
 import { Statement } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Beats } from "../src/repo/Beats.js";
@@ -27,6 +27,7 @@ import { Party } from "../src/repo/Party.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aCharacterAt, anAccount, aPlayerAt, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **The creator's NPC monitor costs the same number of statements however
@@ -65,9 +66,6 @@ const services = Layer.mergeAll(
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_npc_session_monitor")));
-
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 const withActor =
   (actor: Actor) =>
@@ -122,11 +120,11 @@ const makeFixture = Effect.gen(function* () {
   return { dm, player, campaign, creator, session, cast };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "npc-session-monitor.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 /**
  * Open `npcId` at the table and give it a conversation: a player's line, then
@@ -136,7 +134,7 @@ beforeAll(async () => {
  */
 const converse = (npcId: NpcId, finish: string | null, pending: number) =>
   Effect.gen(function* () {
-    const { dm, player, campaign, creator, session } = fixture;
+    const { dm, player, campaign, creator, session } = yield* Fixture;
     const threads = yield* NpcThreads;
     const proposals = yield* NpcProposals;
     const thread = yield* threads.openSession(creator, npcId, session.id);
@@ -174,41 +172,40 @@ const converse = (npcId: NpcId, finish: string | null, pending: number) =>
   });
 
 const monitor = (configured: boolean) =>
-  Effect.flatMap(NpcThreads, (threads) =>
-    threads.sessionMonitor(fixture.creator, fixture.session.id, "scripted-local", configured),
-  );
+  Effect.gen(function* () {
+    const { creator, session } = yield* Fixture;
+    const threads = yield* NpcThreads;
+    return yield* threads.sessionMonitor(creator, session.id, "scripted-local", configured);
+  });
 
-describe("the creator's NPC monitor", () => {
-  it("runs the same statements for one open NPC as for every open NPC", async () => {
-    const [none, one, all] = await runtime.runPromise(
+describeLayer("npc-session-monitor", shared, (it) => {
+  describe("the creator's NPC monitor", () => {
+    it.effect("runs the same statements for one open NPC as for every open NPC", () =>
       Effect.gen(function* () {
-        const [cazril, wick, marrow] = fixture.cast;
+        const [cazril, wick, marrow] = (yield* Fixture).cast;
         const none = yield* counted(monitor(true));
         yield* converse(cazril!, "stop", 1);
         const one = yield* counted(monitor(true));
         yield* converse(wick!, "length", 2);
         yield* converse(marrow!, null, 0);
         const all = yield* counted(monitor(true));
-        return [none, one, all] as const;
-      }).pipe(Effect.orDie),
+
+        // The night's gate and its threads; with no thread open, nothing else.
+        expect(none.value).toEqual([]);
+        expect(none.statements).toHaveLength(2);
+        // Then the NPCs, the lines, the pending proposals and the last finishes,
+        // once each for every thread.
+        expect(one.value).toHaveLength(1);
+        expect(all.value).toHaveLength(3);
+        expect(one.statements).toHaveLength(2 + 4);
+        expect(all.statements).toHaveLength(one.statements.length);
+      }),
     );
 
-    // The night's gate and its threads; with no thread open, nothing else.
-    expect(none.value).toEqual([]);
-    expect(none.statements).toHaveLength(2);
-    // Then the NPCs, the lines, the pending proposals and the last finishes,
-    // once each for every thread.
-    expect(one.value).toHaveLength(1);
-    expect(all.value).toHaveLength(3);
-    expect(one.statements).toHaveLength(2 + 4);
-    expect(all.statements).toHaveLength(one.statements.length);
-  });
-
-  it("answers for each open NPC what reading that NPC alone does", async () => {
-    const { dm, campaign, creator, session, cast } = fixture;
-    const [cazril, wick, marrow, ilse] = cast;
-    const [monitored, unconfigured, alone] = await runtime.runPromise(
+    it.effect("answers for each open NPC what reading that NPC alone does", () =>
       Effect.gen(function* () {
+        const { dm, campaign, creator, session, cast } = yield* Fixture;
+        const [cazril, wick, marrow, ilse] = cast;
         const threads = yield* NpcThreads;
         // The previous test opened three; pause one so `available` differs.
         yield* threads.pauseSession(creator, marrow!, session.id);
@@ -222,46 +219,45 @@ describe("the creator's NPC monitor", () => {
             }),
           ),
         );
-        return [monitored, unconfigured, alone] as const;
-      }).pipe(Effect.orDie),
+
+        const byNpc = (entries: ReadonlyArray<NpcSessionMonitor>, id: NpcId | undefined) =>
+          entries.find((entry) => entry.npc.id === id)!;
+
+        // Newest first, as the table last spoke; the NPC never opened is absent.
+        expect(monitored.map((entry) => entry.npc.id)).toEqual([marrow, wick, cazril]);
+        expect(monitored.map((entry) => entry.npc.id)).not.toContain(ilse);
+        for (const [index, entry] of monitored.entries()) {
+          expect(entry.npc).toEqual(alone[index]!.npc);
+          expect(entry.turns).toEqual(alone[index]!.turns);
+          expect(entry.thread.npcId).toBe(entry.npc.id);
+          expect(entry.turns.every((turn) => turn.threadId === entry.thread.id)).toBe(true);
+        }
+
+        expect(byNpc(monitored, cazril).turns.map((turn) => [turn.who, turn.speakerName])).toEqual([
+          ["user", "Pim"],
+          ["npc", null],
+        ]);
+        expect(byNpc(monitored, marrow).turns.map((turn) => turn.who)).toEqual(["user"]);
+
+        expect(byNpc(monitored, cazril).pendingProposals).toBe(1);
+        expect(byNpc(monitored, wick).pendingProposals).toBe(2);
+        expect(byNpc(monitored, marrow).pendingProposals).toBe(0);
+
+        expect(byNpc(monitored, cazril).lastFailure).toBeNull();
+        expect(byNpc(monitored, wick).lastFailure).toBe("Last reply ended with length.");
+        expect(byNpc(monitored, marrow).lastFailure).toBeNull();
+
+        expect(byNpc(monitored, cazril).available).toBe(true);
+        expect(byNpc(monitored, marrow).available).toBe(false);
+        expect(byNpc(monitored, marrow).thread.sessionState).toBe("paused");
+
+        expect(unconfigured.map((entry) => entry.available)).toEqual([false, false, false]);
+        expect(unconfigured.map((entry) => entry.lastFailure)).toEqual([
+          "No model is configured behind NPC chat.",
+          "No model is configured behind NPC chat.",
+          "No model is configured behind NPC chat.",
+        ]);
+      }),
     );
-
-    const byNpc = (entries: ReadonlyArray<NpcSessionMonitor>, id: NpcId | undefined) =>
-      entries.find((entry) => entry.npc.id === id)!;
-
-    // Newest first, as the table last spoke; the NPC never opened is absent.
-    expect(monitored.map((entry) => entry.npc.id)).toEqual([marrow, wick, cazril]);
-    expect(monitored.map((entry) => entry.npc.id)).not.toContain(ilse);
-    for (const [index, entry] of monitored.entries()) {
-      expect(entry.npc).toEqual(alone[index]!.npc);
-      expect(entry.turns).toEqual(alone[index]!.turns);
-      expect(entry.thread.npcId).toBe(entry.npc.id);
-      expect(entry.turns.every((turn) => turn.threadId === entry.thread.id)).toBe(true);
-    }
-
-    expect(byNpc(monitored, cazril).turns.map((turn) => [turn.who, turn.speakerName])).toEqual([
-      ["user", "Pim"],
-      ["npc", null],
-    ]);
-    expect(byNpc(monitored, marrow).turns.map((turn) => turn.who)).toEqual(["user"]);
-
-    expect(byNpc(monitored, cazril).pendingProposals).toBe(1);
-    expect(byNpc(monitored, wick).pendingProposals).toBe(2);
-    expect(byNpc(monitored, marrow).pendingProposals).toBe(0);
-
-    expect(byNpc(monitored, cazril).lastFailure).toBeNull();
-    expect(byNpc(monitored, wick).lastFailure).toBe("Last reply ended with length.");
-    expect(byNpc(monitored, marrow).lastFailure).toBeNull();
-
-    expect(byNpc(monitored, cazril).available).toBe(true);
-    expect(byNpc(monitored, marrow).available).toBe(false);
-    expect(byNpc(monitored, marrow).thread.sessionState).toBe("paused");
-
-    expect(unconfigured.map((entry) => entry.available)).toEqual([false, false, false]);
-    expect(unconfigured.map((entry) => entry.lastFailure)).toEqual([
-      "No model is configured behind NPC chat.",
-      "No model is configured behind NPC chat.",
-      "No model is configured behind NPC chat.",
-    ]);
   });
 });
