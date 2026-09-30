@@ -75,34 +75,41 @@ import { renderImage } from "./render.js";
  * ### The job
  *
  * A service-owned `FiberSet`, so shutdown interrupts every job cleanly, and a
- * `Semaphore` of `PORTRAIT_CONCURRENCY` shared by every kind. Each job —
- * waiting for a permit included — runs under {@link JOB_TIMEOUT}: call the
- * image model at the kind's size, decode and resize with `sharp`, then store
- * every file and mark the row `ready` inside one transaction that holds the
- * row's lock (see `ImageRecords.store` for why that makes a delete mid-draw
- * safe). Any failure marks the row `failed` with its kind and enqueues the
- * prefix; provider text goes to the log only.
+ * `Semaphore` of `PORTRAIT_CONCURRENCY` shared by every kind. A job queues for
+ * a permit untimed; once it has one it stamps its row's `updated_at`
+ * (`ImageRecords.drawing`, which draws nothing if the row was deleted or swept
+ * while it queued) and runs under {@link JOB_TIMEOUT}: call the image model at
+ * the kind's size, decode and resize with `sharp`, then store every file and
+ * mark the row `ready` inside one transaction that holds the row's lock (see
+ * `ImageRecords.store` for why that makes a delete mid-draw safe). Timing the
+ * queue as well would record a draw waiting behind slow ones as `timeout`
+ * without its request ever being sent. Any failure marks the row `failed`
+ * with its kind and enqueues the prefix; provider text goes to the log only.
  *
  * ### The loop
  *
- * At boot and every minute: rows of any kind still `generating` past
- * {@link STALE_AFTER_SECONDS} belong to a process that died and become
- * `interrupted`, and due `storage_deletion` rows are drained through
+ * At boot and every minute: rows of any kind still `generating`
+ * {@link STALE_AFTER_SECONDS} after they were created or last got a permit
+ * belong to a process that died and become `interrupted`, and due `storage_deletion` rows are drained through
  * `ObjectStorage.deletePrefix`. The loop runs whenever storage is on, whether
  * or not generation is, because a deleted subject's files must go either way.
  *
  * ### One instance
  *
  * The hand-off is in-process. A second server instance would draw its own
- * creations and sweep correctly (the sweep only touches rows older than any
- * live job can be), but replacing the hand-off with a `for update skip
+ * creations and sweep correctly (the sweep only touches rows no live draw
+ * can still be holding), but replacing the hand-off with a `for update skip
  * locked` pickup over `generating` rows is the step for real horizontal scale.
  */
 
 /** OpenAI says complex prompts may take up to two minutes. */
 export const JOB_TIMEOUT = Duration.seconds(150);
 
-/** Older than any job can live, with slack for a slow commit. */
+/**
+ * Longer than any draw runs after its permit, with slack for a slow commit.
+ * A row that queued this long without a permit is swept too, and its job
+ * then draws nothing.
+ */
 export const STALE_AFTER_SECONDS = 170;
 
 const LOOP_EVERY = Duration.minutes(1);
@@ -215,6 +222,7 @@ export class HobImages extends Context.Service<
 
         const draw = (image: ImageModel["Service"], job: ImageJob) =>
           Effect.gen(function* () {
+            if (!(yield* records.drawing(job))) return;
             const drawn = yield* image.generate(job.prompt, IMAGE_KINDS[job.kind].size);
             const rendered = yield* renderImage(job.kind, drawn.bytes);
             const files = [
@@ -246,8 +254,12 @@ export class HobImages extends Context.Service<
               },
             );
           }).pipe(
-            Semaphore.withPermit(permits),
+            // The budget starts with the permit: timing the queue as well
+            // would record a draw waiting behind slow ones as `timeout`
+            // before its request was ever sent. `drawing` restarts the
+            // sweep's clock at the same moment.
             Effect.timeout(timeout),
+            Semaphore.withPermit(permits),
             Effect.catchCause((cause) =>
               // Shutdown interrupts the job; the row stays `generating` and the
               // next sweep calls it `interrupted`.

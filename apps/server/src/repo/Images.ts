@@ -195,14 +195,22 @@ export class ImageRecords extends Context.Service<
       stored: StoredImage,
     ) => Effect.Effect<boolean, E>;
     /**
+     * A queued job got its permit: stamp the row's `updated_at`, which the
+     * stale sweep measures from, while it is still `generating`. `false`
+     * when the row is gone or no longer drawing (a delete, or a sweep while
+     * it queued); the job then draws nothing and spends nothing.
+     */
+    readonly drawing: (job: ImageJob) => Effect.Effect<boolean>;
+    /**
      * Mark a drawing row failed, and enqueue its prefix for deletion in the
      * same transaction in case anything was put before the failure.
      */
     readonly fail: (job: ImageJob, failure: ImageFailure) => Effect.Effect<void>;
     /**
-     * Rows of any kind still `generating` after `olderThanSeconds` belong to a
-     * process that died; mark them `interrupted` and enqueue their prefixes.
-     * Answers how many.
+     * Rows of any kind still `generating` `olderThanSeconds` after they were
+     * created or last got a permit (`updated_at`) belong to a process that
+     * died; mark them `interrupted` and enqueue their prefixes. Answers how
+     * many.
      */
     readonly sweepStale: (olderThanSeconds: number) => Effect.Effect<number>;
     /** Deletions whose time has come, oldest first. */
@@ -329,6 +337,16 @@ export class ImageRecords extends Context.Service<
             ),
           ),
 
+        drawing: (job) =>
+          sql<{ readonly id: string }>`
+            update ${table(job.kind)} set updated_at = now()
+            where id = ${job.id} and state = 'generating'
+            returning id
+          `.pipe(
+            Effect.map((rows) => rows.length > 0),
+            Effect.orDie,
+          ),
+
         fail: (job, failure) =>
           sql
             .withTransaction(
@@ -353,7 +371,7 @@ export class ImageRecords extends Context.Service<
                 update ${table(kind)} set
                   state = 'failed', failure = 'interrupted', finished_at = now(), updated_at = now()
                 where state = 'generating'
-                  and created_at < now() - make_interval(secs => ${olderThanSeconds})
+                  and updated_at < now() - make_interval(secs => ${olderThanSeconds})
                 returning storage_prefix
               ), enqueued as (
                 insert into storage_deletion (prefix) select storage_prefix from swept

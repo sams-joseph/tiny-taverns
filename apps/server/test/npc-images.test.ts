@@ -857,7 +857,7 @@ describe("when there is no portrait", () => {
 
   it("records a draw that outlives the job timeout as timeout, and queues its files", async () => {
     const hanging = scriptedImages({ apiUrl: OPENAI, model: MODEL });
-    hanging.next({ kind: "hang" });
+    hanging.next({ kind: "hang" }, { kind: "hang" });
     const npc = await addNpc(stranger, theirs, { name: "Slow", role: "a patient heron-keeper" });
     await settled();
     // The shared worker drew both; forget that, so the slow worker can start them.
@@ -896,6 +896,124 @@ describe("when there is no portrait", () => {
       `,
     );
     expect(queued[0]?.count).toBe(1);
+  });
+
+  it("starts each draw's timeout when it gets its permit, not while it queues", async () => {
+    // One permit and three draws: the portrait hangs out its whole budget
+    // while the banner and the cover queue behind it, and each of those
+    // answers well inside a budget of its own, but not inside what was left
+    // of one that had been running while it queued.
+    const slow = scriptedImages({ apiUrl: OPENAI, model: MODEL });
+    const banner = await run(Deferred.make<void>());
+    const cover = await run(Deferred.make<void>());
+    slow.next(
+      { kind: "hang" },
+      { kind: "held", release: banner },
+      { kind: "held", release: cover },
+    );
+    /** Answer the `index`th request a second after it is sent. */
+    const answerLater = (index: number, release: Deferred.Deferred<void>) =>
+      Effect.gen(function* () {
+        while (slow.requests().length <= index) yield* Effect.sleep("5 millis");
+        yield* Effect.sleep("1 second");
+        yield* Deferred.succeed(release, undefined);
+      });
+    const npc = await addNpc(stranger, theirs, { name: "Queued", role: "a weary ferryman" });
+    const campaign = await as(stranger.token, (client) =>
+      client.campaigns.findById({ params: { campaignId: theirs } }),
+    );
+    await settled();
+    // The shared worker drew all three; forget that, so the slow worker can start them.
+    await sql((sql) => sql`delete from npc_image where npc_id = ${npc.id}`);
+    await sql((sql) => sql`delete from npc_banner where npc_id = ${npc.id}`);
+    await sql((sql) => sql`delete from campaign_image where campaign_id = ${theirs}`);
+
+    await run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* Layer.build(
+            HobImages.layer({
+              generation: Option.some({
+                limits: { perAccountPerDay: 100, perDay: 100 },
+                concurrency: 1,
+                timeout: "5 seconds",
+              }),
+              storageOn: false,
+            }).pipe(Layer.provide([ImageRecords.layer, ObjectStorage.memory, urls, slow.layer])),
+          );
+          const worker = Context.get(built, HobImages);
+          yield* Effect.forkScoped(answerLater(1, banner));
+          yield* Effect.forkScoped(answerLater(2, cover));
+          expect((yield* worker.drawNpc(npc)).imagePending).toBe(true);
+          expect((yield* worker.drawCampaign(campaign)).imagePending).toBe(true);
+          yield* worker.idle;
+        }),
+      ).pipe(Effect.provideService(CurrentActor, stranger.actor)),
+    );
+
+    expect(slow.requests().map((request) => request.size)).toEqual([
+      "1024x1024",
+      "1536x1024",
+      "1536x1024",
+    ]);
+    expect((await recordOf(npc.id))?.failure).toBe("timeout");
+    expect(await bannerOf(npc.id)).toMatchObject({ state: "ready", failure: null });
+    const drawn = await sql(
+      (sql) => sql<{ readonly state: string; readonly failure: string | null }>`
+        select state, failure from campaign_image where campaign_id = ${theirs}
+      `,
+    );
+    expect(drawn[0]).toMatchObject({ state: "ready", failure: null });
+  });
+
+  it("draws nothing for a job swept while it queued, and sends no request", async () => {
+    // The portrait holds the one permit until it is released; the banner
+    // queues behind it long enough (backdated here) for the sweep to call it
+    // `interrupted`.
+    const slow = scriptedImages({ apiUrl: OPENAI, model: MODEL });
+    const portrait = await run(Deferred.make<void>());
+    slow.next({ kind: "held", release: portrait }, { kind: "hang" });
+    const npc = await addNpc(stranger, theirs, { name: "Forgotten", role: "a lamplighter" });
+    await settled();
+    await sql((sql) => sql`delete from npc_image where npc_id = ${npc.id}`);
+    await sql((sql) => sql`delete from npc_banner where npc_id = ${npc.id}`);
+
+    const swept = await run(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* Layer.build(
+            HobImages.layer({
+              generation: Option.some({
+                limits: { perAccountPerDay: 100, perDay: 100 },
+                concurrency: 1,
+                timeout: "5 seconds",
+              }),
+              storageOn: false,
+            }).pipe(Layer.provide([ImageRecords.layer, ObjectStorage.memory, urls, slow.layer])),
+          );
+          const worker = Context.get(built, HobImages);
+          expect((yield* worker.drawNpc(npc)).imagePending).toBe(true);
+          while (slow.requests().length === 0) yield* Effect.sleep("5 millis");
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
+            update npc_banner set
+              created_at = now() - interval '10 minutes',
+              updated_at = now() - interval '10 minutes'
+            where npc_id = ${npc.id}
+          `;
+          const swept = yield* worker.sweep;
+          yield* Deferred.succeed(portrait, undefined);
+          yield* worker.idle;
+          return swept;
+        }),
+      ).pipe(Effect.provideService(CurrentActor, stranger.actor)),
+    );
+
+    // Only the banner was swept: the portrait drawing under its permit was not.
+    expect(swept).toBe(1);
+    expect(slow.requests().map((request) => request.size)).toEqual(["1024x1024"]);
+    expect((await recordOf(npc.id))?.state).toBe("ready");
+    expect((await bannerOf(npc.id))?.failure).toBe("interrupted");
   });
 
   it("spends the one daily budget portraits, banners and covers spend", async () => {
@@ -1044,7 +1162,8 @@ describe("deleting an NPC", () => {
       (sql) => sql`
         update npc_image set
           state = 'generating', failure = null, finished_at = null,
-          created_at = now() - interval '10 minutes'
+          created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
         where npc_id = ${npc.id}
       `,
     );

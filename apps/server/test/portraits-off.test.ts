@@ -164,6 +164,7 @@ describe("a server that restarts mid-draw", () => {
           model: "m",
           storage_prefix: `portraits/${accountId}/${character.id}/stale`,
           created_at: new Date(Date.now() - 10 * 60 * 1000),
+          updated_at: new Date(Date.now() - 10 * 60 * 1000),
         })}
       `,
     );

@@ -630,7 +630,8 @@ describe("deleting a campaign", () => {
       (sql) => sql`
         update campaign_image set
           state = 'generating', failure = null, finished_at = null,
-          created_at = now() - interval '10 minutes'
+          created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
         where campaign_id = ${campaign.id}
       `,
     );

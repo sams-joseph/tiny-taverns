@@ -624,7 +624,8 @@ describe("deleting a Shared World", () => {
       (sql) => sql`
         update shared_world_image set
           state = 'generating', failure = null, finished_at = null,
-          created_at = now() - interval '10 minutes'
+          created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
         where group_id = ${world.id}
       `,
     );
