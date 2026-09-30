@@ -9,7 +9,3 @@ allowBuilds:
   # here uses msgpack (it backs effect's rpc/cluster/eventlog modules), so
   # decline the native build rather than requiring a toolchain to install.
   msgpackr-extract: false
-  # Its postinstall only recreates the shared-library symlinks npm cannot ship;
-  # scripts/with-private-postgres.sh makes them in its own scratch directory
-  # instead, so nothing writes into node_modules.
-  "@embedded-postgres/linux-x64": false

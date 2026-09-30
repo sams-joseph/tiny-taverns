@@ -33,4 +33,39 @@ describe("the database the suite runs against", () => {
     vi.resetModules();
     await expect(import("./support/database.js")).rejects.toThrow(/DATABASE_URL is not set/);
   });
+  it("passes a run's database prefix through turbo too", () => {
+    expect(turboJson.tasks.test?.passThroughEnv).toContain("TAVERNS_TEST_DATABASE_PREFIX");
+  });
+});
+
+/**
+ * A run sharing a Postgres server with somebody else's (the gate on the
+ * development server) names its per-file databases under a prefix of its own,
+ * because every file force-drops the database it is about to create.
+ */
+describe("the per-file database name", () => {
+  it("is the file's own name without a prefix", async () => {
+    const { testDatabaseName } = await import("./support/database.js");
+    expect(testDatabaseName("taverns_test_spells", undefined)).toBe("taverns_test_spells");
+    expect(testDatabaseName("taverns_test_spells", "")).toBe("taverns_test_spells");
+  });
+
+  it("sits under the run's prefix when one is set", async () => {
+    const { testDatabaseName } = await import("./support/database.js");
+    expect(testDatabaseName("taverns_test_spells", "taverns_gate_0a1b2c3d")).toBe(
+      "taverns_gate_0a1b2c3d_taverns_test_spells",
+    );
+  });
+
+  it("refuses a prefix that is not a plain identifier", async () => {
+    const { testDatabaseName } = await import("./support/database.js");
+    expect(() => testDatabaseName("taverns_test_spells", 'x"; drop database taverns; --')).toThrow(
+      /TAVERNS_TEST_DATABASE_PREFIX/,
+    );
+  });
+
+  it("refuses a name Postgres would truncate", async () => {
+    const { testDatabaseName } = await import("./support/database.js");
+    expect(() => testDatabaseName("taverns_test_spells", "p".repeat(44))).toThrow(/63 characters/);
+  });
 });

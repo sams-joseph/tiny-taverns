@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # with-private-postgres.sh COMMAND [ARGS...]
 #
-# Runs COMMAND against a throwaway Postgres of its own, so a suite never needs,
-# and never reaches, the development database on 5433 (`compose.yaml`).
+# Runs COMMAND against a throwaway database of its own on the development
+# Postgres server (`compose.yaml`: 127.0.0.1:5433, taverns/taverns), so a suite
+# never reads or writes the `taverns` database `pnpm dev` uses.
 #
-# - Starts Postgres 18 from the pinned `@embedded-postgres/linux-x64`
-#   devDependency (CI's service is `postgres:18`) on a free loopback port that
-#   is never 5433, with its data under `.scratch/` in this checkout (not /tmp,
-#   whose quota is shared by every session on the machine).
-# - Runs COMMAND with DATABASE_URL and E2E_AUTH_DATABASE_URL set to it, whatever
-#   they were before, and exits with COMMAND's status.
-# - On success, failure or a signal, stops COMMAND's process group and exactly
-#   the postmaster it started (both by the PID recorded at spawn) and deletes
-#   the data.
+# - Expects that server to be running already (`pnpm db:up`) and fails saying so
+#   when it is not.
+# - Creates `taverns_gate_<random>` through the maintenance database `postgres`,
+#   then runs COMMAND with DATABASE_URL and E2E_AUTH_DATABASE_URL pointing at it
+#   and TAVERNS_TEST_DATABASE_PREFIX set to its name, so the server suite's
+#   per-file databases are named under it and cannot collide with anybody
+#   else's (`apps/server/test/support/database.ts`). Exits with COMMAND's status.
+# - On success, failure or a signal, stops COMMAND's process group (by the PID
+#   recorded at spawn), then drops its database and every `<its name>_*` one.
 #
-# Linux x64 only, like the binaries. No Docker, no client tools.
+# TAVERNS_PG_HOST, TAVERNS_PG_PORT, TAVERNS_PG_USER and TAVERNS_PG_PASSWORD
+# point it at another server; they default to the compose one.
 
 set -euo pipefail
 
@@ -24,36 +26,53 @@ if [ "$#" -eq 0 ]; then
 fi
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-native="$root/node_modules/@embedded-postgres/linux-x64/native"
-if [ ! -x "$native/bin/postgres" ]; then
-  echo "with-private-postgres: no Postgres binaries at $native; run pnpm install (Linux x64 only)." >&2
-  exit 69
-fi
+host=${TAVERNS_PG_HOST:-127.0.0.1}
+port=${TAVERNS_PG_PORT:-5433}
+user=${TAVERNS_PG_USER:-taverns}
+password=${TAVERNS_PG_PASSWORD:-taverns}
 
-# True while $1, a child of this shell, is running (a zombie counts as gone).
-alive() {
-  local state
-  state=$(awk '{ print $3 }' "/proc/$1/stat" 2>/dev/null) || return 1
-  [ "$state" != "Z" ]
-}
-
-stop_postgres() {
-  [ -n "$pg_pid" ] || return 0
-  if alive "$pg_pid"; then
-    kill -INT "$pg_pid" 2>/dev/null || true # fast shutdown
-    for _ in $(seq 1 300); do
-      alive "$pg_pid" || break
-      sleep 0.1
-    done
-    if alive "$pg_pid"; then
-      echo "with-private-postgres: postmaster $pg_pid ignored fast shutdown for 30 s; killing it." >&2
-      kill -KILL "$pg_pid" 2>/dev/null || true
-    fi
-  fi
-  # Reap it. Until this the PID cannot be reused, so every signal above
-  # reached the process this script started and nothing else.
-  wait "$pg_pid" 2>/dev/null || true
-  pg_pid=""
+# admin ACTION NAME: create or drop NAME (and, for drop, every NAME_* database)
+# through the maintenance database, with the workspace's own `pg`; the
+# server image ships psql, but the host may not have it.
+admin() {
+  PGHOST_="$host" PGPORT_="$port" PGUSER_="$user" PGPASSWORD_="$password" \
+    node -e '
+      const [root, action, name] = process.argv.slice(1);
+      const pg = require(require.resolve("pg", { paths: [root + "/apps/web"] }));
+      const env = process.env;
+      const where = `${env.PGHOST_}:${env.PGPORT_}`;
+      const client = new pg.Client({
+        host: env.PGHOST_, port: Number(env.PGPORT_), user: env.PGUSER_,
+        password: env.PGPASSWORD_, database: "postgres", connectionTimeoutMillis: 5000,
+      });
+      const quote = (n) => `"${n.replaceAll("\"", "\"\"")}"`;
+      (async () => {
+        try {
+          await client.connect();
+        } catch (error) {
+          console.error(`with-private-postgres: Postgres is not reachable at ${where} (${error.message}).`);
+          console.error("  Start the development database with `pnpm db:up`, or point TAVERNS_PG_HOST and");
+          console.error("  TAVERNS_PG_PORT at another Postgres server.");
+          process.exit(69);
+        }
+        try {
+          if (action === "create") {
+            await client.query(`create database ${quote(name)}`);
+          } else {
+            const { rows } = await client.query(
+              "select datname from pg_database where datname = $1 or left(datname, length($1) + 1) = $1 || $2",
+              [name, "_"],
+            );
+            for (const { datname } of rows) await client.query(`drop database if exists ${quote(datname)} with (force)`);
+          }
+        } finally {
+          await client.end();
+        }
+      })().catch((error) => {
+        console.error(`with-private-postgres: could not ${action} ${name} on ${where}: ${error.message}`);
+        process.exit(70);
+      });
+    ' "$root" "$1" "$2"
 }
 
 # True while any live process remains in COMMAND's process group.
@@ -90,85 +109,29 @@ cleanup() {
   local status=$?
   trap - EXIT INT TERM HUP
   stop_command
-  stop_postgres
-  rm -rf "$work"
-  rmdir "$root/.scratch" 2>/dev/null || true
+  if [ -n "$database" ]; then
+    admin drop "$database" ||
+      echo "with-private-postgres: $database and its ${database}_* databases may be left on $host:$port." >&2
+  fi
   exit "$status"
 }
 
-mkdir -p "$root/.scratch"
-work=$(mktemp -d "$root/.scratch/pg.XXXXXX")
-pg_pid=""
+database=""
 cmd_pid=""
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-# npm cannot ship symlinks, and the binaries load libicu*.so.60 by those names.
-# Recreate the links the package lists, here rather than in node_modules.
-mkdir "$work/lib"
-node -e '
-  const [lib, native] = process.argv.slice(1);
-  const fs = require("fs"), path = require("path");
-  for (const { source, target } of require(path.join(native, "pg-symlinks.json")))
-    fs.symlinkSync(path.join(native, "..", source), path.join(lib, path.basename(target)));
-' "$work/lib" "$native"
-export LD_LIBRARY_PATH="$work/lib:$native/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+name="taverns_gate_$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+admin create "$name"
+database=$name
 
-printf 'taverns\n' >"$work/pwfile"
-locale=C.UTF-8
-if locale -a 2>/dev/null | grep -qix 'en_US.utf-\?8'; then locale=en_US.UTF-8; fi
-"$native/bin/initdb" -D "$work/data" -U taverns --pwfile="$work/pwfile" \
-  -A scram-sha-256 -E UTF8 --locale="$locale" --no-sync >"$work/initdb.log" 2>&1 ||
-  { cat "$work/initdb.log" >&2; exit 70; }
-echo "CREATE DATABASE taverns" |
-  "$native/bin/postgres" --single -D "$work/data" -F postgres >"$work/single.log" 2>&1 ||
-  { cat "$work/single.log" >&2; exit 70; }
-
-# A free port, never 5433. Another process can take it between the check and
-# the bind, so a failed start picks again.
-pick_port() {
-  local port
-  for _ in $(seq 1 50); do
-    port=$((20000 + RANDOM % 40000))
-    [ "$port" -ne 5433 ] || continue
-    if [ -z "$(ss -Htln "sport = :$port" 2>/dev/null)" ]; then
-      echo "$port"
-      return 0
-    fi
-  done
-  return 1
-}
-
-port=""
-for _ in $(seq 1 5); do
-  port=$(pick_port) || { echo "with-private-postgres: no free port found." >&2; exit 70; }
-  "$native/bin/postgres" -D "$work/data" -h 127.0.0.1 -p "$port" -k '' \
-    -c max_connections=400 -c fsync=off -c synchronous_commit=off -c full_page_writes=off \
-    >"$work/postgres.log" 2>&1 &
-  pg_pid=$!
-  # postmaster.pid's eighth line reads "ready" once connections are accepted.
-  for _ in $(seq 1 600); do
-    alive "$pg_pid" || break
-    [ "$(sed -n 8p "$work/data/postmaster.pid" 2>/dev/null | tr -d ' ')" = ready ] && break
-    sleep 0.1
-  done
-  if alive "$pg_pid" && [ "$(sed -n 8p "$work/data/postmaster.pid" 2>/dev/null | tr -d ' ')" = ready ]; then
-    break
-  fi
-  stop_postgres
-  if ! grep -q 'could not bind\|Address already in use' "$work/postgres.log"; then
-    cat "$work/postgres.log" >&2
-    exit 70
-  fi
-  port=""
-done
-[ -n "$port" ] || { echo "with-private-postgres: Postgres did not start." >&2; exit 70; }
-
-export DATABASE_URL="postgres://taverns:taverns@127.0.0.1:$port/taverns"
-export E2E_AUTH_DATABASE_URL="$DATABASE_URL"
-echo "with-private-postgres: Postgres $pg_pid on 127.0.0.1:$port, data in ${work#"$root"/}" >&2
+url="postgres://$(node -p 'encodeURIComponent(process.argv[1]) + ":" + encodeURIComponent(process.argv[2])' "$user" "$password")@$host:$port/$database"
+export DATABASE_URL="$url"
+export E2E_AUTH_DATABASE_URL="$url"
+export TAVERNS_TEST_DATABASE_PREFIX="$database"
+echo "with-private-postgres: database $database on $host:$port" >&2
 
 # In the background so a signal to this script is handled at once rather than
 # after COMMAND ends; stdin is passed through explicitly, since a background

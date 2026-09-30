@@ -9,8 +9,8 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // `.repos/**` holds vendored upstream source (see README); never lint it. Per-package
   // `eslint .` runs never reach it today, but this keeps it out if linting is ever run from root.
-  // `.scratch/` is where scripts/with-private-postgres.sh and agents keep throwaway files; ESLint
-  // does not read git's ignores, so a leftover there would fail the package's lint.
+  // `.scratch/` is where agents and gate runs keep throwaway files; ESLint does not read git's
+  // ignores, so a leftover there would fail the package's lint.
   { ignores: ["dist/**", "coverage/**", ".turbo/**", ".repos/**", "**/.scratch/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,

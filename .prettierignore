@@ -5,7 +5,7 @@ coverage
 pnpm-lock.yaml
 .claude
 .repos
-# Throwaway files: scripts/with-private-postgres.sh keeps its Postgres data here.
+# Agents' and gate runs' throwaway files.
 .scratch
 # The designers' delivery, kept byte-for-byte (see packages/design-system/PORT-NOTES.md).
 packages/design-system
