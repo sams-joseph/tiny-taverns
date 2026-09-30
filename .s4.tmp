@@ -1,0 +1,2 @@
+with-private-postgres: Postgres 2744352 on 127.0.0.1:52600, data in .scratch/pg.BdyqE8
+cmd pgid 2744384
