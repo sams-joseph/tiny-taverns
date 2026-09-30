@@ -1,7 +1,7 @@
+import { describe, expect, it } from "@effect/vitest";
 import { Actor, type CreatureId, CurrentActor } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -15,6 +15,7 @@ import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * The bestiary's own visibility properties.
@@ -26,20 +27,17 @@ import { items } from "./support/paging.js";
  * actor is the failure mode, and reasoning about a `WHERE` clause is not
  * evidence — every claim here is a query someone actually ran.
  */
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    CampaignCreatorActors.layer,
-    Groups.layer,
-    Creatures.layer,
-    EncounterCreatures.layer,
-    Encounters.layer,
-    Invites.layer,
-    LibraryShares.layer,
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_bestiary"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  CampaignCreatorActors.layer,
+  Groups.layer,
+  Creatures.layer,
+  EncounterCreatures.layer,
+  Encounters.layer,
+  Invites.layer,
+  LibraryShares.layer,
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_bestiary")));
 
 const withActor =
   (actor: Actor) =>
@@ -143,17 +141,11 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
-let creatures: (typeof Creatures)["Service"];
-let roster: (typeof EncounterCreatures)["Service"];
-let encounters: (typeof Encounters)["Service"];
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "bestiary.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-  creatures = await runtime.runPromise(Creatures);
-  roster = await runtime.runPromise(EncounterCreatures);
-  encounters = await runtime.runPromise(Encounters);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 describe("challenge ratings", () => {
   it("sort where they read, including the fractional ones", () => {
@@ -174,61 +166,69 @@ describe("challenge ratings", () => {
   });
 });
 
-describe("the new tables fail closed", () => {
-  it("stores a creature created with no explicit visibility as dm", () => {
-    expect(fixture.authored.visibility).toBe("dm");
-    expect(fixture.authored.origin).toBe("authored");
-    expect(fixture.authored.assistantTurnId).toBeNull();
-  });
-
-  it("defaults at the column, not only in the payload schema", async () => {
-    // Inserted straight into the table, bypassing every TypeScript path — the
-    // property a table added later inherits for free.
-    const rows = await runtime.runPromise(
+describeLayer("bestiary", shared, (it) => {
+  describe("the new tables fail closed", () => {
+    it.effect("stores a creature created with no explicit visibility as dm", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const creature = yield* sql<{
-          readonly id: CreatureId;
-          readonly visibility: string;
-          readonly origin: string;
-          readonly cr_sort: number;
-        }>`
+        const fixture = yield* Fixture;
+        expect(fixture.authored.visibility).toBe("dm");
+        expect(fixture.authored.origin).toBe("authored");
+        expect(fixture.authored.assistantTurnId).toBeNull();
+      }),
+    );
+
+    it.effect("defaults at the column, not only in the payload schema", () =>
+      Effect.gen(function* () {
+        // Inserted straight into the table, bypassing every TypeScript path — the
+        // property a table added later inherits for free.
+        const fixture = yield* Fixture;
+        const rows = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const creature = yield* sql<{
+            readonly id: CreatureId;
+            readonly visibility: string;
+            readonly origin: string;
+            readonly cr_sort: number;
+          }>`
           insert into creature (campaign_id, name, type, cr, ac, hp)
           values (${fixture.campaign.id}, 'inserted behind the repository', 'Ooze', '1', 10, 10)
           returning id, visibility, origin, cr_sort
         `;
-        const line = yield* sql<{
-          readonly visibility: string;
-          readonly origin: string;
-          readonly count: number;
-        }>`
+          const line = yield* sql<{
+            readonly visibility: string;
+            readonly origin: string;
+            readonly count: number;
+          }>`
           insert into encounter_creature (encounter_id, creature_id)
           values (${fixture.encounter.id}, ${creature[0]!.id})
           returning visibility, origin, count
         `;
-        return { creature: creature[0]!, line: line[0]! };
-      }).pipe(Effect.orDie),
+          return { creature: creature[0]!, line: line[0]! };
+        }).pipe(Effect.orDie);
+
+        expect(rows.creature.visibility).toBe("dm");
+        expect(rows.creature.origin).toBe("authored");
+        expect(rows.line).toEqual({ visibility: "dm", origin: "authored", count: 1 });
+      }),
     );
 
-    expect(rows.creature.visibility).toBe("dm");
-    expect(rows.creature.origin).toBe("authored");
-    expect(rows.line).toEqual({ visibility: "dm", origin: "authored", count: 1 });
-  });
-
-  it("refuses a system creature that names a campaign, and a global one that does not", async () => {
-    // `creature_system_is_unowned` (`0015`), which replaced
-    // `creature_system_is_global` when a null campaign stopped meaning
-    // "nobody's": a bundled creature is the one **nobody owns**, and being
-    // `system` and being unowned are the same statement. So there is no
-    // campaign-scoped system row and no ownerless authored one — which is what
-    // makes immutability a consequence of the write predicates rather than a
-    // rule to remember. `library.test.ts` pins the other ownership column and
-    // every write path in the product against it.
-    const insert = (origin: string, campaignId: string | null) =>
-      runtime.runPromise(
+    it.effect(
+      "refuses a system creature that names a campaign, and a global one that does not",
+      () =>
         Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`
+          // `creature_system_is_unowned` (`0015`), which replaced
+          // `creature_system_is_global` when a null campaign stopped meaning
+          // "nobody's": a bundled creature is the one **nobody owns**, and being
+          // `system` and being unowned are the same statement. So there is no
+          // campaign-scoped system row and no ownerless authored one — which is what
+          // makes immutability a consequence of the write predicates rather than a
+          // rule to remember. `library.test.ts` pins the other ownership column and
+          // every write path in the product against it.
+          const fixture = yield* Fixture;
+          const insert = (origin: string, campaignId: string | null) =>
+            Effect.gen(function* () {
+              const sql = yield* SqlClient.SqlClient;
+              yield* sql`
             insert into creature ${sql.insert({
               campaign_id: campaignId,
               origin,
@@ -239,629 +239,716 @@ describe("the new tables fail closed", () => {
               hp: 10,
             })}
           `;
-        }).pipe(Effect.result),
-      );
+            }).pipe(Effect.result);
 
-    expect((await insert("system", fixture.campaign.id))._tag).toBe("Failure");
-    expect((await insert("authored", null))._tag).toBe("Failure");
-    expect((await insert("system", null))._tag).toBe("Success");
+          expect((yield* insert("system", fixture.campaign.id))._tag).toBe("Failure");
+          expect((yield* insert("authored", null))._tag).toBe("Failure");
+          expect((yield* insert("system", null))._tag).toBe("Success");
 
-    // The one that succeeded is a real global row, and the corpus assertions
-    // further down count. Put the shared corpus back the way the import left it
-    // so the order of these tests does not matter.
-    await runtime.runPromise(
+          // The one that succeeded is a real global row, and the corpus assertions
+          // further down count. Put the shared corpus back the way the import left it
+          // so the order of these tests does not matter.
+          yield* Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`delete from creature where name = 'system-null'`;
+          }).pipe(Effect.orDie);
+        }),
+    );
+  });
+
+  describe("the global system corpus", () => {
+    it.effect("is reachable from every campaign the actor can read", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`delete from creature where name = 'system-null'`;
-      }).pipe(Effect.orDie),
-    );
-  });
-});
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const here = yield* withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {})));
+        const there = yield* withActor(fixture.dm)(
+          items(creatures.list(fixture.otherTable.id, {})),
+        );
 
-describe("the global system corpus", () => {
-  it("is reachable from every campaign the actor can read", async () => {
-    const here = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
-    );
-    const there = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.otherTable.id, {}))),
-    );
-
-    expect(here.map((creature) => creature.name)).toContain("Goblin Boss");
-    expect(there.map((creature) => creature.name)).toContain("Goblin Boss");
-    // Nothing in this list is a campaign row, ever — internal instances are
-    // plumbing no list returns, which is the instancing decision as a pin.
-    expect(here.every((creature) => creature.campaignId === null)).toBe(true);
-  });
-
-  it("reaches the DM's own Library at every table, and nobody else's anywhere", async () => {
-    // The boundary moved with the instancing decision: a DM's Library serves
-    // all of their tables by design, and the wall is the account plus the
-    // explicit group share — another account's original is unreachable here by
-    // any path, shared into their own group or not.
-    const here = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
-    );
-    const there = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.otherTable.id, {}))),
+        expect(here.map((creature) => creature.name)).toContain("Goblin Boss");
+        expect(there.map((creature) => creature.name)).toContain("Goblin Boss");
+        // Nothing in this list is a campaign row, ever — internal instances are
+        // plumbing no list returns, which is the instancing decision as a pin.
+        expect(here.every((creature) => creature.campaignId === null)).toBe(true);
+      }),
     );
 
-    expect(here.map((creature) => creature.id)).toContain(fixture.authored.id);
-    expect(there.map((creature) => creature.id)).toContain(fixture.authored.id);
-    expect(here.map((creature) => creature.id)).not.toContain(fixture.creatureElsewhere.id);
-    expect(there.map((creature) => creature.id)).not.toContain(fixture.creatureElsewhere.id);
-  });
-
-  it("is not reachable through a campaign the actor cannot read", async () => {
-    // The failure this predicate exists to prevent. Written the natural way —
-    // `campaign_id is null OR <the campaign-scoped test>` — a global row would
-    // come back for *any* authenticated request naming *any* campaign id,
-    // including one belonging to somebody else. `findById` is reached by path,
-    // and a path is a claim.
-    const listed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.dm)(items(creatures.list(fixture.outsiderCampaign.id, {})))),
-    );
-    const found = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.dm)(
-          creatures.findById(fixture.outsiderCampaign.id, fixture.goblinBoss.id),
-        ),
-      ),
-    );
-
-    expect(listed._tag).toBe("NotFound");
-    expect(found._tag).toBe("NotFound");
-    expect(found.resource).toBe("creature");
-
-    // …and the same creature through a campaign this DM does own is right there.
-    const honest = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.findById(fixture.campaign.id, fixture.goblinBoss.id)),
-    );
-    expect(honest.name).toBe("Goblin Boss");
-  });
-
-  it("still answers to the row's own visibility, so a player gets no stat blocks", async () => {
-    // "Global" means shared between a DM's campaigns, not shared with their
-    // players. A stat block is exactly what the product says a player must not
-    // have — the hag's legendary actions are the example.
-    const listed = await runtime.runPromise(
-      withActor(fixture.player)(items(creatures.list(fixture.campaign.id, {}))),
-    );
-    const found = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(creatures.findById(fixture.campaign.id, fixture.goblinBoss.id)),
-      ),
-    );
-
-    expect(found._tag).toBe("NotFound");
-    // Only the one the DM deliberately shared, and nothing global.
-    expect(listed.map((creature) => creature.id)).toEqual([fixture.sharedCreature.id]);
-  });
-
-  it("reaches a shared global row through a membership, which is what changed under it", async () => {
-    // `corpusRowReadable` composes `campaignReadable`, so when reach stopped
-    // meaning ownership this predicate quietly changed too and nothing in its
-    // own text says so: a global row is now reachable through a **membership**
-    // rather than through account ownership. The test above proves the default
-    // still fails closed; this one proves the other half is really the row's own
-    // visibility and not the campaign gate accidentally refusing everything.
-    //
-    // Written with raw SQL because nothing ships a way to share a system
-    // creature — `bestiary/import.ts` never writes `visibility`, deliberately,
-    // so an upgrade cannot un-share one. The point here is what the predicate
-    // permits, not what a path does.
-    const seen = await runtime.runPromise(
+    it.effect("reaches the DM's own Library at every table, and nobody else's anywhere", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
+        // The boundary moved with the instancing decision: a DM's Library serves
+        // all of their tables by design, and the wall is the account plus the
+        // explicit group share — another account's original is unreachable here by
+        // any path, shared into their own group or not.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const here = yield* withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {})));
+        const there = yield* withActor(fixture.dm)(
+          items(creatures.list(fixture.otherTable.id, {})),
+        );
+
+        expect(here.map((creature) => creature.id)).toContain(fixture.authored.id);
+        expect(there.map((creature) => creature.id)).toContain(fixture.authored.id);
+        expect(here.map((creature) => creature.id)).not.toContain(fixture.creatureElsewhere.id);
+        expect(there.map((creature) => creature.id)).not.toContain(fixture.creatureElsewhere.id);
+      }),
+    );
+
+    it.effect("is not reachable through a campaign the actor cannot read", () =>
+      Effect.gen(function* () {
+        // The failure this predicate exists to prevent. Written the natural way —
+        // `campaign_id is null OR <the campaign-scoped test>` — a global row would
+        // come back for *any* authenticated request naming *any* campaign id,
+        // including one belonging to somebody else. `findById` is reached by path,
+        // and a path is a claim.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const listed = yield* Effect.flip(
+          withActor(fixture.dm)(items(creatures.list(fixture.outsiderCampaign.id, {}))),
+        );
+        const found = yield* Effect.flip(
+          withActor(fixture.dm)(
+            creatures.findById(fixture.outsiderCampaign.id, fixture.goblinBoss.id),
+          ),
+        );
+
+        expect(listed._tag).toBe("NotFound");
+        expect(found._tag).toBe("NotFound");
+        expect(found.resource).toBe("creature");
+
+        // …and the same creature through a campaign this DM does own is right there.
+        const honest = yield* withActor(fixture.dm)(
+          creatures.findById(fixture.campaign.id, fixture.goblinBoss.id),
+        );
+        expect(honest.name).toBe("Goblin Boss");
+      }),
+    );
+
+    it.effect("still answers to the row's own visibility, so a player gets no stat blocks", () =>
+      Effect.gen(function* () {
+        // "Global" means shared between a DM's campaigns, not shared with their
+        // players. A stat block is exactly what the product says a player must not
+        // have — the hag's legendary actions are the example.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const listed = yield* withActor(fixture.player)(
+          items(creatures.list(fixture.campaign.id, {})),
+        );
+        const found = yield* Effect.flip(
+          withActor(fixture.player)(creatures.findById(fixture.campaign.id, fixture.goblinBoss.id)),
+        );
+
+        expect(found._tag).toBe("NotFound");
+        // Only the one the DM deliberately shared, and nothing global.
+        expect(listed.map((creature) => creature.id)).toEqual([fixture.sharedCreature.id]);
+      }),
+    );
+
+    it.effect(
+      "reaches a shared global row through a membership, which is what changed under it",
+      () =>
+        Effect.gen(function* () {
+          // `corpusRowReadable` composes `campaignReadable`, so when reach stopped
+          // meaning ownership this predicate quietly changed too and nothing in its
+          // own text says so: a global row is now reachable through a **membership**
+          // rather than through account ownership. The test above proves the default
+          // still fails closed; this one proves the other half is really the row's own
+          // visibility and not the campaign gate accidentally refusing everything.
+          //
+          // Written with raw SQL because nothing ships a way to share a system
+          // creature — `bestiary/import.ts` never writes `visibility`, deliberately,
+          // so an upgrade cannot un-share one. The point here is what the predicate
+          // permits, not what a path does.
+          const fixture = yield* Fixture;
+          const creatures = yield* Creatures;
+          const seen = yield* Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`
           update creature set visibility = 'shared' where id = ${fixture.goblinBoss.id}
         `;
-        const found = yield* Effect.provideService(
+            const found = yield* Effect.provideService(
+              creatures.findById(fixture.campaign.id, fixture.goblinBoss.id),
+              CurrentActor,
+              fixture.player,
+            );
+            // A stranger's membership reaches nothing, however global the row is:
+            // the campaign gate sits outside the union, not inside a bare `OR`.
+            const throughAnother = yield* Effect.provideService(
+              creatures.findById(fixture.outsiderCampaign.id, fixture.goblinBoss.id),
+              CurrentActor,
+              fixture.player,
+            ).pipe(Effect.flip);
+            yield* sql`update creature set visibility = 'dm' where id = ${fixture.goblinBoss.id}`;
+            return { found, throughAnother };
+          }).pipe(Effect.orDie);
+
+          expect(seen.found.name).toBe("Goblin Boss");
+          expect(seen.throughAnother._tag).toBe("NotFound");
+        }),
+    );
+
+    it.effect("is immutable, even to the DM whose campaign reaches it", () =>
+      Effect.gen(function* () {
+        // No `origin = 'system'` check anywhere in the repository. The Library is
+        // the one write surface left, its predicate compares `account_id` to the
+        // credential's own, and a bundled row's is null.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const updated = yield* Effect.flip(
+          withActor(fixture.dm)(
+            creatures.libraryUpdate(fixture.goblinBoss.id, { name: "tampered" }),
+          ),
+        );
+        const removed = yield* Effect.flip(
+          withActor(fixture.dm)(creatures.libraryRemove(fixture.goblinBoss.id)),
+        );
+
+        expect(updated._tag).toBe("NotFound");
+        expect(removed._tag).toBe("NotFound");
+
+        const untouched = yield* withActor(fixture.dm)(
           creatures.findById(fixture.campaign.id, fixture.goblinBoss.id),
-          CurrentActor,
-          fixture.player,
         );
-        // A stranger's membership reaches nothing, however global the row is:
-        // the campaign gate sits outside the union, not inside a bare `OR`.
-        const throughAnother = yield* Effect.provideService(
-          creatures.findById(fixture.outsiderCampaign.id, fixture.goblinBoss.id),
-          CurrentActor,
-          fixture.player,
-        ).pipe(Effect.flip);
-        yield* sql`update creature set visibility = 'dm' where id = ${fixture.goblinBoss.id}`;
-        return { found, throughAnother };
-      }).pipe(Effect.orDie),
+        expect(untouched.name).toBe("Goblin Boss");
+      }),
     );
 
-    expect(seen.found.name).toBe("Goblin Boss");
-    expect(seen.throughAnother._tag).toBe("NotFound");
-  });
-
-  it("is immutable, even to the DM whose campaign reaches it", async () => {
-    // No `origin = 'system'` check anywhere in the repository. The Library is
-    // the one write surface left, its predicate compares `account_id` to the
-    // credential's own, and a bundled row's is null.
-    const updated = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.dm)(creatures.libraryUpdate(fixture.goblinBoss.id, { name: "tampered" })),
-      ),
-    );
-    const removed = await runtime.runPromise(
-      Effect.flip(withActor(fixture.dm)(creatures.libraryRemove(fixture.goblinBoss.id))),
-    );
-
-    expect(updated._tag).toBe("NotFound");
-    expect(removed._tag).toBe("NotFound");
-
-    const untouched = await runtime.runPromise(
-      withActor(fixture.dm)(creatures.findById(fixture.campaign.id, fixture.goblinBoss.id)),
-    );
-    expect(untouched.name).toBe("Goblin Boss");
-  });
-
-  it("re-imports as an update, so a reskin's ancestor survives an upgrade", async () => {
-    const again = await runtime.runPromise(importSystemCreatures().pipe(Effect.orDie));
-
-    expect(again.inserted).toBe(0);
-    expect(again.updated).toBeGreaterThan(0);
-
-    const corpus = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
-    );
-    expect(corpus.filter((creature) => creature.name === "Goblin Boss")).toHaveLength(1);
-  });
-});
-
-describe("instancing at the point of use", () => {
-  it("mints the campaign's internal instance when a Library creature goes on a roster", async () => {
-    const seen = await runtime.runPromise(
+    it.effect("re-imports as an update, so a reskin's ancestor survives an upgrade", () =>
       Effect.gen(function* () {
-        const encounter = yield* encounters.create(fixture.campaign.id, {
-          name: "Six by the ford",
-        });
-        const line = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.authored.id,
-          count: 2,
-        });
-        const instance = yield* creatures.findById(fixture.campaign.id, line.creatureId);
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const again = yield* importSystemCreatures().pipe(Effect.orDie);
 
-        // A Library edit after the fact does not reach the built encounter —
-        // the instance is a snapshot taken when the roster line was made.
-        yield* creatures.libraryUpdate(fixture.authored.id, {
-          name: "The Ferryman's Wife (revised)",
-          hp: 99,
-        });
-        const stillSnapshot = yield* creatures.findById(fixture.campaign.id, line.creatureId);
-        yield* creatures.libraryUpdate(fixture.authored.id, {
-          name: "The Ferryman's Wife",
-          hp: 82,
-        });
+        expect(again.inserted).toBe(0);
+        expect(again.updated).toBeGreaterThan(0);
 
-        // No list surfaces the instance: the campaign's usable list stays the
-        // picker's answer, and the Library stays originals only.
-        const usable = yield* items(creatures.list(fixture.campaign.id, {}));
-        const shelf = yield* items(creatures.library({ q: "Ferryman" }));
-
-        return { encounter, line, instance, stillSnapshot, usable, shelf };
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+        const corpus = yield* withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {})));
+        expect(corpus.filter((creature) => creature.name === "Goblin Boss")).toHaveLength(1);
+      }),
     );
-
-    expect(seen.line.creatureId).not.toBe(fixture.authored.id);
-    expect(seen.line.name).toBe("The Ferryman's Wife");
-    expect(seen.instance.campaignId).toBe(fixture.campaign.id);
-    expect(seen.instance.accountId).toBeNull();
-    expect(seen.instance.derivedFrom).toBe(fixture.authored.id);
-    // A new row fails closed, and the snapshot is exactly the source.
-    expect(seen.instance.visibility).toBe("dm");
-    expect(seen.instance.ac).toBe(17);
-    expect(seen.stillSnapshot.name).toBe("The Ferryman's Wife");
-    expect(seen.stillSnapshot.hp).toBe(82);
-    expect(seen.usable.map((creature) => creature.id)).not.toContain(seen.line.creatureId);
-    expect(seen.shelf.map((creature) => creature.id)).toContain(fixture.authored.id);
-    expect(seen.shelf.map((creature) => creature.id)).not.toContain(seen.line.creatureId);
   });
 
-  it("references the bundle directly — immutable rows need no snapshot", async () => {
-    const seen = await runtime.runPromise(
+  describe("instancing at the point of use", () => {
+    it.effect(
+      "mints the campaign's internal instance when a Library creature goes on a roster",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const creatures = yield* Creatures;
+          const roster = yield* EncounterCreatures;
+          const encounters = yield* Encounters;
+          const seen = yield* Effect.gen(function* () {
+            const encounter = yield* encounters.create(fixture.campaign.id, {
+              name: "Six by the ford",
+            });
+            const line = yield* roster.create(fixture.campaign.id, encounter.id, {
+              creatureId: fixture.authored.id,
+              count: 2,
+            });
+            const instance = yield* creatures.findById(fixture.campaign.id, line.creatureId);
+
+            // A Library edit after the fact does not reach the built encounter —
+            // the instance is a snapshot taken when the roster line was made.
+            yield* creatures.libraryUpdate(fixture.authored.id, {
+              name: "The Ferryman's Wife (revised)",
+              hp: 99,
+            });
+            const stillSnapshot = yield* creatures.findById(fixture.campaign.id, line.creatureId);
+            yield* creatures.libraryUpdate(fixture.authored.id, {
+              name: "The Ferryman's Wife",
+              hp: 82,
+            });
+
+            // No list surfaces the instance: the campaign's usable list stays the
+            // picker's answer, and the Library stays originals only.
+            const usable = yield* items(creatures.list(fixture.campaign.id, {}));
+            const shelf = yield* items(creatures.library({ q: "Ferryman" }));
+
+            return { encounter, line, instance, stillSnapshot, usable, shelf };
+          }).pipe(withActor(fixture.dm), Effect.orDie);
+
+          expect(seen.line.creatureId).not.toBe(fixture.authored.id);
+          expect(seen.line.name).toBe("The Ferryman's Wife");
+          expect(seen.instance.campaignId).toBe(fixture.campaign.id);
+          expect(seen.instance.accountId).toBeNull();
+          expect(seen.instance.derivedFrom).toBe(fixture.authored.id);
+          // A new row fails closed, and the snapshot is exactly the source.
+          expect(seen.instance.visibility).toBe("dm");
+          expect(seen.instance.ac).toBe(17);
+          expect(seen.stillSnapshot.name).toBe("The Ferryman's Wife");
+          expect(seen.stillSnapshot.hp).toBe(82);
+          expect(seen.usable.map((creature) => creature.id)).not.toContain(seen.line.creatureId);
+          expect(seen.shelf.map((creature) => creature.id)).toContain(fixture.authored.id);
+          expect(seen.shelf.map((creature) => creature.id)).not.toContain(seen.line.creatureId);
+        }),
+    );
+
+    it.effect("references the bundle directly — immutable rows need no snapshot", () =>
       Effect.gen(function* () {
-        const encounter = yield* encounters.create(fixture.campaign.id, {
-          name: "Straight from the corpus",
-        });
-        const line = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.goblinBoss.id,
-          count: 4,
-        });
-        return { line };
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const encounter = yield* encounters.create(fixture.campaign.id, {
+            name: "Straight from the corpus",
+          });
+          const line = yield* roster.create(fixture.campaign.id, encounter.id, {
+            creatureId: fixture.goblinBoss.id,
+            count: 4,
+          });
+          return { line };
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(seen.line.creatureId).toBe(fixture.goblinBoss.id);
+        expect(seen.line.name).toBe("Goblin Boss");
+      }),
     );
 
-    expect(seen.line.creatureId).toBe(fixture.goblinBoss.id);
-    expect(seen.line.name).toBe("Goblin Boss");
-  });
-
-  it("sees through the instancing when refusing a repeat", async () => {
-    const seen = await runtime.runPromise(
+    it.effect("sees through the instancing when refusing a repeat", () =>
       Effect.gen(function* () {
-        const encounter = yield* encounters.create(fixture.campaign.id, { name: "Twice over" });
-        const first = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.authored.id,
-        });
-        // Naming the same source again must not mint a second invisible
-        // instance with a fresh id and sail past the unique index.
-        const again = yield* Effect.flip(
-          roster.create(fixture.campaign.id, encounter.id, { creatureId: fixture.authored.id }),
-        );
-        // A different encounter is a different snapshot, deliberately.
-        const second = yield* encounters.create(fixture.campaign.id, { name: "And elsewhere" });
-        const elsewhere = yield* roster.create(fixture.campaign.id, second.id, {
-          creatureId: fixture.authored.id,
-        });
-        return { first, again, elsewhere };
-      }).pipe(withActor(fixture.dm), Effect.orDie),
-    );
-
-    expect(seen.again._tag).toBe("Conflict");
-    expect(seen.elsewhere.creatureId).not.toBe(seen.first.creatureId);
-    expect(seen.elsewhere.name).toBe("The Ferryman's Wife");
-  });
-
-  it("cannot use a creature the actor cannot reach", async () => {
-    const error = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.dm)(
-          roster.create(fixture.campaign.id, fixture.encounter.id, {
-            creatureId: fixture.creatureElsewhere.id,
-          }),
-        ),
-      ),
-    );
-
-    expect(error._tag).toBe("NotFound");
-    expect(error._tag === "NotFound" && error.resource).toBe("creature");
-  });
-
-  it("is refused to a player, who cannot write a roster at all", async () => {
-    const error = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          roster.create(fixture.campaign.id, fixture.encounter.id, {
-            creatureId: fixture.sharedCreature.id,
-          }),
-        ),
-      ),
-    );
-
-    expect(error._tag).toBe("NotFound");
-  });
-});
-
-describe("a campaign-scoped actor", () => {
-  it("cannot read the other campaign's creatures, by either path", async () => {
-    const honest = await runtime.runPromise(
-      Effect.flip(withActor(fixture.player)(items(creatures.list(fixture.otherTable.id, {})))),
-    );
-    // Naming this campaign while asking for a creature that lives in the other
-    // one — the shape that would work if the predicate trusted the id.
-    const smuggled = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.player)(
-          creatures.findById(fixture.campaign.id, fixture.creatureElsewhere.id),
-        ),
-      ),
-    );
-
-    expect(honest._tag).toBe("NotFound");
-    expect(smuggled._tag).toBe("NotFound");
-
-    // …and it really is there: its owner reads it at their own table, through
-    // the group share their grant made.
-    const asOwner = await runtime.runPromise(
-      withActor(fixture.outsider)(
-        creatures.findById(fixture.outsiderCampaign.id, fixture.creatureElsewhere.id),
-      ),
-    );
-    expect(asOwner.name).toBe("Whatever Is In The Crate");
-  });
-
-  it("narrows a dm-role actor too, so scope does not depend on the role", async () => {
-    const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
-
-    const listed = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, {})))),
-    );
-    // The global corpus is no way around it either: it is reachable *through a
-    // readable campaign*, and this credential does not reach that campaign.
-    const corpus = await runtime.runPromise(
-      Effect.flip(withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, {})))),
-    );
-
-    expect(listed._tag).toBe("NotFound");
-    expect(corpus._tag).toBe("NotFound");
-  });
-});
-
-describe("another account", () => {
-  it("reaches neither the campaign's creatures nor its roster", async () => {
-    const creature = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.outsider)(
-          creatures.findById(fixture.campaign.id, fixture.sharedCreature.id),
-        ),
-      ),
-    );
-    // The roster read takes the creator's proof, which nobody else can mint.
-    const line = await runtime.runPromise(Effect.flip(asDm(fixture.outsider, fixture.campaign.id)));
-
-    expect(creature._tag).toBe("NotFound");
-    expect(line._tag).toBe("NotFound");
-  });
-});
-
-describe("an encounter's roster", () => {
-  it("accepts a Library creature and a global one, and makes the card's count true", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
-        const encounter = yield* encounters.create(fixture.campaign.id, {
-          name: "Six in the reeds",
-        });
-        const empty = yield* encounters.findById(dm, encounter.id);
-
-        const own = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.authored.id,
-          count: 2,
-        });
-        const global = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.goblinBoss.id,
-          count: 4,
-        });
-
-        const listed = yield* roster.list(dm, encounter.id);
-        const counted = yield* encounters.findById(dm, encounter.id);
-        const raised = yield* roster.update(fixture.campaign.id, encounter.id, own.id, {
-          count: 3,
-        });
-        const afterRaise = yield* encounters.findById(dm, encounter.id);
-        yield* roster.remove(fixture.campaign.id, encounter.id, global.id);
-        const afterRemove = yield* encounters.findById(dm, encounter.id);
-
-        return { encounter, empty, own, global, listed, counted, raised, afterRaise, afterRemove };
-      }).pipe(withActor(fixture.dm), Effect.orDie),
-    );
-
-    expect(seen.empty.creatureCount).toBe(0);
-    expect(seen.own.count).toBe(2);
-    // The fixture's `count: 6` — `sum(encounter_creature.count)`, not a column.
-    expect(seen.counted.creatureCount).toBe(6);
-    // The Library source was instanced; the bundled one went on as-is.
-    expect(seen.listed.map((line) => line.name)).toEqual(["The Ferryman's Wife", "Goblin Boss"]);
-    expect(seen.listed[0]?.creatureId).not.toBe(fixture.authored.id);
-    expect(seen.listed[1]?.creatureId).toBe(fixture.goblinBoss.id);
-    expect(seen.raised.count).toBe(3);
-    expect(seen.afterRaise.creatureCount).toBe(7);
-    expect(seen.afterRemove.creatureCount).toBe(3);
-  });
-
-  it("counts what the actor can see, so the card and the list agree", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const encounter = yield* Effect.provideService(
-          encounters.create(fixture.campaign.id, {
-            name: "Half of it is hidden",
-            visibility: "shared",
-            ready: true,
-          }),
-          CurrentActor,
-          fixture.dm,
-        );
-        yield* Effect.provideService(
-          roster.create(fixture.campaign.id, encounter.id, {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const encounter = yield* encounters.create(fixture.campaign.id, { name: "Twice over" });
+          const first = yield* roster.create(fixture.campaign.id, encounter.id, {
             creatureId: fixture.authored.id,
-            count: 5,
-          }),
-          CurrentActor,
-          fixture.dm,
+          });
+          // Naming the same source again must not mint a second invisible
+          // instance with a fresh id and sail past the unique index.
+          const again = yield* Effect.flip(
+            roster.create(fixture.campaign.id, encounter.id, { creatureId: fixture.authored.id }),
+          );
+          // A different encounter is a different snapshot, deliberately.
+          const second = yield* encounters.create(fixture.campaign.id, { name: "And elsewhere" });
+          const elsewhere = yield* roster.create(fixture.campaign.id, second.id, {
+            creatureId: fixture.authored.id,
+          });
+          return { first, again, elsewhere };
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(seen.again._tag).toBe("Conflict");
+        expect(seen.elsewhere.creatureId).not.toBe(seen.first.creatureId);
+        expect(seen.elsewhere.name).toBe("The Ferryman's Wife");
+      }),
+    );
+
+    it.effect("cannot use a creature the actor cannot reach", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const error = yield* Effect.flip(
+          withActor(fixture.dm)(
+            roster.create(fixture.campaign.id, fixture.encounter.id, {
+              creatureId: fixture.creatureElsewhere.id,
+            }),
+          ),
         );
-        yield* Effect.provideService(
-          roster.create(fixture.campaign.id, encounter.id, {
-            creatureId: fixture.sharedCreature.id,
+
+        expect(error._tag).toBe("NotFound");
+        expect(error._tag === "NotFound" && error.resource).toBe("creature");
+      }),
+    );
+
+    it.effect("is refused to a player, who cannot write a roster at all", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const error = yield* Effect.flip(
+          withActor(fixture.player)(
+            roster.create(fixture.campaign.id, fixture.encounter.id, {
+              creatureId: fixture.sharedCreature.id,
+            }),
+          ),
+        );
+
+        expect(error._tag).toBe("NotFound");
+      }),
+    );
+  });
+
+  describe("a campaign-scoped actor", () => {
+    it.effect("cannot read the other campaign's creatures, by either path", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const honest = yield* Effect.flip(
+          withActor(fixture.player)(items(creatures.list(fixture.otherTable.id, {}))),
+        );
+        // Naming this campaign while asking for a creature that lives in the other
+        // one — the shape that would work if the predicate trusted the id.
+        const smuggled = yield* Effect.flip(
+          withActor(fixture.player)(
+            creatures.findById(fixture.campaign.id, fixture.creatureElsewhere.id),
+          ),
+        );
+
+        expect(honest._tag).toBe("NotFound");
+        expect(smuggled._tag).toBe("NotFound");
+
+        // …and it really is there: its owner reads it at their own table, through
+        // the group share their grant made.
+        const asOwner = yield* withActor(fixture.outsider)(
+          creatures.findById(fixture.outsiderCampaign.id, fixture.creatureElsewhere.id),
+        );
+        expect(asOwner.name).toBe("Whatever Is In The Crate");
+      }),
+    );
+
+    it.effect("narrows a dm-role actor too, so scope does not depend on the role", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const scopedDm = scopedTo(fixture.dm, fixture.campaign.id);
+
+        const listed = yield* Effect.flip(
+          withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, {}))),
+        );
+        // The global corpus is no way around it either: it is reachable *through a
+        // readable campaign*, and this credential does not reach that campaign.
+        const corpus = yield* Effect.flip(
+          withActor(scopedDm)(items(creatures.list(fixture.otherTable.id, {}))),
+        );
+
+        expect(listed._tag).toBe("NotFound");
+        expect(corpus._tag).toBe("NotFound");
+      }),
+    );
+  });
+
+  describe("another account", () => {
+    it.effect("reaches neither the campaign's creatures nor its roster", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const creature = yield* Effect.flip(
+          withActor(fixture.outsider)(
+            creatures.findById(fixture.campaign.id, fixture.sharedCreature.id),
+          ),
+        );
+        // The roster read takes the creator's proof, which nobody else can mint.
+        const line = yield* Effect.flip(asDm(fixture.outsider, fixture.campaign.id));
+
+        expect(creature._tag).toBe("NotFound");
+        expect(line._tag).toBe("NotFound");
+      }),
+    );
+  });
+
+  describe("an encounter's roster", () => {
+    it.effect("accepts a Library creature and a global one, and makes the card's count true", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const dm = yield* asDm(fixture.dm, fixture.campaign.id);
+          const encounter = yield* encounters.create(fixture.campaign.id, {
+            name: "Six in the reeds",
+          });
+          const empty = yield* encounters.findById(dm, encounter.id);
+
+          const own = yield* roster.create(fixture.campaign.id, encounter.id, {
+            creatureId: fixture.authored.id,
             count: 2,
-            visibility: "shared",
-          }),
-          CurrentActor,
-          fixture.dm,
-        );
+          });
+          const global = yield* roster.create(fixture.campaign.id, encounter.id, {
+            creatureId: fixture.goblinBoss.id,
+            count: 4,
+          });
 
-        const dm = yield* asDm(fixture.dm, fixture.campaign.id);
-        const asCreator = yield* encounters.findById(dm, encounter.id);
-        const creatorList = yield* roster.list(dm, encounter.id);
-        const asPlayer = yield* Effect.provideService(
-          encounters.findAsPlayer(fixture.campaign.id, encounter.id),
-          CurrentActor,
-          fixture.player,
-        );
+          const listed = yield* roster.list(dm, encounter.id);
+          const counted = yield* encounters.findById(dm, encounter.id);
+          const raised = yield* roster.update(fixture.campaign.id, encounter.id, own.id, {
+            count: 3,
+          });
+          const afterRaise = yield* encounters.findById(dm, encounter.id);
+          yield* roster.remove(fixture.campaign.id, encounter.id, global.id);
+          const afterRemove = yield* encounters.findById(dm, encounter.id);
 
-        return { asCreator, creatorList, asPlayer };
-      }).pipe(Effect.orDie),
+          return {
+            encounter,
+            empty,
+            own,
+            global,
+            listed,
+            counted,
+            raised,
+            afterRaise,
+            afterRemove,
+          };
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(seen.empty.creatureCount).toBe(0);
+        expect(seen.own.count).toBe(2);
+        // The fixture's `count: 6` — `sum(encounter_creature.count)`, not a column.
+        expect(seen.counted.creatureCount).toBe(6);
+        // The Library source was instanced; the bundled one went on as-is.
+        expect(seen.listed.map((line) => line.name)).toEqual([
+          "The Ferryman's Wife",
+          "Goblin Boss",
+        ]);
+        expect(seen.listed[0]?.creatureId).not.toBe(fixture.authored.id);
+        expect(seen.listed[1]?.creatureId).toBe(fixture.goblinBoss.id);
+        expect(seen.raised.count).toBe(3);
+        expect(seen.afterRaise.creatureCount).toBe(7);
+        expect(seen.afterRemove.creatureCount).toBe(3);
+      }),
     );
 
-    expect(seen.asCreator.creatureCount).toBe(7);
-    expect(seen.creatorList).toHaveLength(2);
-    expect(seen.asPlayer.creatures.map(({ count }) => count)).toEqual([2]);
-  });
+    it.effect("counts what the actor can see, so the card and the list agree", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const encounter = yield* Effect.provideService(
+            encounters.create(fixture.campaign.id, {
+              name: "Half of it is hidden",
+              visibility: "shared",
+              ready: true,
+            }),
+            CurrentActor,
+            fixture.dm,
+          );
+          yield* Effect.provideService(
+            roster.create(fixture.campaign.id, encounter.id, {
+              creatureId: fixture.authored.id,
+              count: 5,
+            }),
+            CurrentActor,
+            fixture.dm,
+          );
+          yield* Effect.provideService(
+            roster.create(fixture.campaign.id, encounter.id, {
+              creatureId: fixture.sharedCreature.id,
+              count: 2,
+              visibility: "shared",
+            }),
+            CurrentActor,
+            fixture.dm,
+          );
 
-  it("refuses a creature from another campaign, and an encounter from another campaign", async () => {
-    // Two different containments. The creature is checked against the same read
-    // predicate a creature read uses — it cannot ride on a composite foreign key
-    // the way `note.encounter_id` does, because half the rows it may point at
-    // are global and have no campaign to name in one.
-    const smuggledCreature = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.dm)(
-          roster.create(fixture.campaign.id, fixture.encounter.id, {
-            creatureId: fixture.creatureElsewhere.id,
-          }),
-        ),
-      ),
+          const dm = yield* asDm(fixture.dm, fixture.campaign.id);
+          const asCreator = yield* encounters.findById(dm, encounter.id);
+          const creatorList = yield* roster.list(dm, encounter.id);
+          const asPlayer = yield* Effect.provideService(
+            encounters.findAsPlayer(fixture.campaign.id, encounter.id),
+            CurrentActor,
+            fixture.player,
+          );
+
+          return { asCreator, creatorList, asPlayer };
+        }).pipe(Effect.orDie);
+
+        expect(seen.asCreator.creatureCount).toBe(7);
+        expect(seen.creatorList).toHaveLength(2);
+        expect(seen.asPlayer.creatures.map(({ count }) => count)).toEqual([2]);
+      }),
     );
-    // …and the encounter id is a claim like any other.
-    const smuggledEncounter = await runtime.runPromise(
-      Effect.flip(
-        withActor(fixture.dm)(
-          roster.create(fixture.campaign.id, fixture.encounterElsewhere.id, {
+
+    it.effect(
+      "refuses a creature from another campaign, and an encounter from another campaign",
+      () =>
+        Effect.gen(function* () {
+          // Two different containments. The creature is checked against the same read
+          // predicate a creature read uses — it cannot ride on a composite foreign key
+          // the way `note.encounter_id` does, because half the rows it may point at
+          // are global and have no campaign to name in one.
+          const fixture = yield* Fixture;
+          const roster = yield* EncounterCreatures;
+          const smuggledCreature = yield* Effect.flip(
+            withActor(fixture.dm)(
+              roster.create(fixture.campaign.id, fixture.encounter.id, {
+                creatureId: fixture.creatureElsewhere.id,
+              }),
+            ),
+          );
+          // …and the encounter id is a claim like any other.
+          const smuggledEncounter = yield* Effect.flip(
+            withActor(fixture.dm)(
+              roster.create(fixture.campaign.id, fixture.encounterElsewhere.id, {
+                creatureId: fixture.authored.id,
+              }),
+            ),
+          );
+
+          // The 404 names the thing the caller asked for and could not have, which
+          // is a different thing in each case.
+          expect(smuggledCreature).toMatchObject({ _tag: "NotFound", resource: "creature" });
+          expect(smuggledEncounter).toMatchObject({ _tag: "NotFound", resource: "encounter" });
+        }),
+    );
+
+    it.effect("reports a repeated creature as a conflict rather than doubling the roster", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const error = yield* Effect.gen(function* () {
+          const encounter = yield* encounters.create(fixture.campaign.id, { name: "Twice" });
+          yield* roster.create(fixture.campaign.id, encounter.id, {
             creatureId: fixture.authored.id,
-          }),
-        ),
-      ),
+          });
+          return yield* Effect.flip(
+            roster.create(fixture.campaign.id, encounter.id, { creatureId: fixture.authored.id }),
+          );
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(error._tag).toBe("Conflict");
+      }),
     );
 
-    // The 404 names the thing the caller asked for and could not have, which
-    // is a different thing in each case.
-    expect(smuggledCreature).toMatchObject({ _tag: "NotFound", resource: "creature" });
-    expect(smuggledEncounter).toMatchObject({ _tag: "NotFound", resource: "encounter" });
+    it.effect("outlives its source's deletion, because the line holds a snapshot", () =>
+      Effect.gen(function* () {
+        // The old surface refused deleting a campaign creature a roster still
+        // named. There is no campaign creature to delete any more: the line points
+        // at an internal instance nothing user-facing can remove, so deleting the
+        // Library original is an ordinary act and the built encounter stands.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const creature = yield* creatures.libraryCreate({
+            name: "Still in use",
+            type: "Beast",
+            cr: "1",
+            ac: 12,
+            hp: 20,
+          });
+          const encounter = yield* encounters.create(fixture.campaign.id, { name: "Using it" });
+          const line = yield* roster.create(fixture.campaign.id, encounter.id, {
+            creatureId: creature.id,
+          });
+
+          // The instance is not a Library row, so the Library delete cannot name
+          // it — there is no path that removes the plumbing.
+          const instanceUntouchable = yield* Effect.flip(creatures.libraryRemove(line.creatureId));
+          yield* creatures.libraryRemove(creature.id);
+          const survives = yield* roster.list(
+            yield* asDm(fixture.dm, fixture.campaign.id),
+            encounter.id,
+          );
+          const instance = yield* creatures.findById(fixture.campaign.id, line.creatureId);
+
+          return { instanceUntouchable, survives, instance };
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(seen.instanceUntouchable._tag).toBe("NotFound");
+        expect(seen.survives.map((line) => line.name)).toEqual(["Still in use"]);
+        expect(seen.instance.derivedFrom).toBeNull();
+      }),
+    );
+
+    it.effect("goes away with its encounter, without taking the creatures with it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const roster = yield* EncounterCreatures;
+        const encounters = yield* Encounters;
+        const seen = yield* Effect.gen(function* () {
+          const encounter = yield* encounters.create(fixture.campaign.id, { name: "Doomed" });
+          yield* roster.create(fixture.campaign.id, encounter.id, {
+            creatureId: fixture.authored.id,
+          });
+          yield* encounters.remove(fixture.campaign.id, encounter.id);
+          return yield* creatures.findById(fixture.campaign.id, fixture.authored.id);
+        }).pipe(withActor(fixture.dm), Effect.orDie);
+
+        expect(seen.name).toBe("The Ferryman's Wife");
+      }),
+    );
   });
 
-  it("reports a repeated creature as a conflict rather than doubling the roster", async () => {
-    const error = await runtime.runPromise(
+  describe("the bestiary's filters", () => {
+    it.effect(
+      "finds a creature by a substring of its name and by a word only the document has",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const creatures = yield* Creatures;
+          const substring = yield* withActor(fixture.dm)(
+            items(creatures.list(fixture.campaign.id, { q: "gob" })),
+          );
+          const fullText = yield* withActor(fixture.dm)(
+            items(creatures.list(fixture.campaign.id, { q: "nimble escape" })),
+          );
+
+          // `Bestiary.jsx:11` is `name.includes(q)`, so half a word has to work…
+          expect(substring.map((creature) => creature.name)).toContain("Goblin Boss");
+          // …and a trait that is in no column at all has to work too.
+          expect(fullText.map((creature) => creature.name)).toContain("Goblin Boss");
+        }),
+    );
+
+    it.effect("treats a query full of punctuation as a search, not as a syntax error", () =>
       Effect.gen(function* () {
-        const encounter = yield* encounters.create(fixture.campaign.id, { name: "Twice" });
-        yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.authored.id,
-        });
-        return yield* Effect.flip(
-          roster.create(fixture.campaign.id, encounter.id, { creatureId: fixture.authored.id }),
+        // `websearch_to_tsquery` rather than `to_tsquery`, and the `ILIKE`
+        // wildcards escaped — a search box is not an expression language.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const results = yield* withActor(fixture.dm)(
+          items(creatures.list(fixture.campaign.id, { q: "100% & _boss_ | (" })),
         );
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+
+        expect(results).toEqual([]);
+      }),
     );
 
-    expect(error._tag).toBe("Conflict");
-  });
+    it.effect(
+      "matches any of the environment toggles, and orders by the sort the client asked for",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const creatures = yield* Creatures;
+          const marsh = yield* withActor(fixture.dm)(
+            items(creatures.list(fixture.campaign.id, { environments: ["Marsh"] })),
+          );
+          const byCr = yield* withActor(fixture.dm)(
+            items(creatures.list(fixture.campaign.id, { sort: "cr" })),
+          );
+          const byName = yield* withActor(fixture.dm)(
+            items(creatures.list(fixture.campaign.id, { sort: "name" })),
+          );
 
-  it("outlives its source's deletion, because the line holds a snapshot", async () => {
-    // The old surface refused deleting a campaign creature a roster still
-    // named. There is no campaign creature to delete any more: the line points
-    // at an internal instance nothing user-facing can remove, so deleting the
-    // Library original is an ordinary act and the built encounter stands.
-    const seen = await runtime.runPromise(
+          expect(marsh.map((creature) => creature.name).sort()).toEqual([
+            "Bullywug Croaker",
+            "Giant Toad",
+            "Goblin Boss",
+            "Marsh Hag",
+            "Will-o'-Wisp",
+          ]);
+          // "1/8" first, and it is the fractional one that proves the sort key works
+          // — the DM's own Library rows order right beside the bundle.
+          expect(byCr[0]!.name).toBe("Reed Skiff");
+          expect(byCr.map((creature) => creature.crSort)).toEqual([0.125, 0.25, 1, 1, 2, 3, 5, 5]);
+          expect(byName.map((creature) => creature.name)).toEqual([
+            "Bullywug Croaker",
+            "Ferryman's Shade",
+            "Giant Toad",
+            "Goblin Boss",
+            "Marsh Hag",
+            "Reed Skiff",
+            "The Ferryman's Wife",
+            "Will-o'-Wisp",
+          ]);
+        }),
+    );
+
+    it.effect("never surfaces an internal instance, whatever the filter", () =>
       Effect.gen(function* () {
-        const creature = yield* creatures.libraryCreate({
-          name: "Still in use",
-          type: "Beast",
-          cr: "1",
-          ac: 12,
-          hp: 20,
-        });
-        const encounter = yield* encounters.create(fixture.campaign.id, { name: "Using it" });
-        const line = yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: creature.id,
-        });
+        // By this point in the file several roster adds have minted campaign
+        // instances. The list is still the picker's answer — "save your own
+        // creatures next to the official ones" is the Library beside the bundle —
+        // and not one row of the plumbing is in it.
+        const fixture = yield* Fixture;
+        const creatures = yield* Creatures;
+        const all = yield* withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {})));
 
-        // The instance is not a Library row, so the Library delete cannot name
-        // it — there is no path that removes the plumbing.
-        const instanceUntouchable = yield* Effect.flip(creatures.libraryRemove(line.creatureId));
-        yield* creatures.libraryRemove(creature.id);
-        const survives = yield* roster.list(
-          yield* asDm(fixture.dm, fixture.campaign.id),
-          encounter.id,
-        );
-        const instance = yield* creatures.findById(fixture.campaign.id, line.creatureId);
-
-        return { instanceUntouchable, survives, instance };
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+        expect(all.length).toBeGreaterThan(0);
+        expect(all.every((creature) => creature.campaignId === null)).toBe(true);
+      }),
     );
-
-    expect(seen.instanceUntouchable._tag).toBe("NotFound");
-    expect(seen.survives.map((line) => line.name)).toEqual(["Still in use"]);
-    expect(seen.instance.derivedFrom).toBeNull();
-  });
-
-  it("goes away with its encounter, without taking the creatures with it", async () => {
-    const seen = await runtime.runPromise(
-      Effect.gen(function* () {
-        const encounter = yield* encounters.create(fixture.campaign.id, { name: "Doomed" });
-        yield* roster.create(fixture.campaign.id, encounter.id, {
-          creatureId: fixture.authored.id,
-        });
-        yield* encounters.remove(fixture.campaign.id, encounter.id);
-        return yield* creatures.findById(fixture.campaign.id, fixture.authored.id);
-      }).pipe(withActor(fixture.dm), Effect.orDie),
-    );
-
-    expect(seen.name).toBe("The Ferryman's Wife");
-  });
-});
-
-describe("the bestiary's filters", () => {
-  it("finds a creature by a substring of its name and by a word only the document has", async () => {
-    const substring = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "gob" }))),
-    );
-    const fullText = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "nimble escape" }))),
-    );
-
-    // `Bestiary.jsx:11` is `name.includes(q)`, so half a word has to work…
-    expect(substring.map((creature) => creature.name)).toContain("Goblin Boss");
-    // …and a trait that is in no column at all has to work too.
-    expect(fullText.map((creature) => creature.name)).toContain("Goblin Boss");
-  });
-
-  it("treats a query full of punctuation as a search, not as a syntax error", async () => {
-    // `websearch_to_tsquery` rather than `to_tsquery`, and the `ILIKE`
-    // wildcards escaped — a search box is not an expression language.
-    const results = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { q: "100% & _boss_ | (" }))),
-    );
-
-    expect(results).toEqual([]);
-  });
-
-  it("matches any of the environment toggles, and orders by the sort the client asked for", async () => {
-    const marsh = await runtime.runPromise(
-      withActor(fixture.dm)(
-        items(creatures.list(fixture.campaign.id, { environments: ["Marsh"] })),
-      ),
-    );
-    const byCr = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "cr" }))),
-    );
-    const byName = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, { sort: "name" }))),
-    );
-
-    expect(marsh.map((creature) => creature.name).sort()).toEqual([
-      "Bullywug Croaker",
-      "Giant Toad",
-      "Goblin Boss",
-      "Marsh Hag",
-      "Will-o'-Wisp",
-    ]);
-    // "1/8" first, and it is the fractional one that proves the sort key works
-    // — the DM's own Library rows order right beside the bundle.
-    expect(byCr[0]!.name).toBe("Reed Skiff");
-    expect(byCr.map((creature) => creature.crSort)).toEqual([0.125, 0.25, 1, 1, 2, 3, 5, 5]);
-    expect(byName.map((creature) => creature.name)).toEqual([
-      "Bullywug Croaker",
-      "Ferryman's Shade",
-      "Giant Toad",
-      "Goblin Boss",
-      "Marsh Hag",
-      "Reed Skiff",
-      "The Ferryman's Wife",
-      "Will-o'-Wisp",
-    ]);
-  });
-
-  it("never surfaces an internal instance, whatever the filter", async () => {
-    // By this point in the file several roster adds have minted campaign
-    // instances. The list is still the picker's answer — "save your own
-    // creatures next to the official ones" is the Library beside the bundle —
-    // and not one row of the plumbing is in it.
-    const all = await runtime.runPromise(
-      withActor(fixture.dm)(items(creatures.list(fixture.campaign.id, {}))),
-    );
-
-    expect(all.length).toBeGreaterThan(0);
-    expect(all.every((creature) => creature.campaignId === null)).toBe(true);
   });
 });

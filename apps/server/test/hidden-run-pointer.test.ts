@@ -1,6 +1,6 @@
+import { describe, expect } from "@effect/vitest";
 import { type Actor, CurrentActor, NotFound, type Session } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Context, Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -23,6 +23,7 @@ import {
   asDm,
 } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * A fight whose Share switch is off is not on the table, as far as a player
@@ -46,15 +47,10 @@ const services = Layer.mergeAll(
   Rolls.layer.pipe(Layer.provide(LiveEvents.layer)),
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hidden_run_pointer")));
-const runtime = ManagedRuntime.make(services);
-
 const as = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R | CurrentActor>) =>
   Effect.provideService(effect, CurrentActor, actor);
 
-const run = <A, E>(effect: Effect.Effect<A, E, Layer.Success<typeof services>>) =>
-  runtime.runPromise(effect);
-
-const fixture = Effect.gen(function* () {
+const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const sessions = yield* Sessions;
   const encounters = yield* Encounters;
@@ -86,11 +82,15 @@ const fixture = Effect.gen(function* () {
   return { dm, dmOf, player, other, neighbour, character, campaign, encounter, session };
 });
 
-type Fixture = Effect.Success<typeof fixture>;
-let f: Fixture;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hidden-run-pointer.test/Fixture",
+) {}
+
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 const pointers = (actor: Actor) =>
   Effect.gen(function* () {
+    const f = yield* Fixture;
     const sessions = yield* Sessions;
     const recap = yield* Recap;
     const listed = yield* as(actor, sessions.list(f.campaign.id));
@@ -104,60 +104,49 @@ const pointers = (actor: Actor) =>
     };
   });
 
-describe("a hidden fight's id", () => {
-  beforeAll(async () => {
-    f = await run(fixture);
-  }, 60_000);
-  afterAll(async () => void (await runtime.dispose()), 60_000);
-
-  it("is not on a player's session read while the fight is hidden", async () => {
-    const hidden = await run(
-      Effect.flatMap(EncounterRuns, (runs) =>
+describeLayer("hidden-run-pointer", shared, (it) => {
+  describe("a hidden fight's id", () => {
+    it.effect("is not on a player's session read while the fight is hidden", () =>
+      Effect.gen(function* () {
+        const f = yield* Fixture;
+        const runs = yield* EncounterRuns;
+        const sessions = yield* Sessions;
         // No `visibility`: a fight starts `dm`, which is the Start dialog's default.
-        runs.start(f.dmOf, f.session.id, { encounterId: f.encounter.id }),
-      ),
-    );
-    expect(hidden.visibility).toBe("dm");
+        const hidden = yield* runs.start(f.dmOf, f.session.id, { encounterId: f.encounter.id });
+        expect(hidden.visibility).toBe("dm");
 
-    // The creator still has the pointer: the runner is driven from it.
-    expect(await run(pointers(f.dm))).toEqual({
-      list: [hidden.id],
-      findById: hidden.id,
-      recap: hidden.id,
-    });
-    // A player reads the session as though nothing were on the table.
-    expect(await run(pointers(f.player))).toEqual({ list: [null], findById: null, recap: null });
+        // The creator still has the pointer: the runner is driven from it.
+        expect(yield* pointers(f.dm)).toEqual({
+          list: [hidden.id],
+          findById: hidden.id,
+          recap: hidden.id,
+        });
+        // A player reads the session as though nothing were on the table.
+        expect(yield* pointers(f.player)).toEqual({ list: [null], findById: null, recap: null });
 
-    // A member of the world from another table does not reach the session.
-    const refused = await run(
-      Effect.flatMap(Sessions, (sessions) =>
-        as(f.neighbour, sessions.findById(f.campaign.id, f.session.id)),
-      ).pipe(Effect.flip),
-    );
-    expect(refused).toBeInstanceOf(NotFound);
+        // A member of the world from another table does not reach the session.
+        const refused = yield* as(f.neighbour, sessions.findById(f.campaign.id, f.session.id)).pipe(
+          Effect.flip,
+        );
+        expect(refused).toBeInstanceOf(NotFound);
 
-    // Sharing the fight is what puts it on the player's table, from the same read.
-    await run(
-      Effect.flatMap(EncounterRuns, (runs) =>
-        runs.update(f.dmOf, f.session.id, hidden.id, { visibility: "shared" }),
-      ),
+        // Sharing the fight is what puts it on the player's table, from the same read.
+        yield* runs.update(f.dmOf, f.session.id, hidden.id, { visibility: "shared" });
+        expect(yield* pointers(f.player)).toEqual({
+          list: [hidden.id],
+          findById: hidden.id,
+          recap: hidden.id,
+        });
+        yield* runs.update(f.dmOf, f.session.id, hidden.id, { visibility: "dm" });
+      }),
     );
-    expect(await run(pointers(f.player))).toEqual({
-      list: [hidden.id],
-      findById: hidden.id,
-      recap: hidden.id,
-    });
-    await run(
-      Effect.flatMap(EncounterRuns, (runs) =>
-        runs.update(f.dmOf, f.session.id, hidden.id, { visibility: "dm" }),
-      ),
-    );
-  });
 
-  it("is not on a roll made while the fight is hidden", async () => {
-    const roll = await run(
-      Effect.flatMap(Rolls, (rolls) =>
-        as(
+    it.effect("is not on a roll made while the fight is hidden", () =>
+      Effect.gen(function* () {
+        const f = yield* Fixture;
+        const rolls = yield* Rolls;
+        const sessions = yield* Sessions;
+        const roll = yield* as(
           f.player,
           rolls.create(f.campaign.id, {
             characterId: f.character.id,
@@ -170,34 +159,22 @@ describe("a hidden fight's id", () => {
             mode: "normal",
             critical: null,
           }),
-        ),
-      ),
-    );
-    // The roll is shared (the night is), so the other player reads it — and
-    // neither player learns which fight it was rolled in.
-    expect(roll.visibility).toBe("shared");
-    expect(roll.encounterRunId).toBeNull();
-    const seenBy = (actor: Actor) =>
-      run(
-        Effect.flatMap(Rolls, (rolls) =>
-          as(actor, rolls.findById(f.campaign.id, f.session.id, roll.id)),
-        ),
-      );
-    expect((await seenBy(f.other)).encounterRunId).toBeNull();
-    expect((await seenBy(f.player)).encounterRunId).toBeNull();
-    const listed = await run(
-      Effect.flatMap(Rolls, (rolls) =>
-        as(f.other, rolls.list(f.campaign.id, f.session.id, { limit: 10 })),
-      ),
-    );
-    expect(listed.map((row) => row.encounterRunId)).toEqual([null]);
+        );
+        // The roll is shared (the night is), so the other player reads it — and
+        // neither player learns which fight it was rolled in.
+        expect(roll.visibility).toBe("shared");
+        expect(roll.encounterRunId).toBeNull();
+        const seenBy = (actor: Actor) =>
+          as(actor, rolls.findById(f.campaign.id, f.session.id, roll.id));
+        expect((yield* seenBy(f.other)).encounterRunId).toBeNull();
+        expect((yield* seenBy(f.player)).encounterRunId).toBeNull();
+        const listed = yield* as(f.other, rolls.list(f.campaign.id, f.session.id, { limit: 10 }));
+        expect(listed.map((row) => row.encounterRunId)).toEqual([null]);
 
-    // The creator still sees which fight it belongs to.
-    const live = await run(
-      Effect.flatMap(Sessions, (sessions) =>
-        as(f.dm, sessions.findById(f.campaign.id, f.session.id)),
-      ),
+        // The creator still sees which fight it belongs to.
+        const live = yield* as(f.dm, sessions.findById(f.campaign.id, f.session.id));
+        expect((yield* seenBy(f.dm)).encounterRunId).toBe(live.activeEncounterRunId);
+      }),
     );
-    expect((await seenBy(f.dm)).encounterRunId).toBe(live.activeEncounterRunId);
   });
 });

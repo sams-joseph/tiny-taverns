@@ -1,3 +1,4 @@
+import { describe, expect } from "@effect/vitest";
 import {
   Actor,
   type AbilityScoreId,
@@ -5,15 +6,15 @@ import {
   type Feat,
   type FeatLibraryCreate,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient, Statement } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Feats } from "../src/repo/Feats.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { anAccount } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **A page of feats costs the same number of statements whatever its length.**
@@ -32,12 +33,9 @@ import { migratedDatabase } from "./support/database.js";
  *      children under their feat in JS is where a set-based read can go wrong,
  *      so every feat on the page is compared with the same feat read alone.
  */
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Accounts.layer, Feats.layer).pipe(
-    Layer.provideMerge(migratedDatabase("taverns_test_feats_hydration")),
-  ),
+const services = Layer.mergeAll(Accounts.layer, Feats.layer).pipe(
+  Layer.provideMerge(migratedDatabase("taverns_test_feats_hydration")),
 );
-afterAll(() => runtime.dispose());
 
 const as =
   (actor: Actor) =>
@@ -56,8 +54,6 @@ const counted = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     );
     return { value, statements };
   });
-
-const run = <A, E>(effect: Effect.Effect<A, E, Feats>) => runtime.runPromise(Effect.orDie(effect));
 
 /**
  * The bundle's ability scores, and a creator whose Library holds a dozen feats
@@ -89,78 +85,78 @@ const makeFixture = Effect.gen(function* () {
   return { dm, written };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "feats-hydration.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-describe("a page of feats", () => {
-  it("runs the same statements for one feat as for every feat", async () => {
-    const { dm, written } = fixture;
-    const [one, all, none] = await run(
+describeLayer("feats-hydration", shared, (it) => {
+  describe("a page of feats", () => {
+    it.effect("runs the same statements for one feat as for every feat", () =>
       Effect.gen(function* () {
+        const { dm, written } = yield* Fixture;
         const feats = yield* Feats;
-        return yield* as(dm)(
+        const [one, all, none] = yield* as(dm)(
           Effect.all([
             counted(feats.library({ limit: 1 })),
             counted(feats.library({ limit: 200 })),
             counted(feats.library({ q: "nothing is called this" })),
           ]),
-        );
+        ).pipe(Effect.orDie);
+
+        expect(one.value.items).toHaveLength(1);
+        expect(all.value.items.length).toBeGreaterThanOrEqual(written.length);
+        // The page, then its descriptions and its prerequisites — once each.
+        expect(all.statements).toHaveLength(3);
+        expect(one.statements).toHaveLength(all.statements.length);
+        // An empty page has no children to read.
+        expect(none.value.items).toEqual([]);
+        expect(none.statements).toHaveLength(1);
       }),
     );
 
-    expect(one.value.items).toHaveLength(1);
-    expect(all.value.items.length).toBeGreaterThanOrEqual(written.length);
-    // The page, then its descriptions and its prerequisites — once each.
-    expect(all.statements).toHaveLength(3);
-    expect(one.statements).toHaveLength(all.statements.length);
-    // An empty page has no children to read.
-    expect(none.value.items).toEqual([]);
-    expect(none.statements).toHaveLength(1);
-  });
-
-  it("answers for each feat what reading that feat alone does", async () => {
-    const { dm, written } = fixture;
-    const [listed, alone] = await run(
+    it.effect("answers for each feat what reading that feat alone does", () =>
       Effect.gen(function* () {
-        const feats = yield* Feats;
-        const listed = yield* as(dm)(feats.library({ limit: 200 }));
-        const alone = yield* Effect.forEach(listed.items, (feat) =>
-          as(dm)(feats.libraryFindById(feat.id)),
-        );
-        return [listed.items, alone] as const;
-      }),
-    );
+        const { dm, written } = yield* Fixture;
+        const [listed, alone] = yield* Effect.gen(function* () {
+          const feats = yield* Feats;
+          const listed = yield* as(dm)(feats.library({ limit: 200 }));
+          const alone = yield* Effect.forEach(listed.items, (feat) =>
+            as(dm)(feats.libraryFindById(feat.id)),
+          );
+          return [listed.items, alone] as const;
+        }).pipe(Effect.orDie);
 
-    expect(listed).toEqual(alone);
-    // And each is what was written, children in the order they were written.
-    for (const feat of written) {
-      const read = listed.find((candidate) => candidate.id === feat.id);
-      expect(read).toEqual(feat);
-    }
-    expect(written.map((feat) => feat.prerequisites.length)).toContain(2);
-    expect(written.map((feat) => feat.description.length)).toContain(0);
-  });
-
-  it("carries the page on from where it stopped, one feat at a time", async () => {
-    const { dm } = fixture;
-    const [paged, whole] = await run(
-      Effect.gen(function* () {
-        const feats = yield* Feats;
-        const whole = yield* as(dm)(feats.library({ limit: 200 }));
-        const paged: Array<Feat> = [];
-        let page = yield* as(dm)(feats.library({ limit: 5 }));
-        paged.push(...page.items);
-        while (page.nextCursor !== null) {
-          page = yield* as(dm)(feats.library({ limit: 5, cursor: page.nextCursor }));
-          paged.push(...page.items);
+        expect(listed).toEqual(alone);
+        // And each is what was written, children in the order they were written.
+        for (const feat of written) {
+          const read = listed.find((candidate) => candidate.id === feat.id);
+          expect(read).toEqual(feat);
         }
-        return [paged, whole.items] as const;
+        expect(written.map((feat) => feat.prerequisites.length)).toContain(2);
+        expect(written.map((feat) => feat.description.length)).toContain(0);
       }),
     );
 
-    expect(paged).toEqual(whole);
+    it.effect("carries the page on from where it stopped, one feat at a time", () =>
+      Effect.gen(function* () {
+        const { dm } = yield* Fixture;
+        const [paged, whole] = yield* Effect.gen(function* () {
+          const feats = yield* Feats;
+          const whole = yield* as(dm)(feats.library({ limit: 200 }));
+          const paged: Array<Feat> = [];
+          let page = yield* as(dm)(feats.library({ limit: 5 }));
+          paged.push(...page.items);
+          while (page.nextCursor !== null) {
+            page = yield* as(dm)(feats.library({ limit: 5, cursor: page.nextCursor }));
+            paged.push(...page.items);
+          }
+          return [paged, whole.items] as const;
+        }).pipe(Effect.orDie);
+
+        expect(paged).toEqual(whole);
+      }),
+    );
   });
 });

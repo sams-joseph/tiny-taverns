@@ -1,14 +1,12 @@
+import { describe, expect } from "@effect/vitest";
 import {
   type Actor,
   type AssistantThreadId,
   type AssistantTurnId,
-  type Campaign,
   CurrentActor,
   type HobEvent,
-  type SessionId,
 } from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Context, DateTime, Effect, Layer, Stream } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -44,6 +42,7 @@ import { Spells } from "../src/repo/Spells.js";
 import { anAccount, aPlayerAt, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks, type ChatRequest } from "./support/model.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **Hob drafts a campaign's story so far; only the creator's accept keeps it.**
@@ -110,9 +109,6 @@ const services = Layer.mergeAll(
   Spells.layer,
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_hob_campaign_story")));
 
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
-
 const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
@@ -174,28 +170,21 @@ const makeFixture = Effect.gen(function* () {
   return { jo, player, campaign, third };
 }).pipe(Effect.orDie);
 
-let fixture: {
-  readonly jo: Actor;
-  readonly player: Actor;
-  readonly campaign: Campaign;
-  readonly third: SessionId;
-};
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hob-campaign-story.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-const ask = (
-  rounds: ReadonlyArray<ReadonlyArray<unknown>>,
-  text = "Write up the story so far.",
-) => {
-  const model = scriptedModel({
-    model: "scripted-local",
-    maxTokens: 4096,
-    rounds: rounds as never,
-  });
-  return runtime.runPromise(
-    Effect.gen(function* () {
+const ask = (rounds: ReadonlyArray<ReadonlyArray<unknown>>, text = "Write up the story so far.") =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const model = scriptedModel({
+      model: "scripted-local",
+      maxTokens: 4096,
+      rounds: rounds as never,
+    });
+    return yield* Effect.gen(function* () {
       const hob = yield* Hob;
       const stream = yield* hob.ask(fixture.campaign.id, { text });
       const events = Array.from(yield* Stream.runCollect(stream));
@@ -203,9 +192,8 @@ const ask = (
     }).pipe(
       withActor(fixture.jo),
       Effect.provide(Hob.layer({ model: "scripted-local" }).pipe(Layer.provide(model.layer))),
-    ),
-  );
-};
+    );
+  });
 
 const begunIn = (events: ReadonlyArray<HobEvent>) => {
   const began = events.find((event) => event.event === "began");
@@ -240,154 +228,166 @@ const toolResults = (requests: ReadonlyArray<ChatRequest>): string =>
   JSON.stringify((requests.at(-1)?.messages ?? []).filter((message) => message["role"] === "tool"));
 
 const accept = (actor: Actor, threadId: AssistantThreadId, turnId: AssistantTurnId) =>
-  runtime.runPromise(
-    Effect.flatMap(Proposals, (proposals) =>
-      proposals.accept("dm", fixture.campaign.id, threadId, turnId),
-    ).pipe(withActor(actor), Effect.result),
-  );
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const proposals = yield* Proposals;
+    return yield* proposals
+      .accept("dm", fixture.campaign.id, threadId, turnId)
+      .pipe(withActor(actor), Effect.result);
+  });
 
-const kept = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const creator = yield* asDm(fixture.jo, fixture.campaign.id);
-      return yield* Effect.flatMap(CampaignStories, (stories) => stories.read(creator));
-    }).pipe(Effect.orDie),
-  );
+const kept = Effect.gen(function* () {
+  const fixture = yield* Fixture;
+  const creator = yield* asDm(fixture.jo, fixture.campaign.id);
+  return yield* Effect.flatMap(CampaignStories, (stories) => stories.read(creator));
+}).pipe(Effect.orDie);
 
 const STORY = "The party crossed the toll bridge and reached the salt flats.";
 const PREVIOUSLY = "Last time, the bridge fell behind you and the flats opened ahead.";
 
-describe("a story drafted by the creator's Hob", () => {
-  let threadId: AssistantThreadId;
-  let turnId: AssistantTurnId;
+describeLayer("hob-campaign-story", shared, (it) => {
+  describe("a story drafted by the creator's Hob", () => {
+    let threadId: AssistantThreadId;
+    let turnId: AssistantTurnId;
 
-  it("reads the ended nights, offers a story covering the newest, and writes nothing", async () => {
-    const { events, requests } = await ask([
-      toolCallChunks("readCampaignStorySources", {}),
-      toolCallChunks(
-        "proposeCampaignStory",
-        { text: STORY, previously: PREVIOUSLY },
-        "call_propose",
-      ),
-      textChunks("Here is the story so far."),
-    ]);
-    ({ threadId, turnId } = begunIn(events));
+    it.effect(
+      "reads the ended nights, offers a story covering the newest, and writes nothing",
+      () =>
+        Effect.gen(function* () {
+          const { events, requests } = yield* ask([
+            toolCallChunks("readCampaignStorySources", {}),
+            toolCallChunks(
+              "proposeCampaignStory",
+              { text: STORY, previously: PREVIOUSLY },
+              "call_propose",
+            ),
+            textChunks("Here is the story so far."),
+          ]);
+          ({ threadId, turnId } = begunIn(events));
 
-    const shown = toolResults(requests);
-    // The DM's own record of the ended nights, each beat flagged for the
-    // Previously that is read to the players.
-    expect(shown).toContain("SHOWNBEAT");
-    expect(shown).toContain("HIDDENBEAT");
-    expect(shown).toContain("SECONDBEAT");
-    expect(shown).toContain("shownToPlayers");
-    // A night still on the table is not a night the story can follow.
-    expect(shown).not.toContain("TONIGHTBEAT");
+          const shown = toolResults(requests);
+          // The DM's own record of the ended nights, each beat flagged for the
+          // Previously that is read to the players.
+          expect(shown).toContain("SHOWNBEAT");
+          expect(shown).toContain("HIDDENBEAT");
+          expect(shown).toContain("SECONDBEAT");
+          expect(shown).toContain("shownToPlayers");
+          // A night still on the table is not a night the story can follow.
+          expect(shown).not.toContain("TONIGHTBEAT");
 
-    // The DM's kept summary of a night rides with it, and "shown" is what a
-    // player was really told: a shared beat on an unshared night was not.
-    const nights = sourcesShown(requests);
-    expect(nights.map((night) => night.number)).toEqual([1, 2]);
-    expect(nights[0]?.summary).toEqual({
-      text: "NIGHTSUMMARY the troll's bridge fell behind them.",
-      shownToPlayers: true,
-    });
-    expect(nights[0]?.beats).toEqual([
-      { text: "SHOWNBEAT the toll bridge fell into the river.", shownToPlayers: true },
-      { text: "HIDDENBEAT the troll is Odo's father.", shownToPlayers: false },
-    ]);
-    expect(nights[1]?.summary).toBeNull();
-    expect(nights[1]?.beats).toEqual([
-      { text: "SECONDBEAT the party reached the salt flats.", shownToPlayers: false },
-    ]);
+          // The DM's kept summary of a night rides with it, and "shown" is what a
+          // player was really told: a shared beat on an unshared night was not.
+          const nights = sourcesShown(requests);
+          expect(nights.map((night) => night.number)).toEqual([1, 2]);
+          expect(nights[0]?.summary).toEqual({
+            text: "NIGHTSUMMARY the troll's bridge fell behind them.",
+            shownToPlayers: true,
+          });
+          expect(nights[0]?.beats).toEqual([
+            { text: "SHOWNBEAT the toll bridge fell into the river.", shownToPlayers: true },
+            { text: "HIDDENBEAT the troll is Odo's father.", shownToPlayers: false },
+          ]);
+          expect(nights[1]?.summary).toBeNull();
+          expect(nights[1]?.beats).toEqual([
+            { text: "SECONDBEAT the party reached the salt flats.", shownToPlayers: false },
+          ]);
 
-    expect(proposedIn(events)).toEqual({
-      target: "campaignStory",
-      text: STORY,
-      previously: PREVIOUSLY,
-      afterSessionNumber: 2,
-    });
-    // Offered, not kept.
-    expect(await kept()).toBeNull();
-  });
+          expect(proposedIn(events)).toEqual({
+            target: "campaignStory",
+            text: STORY,
+            previously: PREVIOUSLY,
+            afterSessionNumber: 2,
+          });
+          // Offered, not kept.
+          expect(yield* kept).toBeNull();
+        }),
+    );
 
-  it("is refused to a player, and kept by the creator as the assistant's, unshared", async () => {
-    const refused = await accept(fixture.player, threadId, turnId);
-    expect(refused._tag).toBe("Failure");
-    expect(await kept()).toBeNull();
+    it.effect("is refused to a player, and kept by the creator as the assistant's, unshared", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const refused = yield* accept(fixture.player, threadId, turnId);
+        expect(refused._tag).toBe("Failure");
+        expect(yield* kept).toBeNull();
 
-    const accepted = await accept(fixture.jo, threadId, turnId);
-    if (accepted._tag !== "Success" || accepted.success.accepted !== "campaignStory") {
-      throw new Error("the story was not kept");
-    }
-    expect(accepted.success.story).toMatchObject({
-      text: STORY,
-      previously: PREVIOUSLY,
-      afterSessionNumber: 2,
-      visibility: "dm",
-      origin: "assistant",
-      assistantTurnId: turnId,
-    });
-    expect(await kept()).toEqual(accepted.success.story);
-
-    const twice = await accept(fixture.jo, threadId, turnId);
-    expect(twice._tag).toBe("Failure");
-  });
-
-  it("refuses a proposal made without reading the sources first", async () => {
-    const { events, requests } = await ask([
-      toolCallChunks("proposeCampaignStory", { text: "An unread rewrite." }),
-      textChunks("I should read first."),
-    ]);
-    expect(proposedIn(events)).toBeUndefined();
-    expect(toolResults(requests)).toContain("readCampaignStorySources before proposing");
-    expect((await kept())?.text).toBe(STORY);
-  });
-
-  it("refreshes from where the kept story stops, and a replacement lands unshared again", async () => {
-    // The creator shares the kept story; then night 3 ends.
-    await runtime.runPromise(
-      Effect.flatMap(CampaignStories, (stories) =>
-        stories.put(fixture.campaign.id, {
+        const accepted = yield* accept(fixture.jo, threadId, turnId);
+        if (accepted._tag !== "Success" || accepted.success.accepted !== "campaignStory") {
+          throw new Error("the story was not kept");
+        }
+        expect(accepted.success.story).toMatchObject({
           text: STORY,
           previously: PREVIOUSLY,
-          visibility: "shared",
+          afterSessionNumber: 2,
+          visibility: "dm",
+          origin: "assistant",
+          assistantTurnId: turnId,
+        });
+        expect(yield* kept).toEqual(accepted.success.story);
+
+        const twice = yield* accept(fixture.jo, threadId, turnId);
+        expect(twice._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("refuses a proposal made without reading the sources first", () =>
+      Effect.gen(function* () {
+        const { events, requests } = yield* ask([
+          toolCallChunks("proposeCampaignStory", { text: "An unread rewrite." }),
+          textChunks("I should read first."),
+        ]);
+        expect(proposedIn(events)).toBeUndefined();
+        expect(toolResults(requests)).toContain("readCampaignStorySources before proposing");
+        expect((yield* kept)?.text).toBe(STORY);
+      }),
+    );
+
+    it.effect(
+      "refreshes from where the kept story stops, and a replacement lands unshared again",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          // The creator shares the kept story; then night 3 ends.
+          yield* Effect.flatMap(CampaignStories, (stories) =>
+            stories.put(fixture.campaign.id, {
+              text: STORY,
+              previously: PREVIOUSLY,
+              visibility: "shared",
+            }),
+          ).pipe(withActor(fixture.jo), Effect.orDie);
+          const now = DateTime.nowUnsafe();
+          yield* Effect.flatMap(Sessions, (sessions) =>
+            sessions.update(fixture.campaign.id, fixture.third, { endedAt: now }),
+          ).pipe(withActor(fixture.jo), Effect.orDie);
+
+          const { events, requests } = yield* ask([
+            toolCallChunks("readCampaignStorySources", {}),
+            toolCallChunks(
+              "proposeCampaignStory",
+              { text: `${STORY} The flats sang.`, previously: null },
+              "call_propose",
+            ),
+            textChunks("Updated."),
+          ]);
+          const shown = toolResults(requests);
+          // The kept story, and only the night after it.
+          expect(shown).toContain(STORY);
+          expect(shown).toContain("TONIGHTBEAT");
+          expect(shown).not.toContain("SHOWNBEAT");
+          expect(shown).not.toContain("SECONDBEAT");
+          expect(proposedIn(events)).toMatchObject({ afterSessionNumber: 3, previously: null });
+
+          const { threadId: thread, turnId: turn } = begunIn(events);
+          const accepted = yield* accept(fixture.jo, thread, turn);
+          if (accepted._tag !== "Success" || accepted.success.accepted !== "campaignStory") {
+            throw new Error("the refresh was not kept");
+          }
+          expect(accepted.success.story).toMatchObject({
+            afterSessionNumber: 3,
+            previously: null,
+            visibility: "dm",
+            assistantTurnId: turn,
+          });
         }),
-      ).pipe(withActor(fixture.jo), Effect.orDie),
     );
-    const now = DateTime.nowUnsafe();
-    await runtime.runPromise(
-      Effect.flatMap(Sessions, (sessions) =>
-        sessions.update(fixture.campaign.id, fixture.third, { endedAt: now }),
-      ).pipe(withActor(fixture.jo), Effect.orDie),
-    );
-
-    const { events, requests } = await ask([
-      toolCallChunks("readCampaignStorySources", {}),
-      toolCallChunks(
-        "proposeCampaignStory",
-        { text: `${STORY} The flats sang.`, previously: null },
-        "call_propose",
-      ),
-      textChunks("Updated."),
-    ]);
-    const shown = toolResults(requests);
-    // The kept story, and only the night after it.
-    expect(shown).toContain(STORY);
-    expect(shown).toContain("TONIGHTBEAT");
-    expect(shown).not.toContain("SHOWNBEAT");
-    expect(shown).not.toContain("SECONDBEAT");
-    expect(proposedIn(events)).toMatchObject({ afterSessionNumber: 3, previously: null });
-
-    const { threadId: thread, turnId: turn } = begunIn(events);
-    const accepted = await accept(fixture.jo, thread, turn);
-    if (accepted._tag !== "Success" || accepted.success.accepted !== "campaignStory") {
-      throw new Error("the refresh was not kept");
-    }
-    expect(accepted.success.story).toMatchObject({
-      afterSessionNumber: 3,
-      previously: null,
-      visibility: "dm",
-      assistantTurnId: turn,
-    });
   });
 });

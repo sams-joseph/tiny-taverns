@@ -1,5 +1,5 @@
 import { layer, type Vitest } from "@effect/vitest";
-import type { Layer } from "effect";
+import type { Duration, Layer } from "effect";
 
 /**
  * A describe block over one shared layer, for `@effect/vitest`: the file's
@@ -23,9 +23,14 @@ import type { Layer } from "effect";
  * heartbeat would stop, and every timestamp read through `Clock` would be the
  * epoch. A test that wants virtual time provides `TestClock.layer()` to its own
  * effect, so only what that test builds runs on it (`npc-images.test.ts`).
+ *
+ * `timeout` keeps a file's own budget for building its layer where that differs
+ * from the suite's `hookTimeout`, such as importing the system corpus
+ * (`core-characters.test.ts`).
  */
 export const describeLayer = <R, E>(
   name: string,
   shared: Layer.Layer<R, E>,
   tests: (it: Vitest.MethodsNonLive<R>) => void,
-): void => layer(shared, { excludeTestServices: true })(name, tests);
+  options?: { readonly timeout?: Duration.Input },
+): void => layer(shared, { excludeTestServices: true, ...options })(name, tests);

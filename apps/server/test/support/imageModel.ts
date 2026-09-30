@@ -5,6 +5,7 @@ import {
   type HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http";
+import type { HobImages } from "../../src/images/HobImages.js";
 import { ImageModel } from "../../src/images/ImageModel.js";
 
 /**
@@ -125,3 +126,21 @@ export const scriptedImages = (options: {
     }).pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, client))),
   };
 };
+
+/**
+ * The `count`th request reaching `endpoint`. A draw that is never sent fails
+ * here, once the worker has nothing left to run, rather than leaving the test
+ * to wait out its budget.
+ */
+export const requested = (
+  endpoint: ScriptedImages,
+  worker: (typeof HobImages)["Service"],
+  count: number,
+) =>
+  Effect.raceFirst(
+    endpoint.sent(count),
+    Effect.andThen(
+      worker.idle,
+      Effect.die(new Error(`Every job ended before request ${String(count)} was sent`)),
+    ),
+  );
