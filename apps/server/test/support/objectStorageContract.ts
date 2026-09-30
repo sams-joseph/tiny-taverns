@@ -1,6 +1,7 @@
-import { Effect, type Layer, ManagedRuntime, Option, Stream } from "effect";
-import { afterAll, describe, expect, it } from "vitest";
+import { expect } from "@effect/vitest";
+import { Effect, type Layer, Option, Stream } from "effect";
 import { ObjectStorage, StorageKey, StorageNotFound } from "../../src/storage/ObjectStorage.js";
+import { describeLayer } from "./suite.js";
 
 /**
  * What every `ObjectStorage` adapter must do, as one suite any adapter runs.
@@ -15,12 +16,7 @@ import { ObjectStorage, StorageKey, StorageNotFound } from "../../src/storage/Ob
  * adapter's layout on disk or on the wire goes in that adapter's own tests.
  */
 export const objectStorageContract = <E>(name: string, layer: Layer.Layer<ObjectStorage, E>) =>
-  describe(`ObjectStorage contract: ${name}`, () => {
-    const runtime = ManagedRuntime.make(layer);
-    afterAll(() => runtime.dispose());
-
-    const run = <A, X>(effect: Effect.Effect<A, X, ObjectStorage>) => runtime.runPromise(effect);
-
+  describeLayer(`ObjectStorage contract: ${name}`, layer, (it) => {
     /** A key under this test's own prefix. */
     const scope = () => {
       const base = `contract-${crypto.randomUUID()}`;
@@ -50,134 +46,158 @@ export const objectStorageContract = <E>(name: string, layer: Layer.Layer<Object
     const removePrefix = (prefix: StorageKey) =>
       ObjectStorage.use((storage) => storage.deletePrefix(prefix));
 
-    it("returns the bytes and content type it was given", async () => {
-      const key = scope()("portraits/original.png");
+    it.effect("returns the bytes and content type it was given", () =>
+      Effect.gen(function* () {
+        const key = scope()("portraits/original.png");
 
-      await run(put(key, bytes("a portrait"), "image/png"));
+        yield* put(key, bytes("a portrait"), "image/png");
 
-      const object = await run(read(key));
-      expect(object.contentType).toBe("image/png");
-      expect(object.size).toBe(10);
-      expect(new TextDecoder().decode(object.body)).toBe("a portrait");
-    });
+        const object = yield* read(key);
+        expect(object.contentType).toBe("image/png");
+        expect(object.size).toBe(10);
+        expect(new TextDecoder().decode(object.body)).toBe("a portrait");
+      }),
+    );
 
-    it("streams an object larger than one chunk intact", async () => {
-      const key = scope()("large.bin");
-      const body = new Uint8Array(300 * 1024).map((_, index) => index % 251);
+    it.effect("streams an object larger than one chunk intact", () =>
+      Effect.gen(function* () {
+        const key = scope()("large.bin");
+        const body = new Uint8Array(300 * 1024).map((_, index) => index % 251);
 
-      await run(put(key, body, "application/octet-stream"));
+        yield* put(key, body, "application/octet-stream");
 
-      const object = await run(read(key));
-      expect(object.size).toBe(body.byteLength);
-      expect(object.body).toEqual(body);
-    });
+        const object = yield* read(key);
+        expect(object.size).toBe(body.byteLength);
+        expect(object.body).toEqual(body);
+      }),
+    );
 
-    it("stores an empty object", async () => {
-      const key = scope()("empty");
+    it.effect("stores an empty object", () =>
+      Effect.gen(function* () {
+        const key = scope()("empty");
 
-      await run(put(key, new Uint8Array(0), "text/plain"));
+        yield* put(key, new Uint8Array(0), "text/plain");
 
-      const object = await run(read(key));
-      expect(object.size).toBe(0);
-      expect(object.body.byteLength).toBe(0);
-    });
+        const object = yield* read(key);
+        expect(object.size).toBe(0);
+        expect(object.body.byteLength).toBe(0);
+      }),
+    );
 
-    it("keeps what was stored when the caller reuses its buffer", async () => {
-      const key = scope()("copied");
-      const body = bytes("before");
+    it.effect("keeps what was stored when the caller reuses its buffer", () =>
+      Effect.gen(function* () {
+        const key = scope()("copied");
+        const body = bytes("before");
 
-      await run(put(key, body, "text/plain"));
-      body.set(bytes("after!"));
+        yield* put(key, body, "text/plain");
+        body.set(bytes("after!"));
 
-      expect(new TextDecoder().decode((await run(read(key))).body)).toBe("before");
-    });
+        expect(new TextDecoder().decode((yield* read(key)).body)).toBe("before");
+      }),
+    );
 
-    it("answers a missing key with StorageNotFound naming it", async () => {
-      const key = scope()("never-written");
+    it.effect("answers a missing key with StorageNotFound naming it", () =>
+      Effect.gen(function* () {
+        const key = scope()("never-written");
 
-      const error = await run(Effect.flip(read(key)));
+        const error = yield* Effect.flip(read(key));
 
-      expect(error).toBeInstanceOf(StorageNotFound);
-      expect(error).toMatchObject({ _tag: "StorageNotFound", key });
-    });
+        expect(error).toBeInstanceOf(StorageNotFound);
+        expect(error).toMatchObject({ _tag: "StorageNotFound", key });
+      }),
+    );
 
-    it("reports metadata through head, and None for a missing key", async () => {
-      const key = scope()("card.webp");
+    it.effect("reports metadata through head, and None for a missing key", () =>
+      Effect.gen(function* () {
+        const key = scope()("card.webp");
 
-      expect(await run(head(key))).toEqual(Option.none());
-      await run(put(key, bytes("card"), "image/webp"));
-      expect(await run(head(key))).toEqual(Option.some({ contentType: "image/webp", size: 4 }));
-    });
+        expect(yield* head(key)).toEqual(Option.none());
+        yield* put(key, bytes("card"), "image/webp");
+        expect(yield* head(key)).toEqual(Option.some({ contentType: "image/webp", size: 4 }));
+      }),
+    );
 
-    it("replaces an object, bytes and content type together", async () => {
-      const key = scope()("replaced");
+    it.effect("replaces an object, bytes and content type together", () =>
+      Effect.gen(function* () {
+        const key = scope()("replaced");
 
-      await run(put(key, bytes("first"), "text/plain"));
-      await run(put(key, bytes("second, longer"), "application/json"));
+        yield* put(key, bytes("first"), "text/plain");
+        yield* put(key, bytes("second, longer"), "application/json");
 
-      const object = await run(read(key));
-      expect(object.contentType).toBe("application/json");
-      expect(object.size).toBe(14);
-      expect(new TextDecoder().decode(object.body)).toBe("second, longer");
-    });
+        const object = yield* read(key);
+        expect(object.contentType).toBe("application/json");
+        expect(object.size).toBe(14);
+        expect(new TextDecoder().decode(object.body)).toBe("second, longer");
+      }),
+    );
 
-    it("holds an object at a key and at a longer key beneath it", async () => {
-      const key = scope();
+    it.effect("holds an object at a key and at a longer key beneath it", () =>
+      Effect.gen(function* () {
+        const key = scope();
 
-      await run(put(key("a"), bytes("parent"), "text/plain"));
-      await run(put(key("a/b"), bytes("child"), "text/plain"));
+        yield* put(key("a"), bytes("parent"), "text/plain");
+        yield* put(key("a/b"), bytes("child"), "text/plain");
 
-      expect(new TextDecoder().decode((await run(read(key("a")))).body)).toBe("parent");
-      expect(new TextDecoder().decode((await run(read(key("a/b")))).body)).toBe("child");
-    });
+        expect(new TextDecoder().decode((yield* read(key("a"))).body)).toBe("parent");
+        expect(new TextDecoder().decode((yield* read(key("a/b"))).body)).toBe("child");
+      }),
+    );
 
-    it("deletes one object, and deleting it again succeeds", async () => {
-      const key = scope();
-      await run(put(key("gone"), bytes("x"), "text/plain"));
-      await run(put(key("kept"), bytes("y"), "text/plain"));
+    it.effect("deletes one object, and deleting it again succeeds", () =>
+      Effect.gen(function* () {
+        const key = scope();
+        yield* put(key("gone"), bytes("x"), "text/plain");
+        yield* put(key("kept"), bytes("y"), "text/plain");
 
-      await run(remove(key("gone")));
-      await run(remove(key("gone")));
-      await run(remove(key("never-written")));
+        yield* remove(key("gone"));
+        yield* remove(key("gone"));
+        yield* remove(key("never-written"));
 
-      expect(await run(head(key("gone")))).toEqual(Option.none());
-      expect(Option.isSome(await run(head(key("kept"))))).toBe(true);
-    });
+        expect(yield* head(key("gone"))).toEqual(Option.none());
+        expect(Option.isSome(yield* head(key("kept")))).toBe(true);
+      }),
+    );
 
-    it("deletes everything under a prefix at any depth, and nothing beside it", async () => {
-      const key = scope();
-      const under = ["p/one", "p/two/deeper", "p/two/deeper/still"];
-      const beside = ["p", "pp/one", "p.other/one", "q/one"];
-      for (const path of [...under, ...beside]) {
-        await run(put(key(path), bytes(path), "text/plain"));
-      }
+    it.effect("deletes everything under a prefix at any depth, and nothing beside it", () =>
+      Effect.gen(function* () {
+        const key = scope();
+        const under = ["p/one", "p/two/deeper", "p/two/deeper/still"];
+        const beside = ["p", "pp/one", "p.other/one", "q/one"];
+        for (const path of [...under, ...beside]) {
+          yield* put(key(path), bytes(path), "text/plain");
+        }
 
-      await run(removePrefix(key("p")));
+        yield* removePrefix(key("p"));
 
-      for (const path of under) expect(await run(head(key(path)))).toEqual(Option.none());
-      // The object at the prefix itself is not under it, and a key that merely
-      // starts with the same characters is a different branch.
-      for (const path of beside) expect(Option.isSome(await run(head(key(path))))).toBe(true);
-    });
+        for (const path of under) expect(yield* head(key(path))).toEqual(Option.none());
+        // The object at the prefix itself is not under it, and a key that merely
+        // starts with the same characters is a different branch.
+        for (const path of beside) expect(Option.isSome(yield* head(key(path)))).toBe(true);
+      }),
+    );
 
-    it("deletes a prefix idempotently, including one that holds nothing", async () => {
-      const key = scope();
-      await run(put(key("p/one"), bytes("x"), "text/plain"));
+    it.effect("deletes a prefix idempotently, including one that holds nothing", () =>
+      Effect.gen(function* () {
+        const key = scope();
+        yield* put(key("p/one"), bytes("x"), "text/plain");
 
-      await run(removePrefix(key("p")));
-      await run(removePrefix(key("p")));
-      await run(removePrefix(key("nothing/here")));
+        yield* removePrefix(key("p"));
+        yield* removePrefix(key("p"));
+        yield* removePrefix(key("nothing/here"));
 
-      expect(await run(head(key("p/one")))).toEqual(Option.none());
-    });
+        expect(yield* head(key("p/one"))).toEqual(Option.none());
+      }),
+    );
 
-    it("stores again under a prefix that was deleted", async () => {
-      const key = scope();
-      await run(put(key("p/one"), bytes("x"), "text/plain"));
-      await run(removePrefix(key("p")));
+    it.effect("stores again under a prefix that was deleted", () =>
+      Effect.gen(function* () {
+        const key = scope();
+        yield* put(key("p/one"), bytes("x"), "text/plain");
+        yield* removePrefix(key("p"));
 
-      await run(put(key("p/one"), bytes("again"), "text/plain"));
+        yield* put(key("p/one"), bytes("again"), "text/plain");
 
-      expect(new TextDecoder().decode((await run(read(key("p/one")))).body)).toBe("again");
-    });
+        expect(new TextDecoder().decode((yield* read(key("p/one"))).body)).toBe("again");
+      }),
+    );
   });

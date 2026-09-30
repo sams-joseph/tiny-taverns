@@ -1,10 +1,10 @@
-import { Effect, ManagedRuntime } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
-const runtime = ManagedRuntime.make(migratedDatabase("taverns_test_schema"));
-afterAll(() => runtime.dispose());
+const database = migratedDatabase("taverns_test_schema");
 
 /**
  * Tables that hold no campaign content and so carry no visibility.
@@ -176,369 +176,393 @@ interface Column {
   readonly column_default: string | null;
 }
 
-let contentTables: ReadonlyArray<string>;
-let columns: ReadonlyArray<Column>;
+const makeFixture = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const columns = yield* sql<Column>`
+    select table_name, column_name, data_type, is_nullable, column_default
+    from information_schema.columns
+    where table_schema = 'public'
+    order by table_name, column_name
+  `;
 
-const columnFor = (table: string, column: string): Column | undefined =>
-  columns.find((c) => c.table_name === table && c.column_name === column);
-
-beforeAll(async () => {
-  const rows = await runtime.runPromise(
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      return yield* sql<Column>`
-        select table_name, column_name, data_type, is_nullable, column_default
-        from information_schema.columns
-        where table_schema = 'public'
-        order by table_name, column_name
-      `;
-    }).pipe(Effect.orDie),
-  );
-
-  columns = rows;
-  contentTables = [...new Set(rows.map((row) => row.table_name))]
+  const contentTables: ReadonlyArray<string> = [...new Set(columns.map((row) => row.table_name))]
     .filter((table) => !NOT_CONTENT.includes(table))
     .sort();
-}, 60_000);
+  const columnFor = (table: string, column: string): Column | undefined =>
+    columns.find((c) => c.table_name === table && c.column_name === column);
+  return { contentTables, columnFor };
+}).pipe(Effect.orDie);
 
-describe("the group architecture's structural absences", () => {
-  it("gives campaign_member no role column — the creator is the campaign's one DM", () => {
-    // The participation decision of 2026-09-01: `campaign.creator_account_id`
-    // is the whole answer to who runs a table, and a role column here would be
-    // the co-DM door this architecture deliberately has no hinge for. If this
-    // fails, somebody has re-added the column the clean baseline removed.
-    expect(columnFor("campaign_member", "role")).toBeUndefined();
-  });
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "schema.test/Fixture",
+) {}
 
-  it("gives character no campaign_id — playable state is account-owned and shared", () => {
-    // The continuity decision: one character, one row of state, carried across
-    // campaigns by seats. A campaign_id here would be the fork the decision
-    // forbids; the campaign's claim on a character is a `campaign_character`
-    // row and nothing else.
-    expect(columnFor("character", "campaign_id")).toBeUndefined();
-    const owner = columnFor("character", "account_id");
-    expect(owner?.is_nullable).toBe("NO");
-  });
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(database));
 
-  it("gives NPC awareness candidates no campaign_id — the NPC is the container", () => {
-    // The curation row hangs off an NPC. A denormalised campaign_id here would
-    // be a second containment answer that can disagree with the NPC's own
-    // campaign, the same nested-table trap prep_item and beat avoid.
-    expect(columnFor("npc_awareness_candidate", "campaign_id")).toBeUndefined();
-  });
-});
-
-describe("every content-bearing table", () => {
-  it("is the set this file thinks it is", () => {
-    // A guard on the guard: if this list changes, the assertions below have
-    // started covering something new, and somebody should have noticed.
-    expect(contentTables).toEqual([
-      "assistant_thread",
-      "assistant_turn",
-      "beat",
-      "campaign",
-      // A named run of a campaign's nights on the Chronicle: the DM's prose,
-      // shared with the table only when they say so. See 0071_campaign_act.ts.
-      "campaign_act",
-      // The seat: a campaign's join to a shared account-owned character. It
-      // is content — the table's word for a character, gated by its own
-      // visibility, and a seat can be the assistant's the day a drafted
-      // character is kept.
-      "campaign_character",
-      // A campaign's story so far: the creator's until shared, and the
-      // assistant's when kept from a Hob draft. See 0072_campaign_story.ts.
-      "campaign_story",
-      "character",
-      // A class or a race — the pieces a character is built from, in the
-      // same three-owner shape a `creature` has. Content, and it carries the
-      // whole tail: an option can be the assistant's the day something proposes
-      // one, and until then the column is inert exactly as every other table's
-      // was between `0001` and `0010`.
-      "character_option",
-      "character_roll",
-      "class_level",
-      "combatant",
-      "creature",
-      "encounter",
-      "encounter_creature",
-      "encounter_run",
-      "equipment",
-      "feat",
-      "feature",
-      "magic_item",
-      "note",
-      // The cast: a structured NPC, its rehearsal threads and their turns —
-      // creator-only content in this slice, carrying the whole tail. An NPC's
-      // own turns are `origin = 'assistant'` pointing at no Hob turn; see
-      // 0037_npcs.ts for why that one check is relaxed there.
-      "npc",
-      "npc_awareness_candidate",
-      "npc_knowledge_fact",
-      "npc_memory",
-      "npc_proposal",
-      "npc_thread",
-      "npc_turn",
-      "prep_item",
-      "racial_trait",
-      "rule_article",
-      "session",
-      "session_event",
-      "spell",
-      "subclass",
-    ]);
-  });
-
-  it("has a visibility column that is not null and defaults to dm", () => {
-    for (const table of contentTables) {
-      const visibility = columnFor(table, "visibility");
-
-      expect(visibility, `${table}.visibility is missing`).toBeDefined();
-      expect(visibility?.is_nullable, `${table}.visibility is nullable`).toBe("NO");
-      expect(visibility?.column_default, `${table}.visibility does not default to dm`).toBe(
-        "'dm'::text",
-      );
-    }
-  });
-
-  it("carries provenance from the first migration", () => {
-    // Added in `0001` and inert for nine migrations, because retrofitting
-    // provenance onto a table that already mixes authored and generated rows
-    // means guessing which is which. `0010` gave the pointer a referent; the
-    // block at the bottom of this file is where it is now exercised.
-    for (const table of contentTables) {
-      const origin = columnFor(table, "origin");
-      const turn = columnFor(table, "assistant_turn_id");
-
-      expect(origin?.is_nullable, `${table}.origin is nullable`).toBe("NO");
-      expect(origin?.column_default, `${table}.origin does not default to authored`).toBe(
-        "'authored'::text",
-      );
-      expect(turn?.data_type, `${table}.assistant_turn_id is missing`).toBe("uuid");
-      expect(turn?.is_nullable, `${table}.assistant_turn_id is not nullable`).toBe("YES");
-    }
-  });
-
-  it("constrains visibility and origin to the values the schema names", async () => {
-    const constraints = await runtime.runPromise(
+describeLayer("schema", shared, (it) => {
+  describe("the group architecture's structural absences", () => {
+    it.effect("gives campaign_member no role column — the creator is the campaign's one DM", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        return yield* sql<{ readonly table_name: string; readonly check_clause: string }>`
+        const { columnFor } = yield* Fixture;
+        // The participation decision of 2026-09-01: `campaign.creator_account_id`
+        // is the whole answer to who runs a table, and a role column here would be
+        // the co-DM door this architecture deliberately has no hinge for. If this
+        // fails, somebody has re-added the column the clean baseline removed.
+        expect(columnFor("campaign_member", "role")).toBeUndefined();
+      }),
+    );
+
+    it.effect("gives character no campaign_id — playable state is account-owned and shared", () =>
+      Effect.gen(function* () {
+        const { columnFor } = yield* Fixture;
+        // The continuity decision: one character, one row of state, carried across
+        // campaigns by seats. A campaign_id here would be the fork the decision
+        // forbids; the campaign's claim on a character is a `campaign_character`
+        // row and nothing else.
+        expect(columnFor("character", "campaign_id")).toBeUndefined();
+        const owner = columnFor("character", "account_id");
+        expect(owner?.is_nullable).toBe("NO");
+      }),
+    );
+
+    it.effect("gives NPC awareness candidates no campaign_id — the NPC is the container", () =>
+      Effect.gen(function* () {
+        const { columnFor } = yield* Fixture;
+        // The curation row hangs off an NPC. A denormalised campaign_id here would
+        // be a second containment answer that can disagree with the NPC's own
+        // campaign, the same nested-table trap prep_item and beat avoid.
+        expect(columnFor("npc_awareness_candidate", "campaign_id")).toBeUndefined();
+      }),
+    );
+  });
+
+  describe("every content-bearing table", () => {
+    it.effect("is the set this file thinks it is", () =>
+      Effect.gen(function* () {
+        const { contentTables } = yield* Fixture;
+        // A guard on the guard: if this list changes, the assertions below have
+        // started covering something new, and somebody should have noticed.
+        expect(contentTables).toEqual([
+          "assistant_thread",
+          "assistant_turn",
+          "beat",
+          "campaign",
+          // A named run of a campaign's nights on the Chronicle: the DM's prose,
+          // shared with the table only when they say so. See 0071_campaign_act.ts.
+          "campaign_act",
+          // The seat: a campaign's join to a shared account-owned character. It
+          // is content — the table's word for a character, gated by its own
+          // visibility, and a seat can be the assistant's the day a drafted
+          // character is kept.
+          "campaign_character",
+          // A campaign's story so far: the creator's until shared, and the
+          // assistant's when kept from a Hob draft. See 0072_campaign_story.ts.
+          "campaign_story",
+          "character",
+          // A class or a race — the pieces a character is built from, in the
+          // same three-owner shape a `creature` has. Content, and it carries the
+          // whole tail: an option can be the assistant's the day something proposes
+          // one, and until then the column is inert exactly as every other table's
+          // was between `0001` and `0010`.
+          "character_option",
+          "character_roll",
+          "class_level",
+          "combatant",
+          "creature",
+          "encounter",
+          "encounter_creature",
+          "encounter_run",
+          "equipment",
+          "feat",
+          "feature",
+          "magic_item",
+          "note",
+          // The cast: a structured NPC, its rehearsal threads and their turns —
+          // creator-only content in this slice, carrying the whole tail. An NPC's
+          // own turns are `origin = 'assistant'` pointing at no Hob turn; see
+          // 0037_npcs.ts for why that one check is relaxed there.
+          "npc",
+          "npc_awareness_candidate",
+          "npc_knowledge_fact",
+          "npc_memory",
+          "npc_proposal",
+          "npc_thread",
+          "npc_turn",
+          "prep_item",
+          "racial_trait",
+          "rule_article",
+          "session",
+          "session_event",
+          "spell",
+          "subclass",
+        ]);
+      }),
+    );
+
+    it.effect("has a visibility column that is not null and defaults to dm", () =>
+      Effect.gen(function* () {
+        const { contentTables, columnFor } = yield* Fixture;
+        for (const table of contentTables) {
+          const visibility = columnFor(table, "visibility");
+
+          expect(visibility, `${table}.visibility is missing`).toBeDefined();
+          expect(visibility?.is_nullable, `${table}.visibility is nullable`).toBe("NO");
+          expect(visibility?.column_default, `${table}.visibility does not default to dm`).toBe(
+            "'dm'::text",
+          );
+        }
+      }),
+    );
+
+    it.effect("carries provenance from the first migration", () =>
+      Effect.gen(function* () {
+        const { contentTables, columnFor } = yield* Fixture;
+        // Added in `0001` and inert for nine migrations, because retrofitting
+        // provenance onto a table that already mixes authored and generated rows
+        // means guessing which is which. `0010` gave the pointer a referent; the
+        // block at the bottom of this file is where it is now exercised.
+        for (const table of contentTables) {
+          const origin = columnFor(table, "origin");
+          const turn = columnFor(table, "assistant_turn_id");
+
+          expect(origin?.is_nullable, `${table}.origin is nullable`).toBe("NO");
+          expect(origin?.column_default, `${table}.origin does not default to authored`).toBe(
+            "'authored'::text",
+          );
+          expect(turn?.data_type, `${table}.assistant_turn_id is missing`).toBe("uuid");
+          expect(turn?.is_nullable, `${table}.assistant_turn_id is not nullable`).toBe("YES");
+        }
+      }),
+    );
+
+    it.effect("constrains visibility and origin to the values the schema names", () =>
+      Effect.gen(function* () {
+        const { contentTables } = yield* Fixture;
+        const constraints = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          return yield* sql<{ readonly table_name: string; readonly check_clause: string }>`
           select rel.relname as table_name, pg_get_constraintdef(con.oid) as check_clause
           from pg_constraint con
           join pg_class rel on rel.oid = con.conrelid
           join pg_namespace nsp on nsp.oid = rel.relnamespace
           where nsp.nspname = 'public' and con.contype = 'c'
         `;
-      }).pipe(Effect.orDie),
+        }).pipe(Effect.orDie);
+
+        for (const table of contentTables) {
+          const clauses = constraints
+            .filter((row) => row.table_name === table)
+            .map((row) => row.check_clause)
+            .join(" ");
+
+          expect(clauses, `${table} does not constrain visibility`).toContain("visibility");
+          expect(clauses, `${table} does not constrain origin`).toContain("origin");
+          // origin = 'assistant' exactly when a turn id is present.
+          expect(clauses, `${table} does not tie origin to assistant_turn_id`).toContain(
+            "assistant_turn_id",
+          );
+        }
+      }),
     );
-
-    for (const table of contentTables) {
-      const clauses = constraints
-        .filter((row) => row.table_name === table)
-        .map((row) => row.check_clause)
-        .join(" ");
-
-      expect(clauses, `${table} does not constrain visibility`).toContain("visibility");
-      expect(clauses, `${table} does not constrain origin`).toContain("origin");
-      // origin = 'assistant' exactly when a turn id is present.
-      expect(clauses, `${table} does not tie origin to assistant_turn_id`).toContain(
-        "assistant_turn_id",
-      );
-    }
   });
-});
 
-describe("the group architecture's removed columns stay removed", () => {
-  it("gives campaign_member no role column, ever again", () => {
-    // The captain's decision of 2026-09-01: the campaign creator is its sole
-    // DM (`campaign.creator_account_id`), and every other live participant is
-    // a player. A role column here was the thing that made co-DM semantics one
-    // UPDATE away; this is the edit that would quietly reintroduce it failing.
-    expect(columnFor("campaign_member", "role")).toBeUndefined();
-    expect(columnFor("group_member", "role")).toBeUndefined();
-    // The campaign's replaced ownership column stays replaced, too.
-    expect(columnFor("campaign", "account_id")).toBeUndefined();
-    expect(columnFor("campaign", "creator_account_id")).toBeDefined();
-    expect(columnFor("campaign", "group_id")?.is_nullable).toBe("NO");
-  });
-});
-
-describe("the DM's planned order", () => {
-  /**
-   * `encounter_prep_campaign_position_key` (`0078`): one encounter to a slot
-   * in a campaign, deferrable so a move's one-statement renumber is checked
-   * once every row has its new number.
-   */
-  it("holds one encounter to a slot per campaign, checked at the end of a statement", async () => {
-    const keys = await runtime.runPromise(
+  describe("the group architecture's removed columns stay removed", () => {
+    it.effect("gives campaign_member no role column, ever again", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        return yield* sql<{
-          readonly conname: string;
-          readonly definition: string;
-          readonly condeferrable: boolean;
-          readonly condeferred: boolean;
-        }>`
+        const { columnFor } = yield* Fixture;
+        // The captain's decision of 2026-09-01: the campaign creator is its sole
+        // DM (`campaign.creator_account_id`), and every other live participant is
+        // a player. A role column here was the thing that made co-DM semantics one
+        // UPDATE away; this is the edit that would quietly reintroduce it failing.
+        expect(columnFor("campaign_member", "role")).toBeUndefined();
+        expect(columnFor("group_member", "role")).toBeUndefined();
+        // The campaign's replaced ownership column stays replaced, too.
+        expect(columnFor("campaign", "account_id")).toBeUndefined();
+        expect(columnFor("campaign", "creator_account_id")).toBeDefined();
+        expect(columnFor("campaign", "group_id")?.is_nullable).toBe("NO");
+      }),
+    );
+  });
+
+  describe("the DM's planned order", () => {
+    /**
+     * `encounter_prep_campaign_position_key` (`0078`): one encounter to a slot
+     * in a campaign, deferrable so a move's one-statement renumber is checked
+     * once every row has its new number.
+     */
+    it.effect("holds one encounter to a slot per campaign, checked at the end of a statement", () =>
+      Effect.gen(function* () {
+        const { columnFor } = yield* Fixture;
+        const keys = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          return yield* sql<{
+            readonly conname: string;
+            readonly definition: string;
+            readonly condeferrable: boolean;
+            readonly condeferred: boolean;
+          }>`
           select con.conname, pg_get_constraintdef(con.oid) as definition,
                  con.condeferrable, con.condeferred
           from pg_constraint con
           join pg_class rel on rel.oid = con.conrelid
           where rel.relname = 'encounter_prep' and con.contype = 'u'
         `;
-      }).pipe(Effect.orDie),
+        }).pipe(Effect.orDie);
+        expect(keys).toEqual([
+          {
+            conname: "encounter_prep_campaign_position_key",
+            definition: 'UNIQUE (campaign_id, "position") DEFERRABLE',
+            condeferrable: true,
+            condeferred: false,
+          },
+        ]);
+        expect(columnFor("encounter_prep", "position")?.is_nullable).toBe("NO");
+        // The order is the DM's: never a column of the row a player reads.
+        expect(columnFor("encounter", "position")).toBeUndefined();
+      }),
     );
-    expect(keys).toEqual([
-      {
-        conname: "encounter_prep_campaign_position_key",
-        definition: 'UNIQUE (campaign_id, "position") DEFERRABLE',
-        condeferrable: true,
-        condeferred: false,
-      },
-    ]);
-    expect(columnFor("encounter_prep", "position")?.is_nullable).toBe("NO");
-    // The order is the DM's: never a column of the row a player reads.
-    expect(columnFor("encounter", "position")).toBeUndefined();
-  });
-});
-
-describe("an account must be reachable by something", () => {
-  it("accepts either credential alone and refuses a row with neither", async () => {
-    const insert = (values: Record<string, string | null>) =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`insert into account ${sql.insert({ name: "Jo", ...values })}`;
-        }).pipe(Effect.result),
-      );
-
-    const machineOnly = await insert({ token_hash: "credential-machine" });
-    const hostedOnly = await insert({ clerk_user_id: "user_credential" });
-    const both = await insert({ token_hash: "credential-both", clerk_user_id: "user_both" });
-    // An account nobody can ever authenticate as is a bug, not a state.
-    const neither = await insert({});
-
-    expect(machineOnly._tag).toBe("Success");
-    expect(hostedOnly._tag).toBe("Success");
-    expect(both._tag).toBe("Success");
-    expect(neither._tag).toBe("Failure");
   });
 
-  it("still requires a token hash to be unique, now that it is nullable", async () => {
-    // Postgres permits many NULLs under a unique constraint, which is what
-    // makes the column nullable safe — but two accounts sharing a hash would
-    // mean one token authenticating as either.
-    const insert = (tokenHash: string) =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const sql = yield* SqlClient.SqlClient;
-          yield* sql`insert into account ${sql.insert({ name: "Jo", token_hash: tokenHash })}`;
-        }).pipe(Effect.result),
-      );
-
-    expect((await insert("credential-unique"))._tag).toBe("Success");
-    expect((await insert("credential-unique"))._tag).toBe("Failure");
-  });
-});
-
-describe("a Hob thread has exactly one scope", () => {
-  /**
-   * `assistant_thread_one_scope` (`0054`): a campaign's, a Shared World's, or
-   * an account's alone. The four `conversationReachable` arms partition the
-   * table only while these three shapes are the only ones a row can take.
-   */
-  it("admits a campaign's, a world's and an account's, and refuses every other shape", async () => {
-    const outcomes = await runtime.runPromise(
+  describe("an account must be reachable by something", () => {
+    it.effect("accepts either credential alone and refuses a row with neither", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const account = yield* sql<{ readonly id: string }>`
+        const insert = (values: Record<string, string | null>) =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`insert into account ${sql.insert({ name: "Jo", ...values })}`;
+          }).pipe(Effect.result);
+
+        const machineOnly = yield* insert({ token_hash: "credential-machine" });
+        const hostedOnly = yield* insert({ clerk_user_id: "user_credential" });
+        const both = yield* insert({ token_hash: "credential-both", clerk_user_id: "user_both" });
+        // An account nobody can ever authenticate as is a bug, not a state.
+        const neither = yield* insert({});
+
+        expect(machineOnly._tag).toBe("Success");
+        expect(hostedOnly._tag).toBe("Success");
+        expect(both._tag).toBe("Success");
+        expect(neither._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("still requires a token hash to be unique, now that it is nullable", () =>
+      Effect.gen(function* () {
+        // Postgres permits many NULLs under a unique constraint, which is what
+        // makes the column nullable safe — but two accounts sharing a hash would
+        // mean one token authenticating as either.
+        const insert = (tokenHash: string) =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* sql`insert into account ${sql.insert({ name: "Jo", token_hash: tokenHash })}`;
+          }).pipe(Effect.result);
+
+        expect((yield* insert("credential-unique"))._tag).toBe("Success");
+        expect((yield* insert("credential-unique"))._tag).toBe("Failure");
+      }),
+    );
+  });
+
+  describe("a Hob thread has exactly one scope", () => {
+    /**
+     * `assistant_thread_one_scope` (`0054`): a campaign's, a Shared World's, or
+     * an account's alone. The four `conversationReachable` arms partition the
+     * table only while these three shapes are the only ones a row can take.
+     */
+    it.effect(
+      "admits a campaign's, a world's and an account's, and refuses every other shape",
+      () =>
+        Effect.gen(function* () {
+          const outcomes = yield* Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const account = yield* sql<{ readonly id: string }>`
           insert into account ${sql.insert({ name: "Jo", token_hash: "thread-scope" })}
           returning id
         `;
-        const accountId = account[0]!.id;
-        const campaign = yield* aCampaign(accountId, "thread scope");
-        const campaignId = campaign[0]!.id;
-        const groups = yield* sql<{ readonly group_id: string }>`
+            const accountId = account[0]!.id;
+            const campaign = yield* aCampaign(accountId, "thread scope");
+            const campaignId = campaign[0]!.id;
+            const groups = yield* sql<{ readonly group_id: string }>`
           select group_id from campaign where id = ${campaignId}
         `;
-        const groupId = groups[0]!.group_id;
+            const groupId = groups[0]!.group_id;
 
-        const insert = (values: Record<string, string>) =>
-          sql`insert into assistant_thread ${sql.insert({ title: "Who?", ...values })}`.pipe(
-            Effect.result,
-            Effect.map((result) => result._tag),
-          );
+            const insert = (values: Record<string, string>) =>
+              sql`insert into assistant_thread ${sql.insert({ title: "Who?", ...values })}`.pipe(
+                Effect.result,
+                Effect.map((result) => result._tag),
+              );
 
-        return {
-          campaign: yield* insert({ campaign_id: campaignId }),
-          campaignOwned: yield* insert({ campaign_id: campaignId, account_id: accountId }),
-          world: yield* insert({ group_id: groupId }),
-          account: yield* insert({ account_id: accountId }),
-          nothing: yield* insert({}),
-          campaignAndWorld: yield* insert({ campaign_id: campaignId, group_id: groupId }),
-          worldOwned: yield* insert({ group_id: groupId, account_id: accountId }),
-          everything: yield* insert({
-            campaign_id: campaignId,
-            group_id: groupId,
-            account_id: accountId,
-          }),
-        };
-      }).pipe(Effect.orDie),
+            return {
+              campaign: yield* insert({ campaign_id: campaignId }),
+              campaignOwned: yield* insert({ campaign_id: campaignId, account_id: accountId }),
+              world: yield* insert({ group_id: groupId }),
+              account: yield* insert({ account_id: accountId }),
+              nothing: yield* insert({}),
+              campaignAndWorld: yield* insert({ campaign_id: campaignId, group_id: groupId }),
+              worldOwned: yield* insert({ group_id: groupId, account_id: accountId }),
+              everything: yield* insert({
+                campaign_id: campaignId,
+                group_id: groupId,
+                account_id: accountId,
+              }),
+            };
+          }).pipe(Effect.orDie);
+
+          expect(outcomes).toEqual({
+            campaign: "Success",
+            campaignOwned: "Success",
+            world: "Success",
+            account: "Success",
+            nothing: "Failure",
+            campaignAndWorld: "Failure",
+            worldOwned: "Failure",
+            everything: "Failure",
+          });
+        }),
     );
-
-    expect(outcomes).toEqual({
-      campaign: "Success",
-      campaignOwned: "Success",
-      world: "Success",
-      account: "Success",
-      nothing: "Failure",
-      campaignAndWorld: "Failure",
-      worldOwned: "Failure",
-      everything: "Failure",
-    });
   });
-});
 
-/**
- * A campaign written straight into the table, with the owner's membership row
- * beside it.
- *
- * The two statements are one transaction because they have to be:
- * `campaign_owner_is_dm_member` (`0011_membership.ts`) refuses a campaign whose
- * owner holds no live `dm` membership, deferred to COMMIT so the pair can be
- * written in either order. A raw `insert into campaign` on its own is rejected
- * at the end of its own statement — which is the constraint doing its job, and
- * why every hand-written campaign in the suite now looks like this.
- * `membership.test.ts` is where that refusal is asserted rather than merely
- * worked around.
- *
- * **A transaction changes how a violation arrives, and the callers below have
- * to know it.** `sql.withTransaction` wraps the COMMIT in `Effect.orDie`
- * (`SqlClient.makeWithTransaction`), so anything a *deferred* constraint
- * catches — `campaign_assistant_turn_fkey` and `campaign_owner_is_dm_member`
- * are both deferred — arrives as a **defect** rather than a typed `SqlError`.
- * `Effect.result` does not catch it; `Effect.exit` does. An immediate
- * constraint still fails the statement inside the transaction and stays a typed
- * failure, which is why the two are mixed below and why every one of them uses
- * `Effect.exit`.
- */
-const aCampaign = (accountId: string, name: string, extra: Record<string, unknown> = {}) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const group = yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const rows = yield* sql<{ readonly id: string }>`
+  /**
+   * A campaign written straight into the table, with the owner's membership row
+   * beside it.
+   *
+   * The two statements are one transaction because they have to be:
+   * `campaign_owner_is_dm_member` (`0011_membership.ts`) refuses a campaign whose
+   * owner holds no live `dm` membership, deferred to COMMIT so the pair can be
+   * written in either order. A raw `insert into campaign` on its own is rejected
+   * at the end of its own statement — which is the constraint doing its job, and
+   * why every hand-written campaign in the suite now looks like this.
+   * `membership.test.ts` is where that refusal is asserted rather than merely
+   * worked around.
+   *
+   * **A transaction changes how a violation arrives, and the callers below have
+   * to know it.** `sql.withTransaction` wraps the COMMIT in `Effect.orDie`
+   * (`SqlClient.makeWithTransaction`), so anything a *deferred* constraint
+   * catches — `campaign_assistant_turn_fkey` and `campaign_owner_is_dm_member`
+   * are both deferred — arrives as a **defect** rather than a typed `SqlError`.
+   * `Effect.result` does not catch it; `Effect.exit` does. An immediate
+   * constraint still fails the statement inside the transaction and stays a typed
+   * failure, which is why the two are mixed below and why every one of them uses
+   * `Effect.exit`.
+   */
+  const aCampaign = (accountId: string, name: string, extra: Record<string, unknown> = {}) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const group = yield* sql.withTransaction(
+        Effect.gen(function* () {
+          const rows = yield* sql<{ readonly id: string }>`
           insert into play_group ${sql.insert({ owner_account_id: accountId, name: `${name} group` })}
           returning id
         `;
-        yield* sql`
+          yield* sql`
           insert into group_member ${sql.insert({ group_id: rows[0]!.id, account_id: accountId })}
         `;
-        return rows[0]!.id;
-      }),
-    );
-    return yield* sql.withTransaction(
-      Effect.gen(function* () {
-        const rows = yield* sql<{ readonly id: string }>`
+          return rows[0]!.id;
+        }),
+      );
+      return yield* sql.withTransaction(
+        Effect.gen(function* () {
+          const rows = yield* sql<{ readonly id: string }>`
           insert into campaign ${sql.insert({
             group_id: group,
             creator_account_id: accountId,
@@ -547,44 +571,44 @@ const aCampaign = (accountId: string, name: string, extra: Record<string, unknow
           })}
           returning id
         `;
-        yield* sql`
+          yield* sql`
           insert into campaign_member ${sql.insert({
             campaign_id: rows[0]!.id,
             group_id: group,
             account_id: accountId,
           })}
         `;
-        return rows;
-      }),
-    );
-  });
+          return rows;
+        }),
+      );
+    });
 
-describe("provenance is enforced, not just declared", () => {
-  /**
-   * A conversation to point at.
-   *
-   * The check has been on every content table since `0001_init.ts` and was
-   * vacuously satisfiable until `0010`: `assistant_turn_id` had no referent, so
-   * a row could claim `origin = 'assistant'` and name any uuid it liked. Now
-   * there is a table, and the assertions below are about a real turn — which is
-   * also what makes the last one, a turn id that names nothing, worth writing.
-   */
-  const aRealTurn = (label: string) =>
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      const account = yield* sql<{ readonly id: string }>`
+  describe("provenance is enforced, not just declared", () => {
+    /**
+     * A conversation to point at.
+     *
+     * The check has been on every content table since `0001_init.ts` and was
+     * vacuously satisfiable until `0010`: `assistant_turn_id` had no referent, so
+     * a row could claim `origin = 'assistant'` and name any uuid it liked. Now
+     * there is a table, and the assertions below are about a real turn — which is
+     * also what makes the last one, a turn id that names nothing, worth writing.
+     */
+    const aRealTurn = (label: string) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const account = yield* sql<{ readonly id: string }>`
         insert into account ${sql.insert({ name: "Jo", token_hash: `provenance-${label}` })}
         returning id
       `;
-      const campaign = yield* aCampaign(account[0]!.id, `provenance ${label}`);
-      const thread = yield* sql<{ readonly id: string }>`
+        const campaign = yield* aCampaign(account[0]!.id, `provenance ${label}`);
+        const thread = yield* sql<{ readonly id: string }>`
         insert into assistant_thread ${sql.insert({
           campaign_id: campaign[0]!.id,
           title: "Who is the ferryman?",
         })}
         returning id
       `;
-      const turn = yield* sql<{ readonly id: string }>`
+        const turn = yield* sql<{ readonly id: string }>`
         insert into assistant_turn ${sql.insert({
           thread_id: thread[0]!.id,
           who: "user",
@@ -592,59 +616,60 @@ describe("provenance is enforced, not just declared", () => {
         })}
         returning id
       `;
-      return { accountId: account[0]!.id, turnId: turn[0]!.id };
-    }).pipe(Effect.orDie);
+        return { accountId: account[0]!.id, turnId: turn[0]!.id };
+      }).pipe(Effect.orDie);
 
-  it("rejects an assistant row with no turn id, and an authored row with one", async () => {
-    const { accountId, turnId } = await runtime.runPromise(aRealTurn("pair"));
-
-    const insert = (origin: string, turn: string | null) =>
-      runtime.runPromise(
-        aCampaign(accountId, `provenance ${origin} ${String(turn)}`, {
-          origin,
-          assistant_turn_id: turn,
-        }).pipe(Effect.exit),
-      );
-
-    const assistantWithoutTurn = await insert("assistant", null);
-    const authoredWithTurn = await insert("authored", turnId);
-    const assistantWithTurn = await insert("assistant", turnId);
-
-    expect(assistantWithoutTurn._tag).toBe("Failure");
-    expect(authoredWithTurn._tag).toBe("Failure");
-    expect(assistantWithTurn._tag).toBe("Success");
-  });
-
-  it("refuses a turn id that names no turn", async () => {
-    // What `0010` bought. Before it, this row was accepted and the campaign
-    // carried a provenance trail leading nowhere — which is worse than none,
-    // because it reads as an answer.
-    const { accountId } = await runtime.runPromise(aRealTurn("invented"));
-    const invented = await runtime.runPromise(
-      aCampaign(accountId, "provenance invented", {
-        origin: "assistant",
-        assistant_turn_id: "00000000-0000-4000-8000-000000000001",
-      }).pipe(Effect.exit),
-    );
-
-    expect(invented._tag).toBe("Failure");
-  });
-
-  it("keeps an accepted row's turn from being deleted out from under it", async () => {
-    // The provenance trail has to survive, so the reference is `no action`
-    // rather than `set null` — which the check constraint would reject anyway.
-    const { accountId, turnId } = await runtime.runPromise(aRealTurn("pinned"));
-    const deleted = await runtime.runPromise(
+    it.effect("rejects an assistant row with no turn id, and an authored row with one", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        yield* aCampaign(accountId, "provenance pinned", {
-          origin: "assistant",
-          assistant_turn_id: turnId,
-        });
-        yield* sql`delete from assistant_turn where id = ${turnId}`;
-      }).pipe(Effect.exit),
+        const { accountId, turnId } = yield* aRealTurn("pair");
+
+        const insert = (origin: string, turn: string | null) =>
+          aCampaign(accountId, `provenance ${origin} ${String(turn)}`, {
+            origin,
+            assistant_turn_id: turn,
+          }).pipe(Effect.exit);
+
+        const assistantWithoutTurn = yield* insert("assistant", null);
+        const authoredWithTurn = yield* insert("authored", turnId);
+        const assistantWithTurn = yield* insert("assistant", turnId);
+
+        expect(assistantWithoutTurn._tag).toBe("Failure");
+        expect(authoredWithTurn._tag).toBe("Failure");
+        expect(assistantWithTurn._tag).toBe("Success");
+      }),
     );
 
-    expect(deleted._tag).toBe("Failure");
+    it.effect("refuses a turn id that names no turn", () =>
+      Effect.gen(function* () {
+        // What `0010` bought. Before it, this row was accepted and the campaign
+        // carried a provenance trail leading nowhere — which is worse than none,
+        // because it reads as an answer.
+        const { accountId } = yield* aRealTurn("invented");
+        const invented = yield* aCampaign(accountId, "provenance invented", {
+          origin: "assistant",
+          assistant_turn_id: "00000000-0000-4000-8000-000000000001",
+        }).pipe(Effect.exit);
+
+        expect(invented._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("keeps an accepted row's turn from being deleted out from under it", () =>
+      Effect.gen(function* () {
+        // The provenance trail has to survive, so the reference is `no action`
+        // rather than `set null` — which the check constraint would reject anyway.
+        const { accountId, turnId } = yield* aRealTurn("pinned");
+        const deleted = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          yield* aCampaign(accountId, "provenance pinned", {
+            origin: "assistant",
+            assistant_turn_id: turnId,
+          });
+          yield* sql`delete from assistant_turn where id = ${turnId}`;
+        }).pipe(Effect.exit);
+
+        expect(deleted._tag).toBe("Failure");
+      }),
+    );
   });
 });

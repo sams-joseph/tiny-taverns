@@ -1,3 +1,4 @@
+import { describe, expect } from "@effect/vitest";
 import {
   type Actor,
   type CampaignCharacterId,
@@ -9,8 +10,7 @@ import {
   type NotFound,
   type SessionId,
 } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Context, Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -36,6 +36,7 @@ import {
   scopedTo,
 } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * A player entering their own initiative from their Table, and what their
@@ -48,26 +49,23 @@ import { migratedDatabase } from "./support/database.js";
  * path is refused the way the read refuses it.
  */
 const live = LiveEvents.layer;
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    Groups.layer,
-    Characters.layer,
-    Combatants.layer.pipe(Layer.provide(live)),
-    Creatures.layer,
-    CampaignCreatorActors.layer,
-    EncounterCreatures.layer,
-    EncounterRuns.layer.pipe(Layer.provide(live)),
-    Encounters.layer,
-    Invites.layer,
-    Party.layer.pipe(Layer.provide(live)),
-    PlayerTable.layer.pipe(Layer.provide(live)),
-    SessionEvents.layer,
-    Sessions.layer.pipe(Layer.provide(live)),
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_player_initiative"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  Groups.layer,
+  Characters.layer,
+  Combatants.layer.pipe(Layer.provide(live)),
+  Creatures.layer,
+  CampaignCreatorActors.layer,
+  EncounterCreatures.layer,
+  EncounterRuns.layer.pipe(Layer.provide(live)),
+  Encounters.layer,
+  Invites.layer,
+  Party.layer.pipe(Layer.provide(live)),
+  PlayerTable.layer.pipe(Layer.provide(live)),
+  SessionEvents.layer,
+  Sessions.layer.pipe(Layer.provide(live)),
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_player_initiative")));
 
 const withActor =
   (actor: Actor) =>
@@ -196,218 +194,274 @@ interface Night {
   readonly goblin: CombatantId;
 }
 
-let fixture: Effect.Success<typeof makeFixture>;
-let table: (typeof PlayerTable)["Service"];
-let runs: (typeof EncounterRuns)["Service"];
-let combatants: (typeof Combatants)["Service"];
-let party: (typeof Party)["Service"];
-let invites: (typeof Invites)["Service"];
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "player-initiative.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-  table = await runtime.runPromise(PlayerTable);
-  runs = await runtime.runPromise(EncounterRuns);
-  combatants = await runtime.runPromise(Combatants);
-  party = await runtime.runPromise(Party);
-  invites = await runtime.runPromise(Invites);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-const tonight = (): Promise<Night> => runtime.runPromise(fixture.tonight);
+const tonight = () => Effect.flatMap(Fixture, (fixture) => fixture.tonight);
 
-const as = <A, E>(actor: Actor, effect: Effect.Effect<A, E, CurrentActor>) =>
-  runtime.runPromise(withActor(actor)(effect).pipe(Effect.orDie));
+const as = <A, E, R>(actor: Actor, effect: Effect.Effect<A, E, R | CurrentActor>) =>
+  withActor(actor)(effect).pipe(Effect.orDie);
 
-const asDmDo = <A, E>(effect: Effect.Effect<A, E, CurrentActor>) => as(fixture.dm, effect);
+const asDmDo = <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
+  Effect.flatMap(Fixture, (fixture) => as(fixture.dm, effect));
 
 /** Enter a number as somebody, answering the failure's tag or `ok`. */
 const enter = (actor: Actor, night: Night, combatantId: CombatantId, initiative: number) =>
-  runtime.runPromise(
-    withActor(actor)(table.setInitiative(fixture.campaign.id, night.run, combatantId, initiative))
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const table = yield* PlayerTable;
+    return yield* withActor(actor)(
+      table.setInitiative(fixture.campaign.id, night.run, combatantId, initiative),
+    )
       .pipe(
         Effect.as("ok" as const),
         Effect.catch((error: NotFound | Conflict) => Effect.succeed(error._tag)),
       )
-      .pipe(Effect.orDie),
-  );
-
-const initiativeOf = async (night: Night, combatantId: CombatantId) =>
-  (await asDmDo(combatants.list(fixture.proof, night.session, night.run))).find(
-    (row) => row.id === combatantId,
-  );
-
-describe("what a seated player's table says while initiative is rolled", () => {
-  it("names the phase, has no numbers, and carries a bonus on your own row alone", async () => {
-    await tonight();
-    const answer = await as(fixture.pim, table.read(fixture.campaign.id));
-    const fight = answer?.fight;
-
-    expect(fight?.phase).toBe("initiative");
-    expect(fight?.upNext).toBeNull();
-    expect(fight?.order.every((row) => row.initiative === null)).toBe(true);
-    const you = fight?.order.find((row) => row.kind === "you");
-    expect(you).toMatchObject({ initiativeBonus: 4, initiativeSetBy: null });
-    for (const row of fight?.order ?? []) {
-      if (row.kind === "you") continue;
-      expect(Object.keys(row)).not.toContain("initiativeBonus");
-      expect(Object.keys(row)).not.toContain("initiativeSetBy");
-    }
-    // The monster's bonus is a number from its stat block, like its AC.
-    expect(JSON.stringify(answer)).not.toContain('"ac"');
-  });
-});
-
-describe("entering your own initiative", () => {
-  it("writes your own character's number as yours, and you may correct it", async () => {
-    const night = await tonight();
-
-    expect(await enter(fixture.pim, night, night.brannoc, 17)).toBe("ok");
-    expect(await initiativeOf(night, night.brannoc)).toMatchObject({
-      initiative: 17,
-      initiativeSetBy: "player",
-    });
-    expect(await enter(fixture.pim, night, night.brannoc, 19)).toBe("ok");
-    expect((await initiativeOf(night, night.brannoc))?.initiative).toBe(19);
-
-    const answer = await as(fixture.pim, table.read(fixture.campaign.id));
-    expect(answer?.fight?.order.find((row) => row.kind === "you")).toMatchObject({
-      initiative: 19,
-      initiativeSetBy: "player",
-    });
-    // A seat-mate sees the number, not who wrote it.
-    const theirs = await as(fixture.wren, table.read(fixture.campaign.id));
-    expect(theirs?.fight?.order.find((row) => row.combatantId === night.brannoc)).toMatchObject({
-      kind: "ally",
-      initiative: 19,
-    });
+      .pipe(Effect.orDie);
   });
 
-  it("lets the DM overwrite it, after which the DM's number stands", async () => {
-    const night = await tonight();
-    expect(await enter(fixture.pim, night, night.brannoc, 17)).toBe("ok");
-
-    await asDmDo(
-      combatants.setInitiative(fixture.proof, night.session, night.run, {
-        entries: [{ combatantId: night.brannoc, initiative: 11 }],
-      }),
-    );
-    expect(await enter(fixture.pim, night, night.brannoc, 20)).toBe("Conflict");
-    expect(await initiativeOf(night, night.brannoc)).toMatchObject({
-      initiative: 11,
-      initiativeSetBy: "dm",
-    });
-  });
-
-  it("never overwrites a number the DM wrote first", async () => {
-    const night = await tonight();
-    await asDmDo(
-      combatants.update(fixture.proof, night.session, night.run, night.brannoc, {
-        initiative: 8,
-      }),
-    );
-
-    expect(await enter(fixture.pim, night, night.brannoc, 20)).toBe("Conflict");
-    expect((await initiativeOf(night, night.brannoc))?.initiative).toBe(8);
-  });
-
-  it("is refused once round 1 has started, and again once the DM goes back to rolling", async () => {
-    const night = await tonight();
-    await asDmDo(
-      combatants.setInitiative(fixture.proof, night.session, night.run, {
-        entries: [night.nessa, night.tamsin, night.goblin].map((combatantId) => ({
-          combatantId,
-          initiative: 10,
-        })),
-      }),
-    );
-    expect(await enter(fixture.pim, night, night.brannoc, 12)).toBe("ok");
-    await asDmDo(runs.begin(fixture.proof, night.session, night.run, {}));
-
-    expect(await enter(fixture.pim, night, night.brannoc, 18)).toBe("Conflict");
-    expect((await initiativeOf(night, night.brannoc))?.initiative).toBe(12);
-
-    // Back to rolling, with the player's own number still theirs to change.
-    await asDmDo(runs.reroll(fixture.proof, night.session, night.run, {}));
-    expect(await enter(fixture.pim, night, night.brannoc, 18)).toBe("ok");
-  });
-
-  it("is refused once the fight is over", async () => {
-    const night = await tonight();
-    await asDmDo(runs.end(fixture.proof, night.session, night.run));
-    expect(await enter(fixture.pim, night, night.brannoc, 18)).not.toBe("ok");
-    expect((await initiativeOf(night, night.brannoc))?.initiative).toBeNull();
-  });
-});
-
-describe("every other row, and every other asker, is not found", () => {
-  it("refuses another player's character and a monster, and writes neither", async () => {
-    const night = await tonight();
-
-    expect(await enter(fixture.pim, night, night.nessa, 20)).toBe("NotFound");
-    expect(await enter(fixture.pim, night, night.goblin, 20)).toBe("NotFound");
-    expect((await initiativeOf(night, night.nessa))?.initiative).toBeNull();
-    expect((await initiativeOf(night, night.goblin))?.initiative).toBeNull();
-  });
-
-  it("refuses your own row named under another fight", async () => {
-    const earlier = await tonight();
-    await asDmDo(runs.end(fixture.proof, earlier.session, earlier.run));
-    const night = await tonight();
-
-    expect(await enter(fixture.pim, { ...night, run: earlier.run }, night.brannoc, 20)).toBe(
-      "NotFound",
+const initiativeOf = (night: Night, combatantId: CombatantId) =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const combatants = yield* Combatants;
+    return (yield* asDmDo(combatants.list(fixture.proof, night.session, night.run))).find(
+      (row) => row.id === combatantId,
     );
   });
 
-  it("refuses a fight the DM has not shared, and a row the DM has hidden", async () => {
-    const night = await tonight();
-    await asDmDo(
-      combatants.update(fixture.proof, night.session, night.run, night.brannoc, {
-        visibility: "dm",
-      }),
-    );
-    expect(await enter(fixture.pim, night, night.brannoc, 20)).toBe("NotFound");
-
-    const other = await tonight();
-    await asDmDo(runs.update(fixture.proof, other.session, other.run, { visibility: "dm" }));
-    expect(await enter(fixture.pim, other, other.brannoc, 20)).toBe("NotFound");
-  });
-
-  it("refuses the campaign's creator, who has no seat, and a stranger", async () => {
-    const night = await tonight();
-
-    expect(await enter(fixture.dm, night, night.brannoc, 20)).toBe("NotFound");
-    expect(await enter(fixture.stranger, night, night.brannoc, 20)).toBe("NotFound");
-    expect(await enter(scopedTo(fixture.pim, fixture.elsewhere.id), night, night.brannoc, 20)).toBe(
-      "NotFound",
-    );
-    expect((await initiativeOf(night, night.brannoc))?.initiative).toBeNull();
-  });
-
-  it("refuses a player whose seat has been given up", async () => {
-    const night = await tonight();
-    await as(fixture.tam, party.leave(fixture.campaign.id, await seatOf(fixture.tam)));
-
-    expect(await enter(fixture.tam, night, night.tamsin, 20)).toBe("NotFound");
-    expect((await initiativeOf(night, night.tamsin))?.initiative).toBeNull();
-  });
-
-  it("refuses a member whose membership has been revoked", async () => {
-    const night = await tonight();
-    await asDmDo(
+describeLayer("player-initiative", shared, (it) => {
+  describe("what a seated player's table says while initiative is rolled", () => {
+    it.effect("names the phase, has no numbers, and carries a bonus on your own row alone", () =>
       Effect.gen(function* () {
-        const listed = yield* invites.listForCampaign(fixture.proof);
-        const wren = listed.find((invite) => invite.label === "Wren")!;
-        return yield* invites.revokeForCampaign(fixture.proof, wren.id);
+        const fixture = yield* Fixture;
+        const table = yield* PlayerTable;
+        yield* tonight();
+        const answer = yield* as(fixture.pim, table.read(fixture.campaign.id));
+        const fight = answer?.fight;
+
+        expect(fight?.phase).toBe("initiative");
+        expect(fight?.upNext).toBeNull();
+        expect(fight?.order.every((row) => row.initiative === null)).toBe(true);
+        const you = fight?.order.find((row) => row.kind === "you");
+        expect(you).toMatchObject({ initiativeBonus: 4, initiativeSetBy: null });
+        for (const row of fight?.order ?? []) {
+          if (row.kind === "you") continue;
+          expect(Object.keys(row)).not.toContain("initiativeBonus");
+          expect(Object.keys(row)).not.toContain("initiativeSetBy");
+        }
+        // The monster's bonus is a number from its stat block, like its AC.
+        expect(JSON.stringify(answer)).not.toContain('"ac"');
+      }),
+    );
+  });
+
+  describe("entering your own initiative", () => {
+    it.effect("writes your own character's number as yours, and you may correct it", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const table = yield* PlayerTable;
+        const night = yield* tonight();
+
+        expect(yield* enter(fixture.pim, night, night.brannoc, 17)).toBe("ok");
+        expect(yield* initiativeOf(night, night.brannoc)).toMatchObject({
+          initiative: 17,
+          initiativeSetBy: "player",
+        });
+        expect(yield* enter(fixture.pim, night, night.brannoc, 19)).toBe("ok");
+        expect((yield* initiativeOf(night, night.brannoc))?.initiative).toBe(19);
+
+        const answer = yield* as(fixture.pim, table.read(fixture.campaign.id));
+        expect(answer?.fight?.order.find((row) => row.kind === "you")).toMatchObject({
+          initiative: 19,
+          initiativeSetBy: "player",
+        });
+        // A seat-mate sees the number, not who wrote it.
+        const theirs = yield* as(fixture.wren, table.read(fixture.campaign.id));
+        expect(theirs?.fight?.order.find((row) => row.combatantId === night.brannoc)).toMatchObject(
+          {
+            kind: "ally",
+            initiative: 19,
+          },
+        );
       }),
     );
 
-    expect(await enter(fixture.wren, night, night.nessa, 20)).toBe("NotFound");
-    expect((await initiativeOf(night, night.nessa))?.initiative).toBeNull();
+    it.effect("lets the DM overwrite it, after which the DM's number stands", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const combatants = yield* Combatants;
+        const night = yield* tonight();
+        expect(yield* enter(fixture.pim, night, night.brannoc, 17)).toBe("ok");
+
+        yield* asDmDo(
+          combatants.setInitiative(fixture.proof, night.session, night.run, {
+            entries: [{ combatantId: night.brannoc, initiative: 11 }],
+          }),
+        );
+        expect(yield* enter(fixture.pim, night, night.brannoc, 20)).toBe("Conflict");
+        expect(yield* initiativeOf(night, night.brannoc)).toMatchObject({
+          initiative: 11,
+          initiativeSetBy: "dm",
+        });
+      }),
+    );
+
+    it.effect("never overwrites a number the DM wrote first", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const combatants = yield* Combatants;
+        const night = yield* tonight();
+        yield* asDmDo(
+          combatants.update(fixture.proof, night.session, night.run, night.brannoc, {
+            initiative: 8,
+          }),
+        );
+
+        expect(yield* enter(fixture.pim, night, night.brannoc, 20)).toBe("Conflict");
+        expect((yield* initiativeOf(night, night.brannoc))?.initiative).toBe(8);
+      }),
+    );
+
+    it.effect(
+      "is refused once round 1 has started, and again once the DM goes back to rolling",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const runs = yield* EncounterRuns;
+          const combatants = yield* Combatants;
+          const night = yield* tonight();
+          yield* asDmDo(
+            combatants.setInitiative(fixture.proof, night.session, night.run, {
+              entries: [night.nessa, night.tamsin, night.goblin].map((combatantId) => ({
+                combatantId,
+                initiative: 10,
+              })),
+            }),
+          );
+          expect(yield* enter(fixture.pim, night, night.brannoc, 12)).toBe("ok");
+          yield* asDmDo(runs.begin(fixture.proof, night.session, night.run, {}));
+
+          expect(yield* enter(fixture.pim, night, night.brannoc, 18)).toBe("Conflict");
+          expect((yield* initiativeOf(night, night.brannoc))?.initiative).toBe(12);
+
+          // Back to rolling, with the player's own number still theirs to change.
+          yield* asDmDo(runs.reroll(fixture.proof, night.session, night.run, {}));
+          expect(yield* enter(fixture.pim, night, night.brannoc, 18)).toBe("ok");
+        }),
+    );
+
+    it.effect("is refused once the fight is over", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const runs = yield* EncounterRuns;
+        const night = yield* tonight();
+        yield* asDmDo(runs.end(fixture.proof, night.session, night.run));
+        expect(yield* enter(fixture.pim, night, night.brannoc, 18)).not.toBe("ok");
+        expect((yield* initiativeOf(night, night.brannoc))?.initiative).toBeNull();
+      }),
+    );
+  });
+
+  describe("every other row, and every other asker, is not found", () => {
+    it.effect("refuses another player's character and a monster, and writes neither", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const night = yield* tonight();
+
+        expect(yield* enter(fixture.pim, night, night.nessa, 20)).toBe("NotFound");
+        expect(yield* enter(fixture.pim, night, night.goblin, 20)).toBe("NotFound");
+        expect((yield* initiativeOf(night, night.nessa))?.initiative).toBeNull();
+        expect((yield* initiativeOf(night, night.goblin))?.initiative).toBeNull();
+      }),
+    );
+
+    it.effect("refuses your own row named under another fight", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const runs = yield* EncounterRuns;
+        const earlier = yield* tonight();
+        yield* asDmDo(runs.end(fixture.proof, earlier.session, earlier.run));
+        const night = yield* tonight();
+
+        expect(yield* enter(fixture.pim, { ...night, run: earlier.run }, night.brannoc, 20)).toBe(
+          "NotFound",
+        );
+      }),
+    );
+
+    it.effect("refuses a fight the DM has not shared, and a row the DM has hidden", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const runs = yield* EncounterRuns;
+        const combatants = yield* Combatants;
+        const night = yield* tonight();
+        yield* asDmDo(
+          combatants.update(fixture.proof, night.session, night.run, night.brannoc, {
+            visibility: "dm",
+          }),
+        );
+        expect(yield* enter(fixture.pim, night, night.brannoc, 20)).toBe("NotFound");
+
+        const other = yield* tonight();
+        yield* asDmDo(runs.update(fixture.proof, other.session, other.run, { visibility: "dm" }));
+        expect(yield* enter(fixture.pim, other, other.brannoc, 20)).toBe("NotFound");
+      }),
+    );
+
+    it.effect("refuses the campaign's creator, who has no seat, and a stranger", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const night = yield* tonight();
+
+        expect(yield* enter(fixture.dm, night, night.brannoc, 20)).toBe("NotFound");
+        expect(yield* enter(fixture.stranger, night, night.brannoc, 20)).toBe("NotFound");
+        expect(
+          yield* enter(scopedTo(fixture.pim, fixture.elsewhere.id), night, night.brannoc, 20),
+        ).toBe("NotFound");
+        expect((yield* initiativeOf(night, night.brannoc))?.initiative).toBeNull();
+      }),
+    );
+
+    it.effect("refuses a player whose seat has been given up", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const party = yield* Party;
+        const night = yield* tonight();
+        yield* as(fixture.tam, party.leave(fixture.campaign.id, yield* seatOf(fixture.tam)));
+
+        expect(yield* enter(fixture.tam, night, night.tamsin, 20)).toBe("NotFound");
+        expect((yield* initiativeOf(night, night.tamsin))?.initiative).toBeNull();
+      }),
+    );
+
+    it.effect("refuses a member whose membership has been revoked", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const invites = yield* Invites;
+        const night = yield* tonight();
+        yield* asDmDo(
+          Effect.gen(function* () {
+            const listed = yield* invites.listForCampaign(fixture.proof);
+            const wren = listed.find((invite) => invite.label === "Wren")!;
+            return yield* invites.revokeForCampaign(fixture.proof, wren.id);
+          }),
+        );
+
+        expect(yield* enter(fixture.wren, night, night.nessa, 20)).toBe("NotFound");
+        expect((yield* initiativeOf(night, night.nessa))?.initiative).toBeNull();
+      }),
+    );
   });
 });
 
 /** An account's own live seat at the campaign, read the way the party list reads it. */
-const seatOf = async (actor: Actor): Promise<CampaignCharacterId> => {
-  const seats = await as(actor, party.list(fixture.campaign.id));
-  return seats.find((row) => row.seat.accountId === actor.accountId)!.seat.id;
-};
+const seatOf = (actor: Actor): Effect.Effect<CampaignCharacterId, never, Fixture | Party> =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const party = yield* Party;
+    const seats = yield* as(actor, party.list(fixture.campaign.id));
+    return seats.find((row) => row.seat.accountId === actor.accountId)!.seat.id;
+  });

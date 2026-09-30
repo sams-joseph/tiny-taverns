@@ -106,8 +106,9 @@ export const freshDatabase = (name: string): Layer.Layer<SqlClient.SqlClient | P
   ).pipe(Layer.orDie);
 
 /**
- * A fresh database as a plain URL — for the one file that spawns a real
- * `node` process rather than building a layer (`start.smoke.test.ts`).
+ * A fresh database as a plain URL rather than a client layer — for the one
+ * file that spawns a real `node` process and hands it the URL
+ * (`start.smoke.test.ts`).
  *
  * The smoke test used to let `dist/main.js` inherit the developer's
  * `DATABASE_URL` default, which meant a spawned server migrating **the shared
@@ -117,17 +118,15 @@ export const freshDatabase = (name: string): Layer.Layer<SqlClient.SqlClient | P
  * an old-ledger dev database cannot take a new migration, by design. A
  * spawned server gets a database of its own, like every other file.
  */
-export const provisionDatabase = (name: string): Promise<string> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      const database = testDatabaseName(name, process.env.TAVERNS_TEST_DATABASE_PREFIX);
-      const quoted = `"${database.replaceAll('"', '""')}"`;
-      yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
-      yield* sql.unsafe(`create database ${quoted}`);
-      return urlFor(database);
-    }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
-  );
+export const provisionDatabase = (name: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const database = testDatabaseName(name, process.env.TAVERNS_TEST_DATABASE_PREFIX);
+    const quoted = `"${database.replaceAll('"', '""')}"`;
+    yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
+    yield* sql.unsafe(`create database ${quoted}`);
+    return urlFor(database);
+  }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain);
 
 /** A fresh database with the migrations already applied. */
 export const migratedDatabase = (

@@ -1,5 +1,7 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect } from "@effect/vitest";
+import { Context, Effect, Layer } from "effect";
 import { provisionDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -70,8 +72,6 @@ const ATTEMPT_TIMEOUT_MS = 2_000;
  * same directory and is removed with it.
  */
 let compiled: Promise<string> | undefined;
-let scratch: Promise<string> | undefined;
-const databaseUrl = () => (scratch ??= provisionDatabase("taverns_test_start_smoke"));
 let buildRoot: string | undefined;
 const buildOnce = () =>
   (compiled ??= (async () => {
@@ -104,6 +104,11 @@ async function freePort(): Promise<number> {
   await once(probe, "close");
   return port;
 }
+
+/** The URL of this file's own database, which every spawned server is given. */
+class DatabaseUrl extends Context.Service<DatabaseUrl, string>()("start.smoke.test/DatabaseUrl") {}
+
+const shared = Layer.effect(DatabaseUrl)(provisionDatabase("taverns_test_start_smoke"));
 
 const spawned: ChildProcess[] = [];
 
@@ -186,141 +191,160 @@ afterAll(async () => {
  * compile cannot move out of the test without giving up the guarantee above, so
  * that would be a change to the pipeline, deliberately not made here.
  */
-describe("production start (built output under plain node)", () => {
-  it("boots the built main.js and answers GET /health", async () => {
-    const main = await buildOnce();
+describeLayer("start.smoke", shared, (it) => {
+  describe("production start (built output under plain node)", () => {
+    it.effect(
+      "boots the built main.js and answers GET /health",
+      () =>
+        Effect.flatMap(DatabaseUrl, (databaseUrl) =>
+          Effect.promise(async () => {
+            const main = await buildOnce();
 
-    const port = await freePort();
-    const { server, output } = startServer(main, port, await databaseUrl());
+            const port = await freePort();
+            const { server, output } = startServer(main, port, databaseUrl);
 
-    const deadline = Date.now() + 20_000;
-    let response: Response | undefined;
-    let lastFailure = "no attempt completed";
-    while (Date.now() < deadline) {
-      if (server.exitCode !== null) {
-        throw new Error(`server exited with code ${server.exitCode}:\n${output()}`);
-      }
-      try {
-        // Every attempt is bounded, and each retry opens a fresh connection.
-        // See ATTEMPT_TIMEOUT_MS: an attempt that lands in the boot window is
-        // never answered, so an unbounded `fetch` here hangs for the whole test
-        // and the `deadline` above — only checked between iterations — never
-        // gets a chance to fire.
-        response = await fetch(`http://127.0.0.1:${port}/health`, {
-          signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
-        });
-        break;
-      } catch (error) {
-        lastFailure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-        await delay(100);
-      }
-    }
+            const deadline = Date.now() + 20_000;
+            let response: Response | undefined;
+            let lastFailure = "no attempt completed";
+            while (Date.now() < deadline) {
+              if (server.exitCode !== null) {
+                throw new Error(`server exited with code ${server.exitCode}:\n${output()}`);
+              }
+              try {
+                // Every attempt is bounded, and each retry opens a fresh connection.
+                // See ATTEMPT_TIMEOUT_MS: an attempt that lands in the boot window is
+                // never answered, so an unbounded `fetch` here hangs for the whole test
+                // and the `deadline` above — only checked between iterations — never
+                // gets a chance to fire.
+                response = await fetch(`http://127.0.0.1:${port}/health`, {
+                  signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+                });
+                break;
+              } catch (error) {
+                lastFailure =
+                  error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+                await delay(100);
+              }
+            }
 
-    if (response === undefined) {
-      throw new Error(
-        `server never answered GET /health on port ${port} within 20s ` +
-          `(last attempt: ${lastFailure}):\n${output()}`,
-      );
-    }
+            if (response === undefined) {
+              throw new Error(
+                `server never answered GET /health on port ${port} within 20s ` +
+                  `(last attempt: ${lastFailure}):\n${output()}`,
+              );
+            }
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain("application/json");
-    const body: unknown = await response.json();
-    expect(body).toMatchObject({ status: "ok" });
-    expect((body as { uptime: number }).uptime).toBeGreaterThanOrEqual(0);
-  }, 180_000);
+            expect(response.status).toBe(200);
+            expect(response.headers.get("content-type")).toContain("application/json");
+            const body: unknown = await response.json();
+            expect(body).toMatchObject({ status: "ok" });
+            expect((body as { uptime: number }).uptime).toBeGreaterThanOrEqual(0);
+          }),
+        ),
+      180_000,
+    );
 
-  /**
-   * The boot-order guarantee: the socket must not accept until the application
-   * can answer on it.
-   *
-   * Written against the raw socket rather than `fetch` on purpose. The property
-   * is about *one particular connection* — the very first one the kernel
-   * accepts — and `fetch` gives no control over which connection a request goes
-   * out on, nor any way to hold one open and watch nothing come back.
-   *
-   * This is what a readiness probe experiences, and it is why the ordering
-   * matters outside the test suite: before the fix, this connection was
-   * accepted and then never answered (5 runs out of 5, held 8s while the same
-   * server answered fresh connections 200). After it, every connection made
-   * before the listener binds is refused outright — ~250 `ECONNREFUSED` in the
-   * ~290ms before `listen`, which is a clean, retryable answer — and the first
-   * one accepted is answered within milliseconds.
-   *
-   * The budget below is deliberately enormous relative to the ~7ms observed:
-   * the failure this guards against is "never", so there is nothing to gain
-   * from a tight bound and a flaky test to lose.
-   */
-  it("answers the first connection it accepts, having refused every earlier one", async () => {
-    const main = await buildOnce();
+    /**
+     * The boot-order guarantee: the socket must not accept until the application
+     * can answer on it.
+     *
+     * Written against the raw socket rather than `fetch` on purpose. The property
+     * is about *one particular connection* — the very first one the kernel
+     * accepts — and `fetch` gives no control over which connection a request goes
+     * out on, nor any way to hold one open and watch nothing come back.
+     *
+     * This is what a readiness probe experiences, and it is why the ordering
+     * matters outside the test suite: before the fix, this connection was
+     * accepted and then never answered (5 runs out of 5, held 8s while the same
+     * server answered fresh connections 200). After it, every connection made
+     * before the listener binds is refused outright — ~250 `ECONNREFUSED` in the
+     * ~290ms before `listen`, which is a clean, retryable answer — and the first
+     * one accepted is answered within milliseconds.
+     *
+     * The budget below is deliberately enormous relative to the ~7ms observed:
+     * the failure this guards against is "never", so there is nothing to gain
+     * from a tight bound and a flaky test to lose.
+     */
+    it.effect(
+      "answers the first connection it accepts, having refused every earlier one",
+      () =>
+        Effect.flatMap(DatabaseUrl, (databaseUrl) =>
+          Effect.promise(async () => {
+            const main = await buildOnce();
 
-    const port = await freePort();
-    const { server, output } = startServer(main, port, await databaseUrl());
+            const port = await freePort();
+            const { server, output } = startServer(main, port, databaseUrl);
 
-    // Hammer connect() until one succeeds. Everything before that must be
-    // refused — the socket is not bound yet — and the one that succeeds is the
-    // first connection this server ever accepted.
-    const refusals = new Map<string, number>();
-    const deadline = Date.now() + 20_000;
-    let accepted: net.Socket | undefined;
-    while (accepted === undefined && Date.now() < deadline) {
-      if (server.exitCode !== null) {
-        throw new Error(`server exited with code ${server.exitCode}:\n${output()}`);
-      }
-      const socket = net.connect({ port, host: "127.0.0.1" });
-      const outcome = await new Promise<string>((resolve) => {
-        socket.once("connect", () => resolve("connect"));
-        socket.once("error", (error: NodeJS.ErrnoException) => resolve(error.code ?? "unknown"));
-      });
-      if (outcome === "connect") {
-        accepted = socket;
-      } else {
-        socket.destroy();
-        refusals.set(outcome, (refusals.get(outcome) ?? 0) + 1);
-        await delay(0);
-      }
-    }
+            // Hammer connect() until one succeeds. Everything before that must be
+            // refused — the socket is not bound yet — and the one that succeeds is the
+            // first connection this server ever accepted.
+            const refusals = new Map<string, number>();
+            const deadline = Date.now() + 20_000;
+            let accepted: net.Socket | undefined;
+            while (accepted === undefined && Date.now() < deadline) {
+              if (server.exitCode !== null) {
+                throw new Error(`server exited with code ${server.exitCode}:\n${output()}`);
+              }
+              const socket = net.connect({ port, host: "127.0.0.1" });
+              const outcome = await new Promise<string>((resolve) => {
+                socket.once("connect", () => resolve("connect"));
+                socket.once("error", (error: NodeJS.ErrnoException) =>
+                  resolve(error.code ?? "unknown"),
+                );
+              });
+              if (outcome === "connect") {
+                accepted = socket;
+              } else {
+                socket.destroy();
+                refusals.set(outcome, (refusals.get(outcome) ?? 0) + 1);
+                await delay(0);
+              }
+            }
 
-    if (accepted === undefined) {
-      throw new Error(`nothing ever accepted a connection on port ${port}:\n${output()}`);
-    }
+            if (accepted === undefined) {
+              throw new Error(`nothing ever accepted a connection on port ${port}:\n${output()}`);
+            }
 
-    let giveUp: NodeJS.Timeout | undefined;
-    try {
-      const reply = new Promise<string>((resolve, reject) => {
-        let received = "";
-        accepted.setEncoding("utf8");
-        accepted.on("data", (chunk: string) => {
-          received += chunk;
-          if (received.includes("\r\n\r\n")) resolve(received);
-        });
-        accepted.once("error", reject);
-        giveUp = setTimeout(
-          () =>
-            reject(
-              new Error(
-                "the first accepted connection was never answered — the listener is binding " +
-                  `before the application can serve. Refused before accept: ${
-                    [...refusals].map(([code, n]) => `${n}x ${code}`).join(", ") || "none"
-                  }\n${output()}`,
-              ),
-            ),
-          10_000,
-        );
-      });
-      accepted.write(
-        `GET /health HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
-      );
-      expect(await reply).toContain("HTTP/1.1 200");
-    } finally {
-      clearTimeout(giveUp);
-      accepted.destroy();
-    }
+            let giveUp: NodeJS.Timeout | undefined;
+            try {
+              const reply = new Promise<string>((resolve, reject) => {
+                let received = "";
+                accepted.setEncoding("utf8");
+                accepted.on("data", (chunk: string) => {
+                  received += chunk;
+                  if (received.includes("\r\n\r\n")) resolve(received);
+                });
+                accepted.once("error", reject);
+                giveUp = setTimeout(
+                  () =>
+                    reject(
+                      new Error(
+                        "the first accepted connection was never answered — the listener is binding " +
+                          `before the application can serve. Refused before accept: ${
+                            [...refusals].map(([code, n]) => `${n}x ${code}`).join(", ") || "none"
+                          }\n${output()}`,
+                      ),
+                    ),
+                  10_000,
+                );
+              });
+              accepted.write(
+                `GET /health HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`,
+              );
+              expect(await reply).toContain("HTTP/1.1 200");
+            } finally {
+              clearTimeout(giveUp);
+              accepted.destroy();
+            }
 
-    // Everything before the accept was refused, not accepted-and-dropped. An
-    // empty map would mean the server bound before the first attempt, which no
-    // observed run has done — but it is not the property under test, so it is
-    // the unexpected *codes* that are asserted on, not the count.
-    expect([...refusals.keys()].filter((code) => code !== "ECONNREFUSED")).toEqual([]);
-  }, 180_000);
+            // Everything before the accept was refused, not accepted-and-dropped. An
+            // empty map would mean the server bound before the first attempt, which no
+            // observed run has done — but it is not the property under test, so it is
+            // the unexpected *codes* that are asserted on, not the count.
+            expect([...refusals.keys()].filter((code) => code !== "ECONNREFUSED")).toEqual([]);
+          }),
+        ),
+      180_000,
+    );
+  });
 });

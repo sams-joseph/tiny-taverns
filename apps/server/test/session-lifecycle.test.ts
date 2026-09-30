@@ -1,7 +1,7 @@
+import { describe, expect } from "@effect/vitest";
 import { Actor, Conflict, CurrentActor, NotFound, type SessionId } from "@taverns/api";
-import { DateTime, Effect, Layer, ManagedRuntime } from "effect";
+import { DateTime, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -14,6 +14,7 @@ import { Encounters } from "../src/repo/Encounters.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * §1.4's session lifecycle, and the one thing it says that had never been
@@ -31,24 +32,21 @@ import { migratedDatabase } from "./support/database.js";
  * cannot represent it being false — that last one is what a client this
  * repository has never met is held to.
  */
-const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Accounts.layer,
-    Campaigns.layer,
-    Groups.layer,
-    Creatures.layer,
-    CampaignCreatorActors.layer,
-    EncounterCreatures.layer,
-    EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
-    Encounters.layer,
-    // Finishing a night now carries a fight still on the table, which
-    // appends to the log and rings the doorbell — so `Sessions` is a live
-    // repository too. `Layer` memoises by identity, so this is the same
-    // `PubSub` the other live layers here take.
-    Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
-  ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_session_lifecycle"))),
-);
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(
+  Accounts.layer,
+  Campaigns.layer,
+  Groups.layer,
+  Creatures.layer,
+  CampaignCreatorActors.layer,
+  EncounterCreatures.layer,
+  EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Encounters.layer,
+  // Finishing a night now carries a fight still on the table, which
+  // appends to the log and rings the doorbell — so `Sessions` is a live
+  // repository too. `Layer` memoises by identity, so this is the same
+  // `PubSub` the other live layers here take.
+  Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
+).pipe(Layer.provideMerge(migratedDatabase("taverns_test_session_lifecycle")));
 
 const withActor =
   (actor: Actor) =>
@@ -112,9 +110,9 @@ const currentSessionId = (campaignId: string) =>
     return rows[0]!.current_session_id;
   }).pipe(Effect.orDie);
 
-describe("finishing a session", () => {
-  it("clears the campaign's pointer at it, in the same transaction", async () => {
-    await runtime.runPromise(
+describeLayer("session-lifecycle", services, (it) => {
+  describe("finishing a session", () => {
+    it.effect("clears the campaign's pointer at it, in the same transaction", () =>
       Effect.gen(function* () {
         const { as, sessions, campaignId, sessionId } = yield* makeFixture;
         expect(yield* currentSessionId(campaignId)).toEqual(sessionId);
@@ -126,38 +124,36 @@ describe("finishing a session", () => {
         expect(yield* currentSessionId(campaignId)).toBeNull();
       }).pipe(Effect.orDie),
     );
-  }, 60_000);
 
-  it("lets the next session be started, numbered one past the last", async () => {
-    // The client half of the dead end, played out: with the pointer clear,
-    // `StartRunDialog` takes its `session === undefined` branch — read the
-    // numbers, invent the next one, point the campaign at it — and the DM is in
-    // session 13 rather than back in the one they just finished.
-    const numbers = await runtime.runPromise(
+    it.effect("lets the next session be started, numbered one past the last", () =>
       Effect.gen(function* () {
-        const { as, campaigns, sessions, campaignId, sessionId } = yield* makeFixture;
-        const endedAt = yield* DateTime.now;
-        yield* as(sessions.update(campaignId, sessionId, { endedAt }));
+        // The client half of the dead end, played out: with the pointer clear,
+        // `StartRunDialog` takes its `session === undefined` branch — read the
+        // numbers, invent the next one, point the campaign at it — and the DM is in
+        // session 13 rather than back in the one they just finished.
+        const numbers = yield* Effect.gen(function* () {
+          const { as, campaigns, sessions, campaignId, sessionId } = yield* makeFixture;
+          const endedAt = yield* DateTime.now;
+          yield* as(sessions.update(campaignId, sessionId, { endedAt }));
 
-        const campaign = yield* as(campaigns.findById(campaignId));
-        expect(campaign.currentSessionId).toBeNull();
+          const campaign = yield* as(campaigns.findById(campaignId));
+          expect(campaign.currentSessionId).toBeNull();
 
-        const highest = yield* as(sessions.list(campaignId)).pipe(
-          Effect.map((rows) => rows.reduce((most, row) => Math.max(most, row.number), 0)),
-        );
-        const next = yield* as(sessions.create(campaignId, { number: highest + 1 }));
-        yield* as(campaigns.update(campaignId, { currentSessionId: next.id }));
+          const highest = yield* as(sessions.list(campaignId)).pipe(
+            Effect.map((rows) => rows.reduce((most, row) => Math.max(most, row.number), 0)),
+          );
+          const next = yield* as(sessions.create(campaignId, { number: highest + 1 }));
+          yield* as(campaigns.update(campaignId, { currentSessionId: next.id }));
 
-        expect(yield* currentSessionId(campaignId)).toEqual(next.id);
-        return { finished: 12, next: next.number };
-      }).pipe(Effect.orDie),
+          expect(yield* currentSessionId(campaignId)).toEqual(next.id);
+          return { finished: 12, next: next.number };
+        }).pipe(Effect.orDie);
+
+        expect(numbers).toEqual({ finished: 12, next: 13 });
+      }),
     );
 
-    expect(numbers).toEqual({ finished: 12, next: 13 });
-  }, 60_000);
-
-  it("does not touch a campaign pointing somewhere else", async () => {
-    await runtime.runPromise(
+    it.effect("does not touch a campaign pointing somewhere else", () =>
       Effect.gen(function* () {
         const { as, campaigns, sessions, campaignId, sessionId } = yield* makeFixture;
         // A second, unfinished session — the pointer stays on it while its
@@ -171,16 +167,14 @@ describe("finishing a session", () => {
         expect(yield* currentSessionId(campaignId)).toEqual(other.id);
       }).pipe(Effect.orDie),
     );
-  }, 60_000);
-});
+  });
 
-describe("ending a fight is not finishing the night", () => {
-  it("leaves the DM in the session, able to start the next encounter", async () => {
-    // `EndRunDialog` offers two endings of different sizes and defaults to the
-    // smaller one. Collapsing them would take the session away from a DM who
-    // only closed a fight — so the distinction is pinned here rather than left
-    // to the dialog that documents it.
-    await runtime.runPromise(
+  describe("ending a fight is not finishing the night", () => {
+    it.effect("leaves the DM in the session, able to start the next encounter", () =>
+      // `EndRunDialog` offers two endings of different sizes and defaults to the
+      // smaller one. Collapsing them would take the session away from a DM who
+      // only closed a fight — so the distinction is pinned here rather than left
+      // to the dialog that documents it.
       Effect.gen(function* () {
         const { as, dm, sessions, campaignId, encounterId, nextEncounterId, sessionId } =
           yield* makeFixture;
@@ -200,75 +194,75 @@ describe("ending a fight is not finishing the night", () => {
         expect(second.endedAt).toBeNull();
       }).pipe(Effect.orDie),
     );
-  }, 60_000);
-});
+  });
 
-describe("a session carrying an end time", () => {
-  it("cannot be made the campaign's current session", async () => {
-    const failure = await runtime.runPromise(
+  describe("a session carrying an end time", () => {
+    it.effect("cannot be made the campaign's current session", () =>
       Effect.gen(function* () {
-        const { as, campaigns, sessions, campaignId, sessionId } = yield* makeFixture;
-        const endedAt = yield* DateTime.now;
-        yield* as(sessions.update(campaignId, sessionId, { endedAt }));
+        const failure = yield* Effect.gen(function* () {
+          const { as, campaigns, sessions, campaignId, sessionId } = yield* makeFixture;
+          const endedAt = yield* DateTime.now;
+          yield* as(sessions.update(campaignId, sessionId, { endedAt }));
 
-        return yield* as(campaigns.update(campaignId, { currentSessionId: sessionId })).pipe(
-          Effect.flip,
-        );
-      }).pipe(Effect.orDie),
+          return yield* as(campaigns.update(campaignId, { currentSessionId: sessionId })).pipe(
+            Effect.flip,
+          );
+        }).pipe(Effect.orDie);
+
+        // Not `NotFound`: the DM can see this session perfectly well, and the
+        // honest answer is that the night is over.
+        expect(failure).toBeInstanceOf(Conflict);
+      }),
     );
 
-    // Not `NotFound`: the DM can see this session perfectly well, and the
-    // honest answer is that the night is over.
-    expect(failure).toBeInstanceOf(Conflict);
-  }, 60_000);
-
-  it("is refused to a campaign that is not the caller's, as NotFound", async () => {
-    // The neighbouring refusal, so the `Conflict` above is known to be about
-    // the end time and not about reachability. Saying "it exists but is not
-    // yours" would itself be a disclosure.
-    const failure = await runtime.runPromise(
+    it.effect("is refused to a campaign that is not the caller's, as NotFound", () =>
       Effect.gen(function* () {
-        const mine = yield* makeFixture;
-        const theirs = yield* makeFixture;
+        // The neighbouring refusal, so the `Conflict` above is known to be about
+        // the end time and not about reachability. Saying "it exists but is not
+        // yours" would itself be a disclosure.
+        const failure = yield* Effect.gen(function* () {
+          const mine = yield* makeFixture;
+          const theirs = yield* makeFixture;
 
-        return yield* mine
-          .as(mine.campaigns.update(mine.campaignId, { currentSessionId: theirs.sessionId }))
-          .pipe(Effect.flip);
-      }).pipe(Effect.orDie),
+          return yield* mine
+            .as(mine.campaigns.update(mine.campaignId, { currentSessionId: theirs.sessionId }))
+            .pipe(Effect.flip);
+        }).pipe(Effect.orDie);
+
+        expect(failure).toBeInstanceOf(NotFound);
+        expect((failure as NotFound).resource).toEqual("session");
+      }),
     );
 
-    expect(failure).toBeInstanceOf(NotFound);
-    expect((failure as NotFound).resource).toEqual("session");
-  }, 60_000);
-
-  it("is refused by the schema, not only by the repository", async () => {
-    // The invariant stated directly, one level below every code path that
-    // could forget it: raw SQL, no repository, no actor. A client this server
-    // has never met cannot represent the bad state either.
-    //
-    // Both directions of the same pair — stamping the end time under a live
-    // pointer, and aiming the pointer at an already-finished session.
-    const errors = await runtime.runPromise(
+    it.effect("is refused by the schema, not only by the repository", () =>
       Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const { as, sessions, campaignId, sessionId } = yield* makeFixture;
+        // The invariant stated directly, one level below every code path that
+        // could forget it: raw SQL, no repository, no actor. A client this server
+        // has never met cannot represent the bad state either.
+        //
+        // Both directions of the same pair — stamping the end time under a live
+        // pointer, and aiming the pointer at an already-finished session.
+        const errors = yield* Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const { as, sessions, campaignId, sessionId } = yield* makeFixture;
 
-        const finishWithoutClearing = yield* sql`
-          update session set ended_at = now() where id = ${sessionId}
-        `.pipe(Effect.flip, Effect.map(describe_));
+          const finishWithoutClearing = yield* sql`
+            update session set ended_at = now() where id = ${sessionId}
+          `.pipe(Effect.flip, Effect.map(describe_));
 
-        // Now finish it properly, and try to point back at it.
-        const endedAt = yield* DateTime.now;
-        yield* as(sessions.update(campaignId, sessionId, { endedAt }));
-        const pointAtFinished = yield* sql`
-          update campaign set current_session_id = ${sessionId} where id = ${campaignId}
-        `.pipe(Effect.flip, Effect.map(describe_));
+          // Now finish it properly, and try to point back at it.
+          const endedAt = yield* DateTime.now;
+          yield* as(sessions.update(campaignId, sessionId, { endedAt }));
+          const pointAtFinished = yield* sql`
+            update campaign set current_session_id = ${sessionId} where id = ${campaignId}
+          `.pipe(Effect.flip, Effect.map(describe_));
 
-        return { finishWithoutClearing, pointAtFinished };
-      }).pipe(Effect.orDie),
+          return { finishWithoutClearing, pointAtFinished };
+        }).pipe(Effect.orDie);
+
+        expect(errors.finishWithoutClearing).toContain("campaign_current_session_id_fkey");
+        expect(errors.pointAtFinished).toContain("campaign_current_session_id_fkey");
+      }),
     );
-
-    expect(errors.finishWithoutClearing).toContain("campaign_current_session_id_fkey");
-    expect(errors.pointAtFinished).toContain("campaign_current_session_id_fkey");
-  }, 60_000);
+  });
 });

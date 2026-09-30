@@ -1,15 +1,16 @@
+import { describe, expect } from "@effect/vitest";
 import { type HobEvent, type SharedWorldId, TavernsApi } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime, Stream } from "effect";
+import { Context, Effect, Layer, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { migratedDatabase } from "./support/database.js";
 import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
 import { testServer } from "./support/http.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * Clearing a Shared World's Story So Far — `DELETE /worlds/:worldId/history/summary`,
@@ -37,14 +38,11 @@ const services = servicesOver(
   undefined,
   Hob.layer({ model: "scripted-story-clear" }).pipe(Layer.provide(model.layer)),
 );
-const runtime = ManagedRuntime.make(
-  applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(testServer),
-    Layer.provideMerge(services),
-    Layer.provideMerge(database),
-  ),
+const application = applicationOver(services, { quiet: true }).pipe(
+  Layer.provideMerge(testServer),
+  Layer.provideMerge(services),
+  Layer.provideMerge(database),
 );
-afterAll(() => runtime.dispose());
 
 const clientFor = (token: string) =>
   HttpApiClient.make(TavernsApi, {
@@ -53,61 +51,52 @@ const clientFor = (token: string) =>
 type Client = Effect.Success<ReturnType<typeof clientFor>>;
 
 const as = <A, E>(token: string, call: (client: Client) => Effect.Effect<A, E>) =>
-  runtime.runPromise(Effect.flatMap(clientFor(token), call).pipe(Effect.orDie));
+  Effect.flatMap(clientFor(token), call).pipe(Effect.orDie);
 
 /** The same call, answering the failure's tag rather than dying on it. */
 const refusal = <A, E extends { readonly _tag: string }>(
   token: string,
   call: (client: Client) => Effect.Effect<A, E>,
 ) =>
-  runtime.runPromise(
-    Effect.flatMap(clientFor(token), (client) =>
-      call(client).pipe(
-        Effect.match({ onFailure: (error) => error._tag, onSuccess: () => "succeeded" }),
-      ),
-    ).pipe(Effect.orDie),
-  );
+  Effect.flatMap(clientFor(token), (client) =>
+    call(client).pipe(
+      Effect.match({ onFailure: (error) => error._tag, onSuccess: () => "succeeded" }),
+    ),
+  ).pipe(Effect.orDie);
 
 const sql = <A>(query: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
-  runtime.runPromise(Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie));
-
-const issue = (name: string) =>
-  runtime.runPromise(Effect.flatMap(Accounts, (accounts) => accounts.issue(name)));
-
-let owner: string;
-let member: string;
-let stranger: string;
-let worldId: SharedWorldId;
+  Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie);
 
 /** The owner asks the world's Hob for a Story So Far, and keeps it. */
-const keepAStory = async (text: string) => {
-  const before = model.requests().length;
-  script.length = before;
-  script.push(
-    toolCallChunks("readStorySoFarSources", {}),
-    toolCallChunks("proposeStorySoFar", { text }),
-    textChunks("Here is the story so far."),
-  );
-  const collected = await as(owner, (client) =>
-    Effect.flatMap(
-      client.sharedWorldHob.ask({
-        params: { worldId },
-        payload: { text: "Draft the Story So Far." },
-      }),
-      (stream) => Stream.runCollect(stream),
-    ),
-  );
-  const events: ReadonlyArray<HobEvent> = Array.from(collected);
-  const began = events.find((event) => event.event === "began");
-  if (began?.event !== "began") throw new Error("no began event");
-  const { threadId, turnId } = began.data;
-  await as(owner, (client) =>
-    client.sharedWorldHob.accept({ params: { worldId, threadId, turnId }, payload: {} }),
-  );
-  return { requests: model.requests().slice(before) };
-};
+const keepAStory = (owner: string, worldId: SharedWorldId, text: string) =>
+  Effect.gen(function* () {
+    const before = model.requests().length;
+    script.length = before;
+    script.push(
+      toolCallChunks("readStorySoFarSources", {}),
+      toolCallChunks("proposeStorySoFar", { text }),
+      textChunks("Here is the story so far."),
+    );
+    const collected = yield* as(owner, (client) =>
+      Effect.flatMap(
+        client.sharedWorldHob.ask({
+          params: { worldId },
+          payload: { text: "Draft the Story So Far." },
+        }),
+        (stream) => Stream.runCollect(stream),
+      ),
+    );
+    const events: ReadonlyArray<HobEvent> = Array.from(collected);
+    const began = events.find((event) => event.event === "began");
+    if (began?.event !== "began") throw new Error("no began event");
+    const { threadId, turnId } = began.data;
+    yield* as(owner, (client) =>
+      client.sharedWorldHob.accept({ params: { worldId, threadId, turnId }, payload: {} }),
+    );
+    return { requests: model.requests().slice(before) };
+  });
 
-const summaryRows = () =>
+const summaryRows = (worldId: SharedWorldId) =>
   sql(
     (sql) =>
       sql<{ readonly status: string; readonly text: string }>`
@@ -117,98 +106,124 @@ const summaryRows = () =>
       `,
   );
 
-beforeAll(async () => {
-  const ownerIssued = await issue("Mara");
-  const memberIssued = await issue("Ivo");
-  const strangerIssued = await issue("Tamsin");
-  owner = ownerIssued.token;
-  member = memberIssued.token;
-  stranger = strangerIssued.token;
+const makeFixture = Effect.gen(function* () {
+  const accounts = yield* Accounts;
+  const ownerIssued = yield* accounts.issue("Mara");
+  const memberIssued = yield* accounts.issue("Ivo");
+  const strangerIssued = yield* accounts.issue("Tamsin");
+  const owner = ownerIssued.token;
+  const member = memberIssued.token;
+  const stranger = strangerIssued.token;
 
-  const world = await as(owner, (client) =>
+  const world = yield* as(owner, (client) =>
     client.sharedWorlds.create({ payload: { name: "The Cinder Marches" } }),
   );
-  worldId = world.id;
+  const worldId = world.id;
   // The member joins the world the shipped way: a campaign in it, and that
   // campaign's invitation, redeemed.
-  const campaign = await as(owner, (client) =>
+  const campaign = yield* as(owner, (client) =>
     client.sharedWorlds.createCampaign({
       params: { worldId },
       payload: { name: "Ashes of Bellwater", visibility: "shared" },
     }),
   );
-  const invite = await as(owner, (client) =>
+  const invite = yield* as(owner, (client) =>
     client.campaignInvites.create({
       params: { campaignId: campaign.id },
       payload: { label: "Ivo at Bellwater" },
     }),
   );
-  await as(member, (client) => client.join.redeem({ payload: { token: invite.token } }));
-  await as(owner, (client) =>
+  yield* as(member, (client) => client.join.redeem({ payload: { token: invite.token } }));
+  yield* as(owner, (client) =>
     client.sharedWorldHistory.create({
       params: { worldId },
       payload: { body: "The eastern bridge fell in the spring floods." },
     }),
   );
-  await keepAStory("The bridge fell, and the Marches are cut in two.");
-}, 60_000);
+  yield* keepAStory(owner, worldId, "The bridge fell, and the Marches are cut in two.");
+  return { owner, member, stranger, worldId };
+}).pipe(Effect.orDie);
 
-describe("clearing the Story So Far", () => {
-  it("is refused to a member who is not the owner, and to a stranger, as NotFound", async () => {
-    // The member can read it, which is what makes the refusal a boundary.
-    const read = await as(member, (client) =>
-      client.sharedWorldHistory.summary({ params: { worldId } }),
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "shared-world-story-clear.test/Fixture",
+) {}
+
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(application));
+
+describeLayer("shared-world-story-clear", shared, (it) => {
+  describe("clearing the Story So Far", () => {
+    it.effect("is refused to a member who is not the owner, and to a stranger, as NotFound", () =>
+      Effect.gen(function* () {
+        const { owner, member, stranger, worldId } = yield* Fixture;
+        // The member can read it, which is what makes the refusal a boundary.
+        const read = yield* as(member, (client) =>
+          client.sharedWorldHistory.summary({ params: { worldId } }),
+        );
+        expect(read?.text).toBe("The bridge fell, and the Marches are cut in two.");
+
+        expect(
+          yield* refusal(member, (client) =>
+            client.sharedWorldHistory.clearSummary({ params: { worldId } }),
+          ),
+        ).toBe("NotFound");
+        expect(
+          yield* refusal(stranger, (client) =>
+            client.sharedWorldHistory.clearSummary({ params: { worldId } }),
+          ),
+        ).toBe("NotFound");
+
+        const still = yield* as(owner, (client) =>
+          client.sharedWorldHistory.summary({ params: { worldId } }),
+        );
+        expect(still?.text).toBe("The bridge fell, and the Marches are cut in two.");
+      }),
     );
-    expect(read?.text).toBe("The bridge fell, and the Marches are cut in two.");
 
-    expect(
-      await refusal(member, (client) =>
-        client.sharedWorldHistory.clearSummary({ params: { worldId } }),
-      ),
-    ).toBe("NotFound");
-    expect(
-      await refusal(stranger, (client) =>
-        client.sharedWorldHistory.clearSummary({ params: { worldId } }),
-      ),
-    ).toBe("NotFound");
+    it.effect("leaves the world with none, keeps the predecessor, and leaves the Chronicle", () =>
+      Effect.gen(function* () {
+        const { owner, member, worldId } = yield* Fixture;
+        yield* as(owner, (client) =>
+          client.sharedWorldHistory.clearSummary({ params: { worldId } }),
+        );
 
-    const still = await as(owner, (client) =>
-      client.sharedWorldHistory.summary({ params: { worldId } }),
+        expect(
+          yield* as(member, (client) => client.sharedWorldHistory.summary({ params: { worldId } })),
+        ).toBeNull();
+        // Superseded, as a replacement leaves its predecessor.
+        expect(yield* summaryRows(worldId)).toEqual([
+          { status: "superseded", text: "The bridge fell, and the Marches are cut in two." },
+        ]);
+        const chronicle = yield* as(owner, (client) =>
+          client.sharedWorldHistory.list({ params: { worldId } }),
+        );
+        expect(chronicle.map((entry) => entry.body)).toEqual([
+          "The eastern bridge fell in the spring floods.",
+        ]);
+
+        // Clearing a world with none is a no-op, not an error.
+        yield* as(owner, (client) =>
+          client.sharedWorldHistory.clearSummary({ params: { worldId } }),
+        );
+        expect(yield* summaryRows(worldId)).toHaveLength(1);
+      }),
     );
-    expect(still?.text).toBe("The bridge fell, and the Marches are cut in two.");
-  }, 60_000);
 
-  it("leaves the world with none, keeps the predecessor, and leaves the Chronicle", async () => {
-    await as(owner, (client) => client.sharedWorldHistory.clearSummary({ params: { worldId } }));
-
-    expect(
-      await as(member, (client) => client.sharedWorldHistory.summary({ params: { worldId } })),
-    ).toBeNull();
-    // Superseded, as a replacement leaves its predecessor.
-    expect(await summaryRows()).toEqual([
-      { status: "superseded", text: "The bridge fell, and the Marches are cut in two." },
-    ]);
-    const chronicle = await as(owner, (client) =>
-      client.sharedWorldHistory.list({ params: { worldId } }),
+    it.effect("lets a new one be kept afterwards, read from the whole Chronicle again", () =>
+      Effect.gen(function* () {
+        const { owner, worldId } = yield* Fixture;
+        const { requests } = yield* keepAStory(owner, worldId, "The Marches remember the bridge.");
+        // With nothing current, the sources start from the first entry rather
+        // than after the cleared summary's coverage.
+        expect(JSON.stringify(requests)).toContain("The eastern bridge fell in the spring floods.");
+        const now = yield* as(owner, (client) =>
+          client.sharedWorldHistory.summary({ params: { worldId } }),
+        );
+        expect(now?.text).toBe("The Marches remember the bridge.");
+        expect((yield* summaryRows(worldId)).map((row) => row.status)).toEqual([
+          "superseded",
+          "accepted",
+        ]);
+      }),
     );
-    expect(chronicle.map((entry) => entry.body)).toEqual([
-      "The eastern bridge fell in the spring floods.",
-    ]);
-
-    // Clearing a world with none is a no-op, not an error.
-    await as(owner, (client) => client.sharedWorldHistory.clearSummary({ params: { worldId } }));
-    expect(await summaryRows()).toHaveLength(1);
-  }, 60_000);
-
-  it("lets a new one be kept afterwards, read from the whole Chronicle again", async () => {
-    const { requests } = await keepAStory("The Marches remember the bridge.");
-    // With nothing current, the sources start from the first entry rather
-    // than after the cleared summary's coverage.
-    expect(JSON.stringify(requests)).toContain("The eastern bridge fell in the spring floods.");
-    const now = await as(owner, (client) =>
-      client.sharedWorldHistory.summary({ params: { worldId } }),
-    );
-    expect(now?.text).toBe("The Marches remember the bridge.");
-    expect((await summaryRows()).map((row) => row.status)).toEqual(["superseded", "accepted"]);
-  }, 60_000);
+  });
 });
