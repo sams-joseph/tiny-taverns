@@ -39,6 +39,11 @@ export interface ScriptedImages {
   readonly layer: Layer.Layer<ImageModel>;
   /** Every request body, in order. */
   readonly requests: () => ReadonlyArray<Record<string, unknown>>;
+  /**
+   * Waits until `count` requests have arrived, so a test can act on a request
+   * being in flight without polling on a real clock.
+   */
+  readonly sent: (count: number) => Effect.Effect<void>;
   /** Queue the next replies; an empty queue answers `image`. */
   readonly next: (...replies: ReadonlyArray<ImageReply>) => void;
 }
@@ -58,6 +63,7 @@ export const scriptedImages = (options: {
 }): ScriptedImages => {
   const requests: Array<Record<string, unknown>> = [];
   const queue: Array<ImageReply> = [];
+  const waiting: Array<{ readonly count: number; readonly arrived: Deferred.Deferred<void> }> = [];
 
   const image = (request: HttpClientRequest.HttpClientRequest) =>
     json(request, 200, {
@@ -72,6 +78,9 @@ export const scriptedImages = (options: {
       const body = request.body;
       if (body._tag !== "Uint8Array") throw new Error("expected a JSON request body");
       requests.push(JSON.parse(new TextDecoder().decode(body.body)) as Record<string, unknown>);
+      for (const waiter of waiting) {
+        if (requests.length >= waiter.count) Deferred.doneUnsafe(waiter.arrived, Effect.void);
+      }
       const reply = queue.shift() ?? { kind: "image" };
       switch (reply.kind) {
         case "image":
@@ -98,6 +107,13 @@ export const scriptedImages = (options: {
 
   return {
     requests: () => requests,
+    sent: (count) =>
+      Effect.suspend(() => {
+        if (requests.length >= count) return Effect.void;
+        const arrived = Deferred.makeUnsafe<void>();
+        waiting.push({ count, arrived });
+        return Deferred.await(arrived);
+      }),
     next: (...replies) => {
       queue.push(...replies);
     },

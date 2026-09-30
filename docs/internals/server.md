@@ -5,7 +5,7 @@ This page covers `apps/server` and `packages/api` as a runtime: the Effect v4 id
 ## Workspace pins that are constraints
 
 - **Formatting is root-only Prettier** (`pnpm format` / `pnpm format:check`), not a turbo task. No package has a `format` script, so CI must name `format:check` as its own step. `.prettierignore` keeps `packages/design-system` and `.repos/` out of every pass.
-- **`effect`, `@effect/platform-node` and `@effect/sql-pg` are pinned exactly at `4.0.0-beta.102`.** Betas are not semver-stable; do not loosen to caret ranges, and bump them together.
+- **`effect`, `@effect/platform-node`, `@effect/sql-pg` and the server's `@effect/vitest` are pinned exactly at `4.0.0-beta.102`.** Betas are not semver-stable; do not loosen to caret ranges, and bump them together.
 - **`.repos/effect` is committed on purpose** at that tag; v4's published docs are thin. Start with `.repos/effect/MIGRATION.md` and `migration/*.md`.
 - **`pnpm-workspace.yaml` sets `msgpackr-extract: false` under `allowBuilds`.** `effect` v4 pulls `msgpackr` transitively; without the entry `pnpm install` exits 1 on the ignored build script.
 - **Vite and Vitest stay aligned** (Vitest 3 with Vite 6 in `apps/web` and `packages/ui`); Vitest 2 pulls Vite 5 and the mix produces duplicate-`vite` type errors.

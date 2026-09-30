@@ -29,6 +29,7 @@
     "sharp": "0.35.4"
   },
   "devDependencies": {
+    "@effect/vitest": "4.0.0-beta.102",
     "@taverns/eslint-config": "workspace:*",
     "@taverns/tsconfig": "workspace:*",
     "@types/node": "^22.10.2",
