@@ -1,13 +1,29 @@
 import { ClerkProvider, useAuth } from "@clerk/react";
-import { useEffect, useMemo, type PropsWithChildren, type ReactNode } from "react";
+import {
+  createContext,
+  use,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  type PropsWithChildren,
+  type ReactNode,
+} from "react";
 import { ClerkRequired } from "./ClerkRequired";
 import { publishableKey } from "./config";
-import { forgetHostedSession, publishHostedSession } from "./credential";
+import {
+  forgetHostedSession,
+  mountHostedSession,
+  publishHostedSession,
+  type HostedSessionClaim,
+} from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
 import { hostedAuthNavigation } from "./navigation";
 import { router } from "../routes";
 
 const navigation = hostedAuthNavigation(router.history);
+
+/** How many `HostedSessionScope`s enclose this point; the credential slot's tie-break. */
+const ScopeDepth = createContext(0);
 
 /**
  * Publishes a hosted session to the app: into React through the context, and
@@ -24,6 +40,13 @@ export function HostedSessionScope({
   session,
   children,
 }: PropsWithChildren<{ readonly session: HostedSession }>): ReactNode {
+  const owner = useId();
+  const depth = use(ScopeDepth) + 1;
+  const claim = useMemo<HostedSessionClaim>(
+    () => ({ owner, depth, session }),
+    [owner, depth, session],
+  );
+
   // Published *during render*, and that is the load-bearing part rather than a
   // shortcut. `api/atoms.ts` builds its client layer outside React and reads
   // the session through this slot; an atom's first read happens while a
@@ -31,10 +54,24 @@ export function HostedSessionScope({
   // effect — layout or passive — runs after the subtree has already asked. It
   // is a derived value rather than state, so writing the same thing on every
   // render is idempotent and safe under `StrictMode`'s double render.
-  publishHostedSession(session);
-  useEffect(() => forgetHostedSession, []);
+  publishHostedSession(claim);
 
-  return <HostedSessionContext value={session}>{children}</HostedSessionContext>;
+  // …and published again on every (re)mount, because `StrictMode` unmounts and
+  // remounts once in development without rendering in between: a scope that
+  // only forgot on unmount left the slot empty, and every request went out
+  // with no bearer until something re-rendered it. A layout effect, so the
+  // slot is back before any child's passive effect can send a request. Which
+  // of two nested scopes holds the slot is `credential.ts`'s rule.
+  useLayoutEffect(() => {
+    mountHostedSession(claim);
+    return () => forgetHostedSession(claim.owner);
+  }, [claim]);
+
+  return (
+    <ScopeDepth value={depth}>
+      <HostedSessionContext value={session}>{children}</HostedSessionContext>
+    </ScopeDepth>
+  );
 }
 
 /**
