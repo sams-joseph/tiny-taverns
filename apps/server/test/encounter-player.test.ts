@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -17,6 +16,7 @@ import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";
 import { aCharacterAt, admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **What a player is told about an encounter: its creatures' names and counts,
@@ -41,7 +41,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

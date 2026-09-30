@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type Character,
@@ -24,6 +23,7 @@ import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedImages } from "./support/imageModel.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **A character with no campaign at all** — `POST /me/characters` against the
@@ -51,7 +51,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

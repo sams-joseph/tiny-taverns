@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   asBackgroundOption,
   asClassOption,
@@ -27,6 +26,7 @@ import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The corpus writes actions and resources onto a fresh sheet** — the actions
@@ -49,7 +49,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

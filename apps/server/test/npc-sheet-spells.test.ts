@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -21,6 +20,7 @@ import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { aCharacterAt, admittedTo, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **An NPC sheet's spell picker is a character's, against the NPC's rules.**
@@ -40,7 +40,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

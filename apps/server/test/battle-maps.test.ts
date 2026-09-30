@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type BattleMap,
@@ -29,6 +28,7 @@ import { aCharacterAt, aGroupMemberAt, admittedTo, asDm } from "./support/actors
 import { migratedDatabase } from "./support/database.js";
 import { scriptedImages } from "./support/imageModel.js";
 import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **Every encounter has one battle map, and Hob draws its picture once, as the
@@ -80,7 +80,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

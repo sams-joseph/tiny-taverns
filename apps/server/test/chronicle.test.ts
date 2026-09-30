@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -19,6 +18,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aCharacterAt, admittedTo, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The whole record in one read, and a player told no more of it than of any
@@ -41,7 +41,7 @@ const database = migratedDatabase("taverns_test_chronicle");
 const services = servicesOver(database);
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

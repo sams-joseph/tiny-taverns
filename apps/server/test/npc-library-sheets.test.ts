@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -23,6 +22,7 @@ import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { asDm, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **A Library NPC's sheet is its owner's, and a copy takes it.**
@@ -43,7 +43,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignCharacterId,
@@ -17,6 +16,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aCharacterAt, admittedTo, asDm, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **An NPC's links: the creator's prep, gone with their target while the NPC
@@ -37,7 +37,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

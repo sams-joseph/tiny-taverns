@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -11,6 +10,7 @@ import { ClerkIdentityProvider } from "../src/ClerkIdentityProvider.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testIdentityInstance, TEST_ORIGIN } from "./support/identity.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The hosted sign-in path, end to end over HTTP, against a keypair this file
@@ -33,7 +33,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     // The same layer value, so it is memoised rather than built twice; this
     // only exposes `SqlClient` to the assertions below.

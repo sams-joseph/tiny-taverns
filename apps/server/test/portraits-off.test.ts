@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { type CampaignId, TavernsApi } from "@taverns/api";
 import { ConfigProvider, Context, Effect, Layer, ManagedRuntime, Option } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -13,6 +12,7 @@ import { ImageRecords } from "../src/repo/Images.js";
 import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **Portraits are opt-in, and OFF is the configuration CI runs.**
@@ -27,7 +27,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

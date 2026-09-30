@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -31,6 +30,7 @@ import { admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { MODERATION_TEXT, scriptedImages } from "./support/imageModel.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **Hob draws a portrait once, after a character is made, and whoever can see
@@ -100,7 +100,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

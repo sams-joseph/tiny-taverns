@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -24,6 +23,7 @@ import { GroupHistory } from "../src/repo/GroupHistory.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aCharacterAt, admittedTo, aGroupMemberAt, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **A player is told what kind of scene is on the table, and nothing of it.**
@@ -45,7 +45,7 @@ const database = migratedDatabase("taverns_test_player_scenes");
 const services = servicesOver(database);
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

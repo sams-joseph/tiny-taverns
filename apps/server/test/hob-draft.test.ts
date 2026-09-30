@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type AssistantThreadId,
@@ -35,6 +34,7 @@ import {
   textChunks,
   toolCallChunks,
 } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **Hob drafting a character with no campaign** — `/me/hob`, the account's own
@@ -78,7 +78,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

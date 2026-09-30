@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   ACT_TITLE_MAX,
   Actor,
@@ -17,6 +16,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Acts } from "../src/repo/Acts.js";
 import { admittedTo, aGroupMemberAt, aPlayerAt, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **A campaign's acts: the creator's to write, and a player's to read only
@@ -37,7 +37,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

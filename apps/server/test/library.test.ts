@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { Actor, type Creature, type CreatureId, CurrentActor, TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -12,6 +11,7 @@ import { Creatures } from "../src/repo/Creatures.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { items } from "./support/paging.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The Library: **where a monster is authored**, and the originals a campaign
@@ -53,7 +53,7 @@ const services = servicesOver(database);
  */
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

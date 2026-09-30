@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -27,6 +26,7 @@ import { ObjectStorage } from "../src/storage/ObjectStorage.js";
 import { aCharacterAt, admittedTo, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedImages } from "./support/imageModel.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The fight's board on a player's table: shown only while the fight is
@@ -68,7 +68,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
