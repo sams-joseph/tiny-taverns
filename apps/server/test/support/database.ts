@@ -5,7 +5,31 @@ import { SqlClient } from "effect/unstable/sql";
 import * as Database from "../../src/Database.js";
 import { DEV_DATABASE_URL } from "../../src/Config.js";
 
-const base = new URL(process.env.DATABASE_URL ?? DEV_DATABASE_URL);
+const UNSET = `
+DATABASE_URL is not set, so the server tests do not know which Postgres to use.
+
+  pnpm db:up
+  DATABASE_URL=${DEV_DATABASE_URL} pnpm -F server test
+
+Every test file force-drops and recreates a database of a fixed name, so the
+suite never falls back to the development default the way \`pnpm dev\` does: a
+run that loses the variable on the way (turbo drops what \`turbo.json\` does not
+pass through) would otherwise land on whatever answers on port 5433.
+`;
+
+/**
+ * The Postgres the suite was pointed at, required rather than defaulted.
+ *
+ * Thrown at import, so every database-backed file fails with this text before
+ * it touches anything.
+ */
+const requiredDatabaseUrl = (): string => {
+  const url = process.env.DATABASE_URL;
+  if (url === undefined || url === "") throw new Error(UNSET);
+  return url;
+};
+
+const base = new URL(requiredDatabaseUrl());
 
 const urlFor = (database: string): string => {
   const url = new URL(base);
