@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { provisionDatabase } from "./support/database.js";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import net from "node:net";
 import { once } from "node:events";
@@ -48,26 +48,44 @@ const ATTEMPT_TIMEOUT_MS = 2_000;
 /**
  * Compile once per run of this file, and never outside it.
  *
- * Both tests here execute `dist/`, and both need the guarantee above — that
+ * Both tests here execute the emit, and both need the guarantee above — that
  * they cannot pass against a stale or absent build. Hoisting the compile to a
  * lazy memo keeps it inside this file and unconditional on every run; it only
  * stops the second test paying for it twice.
+ *
+ * The emit goes to a fresh directory of its own, never `dist/`. CI runs
+ * `lint typecheck test build` in one turbo invocation, so `server:build` may be
+ * rewriting `dist/` at the very moment this file would delete and recompile it
+ * — and turbo would cache whichever half-written tree was left as the build's
+ * output. A new directory per run also needs no `rm` first: `tsc` never deletes
+ * an output whose source is gone, and the migration loader scans `migrations/`
+ * by directory, so a stale compiled migration left behind is a duplicate id
+ * that stops the boot (measured when the group architecture renamed one).
+ *
+ * It lives under this package's `node_modules/.cache` rather than the system
+ * temp directory because Node resolves the emit's bare imports by walking up
+ * from the file, so it must sit inside `apps/server`; `node_modules` is already
+ * ignored by git, the linters and the formatter. The emit is one level down so
+ * `Config`'s default storage root, `../.storage` from the emit, lands inside the
+ * same directory and is removed with it.
  */
-let compiled: Promise<unknown> | undefined;
+let compiled: Promise<string> | undefined;
 let scratch: Promise<string> | undefined;
 const databaseUrl = () => (scratch ??= provisionDatabase("taverns_test_start_smoke"));
+let buildRoot: string | undefined;
 const buildOnce = () =>
-  // `dist/` is removed first, exactly as the build script removes it: `tsc`
-  // never deletes an output whose source is gone, and the migration loader
-  // scans `dist/migrations` by directory — so a stale compiled migration is
-  // not dead weight, it is a duplicate id that stops the boot. Measured when
-  // the group architecture renamed one: the ledger held both spellings and
-  // `Migrator` refused to run at all.
-  (compiled ??= rm(path.join(appDir, "dist"), { recursive: true, force: true }).then(() =>
-    execFileAsync("node_modules/typescript/bin/tsc", ["-p", "tsconfig.build.json"], {
-      cwd: appDir,
-    }),
-  ));
+  (compiled ??= (async () => {
+    const cache = path.join(appDir, "node_modules", ".cache");
+    await mkdir(cache, { recursive: true });
+    buildRoot = await mkdtemp(path.join(cache, "start-smoke-"));
+    const outDir = path.join(buildRoot, "dist");
+    await execFileAsync(
+      "node_modules/typescript/bin/tsc",
+      ["-p", "tsconfig.build.json", "--outDir", outDir],
+      { cwd: appDir },
+    );
+    return path.join(outDir, "main.js");
+  })());
 
 /**
  * Ask the OS for a free port so parallel runs (and a locally running `dev`
@@ -89,12 +107,13 @@ async function freePort(): Promise<number> {
 
 const spawned: ChildProcess[] = [];
 
-/** Start `dist/main.js` under plain `node`, exactly as `pnpm -F server start` does. */
+/** Start the emitted `main.js` under plain `node`, as `pnpm -F server start` does `dist/main.js`. */
 function startServer(
+  main: string,
   port: number,
   databaseUrl: string,
 ): { server: ChildProcess; output: () => string } {
-  const server = spawn(process.execPath, ["dist/main.js"], {
+  const server = spawn(process.execPath, [main], {
     cwd: appDir,
     // Its own database, provisioned per file — never the developer's default.
     // See `provisionDatabase` for the near-miss that made this explicit.
@@ -109,7 +128,7 @@ function startServer(
   return { server, output: () => output };
 }
 
-/** Kill every child on every exit path, including assertion failures. */
+/** Kill every child on every exit path, including assertion failures, then drop the emit. */
 afterAll(async () => {
   for (const server of spawned) {
     if (server.exitCode !== null || server.killed) continue;
@@ -117,6 +136,7 @@ afterAll(async () => {
     await Promise.race([once(server, "exit"), delay(5_000)]);
     if (server.exitCode === null) server.kill("SIGKILL");
   }
+  if (buildRoot !== undefined) await rm(buildRoot, { recursive: true, force: true });
 });
 
 /**
@@ -129,7 +149,7 @@ afterAll(async () => {
  * real build output under the real runtime proves the emit is loadable.
  *
  * The `tsc` invocation stays *inside* the test on purpose. Compiling here is
- * what makes it impossible for this to pass against a stale or absent `dist/`;
+ * what makes it impossible for this to pass against a stale or absent build;
  * hand the compile to the build pipeline and the test's guarantee becomes a
  * guarantee about whatever happened to be on disk.
  *
@@ -167,11 +187,11 @@ afterAll(async () => {
  * that would be a change to the pipeline, deliberately not made here.
  */
 describe("production start (built output under plain node)", () => {
-  it("boots dist/main.js and answers GET /health", async () => {
-    await buildOnce();
+  it("boots the built main.js and answers GET /health", async () => {
+    const main = await buildOnce();
 
     const port = await freePort();
-    const { server, output } = startServer(port, await databaseUrl());
+    const { server, output } = startServer(main, port, await databaseUrl());
 
     const deadline = Date.now() + 20_000;
     let response: Response | undefined;
@@ -232,10 +252,10 @@ describe("production start (built output under plain node)", () => {
    * from a tight bound and a flaky test to lose.
    */
   it("answers the first connection it accepts, having refused every earlier one", async () => {
-    await buildOnce();
+    const main = await buildOnce();
 
     const port = await freePort();
-    const { server, output } = startServer(port, await databaseUrl());
+    const { server, output } = startServer(main, port, await databaseUrl());
 
     // Hammer connect() until one succeeds. Everything before that must be
     // refused — the socket is not bound yet — and the one that succeeds is the
