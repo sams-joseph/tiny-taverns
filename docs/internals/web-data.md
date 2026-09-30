@@ -28,7 +28,7 @@ The atom client layer is built outside React, so `auth/credential.ts` publishes 
 
 - **`HostedSessionScope` (`auth/AuthProvider.tsx`) publishes during render.** An atom's first read happens while a component renders, so a publish in any effect is too late. The value is derived, so publishing every render is idempotent. It publishes again in a layout effect on every (re)mount, because `StrictMode` unmounts and remounts in development without rendering, and a scope that only forgot on unmount sent every request without a bearer. Nested scopes each own a claim with their depth; the innermost mounted one holds the slot, as it provides the context.
 - **The slot defaults to `NO_HOSTED_SESSION`, the same value `HostedSessionContext` defaults to**, so with no provider both readers agree that nobody is signed in.
-- **A fixture for a screen that reads through atoms wraps in `HostedSessionScope`, not the raw `HostedSessionContext`**, or React and the atom layer disagree about who is signed in. (`SignedOutGate.test.tsx` uses the raw context; it reads through no atom.)
+- **A fixture for a screen that reads through atoms wraps in `HostedSessionScope`, not the raw `HostedSessionContext`**, or React and the atom layer disagree about who is signed in. The signed-out gate reads the slot too (the root route's `beforeLoad`, through `routerAuth`), so a raw context would not reach it either.
 
 ## Keys: writes name what they changed
 

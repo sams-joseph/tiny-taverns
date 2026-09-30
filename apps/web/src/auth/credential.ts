@@ -30,11 +30,16 @@ import { NO_HOSTED_SESSION, useHostedSession, type HostedSession } from "./hoste
  */
 export type CredentialPresence = "present" | "absent" | "unknown";
 
-export const useCredentialPresence = (): CredentialPresence => {
-  const { signedIn, loading } = useHostedSession();
-
-  if (signedIn) return "present";
-  return loading ? "unknown" : "absent";
+/**
+ * The rule, written once, for the root route's `beforeLoad` (which asks the
+ * slot below) and for `RoutedApp` in `App.tsx` (which asks React, to know when
+ * the router has to ask again).
+ */
+export const presenceOf = (
+  session: Pick<HostedSession, "signedIn" | "loading">,
+): CredentialPresence => {
+  if (session.signedIn) return "present";
+  return session.loading ? "unknown" : "absent";
 };
 
 /** Resolves a bearer token, or `undefined` when nobody is signed in. */
@@ -42,6 +47,9 @@ export type FetchCredential = () => Promise<string | undefined>;
 
 /** The half of a hosted session that decides a credential, and the only half. */
 type SessionCredential = Pick<HostedSession, "signedIn" | "fetchToken">;
+
+/** What the slot below holds: the credential, and whether the vendor has answered yet. */
+type PublishedSession = SessionCredential & Pick<HostedSession, "loading">;
 
 /**
  * The rule, written once, for both readers below — the hook React screens use,
@@ -86,7 +94,7 @@ export interface HostedSessionClaim {
   readonly owner: string;
   /** How many scopes enclose it, itself included; the deeper claim wins. */
   readonly depth: number;
-  readonly session: SessionCredential;
+  readonly session: PublishedSession;
 }
 
 /** The scopes that have mounted and not yet unmounted, by owner. */
@@ -141,6 +149,22 @@ export const forgetHostedSession = (owner: string): void => {
  */
 export const fetchCredential: FetchCredential = () =>
   credentialFrom(published?.session ?? NO_HOSTED_SESSION)();
+
+/**
+ * The slot, as the router sees it: `router.ts` hands this to every route as
+ * context, and the root route's `beforeLoad` asks it who is signed in.
+ *
+ * It is the slot rather than React because a `beforeLoad` runs outside React,
+ * and synchronous because the gate must never wait (`routes/__root.tsx` says
+ * why). The router does not hear the slot change; `RoutedApp` tells it.
+ */
+export interface RouterAuth {
+  readonly presence: () => CredentialPresence;
+}
+
+export const routerAuth: RouterAuth = {
+  presence: () => presenceOf(published?.session ?? NO_HOSTED_SESSION),
+};
 
 export const useCredential = (): FetchCredential => {
   const { signedIn, fetchToken } = useHostedSession();

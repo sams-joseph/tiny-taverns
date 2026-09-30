@@ -1,8 +1,11 @@
 import { RegistryProvider } from "@effect/atom-react";
-import { createBrowserHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createBrowserHistory, createRouter } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { RoutedApp } from "../App";
 import { HostedSessionScope } from "../auth/AuthProvider";
+import { publishHostedSession, routerAuth } from "../auth/credential";
+import { NO_HOSTED_SESSION, type HostedSession } from "../auth/hostedSession";
 import { routeTree } from "../routeTree.gen";
 import { TEST_SESSION } from "./session";
 
@@ -13,11 +16,34 @@ import { TEST_SESSION } from "./session";
  * `"signed-in"` is the default because that is what a screen test means: *the
  * app, as somebody who is entitled to be in it sees it*. It wraps the route in
  * `TEST_SESSION`, outside any `wrap` the test passes, so a test's own
- * `HostedSessionScope` is the inner one and wins. `"none"` is for the tests
- * that are about the gate itself, and for the join page, which is designed to
- * render with nobody signed in.
+ * `HostedSessionScope` is the inner one and wins. `"none"` is nobody signed in,
+ * for the homepage and the join page, which is designed to render with nobody
+ * signed in. A `HostedSession` is for the tests about the gate itself.
+ *
+ * **The gate asks this, not a `wrap`'s scope, on the first load.** The root
+ * route's `beforeLoad` reads the published session, and the router loads
+ * before anything renders, so a test whose own scope starts in a different
+ * state from this one would be gated on this one until the session next
+ * changed. A test that changes the session names where it starts here.
  */
-export type TestCredential = "signed-in" | "none";
+export type TestCredential = "signed-in" | "none" | HostedSession;
+
+const sessionFor = (credential: TestCredential): HostedSession => {
+  if (credential === "signed-in") return TEST_SESSION;
+  if (credential === "none") return NO_HOSTED_SESSION;
+  return credential;
+};
+
+/**
+ * The claim the harness publishes before the first load. As deep as a claim
+ * can be, so it takes the slot from any scope a previous render left mounted;
+ * never mounted itself, so the render's own scope takes the slot straight back.
+ */
+const beforeRender = (session: HostedSession) => ({
+  owner: "renderAt, before the first render",
+  depth: Number.POSITIVE_INFINITY,
+  session,
+});
 
 /**
  * Render the app at a URL, rather than rendering a screen by hand.
@@ -51,8 +77,8 @@ export type TestCredential = "signed-in" | "none";
  * globally by key, which is what makes the leak reach across files — the *atom*
  * is shared on purpose; the registry holding its value must not be.
  *
- * It is also the composition `main.tsx` renders, so this is the real tree
- * rather than a harness of its own.
+ * It is also the composition `main.tsx` renders, `RoutedApp` included, so this
+ * is the real tree rather than a harness of its own.
  */
 export const renderAt = async (
   path: string,
@@ -60,8 +86,11 @@ export const renderAt = async (
   credential: TestCredential = "signed-in",
 ): Promise<void> => {
   globalThis.history.replaceState(null, "", path);
+  const session = sessionFor(credential);
+  publishHostedSession(beforeRender(session));
   const router = createRouter({
     routeTree,
+    context: { auth: routerAuth },
     history: createBrowserHistory(),
     basepath: import.meta.env.BASE_URL,
     // Off in tests for the reason it is off in the app: nothing here has a
@@ -76,15 +105,9 @@ export const renderAt = async (
   await router.load();
   const tree = (
     <RegistryProvider>
-      <RouterProvider router={router} />
+      <RoutedApp router={router} />
     </RegistryProvider>
   );
   const wrapped = wrap === undefined ? tree : wrap(tree);
-  render(
-    credential === "signed-in" ? (
-      <HostedSessionScope session={TEST_SESSION}>{wrapped}</HostedSessionScope>
-    ) : (
-      <>{wrapped}</>
-    ),
-  );
+  render(<HostedSessionScope session={session}>{wrapped}</HostedSessionScope>);
 };

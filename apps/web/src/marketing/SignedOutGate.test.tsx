@@ -1,6 +1,6 @@
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HostedSessionContext, type HostedSession } from "../auth/hostedSession";
+import type { HostedSession } from "../auth/hostedSession";
 import { renderAt } from "../test/renderRoute";
 
 /**
@@ -35,10 +35,6 @@ const session = (over: Partial<HostedSession>): HostedSession => ({
   ...over,
 });
 
-const wrap = (hosted: HostedSession) => (tree: React.ReactNode) => (
-  <HostedSessionContext value={hosted}>{tree}</HostedSessionContext>
-);
-
 afterEach(cleanup);
 
 /** The homepage's own headline — nothing else in the product says it. */
@@ -48,14 +44,14 @@ const appNav = () => screen.queryByRole("navigation", { name: "Sections" });
 
 describe("the signed-out gate", () => {
   it("shows the homepage when nobody is signed in", async () => {
-    await renderAt(CAMPAIGN_LIST, wrap(session({})), "none");
+    await renderAt(CAMPAIGN_LIST, undefined, session({}));
 
     expect(marketing()).toBeInTheDocument();
     expect(appNav()).toBeNull();
   });
 
   it("shows the app to a hosted session", async () => {
-    await renderAt(CAMPAIGN_LIST, wrap(session({ configured: true, signedIn: true })), "none");
+    await renderAt(CAMPAIGN_LIST, undefined, session({ configured: true, signedIn: true }));
 
     expect(appNav()).toBeInTheDocument();
     expect(marketing()).toBeNull();
@@ -72,7 +68,7 @@ describe("the signed-out gate", () => {
    * under test: **neither page**, on purpose.
    */
   it("draws neither page while a configured provider is still deciding", async () => {
-    await renderAt(CAMPAIGN_LIST, wrap(session({ configured: true, loading: true })), "none");
+    await renderAt(CAMPAIGN_LIST, undefined, session({ configured: true, loading: true }));
 
     expect(marketing()).toBeNull();
     expect(appNav()).toBeNull();
@@ -89,7 +85,19 @@ describe("the signed-out gate", () => {
  */
 describe("the route that renders signed out", () => {
   it("still shows the invitation preview at /join/<token>", async () => {
-    await renderAt(`/join/${TOKEN}`, wrap(session({})), "none");
+    await renderAt(`/join/${TOKEN}`, undefined, session({}));
+
+    expect(marketing()).toBeNull();
+    expect(await screen.findByRole("heading", { name: "An invitation" })).toBeInTheDocument();
+  });
+
+  /**
+   * The exemption is checked before the credential, so the invitation opens
+   * at once whatever the vendor is doing — the half of the property a settled
+   * session cannot show.
+   */
+  it("does not wait on a provider that is still deciding", async () => {
+    await renderAt(`/join/${TOKEN}`, undefined, session({ configured: true, loading: true }));
 
     expect(marketing()).toBeNull();
     expect(await screen.findByRole("heading", { name: "An invitation" })).toBeInTheDocument();

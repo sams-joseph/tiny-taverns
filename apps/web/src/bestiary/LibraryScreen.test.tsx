@@ -408,7 +408,7 @@ describe("LibraryScreen", () => {
   it("says to sign in again when the session it has is refused", async () => {
     // **A session the server does not accept, not the absence of one.** A
     // visitor who is not signed in never reaches this route —
-    // `marketing/SignedOutGate.tsx` renders the homepage above every match —
+    // the root route's gate renders the homepage above every match —
     // so the reachable 401 is an ended or unverifiable session.
     server.routes.set(LIST, {
       status: 401,
