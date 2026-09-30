@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type AssistantThreadId,
@@ -24,6 +23,7 @@ import {
   textChunks,
   toolCallChunks,
 } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The creator's Hob plans the next night and starts acts, and only the
@@ -55,7 +55,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

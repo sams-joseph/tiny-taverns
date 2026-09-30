@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type AssistantThreadId,
@@ -22,6 +21,7 @@ import { Creatures } from "../src/repo/Creatures.js";
 import { admittedTo, aGroupMemberAt, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **An encounter's kind is on the encounter; its DM prep — tactics, treasure,
@@ -48,7 +48,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

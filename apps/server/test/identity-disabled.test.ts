@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { TavernsApi } from "@taverns/api";
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Option } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -11,6 +10,7 @@ import { IdentityProvider } from "../src/IdentityProvider.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testIdentityInstance } from "./support/identity.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The default configuration: no verification key, so no hosted sign-in.
@@ -27,7 +27,7 @@ const services = servicesOver(database, IdentityProvider.disabled);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

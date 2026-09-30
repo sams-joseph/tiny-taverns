@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   type Ability,
   ABILITY_KEYS,
@@ -43,6 +42,7 @@ import {
   textChunks,
   toolCallChunks,
 } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The creator's Hob drafts a new NPC for the Cast, and only the creator
@@ -81,7 +81,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

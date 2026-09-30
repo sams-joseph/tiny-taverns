@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -20,6 +19,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { admittedTo, aGroupMemberAt, anAccount, aPlayerAt } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The DM's planned order: a campaign's encounters in the order the table
@@ -43,7 +43,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

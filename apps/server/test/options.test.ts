@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   type BackgroundBody,
   type CharacterOption,
@@ -20,6 +19,7 @@ import { importClassProgression } from "../src/ruleset/progression.js";
 import { SYSTEM_OPTIONS, type SystemOption } from "../src/ruleset/systemOptions.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **A campaign can have its own classes, race and backgrounds, and
@@ -56,7 +56,7 @@ const services = servicesOver(database);
  */
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

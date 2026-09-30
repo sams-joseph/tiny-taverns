@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type CampaignId,
@@ -27,6 +26,7 @@ import { ObjectStorage, StorageKey } from "../src/storage/ObjectStorage.js";
 import { aCharacterAt, aGroupMemberAt, admittedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { MODERATION_TEXT, scriptedImages } from "./support/imageModel.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **Hob draws a campaign NPC's portrait once, when it joins the cast or — for
@@ -72,7 +72,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(ImageRecords.layer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),

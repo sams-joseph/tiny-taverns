@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { CampaignId, TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -9,6 +8,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The real application — the same `servicesOver`/`applicationOver` that
@@ -31,7 +31,7 @@ const services = servicesOver(database);
  */
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

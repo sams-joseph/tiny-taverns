@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import {
   Actor,
   type AssistantThreadId,
@@ -29,6 +28,7 @@ import {
   textChunks,
   toolCallChunks,
 } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * A Hob card's *Discard*, and the pointer a keep leaves for *Open it* — in each
@@ -62,7 +62,7 @@ const services = servicesOver(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

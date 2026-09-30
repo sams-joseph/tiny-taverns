@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { type CampaignId, type SharedWorldId, TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -8,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * **The three player-facing descriptions** — a campaign's and a Shared World's
@@ -24,7 +24,7 @@ const services = servicesOver(database);
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

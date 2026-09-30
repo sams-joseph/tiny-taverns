@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { type HobEvent, type SharedWorldId, TavernsApi } from "@taverns/api";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -10,6 +9,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { migratedDatabase } from "./support/database.js";
 import { type Round, scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * Clearing a Shared World's Story So Far — `DELETE /worlds/:worldId/history/summary`,
@@ -39,7 +39,7 @@ const services = servicesOver(
 );
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

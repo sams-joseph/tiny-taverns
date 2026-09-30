@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import { TavernsApi } from "@taverns/api";
 import { DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -9,6 +8,7 @@ import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedModel, textChunks, toolCallChunks } from "./support/model.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The Shared World promise as one public journey.
@@ -37,7 +37,7 @@ const assistant = Hob.layer({ model: "scripted-shared-world" }).pipe(Layer.provi
 const services = servicesOver(database, undefined, assistant);
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
   ),

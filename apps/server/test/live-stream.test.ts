@@ -1,4 +1,3 @@
-import { NodeHttpServer } from "@effect/platform-node";
 import type { CampaignId, EncounterRunId, LiveEvent, SessionId } from "@taverns/api";
 import { TavernsApi } from "@taverns/api";
 import { ConfigProvider, Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
@@ -9,6 +8,7 @@ import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { testServer } from "./support/http.js";
 
 /**
  * The live stream, end to end, through the client **derived from the same
@@ -47,7 +47,7 @@ const environment = Layer.succeed(
 
 const runtime = ManagedRuntime.make(
   applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provideMerge(testServer),
     Layer.provideMerge(services),
     Layer.provideMerge(database),
     // Outermost, so it covers the layers' construction and not only what runs
