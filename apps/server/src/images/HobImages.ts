@@ -75,34 +75,46 @@ import { renderImage } from "./render.js";
  * ### The job
  *
  * A service-owned `FiberSet`, so shutdown interrupts every job cleanly, and a
- * `Semaphore` of `PORTRAIT_CONCURRENCY` shared by every kind. Each job —
- * waiting for a permit included — runs under {@link JOB_TIMEOUT}: call the
- * image model at the kind's size, decode and resize with `sharp`, then store
- * every file and mark the row `ready` inside one transaction that holds the
- * row's lock (see `ImageRecords.store` for why that makes a delete mid-draw
- * safe). Any failure marks the row `failed` with its kind and enqueues the
- * prefix; provider text goes to the log only.
+ * `Semaphore` of `PORTRAIT_CONCURRENCY` shared by every kind. A job queues for
+ * a permit untimed; once it has one it stamps its row's `updated_at`
+ * (`ImageRecords.drawing`, which draws nothing if the row was deleted while
+ * it queued) and runs under {@link JOB_TIMEOUT}: call the image model at
+ * the kind's size, decode and resize with `sharp`, then store every file and
+ * mark the row `ready` inside one transaction that holds the row's lock (see
+ * `ImageRecords.store` for why that makes a delete mid-draw safe). Timing the
+ * queue as well would record a draw waiting behind slow ones as `timeout`
+ * without its request ever being sent. Any failure marks the row `failed`
+ * with its kind and enqueues the prefix; provider text goes to the log only.
  *
  * ### The loop
  *
- * At boot and every minute: rows of any kind still `generating` past
- * {@link STALE_AFTER_SECONDS} belong to a process that died and become
- * `interrupted`, and due `storage_deletion` rows are drained through
- * `ObjectStorage.deletePrefix`. The loop runs whenever storage is on, whether
- * or not generation is, because a deleted subject's files must go either way.
+ * At boot and every minute: rows of any kind still `generating`
+ * {@link STALE_AFTER_SECONDS} after they were created or last got a permit
+ * become `interrupted`, and due `storage_deletion` rows are drained through
+ * `ObjectStorage.deletePrefix`. The worker keeps the ids of the rows its jobs
+ * hold, queued or drawing, from hand-off until the job ends by any path, and
+ * the sweep passes over those, so a live job is never swept however long it
+ * queues. That assumes the one server process that started a row is the only
+ * one holding it; a row whose process died has no holder and is swept by
+ * age. The loop runs whenever storage is on, whether or not generation is,
+ * because a deleted subject's files must go either way.
  *
  * ### One instance
  *
  * The hand-off is in-process. A second server instance would draw its own
- * creations and sweep correctly (the sweep only touches rows older than any
- * live job can be), but replacing the hand-off with a `for update skip
- * locked` pickup over `generating` rows is the step for real horizontal scale.
+ * creations, but its sweep would not know the first instance's held rows and
+ * would call one queued there past {@link STALE_AFTER_SECONDS} `interrupted`.
+ * Replacing the hand-off with a `for update skip locked` pickup over
+ * `generating` rows is the step for real horizontal scale.
  */
 
 /** OpenAI says complex prompts may take up to two minutes. */
 export const JOB_TIMEOUT = Duration.seconds(150);
 
-/** Older than any job can live, with slack for a slow commit. */
+/**
+ * Longer than any draw runs after its permit, with slack for a slow commit.
+ * Only rows no live job of this process holds are swept.
+ */
 export const STALE_AFTER_SECONDS = 170;
 
 const LOOP_EVERY = Duration.minutes(1);
@@ -182,6 +194,8 @@ export class HobImages extends Context.Service<
         const urls = yield* ImageUrls;
         const model = yield* Effect.serviceOption(ImageModel);
         const jobs = yield* FiberSet.make<void, never>();
+        // Row ids of the jobs this process holds, queued or drawing.
+        const held = new Set<string>();
         // The loop and kicked drains, apart from the jobs so `idle` means
         // "no image is being drawn".
         const housekeeping = yield* FiberSet.make<void, never>();
@@ -215,6 +229,7 @@ export class HobImages extends Context.Service<
 
         const draw = (image: ImageModel["Service"], job: ImageJob) =>
           Effect.gen(function* () {
+            if (!(yield* records.drawing(job))) return;
             const drawn = yield* image.generate(job.prompt, IMAGE_KINDS[job.kind].size);
             const rendered = yield* renderImage(job.kind, drawn.bytes);
             const files = [
@@ -246,8 +261,11 @@ export class HobImages extends Context.Service<
               },
             );
           }).pipe(
-            Semaphore.withPermit(permits),
+            // The budget starts with the permit: timing the queue as well
+            // would record a draw waiting behind slow ones as `timeout`
+            // before its request was ever sent.
             Effect.timeout(timeout),
+            Semaphore.withPermit(permits),
             Effect.catchCause((cause) =>
               // Shutdown interrupts the job; the row stays `generating` and the
               // next sweep calls it `interrupted`.
@@ -287,7 +305,7 @@ export class HobImages extends Context.Service<
           ),
         );
 
-        const sweep = records.sweepStale(STALE_AFTER_SECONDS);
+        const sweep = Effect.suspend(() => records.sweepStale(STALE_AFTER_SECONDS, held));
 
         if (options.storageOn) {
           yield* Effect.all([sweep, drainDeletions]).pipe(
@@ -324,7 +342,14 @@ export class HobImages extends Context.Service<
                   limits: settings.limits,
                 });
                 if (job === undefined) return false;
-                yield* FiberSet.run(jobs, draw(image, job));
+                yield* FiberSet.run(
+                  jobs,
+                  Effect.acquireUseRelease(
+                    Effect.sync(() => held.add(job.id)),
+                    () => draw(image, job),
+                    () => Effect.sync(() => held.delete(job.id)),
+                  ),
+                );
                 return true;
               }).pipe(
                 Effect.catchCause((cause) =>

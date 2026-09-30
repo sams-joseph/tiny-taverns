@@ -660,7 +660,7 @@ describe("when there is no portrait", () => {
     // that never answers — so the outcome cannot depend on how fast the
     // machine is. The shared worker keeps the production timeout.
     const hanging = scriptedImages({ apiUrl: OPENAI, model: MODEL });
-    hanging.next({ kind: "hang" });
+    hanging.next({ kind: "hang" }, { kind: "hang" });
     const created = await sql(
       (sql) => sql<{ readonly id: CharacterId }>`
         insert into character ${sql.insert({
@@ -898,7 +898,8 @@ describe("crashes and deletes in the middle of a draw", () => {
       (sql) => sql<{ readonly storage_prefix: string }>`
         update character_portrait set
           state = 'generating', failure = null, finished_at = null, prompt = 'x', model = 'm',
-          created_at = now() - interval '10 minutes'
+          created_at = now() - interval '10 minutes',
+          updated_at = now() - interval '10 minutes'
         where character_id = ${character.id}
         returning storage_prefix
       `,
