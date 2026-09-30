@@ -12,9 +12,6 @@ concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
-
 # One job per suite, each on its own runner. Run together on one 4-vCPU runner,
 # the web and server suites contended for the same cores, and that contention
 # is what pushed their timing-sensitive tests past their budgets.
