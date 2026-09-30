@@ -1,0 +1,34 @@
+# Taverns: the gate runs the checks CI runs (.github/workflows/ci.yml), against a
+# database it owns. no-mistakes reads `commands` from the default branch's copy
+# of this file only.
+commands:
+  prepare: pnpm install --frozen-lockfile
+  lint: pnpm turbo run lint typecheck && pnpm format:check
+  # scripts/with-private-postgres.sh starts a throwaway Postgres 18 on a free
+  # port (never 5433), runs its arguments with DATABASE_URL pointed at it, then
+  # stops that Postgres and deletes its data. turbo.json passes DATABASE_URL
+  # through to `test`.
+  test: scripts/with-private-postgres.sh sh -c 'pnpm turbo run build test --continue && pnpm -F web e2e'
+
+test:
+  instructions: |
+    Databases: never connect to 127.0.0.1:5433 or to any Postgres you did not start.
+    5433 is the maintainer's development database, and a past gate run wrote an
+    account into it. Every server command (tests, `pnpm -F server token:issue`,
+    `migrate`, the importers, `tsx src/main.ts`) must run under
+    scripts/with-private-postgres.sh, which sets DATABASE_URL to a Postgres of its
+    own; never rely on the default in apps/server/src/Config.ts, which is 5433.
+    Run each command inside one invocation of the script, since the database is
+    gone when it exits. Never run `pnpm db:up`, `db:down`, `db:reset` or
+    `db:reset:fresh`.
+    Ports: 3000, 5173 and 5433 belong to the maintainer's running `pnpm dev`. Never
+    use, probe or stop those servers. Use free ports only, and never stop a process
+    you did not start (no pkill, no killall, no kill by name or pattern). Stop only
+    PIDs you recorded at spawn.
+    Models: never call a real model or image API. Leave HOB_API_URL, HOB_MODEL and
+    PORTRAIT_API_URL unset, or point them at the test suite's scripted stubs.
+    Clerk: never create, change or delete a Clerk user; sign in only as the two
+    existing `+clerk_test` users the way `pnpm -F web e2e:auth` does. Skip
+    `e2e:auth` when the CLERK_* keys are absent.
+    Scratch: keep data directories under the run worktree's .scratch/, not /tmp
+    (a uid-wide quota there has filled during a server suite run).

@@ -19,6 +19,7 @@
     "db:reset": "docker compose down -v && docker compose up -d --wait"
   },
   "devDependencies": {
+    "@embedded-postgres/linux-x64": "18.3.0-beta.17",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"

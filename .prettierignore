@@ -5,6 +5,8 @@ coverage
 pnpm-lock.yaml
 .claude
 .repos
+# Throwaway files: scripts/with-private-postgres.sh keeps its Postgres data here.
+.scratch
 # The designers' delivery, kept byte-for-byte (see packages/design-system/PORT-NOTES.md).
 packages/design-system
 # The @AGENTS.md pointer, kept in its exact two-line form by firstmate's fm-ensure-agents-md.sh.

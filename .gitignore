@@ -15,3 +15,5 @@ test-results/
 playwright-report/
 test-results-auth/
 playwright-report-auth/
+# Throwaway files: scripts/with-private-postgres.sh keeps its Postgres data here.
+.scratch/

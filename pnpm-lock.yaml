@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@embedded-postgres/linux-x64':
+        specifier: 18.3.0-beta.17
+        version: 18.3.0-beta.17
       prettier:
         specifier: ^3.4.2
         version: 3.9.6
@@ -609,6 +612,12 @@ packages:
     resolution: {integrity: sha512-02a+fNfECWCZIZcgHl7OLQN2jZj42gq90EdwdnvR3KA6GLGypY02swABS4zFtaW9H80rTa0ukqVnTdcO/DT5GQ==}
     peerDependencies:
       effect: ^4.0.0-beta.102
+
+  '@embedded-postgres/linux-x64@18.3.0-beta.17':
+    resolution: {integrity: sha512-8orSD6NNopSLtjqir4dWQBrj+g8j1eJjWd9mB60A3xbWMzIBIPQpzT7XzbacW9YFSl/DejOLnRXfff+Wr13Tgw==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [linux]
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -4333,6 +4342,8 @@ snapshots:
       pg-types: 4.1.0
     transitivePeerDependencies:
       - pg-native
+
+  '@embedded-postgres/linux-x64@18.3.0-beta.17': {}
 
   '@emnapi/runtime@1.11.3':
     dependencies:

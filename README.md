@@ -393,7 +393,9 @@ Vitest runs in every workspace project. Each has at least one real, passing test
 
 **The server's database tests need a Postgres and `DATABASE_URL` naming it** — for the
 Docker one, `pnpm db:up`, then
-`DATABASE_URL=postgres://taverns:taverns@127.0.0.1:5433/taverns pnpm -F server test`. They
+`DATABASE_URL=postgres://taverns:taverns@127.0.0.1:5433/taverns pnpm -F server test`. On
+Linux x64 without Docker, `scripts/with-private-postgres.sh pnpm -F server test` runs them
+against a throwaway Postgres 18 of its own on a free port, and removes it afterwards. They
 run against a real Postgres — the schema is Postgres dialect and a stand-in would not
 exercise it — and each test file creates its own throwaway database. Unlike `pnpm dev`, the
 suite has no default database: each file force-drops a database of a fixed name, so it
@@ -421,4 +423,7 @@ environment, and skips without them (same README).
 then `pnpm turbo run lint typecheck test build` and `pnpm format:check`. A second job runs
 the web Playwright suites and uploads their reports when they fail. The authenticated suite
 reads the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
-without them (a fork's pull request) it is skipped with a notice.
+without them (a fork's pull request) it is skipped with a notice. `.no-mistakes.yaml` pins
+the same commands for the no-mistakes gate, with its tests under
+`scripts/with-private-postgres.sh` so they never reach the development database; a change
+to what CI runs changes both.
