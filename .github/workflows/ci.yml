@@ -6,14 +6,50 @@ on:
   pull_request:
     branches: [main]
 
+# A newer push to a pull request cancels its older run; every main push runs to
+# the end, so back-to-back merges each keep their own verdict.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# One job per suite, each on its own runner. Run together on one 4-vCPU runner,
+# the web and server suites contended for the same cores, and that contention
+# is what pushed their timing-sensitive tests past their budgets.
 jobs:
-  ci:
+  checks:
     runs-on: ubuntu-latest
 
-    # The server's repository and migration tests run against a real Postgres —
-    # the schema is Postgres dialect, and they fail loudly rather than skipping
-    # when it is missing. The suite refuses to run without DATABASE_URL, and
-    # turbo passes it through to `test` (turbo.json), so it is named here.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint, typecheck, build
+        run: pnpm turbo run lint typecheck build
+
+      # Prettier is a root-only script, not a turbo task — so it has to be named
+      # here or nothing checks it. It was not, and six files had drifted.
+      - name: Check formatting
+        run: pnpm format:check
+
+  # The server's repository and migration tests run against a real Postgres —
+  # the schema is Postgres dialect, and they fail loudly rather than skipping
+  # when it is missing. The suite refuses to run without DATABASE_URL, and
+  # turbo passes it through to `test` (turbo.json), so it is named here.
+  server-test:
+    runs-on: ubuntu-latest
+
     env:
       DATABASE_URL: postgres://taverns:taverns@127.0.0.1:5433/taverns
 
@@ -42,19 +78,36 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint, typecheck, test, build
-        run: pnpm turbo run lint typecheck test build
+      - name: Test the server
+        run: pnpm turbo run test --filter=server
 
-      # Prettier is a root-only script, not a turbo task — so it has to be named
-      # here or nothing checks it. It was not, and six files had drifted.
-      - name: Check formatting
-        run: pnpm format:check
+  web-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test the web app and the shared packages
+        run: pnpm turbo run test --filter=web --filter=@taverns/ui --filter=@taverns/api
 
   # The web Playwright suites (`apps/web/e2e/README.md`). The layout suite is
   # Chromium over the fixture maps and needs neither Postgres nor the server;
@@ -88,7 +141,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies

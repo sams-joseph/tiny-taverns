@@ -89,7 +89,8 @@ same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI
 
 ## Prerequisites
 
-- **Node** >= 22.13 (pnpm's own floor; developed on Node 26, CI runs Node 24)
+- **Node** >= 22.13 (pnpm's own floor; developed on Node 26, CI runs the version in
+  `.node-version`)
 - **pnpm** (version is pinned via the root `package.json` `packageManager` field; run
   `corepack enable` to have the right version selected automatically)
 - **Docker**, for the development database
@@ -419,10 +420,14 @@ environment, and skips without them (same README).
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` installs pnpm + Node, runs `pnpm install --frozen-lockfile`,
-then `pnpm turbo run lint typecheck test build` and `pnpm format:check`. A second job runs
-the web Playwright suites and uploads their reports when they fail. The authenticated suite
-reads the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
+`.github/workflows/ci.yml` runs four jobs in parallel, each on its own runner, after
+installing pnpm, the Node in `.node-version`, and `pnpm install --frozen-lockfile`:
+`checks` runs `pnpm turbo run lint typecheck build` and `pnpm format:check`; `server-test`
+runs the server suite against a Postgres service; `web-test` runs the web, `@taverns/ui` and
+`@taverns/api` suites; and `e2e` runs the web Playwright suites and uploads their reports
+when they fail. A newer push to a pull request cancels that pull request's older run; a
+push to `main` always runs to the end. The authenticated suite reads the
+`CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
 without them (a fork's pull request) it is skipped with a notice. `.no-mistakes.yaml` pins
 the same commands for the no-mistakes gate, with its tests under
 `scripts/with-private-postgres.sh` so they never reach the development database; a change
