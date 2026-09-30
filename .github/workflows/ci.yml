@@ -12,6 +12,15 @@ concurrency:
   group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Turbo's local cache is kept between runs, one per job, so a task whose inputs
+# have not changed replays its logs and outputs instead of running. A save is
+# keyed by commit and a run restores the newest save for the same lockfile.
+# `server#test` is never cached (turbo.json): its result depends on the
+# database. Entries a week old are dropped so a restore stays small; a task
+# that still hits them simply runs once and is saved again.
+env:
+  TURBO_CACHE_DIR: ${{ github.workspace }}/.turbo/cache
+
 # One job per suite, each on its own runner. Run together on one 4-vCPU runner,
 # the web and server suites contended for the same cores, and that contention
 # is what pushed their timing-sensitive tests past their budgets.
@@ -34,6 +43,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore turbo's cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TURBO_CACHE_DIR }}
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Drop cache entries older than a week
+        run: find "$TURBO_CACHE_DIR" -type f -mtime +7 -delete 2>/dev/null || true
 
       - name: Lint, typecheck, build
         run: pnpm turbo run lint typecheck build
@@ -84,6 +103,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore turbo's cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TURBO_CACHE_DIR }}
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Drop cache entries older than a week
+        run: find "$TURBO_CACHE_DIR" -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Test the server
         run: pnpm turbo run test --filter=server
 
@@ -105,6 +134,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore turbo's cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TURBO_CACHE_DIR }}
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Drop cache entries older than a week
+        run: find "$TURBO_CACHE_DIR" -type f -mtime +7 -delete 2>/dev/null || true
 
       - name: Test the web app and the shared packages
         run: pnpm turbo run test --filter=web --filter=@taverns/ui --filter=@taverns/api
@@ -146,6 +185,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore turbo's cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TURBO_CACHE_DIR }}
+          key: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Drop cache entries older than a week
+        run: find "$TURBO_CACHE_DIR" -type f -mtime +7 -delete 2>/dev/null || true
 
       - name: Read the Playwright version
         id: playwright
