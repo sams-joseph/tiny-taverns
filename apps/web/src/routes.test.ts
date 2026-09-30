@@ -10,6 +10,7 @@ import {
 import { createBrowserHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
+import { routerAuth } from "./auth/credential";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -38,7 +39,11 @@ const ENCOUNTER_ID = Schema.decodeSync(EncounterId)("2b1f2a1e-0000-4000-8000-000
 const SEAT_ID = Schema.decodeSync(CampaignCharacterId)("2b1f2a1e-0000-4000-8000-000000000951");
 
 const routerAt = (path: string) =>
-  createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
+  createRouter({
+    routeTree,
+    context: { auth: routerAuth },
+    history: createMemoryHistory({ initialEntries: [path] }),
+  });
 
 /**
  * Where a path lands: the id of the deepest route that matched, and the params
@@ -169,7 +174,11 @@ describe("the route table", () => {
     // `history.createHref` over the built location is exactly what `Link`
     // renders, and what `campaign/InviteDialog.tsx` resolves against the page.
     globalThis.history.replaceState(null, "", "/");
-    const router = createRouter({ routeTree, history: createBrowserHistory() });
+    const router = createRouter({
+      routeTree,
+      context: { auth: routerAuth },
+      history: createBrowserHistory(),
+    });
     const href = router.history.createHref(
       router.buildLocation({ to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" } })
         .publicHref,
@@ -182,6 +191,7 @@ describe("the route table", () => {
     // `example.com/taverns/` hands out links a stranger can open there.
     const router = createRouter({
       routeTree,
+      context: { auth: routerAuth },
       basepath: "/taverns/",
       history: createMemoryHistory({ initialEntries: ["/taverns/campaigns"] }),
     });
@@ -199,7 +209,11 @@ describe("the route table", () => {
     // A reload is a new router over the same address bar: nothing but the URL
     // survives it, so both must land on the fight the URL names.
     for (let load = 0; load < 2; load++) {
-      const router = createRouter({ routeTree, history: createBrowserHistory() });
+      const router = createRouter({
+        routeTree,
+        context: { auth: routerAuth },
+        history: createBrowserHistory(),
+      });
       await router.load();
       const leaf = router.state.matches.at(-1);
       expect(leaf?.fullPath).toBe("/campaigns/$campaignId/sessions/$sessionId/runs/$runId");

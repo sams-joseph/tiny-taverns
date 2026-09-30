@@ -1,4 +1,5 @@
 import { createRouter } from "@tanstack/react-router";
+import { routerAuth } from "./auth/credential";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -36,9 +37,14 @@ import { routeTree } from "./routeTree.gen";
  *
  * `scrollRestoration` restores the scroll on back and forward, and scrolls to
  * the element a `Link`'s `hash` names.
+ *
+ * `context` is where the root route asks who is signed in
+ * (`routes/__root.tsx`). The root declares it, so no router, a test's
+ * included, can be built without one.
  */
 export const router = createRouter({
   routeTree,
+  context: { auth: routerAuth },
   basepath: import.meta.env.BASE_URL,
   scrollRestoration: true,
   defaultPreload: false,

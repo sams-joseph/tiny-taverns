@@ -52,13 +52,27 @@ const press = async (name: string): Promise<void> => {
   });
 };
 
+/** The gate's first answer is `renderAt`'s, so it starts where the vendor does. */
 const at = (path: string, initial: HostedSession) =>
-  renderAt(path, (tree) => <Vendor initial={initial}>{tree}</Vendor>, "none");
+  renderAt(path, (tree) => <Vendor initial={initial}>{tree}</Vendor>, initial);
 
 const marketing = () => screen.queryByRole("heading", { name: /Run the fight/ });
 const appNav = () => screen.queryByRole("navigation", { name: "Sections" });
 
 afterEach(cleanup);
+
+describe("the vendor's first answer", () => {
+  it("opens the app when a deciding provider answers signed in", async () => {
+    await at("/campaigns", session({ configured: true, loading: true }));
+    expect(marketing()).toBeNull();
+    expect(appNav()).toBeNull();
+
+    await press("sign in");
+
+    expect(appNav()).toBeInTheDocument();
+    expect(marketing()).toBeNull();
+  });
+});
 
 describe("signing out", () => {
   it("lands on the marketing page", async () => {
