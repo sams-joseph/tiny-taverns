@@ -30,5 +30,8 @@ test:
     Clerk: never create, change or delete a Clerk user; sign in only as the two
     existing `+clerk_test` users the way `pnpm -F web e2e:auth` does. Skip
     `e2e:auth` when the CLERK_* keys are absent.
-    Scratch: keep data directories under the run worktree's .scratch/, not /tmp
-    (a uid-wide quota there has filled during a server suite run).
+    Scratch: write every temporary file, log and data directory under the run
+    worktree's .scratch/, which git ignores: never /tmp (a uid-wide quota there
+    has filled during a server suite run), and never anywhere else in the
+    worktree, where a later step can commit it (a gate run once shipped a
+    root-level .s4.tmp that way).
