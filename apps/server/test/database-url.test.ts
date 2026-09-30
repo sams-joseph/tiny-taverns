@@ -12,11 +12,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * pointed the suite at a private Postgres landed on somebody else's database,
  * where every file force-drops a database of a fixed name.
  */
-const turboJson: {
-  readonly tasks: Record<string, { readonly passThroughEnv?: ReadonlyArray<string> }>;
-} = JSON.parse(
+type TurboTask = { readonly cache?: boolean; readonly passThroughEnv?: ReadonlyArray<string> };
+const turboJson: { readonly tasks: Record<string, TurboTask> } = JSON.parse(
   readFileSync(fileURLToPath(new URL("../../../turbo.json", import.meta.url)), "utf8"),
-) as { readonly tasks: Record<string, { readonly passThroughEnv?: ReadonlyArray<string> }> };
+) as { readonly tasks: Record<string, TurboTask> };
+
+/**
+ * `server#test` replaces the generic `test` for this package rather than
+ * merging with it, so both must name the variables.
+ */
+const serverTestTasks = ["test", "server#test"] as const;
 
 describe("the database the suite runs against", () => {
   afterEach(() => {
@@ -24,8 +29,16 @@ describe("the database the suite runs against", () => {
     vi.resetModules();
   });
 
-  it("reaches the suite through turbo", () => {
-    expect(turboJson.tasks.test?.passThroughEnv).toContain("DATABASE_URL");
+  it.each(serverTestTasks)("reaches the suite through turbo's %s", (task) => {
+    expect(turboJson.tasks[task]?.passThroughEnv).toContain("DATABASE_URL");
+  });
+
+  /**
+   * CI keeps turbo's cache between runs, and a replayed pass says nothing about
+   * the database this run would have met: no input turbo hashes can see it.
+   */
+  it("is never answered from turbo's cache", () => {
+    expect(turboJson.tasks["server#test"]?.cache).toBe(false);
   });
 
   it.each([undefined, ""])("refuses to run when DATABASE_URL is %j", async (value) => {
@@ -33,8 +46,8 @@ describe("the database the suite runs against", () => {
     vi.resetModules();
     await expect(import("./support/database.js")).rejects.toThrow(/DATABASE_URL is not set/);
   });
-  it("passes a run's database prefix through turbo too", () => {
-    expect(turboJson.tasks.test?.passThroughEnv).toContain("TAVERNS_TEST_DATABASE_PREFIX");
+  it.each(serverTestTasks)("passes a run's database prefix through turbo's %s too", (task) => {
+    expect(turboJson.tasks[task]?.passThroughEnv).toContain("TAVERNS_TEST_DATABASE_PREFIX");
   });
 });
 
