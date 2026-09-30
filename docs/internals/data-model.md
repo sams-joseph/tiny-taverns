@@ -99,6 +99,6 @@ A night keeps two things beside its detail (`0070_session_entry.ts`). `session.s
 
 ## Database tests
 
-`apps/server/test/support/database.ts` creates a private database per test file and turns a connection failure into a message naming `pnpm db:up`. Do not make these tests skip; a silently skipped database test has hidden shipped defects before. `start.smoke.test.ts` provisions its own database through `DATABASE_URL`, so a spawned `dist/main.js` never migrates the developer's default.
+`apps/server/test/support/database.ts` creates a private database per test file and turns a connection failure into a message naming `pnpm db:up`. Do not make these tests skip; a silently skipped database test has hidden shipped defects before. `start.smoke.test.ts` provisions its own database through `DATABASE_URL`, so the server build it spawns never migrates the developer's default.
 
 `apps/server/vitest.config.ts` caps the suite at `maxWorkers: 8`: every file applies the full ledger on its first runtime build, and core-count parallelism ran 30 simultaneous DDL transactions that exhausted PostgreSQL's shared lock table (SQLSTATE `53200`, `max_locks_per_transaction`) while connections were plentiful. The cap lives in the checked-in config rather than in a tuned database. `testTimeout` and `hookTimeout` are both `60_000` because the same `migratedDatabase` cost lands on a hook or a test body depending on whether a file has a `beforeAll`; `start.smoke.test.ts` keeps its own `180_000` because it runs `tsc` inside the test beside CI's concurrent builds.
