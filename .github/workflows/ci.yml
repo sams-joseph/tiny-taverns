@@ -9,7 +9,7 @@ on:
 # A newer push to a pull request cancels its older run; every main push runs to
 # the end, so back-to-back merges each keep their own verdict.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # One job per suite, each on its own runner. Run together on one 4-vCPU runner,
