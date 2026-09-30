@@ -10,8 +10,9 @@
 #   whose quota is shared by every session on the machine).
 # - Runs COMMAND with DATABASE_URL and E2E_AUTH_DATABASE_URL set to it, whatever
 #   they were before, and exits with COMMAND's status.
-# - On success, failure or a signal, stops exactly the postmaster it started
-#   (its own child, by the PID it recorded at spawn) and deletes the data.
+# - On success, failure or a signal, stops COMMAND's process group and exactly
+#   the postmaster it started (both by the PID recorded at spawn) and deletes
+#   the data.
 #
 # Linux x64 only, like the binaries. No Docker, no client tools.
 
@@ -28,22 +29,6 @@ if [ ! -x "$native/bin/postgres" ]; then
   echo "with-private-postgres: no Postgres binaries at $native; run pnpm install (Linux x64 only)." >&2
   exit 69
 fi
-
-mkdir -p "$root/.scratch"
-work=$(mktemp -d "$root/.scratch/pg.XXXXXX")
-pg_pid=""
-cmd_pid=""
-
-# npm cannot ship symlinks, and the binaries load libicu*.so.60 by those names.
-# Recreate the links the package lists, here rather than in node_modules.
-mkdir "$work/lib"
-node -e '
-  const [lib, native] = process.argv.slice(1);
-  const fs = require("fs"), path = require("path");
-  for (const { source, target } of require(path.join(native, "pg-symlinks.json")))
-    fs.symlinkSync(path.join(native, "..", source), path.join(lib, path.basename(target)));
-' "$work/lib" "$native"
-export LD_LIBRARY_PATH="$work/lib:$native/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # True while $1, a child of this shell, is running (a zombie counts as gone).
 alive() {
@@ -71,22 +56,65 @@ stop_postgres() {
   pg_pid=""
 }
 
+# True while any live process remains in COMMAND's process group.
+group_alive() {
+  local stat line
+  for stat in /proc/[0-9]*/stat; do
+    read -r line 2>/dev/null <"$stat" || continue
+    [[ ${line##*) } =~ ^([A-Za-z])\ -?[0-9]+\ ([0-9]+)\  ]] || continue
+    [ "${BASH_REMATCH[2]}" = "$cmd_pid" ] && [ "${BASH_REMATCH[1]}" != Z ] && return 0
+  done
+  return 1
+}
+
+# COMMAND leads a process group of its own, whose id is the PID recorded at
+# spawn, so everything it started is stopped with it and nothing else is.
+stop_command() {
+  [ -n "$cmd_pid" ] || return 0
+  if group_alive; then
+    kill -TERM -- -"$cmd_pid" 2>/dev/null || true
+    for _ in $(seq 1 100); do
+      group_alive || break
+      sleep 0.1
+    done
+    if group_alive; then
+      echo "with-private-postgres: command group $cmd_pid ignored SIGTERM for 10 s; killing it." >&2
+      kill -KILL -- -"$cmd_pid" 2>/dev/null || true
+    fi
+  fi
+  wait "$cmd_pid" 2>/dev/null || true
+  cmd_pid=""
+}
+
 cleanup() {
   local status=$?
   trap - EXIT INT TERM HUP
-  if [ -n "$cmd_pid" ]; then
-    kill -TERM "$cmd_pid" 2>/dev/null || true
-    wait "$cmd_pid" 2>/dev/null || true
-  fi
+  stop_command
   stop_postgres
   rm -rf "$work"
   rmdir "$root/.scratch" 2>/dev/null || true
   exit "$status"
 }
+
+mkdir -p "$root/.scratch"
+work=$(mktemp -d "$root/.scratch/pg.XXXXXX")
+pg_pid=""
+cmd_pid=""
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
+
+# npm cannot ship symlinks, and the binaries load libicu*.so.60 by those names.
+# Recreate the links the package lists, here rather than in node_modules.
+mkdir "$work/lib"
+node -e '
+  const [lib, native] = process.argv.slice(1);
+  const fs = require("fs"), path = require("path");
+  for (const { source, target } of require(path.join(native, "pg-symlinks.json")))
+    fs.symlinkSync(path.join(native, "..", source), path.join(lib, path.basename(target)));
+' "$work/lib" "$native"
+export LD_LIBRARY_PATH="$work/lib:$native/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 printf 'taverns\n' >"$work/pwfile"
 locale=C.UTF-8
@@ -144,10 +172,10 @@ echo "with-private-postgres: Postgres $pg_pid on 127.0.0.1:$port, data in ${work
 
 # In the background so a signal to this script is handled at once rather than
 # after COMMAND ends; stdin is passed through explicitly, since a background
-# job would otherwise read /dev/null.
-"$@" <&0 &
+# job would otherwise read /dev/null. setsid makes COMMAND the leader of a new
+# process group (a fresh child is never one already, so setsid does not fork).
+setsid "$@" <&0 &
 cmd_pid=$!
 status=0
 wait "$cmd_pid" || status=$?
-cmd_pid=""
 exit "$status"
