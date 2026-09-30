@@ -42,6 +42,9 @@ importers:
         specifier: 0.35.4
         version: 0.35.4(@types/node@22.20.1)
     devDependencies:
+      '@effect/vitest':
+        specifier: 4.0.0-beta.102
+        version: 4.0.0-beta.102(effect@4.0.0-beta.102)(vitest@3.2.7(@types/node@22.20.1)(jiti@2.7.0)(jsdom@25.0.1)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@taverns/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
@@ -612,6 +615,12 @@ packages:
     resolution: {integrity: sha512-02a+fNfECWCZIZcgHl7OLQN2jZj42gq90EdwdnvR3KA6GLGypY02swABS4zFtaW9H80rTa0ukqVnTdcO/DT5GQ==}
     peerDependencies:
       effect: ^4.0.0-beta.102
+
+  '@effect/vitest@4.0.0-beta.102':
+    resolution: {integrity: sha512-4dipFAYG6imOzrY3zy3BgzCJkbb9xESyzUef0WSx8bsK0/SpITqbJpdwKeOyDWLZ+rimjua8IbTFMAde865pIQ==}
+    peerDependencies:
+      effect: ^4.0.0-beta.102
+      vitest: ^3.0.0 || ^4.0.0
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -4430,6 +4439,11 @@ snapshots:
       pg-types: 4.1.0
     transitivePeerDependencies:
       - pg-native
+
+  '@effect/vitest@4.0.0-beta.102(effect@4.0.0-beta.102)(vitest@3.2.7(@types/node@22.20.1)(jiti@2.7.0)(jsdom@25.0.1)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+    dependencies:
+      effect: 4.0.0-beta.102
+      vitest: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(jsdom@25.0.1)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@emnapi/runtime@1.11.3':
     dependencies:

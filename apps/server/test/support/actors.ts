@@ -45,6 +45,26 @@ export const anAccount = (name: string): Effect.Effect<Actor, never, Accounts> =
     return new Actor({ accountId: issued.accountId, scope: { _tag: "account" } });
   }).pipe(Effect.orDie);
 
+/** An account as an HTTP suite holds it: the bearer token, and the actor it resolves to. */
+export interface Person {
+  readonly token: string;
+  readonly actor: Actor;
+}
+
+/**
+ * `anAccount` for a suite that speaks HTTP: the same account-wide credential,
+ * with the token a derived client sends kept rather than dropped.
+ */
+export const aPerson = (name: string): Effect.Effect<Person, never, Accounts> =>
+  Effect.gen(function* () {
+    const accounts = yield* Accounts;
+    const issued = yield* accounts.issue(name);
+    return {
+      token: issued.token,
+      actor: new Actor({ accountId: issued.accountId, scope: { _tag: "account" } }),
+    };
+  }).pipe(Effect.orDie);
+
 /**
  * The same account's credential, narrowed to one campaign.
  *
