@@ -92,7 +92,7 @@ export function useSection(): Section {
  * The campaign this route is about, if it names one.
  *
  * The decoded, branded id from the match rather than the raw segment: the
- * router already refused anything it did not mint (see `routes.tsx`). It is
+ * router already refused anything it did not mint (see `routes/-params.ts`). It is
  * what decides whether the campaign-scoped nav items are drawn.
  */
 export function useCampaignId(): CampaignId | undefined {

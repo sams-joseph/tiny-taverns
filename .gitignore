@@ -17,3 +17,5 @@ test-results-auth/
 playwright-report-auth/
 # Agents' and gate runs' throwaway files.
 .scratch/
+# The router plugin's scratch directory (apps/web/vite.config.ts).
+.tanstack/

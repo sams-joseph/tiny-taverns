@@ -30,7 +30,8 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * **The campaign view was one screen with three tabs; the sixth delivery makes
  * it several screens.** `CampaignScreens.jsx` splits `CampaignHome.jsx` into
  * `CampOverview`, `CampEncounters` and `CampNotes`, because the delivery's
- * second nav row is a row of URLs and a tab is not one — see `routes.tsx`.
+ * second nav row is a row of URLs and a tab is not one — see
+ * `routes/_shell/campaigns/$campaignId/index.tsx`.
  *
  * What the split must not do is give the campaign several answers to what it is.
  * Whether the table is shared, who is invited, and finishing the night are facts

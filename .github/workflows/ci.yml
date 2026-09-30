@@ -148,6 +148,11 @@ jobs:
       - name: Test the web app and the shared packages
         run: pnpm turbo run test --filter=web --filter=@taverns/ui --filter=@taverns/api
 
+      # Vitest's Vite start regenerates the route tree from `src/routes/`; a
+      # committed tree that differs from it is stale (`apps/web/src/router.ts`).
+      - name: Check the route tree is current
+        run: git diff --exit-code apps/web/src/routeTree.gen.ts
+
   # The web Playwright suites (`apps/web/e2e/README.md`). The layout suite is
   # Chromium over the fixture maps and needs neither Postgres nor the server;
   # the authenticated suite signs in through Clerk against the real server, on

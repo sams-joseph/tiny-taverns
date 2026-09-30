@@ -10,7 +10,7 @@ import {
 import { createBrowserHistory, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { routeTree } from "./routes";
+import { routeTree } from "./routeTree.gen";
 
 /**
  * The route table, asked the same questions the hand-rolled parser was asked.
@@ -81,9 +81,9 @@ describe("the route table", () => {
     // this is the same round trip the old `parseRoute(hrefFor(route))` was:
     // build the URL for a screen, and land back on that screen.
     const screens = [
-      { to: "/campaigns", at: "/campaigns" },
-      { to: "/worlds", at: "/worlds" },
-      { to: "/library", at: "/library" },
+      { to: "/campaigns", at: "/campaigns/" },
+      { to: "/worlds", at: "/worlds/" },
+      { to: "/library", at: "/library/" },
       {
         to: "/campaigns/$campaignId",
         params: { campaignId: CAMPAIGN_ID },
@@ -97,9 +97,7 @@ describe("the route table", () => {
       {
         to: "/campaigns/$campaignId/party",
         params: { campaignId: CAMPAIGN_ID },
-        // The party's splat takes an empty rest, so the bare tab resolves on it
-        // — the same screen and remount key, as `encounters/$` and `cast/$`.
-        at: "/campaigns/$campaignId/party/$",
+        at: "/campaigns/$campaignId/party/",
       },
       {
         to: "/campaigns/$campaignId/party/$seatId",
@@ -109,7 +107,7 @@ describe("the route table", () => {
       {
         to: "/campaigns/$campaignId/encounters/$encounterId",
         params: { campaignId: CAMPAIGN_ID, encounterId: ENCOUNTER_ID },
-        at: "/campaigns/$campaignId/encounters/$encounterId",
+        at: "/campaigns/$campaignId/encounters/$encounterId/",
       },
       {
         to: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
@@ -117,7 +115,7 @@ describe("the route table", () => {
         at: "/campaigns/$campaignId/sessions/$sessionId/runs/$runId",
       },
       { to: "/join/$token", params: { token: "aG93LWRvLXlvdS1kbw" }, at: "/join/$token" },
-      { to: "/worlds/$worldId", params: { worldId: WORLD_ID }, at: "/worlds/$worldId" },
+      { to: "/worlds/$worldId", params: { worldId: WORLD_ID }, at: "/worlds/$worldId/" },
       { to: "/characters", at: "/characters/" },
       {
         to: "/characters/$characterId",
@@ -180,7 +178,7 @@ describe("the route table", () => {
   });
 
   it("writes an invitation link under the basepath when the app is served under one", () => {
-    // `routes.tsx` sets `basepath` to Vite's `base`; a build for
+    // `router.ts` sets `basepath` to Vite's `base`; a build for
     // `example.com/taverns/` hands out links a stranger can open there.
     const router = createRouter({
       routeTree,
@@ -236,7 +234,7 @@ describe("the route table", () => {
     // Library entities are owned by an account and sit in no campaign, so
     // `libraryRowReadable` composes no campaign gate at all — and the Library
     // is the only place a corpus is managed now.
-    expect(landsOn("/library")).toEqual({ at: "/library", params: {} });
+    expect(landsOn("/library")).toEqual({ at: "/library/", params: {} });
     expect(landsOn("/library/rules")).toEqual({ at: "/library/rules", params: {} });
     expect(landsOn("/library/anything").at).toBe("/$");
   });
@@ -259,9 +257,9 @@ describe("the route table", () => {
   it("hangs the party off a campaign, because the roster is one table's", () => {
     // `members.list` and `invites.list` are both `/campaigns/:campaignId/…` and
     // both behind the DM gate, which is checked against exactly that path.
-    // The splat is the Party screen too; see the round trip above.
+    // The splat below is the Party screen too, with the same remount key.
     expect(landsOn(`/campaigns/${CAMPAIGN_ID}/party`)).toEqual({
-      at: "/campaigns/$campaignId/party/$",
+      at: "/campaigns/$campaignId/party/",
       params: { campaignId: CAMPAIGN_ID },
     });
     expect(landsOn("/campaigns/not-a-uuid/party").at).toBe("/$");
@@ -294,7 +292,7 @@ describe("the route table", () => {
     // the URL any more: the same campaign URL renders creator or participant
     // chrome from the relation, which is data rather than a path segment.
     expect(landsOn(`/worlds/${WORLD_ID}`)).toEqual({
-      at: "/worlds/$worldId",
+      at: "/worlds/$worldId/",
       params: { worldId: WORLD_ID },
     });
     expect(landsOn("/worlds/not-a-uuid").at).toBe("/$");
@@ -335,7 +333,7 @@ describe("the route table", () => {
     expect(landsOn("/campaigns/not-a-uuid").at).toBe("/$");
     expect(landsOn(`/groups/${WORLD_ID}`).at).toBe("/$");
     expect(landsOn("/groups").at).toBe("/$");
-    expect(landsOn("/worlds").at).toBe("/worlds");
+    expect(landsOn("/worlds").at).toBe("/worlds/");
     expect(landsOn("/").at).toBe("/");
   });
 
@@ -364,6 +362,14 @@ describe("the route table", () => {
         path: `/campaigns/${CAMPAIGN_ID}/encounters/nope`,
         at: "/campaigns/$campaignId/encounters/$",
       },
+      {
+        path: `/campaigns/${CAMPAIGN_ID}/encounters/nope/edit`,
+        at: "/campaigns/$campaignId/encounters/$",
+      },
+      { path: `/campaigns/${CAMPAIGN_ID}/cast/nope`, at: "/campaigns/$campaignId/cast/$" },
+      { path: `/campaigns/${CAMPAIGN_ID}/cast/nope/talk`, at: "/campaigns/$campaignId/cast/$" },
+      { path: "/library/npcs/nope", at: "/library/npcs/$" },
+      { path: "/worlds/nope/chronicle", at: "/$" },
       { path: "/groups/nope", at: "/$" },
       { path: "/worlds/nope", at: "/$" },
       { path: "/characters/nope", at: "/characters/$" },

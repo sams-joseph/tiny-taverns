@@ -1,9 +1,22 @@
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // Writes `src/routeTree.gen.ts` from `src/routes/` (see `src/router.ts`).
+    // Before `react()`, as the plugin requires. No code splitting: the app is
+    // one chunk, as it was when the table was a single file.
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: false,
+      quoteStyle: "double",
+      semicolons: true,
+    }),
+    react(),
+    tailwindcss(),
+  ],
   server: {
     port: 5173,
     host: true,
