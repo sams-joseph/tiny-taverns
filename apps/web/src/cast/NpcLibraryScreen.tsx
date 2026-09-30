@@ -608,6 +608,7 @@ export function NpcLibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={
           resource.state === "ready"
@@ -616,51 +617,63 @@ export function NpcLibraryScreen() {
         }
         tabs={<LibraryNav />}
       />
-      {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-      {resource.state === "ready" && (
-        <div className="flex flex-col gap-6">
-          <FilterBar
-            narrowed={filter.narrowed}
-            onClear={filter.clear}
-            actions={
-              <Button size="sm" onClick={() => setEditing("new")}>
-                <Icon name="plus" size={13} />
-                Write an NPC source
-              </Button>
-            }
-          >
-            <FilterBox label="Search NPC sources" list={filter} />
-          </FilterBar>
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={filter.narrowed ? "search" : "user-round"}
-              title={filter.narrowed ? "No NPCs match" : "No reusable NPCs yet"}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {resource.state === "loading" && <Loading label="Reading NPC sources…" />}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
+        {resource.state === "ready" && (
+          <div className="flex flex-col gap-6">
+            <FilterBar
+              narrowed={filter.narrowed}
+              onClear={filter.clear}
+              actions={
+                <Button size="sm" onClick={() => setEditing("new")}>
+                  <Icon name="plus" size={13} />
+                  Write an NPC source
+                </Button>
+              }
             >
-              {!filter.narrowed
-                ? "Write an original here, share it with a Shared World, then add snapshots to campaigns."
-                : "Loosen the search to see more sources."}
-            </EmptyState>
-          ) : (
-            <div className="grid gap-4 @3xl:grid-cols-2 @6xl:grid-cols-3">
-              {filtered.map((source) => (
-                <SourceCard
-                  key={source.id}
-                  source={source}
-                  sheet={sheets.get(source.id)}
-                  onEdit={() => setEditing(source)}
-                  onAdd={() => setAdding(source)}
-                  onShare={() => setSharing(source)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              <FilterBox label="Search NPC sources" list={filter} />
+            </FilterBar>
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={filter.narrowed ? "search" : "user-round"}
+                title={filter.narrowed ? "No NPCs match" : "No reusable NPCs yet"}
+              >
+                {!filter.narrowed
+                  ? "Write an original here, share it with a Shared World, then add snapshots to campaigns."
+                  : "Loosen the search to see more sources."}
+              </EmptyState>
+            ) : (
+              <div className="grid gap-4 @3xl:grid-cols-2 @6xl:grid-cols-3">
+                {filtered.map((source) => (
+                  <SourceCard
+                    key={source.id}
+                    source={source}
+                    sheet={sheets.get(source.id)}
+                    onEdit={() => setEditing(source)}
+                    onAdd={() => setAdding(source)}
+                    onShare={() => setSharing(source)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          className="self-start"
+          render={<Link to="/library" />}
+        >
+          Back to monsters
+        </Button>
+      </div>
       {editing !== undefined && (
         <SourceDialog
           source={editing === "new" ? undefined : editing}
@@ -681,15 +694,6 @@ export function NpcLibraryScreen() {
       {sharing !== undefined && (
         <ShareDialog source={sharing} worlds={worlds} onClose={() => setSharing(undefined)} />
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        nativeButton={false}
-        className="mt-6"
-        render={<Link to="/library" />}
-      >
-        Back to monsters
-      </Button>
     </>
   );
 }

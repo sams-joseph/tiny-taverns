@@ -38,7 +38,7 @@ pnpm -F web e2e -g "760px party"               # one title: "<width>px <screen>"
   - `banners.spec.ts`: a Party card's, a Cast card's and the NPC drawer's portrait band drawing the 2:1 banner covered, not stretched, over the whole band and keeping most of it, and a seat drawn before banners filling its band with the square.
   - `hero.spec.ts`: the Overview heroes with a cover picture, while Hob draws one, and when the picture fails to load.
   - `loading.spec.ts`: the page skeleton held open in the Overview's centred frame, its edges on the Overview content's.
-  - `lists.spec.ts`: the Campaigns and Shared Worlds lists' cards, empty state and skeleton on the Overview's centred frame at 1280 and 768, the header's title row over the card grid's edges, and neither list scrolling sideways on a 360 phone.
+  - `lists.spec.ts`: every top-level list (Campaigns, Shared Worlds, My Characters and each Library shelf) with its cards, empty state and skeleton on the Overview's centred frame at 1280 and 768, the header's title row and the Library's tab strip over the card grid's edges, and no list scrolling sideways on a 360 phone.
 
 The widths are 1440, 1024, 760 and 390: wide; just above Hob's inline breakpoint (1020); below the header's wrap breakpoint (896) and the campaign row's `@3xl`; and a phone. The old shell audit also walked 1200 and 900; they were dropped because each sits in bands the four already cover: 1200 in 1440's for every rule, 900 in 1024's for the campaign row and 760's for the header's wrap and Hob's overlay.
 

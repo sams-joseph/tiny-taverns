@@ -147,19 +147,31 @@ function PageHeader({
       {/* Centred, the gutters move to a band-wide wrapper and the row is
           capped inside them, as `main`'s padding holds a centred body. */}
       {bar && centred ? <div className={gutters}>{row}</div> : row}
-      {tabs !== undefined && (
+      {tabs !== undefined &&
         // `items-stretch` with no bottom padding: the strip's items reach the
         // hairline, exactly as the campaign row's do. In the bar that is the
         // bar's own; in content the strip draws one, under the title row.
-        <div
-          className={cn(
-            "@container flex h-10 items-stretch",
-            bar ? "px-page-sm @3xl/app:px-page" : "mt-3 border-b border-hairline",
-          )}
-        >
-          {tabs}
-        </div>
-      )}
+        // Centred, the strip is capped in the title row's frame the same way.
+        (bar && centred ? (
+          <div className={cn("h-10", gutters)}>
+            <div
+              data-slot="page-header-tabs"
+              className="@container mx-auto flex h-full w-full max-w-overview items-stretch"
+            >
+              {tabs}
+            </div>
+          </div>
+        ) : (
+          <div
+            data-slot="page-header-tabs"
+            className={cn(
+              "@container flex h-10 items-stretch",
+              bar ? gutters : "mt-3 border-b border-hairline",
+            )}
+          >
+            {tabs}
+          </div>
+        ))}
     </header>
   );
 }
@@ -191,9 +203,11 @@ interface PageHeaderProps {
    */
   readonly framed?: boolean;
   /**
-   * Centre the bar's title row at the Overview's width (`max-w-overview`), so
-   * its edges are those of a body drawn in that frame; the band itself still
-   * spans the window. The Campaigns and Shared Worlds lists use it.
+   * Centre the bar's title row, and its tab strip if it has one, at the
+   * Overview's width (`max-w-overview`), so their edges are those of a body
+   * drawn in that frame; the band itself still spans the window. The top-level
+   * list pages use it: Campaigns, Shared Worlds, My Characters and every
+   * Library shelf.
    */
   readonly centred?: boolean;
 }

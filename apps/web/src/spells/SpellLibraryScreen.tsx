@@ -44,6 +44,7 @@ export function SpellLibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={
           shown === undefined
@@ -52,54 +53,57 @@ export function SpellLibraryScreen() {
         }
         tabs={<LibraryNav />}
       />
-      {shown === undefined && resource.state === "loading" && (
-        <Loading label="Reading the spells…" />
-      )}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-      {shown !== undefined && resource.state !== "failed" && (
-        <div className="flex flex-col gap-6">
-          <SpellFilters
-            list={list}
-            sort={sort}
-            onSort={setSort}
-            busy={resource.state === "loading"}
-            actions={
-              <Button size="sm" onClick={() => setWriting(true)}>
-                <Icon name="plus" size={13} />
-                Write a spell
-              </Button>
-            }
-          />
-          {pages.spells.length === 0 ? (
-            <EmptyState icon="book-open" title="No spells here">
-              {list.narrowed ? (
-                "Loosen a filter, or clear the search — the bundled corpus is in this list too."
-              ) : (
-                <>
-                  Write a spell, or load the bundled 2014 SRD corpus with{" "}
-                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-                    pnpm -F server spell:import
-                  </code>
-                  .
-                </>
-              )}
-            </EmptyState>
-          ) : (
-            <SpellGrid spells={pages.spells} onOpen={(spell) => setOpened(spell.id)} />
-          )}
-          <ShowMore
-            hasMore={pages.hasMore}
-            loadingMore={pages.loadingMore}
-            onMore={pages.loadMore}
-            count={pages.spells.length}
-            failure={pages.moreFailure}
-          />
-        </div>
-      )}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {shown === undefined && resource.state === "loading" && (
+          <Loading label="Reading the spells…" />
+        )}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
+        {shown !== undefined && resource.state !== "failed" && (
+          <div className="flex flex-col gap-6">
+            <SpellFilters
+              list={list}
+              sort={sort}
+              onSort={setSort}
+              busy={resource.state === "loading"}
+              actions={
+                <Button size="sm" onClick={() => setWriting(true)}>
+                  <Icon name="plus" size={13} />
+                  Write a spell
+                </Button>
+              }
+            />
+            {pages.spells.length === 0 ? (
+              <EmptyState icon="book-open" title="No spells here">
+                {list.narrowed ? (
+                  "Loosen a filter, or clear the search — the bundled corpus is in this list too."
+                ) : (
+                  <>
+                    Write a spell, or load the bundled 2014 SRD corpus with{" "}
+                    <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                      pnpm -F server spell:import
+                    </code>
+                    .
+                  </>
+                )}
+              </EmptyState>
+            ) : (
+              <SpellGrid spells={pages.spells} onOpen={(spell) => setOpened(spell.id)} />
+            )}
+            <ShowMore
+              hasMore={pages.hasMore}
+              loadingMore={pages.loadingMore}
+              onMore={pages.loadMore}
+              count={pages.spells.length}
+              failure={pages.moreFailure}
+            />
+          </div>
+        )}
+      </div>
       {opening !== undefined && (
         <SpellDialog spell={opening} onClose={() => setOpened(undefined)} />
       )}

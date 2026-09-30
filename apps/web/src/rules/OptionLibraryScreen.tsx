@@ -127,119 +127,128 @@ export function OptionLibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={options === undefined ? undefined : summaryOf(options)}
         tabs={<LibraryNav />}
       />
-      {resource.state === "loading" && <Loading label="Opening your library…" />}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {resource.state === "loading" && <Loading label="Opening your library…" />}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
 
-      {options !== undefined && (
-        <div className="flex flex-col gap-8">
-          <FilterBar
-            narrowed={searching}
-            onClear={() => setFilter(EMPTY_FILTER_VALUE)}
-            actions={
-              /* This tab's four verbs, inside the tab's content — the
+        {options !== undefined && (
+          <div className="flex flex-col gap-8">
+            <FilterBar
+              narrowed={searching}
+              onClear={() => setFilter(EMPTY_FILTER_VALUE)}
+              actions={
+                /* This tab's four verbs, inside the tab's content — the
                  captain's rule, quoted on `TopBar`. `FilterBar`'s slot wraps,
                  which four controls need where every other tab has one. */
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setEditing({ kind: "background", option: undefined })}
-                >
-                  <Icon name="plus" size={14} />
-                  Write a background
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setEditing({ kind: "race", option: undefined })}
-                >
-                  <Icon name="plus" size={14} />
-                  Write a race
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => setEditingFeat(null)}>
-                  <Icon name="plus" size={14} />
-                  Write a feat
-                </Button>
-                <Button size="sm" onClick={() => setEditing({ kind: "class", option: undefined })}>
-                  <Icon name="plus" size={14} />
-                  Write a class
-                </Button>
-              </>
-            }
-          >
-            <FilterBox label="Search the rules" list={{ value: filter, onChange: setFilter }} />
-          </FilterBar>
-          {nothingMatches && (
-            <EmptyState icon="book-open" title="Nothing matches">
-              No class, race, background or feat answers that — clear the search to see the whole
-              shelf.
-            </EmptyState>
-          )}
-          {/* **`isLibraryOriginal`, and never `origin`** — the shipped write
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditing({ kind: "background", option: undefined })}
+                  >
+                    <Icon name="plus" size={14} />
+                    Write a background
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditing({ kind: "race", option: undefined })}
+                  >
+                    <Icon name="plus" size={14} />
+                    Write a race
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setEditingFeat(null)}>
+                    <Icon name="plus" size={14} />
+                    Write a feat
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setEditing({ kind: "class", option: undefined })}
+                  >
+                    <Icon name="plus" size={14} />
+                    Write a class
+                  </Button>
+                </>
+              }
+            >
+              <FilterBox label="Search the rules" list={{ value: filter, onChange: setFilter }} />
+            </FilterBar>
+            {nothingMatches && (
+              <EmptyState icon="book-open" title="Nothing matches">
+                No class, race, background or feat answers that — clear the search to see the whole
+                shelf.
+              </EmptyState>
+            )}
+            {/* **`isLibraryOriginal`, and never `origin`** — the shipped write
               predicate rendered rather than restated. A bundled row is readable
               here and not writable, so it gets no *Edit*; deleting one you own
               is inside the form, beside the sentence about what happens to the
               copies. No `onRemove` at all on this list: there is no table for a
               row to be taken off. */}
-          {!(searching && of("class").length === 0) && (
-            <OptionSection
-              title="Classes"
-              options={of("class")}
-              empty="No classes at all"
-              emptyBody={emptyBody("class")}
-              onEdit={(option) =>
-                isLibraryOriginal(option) ? () => setEditing({ kind: "class", option }) : undefined
-              }
-              onProgression={(option) => () => setProgression(option)}
-            />
-          )}
-          {!(searching && of("race").length === 0) && (
-            <OptionSection
-              title="Race"
-              options={of("race")}
-              empty="No race at all"
-              emptyBody={emptyBody("race")}
-              onEdit={(option) =>
-                isLibraryOriginal(option) ? () => setEditing({ kind: "race", option }) : undefined
-              }
-            />
-          )}
-          {/* **Third, and last, for the reason it is third on `RulesScreen` and
+            {!(searching && of("class").length === 0) && (
+              <OptionSection
+                title="Classes"
+                options={of("class")}
+                empty="No classes at all"
+                emptyBody={emptyBody("class")}
+                onEdit={(option) =>
+                  isLibraryOriginal(option)
+                    ? () => setEditing({ kind: "class", option })
+                    : undefined
+                }
+                onProgression={(option) => () => setProgression(option)}
+              />
+            )}
+            {!(searching && of("race").length === 0) && (
+              <OptionSection
+                title="Race"
+                options={of("race")}
+                empty="No race at all"
+                emptyBody={emptyBody("race")}
+                onEdit={(option) =>
+                  isLibraryOriginal(option) ? () => setEditing({ kind: "race", option }) : undefined
+                }
+              />
+            )}
+            {/* **Third, and last, for the reason it is third on `RulesScreen` and
               on the create form**: 2014 backgrounds carry proficiencies,
               languages, equipment and feature text. Ability-score arithmetic
               belongs to races and contained subraces. */}
-          {!(searching && of("background").length === 0) && (
-            <OptionSection
-              title="Backgrounds"
-              options={of("background")}
-              empty="No backgrounds at all"
-              emptyBody={emptyBody("background")}
-              onEdit={(option) =>
-                isLibraryOriginal(option)
-                  ? () => setEditing({ kind: "background", option })
-                  : undefined
-              }
-            />
-          )}
-          {!(searching && shownFeats.length === 0) && (
-            <FeatSection
-              feats={shownFeats}
-              emptyBody={emptyFeatBody}
-              onEdit={(feat) =>
-                isLibraryFeatOriginal(feat) ? () => setEditingFeat(feat) : undefined
-              }
-            />
-          )}
-        </div>
-      )}
+            {!(searching && of("background").length === 0) && (
+              <OptionSection
+                title="Backgrounds"
+                options={of("background")}
+                empty="No backgrounds at all"
+                emptyBody={emptyBody("background")}
+                onEdit={(option) =>
+                  isLibraryOriginal(option)
+                    ? () => setEditing({ kind: "background", option })
+                    : undefined
+                }
+              />
+            )}
+            {!(searching && shownFeats.length === 0) && (
+              <FeatSection
+                feats={shownFeats}
+                emptyBody={emptyFeatBody}
+                onEdit={(feat) =>
+                  isLibraryFeatOriginal(feat) ? () => setEditingFeat(feat) : undefined
+                }
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {editing !== undefined && vocabulary !== undefined && (
         <OptionForm

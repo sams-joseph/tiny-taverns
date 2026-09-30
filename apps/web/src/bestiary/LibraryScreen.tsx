@@ -116,6 +116,7 @@ export function LibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={
           corpus.shown === undefined
@@ -124,36 +125,38 @@ export function LibraryScreen() {
         }
         tabs={<LibraryNav />}
       />
-      {corpus.shown === undefined && corpus.resource.state === "loading" && (
-        <Loading label="Opening your library…" />
-      )}
-      {corpus.resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={corpus.resource.failure} onRetry={corpus.reload} />
-        </div>
-      )}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {corpus.shown === undefined && corpus.resource.state === "loading" && (
+          <Loading label="Opening your library…" />
+        )}
+        {corpus.resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={corpus.resource.failure} onRetry={corpus.reload} />
+          </div>
+        )}
 
-      {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
-        <div className="flex flex-col gap-6">
-          <CreatureFilters
-            corpus={corpus}
-            label="Search the library"
-            actions={
-              /* The tab's own verb, inside the tab's content — the captain's
+        {corpus.shown !== undefined && corpus.resource.state !== "failed" && (
+          <div className="flex flex-col gap-6">
+            <CreatureFilters
+              corpus={corpus}
+              label="Search the library"
+              actions={
+                /* The tab's own verb, inside the tab's content — the captain's
                  rule, quoted on `TopBar`. */
-              <Button size="sm" onClick={() => setEditing(null)}>
-                <Icon name="plus" size={13} />
-                Write a creature
-              </Button>
-            }
-          />
+                <Button size="sm" onClick={() => setEditing(null)}>
+                  <Icon name="plus" size={13} />
+                  Write a creature
+                </Button>
+              }
+            />
 
-          {corpus.creatures.length === 0 ? (
-            <EmptyState icon="footprints" title="Nothing lives here">
-              {corpus.narrowed && corpus.barren !== true ? (
-                "Loosen a filter, or clear the search — the bundled corpus is in this list too."
-              ) : (
-                /* **What fills a Library is writing something**, which is the
+            {corpus.creatures.length === 0 ? (
+              <EmptyState icon="footprints" title="Nothing lives here">
+                {corpus.narrowed && corpus.barren !== true ? (
+                  "Loosen a filter, or clear the search — the bundled corpus is in this list too."
+                ) : (
+                  /* **What fills a Library is writing something**, which is the
                    sentence the first version of this screen could not say: back
                    then the list was a gathering of campaign rows and the answer
                    was "join a table". Authoring is not an act inside a campaign,
@@ -161,39 +164,40 @@ export function LibraryScreen() {
                    from a full list. The bundle is named second because it is the
                    other way this fills, and because a fresh database has not
                    imported it. */
-                <>
-                  Write your first creature and it lives here, in no campaign until you copy it into
-                  one. The bundled corpus arrives with{" "}
-                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-                    pnpm -F server bestiary:import
-                  </code>
-                  .
-                </>
-              )}
-            </EmptyState>
-          ) : (
-            /* *Edit* on the rows this account owns and on no others — the
+                  <>
+                    Write your first creature and it lives here, in no campaign until you copy it
+                    into one. The bundled corpus arrives with{" "}
+                    <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                      pnpm -F server bestiary:import
+                    </code>
+                    .
+                  </>
+                )}
+              </EmptyState>
+            ) : (
+              /* *Edit* on the rows this account owns and on no others — the
                shipped write predicate rendered rather than restated. A bundled
                row is readable here and not writable, so it gets the reader and
                the copy action and nothing else. */
-            <CreatureGrid
-              creatures={corpus.creatures}
-              onEdit={(creature) =>
-                isLibraryEntity(creature) ? () => setEditing(creature) : undefined
-              }
-              onOpen={setOpened}
-            />
-          )}
+              <CreatureGrid
+                creatures={corpus.creatures}
+                onEdit={(creature) =>
+                  isLibraryEntity(creature) ? () => setEditing(creature) : undefined
+                }
+                onOpen={setOpened}
+              />
+            )}
 
-          <ShowMore
-            hasMore={corpus.hasMore}
-            loadingMore={corpus.loadingMore}
-            onMore={corpus.loadMore}
-            count={corpus.creatures.length}
-            failure={corpus.moreFailure}
-          />
-        </div>
-      )}
+            <ShowMore
+              hasMore={corpus.hasMore}
+              loadingMore={corpus.loadingMore}
+              onMore={corpus.loadMore}
+              count={corpus.creatures.length}
+              failure={corpus.moreFailure}
+            />
+          </div>
+        )}
+      </div>
 
       {opening !== undefined && (
         <CreatureDialog key={opening.id} creature={opening} onClose={() => setOpened(undefined)} />

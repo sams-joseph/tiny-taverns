@@ -295,6 +295,7 @@ export function MyCharactersScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Your characters"
         subtitle={
           view === undefined
@@ -304,30 +305,33 @@ export function MyCharactersScreen() {
       >
         {view !== undefined && <NewCharacterAction memberships={view.memberships} />}
       </TopBar>
-      {resource.state === "loading" && <Loading label="Reading your characters…" />}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-
-      {view !== undefined &&
-        (view.characters.length === 0 ? (
-          <NothingYet view={view} />
-        ) : (
-          // `auto-fill minmax(…)` as container queries, because the question is how wide *this column* is and the
-          // Hob panel can take 400px of it without the window moving.
-          <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-4">
-            {view.characters.map((owned) => (
-              <CharacterCard
-                key={owned.character.id}
-                owned={owned}
-                campaignNames={view.campaignNames}
-                memberships={view.memberships}
-              />
-            ))}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {resource.state === "loading" && <Loading label="Reading your characters…" />}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
           </div>
-        ))}
+        )}
+
+        {view !== undefined &&
+          (view.characters.length === 0 ? (
+            <NothingYet view={view} />
+          ) : (
+            // `auto-fill minmax(…)` as container queries, because the question is how wide *this column* is and the
+            // Hob panel can take 400px of it without the window moving.
+            <div className="grid grid-cols-1 items-stretch gap-gutter @2xl:grid-cols-2 @5xl:grid-cols-3">
+              {view.characters.map((owned) => (
+                <CharacterCard
+                  key={owned.character.id}
+                  owned={owned}
+                  campaignNames={view.campaignNames}
+                  memberships={view.memberships}
+                />
+              ))}
+            </div>
+          ))}
+      </div>
     </>
   );
 }

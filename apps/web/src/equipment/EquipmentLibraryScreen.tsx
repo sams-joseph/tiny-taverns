@@ -50,6 +50,7 @@ export function EquipmentLibraryScreen() {
   return (
     <>
       <TopBar
+        centred
         title="Library"
         subtitle={
           shown === undefined
@@ -58,58 +59,61 @@ export function EquipmentLibraryScreen() {
         }
         tabs={<LibraryNav />}
       />
-      {shown === undefined && resource.state === "loading" && (
-        <Loading label="Reading the equipment…" />
-      )}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-      {shown !== undefined && resource.state !== "failed" && (
-        <div className="flex flex-col gap-6">
-          <EquipmentFilters
-            list={list}
-            sort={sort}
-            onSort={setSort}
-            busy={resource.state === "loading"}
-            actions={
-              <Button size="sm" onClick={() => setEditing("new")}>
-                <Icon name="package" size={13} />
-                Write equipment
-              </Button>
-            }
-          />
-          {pages.equipment.length === 0 ? (
-            <EmptyState icon="package" title="No equipment here">
-              {list.narrowed ? (
-                "Loosen a filter, or clear the search — the bundled corpus is in this list too."
-              ) : (
-                <>
-                  Write an item, or load the bundled 2014 SRD corpus with{" "}
-                  <code className="font-mono text-mono whitespace-nowrap text-slate-300">
-                    pnpm -F server equipment:import
-                  </code>
-                  .
-                </>
-              )}
-            </EmptyState>
-          ) : (
-            <EquipmentGrid
-              equipment={pages.equipment}
-              onOpen={(item) => setOpened(item.id)}
-              onEdit={(item) => setEditing(item.id)}
+      {/* The Overview's frame, and its own container so the grid answers to it. */}
+      <div className="@container mx-auto flex w-full max-w-overview flex-col gap-6">
+        {shown === undefined && resource.state === "loading" && (
+          <Loading label="Reading the equipment…" />
+        )}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
+        {shown !== undefined && resource.state !== "failed" && (
+          <div className="flex flex-col gap-6">
+            <EquipmentFilters
+              list={list}
+              sort={sort}
+              onSort={setSort}
+              busy={resource.state === "loading"}
+              actions={
+                <Button size="sm" onClick={() => setEditing("new")}>
+                  <Icon name="package" size={13} />
+                  Write equipment
+                </Button>
+              }
             />
-          )}
-          <ShowMore
-            hasMore={pages.hasMore}
-            loadingMore={pages.loadingMore}
-            onMore={pages.loadMore}
-            count={pages.equipment.length}
-            failure={pages.moreFailure}
-          />
-        </div>
-      )}
+            {pages.equipment.length === 0 ? (
+              <EmptyState icon="package" title="No equipment here">
+                {list.narrowed ? (
+                  "Loosen a filter, or clear the search — the bundled corpus is in this list too."
+                ) : (
+                  <>
+                    Write an item, or load the bundled 2014 SRD corpus with{" "}
+                    <code className="font-mono text-mono whitespace-nowrap text-slate-300">
+                      pnpm -F server equipment:import
+                    </code>
+                    .
+                  </>
+                )}
+              </EmptyState>
+            ) : (
+              <EquipmentGrid
+                equipment={pages.equipment}
+                onOpen={(item) => setOpened(item.id)}
+                onEdit={(item) => setEditing(item.id)}
+              />
+            )}
+            <ShowMore
+              hasMore={pages.hasMore}
+              loadingMore={pages.loadingMore}
+              onMore={pages.loadMore}
+              count={pages.equipment.length}
+              failure={pages.moreFailure}
+            />
+          </div>
+        )}
+      </div>
       {opening !== undefined && (
         <EquipmentDialog equipment={opening} onClose={() => setOpened(undefined)} />
       )}
