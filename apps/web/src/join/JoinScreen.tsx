@@ -37,7 +37,7 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * Three things about it are decisions rather than layout.
  *
  * **The token goes to the API only in a `POST` body.** It arrives as a path
- * segment (`/join/<token>`, a trade `routes.tsx` records), but nothing here puts
+ * segment (`/join/<token>`, a trade `router.ts` records), but nothing here puts
  * it in an API request line or a query string, and nothing renders it.
  *
  * **Every refusal reads the same, because the server answers the same.** An

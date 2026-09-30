@@ -97,7 +97,7 @@ export type CampaignInviteCreate = typeof CampaignInviteCreate.Type;
  *
  * The link carries it as a path segment (`/join/<token>`), so the web host's
  * access log sees it — a trade accepted for a single-use secret (see the web
- * app's `routes.tsx`). The API still takes it in a `POST` body rather than its
+ * app's `router.ts`). The API still takes it in a `POST` body rather than its
  * own request line, so the API's logs do not.
  */
 export const InviteToken = Schema.Struct({ token: Schema.NonEmptyString });

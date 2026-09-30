@@ -18,7 +18,7 @@ import {
 } from "./credential";
 import { HostedSessionContext, type HostedSession } from "./hostedSession";
 import { hostedAuthNavigation } from "./navigation";
-import { router } from "../routes";
+import { router } from "../router";
 
 const navigation = hostedAuthNavigation(router.history);
 

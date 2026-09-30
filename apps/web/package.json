@@ -30,6 +30,7 @@
     "@clerk/testing": "^2.2.37",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/router-plugin": "1.168.30",
     "@taverns/eslint-config": "workspace:*",
     "@taverns/tsconfig": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",

@@ -11,3 +11,5 @@ pnpm-lock.yaml
 packages/design-system
 # The @AGENTS.md pointer, kept in its exact two-line form by firstmate's fm-ensure-agents-md.sh.
 CLAUDE.md
+# Written by the router plugin (apps/web/src/router.ts), in its own formatting.
+apps/web/src/routeTree.gen.ts

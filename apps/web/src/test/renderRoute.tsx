@@ -3,7 +3,7 @@ import { createBrowserHistory, createRouter, RouterProvider } from "@tanstack/re
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { HostedSessionScope } from "../auth/AuthProvider";
-import { routeTree } from "../routes";
+import { routeTree } from "../routeTree.gen";
 import { TEST_SESSION } from "./session";
 
 /**
