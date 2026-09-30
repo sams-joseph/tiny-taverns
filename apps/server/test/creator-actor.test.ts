@@ -1,8 +1,8 @@
+import { describe, expect } from "@effect/vitest";
 import { type CampaignId, CurrentActor, NotFound, type SessionId } from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -22,6 +22,7 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign, scopedTo } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * The DM gate: **the wide reads cannot be reached without a proof, and the
@@ -70,8 +71,6 @@ const services = Layer.mergeAll(
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
 ).pipe(Layer.provideMerge(migratedDatabase("taverns_test_dm_actor")));
-const runtime = ManagedRuntime.make(services);
-afterAll(() => runtime.dispose());
 
 /**
  * One DM with two tables, one player at the first, one stranger.
@@ -105,167 +104,11 @@ const makeFixture = Effect.gen(function* () {
   };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof makeFixture>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "creator-actor.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(makeFixture);
-}, 60_000);
-
-describe("the compiler carries it", () => {
-  /**
-   * Never called. Every line in it is a call the type system must refuse, and
-   * `@ts-expect-error` inverts each one — so `pnpm -F server typecheck` fails
-   * if any of these ever starts to compile. That is the half of this property
-   * a runtime assertion cannot reach: "there is no way to call it wrongly" is
-   * a statement about programs that do not exist.
-   */
-  const refusedByTheCompiler = (
-    combatants: (typeof Combatants)["Service"],
-    runs: (typeof EncounterRuns)["Service"],
-    events: (typeof SessionEvents)["Service"],
-    memberships: (typeof Memberships)["Service"],
-    campaignId: CampaignId,
-    sessionId: SessionId,
-    actor: (typeof CurrentActor)["Service"],
-    proof: CampaignCreatorActor,
-  ) => {
-    // The campaign id in the path is a claim. It is what these methods used to
-    // take, and it proves nothing about who is asking.
-    // @ts-expect-error the proof is what the method takes, not the id
-    runs.list(campaignId, sessionId);
-    // @ts-expect-error the proof is what the method takes, not the id
-    combatants.list(campaignId, sessionId, sessionId);
-    // @ts-expect-error the proof is what the method takes, not the id
-    events.list(campaignId, sessionId, {});
-    // The roster takes the proof and *nothing else* — the campaign travels
-    // inside it — so naming a campaign is not a call with a spare argument, it
-    // is the wrong argument in the only position there is.
-    // @ts-expect-error the proof is what the method takes, not the id
-    memberships.list(campaignId);
-
-    // The actor `Authorization` resolved is not a proof either: it carries no
-    // role, and cannot — a person is the DM of one table and a player at
-    // another on the same credential.
-    // @ts-expect-error an Actor is half of the pair, and the wrong half alone
-    runs.list(actor, sessionId);
-
-    // And it cannot be forged: the brand is a module-private `unique symbol`,
-    // so an object with the two visible fields is not one, and the assertion
-    // that would paper over it is not legal either.
-    // @ts-expect-error the brand is missing, and it is not writable from here
-    runs.list({ actor, campaign: campaignId }, sessionId);
-    // @ts-expect-error `Actor` and `CampaignCreatorActor` do not overlap, so this is not a cast
-    runs.list(actor as CampaignCreatorActor, sessionId);
-
-    // The one shape that does compile.
-    return runs.list(proof, sessionId);
-  };
-
-  it("refuses every call that skips the check", () => {
-    // The assertions are the six lines above, checked at build time. This one
-    // only keeps the function referenced, so nothing drops it as dead code.
-    expect(typeof refusedByTheCompiler).toBe("function");
-  });
-
-  it("takes the proof on every method of all three repositories, and on the wide recap", () => {
-    // A method added to one of these and given a campaign id instead makes this
-    // fail to compile, which is what stops the next one being the leak. The
-    // keys are named rather than derived, so a new method is a visible edit
-    // here as well — the same rule `adherence.test.ts` uses for components.
-    const combatants: GatedOn<(typeof Combatants)["Service"]> = {
-      list: true,
-      create: true,
-      update: true,
-      damage: true,
-      move: true,
-      setInitiative: true,
-      remove: true,
-    };
-    const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
-      list: true,
-      findById: true,
-      start: true,
-      resume: true,
-      update: true,
-      nextTurn: true,
-      escalate: true,
-      begin: true,
-      reroll: true,
-      end: true,
-    };
-    const events: GatedOn<(typeof SessionEvents)["Service"]> = {
-      list: true,
-      listForRun: true,
-      // The streaming spelling, which a grep for `CurrentActor>` does not see
-      // because it always took its actor as an argument. Ungated it would have
-      // left the other two decorative — the stream is the wide read.
-      pollForRun: true,
-    };
-
-    // `Recap` is the fourth, and the only one that is gated in part: `read`
-    // assembles whole `Combatant` values and takes the proof, `readAsPlayer`
-    // answers the narrow `PlayerSessionRecap` and takes an ordinary actor. So
-    // it cannot be a `GatedOn<…>` — a partial gate is exactly the shape that
-    // needs saying out loud rather than deriving.
-    // The Chronicle's list is the same split over every night at once.
-    const recap: {
-      readonly read: ExactlyCampaignCreatorActor<Parameters<(typeof Recap)["Service"]["read"]>[0]>;
-      readonly readAsPlayer: ExactlyCampaignCreatorActor<
-        Parameters<(typeof Recap)["Service"]["readAsPlayer"]>[0]
-      >;
-      readonly chronicle: ExactlyCampaignCreatorActor<
-        Parameters<(typeof Recap)["Service"]["chronicle"]>[0]
-      >;
-      readonly chronicleAsPlayer: ExactlyCampaignCreatorActor<
-        Parameters<(typeof Recap)["Service"]["chronicleAsPlayer"]>[0]
-      >;
-    } = { read: true, readAsPlayer: false, chronicle: true, chronicleAsPlayer: false };
-
-    // `Memberships` is the fifth, and the second that is gated in part — for a
-    // different reason from `Recap`'s. `list` is *who is at this table* and
-    // takes the proof; `mine` is *which tables am I at*, an `Effect` rather
-    // than a function, and it is not gated because the campaigns a credential
-    // already reaches are not a disclosure to the credential that reaches
-    // them. Named rather than derived, so that an ungated third method here
-    // would be a visible edit.
-    const memberships: {
-      readonly list: ExactlyCampaignCreatorActor<
-        Parameters<(typeof Memberships)["Service"]["list"]>[0]
-      >;
-      readonly mine: false;
-    } = { list: true, mine: false };
-
-    // `HobDirectWrites` is the sixth and is wholly gated: even its target
-    // vocabulary is a fact about the creator's current live fight, and spend
-    // and undo are writes on that same seam.
-    const direct: GatedOn<(typeof HobDirectWrites)["Service"]> = {
-      currentTargets: true,
-      list: true,
-      spendResource: true,
-      undo: true,
-    };
-
-    // `RunScenes` is the seventh and wholly gated: a scene is copied from the
-    // encounter's prep, and its checks carry the DCs and targets a player is
-    // never told.
-    const scenes: GatedOn<(typeof RunScenes)["Service"]> = {
-      read: true,
-      update: true,
-      logCheck: true,
-      removeCheck: true,
-    };
-
-    expect([
-      Object.keys(combatants).length,
-      Object.keys(runs).length,
-      Object.keys(events).length,
-      Object.keys(recap).length,
-      Object.keys(memberships).length,
-      Object.keys(direct).length,
-      Object.keys(scenes).length,
-    ]).toEqual([7, 10, 3, 4, 2, 4, 4]);
-  });
-});
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
 /** `true` only where this method's first parameter is exactly a `CampaignCreatorActor`. */
 type ExactlyCampaignCreatorActor<A> = [A] extends [CampaignCreatorActor]
@@ -280,550 +123,723 @@ type GatedOn<S> = {
     : false;
 };
 
-describe("the proof has one construction site", () => {
-  const sourceDirectory = fileURLToPath(new URL("../src", import.meta.url));
+describeLayer("creator-actor", shared, (it) => {
+  describe("the compiler carries it", () => {
+    /**
+     * Never called. Every line in it is a call the type system must refuse, and
+     * `@ts-expect-error` inverts each one — so `pnpm -F server typecheck` fails
+     * if any of these ever starts to compile. That is the half of this property
+     * a runtime assertion cannot reach: "there is no way to call it wrongly" is
+     * a statement about programs that do not exist.
+     */
+    const refusedByTheCompiler = (
+      combatants: (typeof Combatants)["Service"],
+      runs: (typeof EncounterRuns)["Service"],
+      events: (typeof SessionEvents)["Service"],
+      memberships: (typeof Memberships)["Service"],
+      campaignId: CampaignId,
+      sessionId: SessionId,
+      actor: (typeof CurrentActor)["Service"],
+      proof: CampaignCreatorActor,
+    ) => {
+      // The campaign id in the path is a claim. It is what these methods used to
+      // take, and it proves nothing about who is asking.
+      // @ts-expect-error the proof is what the method takes, not the id
+      runs.list(campaignId, sessionId);
+      // @ts-expect-error the proof is what the method takes, not the id
+      combatants.list(campaignId, sessionId, sessionId);
+      // @ts-expect-error the proof is what the method takes, not the id
+      events.list(campaignId, sessionId, {});
+      // The roster takes the proof and *nothing else* — the campaign travels
+      // inside it — so naming a campaign is not a call with a spare argument, it
+      // is the wrong argument in the only position there is.
+      // @ts-expect-error the proof is what the method takes, not the id
+      memberships.list(campaignId);
 
-  const sourceFiles = (directory: string): ReadonlyArray<string> =>
-    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-      const path = `${directory}/${entry.name}`;
-      if (entry.isDirectory()) return sourceFiles(path);
-      return entry.name.endsWith(".ts") ? [path] : [];
+      // The actor `Authorization` resolved is not a proof either: it carries no
+      // role, and cannot — a person is the DM of one table and a player at
+      // another on the same credential.
+      // @ts-expect-error an Actor is half of the pair, and the wrong half alone
+      runs.list(actor, sessionId);
+
+      // And it cannot be forged: the brand is a module-private `unique symbol`,
+      // so an object with the two visible fields is not one, and the assertion
+      // that would paper over it is not legal either.
+      // @ts-expect-error the brand is missing, and it is not writable from here
+      runs.list({ actor, campaign: campaignId }, sessionId);
+      // @ts-expect-error `Actor` and `CampaignCreatorActor` do not overlap, so this is not a cast
+      runs.list(actor as CampaignCreatorActor, sessionId);
+
+      // The one shape that does compile.
+      return runs.list(proof, sessionId);
+    };
+
+    it("refuses every call that skips the check", () => {
+      // The assertions are the six lines above, checked at build time. This one
+      // only keeps the function referenced, so nothing drops it as dead code.
+      expect(typeof refusedByTheCompiler).toBe("function");
     });
 
-  /**
-   * Comments stripped, so the rule can be described in the files it governs —
-   * crude on purpose, exactly as `membership.test.ts`'s and `hob.test.ts`'s are.
-   */
-  const code = (path: string): string =>
-    readFileSync(path, "utf8")
-      .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-      .replaceAll(/\/\/.*$/gm, "");
+    it("takes the proof on every method of all three repositories, and on the wide recap", () => {
+      // A method added to one of these and given a campaign id instead makes this
+      // fail to compile, which is what stops the next one being the leak. The
+      // keys are named rather than derived, so a new method is a visible edit
+      // here as well — the same rule `adherence.test.ts` uses for components.
+      const combatants: GatedOn<(typeof Combatants)["Service"]> = {
+        list: true,
+        create: true,
+        update: true,
+        damage: true,
+        move: true,
+        setInitiative: true,
+        remove: true,
+      };
+      const runs: GatedOn<(typeof EncounterRuns)["Service"]> = {
+        list: true,
+        findById: true,
+        start: true,
+        resume: true,
+        update: true,
+        nextTurn: true,
+        escalate: true,
+        begin: true,
+        reroll: true,
+        end: true,
+      };
+      const events: GatedOn<(typeof SessionEvents)["Service"]> = {
+        list: true,
+        listForRun: true,
+        // The streaming spelling, which a grep for `CurrentActor>` does not see
+        // because it always took its actor as an argument. Ungated it would have
+        // left the other two decorative — the stream is the wide read.
+        pollForRun: true,
+      };
 
-  /**
-   * Source files outside the migrations whose *code* matches. Migrations are
-   * excluded for `membership.test.ts`'s reason: they **are** the schema, and a
-   * migration is a historical record rather than a query anyone composes.
-   */
-  const mentioning = (pattern: RegExp): ReadonlyArray<string> =>
-    sourceFiles(sourceDirectory)
-      .map((path) => path.slice(sourceDirectory.length + 1))
-      .filter((path) => !path.startsWith("migrations/"))
-      .filter((path) => pattern.test(code(`${sourceDirectory}/${path}`)))
-      .sort();
+      // `Recap` is the fourth, and the only one that is gated in part: `read`
+      // assembles whole `Combatant` values and takes the proof, `readAsPlayer`
+      // answers the narrow `PlayerSessionRecap` and takes an ordinary actor. So
+      // it cannot be a `GatedOn<…>` — a partial gate is exactly the shape that
+      // needs saying out loud rather than deriving.
+      // The Chronicle's list is the same split over every night at once.
+      const recap: {
+        readonly read: ExactlyCampaignCreatorActor<
+          Parameters<(typeof Recap)["Service"]["read"]>[0]
+        >;
+        readonly readAsPlayer: ExactlyCampaignCreatorActor<
+          Parameters<(typeof Recap)["Service"]["readAsPlayer"]>[0]
+        >;
+        readonly chronicle: ExactlyCampaignCreatorActor<
+          Parameters<(typeof Recap)["Service"]["chronicle"]>[0]
+        >;
+        readonly chronicleAsPlayer: ExactlyCampaignCreatorActor<
+          Parameters<(typeof Recap)["Service"]["chronicleAsPlayer"]>[0]
+        >;
+      } = { read: true, readAsPlayer: false, chronicle: true, chronicleAsPlayer: false };
 
-  it("is minted in exactly one file, and nowhere near a `campaign_member`", () => {
-    // A second `as CampaignCreatorActor` anywhere would be a second answer to "is this
-    // actor a DM here", and the day the two disagree is the day the one that
-    // is wrong is the one nobody is looking at. `as unknown as` is named too,
-    // because that is the spelling a private brand pushes someone towards.
-    expect(mentioning(/as CampaignCreatorActor\b/)).toEqual(["repo/CreatorActor.ts"]);
-    expect(mentioning(/as unknown as/)).toEqual([]);
+      // `Memberships` is the fifth, and the second that is gated in part — for a
+      // different reason from `Recap`'s. `list` is *who is at this table* and
+      // takes the proof; `mine` is *which tables am I at*, an `Effect` rather
+      // than a function, and it is not gated because the campaigns a credential
+      // already reaches are not a disclosure to the credential that reaches
+      // them. Named rather than derived, so that an ungated third method here
+      // would be a visible edit.
+      const memberships: {
+        readonly list: ExactlyCampaignCreatorActor<
+          Parameters<(typeof Memberships)["Service"]["list"]>[0]
+        >;
+        readonly mine: false;
+      } = { list: true, mine: false };
 
-    // And the check composes the shipped predicate rather than writing its
-    // own: `membership.test.ts` still holds that only two modules in `src` may
-    // name the table, and this is not one of them.
-    expect(mentioning(/\bcampaign_member\b/)).toEqual([
-      "repo/Memberships.ts",
-      "repo/visibility.ts",
-    ]);
+      // `HobDirectWrites` is the sixth and is wholly gated: even its target
+      // vocabulary is a fact about the creator's current live fight, and spend
+      // and undo are writes on that same seam.
+      const direct: GatedOn<(typeof HobDirectWrites)["Service"]> = {
+        currentTargets: true,
+        list: true,
+        spendResource: true,
+        undo: true,
+      };
+
+      // `RunScenes` is the seventh and wholly gated: a scene is copied from the
+      // encounter's prep, and its checks carry the DCs and targets a player is
+      // never told.
+      const scenes: GatedOn<(typeof RunScenes)["Service"]> = {
+        read: true,
+        update: true,
+        logCheck: true,
+        removeCheck: true,
+      };
+
+      expect([
+        Object.keys(combatants).length,
+        Object.keys(runs).length,
+        Object.keys(events).length,
+        Object.keys(recap).length,
+        Object.keys(memberships).length,
+        Object.keys(direct).length,
+        Object.keys(scenes).length,
+      ]).toEqual([7, 10, 3, 4, 2, 4, 4]);
+    });
   });
-});
 
-describe("what the check refuses", () => {
-  const proofFor = (actor: (typeof CurrentActor)["Service"], campaignId: CampaignId) =>
-    runtime.runPromise(asDm(actor, campaignId).pipe(Effect.result));
+  describe("the proof has one construction site", () => {
+    const sourceDirectory = fileURLToPath(new URL("../src", import.meta.url));
 
-  it("gives the campaign's DM a proof that works", async () => {
-    const proof = await proofFor(fixture.dm, fixture.campaign.id);
-    expect(proof._tag).toBe("Success");
+    const sourceFiles = (directory: string): ReadonlyArray<string> =>
+      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+        const path = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) return sourceFiles(path);
+        return entry.name.endsWith(".ts") ? [path] : [];
+      });
 
-    const listed = await runtime.runPromise(
-      Effect.flatMap(EncounterRuns, (runs) =>
-        runs.list(proof._tag === "Success" ? proof.success : never(), fixture.session.id),
-      ).pipe(Effect.orDie),
-    );
-    expect(listed).toEqual([]);
-  }, 60_000);
+    /**
+     * Comments stripped, so the rule can be described in the files it governs —
+     * crude on purpose, exactly as `membership.test.ts`'s and `hob.test.ts`'s are.
+     */
+    const code = (path: string): string =>
+      readFileSync(path, "utf8")
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/\/\/.*$/gm, "");
 
-  it("carries the campaign inside it, so there is no second id to disagree", async () => {
-    // The reason the gated methods take the proof *in place of* a campaign id
-    // rather than beside one: a proof obtained for the first table cannot be
-    // spent on a read of the second, because there is nowhere to name the
-    // second. A `CampaignCreatorActor` is a fact about a pair, exactly as `isDm` is.
-    const proof = await runtime.runPromise(
-      asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie),
-    );
+    /**
+     * Source files outside the migrations whose *code* matches. Migrations are
+     * excluded for `membership.test.ts`'s reason: they **are** the schema, and a
+     * migration is a historical record rather than a query anyone composes.
+     */
+    const mentioning = (pattern: RegExp): ReadonlyArray<string> =>
+      sourceFiles(sourceDirectory)
+        .map((path) => path.slice(sourceDirectory.length + 1))
+        .filter((path) => !path.startsWith("migrations/"))
+        .filter((path) => pattern.test(code(`${sourceDirectory}/${path}`)))
+        .sort();
 
-    expect(Object.keys(proof).sort()).toEqual(["actor", "campaign", "group"]);
-    expect(proof.group).toBe(fixture.campaign.contextId);
-    expect(proof.campaign).toBe(fixture.campaign.id);
-    expect(proof.actor).toEqual(fixture.dm);
-  }, 60_000);
+    it("is minted in exactly one file, and nowhere near a `campaign_member`", () => {
+      // A second `as CampaignCreatorActor` anywhere would be a second answer to "is this
+      // actor a DM here", and the day the two disagree is the day the one that
+      // is wrong is the one nobody is looking at. `as unknown as` is named too,
+      // because that is the spelling a private brand pushes someone towards.
+      expect(mentioning(/as CampaignCreatorActor\b/)).toEqual(["repo/CreatorActor.ts"]);
+      expect(mentioning(/as unknown as/)).toEqual([]);
 
-  it("refuses a player of the campaign, with a NotFound and not a Forbidden", async () => {
-    // The whole point of the step. "It exists but is not yours" is itself a
-    // disclosure, so the refusal is the same 404 every other denial answers
-    // with — and it names the campaign, because that is what could not be had.
-    const refused = await proofFor(fixture.player, fixture.campaign.id);
+      // And the check composes the shipped predicate rather than writing its
+      // own: `membership.test.ts` still holds that only two modules in `src` may
+      // name the table, and this is not one of them.
+      expect(mentioning(/\bcampaign_member\b/)).toEqual([
+        "repo/Memberships.ts",
+        "repo/visibility.ts",
+      ]);
+    });
+  });
 
-    expect(refused._tag).toBe("Failure");
-    expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
-    expect(refused._tag === "Failure" && (refused.failure as NotFound).resource).toBe("campaign");
-  }, 60_000);
+  describe("what the check refuses", () => {
+    const proofFor = (actor: (typeof CurrentActor)["Service"], campaignId: CampaignId) =>
+      asDm(actor, campaignId).pipe(Effect.result);
 
-  it("refuses a stranger, and a campaign that does not exist", async () => {
-    const stranger = await proofFor(fixture.stranger, fixture.campaign.id);
-    const nothing = await proofFor(fixture.dm, crypto.randomUUID() as CampaignId);
+    it.effect("gives the campaign's DM a proof that works", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const proof = yield* proofFor(fixture.dm, fixture.campaign.id);
+        expect(proof._tag).toBe("Success");
 
-    expect(stranger._tag).toBe("Failure");
-    expect(nothing._tag).toBe("Failure");
-  }, 60_000);
-
-  it("refuses a credential scoped to another table, though the account is its DM", async () => {
-    // Two independent narrowings, and both apply to the proof: membership says
-    // which campaigns the account touches at all, credential scope narrows that
-    // further. Deliberately not keyed on the role — a scoped credential minted
-    // later for something other than a player must not reach past its campaign
-    // either.
-    const scoped = scopedTo(fixture.dm, fixture.campaign.id);
-
-    const elsewhere = await proofFor(scoped, fixture.otherTable.id);
-    const own = await proofFor(scoped, fixture.campaign.id);
-
-    expect(elsewhere._tag).toBe("Failure");
-    expect(own._tag).toBe("Success");
-  }, 60_000);
-
-  it("still lets the SQL predicate do its own work underneath", async () => {
-    // The proof is a precondition on the seam, not a replacement for it. A
-    // session of another campaign named through a proof for this one is still
-    // refused by `ensureNestedParentReadable`, exactly as before — so the
-    // failure mode of a bug in the gate is today's behaviour rather than an
-    // open door.
-    const proof = await runtime.runPromise(
-      asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie),
-    );
-    const theirNight = await runtime.runPromise(
-      Effect.flatMap(Sessions, (sessions) =>
-        sessions.create(fixture.otherTable.id, { number: 1 }),
-      ).pipe(Effect.provideService(CurrentActor, fixture.dm), Effect.orDie),
+        const runs = yield* EncounterRuns;
+        const listed = yield* runs
+          .list(proof._tag === "Success" ? proof.success : never(), fixture.session.id)
+          .pipe(Effect.orDie);
+        expect(listed).toEqual([]);
+      }),
     );
 
-    const smuggled = await runtime.runPromise(
-      Effect.flatMap(EncounterRuns, (runs) => runs.list(proof, theirNight.id)).pipe(Effect.flip),
-    );
-    expect(smuggled).toBeInstanceOf(NotFound);
-  }, 60_000);
-});
+    it.effect("carries the campaign inside it, so there is no second id to disagree", () =>
+      Effect.gen(function* () {
+        // The reason the gated methods take the proof *in place of* a campaign id
+        // rather than beside one: a proof obtained for the first table cannot be
+        // spent on a read of the second, because there is nowhere to name the
+        // second. A `CampaignCreatorActor` is a fact about a pair, exactly as `isDm` is.
+        const fixture = yield* Fixture;
+        const proof = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
 
-describe("the scope, counted", () => {
-  const repoDirectory = fileURLToPath(new URL("../src/repo", import.meta.url));
-
-  const code = (name: string): string =>
-    readFileSync(`${repoDirectory}/${name}`, "utf8")
-      .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-      .replaceAll(/\/\/.*$/gm, "");
-
-  const files = (): ReadonlyArray<string> =>
-    readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
-
-  it("keeps the creator-gated seams counted and leaves every other actor-scoped read and write alone", () => {
-    // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
-    // `src/repo`. Two corrections, both measured here rather than argued:
-    //
-    // - that grep counted 69 occurrences but only 67 declarations; one was
-    //   prose in a doc comment and one was an inner helper repeating its own
-    //   service method's signature;
-    // - `SessionEvents.pollForRun` is a 68th actor-scoped method the grep
-    //   cannot see, because it takes its actor as an argument. It is the live
-    //   stream, so it is gated too — hence fifteen, not fourteen.
-    //
-    // The sixteenth is `Recap.read`, which the doc comment on `CampaignCreatorActor.ts` used
-    // to name as "the next candidate" and leave alone. It was not a candidate,
-    // it was a live disclosure: it assembles whole `Combatant` values, and a
-    // player of a `shared` campaign could read a monster's exact hit points and
-    // armour class out of it. The gate closed the wide read and
-    // `Recap.readAsPlayer` is what a player gets instead.
-    //
-    // What is left alone is left alone on purpose: every one of those returns a
-    // `shared` row a player is entitled to see in full, or a narrow projection
-    // whose type is what keeps it narrow.
-    const gated = files().reduce(
-      (total, name) =>
-        total + (code(name).match(/\b(dm|creator): CampaignCreatorActor\b/g) ?? []).length,
-      0,
-    );
-    const ungated = files().reduce(
-      (total, name) => total + (code(name).match(/CurrentActor>/g) ?? []).length,
-      0,
+        expect(Object.keys(proof).sort()).toEqual(["actor", "campaign", "group"]);
+        expect(proof.group).toBe(fixture.campaign.contextId);
+        expect(proof.campaign).toBe(fixture.campaign.id);
+        expect(proof.actor).toEqual(fixture.dm);
+      }),
     );
 
-    // Seventeen through nineteen are `Memberships.list`, `add` and `remove` —
-    // the roster and the participation writes the group architecture gave the
-    // creator. `list` was gated in the change that declared the endpoint, so
-    // there is no release in which `GET /campaigns/:c/members` answered a
-    // player; `add` and `remove` arrived gated for the same reason on the day
-    // participation management became an endpoint, and the gate also carries
-    // the group the eligibility check is asked about.
-    // The twentieth is `GroupHistory.fromRecap` — sharing a played night to
-    // the group's chronicle is the campaign creator's act, so it takes the
-    // proof the recap itself requires rather than a campaign id a caller
-    // could aim.
-    // Twenty-one through twenty-four are Hob's direct-write seam: current
-    // targets, the audit list, the spend and the undo all take the creator
-    // proof for the live fight rather than a campaign id a model or client can
-    // aim.
-    // Twenty-five through seventy-six are the cast: `Npcs`, `NpcKnowledge`,
-    // `NpcMemories`, `NpcAwareness`, `NpcFollowUps`, `NpcThreads` and `NpcProposals`, gated from
-    // the day the endpoints were declared, because an NPC row and its context
-    // carry creator-only material and the creator actions that open, pause,
-    // resume, close, monitor a shared session channel and curate Hob awareness
-    // are still the campaign creator's acts. This is an occurrence count rather
-    // than a method count: inner helpers in those files restate their own
-    // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
-    // Campaign invitations add three creator-gated operations: list, mint and
-    // revoke. Their authority follows the campaign, not its hidden group.
-    // Promoting a campaign's private context adds the eightieth seam;
-    // connecting one to an owned Shared World adds the eighty-first, and
-    // disconnecting it again is the eighty-second. Moving directly between two
-    // Shared Worlds adds the eighty-third.
-    // Eighty-four and eighty-five are `BattleMaps.forEncounter` and
-    // `update`: an encounter's map is the creator's alone, gated from the day
-    // it was declared, before any player projection of a map exists.
-    // Eighty-six is `BattleMaps.forRun`, a fight's board, for the same reason.
-    // Eighty-seven is `BattleMaps.rosterTypes`, the creature types a map without a
-    // setting line is drawn from, read beside the map it draws.
-    // Eighty-eight and eighty-nine are `Encounters.prep` and `prepList`: an
-    // encounter's tactics, treasure and challenge numbers are the creator's
-    // alone, gated from the day they were declared.
-    // Ninety to ninety-two are `SeatPreps.list`, `update` and the inner
-    // read `update` answers with: a seat's hook and secret are the DM's own
-    // notes about a player's character, gated from the day they were declared.
-    // Ninety-three through ninety-five are `Encounters.list`, `findById` and
-    // `EncounterCreatures.list`: `Encounter` carries the computed difficulty
-    // and a roster line its creature's numbers, which a player is not told
-    // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
-    // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
-    // Ninety-six is `Combatants.move`: a token's square is the DM's alone
-    // until the map is shared.
-    // Ninety-seven is `EncounterRuns.escalate`, and ninety-eight to a hundred
-    // and two are `RunScenes`' four and the run read they share: a running
-    // scene is copied from the prep and its checks carry DCs a player is not
-    // told, gated from the day declared.
-    // A hundred and three to a hundred and five are the initiative phase:
-    // `begin`, `reroll` and `Combatants.setInitiative`, the fight's own
-    // writes. The player's own-initiative write is `PlayerTable.setInitiative`,
-    // which is ungated for the read's reason: it reaches exactly the row
-    // `ownSeatedCombatant` allows, and there is no DM projection of it.
-    // A hundred and six and seven are `Notes.list` and `findById`: `Note` is
-    // the creator's working record, and a player reads `listAsPlayer`, a
-    // `PlayerNote` with no visibility or provenance, ungated for
-    // `listAsPlayer`'s reason on `Encounters`.
-    // A hundred and eight to a hundred and eleven are a note's links:
-    // `Notes.addLink` and `removeLink`, the note's read they share, and the
-    // target's check in `links.ts`, which an NPC's links share too. A link
-    // names an encounter, a seat or an NPC whether or not a player may read
-    // it, so it is the creator's from the day it was declared, and
-    // `PlayerNote` has none.
-    // A hundred and twelve is `Recap.chronicle`, every night at once: the
-    // recap's gate over the list, from the day it was declared.
-    // A hundred and thirteen to fifteen are `Acts.create`, `update` and
-    // `remove`: starting, renaming, sharing and removing an act on the
-    // Chronicle are the creator's acts, gated from the day declared.
-    // A hundred and sixteen is `CampaignStories.read`: the story's wide row
-    // carries its visibility and provenance, and a player reads the narrow
-    // `readAsPlayer`, ungated for `Notes.listAsPlayer`'s reason.
-    // A hundred and seventeen to twenty are `NpcPreps.list`, `find`,
-    // `update` and the inner read they share: an NPC's attitude, status,
-    // whereabouts and first meeting are the DM's own prep, gated from the day
-    // they were declared, and `PlayerNpc` carries none of them.
-    // A hundred and twenty-one to twenty-five are an NPC's links:
-    // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
-    // share, the NPC's check and its links' read. Ties are DM prep, the
-    // creator's from the day they were declared, and `PlayerNpc` has none.
-    // A hundred and twenty-six to thirty-two are an NPC's sheet:
-    // `NpcSheets.list`, `find`, `put`, `update`, `remove` and `spells`, the
-    // sheet's spell picker, and the one inner helper they share, the
-    // campaign's reach — the NPC in the proof's campaign and that campaign's
-    // rules. A sheet is DM prep, the creator's from the day it was declared,
-    // and `PlayerNpc` carries none of it.
-    expect(gated).toBe(132);
-    // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
-    // `CurrentActor` like any other read and is what turns one into a proof —
-    // plus the inner helper in `Proposals.ts` that restates its own service
-    // method's signature. That duplicate is one of the two the plan's 69
-    // counted as methods, which is why this is an occurrence count with two
-    // named exceptions rather than a method count.
-    //
-    // Campaign invitation list/create/revoke are proof-gated above. `redeem`
-    // remains actor-scoped and `preview` deliberately requires no actor because
-    // it answers before its reader has an account. Removing the three legacy
-    // group invitation methods and `Groups.removeMember` took four ungated
-    // occurrences out of the previous count.
-    //
-    // `Memberships.list` did not move it either, which is the arithmetic to
-    // notice a second time: it takes the proof and requires no `CurrentActor`,
-    // so it lands in `gated` above and nowhere here. A gated method is not an
-    // ungated one that grew a check.
-    //
-    // The sixty-first is `Characters.damage` (`0014`), and it is ungated
-    // deliberately: a character is the row a player is *most* entitled to see
-    // in full, so gating the party would decide the player fight view's shape
-    // by accident. What the live columns do change is the question, and it is
-    // worth stating where the answer will have to be given: a `shared`
-    // character now carries exact current hit points, so step 8's projection
-    // has a real decision to make about somebody else's character. It has none
-    // to make about their own.
-    //
-    // The count did not move when `Recap` was split, which is the arithmetic
-    // worth noticing: `read` gave one up to the gate and `readAsPlayer` took
-    // one back. A narrowed projection is an ordinary actor-scoped read — it is
-    // the *type* that keeps it narrow, not the proof.
-    //
-    // The sixty-second is `Characters.assign`, which says whose character a row
-    // is. Ungated for the reason the rest of `Characters` is, and one more: it
-    // is a **write**, and `rowWritable` already requires `isDm` — a proof on
-    // top would be a second answer to a question the predicate underneath
-    // answers first, which is the shape `CampaignCreatorActor.ts` warns against. The gate is
-    // for reads whose *player projection diverges*, and assignment has no
-    // player projection at all.
-    //
-    // The sixty-third is `Characters.mine` — `GET /me/characters`. It is the
-    // mirror of `Memberships.mine` and ungated for the mirror-image reason: the
-    // characters an account already owns, in campaigns its credential already
-    // reaches, are not a disclosure to that credential. It is also the only read
-    // in the product that is *narrower* than what the actor may see, because
-    // `ownRowReadable` conjoins ownership onto the same predicate
-    // `characters.list` composes — so it cannot answer a row the gate would have
-    // been protecting, one campaign at a time.
-    //
-    // The sixty-fourth is `Characters.updateOwn` — `PATCH /me/characters/:id`,
-    // and the first write in the product a non-DM may make. It is the one entry
-    // here that is ungated because the gate would answer the *wrong question*
-    // rather than a redundant one: a `CampaignCreatorActor` is a proof that this account is
-    // the campaign's DM, and the whole point of this method is that its caller
-    // is not. What bounds it is `ownRowWritable` — ownership conjoined with the
-    // same campaign gate the reads use, so it can never reach a row
-    // `ownedRowReadable` refuses — and `CharacterOwnUpdate`, which has no field
-    // for a live column. Two boundaries, neither of them a proof, and
-    // `player-write.test.ts` pins both.
-    //
-    // The last five are the **Library** — `Creatures.library`, `libraryFindById`,
-    // `libraryCreate`, `libraryUpdate` and `libraryRemove`, the whole of
-    // `/library/creatures`. A `CampaignCreatorActor` could not be spent on any of them and
-    // should not be: the proof carries a campaign, and the whole shape of this
-    // group is that it names none. These rows are in no campaign at all —
-    // originals, which a campaign takes copies of — so there is no membership to
-    // prove, no role to be, and no player projection to diverge from.
-    //
-    // What bounds them is `libraryRowReadable` and `libraryRowWritable`, which
-    // compare `account_id` to the account the credential resolved to and to
-    // nothing a caller supplied. The write half is also where the shared
-    // corpus's structural immutability lives now that a null campaign no longer
-    // means "nobody's": a bundled row's `account_id` is null and a null never
-    // equals a uuid. `library.test.ts` pins both, including the two that matter
-    // most — one account's Library is neither readable nor writable by another,
-    // and no path in the product writes a bundled row.
-    //
-    // Campaign-first `Campaigns.createStandalone` adds one ordinary
-    // actor-scoped write. It cannot take a creator proof because the campaign
-    // does not exist yet; `CurrentActor` supplies the creator identity and the
-    // transaction writes the private group, campaign and required membership
-    // rows together.
-    //
-    // The seventieth is `Campaigns.restore` — `POST /campaigns/:c/restore`, the
-    // mirror of `archive`. Ungated for the reason `Characters.assign` is: it is
-    // a **write**, so `campaignWritable` already requires `isDm`, and a proof on
-    // top would be a second answer to the question the predicate underneath
-    // answers first. It has no player projection to diverge either — the shelf
-    // is a fact about the campaign rather than about who is reading it.
-    //
-    // `Memberships.mine` taking a shelf did not move this count, which is the
-    // arithmetic worth noticing: `GET /me/campaigns/archived` is the same method
-    // with a different argument, so the second endpoint arrived without a second
-    // actor-scoped read for the gate to have an opinion about.
-    //
-    // The seventy-first is `PlayerTable.read` — `GET /campaigns/:c/table`, the
-    // live banner's read. It is the second instance of the rule `Recap` is the
-    // first of, and it landed on the right side of it from the start: the gate
-    // is for a read whose *player projection diverges from the DM's*, and this
-    // read has no DM projection at all. A DM has the runner, `runs.list` and
-    // `sessions.list`, every one of which says more than this and is gated or
-    // DM-only already, so a proof here would buy nothing and would have to be
-    // spent by the audience the endpoint is for. What keeps it narrow is
-    // `PlayerLiveTable`, which has no field for a hit-point total, a band or an
-    // armour class — the *type*, exactly as it is for `Recap.readAsPlayer`.
-    //
-    // The seventy-second and seventy-third are `Creatures.environments` and
-    // `Creatures.libraryEnvironments` — the chip row's vocabulary over each of
-    // the two creature lists. Each composes the *same* predicate as the list it
-    // belongs to, so it can only ever name an environment that list will return,
-    // and it discloses strictly less than the rows do. Gating them would gate
-    // the bestiary itself, which is a creature read a player of a shared
-    // campaign is entitled to.
-    //
-    // The seventy-fourth and seventy-fifth are `Characters.createOwn` and
-    // `Characters.removeOwn` — `POST /me/campaigns/:c/characters` and
-    // `DELETE /me/characters/:id`, the other two thirds of what a player may do
-    // to a character. They are ungated for `updateOwn`'s reason, not for a new
-    // one: the gate proves *this account is the campaign's DM*, and the whole
-    // point of all three is that its caller is not, so a proof here would answer
-    // the wrong question rather than a redundant one.
-    //
-    // What bounds the delete is `ownRowWritable`, the same fragment the PATCH
-    // composes, so it can never reach a row `ownedRowReadable` refuses. What
-    // bounds the create is `ensureCampaignReadable` — the campaign half of
-    // `withinReadableCampaign`, which is what makes a row created through it
-    // readable and writable by its creator afterwards — plus
-    // `CharacterOwnCreate`, which has no field for a live column, for
-    // `visibility` or for an account. `player-create.test.ts` pins both halves.
-    //
-    // The last ten are the whole of `repo/Options.ts` — a campaign's rules
-    // vocabulary and the Library originals behind it. **Five of them are the
-    // Library's and are ungated for the Library's reason**, unchanged: a proof
-    // carries a campaign and those rows are in none, so there is no membership
-    // to prove and no player projection to diverge from.
-    //
-    // The other five are campaign-scoped and are the interesting half, because
-    // this is the one campaign-scoped list in the product a **player** reads.
-    // The gate is for a read whose player projection *diverges* from the DM's,
-    // and here the two projections are the same schema: a class is a name and a
-    // hit die, and a player who may pick it is a player who may read it. What
-    // narrows a player's answer is `corpusRowReadable`'s last clause — a copy
-    // the DM has not shared is not in it — which is the row-level toggle doing
-    // its ordinary job rather than a projection. Gating `list` would take the
-    // create form's picker away from the audience it exists for.
-    //
-    // The class-progression reads hang off an already-readable class option
-    // and return the same schema to DM and player, so they follow `Options`:
-    // the row-level predicates underneath are the boundary, not a DM proof.
-    //
-    // The last fifty-seven are `repo/Spells.ts`, `repo/Equipment.ts`,
-    // `repo/MagicItems.ts`, `repo/RuleArticles.ts`, `repo/Feats.ts` and the creature facet
-    // reads: five corpora plus the account Library originals and read-only
-    // facet vocabularies behind them. They follow the same ownership model as
-    // creatures and options: the Library half names no campaign, while the
-    // campaign half either returns the same schema to a player who can read the
-    // row or writes through `rowWritable` / `ensureCampaignWritable`, where
-    // DM-ness is already the predicate underneath.
-    // The nine group operations are mine, the owner-only archived shelf,
-    // findById, create, update, archive, restore, members and the campaign
-    // directory. None takes the proof and none should: a
-    // `CampaignCreatorActor` proves a fact about one campaign,
-    // and every one of these is about the Shared World above it. Reads compose
-    // `groupReadable`; the remaining settings writes compose `groupWritable`.
-    //
-    // `GroupHistory` adds four: `list`, `create`, `summary` and `fromRecap`
-    // itself, which appears in *both* counts — it takes the creator proof for
-    // the campaign half and still reads the ambient actor for the group half,
-    // because being the creator of a campaign says nothing about being a live
-    // member of the group named in the path.
-    //
-    // The continuity split moved the count by two: the old campaign-scoped
-    // `Characters` (seven methods) became the owner-side four plus `Party`'s
-    // five. None of the nine takes the proof and none should. The owner
-    // methods are `Characters.updateOwn`'s old argument writ large — the gate
-    // would prove the caller runs the table, and the whole point is that they
-    // need not. `Party` follows `Options`, not `Memberships`: its one read
-    // answers the creator and a player the *same schema*, narrowed by the
-    // seat's own row-level `visibility` rather than by a divergent
-    // projection, and its writes compose `rowWritable`/`campaignWritableById`
-    // underneath — a proof on top would be a second answer to the question
-    // the predicate answers first.
-    // Stage 5 added four more: `GroupHistory.search`, `playedNights` and
-    // `nightStory` — the canonical reads the group-Hob boundary decision
-    // grants to every live member — and `Proposals.acceptSharedWorld`, whose
-    // audience is a hand-written chronicle entry's: any member, no proof.
-    // And stage 6's three: `LibraryShares.list`/`share`/`unshare` — the
-    // grant is the resource owner's act over their own original, checked in
-    // the statement, and the reads are any live member's.
-    // The count fell by forty when the campaign-copy management methods went
-    // with the instancing decision of 2026-09-02: the seven corpora lost their
-    // campaign-scoped list/create/update/remove/derive surface, and what
-    // replaced it — the internal instancing inside `EncounterCreatures.create`
-    // — lives in a method that was already counted. None of the removals was
-    // gated, so `gated` did not move.
-    // `HobThreads.reachOf` was the one hundred and twenty-third: it answers
-    // which set a named thread is in *because* a creator now holds threads in
-    // both (`HobAsk.intent`), so a proof is exactly the wrong instrument — it
-    // reads through the disjunction of the two complete predicates and an
-    // unreachable thread is the ordinary `NotFound`. Resource spending and
-    // rests add two owner-only character methods for the same reason: a proof
-    // that the caller runs a campaign would answer the wrong question. Hob's
-    // draft spell rules add two more: the persisted owner picker and the
-    // pre-accept proposal grammar share a campaign-readable spellbook answer,
-    // and neither has a DM projection to prove. Rolls add four more: create,
-    // list, findById and the own-character log answer a session's player-safe
-    // dice tray, not a DM projection of the runner. `EquipmentRepo.bundledNamed`
-    // is the one hundred and thirty-second: a Library read like the shelf's
-    // other five — the rows are in no campaign, so there is no membership to
-    // prove and no player projection to diverge from — reached by Hob's
-    // character draft to link a carried name to its bundled row. NPC Library
-    // sources add seven account-owned source methods for the same reason: their
-    // rows are originals in no campaign, so a campaign proof is the wrong
-    // instrument, while copying into a campaign is separately creator-gated.
-    // NPC session chat adds five participant/player-safe methods: listing,
-    // finding, reading turns, appending and building prompt context for the
-    // shared live-session channel. They deliberately read through active table
-    // presence, not a creator proof; only opening the channel is creator-gated.
-    // `ImageRecords.start` is the one hundred and fifty-fifth: it records a
-    // Hob-drawn image of the actor's own subject — a character through
-    // `ownCharacter`, which is in no campaign, or a campaign through
-    // `campaignWritable`, which is already the creator predicate underneath —
-    // so there is nothing for a proof to prove. `Characters.createCore` and
-    // `Options.core` are the one hundred and fifty-seventh: a character made
-    // with no campaign and the core rules it is made from, in no campaign, so
-    // there is no table whose creator a proof could name.
-    // `Proposals.acceptDraft` is the one hundred and fifty-eighth: Hob drafting
-    // that character, in a thread of the actor's own account, for the same
-    // reason. (Its spells are `Spells.forDraft` with no campaign, already
-    // counted.)
-    // The two permanent deletes are the one hundred and fifty-ninth and
-    // sixtieth. `Campaigns.deletePermanently` sits beside `archive` and
-    // `restore`: `campaignWritable` is already the creator predicate, and the
-    // archived shelf reaches it without the campaign screen's proof.
-    // `Groups.deletePermanently` is the world owner's act on no campaign at
-    // all, gated by `groupWritable` like `Groups.archive`.
-    // `Party.rest` is the one hundred and sixty-first, for `Party`'s reason
-    // above: it is a write whose reach is `characterVitalsWritable`, and
-    // `campaignWritableById` underneath is already the creator predicate.
-    // Gating `Encounters.list`, `findById` and `EncounterCreatures.list` gave
-    // three up, and `Encounters.listAsPlayer` and `findAsPlayer` took two
-    // back: `Recap`'s arithmetic, with the roster folded into the encounter.
-    // `PlayerTable.setInitiative` is the one hundred and sixty-first: a
-    // player's own initiative, whose reach is `ownSeatedCombatant` — their own
-    // seated character's row in a fight they can see — for `PlayerTable`'s
-    // reason above.
-    // Gating `Notes.list` and `findById` gave two up and `Notes.listAsPlayer`
-    // took one back, so a hundred and sixty. `Notes.setPinned` is the one
-    // hundred and sixty-first, for `update`'s reason: a write whose reach is
-    // `rowWritable`, which is already the creator predicate.
-    // `Recap.chronicleAsPlayer` is the one hundred and sixty-second, the
-    // player's half of the Chronicle's list, for `readAsPlayer`'s reason.
-    // `Acts.list` is the one hundred and sixty-third, for `Party`'s reason:
-    // the creator and a player read the same `CampaignAct`, and what narrows a
-    // player's answer is the act's own Share switch through `rowReadable`.
-    // `CampaignStories` adds four: `readAsPlayer`, for `listAsPlayer`'s reason,
-    // and `put`, `remove` and `accept`, writes whose reach is
-    // `ensureCampaignWritable`, which is already the creator predicate — so a
-    // hundred and sixty-seven.
-    // A hundred and sixty-eight to seventy-three are a Library original's
-    // sheet: `NpcSheets.libraryList`, `libraryFind`, `libraryPut`,
-    // `libraryUpdate`, `libraryRemove` and `librarySpells`, for
-    // `Npcs.library`'s reason: there is no campaign to prove, and
-    // `libraryRowWritable` is already the owner predicate.
-    // `Encounters.move` is the one hundred and seventy-fourth, for
-    // `Notes.setPinned`'s reason: a write whose reach is `rowWritable` and
-    // `ensureCampaignWritable`, which are already the creator predicate.
-    // `GroupHistory.clearSummary` is the one hundred and seventy-fifth: a
-    // Shared World's write, not a campaign's, whose reach is
-    // `ensureGroupWritable`, the world owner's predicate.
-    // `HobThreads.discard` is the one hundred and seventy-sixth, for
-    // `reachOf`'s reason: it answers to the thread's own reach, through the
-    // accept's turn lock, whose `"dm"` arm is already the creator predicate
-    // and whose other arms are a player's own thread, a Shared World's or an
-    // account's — no campaign for a proof to name.
-    expect(ungated).toBe(176);
+    it.effect("refuses a player of the campaign, with a NotFound and not a Forbidden", () =>
+      Effect.gen(function* () {
+        // The whole point of the step. "It exists but is not yours" is itself a
+        // disclosure, so the refusal is the same 404 every other denial answers
+        // with — and it names the campaign, because that is what could not be had.
+        const fixture = yield* Fixture;
+        const refused = yield* proofFor(fixture.player, fixture.campaign.id);
+
+        expect(refused._tag).toBe("Failure");
+        expect(refused._tag === "Failure" && refused.failure).toBeInstanceOf(NotFound);
+        expect(refused._tag === "Failure" && (refused.failure as NotFound).resource).toBe(
+          "campaign",
+        );
+      }),
+    );
+
+    it.effect("refuses a stranger, and a campaign that does not exist", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const stranger = yield* proofFor(fixture.stranger, fixture.campaign.id);
+        const nothing = yield* proofFor(fixture.dm, crypto.randomUUID() as CampaignId);
+
+        expect(stranger._tag).toBe("Failure");
+        expect(nothing._tag).toBe("Failure");
+      }),
+    );
+
+    it.effect("refuses a credential scoped to another table, though the account is its DM", () =>
+      Effect.gen(function* () {
+        // Two independent narrowings, and both apply to the proof: membership says
+        // which campaigns the account touches at all, credential scope narrows that
+        // further. Deliberately not keyed on the role — a scoped credential minted
+        // later for something other than a player must not reach past its campaign
+        // either.
+        const fixture = yield* Fixture;
+        const scoped = scopedTo(fixture.dm, fixture.campaign.id);
+
+        const elsewhere = yield* proofFor(scoped, fixture.otherTable.id);
+        const own = yield* proofFor(scoped, fixture.campaign.id);
+
+        expect(elsewhere._tag).toBe("Failure");
+        expect(own._tag).toBe("Success");
+      }),
+    );
+
+    it.effect("still lets the SQL predicate do its own work underneath", () =>
+      Effect.gen(function* () {
+        // The proof is a precondition on the seam, not a replacement for it. A
+        // session of another campaign named through a proof for this one is still
+        // refused by `ensureNestedParentReadable`, exactly as before — so the
+        // failure mode of a bug in the gate is today's behaviour rather than an
+        // open door.
+        const fixture = yield* Fixture;
+        const proof = yield* asDm(fixture.dm, fixture.campaign.id).pipe(Effect.orDie);
+        const sessions = yield* Sessions;
+        const theirNight = yield* sessions
+          .create(fixture.otherTable.id, { number: 1 })
+          .pipe(Effect.provideService(CurrentActor, fixture.dm), Effect.orDie);
+
+        const runs = yield* EncounterRuns;
+        const smuggled = yield* runs.list(proof, theirNight.id).pipe(Effect.flip);
+        expect(smuggled).toBeInstanceOf(NotFound);
+      }),
+    );
+  });
+
+  describe("the scope, counted", () => {
+    const repoDirectory = fileURLToPath(new URL("../src/repo", import.meta.url));
+
+    const code = (name: string): string =>
+      readFileSync(`${repoDirectory}/${name}`, "utf8")
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/\/\/.*$/gm, "");
+
+    const files = (): ReadonlyArray<string> =>
+      readdirSync(repoDirectory).filter((name) => name.endsWith(".ts"));
+
+    it("keeps the creator-gated seams counted and leaves every other actor-scoped read and write alone", () => {
+      // The plan costed this at 14 of 69 by grepping `CurrentActor>` across
+      // `src/repo`. Two corrections, both measured here rather than argued:
+      //
+      // - that grep counted 69 occurrences but only 67 declarations; one was
+      //   prose in a doc comment and one was an inner helper repeating its own
+      //   service method's signature;
+      // - `SessionEvents.pollForRun` is a 68th actor-scoped method the grep
+      //   cannot see, because it takes its actor as an argument. It is the live
+      //   stream, so it is gated too — hence fifteen, not fourteen.
+      //
+      // The sixteenth is `Recap.read`, which the doc comment on `CampaignCreatorActor.ts` used
+      // to name as "the next candidate" and leave alone. It was not a candidate,
+      // it was a live disclosure: it assembles whole `Combatant` values, and a
+      // player of a `shared` campaign could read a monster's exact hit points and
+      // armour class out of it. The gate closed the wide read and
+      // `Recap.readAsPlayer` is what a player gets instead.
+      //
+      // What is left alone is left alone on purpose: every one of those returns a
+      // `shared` row a player is entitled to see in full, or a narrow projection
+      // whose type is what keeps it narrow.
+      const gated = files().reduce(
+        (total, name) =>
+          total + (code(name).match(/\b(dm|creator): CampaignCreatorActor\b/g) ?? []).length,
+        0,
+      );
+      const ungated = files().reduce(
+        (total, name) => total + (code(name).match(/CurrentActor>/g) ?? []).length,
+        0,
+      );
+
+      // Seventeen through nineteen are `Memberships.list`, `add` and `remove` —
+      // the roster and the participation writes the group architecture gave the
+      // creator. `list` was gated in the change that declared the endpoint, so
+      // there is no release in which `GET /campaigns/:c/members` answered a
+      // player; `add` and `remove` arrived gated for the same reason on the day
+      // participation management became an endpoint, and the gate also carries
+      // the group the eligibility check is asked about.
+      // The twentieth is `GroupHistory.fromRecap` — sharing a played night to
+      // the group's chronicle is the campaign creator's act, so it takes the
+      // proof the recap itself requires rather than a campaign id a caller
+      // could aim.
+      // Twenty-one through twenty-four are Hob's direct-write seam: current
+      // targets, the audit list, the spend and the undo all take the creator
+      // proof for the live fight rather than a campaign id a model or client can
+      // aim.
+      // Twenty-five through seventy-six are the cast: `Npcs`, `NpcKnowledge`,
+      // `NpcMemories`, `NpcAwareness`, `NpcFollowUps`, `NpcThreads` and `NpcProposals`, gated from
+      // the day the endpoints were declared, because an NPC row and its context
+      // carry creator-only material and the creator actions that open, pause,
+      // resume, close, monitor a shared session channel and curate Hob awareness
+      // are still the campaign creator's acts. This is an occurrence count rather
+      // than a method count: inner helpers in those files restate their own
+      // methods' first parameter, exactly as `Proposals.ts`'s duplicate below does.
+      // Campaign invitations add three creator-gated operations: list, mint and
+      // revoke. Their authority follows the campaign, not its hidden group.
+      // Promoting a campaign's private context adds the eightieth seam;
+      // connecting one to an owned Shared World adds the eighty-first, and
+      // disconnecting it again is the eighty-second. Moving directly between two
+      // Shared Worlds adds the eighty-third.
+      // Eighty-four and eighty-five are `BattleMaps.forEncounter` and
+      // `update`: an encounter's map is the creator's alone, gated from the day
+      // it was declared, before any player projection of a map exists.
+      // Eighty-six is `BattleMaps.forRun`, a fight's board, for the same reason.
+      // Eighty-seven is `BattleMaps.rosterTypes`, the creature types a map without a
+      // setting line is drawn from, read beside the map it draws.
+      // Eighty-eight and eighty-nine are `Encounters.prep` and `prepList`: an
+      // encounter's tactics, treasure and challenge numbers are the creator's
+      // alone, gated from the day they were declared.
+      // Ninety to ninety-two are `SeatPreps.list`, `update` and the inner
+      // read `update` answers with: a seat's hook and secret are the DM's own
+      // notes about a player's character, gated from the day they were declared.
+      // Ninety-three through ninety-five are `Encounters.list`, `findById` and
+      // `EncounterCreatures.list`: `Encounter` carries the computed difficulty
+      // and a roster line its creature's numbers, which a player is not told
+      // (captain's decision, 2026-09-25). A player reads `listAsPlayer` and
+      // `findAsPlayer`, names and counts, ungated for `PlayerTable`'s reason.
+      // Ninety-six is `Combatants.move`: a token's square is the DM's alone
+      // until the map is shared.
+      // Ninety-seven is `EncounterRuns.escalate`, and ninety-eight to a hundred
+      // and two are `RunScenes`' four and the run read they share: a running
+      // scene is copied from the prep and its checks carry DCs a player is not
+      // told, gated from the day declared.
+      // A hundred and three to a hundred and five are the initiative phase:
+      // `begin`, `reroll` and `Combatants.setInitiative`, the fight's own
+      // writes. The player's own-initiative write is `PlayerTable.setInitiative`,
+      // which is ungated for the read's reason: it reaches exactly the row
+      // `ownSeatedCombatant` allows, and there is no DM projection of it.
+      // A hundred and six and seven are `Notes.list` and `findById`: `Note` is
+      // the creator's working record, and a player reads `listAsPlayer`, a
+      // `PlayerNote` with no visibility or provenance, ungated for
+      // `listAsPlayer`'s reason on `Encounters`.
+      // A hundred and eight to a hundred and eleven are a note's links:
+      // `Notes.addLink` and `removeLink`, the note's read they share, and the
+      // target's check in `links.ts`, which an NPC's links share too. A link
+      // names an encounter, a seat or an NPC whether or not a player may read
+      // it, so it is the creator's from the day it was declared, and
+      // `PlayerNote` has none.
+      // A hundred and twelve is `Recap.chronicle`, every night at once: the
+      // recap's gate over the list, from the day it was declared.
+      // A hundred and thirteen to fifteen are `Acts.create`, `update` and
+      // `remove`: starting, renaming, sharing and removing an act on the
+      // Chronicle are the creator's acts, gated from the day declared.
+      // A hundred and sixteen is `CampaignStories.read`: the story's wide row
+      // carries its visibility and provenance, and a player reads the narrow
+      // `readAsPlayer`, ungated for `Notes.listAsPlayer`'s reason.
+      // A hundred and seventeen to twenty are `NpcPreps.list`, `find`,
+      // `update` and the inner read they share: an NPC's attitude, status,
+      // whereabouts and first meeting are the DM's own prep, gated from the day
+      // they were declared, and `PlayerNpc` carries none of them.
+      // A hundred and twenty-one to twenty-five are an NPC's links:
+      // `NpcLinks.list`, `add` and `remove`, and the two inner helpers they
+      // share, the NPC's check and its links' read. Ties are DM prep, the
+      // creator's from the day they were declared, and `PlayerNpc` has none.
+      // A hundred and twenty-six to thirty-two are an NPC's sheet:
+      // `NpcSheets.list`, `find`, `put`, `update`, `remove` and `spells`, the
+      // sheet's spell picker, and the one inner helper they share, the
+      // campaign's reach — the NPC in the proof's campaign and that campaign's
+      // rules. A sheet is DM prep, the creator's from the day it was declared,
+      // and `PlayerNpc` carries none of it.
+      expect(gated).toBe(132);
+      // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
+      // `CurrentActor` like any other read and is what turns one into a proof —
+      // plus the inner helper in `Proposals.ts` that restates its own service
+      // method's signature. That duplicate is one of the two the plan's 69
+      // counted as methods, which is why this is an occurrence count with two
+      // named exceptions rather than a method count.
+      //
+      // Campaign invitation list/create/revoke are proof-gated above. `redeem`
+      // remains actor-scoped and `preview` deliberately requires no actor because
+      // it answers before its reader has an account. Removing the three legacy
+      // group invitation methods and `Groups.removeMember` took four ungated
+      // occurrences out of the previous count.
+      //
+      // `Memberships.list` did not move it either, which is the arithmetic to
+      // notice a second time: it takes the proof and requires no `CurrentActor`,
+      // so it lands in `gated` above and nowhere here. A gated method is not an
+      // ungated one that grew a check.
+      //
+      // The sixty-first is `Characters.damage` (`0014`), and it is ungated
+      // deliberately: a character is the row a player is *most* entitled to see
+      // in full, so gating the party would decide the player fight view's shape
+      // by accident. What the live columns do change is the question, and it is
+      // worth stating where the answer will have to be given: a `shared`
+      // character now carries exact current hit points, so step 8's projection
+      // has a real decision to make about somebody else's character. It has none
+      // to make about their own.
+      //
+      // The count did not move when `Recap` was split, which is the arithmetic
+      // worth noticing: `read` gave one up to the gate and `readAsPlayer` took
+      // one back. A narrowed projection is an ordinary actor-scoped read — it is
+      // the *type* that keeps it narrow, not the proof.
+      //
+      // The sixty-second is `Characters.assign`, which says whose character a row
+      // is. Ungated for the reason the rest of `Characters` is, and one more: it
+      // is a **write**, and `rowWritable` already requires `isDm` — a proof on
+      // top would be a second answer to a question the predicate underneath
+      // answers first, which is the shape `CampaignCreatorActor.ts` warns against. The gate is
+      // for reads whose *player projection diverges*, and assignment has no
+      // player projection at all.
+      //
+      // The sixty-third is `Characters.mine` — `GET /me/characters`. It is the
+      // mirror of `Memberships.mine` and ungated for the mirror-image reason: the
+      // characters an account already owns, in campaigns its credential already
+      // reaches, are not a disclosure to that credential. It is also the only read
+      // in the product that is *narrower* than what the actor may see, because
+      // `ownRowReadable` conjoins ownership onto the same predicate
+      // `characters.list` composes — so it cannot answer a row the gate would have
+      // been protecting, one campaign at a time.
+      //
+      // The sixty-fourth is `Characters.updateOwn` — `PATCH /me/characters/:id`,
+      // and the first write in the product a non-DM may make. It is the one entry
+      // here that is ungated because the gate would answer the *wrong question*
+      // rather than a redundant one: a `CampaignCreatorActor` is a proof that this account is
+      // the campaign's DM, and the whole point of this method is that its caller
+      // is not. What bounds it is `ownRowWritable` — ownership conjoined with the
+      // same campaign gate the reads use, so it can never reach a row
+      // `ownedRowReadable` refuses — and `CharacterOwnUpdate`, which has no field
+      // for a live column. Two boundaries, neither of them a proof, and
+      // `player-write.test.ts` pins both.
+      //
+      // The last five are the **Library** — `Creatures.library`, `libraryFindById`,
+      // `libraryCreate`, `libraryUpdate` and `libraryRemove`, the whole of
+      // `/library/creatures`. A `CampaignCreatorActor` could not be spent on any of them and
+      // should not be: the proof carries a campaign, and the whole shape of this
+      // group is that it names none. These rows are in no campaign at all —
+      // originals, which a campaign takes copies of — so there is no membership to
+      // prove, no role to be, and no player projection to diverge from.
+      //
+      // What bounds them is `libraryRowReadable` and `libraryRowWritable`, which
+      // compare `account_id` to the account the credential resolved to and to
+      // nothing a caller supplied. The write half is also where the shared
+      // corpus's structural immutability lives now that a null campaign no longer
+      // means "nobody's": a bundled row's `account_id` is null and a null never
+      // equals a uuid. `library.test.ts` pins both, including the two that matter
+      // most — one account's Library is neither readable nor writable by another,
+      // and no path in the product writes a bundled row.
+      //
+      // Campaign-first `Campaigns.createStandalone` adds one ordinary
+      // actor-scoped write. It cannot take a creator proof because the campaign
+      // does not exist yet; `CurrentActor` supplies the creator identity and the
+      // transaction writes the private group, campaign and required membership
+      // rows together.
+      //
+      // The seventieth is `Campaigns.restore` — `POST /campaigns/:c/restore`, the
+      // mirror of `archive`. Ungated for the reason `Characters.assign` is: it is
+      // a **write**, so `campaignWritable` already requires `isDm`, and a proof on
+      // top would be a second answer to the question the predicate underneath
+      // answers first. It has no player projection to diverge either — the shelf
+      // is a fact about the campaign rather than about who is reading it.
+      //
+      // `Memberships.mine` taking a shelf did not move this count, which is the
+      // arithmetic worth noticing: `GET /me/campaigns/archived` is the same method
+      // with a different argument, so the second endpoint arrived without a second
+      // actor-scoped read for the gate to have an opinion about.
+      //
+      // The seventy-first is `PlayerTable.read` — `GET /campaigns/:c/table`, the
+      // live banner's read. It is the second instance of the rule `Recap` is the
+      // first of, and it landed on the right side of it from the start: the gate
+      // is for a read whose *player projection diverges from the DM's*, and this
+      // read has no DM projection at all. A DM has the runner, `runs.list` and
+      // `sessions.list`, every one of which says more than this and is gated or
+      // DM-only already, so a proof here would buy nothing and would have to be
+      // spent by the audience the endpoint is for. What keeps it narrow is
+      // `PlayerLiveTable`, which has no field for a hit-point total, a band or an
+      // armour class — the *type*, exactly as it is for `Recap.readAsPlayer`.
+      //
+      // The seventy-second and seventy-third are `Creatures.environments` and
+      // `Creatures.libraryEnvironments` — the chip row's vocabulary over each of
+      // the two creature lists. Each composes the *same* predicate as the list it
+      // belongs to, so it can only ever name an environment that list will return,
+      // and it discloses strictly less than the rows do. Gating them would gate
+      // the bestiary itself, which is a creature read a player of a shared
+      // campaign is entitled to.
+      //
+      // The seventy-fourth and seventy-fifth are `Characters.createOwn` and
+      // `Characters.removeOwn` — `POST /me/campaigns/:c/characters` and
+      // `DELETE /me/characters/:id`, the other two thirds of what a player may do
+      // to a character. They are ungated for `updateOwn`'s reason, not for a new
+      // one: the gate proves *this account is the campaign's DM*, and the whole
+      // point of all three is that its caller is not, so a proof here would answer
+      // the wrong question rather than a redundant one.
+      //
+      // What bounds the delete is `ownRowWritable`, the same fragment the PATCH
+      // composes, so it can never reach a row `ownedRowReadable` refuses. What
+      // bounds the create is `ensureCampaignReadable` — the campaign half of
+      // `withinReadableCampaign`, which is what makes a row created through it
+      // readable and writable by its creator afterwards — plus
+      // `CharacterOwnCreate`, which has no field for a live column, for
+      // `visibility` or for an account. `player-create.test.ts` pins both halves.
+      //
+      // The last ten are the whole of `repo/Options.ts` — a campaign's rules
+      // vocabulary and the Library originals behind it. **Five of them are the
+      // Library's and are ungated for the Library's reason**, unchanged: a proof
+      // carries a campaign and those rows are in none, so there is no membership
+      // to prove and no player projection to diverge from.
+      //
+      // The other five are campaign-scoped and are the interesting half, because
+      // this is the one campaign-scoped list in the product a **player** reads.
+      // The gate is for a read whose player projection *diverges* from the DM's,
+      // and here the two projections are the same schema: a class is a name and a
+      // hit die, and a player who may pick it is a player who may read it. What
+      // narrows a player's answer is `corpusRowReadable`'s last clause — a copy
+      // the DM has not shared is not in it — which is the row-level toggle doing
+      // its ordinary job rather than a projection. Gating `list` would take the
+      // create form's picker away from the audience it exists for.
+      //
+      // The class-progression reads hang off an already-readable class option
+      // and return the same schema to DM and player, so they follow `Options`:
+      // the row-level predicates underneath are the boundary, not a DM proof.
+      //
+      // The last fifty-seven are `repo/Spells.ts`, `repo/Equipment.ts`,
+      // `repo/MagicItems.ts`, `repo/RuleArticles.ts`, `repo/Feats.ts` and the creature facet
+      // reads: five corpora plus the account Library originals and read-only
+      // facet vocabularies behind them. They follow the same ownership model as
+      // creatures and options: the Library half names no campaign, while the
+      // campaign half either returns the same schema to a player who can read the
+      // row or writes through `rowWritable` / `ensureCampaignWritable`, where
+      // DM-ness is already the predicate underneath.
+      // The nine group operations are mine, the owner-only archived shelf,
+      // findById, create, update, archive, restore, members and the campaign
+      // directory. None takes the proof and none should: a
+      // `CampaignCreatorActor` proves a fact about one campaign,
+      // and every one of these is about the Shared World above it. Reads compose
+      // `groupReadable`; the remaining settings writes compose `groupWritable`.
+      //
+      // `GroupHistory` adds four: `list`, `create`, `summary` and `fromRecap`
+      // itself, which appears in *both* counts — it takes the creator proof for
+      // the campaign half and still reads the ambient actor for the group half,
+      // because being the creator of a campaign says nothing about being a live
+      // member of the group named in the path.
+      //
+      // The continuity split moved the count by two: the old campaign-scoped
+      // `Characters` (seven methods) became the owner-side four plus `Party`'s
+      // five. None of the nine takes the proof and none should. The owner
+      // methods are `Characters.updateOwn`'s old argument writ large — the gate
+      // would prove the caller runs the table, and the whole point is that they
+      // need not. `Party` follows `Options`, not `Memberships`: its one read
+      // answers the creator and a player the *same schema*, narrowed by the
+      // seat's own row-level `visibility` rather than by a divergent
+      // projection, and its writes compose `rowWritable`/`campaignWritableById`
+      // underneath — a proof on top would be a second answer to the question
+      // the predicate answers first.
+      // Stage 5 added four more: `GroupHistory.search`, `playedNights` and
+      // `nightStory` — the canonical reads the group-Hob boundary decision
+      // grants to every live member — and `Proposals.acceptSharedWorld`, whose
+      // audience is a hand-written chronicle entry's: any member, no proof.
+      // And stage 6's three: `LibraryShares.list`/`share`/`unshare` — the
+      // grant is the resource owner's act over their own original, checked in
+      // the statement, and the reads are any live member's.
+      // The count fell by forty when the campaign-copy management methods went
+      // with the instancing decision of 2026-09-02: the seven corpora lost their
+      // campaign-scoped list/create/update/remove/derive surface, and what
+      // replaced it — the internal instancing inside `EncounterCreatures.create`
+      // — lives in a method that was already counted. None of the removals was
+      // gated, so `gated` did not move.
+      // `HobThreads.reachOf` was the one hundred and twenty-third: it answers
+      // which set a named thread is in *because* a creator now holds threads in
+      // both (`HobAsk.intent`), so a proof is exactly the wrong instrument — it
+      // reads through the disjunction of the two complete predicates and an
+      // unreachable thread is the ordinary `NotFound`. Resource spending and
+      // rests add two owner-only character methods for the same reason: a proof
+      // that the caller runs a campaign would answer the wrong question. Hob's
+      // draft spell rules add two more: the persisted owner picker and the
+      // pre-accept proposal grammar share a campaign-readable spellbook answer,
+      // and neither has a DM projection to prove. Rolls add four more: create,
+      // list, findById and the own-character log answer a session's player-safe
+      // dice tray, not a DM projection of the runner. `EquipmentRepo.bundledNamed`
+      // is the one hundred and thirty-second: a Library read like the shelf's
+      // other five — the rows are in no campaign, so there is no membership to
+      // prove and no player projection to diverge from — reached by Hob's
+      // character draft to link a carried name to its bundled row. NPC Library
+      // sources add seven account-owned source methods for the same reason: their
+      // rows are originals in no campaign, so a campaign proof is the wrong
+      // instrument, while copying into a campaign is separately creator-gated.
+      // NPC session chat adds five participant/player-safe methods: listing,
+      // finding, reading turns, appending and building prompt context for the
+      // shared live-session channel. They deliberately read through active table
+      // presence, not a creator proof; only opening the channel is creator-gated.
+      // `ImageRecords.start` is the one hundred and fifty-fifth: it records a
+      // Hob-drawn image of the actor's own subject — a character through
+      // `ownCharacter`, which is in no campaign, or a campaign through
+      // `campaignWritable`, which is already the creator predicate underneath —
+      // so there is nothing for a proof to prove. `Characters.createCore` and
+      // `Options.core` are the one hundred and fifty-seventh: a character made
+      // with no campaign and the core rules it is made from, in no campaign, so
+      // there is no table whose creator a proof could name.
+      // `Proposals.acceptDraft` is the one hundred and fifty-eighth: Hob drafting
+      // that character, in a thread of the actor's own account, for the same
+      // reason. (Its spells are `Spells.forDraft` with no campaign, already
+      // counted.)
+      // The two permanent deletes are the one hundred and fifty-ninth and
+      // sixtieth. `Campaigns.deletePermanently` sits beside `archive` and
+      // `restore`: `campaignWritable` is already the creator predicate, and the
+      // archived shelf reaches it without the campaign screen's proof.
+      // `Groups.deletePermanently` is the world owner's act on no campaign at
+      // all, gated by `groupWritable` like `Groups.archive`.
+      // `Party.rest` is the one hundred and sixty-first, for `Party`'s reason
+      // above: it is a write whose reach is `characterVitalsWritable`, and
+      // `campaignWritableById` underneath is already the creator predicate.
+      // Gating `Encounters.list`, `findById` and `EncounterCreatures.list` gave
+      // three up, and `Encounters.listAsPlayer` and `findAsPlayer` took two
+      // back: `Recap`'s arithmetic, with the roster folded into the encounter.
+      // `PlayerTable.setInitiative` is the one hundred and sixty-first: a
+      // player's own initiative, whose reach is `ownSeatedCombatant` — their own
+      // seated character's row in a fight they can see — for `PlayerTable`'s
+      // reason above.
+      // Gating `Notes.list` and `findById` gave two up and `Notes.listAsPlayer`
+      // took one back, so a hundred and sixty. `Notes.setPinned` is the one
+      // hundred and sixty-first, for `update`'s reason: a write whose reach is
+      // `rowWritable`, which is already the creator predicate.
+      // `Recap.chronicleAsPlayer` is the one hundred and sixty-second, the
+      // player's half of the Chronicle's list, for `readAsPlayer`'s reason.
+      // `Acts.list` is the one hundred and sixty-third, for `Party`'s reason:
+      // the creator and a player read the same `CampaignAct`, and what narrows a
+      // player's answer is the act's own Share switch through `rowReadable`.
+      // `CampaignStories` adds four: `readAsPlayer`, for `listAsPlayer`'s reason,
+      // and `put`, `remove` and `accept`, writes whose reach is
+      // `ensureCampaignWritable`, which is already the creator predicate — so a
+      // hundred and sixty-seven.
+      // A hundred and sixty-eight to seventy-three are a Library original's
+      // sheet: `NpcSheets.libraryList`, `libraryFind`, `libraryPut`,
+      // `libraryUpdate`, `libraryRemove` and `librarySpells`, for
+      // `Npcs.library`'s reason: there is no campaign to prove, and
+      // `libraryRowWritable` is already the owner predicate.
+      // `Encounters.move` is the one hundred and seventy-fourth, for
+      // `Notes.setPinned`'s reason: a write whose reach is `rowWritable` and
+      // `ensureCampaignWritable`, which are already the creator predicate.
+      // `GroupHistory.clearSummary` is the one hundred and seventy-fifth: a
+      // Shared World's write, not a campaign's, whose reach is
+      // `ensureGroupWritable`, the world owner's predicate.
+      // `HobThreads.discard` is the one hundred and seventy-sixth, for
+      // `reachOf`'s reason: it answers to the thread's own reach, through the
+      // accept's turn lock, whose `"dm"` arm is already the creator predicate
+      // and whose other arms are a player's own thread, a Shared World's or an
+      // account's — no campaign for a proof to name.
+      expect(ungated).toBe(176);
+    });
   });
 });
 

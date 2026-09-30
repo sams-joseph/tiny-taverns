@@ -1,16 +1,7 @@
-import {
-  type Actor,
-  type AssistantTurnId,
-  type CampaignId,
-  type CharacterId,
-  type CombatantId,
-  CurrentActor,
-  type EncounterRunId,
-  type SessionId,
-} from "@taverns/api";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { type Actor, type AssistantTurnId, type CharacterId, CurrentActor } from "@taverns/api";
+import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
@@ -24,30 +15,20 @@ import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aPlayerAt, anAccount, asDm, createCampaign } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { describeLayer } from "./support/suite.js";
 
 const database = migratedDatabase("taverns_test_hob_direct");
-const runtime = ManagedRuntime.make(Layer.mergeAll(servicesOver(database), database));
-afterAll(() => runtime.dispose());
+const services = Layer.mergeAll(servicesOver(database), database);
 
 const withActor =
   (actor: Actor) =>
   <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
     Effect.provideService(effect, CurrentActor, actor);
 
-interface Fixture {
-  readonly dm: Actor;
-  readonly player: Actor;
-  readonly campaignId: CampaignId;
-  readonly sessionId: SessionId;
-  readonly runId: EncounterRunId;
-  readonly combatantId: CombatantId;
-  readonly characterId: CharacterId;
-}
-
 const turnId = (suffix: string): AssistantTurnId =>
   `2b1f2a1e-0034-4000-8000-${suffix}` as AssistantTurnId;
 
-const seed = Effect.gen(function* () {
+const makeFixture = Effect.gen(function* () {
   const campaigns = yield* Campaigns;
   const characters = yield* Characters;
   const combatants = yield* Combatants;
@@ -107,16 +88,19 @@ const seed = Effect.gen(function* () {
     runId: run.id,
     combatantId: pc.id,
     characterId: character.id,
-  } satisfies Fixture;
+  };
 }).pipe(Effect.orDie);
 
-let fixture: Effect.Success<typeof seed>;
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hob-direct-writes.test/Fixture",
+) {}
 
-beforeAll(async () => {
-  fixture = await runtime.runPromise(seed);
-}, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(services));
 
-const usedOf = (characterId: Fixture["characterId"]) =>
+const asTheDm = <A, E, R>(effect: Effect.Effect<A, E, R | CurrentActor>) =>
+  Effect.flatMap(Fixture, (fixture) => withActor(fixture.dm)(effect));
+
+const usedOf = (characterId: CharacterId) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) =>
     Effect.map(
       sql<{ readonly used: number }>`
@@ -132,6 +116,7 @@ const usedOf = (characterId: Fixture["characterId"]) =>
 
 const spend = (call: string) =>
   Effect.gen(function* () {
+    const fixture = yield* Fixture;
     const threads = yield* HobThreads;
     const direct = yield* HobDirectWrites;
     const proof = yield* asDm(fixture.dm, fixture.campaignId);
@@ -154,12 +139,13 @@ const spend = (call: string) =>
       amount: 1,
     });
     return result.update;
-  }).pipe(withActor(fixture.dm));
+  }).pipe(asTheDm);
 
-describe("Hob direct resource writes", () => {
-  it("is off by default and a mid-fight revoke makes an in-flight spend fail", async () => {
-    await runtime.runPromise(
+describeLayer("hob-direct-writes", shared, (it) => {
+  describe("Hob direct resource writes", () => {
+    it.effect("is off by default and a mid-fight revoke makes an in-flight spend fail", () =>
       Effect.gen(function* () {
+        const fixture = yield* Fixture;
         const direct = yield* HobDirectWrites;
         const runs = yield* EncounterRuns;
         const proof = yield* asDm(fixture.dm, fixture.campaignId);
@@ -192,57 +178,60 @@ describe("Hob direct resource writes", () => {
         );
         expect(failed).toMatchObject({ _tag: "Conflict" });
         expect(yield* usedOf(fixture.characterId)).toBe(0);
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+      }).pipe(asTheDm, Effect.orDie),
     );
-  }, 60_000);
 
-  it("audits a spend and undoes it only while the counter still has Hob's after value", async () => {
-    await runtime.runPromise(
-      Effect.gen(function* () {
-        const runs = yield* EncounterRuns;
-        const direct = yield* HobDirectWrites;
-        const proof = yield* asDm(fixture.dm, fixture.campaignId);
-        yield* runs.update(proof, fixture.sessionId, fixture.runId, { allowHobDirectWrites: true });
+    it.effect(
+      "audits a spend and undoes it only while the counter still has Hob's after value",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const runs = yield* EncounterRuns;
+          const direct = yield* HobDirectWrites;
+          const proof = yield* asDm(fixture.dm, fixture.campaignId);
+          yield* runs.update(proof, fixture.sessionId, fixture.runId, {
+            allowHobDirectWrites: true,
+          });
 
-        const events = yield* SessionEvents;
-        const first = yield* spend("first");
-        expect(first).toMatchObject({ beforeUsed: 0, afterUsed: 1, resourceName: "Second Wind" });
-        expect(yield* usedOf(fixture.characterId)).toBe(1);
+          const events = yield* SessionEvents;
+          const first = yield* spend("first");
+          expect(first).toMatchObject({ beforeUsed: 0, afterUsed: 1, resourceName: "Second Wind" });
+          expect(yield* usedOf(fixture.characterId)).toBe(1);
 
-        const duplicate = yield* spend("first");
-        expect(duplicate.id).toBe(first.id);
-        expect(yield* usedOf(fixture.characterId)).toBe(1);
-        expect(
-          (yield* events.listForRun(proof, fixture.sessionId, fixture.runId, 0, 200)).filter(
-            (event) => event.kind === "hob-resource-spent",
-          ),
-        ).toHaveLength(1);
+          const duplicate = yield* spend("first");
+          expect(duplicate.id).toBe(first.id);
+          expect(yield* usedOf(fixture.characterId)).toBe(1);
+          expect(
+            (yield* events.listForRun(proof, fixture.sessionId, fixture.runId, 0, 200)).filter(
+              (event) => event.kind === "hob-resource-spent",
+            ),
+          ).toHaveLength(1);
 
-        const undone = yield* direct.undo(proof, fixture.sessionId, fixture.runId, first.id);
-        expect(undone.undoneAt).not.toBeNull();
-        expect(yield* usedOf(fixture.characterId)).toBe(0);
-        expect(
-          (yield* events.listForRun(proof, fixture.sessionId, fixture.runId, 0, 200)).filter(
-            (event) => event.kind === "hob-resource-undone",
-          ),
-        ).toHaveLength(1);
+          const undone = yield* direct.undo(proof, fixture.sessionId, fixture.runId, first.id);
+          expect(undone.undoneAt).not.toBeNull();
+          expect(yield* usedOf(fixture.characterId)).toBe(0);
+          expect(
+            (yield* events.listForRun(proof, fixture.sessionId, fixture.runId, 0, 200)).filter(
+              (event) => event.kind === "hob-resource-undone",
+            ),
+          ).toHaveLength(1);
 
-        const again = yield* direct.undo(proof, fixture.sessionId, fixture.runId, first.id);
-        expect(again.id).toBe(first.id);
-        expect(yield* usedOf(fixture.characterId)).toBe(0);
+          const again = yield* direct.undo(proof, fixture.sessionId, fixture.runId, first.id);
+          expect(again.id).toBe(first.id);
+          expect(yield* usedOf(fixture.characterId)).toBe(0);
 
-        const second = yield* spend("second");
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`
+          const second = yield* spend("second");
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`
           update character
           set body = jsonb_set(body, array['resources','0','used'], to_jsonb(0), false)
           where id = ${fixture.characterId}
         `;
-        const refused = yield* Effect.flip(
-          direct.undo(proof, fixture.sessionId, fixture.runId, second.id),
-        );
-        expect(refused).toMatchObject({ _tag: "Conflict" });
-      }).pipe(withActor(fixture.dm), Effect.orDie),
+          const refused = yield* Effect.flip(
+            direct.undo(proof, fixture.sessionId, fixture.runId, second.id),
+          );
+          expect(refused).toMatchObject({ _tag: "Conflict" });
+        }).pipe(asTheDm, Effect.orDie),
     );
-  }, 60_000);
+  });
 });

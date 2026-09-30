@@ -1,7 +1,7 @@
+import { describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Logger } from "effect";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 import { identityFromConfig } from "../src/app.js";
 import { testIdentityInstance } from "./support/identity.js";
 
@@ -61,56 +61,60 @@ describe("the env file the server reads", () => {
  * server had not seen it. One line at boot, in both modes, turns "why is my
  * session token rejected" into a glance at the first screen of output.
  */
-const bootLines = async (env: Record<string, string>): Promise<ReadonlyArray<string>> => {
-  const lines: Array<string> = [];
-  const capture = Logger.make<unknown, void>(({ message }) => {
-    lines.push(Array.isArray(message) ? message.map(String).join(" ") : String(message));
-  });
+const bootLines = (env: Record<string, string>): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.suspend(() => {
+    const lines: Array<string> = [];
+    const capture = Logger.make<unknown, void>(({ message }) => {
+      lines.push(Array.isArray(message) ? message.map(String).join(" ") : String(message));
+    });
 
-  await Effect.runPromise(
-    Effect.void.pipe(
+    return Effect.void.pipe(
       Effect.provide(identityFromConfig),
       // Outside the layer being built, so it captures construction itself.
       Effect.provide(Logger.layer([capture])),
       Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env })),
       Effect.orDie,
-    ),
-  );
-
-  return lines;
-};
+      Effect.as(lines),
+    );
+  });
 
 describe("what the server says at boot about hosted sign-in", () => {
-  it("says OFF, and names the file to set it in, when no key is configured", async () => {
-    const lines = await bootLines({});
+  it.live("says OFF, and names the file to set it in, when no key is configured", () =>
+    Effect.gen(function* () {
+      const lines = yield* bootLines({});
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("Hosted sign-in is OFF");
-    // The whole point of the line is that a key set in the wrong place is
-    // obvious immediately, which needs the right place named.
-    expect(lines[0]).toContain("apps/server/.env.local");
-  });
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("Hosted sign-in is OFF");
+      // The whole point of the line is that a key set in the wrong place is
+      // obvious immediately, which needs the right place named.
+      expect(lines[0]).toContain("apps/server/.env.local");
+    }),
+  );
 
-  it("says ON when a key is configured, so a key that was not read is obvious", async () => {
-    const instance = testIdentityInstance();
+  it.live("says ON when a key is configured, so a key that was not read is obvious", () =>
+    Effect.gen(function* () {
+      const instance = testIdentityInstance();
 
-    const lines = await bootLines({ CLERK_JWT_KEY: instance.jwtKey });
+      const lines = yield* bootLines({ CLERK_JWT_KEY: instance.jwtKey });
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("Hosted sign-in is ON");
-  });
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("Hosted sign-in is ON");
+    }),
+  );
 
-  it("logs no key material, not even a prefix or a length", async () => {
-    const instance = testIdentityInstance();
+  it.live("logs no key material, not even a prefix or a length", () =>
+    Effect.gen(function* () {
+      const instance = testIdentityInstance();
 
-    const lines = await bootLines({ CLERK_JWT_KEY: instance.jwtKey });
-    const output = lines.join("\n");
+      const lines = yield* bootLines({ CLERK_JWT_KEY: instance.jwtKey });
+      const output = lines.join("\n");
 
-    expect(output).not.toContain(instance.jwtKey);
-    // Boot output ends up in log aggregators, and "configured" already says
-    // everything a prefix would. The modulus body, in any fragment.
-    const body = instance.jwtKey.replace(/-----[^-]+-----|\s/g, "");
-    expect(output).not.toContain(body.slice(0, 12));
-    expect(output).not.toContain(String(instance.jwtKey.length));
-  });
+      expect(output).not.toContain(instance.jwtKey);
+      // Boot output ends up in log aggregators, and "configured" already says
+      // everything a prefix would. The modulus body, in any fragment.
+      const body = instance.jwtKey.replace(/-----[^-]+-----|\s/g, "");
+      expect(output).not.toContain(body.slice(0, 12));
+      expect(output).not.toContain(String(instance.jwtKey.length));
+    }),
+  );
 });

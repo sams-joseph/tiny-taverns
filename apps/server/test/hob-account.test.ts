@@ -1,16 +1,9 @@
-import {
-  Actor,
-  type AssistantThreadId,
-  type HobEvent,
-  type SharedWorld,
-  TavernsApi,
-} from "@taverns/api";
-import { Effect, Layer, ManagedRuntime, Option, Redacted, Stream } from "effect";
+import { describe, expect } from "@effect/vitest";
+import { type AssistantThreadId, type HobEvent, TavernsApi } from "@taverns/api";
+import { Context, Effect, Layer, Option, Redacted, Stream } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApiClient } from "effect/unstable/httpapi";
 import { SqlClient } from "effect/unstable/sql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
@@ -20,7 +13,7 @@ import { ImageRecords } from "../src/repo/Images.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { ObjectStorage } from "../src/storage/ObjectStorage.js";
-import { campaignVia } from "./support/actors.js";
+import { aPerson, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { scriptedImages } from "./support/imageModel.js";
 import {
@@ -31,6 +24,7 @@ import {
   toolCallChunks,
 } from "./support/model.js";
 import { testServer } from "./support/http.js";
+import { describeLayer } from "./support/suite.js";
 
 /**
  * **The account's own Hob panel** — `/me/hob` with no `intent`, the Hob on
@@ -75,15 +69,12 @@ const services = servicesOver(
   }).pipe(Layer.provide(images.layer)),
 );
 
-const runtime = ManagedRuntime.make(
-  applicationOver(services, { quiet: true }).pipe(
-    Layer.provideMerge(testServer),
-    Layer.provideMerge(ImageRecords.layer),
-    Layer.provideMerge(services),
-    Layer.provideMerge(database),
-  ),
+const application = applicationOver(services, { quiet: true }).pipe(
+  Layer.provideMerge(testServer),
+  Layer.provideMerge(ImageRecords.layer),
+  Layer.provideMerge(services),
+  Layer.provideMerge(database),
 );
-afterAll(() => runtime.dispose());
 
 const clientFor = (token: string) =>
   HttpApiClient.make(TavernsApi, {
@@ -92,42 +83,23 @@ const clientFor = (token: string) =>
 type Client = Effect.Success<ReturnType<typeof clientFor>>;
 
 const as = <A, E>(token: string, call: (client: Client) => Effect.Effect<A, E>) =>
-  runtime.runPromise(Effect.flatMap(clientFor(token), call).pipe(Effect.orDie));
+  Effect.flatMap(clientFor(token), call).pipe(Effect.orDie);
 
 /** The same call, answering the failure's tag rather than dying on it. */
 const refusal = <A, E extends { readonly _tag: string }>(
   token: string,
   call: (client: Client) => Effect.Effect<A, E>,
 ) =>
-  runtime.runPromise(
-    Effect.flatMap(clientFor(token), (client) =>
-      call(client).pipe(
-        Effect.match({ onFailure: (error) => error._tag, onSuccess: () => "succeeded" }),
-      ),
-    ).pipe(Effect.orDie),
-  );
-
-const run = <A, E>(
-  effect: Effect.Effect<A, E, ManagedRuntime.ManagedRuntime.Services<typeof runtime>>,
-) => runtime.runPromise(effect.pipe(Effect.orDie));
+  Effect.flatMap(clientFor(token), (client) =>
+    call(client).pipe(
+      Effect.match({ onFailure: (error) => error._tag, onSuccess: () => "succeeded" }),
+    ),
+  ).pipe(Effect.orDie);
 
 const sql = <A>(query: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>) =>
-  runtime.runPromise(Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie));
+  Effect.flatMap(SqlClient.SqlClient, query).pipe(Effect.orDie);
 
-const settled = () => runtime.runPromise(Effect.flatMap(HobImages, (drawing) => drawing.idle));
-
-interface Person {
-  readonly token: string;
-  readonly actor: Actor;
-}
-
-const person = async (name: string): Promise<Person> => {
-  const issued = await run(Effect.flatMap(Accounts, (accounts) => accounts.issue(name)));
-  return {
-    token: issued.token,
-    actor: new Actor({ accountId: issued.accountId, scope: { _tag: "account" } }),
-  };
-};
+const settled = Effect.flatMap(HobImages, (drawing) => drawing.idle);
 
 const ASKED = "Draft me a campaign: a ghost story on a river, slow and cold.";
 
@@ -147,7 +119,7 @@ interface Asked {
 }
 
 /** Ask the account's panel (`/me/hob/ask`, no `intent`) with these rounds scripted. */
-const ask = async (
+const ask = (
   token: string,
   options: {
     readonly text?: string;
@@ -155,24 +127,25 @@ const ask = async (
     readonly intent?: "character";
     readonly rounds?: ReadonlyArray<Round>;
   } = {},
-): Promise<Asked> => {
-  const before = model.requests().length;
-  script.length = before;
-  script.push(...(options.rounds ?? [aCampaign(), textChunks("Here is your table.")]));
-  const events = await as(token, (client) =>
-    Effect.flatMap(
-      client.meHob.ask({
-        payload: {
-          text: options.text ?? ASKED,
-          ...(options.threadId === undefined ? {} : { threadId: options.threadId }),
-          ...(options.intent === undefined ? {} : { intent: options.intent }),
-        },
-      }),
-      (stream) => Stream.runCollect(stream),
-    ),
-  );
-  return { events: Array.from(events), requests: model.requests().slice(before) };
-};
+) =>
+  Effect.gen(function* () {
+    const before = model.requests().length;
+    script.length = before;
+    script.push(...(options.rounds ?? [aCampaign(), textChunks("Here is your table.")]));
+    const events = yield* as(token, (client) =>
+      Effect.flatMap(
+        client.meHob.ask({
+          payload: {
+            text: options.text ?? ASKED,
+            ...(options.threadId === undefined ? {} : { threadId: options.threadId }),
+            ...(options.intent === undefined ? {} : { intent: options.intent }),
+          },
+        }),
+        (stream) => Stream.runCollect(stream),
+      ),
+    );
+    return { events: Array.from(events), requests: model.requests().slice(before) } as Asked;
+  });
 
 const begunIn = (events: ReadonlyArray<HobEvent>) => {
   const began = events.find((event) => event.event === "began");
@@ -191,453 +164,551 @@ const toolNames = (request: ChatRequest | undefined): ReadonlyArray<string> =>
     .filter((name): name is string => name !== undefined)
     .sort();
 
-const campaignCount = () =>
-  sql((sql) => sql<{ readonly count: string }>`select count(*)::text as count from campaign`).then(
-    (rows) => Number(rows[0]?.count ?? "0"),
-  );
+const campaignCount = sql(
+  (sql) => sql<{ readonly count: string }>`select count(*)::text as count from campaign`,
+).pipe(Effect.map((rows) => Number(rows[0]?.count ?? "0")));
 
-let owner: Person;
-let stranger: Person;
-let coast: SharedWorld;
-let theirs: SharedWorld;
-
-beforeAll(async () => {
-  await run(importSystemEquipment());
-  await run(importSystemOptions());
-  await run(importSystemSpells());
-  owner = await person("Wren");
-  stranger = await person("Tamsin");
-  coast = await as(owner.token, (client) =>
+const makeFixture = Effect.gen(function* () {
+  yield* importSystemEquipment();
+  yield* importSystemOptions();
+  yield* importSystemSpells();
+  const owner = yield* aPerson("Wren");
+  const stranger = yield* aPerson("Tamsin");
+  const coast = yield* as(owner.token, (client) =>
     client.sharedWorlds.create({ payload: { name: "The Drowned Coast" } }),
   );
   // Somebody else's world, with a campaign whose words must never reach the
   // owner's model: its name is not a world the owner can start a table in.
-  theirs = await as(stranger.token, (client) =>
+  const theirs = yield* as(stranger.token, (client) =>
     client.sharedWorlds.create({ payload: { name: "Tamsin's Marches" } }),
   );
-  await as(stranger.token, (client) =>
+  yield* as(stranger.token, (client) =>
     campaignVia(client, { name: "STRANGER_SENTINEL table", visibility: "shared" }),
   );
   // The owner's own standalone table: its hidden context is not a Shared World.
-  await as(owner.token, (client) =>
+  yield* as(owner.token, (client) =>
     client.campaigns.create({ payload: { name: "OWNER_SENTINEL table" } }),
   );
-}, 120_000);
+  return { owner, stranger, coast, theirs };
+}).pipe(Effect.orDie);
 
-describe("the panel's toolkit fits where it is", () => {
-  it("offers character, campaign and world drafting and nothing that reads a record", async () => {
-    const { requests } = await ask(owner.token);
-    expect(toolNames(requests[0])).toEqual([
-      "listStartingSpells",
-      "proposeCampaign",
-      "proposeCharacter",
-      "proposeSharedWorld",
-    ]);
-    const shown = JSON.stringify(requests[0]?.tools);
-    expect(shown.toLowerCase()).not.toContain("campaignid");
-    for (const absent of [
-      "searchCampaign",
-      "proposeNote",
-      "proposeEncounter",
-      "proposeBeat",
-      "proposeSharedWorldEntry",
-      "proposeStorySoFar",
-    ]) {
-      expect(shown).not.toContain(absent);
-    }
-    // No campaign's record reaches the model from here.
-    expect(JSON.stringify(requests)).not.toContain("OWNER_SENTINEL");
-    expect(JSON.stringify(requests)).not.toContain("STRANGER_SENTINEL");
-  }, 60_000);
+class Fixture extends Context.Service<Fixture, Effect.Success<typeof makeFixture>>()(
+  "hob-account.test/Fixture",
+) {}
 
-  it("names the asker's own Shared Worlds, and no one else's", async () => {
-    const { requests } = await ask(owner.token);
-    const shown = JSON.stringify(requests[0]?.tools);
-    expect(shown).toContain("The Drowned Coast");
-    expect(shown).not.toContain("Tamsin's Marches");
-    // Somebody in no Shared World is told so rather than shown an empty choice.
-    const lonely = await person("Lonely");
-    const theirRequests = await ask(lonely.token);
-    const theirShown = JSON.stringify(theirRequests.requests[0]?.tools);
-    expect(theirShown).toContain("no Shared World");
-    expect(theirShown).not.toContain("The Drowned Coast");
-  }, 60_000);
+const shared = Layer.effect(Fixture)(makeFixture).pipe(Layer.provideMerge(application));
 
-  it("keeps the create screen's composer to character drafting", async () => {
-    const { requests } = await ask(owner.token, {
-      intent: "character",
-      rounds: [textChunks("Tell me about them.")],
-    });
-    expect(toolNames(requests[0])).toEqual(["listStartingSpells", "proposeCharacter"]);
-  }, 60_000);
-});
+describeLayer(
+  "hob-account",
+  shared,
+  (it) => {
+    describe("the panel's toolkit fits where it is", () => {
+      it.effect(
+        "offers character, campaign and world drafting and nothing that reads a record",
+        () =>
+          Effect.gen(function* () {
+            const { owner } = yield* Fixture;
+            const { requests } = yield* ask(owner.token);
+            expect(toolNames(requests[0])).toEqual([
+              "listStartingSpells",
+              "proposeCampaign",
+              "proposeCharacter",
+              "proposeSharedWorld",
+            ]);
+            const shown = JSON.stringify(requests[0]?.tools);
+            expect(shown.toLowerCase()).not.toContain("campaignid");
+            for (const absent of [
+              "searchCampaign",
+              "proposeNote",
+              "proposeEncounter",
+              "proposeBeat",
+              "proposeSharedWorldEntry",
+              "proposeStorySoFar",
+            ]) {
+              expect(shown).not.toContain(absent);
+            }
+            // No campaign's record reaches the model from here.
+            expect(JSON.stringify(requests)).not.toContain("OWNER_SENTINEL");
+            expect(JSON.stringify(requests)).not.toContain("STRANGER_SENTINEL");
+          }),
+      );
 
-describe("drafting a campaign", () => {
-  it("offers a card and writes nothing until it is kept", async () => {
-    const count = await campaignCount();
-    const { events } = await ask(owner.token);
-    const proposed = proposedIn(events);
-    expect(proposed?.proposal).toEqual({
-      target: "campaign",
-      name: "The Drowned Bell",
-      partyName: "The Lantern Crew",
-      description: "A river town where the church bell rings under the water every night.",
-      world: null,
-    });
-    expect(events.at(-1)?.event).toBe("done");
-    expect(await campaignCount()).toBe(count);
-  }, 60_000);
-
-  it("resolves a Shared World by name to the one the asker is in", async () => {
-    const { events } = await ask(owner.token, {
-      rounds: [aCampaign({ sharedWorld: "The Drowned Coast" }), textChunks("On the coast.")],
-    });
-    const proposed = proposedIn(events);
-    if (proposed?.proposal.target !== "campaign") throw new Error("no campaign proposal");
-    expect(proposed.proposal.world).toEqual({ id: coast.id, name: "The Drowned Coast" });
-  }, 60_000);
-
-  it("refuses a world the asker is not in, to the model, and offers nothing", async () => {
-    // Within the enum the grammar itself refuses it, and the correction names
-    // the one world there is.
-    const { events, requests } = await ask(owner.token, {
-      rounds: [aCampaign({ sharedWorld: "Tamsin's Marches" }), textChunks("I could not.")],
-    });
-    expect(proposedIn(events)).toBeUndefined();
-    const corrected = JSON.stringify(requests[1]?.messages);
-    expect(corrected).toContain("could not be read");
-    expect(corrected).toContain("The Drowned Coast");
-  }, 60_000);
-
-  it("refuses any world to somebody in none, in the handler, and offers nothing", async () => {
-    const lonely = await person("Alone");
-    const { events, requests } = await ask(lonely.token, {
-      rounds: [aCampaign({ sharedWorld: "Tamsin's Marches" }), textChunks("Standalone, then.")],
-    });
-    expect(proposedIn(events)).toBeUndefined();
-    expect(JSON.stringify(requests[1]?.messages)).toContain(
-      "they are in no Shared World, so leave sharedWorld out",
-    );
-    // "none" is absence, not a world called that.
-    const plain = await ask(lonely.token, {
-      rounds: [aCampaign({ sharedWorld: "None" }), textChunks("Standalone.")],
-    });
-    const proposed = proposedIn(plain.events);
-    expect(proposed?.proposal.target === "campaign" && proposed.proposal.world).toBeNull();
-  }, 60_000);
-
-  it("continues the same thread on a redraft, and shows the model its offer", async () => {
-    const first = await ask(owner.token);
-    const { threadId } = begunIn(first.events);
-    const second = await ask(owner.token, {
-      threadId,
-      text: "Make it darker.",
-      rounds: [aCampaign({ name: "The Black Bell" }), textChunks("Darker.")],
-    });
-    expect(begunIn(second.events).threadId).toBe(threadId);
-    expect(JSON.stringify(second.requests[0]?.messages)).toContain(
-      'You offered a campaign called \\"The Drowned Bell\\"',
-    );
-    const proposed = proposedIn(second.events);
-    expect(proposed?.proposal.target === "campaign" && proposed.proposal.name).toBe(
-      "The Black Bell",
-    );
-  }, 60_000);
-});
-
-describe("a prose answer", () => {
-  it("is reported when a campaign was asked for, and quiet in ordinary chat", async () => {
-    const asked = await ask(owner.token, { rounds: [textChunks("A cold river, a bell.")] });
-    const last = asked.events.at(-1);
-    expect(last?.event).toBe("failed");
-    expect(last?.event === "failed" && last.data.message).toContain("drafted nothing you can keep");
-
-    const chat = await ask(owner.token, {
-      text: "What can you do from here?",
-      rounds: [textChunks("I can draft a campaign or a character.")],
-    });
-    expect(chat.events.at(-1)?.event).toBe("done");
-  }, 60_000);
-});
-
-describe("keeping it", () => {
-  it("makes one campaign the asker runs, stamped with the turn, and draws its cover once", async () => {
-    const { events } = await ask(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    const count = await campaignCount();
-    const drawnBefore = images.requests().length;
-
-    const accepted = await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    if (accepted.accepted !== "campaign") throw new Error("not a campaign");
-    expect(accepted.campaign).toMatchObject({
-      name: "The Drowned Bell",
-      partyName: "The Lantern Crew",
-      description: "A river town where the church bell rings under the water every night.",
-      creatorAccountId: owner.actor.accountId,
-      origin: "assistant",
-      assistantTurnId: turnId,
-      imagePending: true,
-    });
-    expect(await campaignCount()).toBe(count + 1);
-    await settled();
-    expect(images.requests().length - drawnBefore).toBe(1);
-
-    // Standalone: the asker's own table, which the list shows as theirs.
-    const mine = await as(owner.token, (client) => client.me.campaigns());
-    const row = mine.find((entry) => entry.campaign.id === accepted.campaign.id);
-    expect(row?.relation).toBe("creator");
-    expect(row?.sharedWorld).toBeNull();
-    const turns = await as(owner.token, (client) => client.meHob.turns({ params: { threadId } }));
-    expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).not.toBeNull();
-  }, 60_000);
-
-  it("makes it inside the Shared World it named", async () => {
-    const { events } = await ask(owner.token, {
-      rounds: [aCampaign({ sharedWorld: "The Drowned Coast" }), textChunks("On the coast.")],
-    });
-    const { threadId, turnId } = begunIn(events);
-    const accepted = await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    if (accepted.accepted !== "campaign") throw new Error("not a campaign");
-    expect(accepted.campaign.contextId).toBe(coast.id);
-    const directory = await as(owner.token, (client) =>
-      client.sharedWorlds.campaigns({ params: { worldId: coast.id } }),
-    );
-    expect(JSON.stringify(directory)).toContain(accepted.campaign.id);
-  }, 60_000);
-
-  it("is one campaign however many times it is kept", async () => {
-    const { events } = await ask(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    const count = await campaignCount();
-    expect(
-      await refusal(owner.token, (client) =>
-        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-      ),
-    ).toBe("Conflict");
-    expect(await campaignCount()).toBe(count);
-  }, 60_000);
-
-  it("is NotFound to another account, which makes nothing", async () => {
-    const { events } = await ask(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    const count = await campaignCount();
-    expect(
-      await refusal(stranger.token, (client) =>
-        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-      ),
-    ).toBe("NotFound");
-    expect(
-      await refusal(stranger.token, (client) => client.meHob.turns({ params: { threadId } })),
-    ).toBe("NotFound");
-    const before = model.requests().length;
-    expect(
-      await refusal(stranger.token, (client) =>
-        client.meHob.ask({ payload: { threadId, text: "Make it mine." } }),
-      ),
-    ).toBe("NotFound");
-    expect(model.requests().length).toBe(before);
-    expect(await campaignCount()).toBe(count);
-    // Still the owner's to keep.
-    const accepted = await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    expect(accepted.accepted).toBe("campaign");
-  }, 60_000);
-
-  it("refuses a keep into a world archived since, and makes nothing", async () => {
-    const brief = await as(owner.token, (client) =>
-      client.sharedWorlds.create({ payload: { name: "The Brief Isles" } }),
-    );
-    const { events } = await ask(owner.token, {
-      rounds: [aCampaign({ sharedWorld: "The Brief Isles" }), textChunks("On the isles.")],
-    });
-    const { threadId, turnId } = begunIn(events);
-    await as(owner.token, (client) =>
-      client.sharedWorlds.archive({ params: { worldId: brief.id } }),
-    );
-    const count = await campaignCount();
-    expect(
-      await refusal(owner.token, (client) =>
-        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-      ),
-    ).toBe("NotFound");
-    expect(await campaignCount()).toBe(count);
-    // And the turn is still unkept: nothing half-happened.
-    const turns = await as(owner.token, (client) => client.meHob.turns({ params: { threadId } }));
-    expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).toBeNull();
-  }, 60_000);
-
-  it("never reaches a campaign's or a Shared World's accept", async () => {
-    const { events } = await ask(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    expect(
-      await refusal(owner.token, (client) =>
-        client.sharedWorldHob.accept({
-          params: { worldId: coast.id, threadId, turnId },
-          payload: {},
+      it.effect("names the asker's own Shared Worlds, and no one else's", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const { requests } = yield* ask(owner.token);
+          const shown = JSON.stringify(requests[0]?.tools);
+          expect(shown).toContain("The Drowned Coast");
+          expect(shown).not.toContain("Tamsin's Marches");
+          // Somebody in no Shared World is told so rather than shown an empty choice.
+          const lonely = yield* aPerson("Lonely");
+          const theirRequests = yield* ask(lonely.token);
+          const theirShown = JSON.stringify(theirRequests.requests[0]?.tools);
+          expect(theirShown).toContain("no Shared World");
+          expect(theirShown).not.toContain("The Drowned Coast");
         }),
-      ),
-    ).toBe("NotFound");
-    expect(theirs.id).not.toBe(coast.id);
-  }, 60_000);
-});
+      );
 
-describe("drafting a Shared World", () => {
-  const WORLD_ASKED = "Make me a Shared World: a drowned archipelago where the tides forgot.";
-
-  /** A world a well-behaved model offers. */
-  const aWorld = (over: Record<string, unknown> = {}) =>
-    toolCallChunks("proposeSharedWorld", {
-      name: "The Sunken Reach",
-      description: "An archipelago the sea took back, where the bells still ring below.",
-      ...over,
+      it.effect("keeps the create screen's composer to character drafting", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const { requests } = yield* ask(owner.token, {
+            intent: "character",
+            rounds: [textChunks("Tell me about them.")],
+          });
+          expect(toolNames(requests[0])).toEqual(["listStartingSpells", "proposeCharacter"]);
+        }),
+      );
     });
 
-  const worldCount = () =>
-    sql(
-      (sql) =>
-        sql<{ readonly count: string }>`
+    describe("drafting a campaign", () => {
+      it.effect("offers a card and writes nothing until it is kept", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const count = yield* campaignCount;
+          const { events } = yield* ask(owner.token);
+          const proposed = proposedIn(events);
+          expect(proposed?.proposal).toEqual({
+            target: "campaign",
+            name: "The Drowned Bell",
+            partyName: "The Lantern Crew",
+            description: "A river town where the church bell rings under the water every night.",
+            world: null,
+          });
+          expect(events.at(-1)?.event).toBe("done");
+          expect(yield* campaignCount).toBe(count);
+        }),
+      );
+
+      it.effect("resolves a Shared World by name to the one the asker is in", () =>
+        Effect.gen(function* () {
+          const { owner, coast } = yield* Fixture;
+          const { events } = yield* ask(owner.token, {
+            rounds: [aCampaign({ sharedWorld: "The Drowned Coast" }), textChunks("On the coast.")],
+          });
+          const proposed = proposedIn(events);
+          if (proposed?.proposal.target !== "campaign") throw new Error("no campaign proposal");
+          expect(proposed.proposal.world).toEqual({ id: coast.id, name: "The Drowned Coast" });
+        }),
+      );
+
+      it.effect("refuses a world the asker is not in, to the model, and offers nothing", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          // Within the enum the grammar itself refuses it, and the correction names
+          // the one world there is.
+          const { events, requests } = yield* ask(owner.token, {
+            rounds: [aCampaign({ sharedWorld: "Tamsin's Marches" }), textChunks("I could not.")],
+          });
+          expect(proposedIn(events)).toBeUndefined();
+          const corrected = JSON.stringify(requests[1]?.messages);
+          expect(corrected).toContain("could not be read");
+          expect(corrected).toContain("The Drowned Coast");
+        }),
+      );
+
+      it.effect("refuses any world to somebody in none, in the handler, and offers nothing", () =>
+        Effect.gen(function* () {
+          const lonely = yield* aPerson("Alone");
+          const { events, requests } = yield* ask(lonely.token, {
+            rounds: [
+              aCampaign({ sharedWorld: "Tamsin's Marches" }),
+              textChunks("Standalone, then."),
+            ],
+          });
+          expect(proposedIn(events)).toBeUndefined();
+          expect(JSON.stringify(requests[1]?.messages)).toContain(
+            "they are in no Shared World, so leave sharedWorld out",
+          );
+          // "none" is absence, not a world called that.
+          const plain = yield* ask(lonely.token, {
+            rounds: [aCampaign({ sharedWorld: "None" }), textChunks("Standalone.")],
+          });
+          const proposed = proposedIn(plain.events);
+          expect(proposed?.proposal.target === "campaign" && proposed.proposal.world).toBeNull();
+        }),
+      );
+
+      it.effect("continues the same thread on a redraft, and shows the model its offer", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const first = yield* ask(owner.token);
+          const { threadId } = begunIn(first.events);
+          const second = yield* ask(owner.token, {
+            threadId,
+            text: "Make it darker.",
+            rounds: [aCampaign({ name: "The Black Bell" }), textChunks("Darker.")],
+          });
+          expect(begunIn(second.events).threadId).toBe(threadId);
+          expect(JSON.stringify(second.requests[0]?.messages)).toContain(
+            'You offered a campaign called \\"The Drowned Bell\\"',
+          );
+          const proposed = proposedIn(second.events);
+          expect(proposed?.proposal.target === "campaign" && proposed.proposal.name).toBe(
+            "The Black Bell",
+          );
+        }),
+      );
+    });
+
+    describe("a prose answer", () => {
+      it.effect("is reported when a campaign was asked for, and quiet in ordinary chat", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const asked = yield* ask(owner.token, { rounds: [textChunks("A cold river, a bell.")] });
+          const last = asked.events.at(-1);
+          expect(last?.event).toBe("failed");
+          expect(last?.event === "failed" && last.data.message).toContain(
+            "drafted nothing you can keep",
+          );
+
+          const chat = yield* ask(owner.token, {
+            text: "What can you do from here?",
+            rounds: [textChunks("I can draft a campaign or a character.")],
+          });
+          expect(chat.events.at(-1)?.event).toBe("done");
+        }),
+      );
+    });
+
+    describe("keeping it", () => {
+      it.effect(
+        "makes one campaign the asker runs, stamped with the turn, and draws its cover once",
+        () =>
+          Effect.gen(function* () {
+            const { owner } = yield* Fixture;
+            const { events } = yield* ask(owner.token);
+            const { threadId, turnId } = begunIn(events);
+            const count = yield* campaignCount;
+            const drawnBefore = images.requests().length;
+
+            const accepted = yield* as(owner.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            );
+            if (accepted.accepted !== "campaign") throw new Error("not a campaign");
+            expect(accepted.campaign).toMatchObject({
+              name: "The Drowned Bell",
+              partyName: "The Lantern Crew",
+              description: "A river town where the church bell rings under the water every night.",
+              creatorAccountId: owner.actor.accountId,
+              origin: "assistant",
+              assistantTurnId: turnId,
+              imagePending: true,
+            });
+            expect(yield* campaignCount).toBe(count + 1);
+            yield* settled;
+            expect(images.requests().length - drawnBefore).toBe(1);
+
+            // Standalone: the asker's own table, which the list shows as theirs.
+            const mine = yield* as(owner.token, (client) => client.me.campaigns());
+            const row = mine.find((entry) => entry.campaign.id === accepted.campaign.id);
+            expect(row?.relation).toBe("creator");
+            expect(row?.sharedWorld).toBeNull();
+            const turns = yield* as(owner.token, (client) =>
+              client.meHob.turns({ params: { threadId } }),
+            );
+            expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).not.toBeNull();
+          }),
+      );
+
+      it.effect("makes it inside the Shared World it named", () =>
+        Effect.gen(function* () {
+          const { owner, coast } = yield* Fixture;
+          const { events } = yield* ask(owner.token, {
+            rounds: [aCampaign({ sharedWorld: "The Drowned Coast" }), textChunks("On the coast.")],
+          });
+          const { threadId, turnId } = begunIn(events);
+          const accepted = yield* as(owner.token, (client) =>
+            client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+          );
+          if (accepted.accepted !== "campaign") throw new Error("not a campaign");
+          expect(accepted.campaign.contextId).toBe(coast.id);
+          const directory = yield* as(owner.token, (client) =>
+            client.sharedWorlds.campaigns({ params: { worldId: coast.id } }),
+          );
+          expect(JSON.stringify(directory)).toContain(accepted.campaign.id);
+        }),
+      );
+
+      it.effect("is one campaign however many times it is kept", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const { events } = yield* ask(owner.token);
+          const { threadId, turnId } = begunIn(events);
+          yield* as(owner.token, (client) =>
+            client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+          );
+          const count = yield* campaignCount;
+          expect(
+            yield* refusal(owner.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            ),
+          ).toBe("Conflict");
+          expect(yield* campaignCount).toBe(count);
+        }),
+      );
+
+      it.effect("is NotFound to another account, which makes nothing", () =>
+        Effect.gen(function* () {
+          const { owner, stranger } = yield* Fixture;
+          const { events } = yield* ask(owner.token);
+          const { threadId, turnId } = begunIn(events);
+          const count = yield* campaignCount;
+          expect(
+            yield* refusal(stranger.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            ),
+          ).toBe("NotFound");
+          expect(
+            yield* refusal(stranger.token, (client) =>
+              client.meHob.turns({ params: { threadId } }),
+            ),
+          ).toBe("NotFound");
+          const before = model.requests().length;
+          expect(
+            yield* refusal(stranger.token, (client) =>
+              client.meHob.ask({ payload: { threadId, text: "Make it mine." } }),
+            ),
+          ).toBe("NotFound");
+          expect(model.requests().length).toBe(before);
+          expect(yield* campaignCount).toBe(count);
+          // Still the owner's to keep.
+          const accepted = yield* as(owner.token, (client) =>
+            client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+          );
+          expect(accepted.accepted).toBe("campaign");
+        }),
+      );
+
+      it.effect("refuses a keep into a world archived since, and makes nothing", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const brief = yield* as(owner.token, (client) =>
+            client.sharedWorlds.create({ payload: { name: "The Brief Isles" } }),
+          );
+          const { events } = yield* ask(owner.token, {
+            rounds: [aCampaign({ sharedWorld: "The Brief Isles" }), textChunks("On the isles.")],
+          });
+          const { threadId, turnId } = begunIn(events);
+          yield* as(owner.token, (client) =>
+            client.sharedWorlds.archive({ params: { worldId: brief.id } }),
+          );
+          const count = yield* campaignCount;
+          expect(
+            yield* refusal(owner.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            ),
+          ).toBe("NotFound");
+          expect(yield* campaignCount).toBe(count);
+          // And the turn is still unkept: nothing half-happened.
+          const turns = yield* as(owner.token, (client) =>
+            client.meHob.turns({ params: { threadId } }),
+          );
+          expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).toBeNull();
+        }),
+      );
+
+      it.effect("never reaches a campaign's or a Shared World's accept", () =>
+        Effect.gen(function* () {
+          const { owner, coast, theirs } = yield* Fixture;
+          const { events } = yield* ask(owner.token);
+          const { threadId, turnId } = begunIn(events);
+          expect(
+            yield* refusal(owner.token, (client) =>
+              client.sharedWorldHob.accept({
+                params: { worldId: coast.id, threadId, turnId },
+                payload: {},
+              }),
+            ),
+          ).toBe("NotFound");
+          expect(theirs.id).not.toBe(coast.id);
+        }),
+      );
+    });
+
+    describe("drafting a Shared World", () => {
+      const WORLD_ASKED = "Make me a Shared World: a drowned archipelago where the tides forgot.";
+
+      /** A world a well-behaved model offers. */
+      const aWorld = (over: Record<string, unknown> = {}) =>
+        toolCallChunks("proposeSharedWorld", {
+          name: "The Sunken Reach",
+          description: "An archipelago the sea took back, where the bells still ring below.",
+          ...over,
+        });
+
+      const worldCount = sql(
+        (sql) =>
+          sql<{ readonly count: string }>`
           select count(*)::text as count from play_group where is_shared_world
         `,
-    ).then((rows) => Number(rows[0]?.count ?? "0"));
+      ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? "0")));
 
-  const offerWorld = (token: string, over: Record<string, unknown> = {}) =>
-    ask(token, { text: WORLD_ASKED, rounds: [aWorld(over), textChunks("Here is your world.")] });
+      const offerWorld = (token: string, over: Record<string, unknown> = {}) =>
+        ask(token, {
+          text: WORLD_ASKED,
+          rounds: [aWorld(over), textChunks("Here is your world.")],
+        });
 
-  it("offers a card and founds nothing until it is kept", async () => {
-    const count = await worldCount();
-    const { events, requests } = await offerWorld(owner.token);
-    expect(proposedIn(events)?.proposal).toEqual({
-      target: "sharedWorld",
-      name: "The Sunken Reach",
-      description: "An archipelago the sea took back, where the bells still ring below.",
-    });
-    expect(events.at(-1)?.event).toBe("done");
-    expect(await worldCount()).toBe(count);
-    // The account prompt names the tool, so the model knows it may.
-    expect(JSON.stringify(requests[0]?.messages)).toContain("proposeSharedWorld");
-  }, 60_000);
+      it.effect("offers a card and founds nothing until it is kept", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const count = yield* worldCount;
+          const { events, requests } = yield* offerWorld(owner.token);
+          expect(proposedIn(events)?.proposal).toEqual({
+            target: "sharedWorld",
+            name: "The Sunken Reach",
+            description: "An archipelago the sea took back, where the bells still ring below.",
+          });
+          expect(events.at(-1)?.event).toBe("done");
+          expect(yield* worldCount).toBe(count);
+          // The account prompt names the tool, so the model knows it may.
+          expect(JSON.stringify(requests[0]?.messages)).toContain("proposeSharedWorld");
+        }),
+      );
 
-  it("takes a blank description as none, and refuses a blank name to the model", async () => {
-    const plain = await offerWorld(owner.token, { description: "   " });
-    const proposed = proposedIn(plain.events);
-    expect(proposed?.proposal.target === "sharedWorld" && proposed.proposal.description).toBeNull();
+      it.effect("takes a blank description as none, and refuses a blank name to the model", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const plain = yield* offerWorld(owner.token, { description: "   " });
+          const proposed = proposedIn(plain.events);
+          expect(
+            proposed?.proposal.target === "sharedWorld" && proposed.proposal.description,
+          ).toBeNull();
 
-    const { events, requests } = await ask(owner.token, {
-      text: WORLD_ASKED,
-      rounds: [aWorld({ name: "   " }), textChunks("I need a name.")],
-    });
-    expect(proposedIn(events)).toBeUndefined();
-    expect(JSON.stringify(requests[1]?.messages)).toContain("give the Shared World a name");
-  }, 60_000);
+          const { events, requests } = yield* ask(owner.token, {
+            text: WORLD_ASKED,
+            rounds: [aWorld({ name: "   " }), textChunks("I need a name.")],
+          });
+          expect(proposedIn(events)).toBeUndefined();
+          expect(JSON.stringify(requests[1]?.messages)).toContain("give the Shared World a name");
+        }),
+      );
 
-  it("reports a prose answer when a world was asked for", async () => {
-    const asked = await ask(owner.token, {
-      text: WORLD_ASKED,
-      rounds: [textChunks("A drowned archipelago, cold and bright.")],
-    });
-    const last = asked.events.at(-1);
-    expect(last?.event).toBe("failed");
-    expect(last?.event === "failed" && last.data.message).toContain("drafted nothing you can keep");
-  }, 60_000);
+      it.effect("reports a prose answer when a world was asked for", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const asked = yield* ask(owner.token, {
+            text: WORLD_ASKED,
+            rounds: [textChunks("A drowned archipelago, cold and bright.")],
+          });
+          const last = asked.events.at(-1);
+          expect(last?.event).toBe("failed");
+          expect(last?.event === "failed" && last.data.message).toContain(
+            "drafted nothing you can keep",
+          );
+        }),
+      );
 
-  it("continues the same thread on a redraft, and shows the model its offer", async () => {
-    const first = await offerWorld(owner.token);
-    const { threadId } = begunIn(first.events);
-    const second = await ask(owner.token, {
-      threadId,
-      text: "Make it colder.",
-      rounds: [aWorld({ name: "The Frozen Reach" }), textChunks("Colder.")],
-    });
-    expect(begunIn(second.events).threadId).toBe(threadId);
-    expect(JSON.stringify(second.requests[0]?.messages)).toContain(
-      'You offered a Shared World called \\"The Sunken Reach\\"',
-    );
-  }, 60_000);
+      it.effect("continues the same thread on a redraft, and shows the model its offer", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const first = yield* offerWorld(owner.token);
+          const { threadId } = begunIn(first.events);
+          const second = yield* ask(owner.token, {
+            threadId,
+            text: "Make it colder.",
+            rounds: [aWorld({ name: "The Frozen Reach" }), textChunks("Colder.")],
+          });
+          expect(begunIn(second.events).threadId).toBe(threadId);
+          expect(JSON.stringify(second.requests[0]?.messages)).toContain(
+            'You offered a Shared World called \\"The Sunken Reach\\"',
+          );
+        }),
+      );
 
-  it("founds one world the asker owns, stamped with the turn, and draws its cover once", async () => {
-    const { events } = await offerWorld(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    const count = await worldCount();
-    const drawnBefore = images.requests().length;
+      it.effect(
+        "founds one world the asker owns, stamped with the turn, and draws its cover once",
+        () =>
+          Effect.gen(function* () {
+            const { owner } = yield* Fixture;
+            const { events } = yield* offerWorld(owner.token);
+            const { threadId, turnId } = begunIn(events);
+            const count = yield* worldCount;
+            const drawnBefore = images.requests().length;
 
-    const accepted = await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    if (accepted.accepted !== "sharedWorld") throw new Error("not a Shared World");
-    expect(accepted.sharedWorld).toMatchObject({
-      name: "The Sunken Reach",
-      description: "An archipelago the sea took back, where the bells still ring below.",
-      ownerAccountId: owner.actor.accountId,
-      archivedAt: null,
-      imagePending: true,
-    });
-    expect(await worldCount()).toBe(count + 1);
-    await settled();
-    expect(images.requests().length - drawnBefore).toBe(1);
+            const accepted = yield* as(owner.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            );
+            if (accepted.accepted !== "sharedWorld") throw new Error("not a Shared World");
+            expect(accepted.sharedWorld).toMatchObject({
+              name: "The Sunken Reach",
+              description: "An archipelago the sea took back, where the bells still ring below.",
+              ownerAccountId: owner.actor.accountId,
+              archivedAt: null,
+              imagePending: true,
+            });
+            expect(yield* worldCount).toBe(count + 1);
+            yield* settled;
+            expect(images.requests().length - drawnBefore).toBe(1);
 
-    // The provenance is on the row, as a kept campaign's is.
-    const [row] = await sql(
-      (sql) =>
-        sql<{ readonly origin: string; readonly assistant_turn_id: string | null }>`
+            // The provenance is on the row, as a kept campaign's is.
+            const [row] = yield* sql(
+              (sql) =>
+                sql<{ readonly origin: string; readonly assistant_turn_id: string | null }>`
           select origin, assistant_turn_id from play_group where id = ${accepted.sharedWorld.id}
         `,
-    );
-    expect(row).toEqual({ origin: "assistant", assistant_turn_id: turnId });
+            );
+            expect(row).toEqual({ origin: "assistant", assistant_turn_id: turnId });
 
-    // The asker's own, as by the form: on their list as its owner.
-    const mine = await as(owner.token, (client) => client.sharedWorlds.list());
-    const entry = mine.find((world) => world.sharedWorld.id === accepted.sharedWorld.id);
-    expect(entry?.isOwner).toBe(true);
-    const turns = await as(owner.token, (client) => client.meHob.turns({ params: { threadId } }));
-    expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).not.toBeNull();
+            // The asker's own, as by the form: on their list as its owner.
+            const mine = yield* as(owner.token, (client) => client.sharedWorlds.list());
+            const entry = mine.find((world) => world.sharedWorld.id === accepted.sharedWorld.id);
+            expect(entry?.isOwner).toBe(true);
+            const turns = yield* as(owner.token, (client) =>
+              client.meHob.turns({ params: { threadId } }),
+            );
+            expect(turns.find((turn) => turn.id === turnId)?.acceptedAt).not.toBeNull();
 
-    // And a later campaign draft may start in it.
-    const { requests } = await ask(owner.token);
-    expect(JSON.stringify(requests[0]?.tools)).toContain("The Sunken Reach");
-  }, 60_000);
+            // And a later campaign draft may start in it.
+            const { requests } = yield* ask(owner.token);
+            expect(JSON.stringify(requests[0]?.tools)).toContain("The Sunken Reach");
+          }),
+      );
 
-  it("is one world however many times it is kept", async () => {
-    const { events } = await offerWorld(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    await as(owner.token, (client) =>
-      client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-    );
-    const count = await worldCount();
-    expect(
-      await refusal(owner.token, (client) =>
-        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-      ),
-    ).toBe("Conflict");
-    expect(await worldCount()).toBe(count);
-  }, 60_000);
-
-  it("is NotFound to another account, which founds nothing", async () => {
-    const { events } = await offerWorld(owner.token);
-    const { threadId, turnId } = begunIn(events);
-    const count = await worldCount();
-    expect(
-      await refusal(stranger.token, (client) =>
-        client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
-      ),
-    ).toBe("NotFound");
-    expect(await worldCount()).toBe(count);
-    // Nor through a Shared World's own accept, which reaches no account thread.
-    expect(
-      await refusal(owner.token, (client) =>
-        client.sharedWorldHob.accept({
-          params: { worldId: coast.id, threadId, turnId },
-          payload: {},
+      it.effect("is one world however many times it is kept", () =>
+        Effect.gen(function* () {
+          const { owner } = yield* Fixture;
+          const { events } = yield* offerWorld(owner.token);
+          const { threadId, turnId } = begunIn(events);
+          yield* as(owner.token, (client) =>
+            client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+          );
+          const count = yield* worldCount;
+          expect(
+            yield* refusal(owner.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            ),
+          ).toBe("Conflict");
+          expect(yield* worldCount).toBe(count);
         }),
-      ),
-    ).toBe("NotFound");
-    expect(await worldCount()).toBe(count);
-  }, 60_000);
-});
+      );
+
+      it.effect("is NotFound to another account, which founds nothing", () =>
+        Effect.gen(function* () {
+          const { owner, stranger, coast } = yield* Fixture;
+          const { events } = yield* offerWorld(owner.token);
+          const { threadId, turnId } = begunIn(events);
+          const count = yield* worldCount;
+          expect(
+            yield* refusal(stranger.token, (client) =>
+              client.meHob.accept({ params: { threadId, turnId }, payload: {} }),
+            ),
+          ).toBe("NotFound");
+          expect(yield* worldCount).toBe(count);
+          // Nor through a Shared World's own accept, which reaches no account thread.
+          expect(
+            yield* refusal(owner.token, (client) =>
+              client.sharedWorldHob.accept({
+                params: { worldId: coast.id, threadId, turnId },
+                payload: {},
+              }),
+            ),
+          ).toBe("NotFound");
+          expect(yield* worldCount).toBe(count);
+        }),
+      );
+    });
+  },
+  { timeout: "120 seconds" },
+);

@@ -30,7 +30,12 @@ import {
   admittedTo,
 } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
-import { MODERATION_TEXT, type ScriptedImages, scriptedImages } from "./support/imageModel.js";
+import {
+  MODERATION_TEXT,
+  type ScriptedImages,
+  requested,
+  scriptedImages,
+} from "./support/imageModel.js";
 import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -200,24 +205,6 @@ const slowWorker = (endpoint: ScriptedImages, timeout: Duration.Input) =>
       storageOn: false,
     }).pipe(Layer.provide([ImageRecords.layer, ObjectStorage.memory, urls, endpoint.layer])),
   ).pipe(Effect.map((built) => Context.get(built, HobImages)));
-
-/**
- * The `count`th request reaching `endpoint`. A draw that is never sent fails
- * here, once the worker has nothing left to run, rather than leaving the test
- * to wait out its budget.
- */
-const requested = (
-  endpoint: ScriptedImages,
-  worker: (typeof HobImages)["Service"],
-  count: number,
-) =>
-  Effect.raceFirst(
-    endpoint.sent(count),
-    Effect.andThen(
-      worker.idle,
-      Effect.die(new Error(`Every job ended before request ${String(count)} was sent`)),
-    ),
-  );
 
 const FERRYMAN: NpcCreate = {
   name: "Cazril",
