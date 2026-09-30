@@ -123,9 +123,15 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-name="taverns_gate_$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-admin create "$name"
-database=$name
+# Recorded before the create, so a signal that lands while it runs (bash
+# defers the trap until node exits) still drops the database node went on to
+# make. Only when the server was never reached (69) is there nothing to drop.
+database="taverns_gate_$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+admin create "$database" || {
+  status=$?
+  [ "$status" -ne 69 ] || database=""
+  exit "$status"
+}
 
 url="postgres://$(node -p 'encodeURIComponent(process.argv[1]) + ":" + encodeURIComponent(process.argv[2])' "$user" "$password")@$host:$port/$database"
 export DATABASE_URL="$url"
