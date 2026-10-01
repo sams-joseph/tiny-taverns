@@ -1,5 +1,6 @@
 # Taverns: the gate runs the checks CI runs (.github/workflows/ci.yml), in
-# databases it owns on the development Postgres server. no-mistakes reads
+# databases it owns on the development Postgres server, plus `pnpm -F web e2e`,
+# which CI does not run. no-mistakes reads
 # `commands` from the default branch's copy of this file only.
 commands:
   prepare: pnpm install --frozen-lockfile

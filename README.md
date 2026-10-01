@@ -430,6 +430,6 @@ push to `main` always runs to the end. Each job keeps turbo's
 local cache between runs with `actions/cache`, so a build, lint, typecheck or test whose
 inputs have not changed replays instead of running; `server#test` is never cached, because
 its result depends on the database (`turbo.json`). `.no-mistakes.yaml` pins
-the same commands for the no-mistakes gate, with its tests under
-`scripts/with-private-postgres.sh` so they never touch the `taverns` database; a change
-to what CI runs changes both.
+the same commands for the no-mistakes gate, plus `pnpm -F web e2e`, which CI does not run,
+with its tests under `scripts/with-private-postgres.sh` so they never touch the `taverns`
+database; a change to what CI runs changes both.
