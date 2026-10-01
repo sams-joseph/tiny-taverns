@@ -1,8 +1,7 @@
 # Taverns: the gate runs the checks CI runs (.github/workflows/ci.yml), in
 # databases it owns on the development Postgres server. Neither runs the
 # Playwright suites (`pnpm -F web e2e`, `e2e:auth`); they are run by hand.
-# no-mistakes reads
-# `commands` from the default branch's copy of this file only.
+# no-mistakes reads `commands` from the default branch's copy of this file only.
 commands:
   prepare: pnpm install --frozen-lockfile
   lint: pnpm turbo run lint typecheck && pnpm format:check
