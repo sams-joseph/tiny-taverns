@@ -1211,8 +1211,9 @@ const ranOut: HobEvent = {
  * **This is the defect that made every other failure in this area look like a
  * model problem.** A tool call's arguments are decoded against the tool's own
  * parameter schema before any handler of ours runs, and a bad one fails the
- * whole stream (`decodeToolCalls` keeps it that way past effect rc.113,
- * which would otherwise answer it as a refused step). Before this, one bad
+ * whole stream with none of the round's calls run (`decodeToolCalls` keeps it
+ * that way past effect rc.113, which would otherwise answer it as a refused
+ * step). Before this, one bad
  * argument ended the answer: nothing was saved to the thread, and the DM was
  * shown a `SchemaError` naming every tool in the toolkit. Measured in a real
  * browser, twice, on two different models.
@@ -1281,9 +1282,10 @@ const recover = <Tools extends AnyTools>(
  *
  * Two shapes reach us, from two different points in `streamText`, and both mean
  * the same thing. `ToolParameterValidationError` is the decode
- * `decodeToolCalls` does as a call arrives, and is the one a bad argument
- * raises (the malformed-argument case in `hob.test.ts`); the handler never
- * runs, and the description already names the refused value.
+ * `decodeToolCalls` does on a response's calls before any is run, and is the
+ * one a bad argument raises (the malformed-argument cases in `hob.test.ts`);
+ * no handler in that round runs, and the description already names the
+ * refused value.
  * `InvalidOutputError` is the decode of the response parts themselves, which
  * is where a bad argument failed at effect 4.0.0-beta.102, and still means
  * the same thing when it fires.

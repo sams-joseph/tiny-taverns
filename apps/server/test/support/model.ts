@@ -129,6 +129,15 @@ export const toolCallChunks = (
   name: string,
   params: Record<string, unknown>,
   id = "call_1",
+): ReadonlyArray<Chunk> => toolCallsChunks([{ name, params, id }]);
+
+/** A round that asks for several tools in one response and says nothing else. */
+export const toolCallsChunks = (
+  calls: ReadonlyArray<{
+    readonly name: string;
+    readonly params: Record<string, unknown>;
+    readonly id: string;
+  }>,
 ): ReadonlyArray<Chunk> => [
   {
     ...CHUNK,
@@ -137,14 +146,12 @@ export const toolCallChunks = (
         index: 0,
         delta: {
           role: "assistant",
-          tool_calls: [
-            {
-              index: 0,
-              id,
-              type: "function",
-              function: { name, arguments: JSON.stringify(params) },
-            },
-          ],
+          tool_calls: calls.map(({ name, params, id }, index) => ({
+            index,
+            id,
+            type: "function",
+            function: { name, arguments: JSON.stringify(params) },
+          })),
         },
         finish_reason: "tool_calls",
       },
