@@ -166,22 +166,6 @@ export function arrayParam(values: ReadonlyArray<ArrayElement> | undefined): str
 type ArrayElement = string | number | boolean | null;
 
 /**
- * An `int8` column as the wire's integer. The driver hands `int8` back as a
- * `bigint`; the schema's `bigint` columns are sequences that only climb and are
- * nowhere near 2^53, and `Schema.Int` refuses one that ever gets there rather
- * than rounding it.
- */
-export const int8Column = Schema.BigInt.pipe(
-  Schema.decodeTo(
-    Schema.Int,
-    new SchemaTransformation.Transformation(
-      SchemaGetter.transform((value: bigint) => Number(value)),
-      SchemaGetter.forbidden(() => "a row is read, never written back"),
-    ),
-  ),
-);
-
-/**
  * `SqlSchema.findOne`'s "no row" as the domain's refusal.
  *
  * `findOne` fails with `NoSuchElementError` when the predicate returned

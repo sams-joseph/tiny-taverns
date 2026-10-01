@@ -1,7 +1,7 @@
 import { expect } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { arrayParam, int8Column } from "../src/repo/rows.js";
+import { arrayParam } from "../src/repo/rows.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -104,17 +104,14 @@ describeLayer("pg-values", freshDatabase("taverns_test_pg_values"), (it) => {
     }),
   );
 
-  it.effect("reads an int8 as the wire's integer, and refuses one it would round", () =>
+  it.effect("reads an int8 as a JS bigint, which is why no column the app reads is one", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      const [row] = yield* sql<{ readonly seq: unknown }>`
-        select ${2 ** 53 - 1}::bigint as seq
+      // `0081` made the two sequences and the columns they fill `integer`.
+      const [row] = yield* sql<{ readonly wide: unknown; readonly narrow: unknown }>`
+        select 7::bigint as wide, 7::integer as narrow
       `;
-      expect(typeof row?.seq).toBe("bigint");
-      expect(yield* Schema.decodeUnknownEffect(int8Column)(row?.seq)).toBe(2 ** 53 - 1);
-
-      const beyond = yield* Effect.flip(Schema.decodeUnknownEffect(int8Column)(2n ** 53n));
-      expect(Schema.isSchemaError(beyond)).toBe(true);
+      expect(row).toEqual({ wide: 7n, narrow: 7 });
     }),
   );
 });

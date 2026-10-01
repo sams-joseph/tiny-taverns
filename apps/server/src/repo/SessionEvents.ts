@@ -18,7 +18,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
-import { classFromColumns, defined, dieOnSqlError, int8Column, timestampColumns } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, timestampColumns } from "./rows.js";
 import {
   containedRowReadable,
   ensureNestedParentReadable,
@@ -31,15 +31,11 @@ import {
 
 /**
  * A `session_event` row as the wire reads it, decoded off `session_event.*`
- * by `SqlSchema`.
- *
- * `seq` is a `bigint` column, read through `int8Column`: the width is
- * genuinely wanted (it is a sequence that only ever climbs) and the value is
- * nowhere near 2^53, so the decode narrows it once, here.
+ * by `SqlSchema`. `seq` is an `integer` column (`0081`), so it reads as the
+ * wire's number with no decode of its own.
  */
 const SessionEventRow = classFromColumns(SessionEvent, {
   ...SessionEvent.fields,
-  seq: int8Column.pipe(Schema.decodeTo(SessionEvent.fields.seq)),
   ...timestampColumns,
 });
 

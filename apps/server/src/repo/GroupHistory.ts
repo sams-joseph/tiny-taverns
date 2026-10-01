@@ -25,7 +25,6 @@ import {
   classFromColumns,
   dieOnSqlError,
   fromColumns,
-  int8Column,
   likeContains,
   orNotFound,
 } from "./rows.js";
@@ -66,7 +65,6 @@ const EntryRow = classFromColumns(
   SharedWorldHistoryEntry,
   {
     ...SharedWorldHistoryEntry.fields,
-    worldSeq: int8Column,
     occurredAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
     acceptedAt: Schema.DateTimeUtcFromDate,
     createdAt: Schema.DateTimeUtcFromDate,
@@ -79,7 +77,6 @@ const SummaryRow = classFromColumns(
   SharedWorldHistorySummary,
   {
     ...SharedWorldHistorySummary.fields,
-    lastWorldSeq: int8Column,
     acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
     createdAt: Schema.DateTimeUtcFromDate,
   },
@@ -712,7 +709,7 @@ export class GroupHistory extends Context.Service<
               // A proposal may cover only a real prefix of this world's
               // Chronicle. Zero is the exact boundary for an empty world.
               if (lastWorldSeq > 0) {
-                const boundary = yield* sql<{ readonly group_seq: bigint }>`
+                const boundary = yield* sql<{ readonly group_seq: number }>`
                   select group_seq from group_history_entry
                   where group_id = ${groupId} and group_seq = ${lastWorldSeq}
                 `;

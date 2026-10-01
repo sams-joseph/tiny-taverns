@@ -468,7 +468,7 @@ export class PlayerTable extends Context.Service<
               if (readable.length === 0) {
                 return yield* new NotFound({ resource: "session", id: sessionId });
               }
-              const rows = yield* sql<{ readonly seq: bigint }>`
+              const rows = yield* sql<{ readonly seq: number }>`
                 select session_event.seq from session_event
                 where session_event.session_id = ${sessionId}
                   and session_event.seq > ${since}
@@ -476,7 +476,7 @@ export class PlayerTable extends Context.Service<
                 order by session_event.seq asc
                 limit ${limit}
               `;
-              return rows.map((row) => Number(row.seq));
+              return rows.map((row) => row.seq);
             }),
           ),
       };
