@@ -1,435 +1,74 @@
-# taverns
+<!-- Use a static Shields badge because pkg.pr.new's dynamic badge times out while counting this repository's releases. -->
 
-A production-grade **boilerplate monorepo** for a web application, wired end-to-end and
-ready to build on. It pairs a **Vite + React SPA** front end with an **Effect.ts** HTTP
-backend, sharing config and a component library across a pnpm + Turborepo workspace.
+[![pkg.pr.new](https://img.shields.io/badge/pkg.pr.new-Effect--TS%2Feffect-black)](https://pkg.pr.new/~/Effect-TS/effect)
 
-## Stack
+# Effect
 
-| Concern         | Choice                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| Package manager | [pnpm](https://pnpm.io) workspaces                                                           |
-| Task runner     | [Turborepo](https://turborepo.dev)                                                           |
-| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)       |
-| Backend         | [Effect](https://effect.website) v4 (RC) HTTP server + `@effect/platform-node`               |
-| Language        | TypeScript (`strict`, ESM everywhere)                                                        |
-| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens      |
-| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives              |
-| Lint / format   | ESLint (flat config) + Prettier                                                              |
-| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library), [Playwright](https://playwright.dev) |
+Effect is a library for building robust, maintainable, type-safe, and production grade applications in TypeScript. It helps you handle the hard problems at scale: typed errors, dependency injection, structured concurrency, scheduling, tracing, and unified schema validation.
 
-## Layout
+> **Effect V4 is currently a release candidate.** The `main` branch contains v4 development.
 
-```
-taverns/
-  apps/
-    web/                 Vite + React SPA (consumes @taverns/ui and @taverns/api)
-    server/              Effect.ts HTTP API over Postgres
-      src/migrations/    forward-only numbered migrations
-  packages/
-    api/                 @taverns/api — the wire contract: schemas, errors, HttpApi.
-                         The server implements it; the web client is derived from it.
-    design-system/       @taverns/design-system — the delivered Tiny Taverns system.
-                         tokens/ is the SINGLE SOURCE OF TRUTH for every design value.
-    ui/                  @taverns/ui — the 14 shadcn components, on Base UI
-    tsconfig/            @taverns/tsconfig — shared tsconfig bases
-    eslint-config/       @taverns/eslint-config — shared flat ESLint config
-  .repos/
-    effect/              vendored upstream Effect source (read-only reference)
-  compose.yaml           the local development database
-  turbo.json             build / lint / typecheck / test / dev pipelines
-  pnpm-workspace.yaml
+## Install V4 RC
+
+```sh
+npm install effect@rc
 ```
 
-### `.repos/` — vendored reference source
-
-`.repos/` holds read-only upstream source vendored for reference. It is **committed on
-purpose** (not gitignored) so the exact source matching our installed dependency travels
-with the repo. Nothing in it is built, linted, formatted, or installed: the
-`pnpm-workspace.yaml` globs are root-anchored (`apps/*`, `packages/*`) so they do not
-match `.repos/effect/packages/*`, and `.repos` is listed in `.prettierignore` and in the
-shared ESLint `ignores`.
-
-`.repos/effect` is the [Effect](https://github.com/Effect-TS/effect) repo at tag
-`effect@4.0.0-rc.117`, added as a squashed subtree so the v4 source is available
-locally (v4's published docs are thin — the source and its tests are the authoritative
-reference). It is pinned to a tag, not a branch, so it stays in lockstep with the
-`effect` version `apps/server` installs. To move it to a newer tag:
-
-```bash
-git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect effect@<version>
-```
-
-Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui` and
-`@taverns/design-system` (tokens, the Alegreya font files and the brand icons all resolve
-through normal Vite imports), plus the shared `@taverns/tsconfig` and
-`@taverns/eslint-config` packages — so the wiring is proven, not decorative.
-
-## The design system
-
-`packages/design-system` holds the delivered **Tiny Taverns** system: tokens, fonts, brand
-assets, the 20 `guidelines/` specimen cards, and one `.prompt.md` + `.d.ts` + `.jsx` spec
-per component. It is also installed as a Claude Code skill — `.claude/skills/tiny-taverns-design`
-is a symlink to it, so there is only ever one copy.
-
-**`tokens/*.css` is the single source of truth.** No hex, radius, duration or measurement is
-restated anywhere else; `packages/ui/src/styles.css` gives those tokens Tailwind names by
-`var()` reference only. The system is **dark only** — there is no light theme to build, and
-no toggle.
-
-`packages/ui` ships the 14 components as real shadcn/ui components on **Base UI** primitives
-(no `@radix-ui/*` anywhere in the tree), styled to the delivered specs. The delivered `.jsx`
-files are the _visual specification_, not code to ship — see
-`packages/design-system/PORT-NOTES.md`.
-
-Two adherence rules from the designers are enforced in ESLint
-(`packages/eslint-config/design-system.js`): no raw hex colours or `px` literals in component
-code, and no importing component internals. `packages/ui/src/adherence.test.ts` extends the
-same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI-only).
-
-## Prerequisites
-
-- **Node** >= 22.13 (pnpm's own floor; developed on Node 26, CI runs the version in
-  `.node-version`)
-- **pnpm** (version is pinned via the root `package.json` `packageManager` field; run
-  `corepack enable` to have the right version selected automatically)
-- **Docker**, for the development database
-- **A Clerk development instance.** The browser signs in through Clerk and has no other way
-  in; see [Clerk](#clerk) below. (An offline Clerk emulator may come later; there is none now.)
-
-## Getting started
-
-```bash
-pnpm install
-pnpm db:up                      # Postgres on 127.0.0.1:5433, via compose.yaml
-pnpm -F server equipment:import  # loads the bundled 2014 SRD mundane equipment (idempotent)
-pnpm -F server ruleset:import   # loads 2014 classes/races/backgrounds, feats, rules and rule sections (idempotent)
-pnpm -F server spell:import      # loads bundled 2014 SRD spells and class/subclass links (optional, idempotent)
-pnpm -F server bestiary:import  # loads the Taverns starter bestiary + 2014 SRD monsters (idempotent)
-pnpm -F server magic-item:import # loads the bundled 2014 SRD magic items (idempotent)
-pnpm dev                         # API on :3000, web on :5173
-```
-
-The import order above is deliberate: equipment comes before the ruleset so background
-starting-equipment references resolve to rows, the ruleset seeds the concrete subclass and class
-progression rows before spells create their class/subclass links, and spells/equipment both come
-before the monster corpus so imported monster relationships can be populated. The rules compendium
-and feats are imported by the same `ruleset:import` command; feats depend only on the ability-score
-vocabulary the command seeds first.
-
-**A database from before the group architecture (2026-09-01) must be reset** — `0001` is a clean
-baseline now and the migrator silently skips rewritten ids, so an old database keeps the old shape
-for ever. Use the clean reset/reseed path: `pnpm db:reset && pnpm -F server migrate && pnpm -F server equipment:import && pnpm -F server ruleset:import && pnpm -F server spell:import && pnpm -F server bestiary:import && pnpm -F server magic-item:import`.
-Against a Postgres this repo's Docker does not own, the reset half is
-`pnpm -F server db:reset:fresh -- --force` (drop + recreate the database `DATABASE_URL` names, then
-migrate) — the product's one destructive command, run by a person, never by the server.
-
-### Clerk
-
-Clerk is a prerequisite for running the app. With no publishable key the web app shows a notice
-saying what to set instead of itself, and with no JWT key the server cannot verify anybody who
-signs in. Both come from the same Clerk instance:
-
-```bash
-# apps/web/.env.local — gitignored; see apps/web/.env.example
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_…      # Dashboard → API keys → Publishable key
-
-# apps/server/.env.local — gitignored; see apps/server/.env.example
-CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"  # Dashboard → API keys → JWT public key (PEM)
-CLERK_TELEMETRY_DISABLED=1                   # the SDK phones home on dev instances otherwise
-```
-
-Both files are per-package, and neither is a Vite thing on the server side:
-`apps/server/.env.local` is read by Node itself, through `--env-file-if-exists` in the
-server's `dev`/`start` scripts. A `.env.local` at the repo root is read by nothing.
-
-The server prints one line at boot saying whether hosted sign-in is **ON** or **OFF**. If
-you set the key and it still says OFF, the file is in the wrong place or the variable is
-misspelled — check that before suspecting the key.
-
-Neither value is a secret: one identifies the frontend, the other only _verifies_ tokens.
-**`CLERK_SECRET_KEY` is deliberately not used by the app or the server** — don't add it to
-either. Its one reader is the authenticated Playwright suite, which runs in Node beside them
-and never hands it to either (`apps/web/e2e/README.md`).
-
-To check a change in a real browser, sign in as one of the instance's two `+clerk_test` users
-(`USERS` in `apps/web/e2e/auth/support/clerk.ts`) the way that suite does: `signIn` in
-`apps/web/e2e/auth/support/fixtures.ts`, after `clerkSetup()`. Such an address passes the
-email code `424242` and receives no mail. Never create, change or delete a Clerk user.
-
-### Optional: object storage
-
-File storage is opt-in. With `STORAGE_DRIVER` unset the server logs `Storage is OFF`
-and anything that stores files reports it unavailable. For local development, store files
-in a directory:
-
-```bash
-# apps/server/.env.local — gitignored; see apps/server/.env.example
-STORAGE_DRIVER=filesystem   # the only driver so far
-# STORAGE_FS_ROOT=…         # defaults to apps/server/.storage (gitignored)
-```
-
-The adapter is provider-neutral. `docs/internals/storage.md` explains how to add a hosted
-provider.
-
-### Optional: Hob-drawn images
-
-Hob draws each new character's portrait, each new campaign's and Shared World's cover,
-each new cast NPC's portrait and each new encounter's battle map once, after it is made, through an OpenAI-shaped image
-endpoint. Images are opt-in: they need an endpoint, a model, a URL-signing secret and
-storage (above), and the server logs `Hob-drawn images are OFF` naming whichever is missing. Each draw costs money on a hosted provider; the daily
-caps, shared by every kind, bound it. The `PORTRAIT_` names govern every kind.
-
-```bash
-# apps/server/.env.local — gitignored; see apps/server/.env.example
-PORTRAIT_API_URL=https://api.openai.com/v1
-PORTRAIT_MODEL=gpt-image-2.5-flare
-PORTRAIT_API_KEY=…                     # secret; never committed
-PORTRAIT_URL_SECRET=…                  # any long random string: openssl rand -hex 32
-# PORTRAIT_QUALITY=medium              # low | medium | high | auto (OpenAI only)
-# PORTRAIT_ACCOUNT_DAILY_LIMIT=10      # per account per UTC day
-# PORTRAIT_DAILY_LIMIT=200             # across every account per UTC day
-# PORTRAIT_CONCURRENCY=2               # draws at once in this process
-```
-
-A local `sd-server` (stable-diffusion.cpp) speaks the same shape; point `PORTRAIT_API_URL`
-at its `/v1`. How it works is `docs/internals/images.md`.
-
-## Workspace commands
-
-Run from the repo root; Turborepo fans each task out across the workspace (respecting
-build order) and caches results.
-
-| Command             | What it does                            |
-| ------------------- | --------------------------------------- |
-| `pnpm dev`          | Run every app's dev server (persistent) |
-| `pnpm build`        | Build all apps and packages             |
-| `pnpm lint`         | ESLint across the workspace             |
-| `pnpm typecheck`    | `tsc --noEmit` across the workspace     |
-| `pnpm test`         | Vitest across the workspace             |
-| `pnpm format`       | Format the repo with Prettier           |
-| `pnpm format:check` | Verify formatting (used in CI)          |
-| `pnpm db:up`        | Start the development database          |
-| `pnpm db:down`      | Stop it, keeping the data               |
-| `pnpm db:reset`     | Stop it and throw the data away         |
-
-For a Postgres outside this repo's Docker, `pnpm -F server db:reset:fresh -- --force` drops and
-recreates the database `DATABASE_URL` names and runs the whole migration ledger.
-
-Each maps to `turbo run <task>`; you can also target one package, e.g.
-`pnpm turbo run test --filter web`.
-
-## Running the apps
-
-**Web (Vite SPA)** — starts on <http://localhost:5173>:
-
-```bash
-pnpm --filter web dev
-```
-
-Every route is a real path (`/campaigns/<id>`, `/join/<token>`), so whatever serves the
-built `apps/web/dist` must answer every path that is not a file with `index.html`, or a
-reload or a shared link 404s. The dev server and `pnpm --filter web preview` already do.
-A static host needs a rewrite of all non-file paths to `/index.html` (Netlify
-`/* /index.html 200`, a Vercel or Cloudflare Pages SPA rewrite, nginx
-`try_files $uri /index.html`). To serve the app under a subpath, set Vite's `base`; the
-router takes its basepath from it.
-
-**Server (Effect.ts)** — starts on <http://localhost:3000> (override with `PORT`). It runs
-pending migrations on boot, so `pnpm db:up` has to have happened first:
-
-```bash
-pnpm --filter server dev
-# then:
-curl http://localhost:3000/health
-# {"status":"ok","uptime":...}
-
-TOKEN=...   # from `pnpm -F server token:issue`
-curl -X POST http://localhost:3000/campaigns \
-  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"name":"The Reed Marches","playerCount":4}'
-```
-
-The API surface is `campaign`, `session`, `character`, `note`, `encounter`, `prep`, `creature`,
-`spell`, `equipment` and `magic_item` CRUD, plus the live session — `run`, `combatant` and the session log — declared
-once in `packages/api` as an `HttpApi` and implemented in `apps/server/src/handlers.ts`. Every
-campaign-scoped group sits behind a bearer-token `Authorization` middleware that resolves
-the request's actor; every repository read carries that actor as a type-level requirement
-and filters in SQL. `docs/internals/visibility.md` records the contract each new endpoint has to follow.
-
-**The live session is the one place a read is a stream.** Writes are ordinary `POST`s;
-`GET /campaigns/:c/sessions/:s/runs/:r/events` is Server-Sent Events. Starting a run seeds
-the initiative list from the encounter's roster (one combatant per creature, per `count`)
-plus the party, and points the session at it:
-
-```bash
-curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/sessions/$SESSION/runs" \
-  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d "{\"encounterId\":\"$ENCOUNTER\"}"
-
-# tail the fight; every event carries its cursor as the SSE `id`
-curl -N "http://localhost:3000/campaigns/$CAMPAIGN/sessions/$SESSION/runs/$RUN/events?since=0" \
-  -H "authorization: Bearer $TOKEN"
-```
-
-Reconnect by passing the last `id` you saw back as `?since=` (or as a `Last-Event-ID`
-header, which a browser's `EventSource` sends by itself). `docs/internals/live-session.md` has the
-full contract the runner UI is written against.
-
-**The bestiary is campaign copies plus two bundled corpora in one list.** A campaign's own
-creatures live under it; `system` creatures are global, immutable and shared by every campaign,
-and the only thing that writes them is `pnpm -F server bestiary:import` — a shell command rather
-than an endpoint, because global content has no campaign to scope it to. The importer loads the
-Taverns-authored starter bundle and the 334-row 2014 SRD monster corpus from the checked-in
-5e-bits snapshot, recording each under a stable source key instead of by display name. A DM who
-wants to change a system creature derives a copy instead:
-
-```bash
-curl -X POST "http://localhost:3000/campaigns/$CAMPAIGN/creatures/$CREATURE/derive" \
-  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"name":"Grask, Boss of the Reeds"}'
-```
-
-**A campaign can have its own classes, races, backgrounds, feats, reference rules, spells, mundane equipment and magic items**, and
-they follow exactly the same model. `pnpm -F server equipment:import` writes the 237 bundled 2014 SRD
-mundane equipment rows; `pnpm -F server ruleset:import` writes the bundled 2014 SRD character
-options, their concrete ability/language/skill/proficiency/trait vocabularies, their concrete
-subrace grants and choices, their subclass/class-level/feature progression, their concrete
-starting-equipment references, the one 2014 SRD feat (Grappler) with its concrete Strength 13
-prerequisite, and the 6 top-level 2014 rules with their 33 ordered rule sections;
-`pnpm -F server spell:import` writes the 319 bundled 2014 SRD spells as global rows linked to the
-class and subclass vocabulary; `pnpm -F server magic-item:import` writes the 362 bundled 2014 SRD
-magic items as global rows. All are keyed by stable source keys from the pinned 5e-bits
-`5e-database` snapshot (`5.10.0`, commit `5a7ee5a0489b26655d343e4a41e8f7942a887af2`). Races contain
-their 2014 subraces in the race body; there is no separate unparented subrace option kind. Class
-progression has concrete subclass, class-level and feature rows, and spell-to-subclass links use
-those subclass rows rather than free text. Character vocabulary is managed in the campaign's
-**Rules** screen; the reference articles live in **Compendium** so they are not confused with the
-character-building vocabulary. Spells, equipment, magic items and the compendium have their own API
-and Library shelves, with the same copy-as-snapshot rule. The copy is what a player reads from,
-because a player can never read somebody else's library — see `docs/internals/corpora.md`, which is
-also where the one thing these importers do differently is written down.
-
-The bundled 2014 monster, character-rules, feat, reference-rules, spell, mundane-equipment and magic-item data are transformed
-from `5e-bits/5e-database` under the MIT License; the underlying Dungeons & Dragons 5th Edition SRD
-5.1 material is used under the Open Game License version 1.0a. The importers store stable source
-keys on rows; attribution is carried in the web footer and README rather than in per-row provenance
-tables. See `THIRD_PARTY_NOTICES.md` for the bundled notice text.
-
-### Sign-in and machine tokens
-
-The server accepts two kinds of bearer credential, and they converge on one actor. A browser
-always sends a session token from Clerk (see [Clerk](#clerk)). A **machine token** from
-`pnpm -F server token:issue <name>` is for scripts, `curl` and the server's tests; no browser
-path accepts one. With `CLERK_JWT_KEY` unset the server still boots and the whole server suite
-passes (the tests sign session tokens with a keypair they generate in-process), but nobody can
-sign in to the web app.
-
-The server reads its half from **`apps/server/.env.local`** — copy
-`apps/server/.env.example`, which documents every variable the server reads:
-
-```bash
-# apps/server/.env.local (gitignored)
-CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----…"   # Dashboard → API keys → Show JWT public key → PEM
-CLERK_TELEMETRY_DISABLED=1                    # the SDK phones home on dev instances otherwise
-```
-
-Node reads that file directly — `--env-file-if-exists=.env.local`, in the server's `dev`,
-`start`, `migrate` and `token:issue` scripts. Three things follow:
-
-- **The path is exactly `apps/server/.env.local`.** It is not a Vite convention here; the
-  root of the repo and `apps/web/.env.local` are both read by something else, or nothing.
-- **A real environment variable still wins**, so `PORT=4000 pnpm -F server dev` overrides
-  the file and a deployment needs no file at all.
-- **`pnpm -F server test` deliberately loads no env file.** The suite has to say the same
-  thing on your machine, on a colleague's and in CI, so it never picks up your key.
-
-The server logs one line at boot — `Hosted sign-in is ON` or `Hosted sign-in is OFF` — so
-a key set in the wrong file or under a mistyped name shows up immediately rather than as a
-mysterious failed sign-in later. It never logs the key, or any part of it.
-
-`CLERK_JWT_KEY` is a **public** key and not a secret: verification is the only thing it can
-do. **`CLERK_SECRET_KEY` is not used by this server and must not be added to it** — tokens
-are verified offline, so an attacker holding the whole environment still cannot mint a
-session for anybody. Keeping it that way is a deliberate security property, not an
-oversight.
-
-Two consequences worth knowing:
-
-- The key is validated at boot. A PEM Clerk cannot use fails the server loudly with an
-  explanatory message, rather than rejecting every sign-in as a bad signature later.
-- `ALLOWED_ORIGINS` feeds both the CORS allowlist and the token's `azp` audience check, so
-  a token minted for a front end that is not on that list is rejected. Setting
-  `ALLOWED_ORIGINS` for a deployment therefore has to include the origin the browser app is
-  actually served from.
-
-Accounts are provisioned just-in-time: the first authenticated request from a person the
-server has not seen creates their account. Signing in this way always creates a _new_
-account — machine-token accounts are never linked to it, and their campaigns stay reachable
-only with their token.
-
-The server is structured idiomatically with **Effect v4** (currently a release candidate,
-pinned to exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
-`effect` under `effect/unstable/http`. `docs/internals/server.md` records the full v3 → v4 mapping, and
-`.repos/effect` vendors the matching upstream source as the authoritative reference.
-
-## Testing
-
-Vitest runs in every workspace project. Each has at least one real, passing test:
-
-- `apps/web` — React Testing Library tests that drive every screen through the real route tree,
-  plus tests of the derived API client as the browser bundles it.
-- `apps/server` — migrations from empty to current, the visibility seam, a schema-adherence
-  guard, the whole API through the derived client against a real in-process server, and a
-  production-start smoke test that runs the real build output under plain `node`. Both
-  credential kinds are covered, machine tokens and hosted sign-in — the latter offline, against a keypair the
-  test generates, so the suite needs no vendor account and no network. The live session gets
-  two files: the state underneath it (seeding, the turn marker, hit points at zero, one live
-  fight per session) and the SSE stream itself, including a client that drops mid-fight and
-  catches up without losing an event.
-- `packages/api` — guards on the wire contract itself: every campaign-scoped endpoint is
-  behind `Authorization`, every content schema carries visibility and provenance.
-- `packages/ui` — component tests, design-system adherence checks, and a guard that keeps
-  the `tailwind-merge` config in step with the theme.
-
-**The server's database tests need a Postgres and `DATABASE_URL` naming it** — for the
-Docker one, `pnpm db:up`, then
-`DATABASE_URL=postgres://taverns:taverns@127.0.0.1:5433/taverns pnpm -F server test`.
-`scripts/with-private-postgres.sh pnpm -F server test` runs them on that same server without
-touching the `taverns` database: in a throwaway database of its own, with the per-file
-databases named under it (`TAVERNS_TEST_DATABASE_PREFIX`), all dropped afterwards. They
-run against a real Postgres — the schema is Postgres dialect and a stand-in would not
-exercise it — and each test file creates its own throwaway database. Unlike `pnpm dev`, the
-suite has no default database: each file force-drops a database of a fixed name, so it
-refuses to start without the variable rather than guess, and `turbo.json` passes the
-variable through to `test`. If the database is not running they fail with a message saying
-so, rather than skipping: a silently-skipped database test is a green build that proves
-nothing. The server suite runs at most eight files concurrently because each fresh database
-applies the complete DDL ledger; leaving worker count proportional to host cores can exhaust
-Postgres's shared lock table even while its connection limit has ample room.
-
-`apps/web` also has a Playwright suite, `pnpm -F web e2e`, that measures the shell's layout
-in Chromium (overflow, fixed chrome heights, alignment across a campaign's tabs, the Hob
-panel, the global nav panels, the Overview heroes) over the same fixture maps, served by a
-stub API inside Vite and signed in by a stand-in session, so it needs no database, API
-server or Clerk keys. `apps/web/e2e/README.md` says
-how to run, debug and extend it; install its browser once with
-`pnpm -F web exec playwright install chromium`. A second suite, `pnpm -F web e2e:auth`,
-signs in through Clerk's development instance against the real server and a throwaway
-database; it needs `pnpm db:up` and the instance's publishable and secret keys in the
-environment, and skips without them (same README).
-
-## Continuous integration
-
-`.github/workflows/ci.yml` runs three jobs in parallel, each on its own runner, after
-installing pnpm, the Node in `.node-version`, and `pnpm install --frozen-lockfile`:
-`checks` runs `pnpm turbo run lint typecheck build` and `pnpm format:check`; `server-test`
-runs the server suite against a Postgres service; `web-test` runs the web, `@taverns/ui` and
-`@taverns/api` suites. The web Playwright suites run neither in CI nor in the no-mistakes
-gate; they are run by hand. A newer push to a pull request cancels that pull request's older
-run; a push to `main` always runs to the end. Each job keeps turbo's local cache between runs
-with `actions/cache`, so a build, lint, typecheck or test whose inputs have not changed
-replays instead of running; `server#test` is never cached, because its result depends on the
-database (`turbo.json`). `.no-mistakes.yaml` pins the same commands for the no-mistakes gate,
-with its tests under `scripts/with-private-postgres.sh` so they never touch the `taverns`
-database; a change to what CI runs changes both.
+## Requirements
+
+- **TypeScript 5.9 or newer.** TypeScript 7 is recommended for the best performance and compatibility with [Effect's TypeScript tooling](https://github.com/Effect-TS/tsgo#installation).
+- **Node.js 18 or newer** is the general minimum for running Effect on Node.js. Some integration packages require newer runtimes; for example, `@effect/sql-sqlite-node` requires Node.js 22.16 or newer.
+- **Strict type-checking:** the `strict` flag must be enabled in your `tsconfig.json`.
+
+## Effect v3
+
+The Effect v3 source code is available on the [`v3`](https://github.com/Effect-TS/effect/tree/v3) branch, which is also where issues and pull requests meant for Effect v3 should be targeted.
+
+## Packages
+
+This monorepo contains the core `effect` package alongside integration packages that extend it. All v4 packages are published under the `rc` tag on npm.
+
+| Package                                                               | Description                                              | API Reference                                                      |
+| --------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`effect`](packages/effect)                                           | The core package                                         | [docs](https://effect.website/docs/v4/api/effect)                  |
+| [`@effect/platform-browser`](packages/platform/browser)               | Platform services for the browser                        | [docs](https://effect.website/docs/v4/api/platform-browser)        |
+| [`@effect/platform-bun`](packages/platform/bun)                       | Platform services for [Bun](https://bun.sh)              | [docs](https://effect.website/docs/v4/api/platform-bun)            |
+| [`@effect/platform-deno`](packages/platform/deno)                     | Platform services for [Deno](https://deno.com)           | [docs](https://effect.website/docs/v4/api/platform-deno)           |
+| [`@effect/platform-node`](packages/platform/node)                     | Platform services for [Node.js](https://nodejs.org)      | [docs](https://effect.website/docs/v4/api/platform-node)           |
+| [`@effect/platform-node-shared`](packages/platform/node-shared)       | Shared services for Node.js-compatible runtimes          | [docs](https://effect.website/docs/v4/api/platform-node-shared)    |
+| [`@effect/sql-clickhouse`](packages/sql/clickhouse)                   | SQL client for [ClickHouse](https://clickhouse.com)      | [docs](https://effect.website/docs/v4/api/sql-clickhouse)          |
+| [`@effect/sql-d1`](packages/sql/d1)                                   | SQL client for Cloudflare D1                             | [docs](https://effect.website/docs/v4/api/sql-d1)                  |
+| [`@effect/sql-libsql`](packages/sql/libsql)                           | SQL client for libSQL                                    | [docs](https://effect.website/docs/v4/api/sql-libsql)              |
+| [`@effect/sql-mssql`](packages/sql/mssql)                             | SQL client for Microsoft SQL Server                      | [docs](https://effect.website/docs/v4/api/sql-mssql)               |
+| [`@effect/sql-mysql2`](packages/sql/mysql2)                           | SQL client for MySQL                                     | [docs](https://effect.website/docs/v4/api/sql-mysql2)              |
+| [`@effect/sql-pg`](packages/sql/pg)                                   | SQL client for PostgreSQL                                | [docs](https://effect.website/docs/v4/api/sql-pg)                  |
+| [`@effect/sql-pglite`](packages/sql/pglite)                           | SQL client for [PGlite](https://pglite.dev)              | [docs](https://effect.website/docs/v4/api/sql-pglite)              |
+| [`@effect/sql-sqlite-bun`](packages/sql/sqlite-bun)                   | SQL client for SQLite via `bun:sqlite`                   | [docs](https://effect.website/docs/v4/api/sql-sqlite-bun)          |
+| [`@effect/sql-sqlite-do`](packages/sql/sqlite-do)                     | SQL client for Cloudflare Durable Objects SQLite         | [docs](https://effect.website/docs/v4/api/sql-sqlite-do)           |
+| [`@effect/sql-sqlite-node`](packages/sql/sqlite-node)                 | SQL client for SQLite via `node:sqlite`                  | [docs](https://effect.website/docs/v4/api/sql-sqlite-node)         |
+| [`@effect/sql-sqlite-react-native`](packages/sql/sqlite-react-native) | SQL client for SQLite in React Native                    | [docs](https://effect.website/docs/v4/api/sql-sqlite-react-native) |
+| [`@effect/sql-sqlite-wasm`](packages/sql/sqlite-wasm)                 | SQL client for SQLite compiled to WebAssembly            | [docs](https://effect.website/docs/v4/api/sql-sqlite-wasm)         |
+| [`@effect/ai-anthropic`](packages/ai/anthropic)                       | Anthropic provider for the Effect AI modules             | [docs](https://effect.website/docs/v4/api/ai-anthropic)            |
+| [`@effect/ai-openai`](packages/ai/openai)                             | OpenAI provider for the Effect AI modules                | [docs](https://effect.website/docs/v4/api/ai-openai)               |
+| [`@effect/ai-typesafe`](packages/ai/typesafe)                         | TypeSafe decision provider for the Effect AI modules     | [docs](https://effect.website/docs/v4/api/ai-typesafe)             |
+| [`@effect/ai-openai-compat`](packages/ai/openai-compat)               | OpenAI-compatible API provider for the Effect AI modules | [docs](https://effect.website/docs/v4/api/ai-openai-compat)        |
+| [`@effect/ai-openrouter`](packages/ai/openrouter)                     | OpenRouter provider for the Effect AI modules            | [docs](https://effect.website/docs/v4/api/ai-openrouter)           |
+| [`@effect/atom-react`](packages/atom/react)                           | React bindings for Effect Atom                           | [docs](https://effect.website/docs/v4/api/atom-react)              |
+| [`@effect/atom-solid`](packages/atom/solid)                           | SolidJS bindings for Effect Atom                         | [docs](https://effect.website/docs/v4/api/atom-solid)              |
+| [`@effect/atom-vue`](packages/atom/vue)                               | Vue bindings for Effect Atom                             | [docs](https://effect.website/docs/v4/api/atom-vue)                |
+| [`@effect/opentelemetry`](packages/opentelemetry)                     | [OpenTelemetry](https://opentelemetry.io) integration    | [docs](https://effect.website/docs/v4/api/opentelemetry)           |
+| [`@effect/vitest`](packages/vitest)                                   | Helpers for testing with [Vitest](https://vitest.dev)    | [docs](https://effect.website/docs/v4/api/vitest)                  |
+| [`@effect/docgen`](packages/tools/docgen)                             | Documentation generator for Effect projects              | [docs](https://effect.website/docs/v4/api/docgen)                  |
+| [`@effect/doctest`](packages/tools/doctest)                           | Runs JSDoc examples as Vitest tests                      | [docs](https://effect.website/docs/v4/api/doctest)                 |
+| [`@effect/openapi-generator`](packages/tools/openapi-generator)       | Generate Effect code from OpenAPI specifications         | [docs](https://effect.website/docs/v4/api/openapi-generator)       |
+
+## Resources
+
+- Documentation (https://effect.website)
+- Discord (https://discord.gg/effect-ts)
+- Effect v3 source (https://github.com/Effect-TS/effect/tree/v3)
+- Effect v4 source (https://github.com/Effect-TS/effect/tree/main)
+
+## License
+
+MIT

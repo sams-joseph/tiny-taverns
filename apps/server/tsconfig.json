@@ -1,8 +1,0 @@
-{
-  "extends": "@taverns/tsconfig/node.json",
-  "compilerOptions": {
-    "types": ["node", "vitest/globals"],
-    "noEmit": true
-  },
-  "include": ["src", "test"]
-}

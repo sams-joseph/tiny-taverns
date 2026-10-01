@@ -1,8 +1,0 @@
-{
-  "extends": "@taverns/tsconfig/react-library.json",
-  "compilerOptions": {
-    "types": ["node", "vitest/globals"],
-    "noEmit": true
-  },
-  "include": ["src", "test", "vitest.setup.ts", "vitest.config.ts"]
-}
