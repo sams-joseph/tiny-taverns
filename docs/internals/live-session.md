@@ -20,7 +20,7 @@ Any live client must implement this against `GET …/runs/:runId/events` (`handl
 - `GET …/log?since=` is the same query over a non-streaming transport.
 - Authorization happens before a stream exists, so a denial is a JSON 404 rather than a failure event inside a 200.
 
-`seq` comes from one global sequence (`session_event_seq`), not `max(seq)+1` per session: a cursor only has to increase. It is `bigint`, so `pg` returns a string and the mapper narrows it once. `payload` is the human-legible remainder, not a contract; a client re-reads rows rather than applying it.
+`seq` comes from one global sequence (`session_event_seq`), not `max(seq)+1` per session: a cursor only has to increase. It is `bigint`, which the driver returns as a JS `bigint`, and the mapper narrows it once (`int8Column`). `payload` is the human-legible remainder, not a contract; a client re-reads rows rather than applying it.
 
 ## Modelling decisions
 

@@ -11,11 +11,11 @@ import { fileURLToPath } from "node:url";
  */
 export const DEV_DATABASE_URL = "postgres://taverns:taverns@127.0.0.1:5433/taverns";
 
-export const databaseUrl = Config.redacted("DATABASE_URL").pipe(
+export const databaseUrl = Config.Redacted("DATABASE_URL").pipe(
   Config.withDefault(Redacted.make(DEV_DATABASE_URL)),
 );
 
-export const port = Config.port("PORT").pipe(Config.withDefault(3000));
+export const port = Config.Port("PORT").pipe(Config.withDefault(3000));
 
 /**
  * Origins allowed to call the API from a browser. `apps/web` runs on 5173 in
@@ -27,7 +27,7 @@ export const port = Config.port("PORT").pipe(Config.withDefault(3000));
  * fails in a way nobody enjoys diagnosing: the browser is allowed to make the
  * call, and the server then rejects the credential it carries.
  */
-export const allowedOrigins = Config.string("ALLOWED_ORIGINS").pipe(
+export const allowedOrigins = Config.String("ALLOWED_ORIGINS").pipe(
   Config.map((value) => value.split(",").map((origin) => origin.trim())),
   Config.withDefault(["http://localhost:5173", "http://127.0.0.1:5173"]),
 );
@@ -45,7 +45,7 @@ export const allowedOrigins = Config.string("ALLOWED_ORIGINS").pipe(
  * twenty — a property that costs twenty seconds of every CI run tends to get
  * deleted, and then nothing checks it at all.
  */
-export const liveHeartbeatSeconds = Config.int("LIVE_HEARTBEAT_SECONDS").pipe(
+export const liveHeartbeatSeconds = Config.Int("LIVE_HEARTBEAT_SECONDS").pipe(
   Config.withDefault(20),
 );
 
@@ -63,7 +63,7 @@ export const liveHeartbeatSeconds = Config.int("LIVE_HEARTBEAT_SECONDS").pipe(
  * `http://127.0.0.1:11434/v1` for Ollama, `http://127.0.0.1:1234/v1` for LM
  * Studio. A hosted provider is the same shape and a different URL.
  */
-export const hobApiUrl = Config.option(Config.string("HOB_API_URL"));
+export const hobApiUrl = Config.option(Config.String("HOB_API_URL"));
 
 /**
  * Which model to ask. No default, and Hob is off unless both this and the URL
@@ -71,7 +71,7 @@ export const hobApiUrl = Config.option(Config.string("HOB_API_URL"));
  * with a provider error, which is a much worse way to find out than a boot line
  * saying Hob is off.
  */
-export const hobModel = Config.option(Config.string("HOB_MODEL"));
+export const hobModel = Config.option(Config.String("HOB_MODEL"));
 
 /**
  * An API key for the model endpoint, if it wants one.
@@ -81,7 +81,7 @@ export const hobModel = Config.option(Config.string("HOB_MODEL"));
  * page, and nothing in this repo may ever commit one — `.env.*` is gitignored
  * and `.env.example` carries the name only.
  */
-export const hobApiKey = Config.option(Config.redacted("HOB_API_KEY"));
+export const hobApiKey = Config.option(Config.Redacted("HOB_API_KEY"));
 
 /**
  * The output cap sent with every generation request, always and explicitly.
@@ -111,10 +111,10 @@ export const hobApiKey = Config.option(Config.redacted("HOB_API_KEY"));
  * short, and it is the one number that turns a capable local model from mute
  * into useful.
  */
-export const hobMaxTokens = Config.int("HOB_MAX_TOKENS").pipe(Config.withDefault(4096));
+export const hobMaxTokens = Config.Int("HOB_MAX_TOKENS").pipe(Config.withDefault(4096));
 
 /** Campaign-wide player/NPC messages per UTC day. Per-player minute cap is fixed at 10. */
-export const npcPlayerCampaignDailyLimit = Config.int("NPC_PLAYER_CAMPAIGN_DAILY_LIMIT").pipe(
+export const npcPlayerCampaignDailyLimit = Config.Int("NPC_PLAYER_CAMPAIGN_DAILY_LIMIT").pipe(
   Config.withDefault(500),
 );
 
@@ -133,7 +133,7 @@ export const npcPlayerCampaignDailyLimit = Config.int("NPC_PLAYER_CAMPAIGN_DAILY
  * still work, and the whole suite still passes. There is no sensible committed
  * default for a key that differs per instance.
  */
-export const clerkJwtKey = Config.option(Config.string("CLERK_JWT_KEY"));
+export const clerkJwtKey = Config.option(Config.String("CLERK_JWT_KEY"));
 
 /**
  * Which object storage provider holds files, the choice `storageFromConfig` in
@@ -147,7 +147,7 @@ export const clerkJwtKey = Config.option(Config.string("CLERK_JWT_KEY"));
  * `filesystem` is the only driver so far. A hosted provider is a new value
  * here and a new adapter; see `docs/internals/storage.md`.
  */
-export const storageDriver = Config.option(Config.literals(["filesystem"], "STORAGE_DRIVER"));
+export const storageDriver = Config.option(Config.Literals(["filesystem"], "STORAGE_DRIVER"));
 
 /**
  * The directory the `filesystem` driver writes under. A relative value is
@@ -155,7 +155,7 @@ export const storageDriver = Config.option(Config.literals(["filesystem"], "STOR
  * resolved from this module so it is the same place under `tsx` and under
  * `node dist/main.js`, and it is gitignored.
  */
-export const storageFsRoot = Config.string("STORAGE_FS_ROOT").pipe(
+export const storageFsRoot = Config.String("STORAGE_FS_ROOT").pipe(
   Config.withDefault(fileURLToPath(new URL("../.storage", import.meta.url))),
 );
 
@@ -171,19 +171,19 @@ export const storageFsRoot = Config.string("STORAGE_FS_ROOT").pipe(
  * `PORTRAIT_MODEL`, `PORTRAIT_URL_SECRET` and storage (`STORAGE_DRIVER`); the
  * boot line names whichever is missing.
  */
-export const portraitApiUrl = Config.option(Config.string("PORTRAIT_API_URL"));
+export const portraitApiUrl = Config.option(Config.String("PORTRAIT_API_URL"));
 
 /** Which image model to ask, as that endpoint names it. `gpt-image-2.5-flare` on OpenAI. */
-export const portraitModel = Config.option(Config.string("PORTRAIT_MODEL"));
+export const portraitModel = Config.option(Config.String("PORTRAIT_MODEL"));
 
 /** A key for the image endpoint, if it wants one. Secret, like `HOB_API_KEY`. */
-export const portraitApiKey = Config.option(Config.redacted("PORTRAIT_API_KEY"));
+export const portraitApiKey = Config.option(Config.Redacted("PORTRAIT_API_KEY"));
 
 /**
  * OpenAI's `quality`, sent only to api.openai.com (see `images/ImageModel.ts`).
  * `medium` is the cost the plan was priced at.
  */
-export const portraitQuality = Config.literals(
+export const portraitQuality = Config.Literals(
   ["low", "medium", "high", "auto"],
   "PORTRAIT_QUALITY",
 ).pipe(Config.withDefault("medium" as const));
@@ -193,15 +193,15 @@ export const portraitQuality = Config.literals(
  * images are OFF — a per-process random key would break every URL at each
  * restart and between two instances, which looks like a storage bug.
  */
-export const portraitUrlSecret = Config.option(Config.redacted("PORTRAIT_URL_SECRET"));
+export const portraitUrlSecret = Config.option(Config.Redacted("PORTRAIT_URL_SECRET"));
 
 /** How many images, of every kind together, draw at once in this process. */
-export const portraitConcurrency = Config.int("PORTRAIT_CONCURRENCY").pipe(Config.withDefault(2));
+export const portraitConcurrency = Config.Int("PORTRAIT_CONCURRENCY").pipe(Config.withDefault(2));
 
 /** Images of every kind together one account may have drawn per UTC day. */
-export const portraitAccountDailyLimit = Config.int("PORTRAIT_ACCOUNT_DAILY_LIMIT").pipe(
+export const portraitAccountDailyLimit = Config.Int("PORTRAIT_ACCOUNT_DAILY_LIMIT").pipe(
   Config.withDefault(10),
 );
 
 /** Images of every kind this server may have drawn per UTC day, across every account. */
-export const portraitDailyLimit = Config.int("PORTRAIT_DAILY_LIMIT").pipe(Config.withDefault(200));
+export const portraitDailyLimit = Config.Int("PORTRAIT_DAILY_LIMIT").pipe(Config.withDefault(200));

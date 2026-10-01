@@ -468,7 +468,7 @@ export class PlayerTable extends Context.Service<
               if (readable.length === 0) {
                 return yield* new NotFound({ resource: "session", id: sessionId });
               }
-              const rows = yield* sql<{ readonly seq: string }>`
+              const rows = yield* sql<{ readonly seq: bigint }>`
                 select session_event.seq from session_event
                 where session_event.session_id = ${sessionId}
                   and session_event.seq > ${since}

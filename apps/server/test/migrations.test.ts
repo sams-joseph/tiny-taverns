@@ -1042,7 +1042,7 @@ describeLayer("adding source provenance after the starter bundle existed", sourc
             origin: "system",
             kind: "class",
             name: "Legacy Druid",
-            body: { hitDie: 8, unarmouredAc: ["DEX"] },
+            body: JSON.stringify({ hitDie: 8, unarmouredAc: ["DEX"] }),
             visibility: "shared",
           })}
         `;

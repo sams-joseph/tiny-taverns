@@ -23,6 +23,7 @@ import {
   MONSTER_PROFICIENCY_RAW,
   MONSTER_RAW,
 } from "./systemMonsters.js";
+import { arrayParam } from "../repo/rows.js";
 
 /** What one run of the import did. */
 export interface ImportResult {
@@ -487,12 +488,12 @@ const writeCreatureCorpus = (
               ${crSort},
               ${creature.ac},
               ${creature.hp},
-              ${creature.environments ?? []},
-              ${creature.damageVulnerabilities ?? []},
-              ${creature.damageResistances ?? []},
-              ${creature.damageImmunities ?? []},
-              ${creature.conditionImmunities ?? []},
-              ${creature.movementModes ?? []},
+              ${arrayParam(creature.environments ?? [])},
+              ${arrayParam(creature.damageVulnerabilities ?? [])},
+              ${arrayParam(creature.damageResistances ?? [])},
+              ${arrayParam(creature.damageImmunities ?? [])},
+              ${arrayParam(creature.conditionImmunities ?? [])},
+              ${arrayParam(creature.movementModes ?? [])},
               ${creature.spellcaster ?? false},
               ${creature.legendary ?? false},
               ${JSON.stringify(stripSourceUrls(statBlock))}
@@ -791,12 +792,12 @@ export const importSystemMonsters = (
               ${monster.crSort ?? crSortFor(monster.cr)},
               ${monster.ac},
               ${monster.hp},
-              ${monster.environments ?? []},
-              ${monster.damageVulnerabilities ?? []},
-              ${monster.damageResistances ?? []},
-              ${monster.damageImmunities ?? []},
-              ${monster.conditionImmunities ?? []},
-              ${monster.movementModes ?? []},
+              ${arrayParam(monster.environments ?? [])},
+              ${arrayParam(monster.damageVulnerabilities ?? [])},
+              ${arrayParam(monster.damageResistances ?? [])},
+              ${arrayParam(monster.damageImmunities ?? [])},
+              ${arrayParam(monster.conditionImmunities ?? [])},
+              ${arrayParam(monster.movementModes ?? [])},
               ${monster.spellcaster ?? false},
               ${monster.legendary ?? false},
               ${JSON.stringify(stripSourceUrls(monster.statBlock ?? emptyStatBlock))}

@@ -27,6 +27,7 @@ import {
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
 import {
+  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -416,7 +417,7 @@ export class Combatants extends Context.Service<
                       hp_max: payload.hpMax,
                       hp_current: payload.hpCurrent ?? hpMax,
                       ac: payload.ac,
-                      conditions: payload.conditions,
+                      conditions: arrayParam(payload.conditions),
                       visibility: payload.visibility,
                     }),
                   }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
@@ -451,7 +452,7 @@ export class Combatants extends Context.Service<
                     hp_current: patch.hpCurrent,
                     hp_max: patch.hpMax,
                     ac: patch.ac,
-                    conditions: patch.conditions,
+                    conditions: arrayParam(patch.conditions),
                     visibility: patch.visibility,
                   });
                   const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(

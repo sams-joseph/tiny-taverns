@@ -13,7 +13,7 @@ overrides:
   # `@effect/platform-node` depends on its shared half by caret range, which
   # otherwise resolves to a newer Effect release than the one pinned everywhere
   # else. Keep it on the same exact version as `effect`; bump them together.
-  "@effect/platform-node-shared": 4.0.0-rc.112
+  "@effect/platform-node-shared": 4.0.0-rc.117
 packageExtensions:
   # jest-dom's matcher types augment `declare module "vitest"` without declaring
   # vitest as a peer, so they resolve whichever vitest pnpm hoists. With the

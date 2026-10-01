@@ -26,7 +26,14 @@ import {
   portraitSigner,
   restCharacterRow,
 } from "./Characters.js";
-import { classFromColumns, defined, dieOnSqlError, orNotFound, timestampColumns } from "./rows.js";
+import {
+  arrayParam,
+  classFromColumns,
+  defined,
+  dieOnSqlError,
+  orNotFound,
+  timestampColumns,
+} from "./rows.js";
 import { requestAlreadyApplied, sessionRequestAlreadyApplied } from "./SessionEvents.js";
 import {
   appendCharacterUpdated,
@@ -181,7 +188,7 @@ export class Party extends Context.Service<
         Result: CharacterRow,
         execute: (ids) => sql`
           select character.*, ${portraitColumns(sql)} from character
-          where character.id = any(${[...ids]})
+          where character.id = any(${arrayParam([...ids])})
         `,
       });
 
@@ -327,7 +334,7 @@ export class Party extends Context.Service<
                     // write, and the seat edit stands alone.
                     let sessionId: SessionId | undefined = undefined;
                     const liveColumns = defined({
-                      conditions: patch.conditions,
+                      conditions: arrayParam(patch.conditions),
                       temp_hp: patch.tempHp,
                       inspiration: patch.inspiration,
                     });

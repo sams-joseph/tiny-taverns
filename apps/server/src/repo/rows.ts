@@ -138,6 +138,50 @@ export const timestampColumns = {
 } as const;
 
 /**
+ * A JS array as a statement parameter, bound the way the `pg` driver bound one:
+ * an untyped array literal (`{"a","b"}`), so Postgres takes its type from where
+ * it stands — `uuid[]` beside a `uuid` column, `integer[]` beside an `integer`
+ * one — and `{}` is an empty array of that type.
+ *
+ * The native driver types a raw array from its elements instead. A string array
+ * binds as `text[]`, which `uuid = any($1)` refuses (`operator does not exist:
+ * uuid = text`), and an empty one cannot be typed at all, so the statement fails
+ * before it is sent. Every array a statement binds goes through this; a
+ * position Postgres cannot type from context (`unnest`) casts it, as it had to
+ * under `pg` too.
+ *
+ * `undefined` stays `undefined`, so a patch's absent column is still dropped by
+ * {@link defined}.
+ */
+export function arrayParam(values: ReadonlyArray<ArrayElement>): string;
+export function arrayParam(values: ReadonlyArray<ArrayElement> | undefined): string | undefined;
+export function arrayParam(values: ReadonlyArray<ArrayElement> | undefined): string | undefined {
+  if (values === undefined) return undefined;
+  const elements = values.map((value) =>
+    value === null ? "NULL" : `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`,
+  );
+  return `{${elements.join(",")}}`;
+}
+
+type ArrayElement = string | number | boolean | null;
+
+/**
+ * An `int8` column as the wire's integer. The driver hands `int8` back as a
+ * `bigint`; the schema's `bigint` columns are sequences that only climb and are
+ * nowhere near 2^53, and `Schema.Int` refuses one that ever gets there rather
+ * than rounding it.
+ */
+export const int8Column = Schema.BigInt.pipe(
+  Schema.decodeTo(
+    Schema.Int,
+    new SchemaTransformation.Transformation(
+      SchemaGetter.transform((value: bigint) => Number(value)),
+      SchemaGetter.forbidden(() => "a row is read, never written back"),
+    ),
+  ),
+);
+
+/**
  * `SqlSchema.findOne`'s "no row" as the domain's refusal.
  *
  * `findOne` fails with `NoSuchElementError` when the predicate returned

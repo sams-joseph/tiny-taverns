@@ -22,6 +22,7 @@ import { SqlClient } from "effect/unstable/sql";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
+import { arrayParam } from "../src/repo/rows.js";
 import { importSystemOptions } from "../src/ruleset/import.js";
 import { importSystemSpells } from "../src/spells/import.js";
 import { campaignVia } from "./support/actors.js";
@@ -448,7 +449,7 @@ describeLayer(
               const rows = yield* sql(
                 (client) => client<{ readonly id: string; readonly source_key: string }>`
                   select id::text, source_key from equipment
-                  where id = any(${[clothes!.equipmentId!, pouch!.equipmentId!]})
+                  where id = any(${arrayParam([clothes!.equipmentId!, pouch!.equipmentId!])})
                   order by source_key
                 `,
               );

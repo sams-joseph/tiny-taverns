@@ -4,6 +4,7 @@ import { Effect, Layer, Redacted } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import * as Database from "../../src/Database.js";
 import { DEV_DATABASE_URL } from "../../src/Config.js";
+import { types } from "../../src/pgTypes.js";
 
 const UNSET = `
 DATABASE_URL is not set, so the server tests do not know which Postgres to use.
@@ -101,7 +102,7 @@ export const freshDatabase = (name: string): Layer.Layer<SqlClient.SqlClient | P
       const quoted = `"${database.replaceAll('"', '""')}"`;
       yield* sql.unsafe(`drop database if exists ${quoted} with (force)`);
       yield* sql.unsafe(`create database ${quoted}`);
-      return PgClient.layer({ url: Redacted.make(urlFor(database)) });
+      return PgClient.layer({ url: Redacted.make(urlFor(database)), types });
     }).pipe(Effect.provide(PgClient.layer({ url: Redacted.make(urlFor("postgres")) })), orExplain),
   ).pipe(Layer.orDie);
 

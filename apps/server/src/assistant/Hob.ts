@@ -75,6 +75,7 @@ import {
   type StoryCoverageSlot,
   vocabularyOf,
 } from "./toolkit.js";
+import { decodeToolCalls } from "./toolArguments.js";
 
 /**
  * Hob answers.
@@ -253,7 +254,7 @@ export class Hob extends Context.Service<
   > =>
     Layer.effect(this)(
       Effect.gen(function* () {
-        const languageModel = yield* LanguageModel.LanguageModel;
+        const languageModel = decodeToolCalls(yield* LanguageModel.LanguageModel);
         const campaigns = yield* Campaigns;
         const groups = yield* Groups;
         const dmActors = yield* CampaignCreatorActors;
@@ -893,7 +894,7 @@ const deliver = (options: {
   readonly asked: string;
   readonly surface: BuildSurface;
   readonly save: (turn: TurnDraft) => Effect.Effect<unknown, unknown>;
-  readonly languageModel: LanguageModel.Service;
+  readonly languageModel: LanguageModel.LanguageModel;
   /** The log line's opening words when the answer fails. */
   readonly failing: string;
 }): Effect.Effect<Stream.Stream<HobEvent>> =>
@@ -1054,7 +1055,7 @@ type AnyTools = Record<string, Tool.Any>;
  * The one reason that is *not* withheld is `length`. See `truncated`.
  */
 const round = <Tools extends AnyTools>(
-  chat: Chat.Service,
+  chat: Chat.Chat,
   toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,
@@ -1209,12 +1210,12 @@ const ranOut: HobEvent = {
  *
  * **This is the defect that made every other failure in this area look like a
  * model problem.** A tool call's arguments are decoded against the tool's own
- * parameter schema *by the framework*, inside `streamText`, before any handler
- * of ours runs — so `failureMode: "return"`, which is how every refusal in this
- * toolkit reaches the model, does not apply to it. One bad argument therefore
- * failed the whole stream: nothing was saved to the thread, no tool step was
- * ever drawn, and the DM was shown a `SchemaError` naming every tool in the
- * toolkit. Measured in a real browser, twice, on two different models.
+ * parameter schema before any handler of ours runs, and a bad one fails the
+ * whole stream (`decodeToolCalls` keeps it that way past effect rc.113,
+ * which would otherwise answer it as a refused step). Before this, one bad
+ * argument ended the answer: nothing was saved to the thread, and the DM was
+ * shown a `SchemaError` naming every tool in the toolkit. Measured in a real
+ * browser, twice, on two different models.
  *
  * A malformed argument is exactly the kind of failure a model can fix, and the
  * shipped convention for that is to tell it. So the correction goes back as a
@@ -1234,14 +1235,14 @@ const ranOut: HobEvent = {
  * Retrying those here would spend the budget on a server that is not answering.
  */
 const recover = <Tools extends AnyTools>(
-  chat: Chat.Service,
+  chat: Chat.Chat,
   toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,
   outputs: OutputSlots,
   error: AiError.AiError | Schema.SchemaError,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> => {
-  const detail = unreadableCall(toolkit, error);
+  const detail = unreadableCall(error);
   if (detail === undefined) return Stream.fail(error);
   if (budget <= 1) {
     // The same question `exhausted` asks, and it is asked more often here: a
@@ -1279,9 +1280,10 @@ const recover = <Tools extends AnyTools>(
  * Whether a failure is the model getting a tool call wrong, and what was wrong.
  *
  * Two shapes reach us, from two different points in `streamText`, and both mean
- * the same thing. `ToolParameterValidationError` is the decode `Toolkit.handle`
- * does before calling a handler, and is the one a bad argument raises (the
- * malformed-argument case in `hob.test.ts`); the handler never runs.
+ * the same thing. `ToolParameterValidationError` is the decode
+ * `decodeToolCalls` does as a call arrives, and is the one a bad argument
+ * raises (the malformed-argument case in `hob.test.ts`); the handler never
+ * runs, and the description already names the refused value.
  * `InvalidOutputError` is the decode of the response parts themselves, which
  * is where a bad argument failed at effect 4.0.0-beta.102, and still means
  * the same thing when it fires.
@@ -1290,47 +1292,14 @@ const recover = <Tools extends AnyTools>(
  * for output the codec refused, so widening this to "anything retryable" would
  * pull in rate limits and provider outages, which another round cannot fix.
  */
-const unreadableCall = <Tools extends AnyTools>(
-  toolkit: Toolkit.WithHandler<Tools>,
-  error: AiError.AiError | Schema.SchemaError,
-): string | undefined => {
+const unreadableCall = (error: AiError.AiError | Schema.SchemaError): string | undefined => {
   if (Schema.isSchemaError(error)) return complaint(error.message, partPath);
   if (!AiError.isAiError(error)) return undefined;
   const reason = error.reason;
   if (reason._tag === "ToolParameterValidationError") {
-    const description = withRefusedValues(toolkit, reason.toolName, reason.toolParams);
-    return `${reason.toolName} — ${complaint(description ?? reason.description, argumentPath)}`;
+    return `${reason.toolName} — ${complaint(reason.description, argumentPath)}`;
   }
   return reason._tag === "InvalidOutputError" ? complaint(reason.description, partPath) : undefined;
-};
-
-/**
- * The same complaint about a call's arguments, with the values it refused.
- *
- * A schema message names the rejected value only when the decode asks for it
- * (`reportInput`), and `Toolkit.handle` does not. The value is the part a model
- * can act on — `Expected a UUID, got "not-a-uuid"` says it passed a name where
- * an id belongs — and the malformed call never reaches the history for the
- * model to look back at. So the arguments are decoded again against the tool's
- * own schema, asking for the input this time. `undefined` when there is no such
- * tool or the second decode somehow succeeds; the caller keeps the original.
- */
-const withRefusedValues = <Tools extends AnyTools>(
-  toolkit: Toolkit.WithHandler<Tools>,
-  toolName: string,
-  params: unknown,
-): string | undefined => {
-  const tool = Object.hasOwn(toolkit.tools, toolName) ? toolkit.tools[toolName] : undefined;
-  if (tool === undefined || !Schema.isSchema(tool.parametersSchema)) return undefined;
-  const decoded = Schema.decodeUnknownEffect(tool.parametersSchema)(params, { reportInput: true });
-  // Every parameter schema in these toolkits is plain data with no services,
-  // which is what lets this decode run synchronously.
-  return Effect.runSync(
-    Effect.match(decoded as Effect.Effect<unknown, Schema.SchemaError>, {
-      onFailure: (error) => error.message,
-      onSuccess: () => undefined,
-    }),
-  );
 };
 
 /**

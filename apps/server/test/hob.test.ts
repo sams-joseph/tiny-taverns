@@ -927,6 +927,9 @@ describeLayer("hob", shared, (it) => {
 
         // The model was told, in a message it can act on, and it did.
         expect(requests).toHaveLength(3);
+        // The unreadable call never reached the history: no tool call is left in
+        // it with nothing answering, which a provider refuses outright.
+        expect(requests[1]?.messages?.some((message) => "tool_calls" in message)).toBe(false);
         const correction = String(requests[1]?.messages?.at(-1)?.content ?? "");
         expect(correction).toContain("could not be read");
         // **What it says is one precise thing, not the codec's whole complaint.** A
@@ -1788,6 +1791,41 @@ describeLayer("hob", shared, (it) => {
           rounds: [reasoningChunks("Hmm, what lives in a marsh.")] as never,
         });
 
+        expect(apologies(events)).toHaveLength(1);
+        expect(apologies(events)[0]).toContain("HOB_MAX_TOKENS");
+      }),
+    );
+
+    it.effect("runs no tool a round that ran out of room asked for", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Since effect 4.0.0-rc.113 a response that stops for `length` resolves its
+        // tool calls with a synthesized failure instead of running their handlers:
+        // a call written in the last tokens before the cap is not trusted to be the
+        // call the model meant. So a well-formed offer in a truncated round makes no
+        // card, and what the DM is told is the knob, once.
+        const cutOff = (yield* withGoblin(
+          toolCallChunks("proposeEncounter", {
+            name: "Ambush in the reeds",
+            creatures: [{ creatureId: "", count: 3 }],
+          }),
+        )).map((chunk) =>
+          typeof chunk === "string"
+            ? chunk
+            : JSON.parse(
+                JSON.stringify(chunk).replace(
+                  '"finish_reason":"tool_calls"',
+                  '"finish_reason":"length"',
+                ),
+              ),
+        );
+        const { events, requests } = yield* ask(fixture.dm, fixture.campaign.id, {
+          text: "Build me an encounter for the reeds.",
+          rounds: [cutOff] as never,
+        });
+
+        expect(requests).toHaveLength(1);
+        expect(events.some((event) => event.event === "proposal")).toBe(false);
         expect(apologies(events)).toHaveLength(1);
         expect(apologies(events)[0]).toContain("HOB_MAX_TOKENS");
       }),

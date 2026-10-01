@@ -18,7 +18,7 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
-import { classFromColumns, defined, dieOnSqlError, timestampColumns } from "./rows.js";
+import { classFromColumns, defined, dieOnSqlError, int8Column, timestampColumns } from "./rows.js";
 import {
   containedRowReadable,
   ensureNestedParentReadable,
@@ -33,15 +33,13 @@ import {
  * A `session_event` row as the wire reads it, decoded off `session_event.*`
  * by `SqlSchema`.
  *
- * `seq` is a `bigint`, and therefore a **string** off the wire: `pg` hands
- * back `int8` as text to protect a precision JavaScript cannot hold — the same
- * reason `creature.cr_sort` is `double precision` rather than `numeric`. Here
- * the width is genuinely wanted (it is a sequence that only ever climbs) and
- * the value is nowhere near 2^53, so the decode narrows it once, here.
+ * `seq` is a `bigint` column, read through `int8Column`: the width is
+ * genuinely wanted (it is a sequence that only ever climbs) and the value is
+ * nowhere near 2^53, so the decode narrows it once, here.
  */
 const SessionEventRow = classFromColumns(SessionEvent, {
   ...SessionEvent.fields,
-  seq: Schema.NumberFromString.pipe(Schema.decodeTo(SessionEvent.fields.seq)),
+  seq: int8Column.pipe(Schema.decodeTo(SessionEvent.fields.seq)),
   ...timestampColumns,
 });
 

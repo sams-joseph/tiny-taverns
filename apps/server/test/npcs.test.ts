@@ -1269,6 +1269,32 @@ describeLayer("npcs", shared, (it) => {
         }),
     );
 
+    it.effect("ends the reply on an offer whose arguments it cannot read", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // An empty memory is refused by the tool's own parameter schema. Since
+        // effect 4.0.0-rc.113 that refusal would be handed to the model as a tool
+        // result and the reply would go on; the agent keeps it where it has always
+        // been, before the call is drawn or answered (`assistant/toolArguments.ts`).
+        const { events, requests } = yield* rehearse(
+          fixture.dm,
+          fixture.campaign.id,
+          fixture.cazril.id,
+          {
+            rounds: [
+              toolCallChunks("proposeNpcMemory", { body: "" }),
+              textChunks("I will keep that ready for your review."),
+            ],
+          },
+        );
+
+        expect(requests).toHaveLength(1);
+        expect(events.some((event) => event.event === "tool")).toBe(false);
+        expect(proposalsIn(events)).toEqual([]);
+        expect(apologies(events)).toHaveLength(1);
+      }),
+    );
+
     it.effect(
       "accepts notes and beats from immutable stored content, and refuses repeat decisions",
       () =>

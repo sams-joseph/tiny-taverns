@@ -37,6 +37,7 @@ import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
 import {
+  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -752,7 +753,7 @@ export class EncounterRuns extends Context.Service<
                         hp_current: member.hp_current ?? member.hp_max ?? 0,
                         hp_max: member.hp_max ?? 0,
                         ac: member.ac,
-                        conditions: member.conditions,
+                        conditions: arrayParam(member.conditions),
                         kind: "pc",
                       });
                     }
@@ -779,7 +780,7 @@ export class EncounterRuns extends Context.Service<
                           // the party's rows and not on the monsters' would
                           // either be dropped or bound as null depending on
                           // which end the seed started at.
-                          conditions: [],
+                          conditions: arrayParam([]),
                           kind: "npc",
                         });
                       }
@@ -937,7 +938,7 @@ export class EncounterRuns extends Context.Service<
                         hp_max: row.hp_max,
                         ac: row.ac,
                         kind: row.kind,
-                        conditions: row.conditions,
+                        conditions: arrayParam(row.conditions),
                         board_column: row.board_column,
                         board_row: row.board_row,
                         visibility: row.visibility,

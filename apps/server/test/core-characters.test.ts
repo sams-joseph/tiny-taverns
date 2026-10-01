@@ -283,19 +283,19 @@ describeLayer(
               (sql) => sql<{
                 readonly account_id: string;
                 readonly origin: string;
-                readonly seats: string;
-                readonly portraits: string;
+                readonly seats: number;
+                readonly portraits: number;
               }>`
           select character.account_id, character.origin,
                  (select count(*) from campaign_character
-                  where campaign_character.character_id = character.id) as seats,
+                  where campaign_character.character_id = character.id)::int as seats,
                  (select count(*) from character_portrait
-                  where character_portrait.character_id = character.id) as portraits
+                  where character_portrait.character_id = character.id)::int as portraits
           from character where character.id = ${character.id}
         `,
             );
             expect(rows).toEqual([
-              { account_id: fresh.actor.accountId, origin: "authored", seats: "0", portraits: "1" },
+              { account_id: fresh.actor.accountId, origin: "authored", seats: 0, portraits: 1 },
             ]);
 
             const mine = yield* as(fresh.token, (client) => client.me.characters());

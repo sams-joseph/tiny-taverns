@@ -37,7 +37,7 @@ Visibility is the one place importers differ. `bestiary:import` never writes it,
 
 ## Row form and document form
 
-A corpus row keeps two forms, and neither derives from the other. Filterable and sortable values are columns; the display half is one `jsonb` `body` (`statBlock` on the wire for creatures) queried only by full text. `"17 (chain shirt, shield)"` is not recoverable from `17`, so both are stored. `cr` is a string (`"1/4"`) with `cr_sort` beside it, derived on write by `crSortFor` in `repo/Creatures.ts` and overridable; it is `double precision` because `pg` returns `numeric` as a string. See [Data model](data-model.md).
+A corpus row keeps two forms, and neither derives from the other. Filterable and sortable values are columns; the display half is one `jsonb` `body` (`statBlock` on the wire for creatures) queried only by full text. `"17 (chain shirt, shield)"` is not recoverable from `17`, so both are stored. `cr` is a string (`"1/4"`) with `cr_sort` beside it, derived on write by `crSortFor` in `repo/Creatures.ts` and overridable; it is `double precision` because the driver returns `numeric` as a string. See [Data model](data-model.md).
 
 ## How a campaign uses a corpus row
 

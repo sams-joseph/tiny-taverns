@@ -59,7 +59,7 @@ const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
  * input `creatureXp` takes beside `cr`. One statement of it, because
  * `repo/Encounters.ts` reads it again for the difficulty and the roster table
  * and the band must be reading one creature the same way. `double precision`
- * because the pg driver hands `numeric` back as a string.
+ * because the driver hands `numeric` back as a string.
  */
 export const statBlockXp = (sql: SqlClient.SqlClient) =>
   sql`case when jsonb_typeof(creature.body->'xp') = 'number'

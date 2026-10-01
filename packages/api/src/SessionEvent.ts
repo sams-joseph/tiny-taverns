@@ -196,7 +196,8 @@ export const LiveEvent = Schema.Union([
     data: Schema.fromJsonString(SessionEvent),
   }),
   Schema.Struct({
-    id: Schema.UndefinedOr(Schema.String),
+    // Absent, not `undefined`: the SSE decoder omits an event's missing `id`.
+    id: Schema.optionalKey(Schema.String),
     event: Schema.Literal("heartbeat"),
     data: Schema.fromJsonString(Heartbeat),
   }),

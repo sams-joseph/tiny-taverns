@@ -15,6 +15,7 @@ import {
   EQUIPMENT_RAW,
   WEAPON_PROPERTY_RAW,
 } from "./systemEquipment.js";
+import { arrayParam } from "../repo/rows.js";
 
 export interface ImportEquipmentResult {
   readonly inserted: number;
@@ -501,8 +502,8 @@ export const importSystemEquipment = (
               ${item.range?.long ?? null},
               ${item.throwRange?.normal ?? null},
               ${item.throwRange?.long ?? null},
-              ${item.properties.map((property) => property.index)},
-              ${item.properties.map((property) => property.name)},
+              ${arrayParam(item.properties.map((property) => property.index))},
+              ${arrayParam(item.properties.map((property) => property.name))},
               ${JSON.stringify(item.body)},
               'shared'
             )

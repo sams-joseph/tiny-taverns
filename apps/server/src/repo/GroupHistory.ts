@@ -25,6 +25,7 @@ import {
   classFromColumns,
   dieOnSqlError,
   fromColumns,
+  int8Column,
   likeContains,
   orNotFound,
 } from "./rows.js";
@@ -60,15 +61,12 @@ import {
  * the one act that turns campaign-private material into group history.
  */
 
-/** `bigint`, which `pg` hands back as a string: read as the wire's integer. */
-const seqColumn = Schema.NumberFromString.pipe(Schema.decodeTo(Schema.Int));
-
 /** A `group_history_entry` row as the wire reads it, decoded off `select *` by `SqlSchema`. */
 const EntryRow = classFromColumns(
   SharedWorldHistoryEntry,
   {
     ...SharedWorldHistoryEntry.fields,
-    worldSeq: seqColumn,
+    worldSeq: int8Column,
     occurredAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
     acceptedAt: Schema.DateTimeUtcFromDate,
     createdAt: Schema.DateTimeUtcFromDate,
@@ -81,7 +79,7 @@ const SummaryRow = classFromColumns(
   SharedWorldHistorySummary,
   {
     ...SharedWorldHistorySummary.fields,
-    lastWorldSeq: seqColumn,
+    lastWorldSeq: int8Column,
     acceptedAt: Schema.NullOr(Schema.DateTimeUtcFromDate),
     createdAt: Schema.DateTimeUtcFromDate,
   },
@@ -714,7 +712,7 @@ export class GroupHistory extends Context.Service<
               // A proposal may cover only a real prefix of this world's
               // Chronicle. Zero is the exact boundary for an empty world.
               if (lastWorldSeq > 0) {
-                const boundary = yield* sql<{ readonly group_seq: string }>`
+                const boundary = yield* sql<{ readonly group_seq: bigint }>`
                   select group_seq from group_history_entry
                   where group_id = ${groupId} and group_seq = ${lastWorldSeq}
                 `;

@@ -21,6 +21,7 @@ import {
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
+  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -106,10 +107,10 @@ const createColumns = (payload: SpellLibraryCreate, owner: Record<string, unknow
     casting_time: payload.castingTime,
     spell_range: payload.range,
     duration: payload.duration,
-    class_indexes: indexesOf(classes),
-    class_names: namesOf(classes),
-    subclass_indexes: indexesOf(subclasses),
-    subclass_names: namesOf(subclasses),
+    class_indexes: arrayParam(indexesOf(classes)),
+    class_names: arrayParam(namesOf(classes)),
+    subclass_indexes: arrayParam(indexesOf(subclasses)),
+    subclass_names: arrayParam(namesOf(subclasses)),
     body: encodeBody({ ...body, school, classes, subclasses }),
     visibility: "visibility" in payload ? payload.visibility : undefined,
   });
@@ -129,10 +130,10 @@ const updateColumns = (patch: SpellLibraryUpdate): Record<string, unknown> => {
     casting_time: patch.castingTime,
     spell_range: patch.range,
     duration: patch.duration,
-    class_indexes: classes === undefined ? undefined : indexesOf(classes),
-    class_names: classes === undefined ? undefined : namesOf(classes),
-    subclass_indexes: subclasses === undefined ? undefined : indexesOf(subclasses),
-    subclass_names: subclasses === undefined ? undefined : namesOf(subclasses),
+    class_indexes: classes === undefined ? undefined : arrayParam(indexesOf(classes)),
+    class_names: classes === undefined ? undefined : arrayParam(namesOf(classes)),
+    subclass_indexes: subclasses === undefined ? undefined : arrayParam(indexesOf(subclasses)),
+    subclass_names: subclasses === undefined ? undefined : arrayParam(namesOf(subclasses)),
     body:
       patch.spell &&
       encodeBody({
@@ -160,13 +161,15 @@ const narrowedBy = (
     clauses.push(matchesQuery(sql, filter.q.trim()));
   }
   if (filter.levels !== undefined && filter.levels.length > 0) {
-    clauses.push(sql`spell.level = any(${filter.levels.map((level) => Number(level))})`);
+    clauses.push(
+      sql`spell.level = any(${arrayParam(filter.levels.map((level) => Number(level)))})`,
+    );
   }
   if (filter.schools !== undefined && filter.schools.length > 0) {
-    clauses.push(sql`spell.school_index = any(${filter.schools})`);
+    clauses.push(sql`spell.school_index = any(${arrayParam(filter.schools)})`);
   }
   if (filter.classes !== undefined && filter.classes.length > 0) {
-    clauses.push(sql`spell.class_indexes && ${filter.classes}`);
+    clauses.push(sql`spell.class_indexes && ${arrayParam(filter.classes)}`);
   }
   if (filter.ritual !== undefined) clauses.push(sql`spell.ritual = ${filter.ritual}`);
   if (filter.concentration !== undefined) {

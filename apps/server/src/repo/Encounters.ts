@@ -35,8 +35,9 @@ import {
   pageOfRows,
 } from "./paging.js";
 import {
-  type AssistantOrigin,
+  arrayParam,
   assistantColumns,
+  type AssistantOrigin,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -171,8 +172,8 @@ const ROSTER: NestedTable = {
  * It counts what *this actor* can see, through the same visibility rule a read
  * of the roster itself would apply — so the number on the card and the list
  * behind it always agree. `coalesce(..., 0)` because an empty roster sums to
- * null, and `::int` because Postgres widens `sum` to a bigint, which the pg
- * driver would hand back as a string.
+ * null, and `::int` because Postgres widens `sum` to a bigint, which the
+ * driver would hand back as a JS `bigint`.
  */
 const creatureCount = (
   sql: SqlClient.SqlClient,
@@ -264,10 +265,9 @@ const lastPlayed = (
 /**
  * Reads and writes over `encounter`, the authored template.
  *
- * `tags` is passed to `sql.insert` as a plain JS array: a bare array in a
- * statement becomes one bind parameter, which `pg` serialises to a Postgres
- * array literal. (`sql.in(...)` is the thing that turns an array into an
- * `(?, ?, ?)` list — do not reach for it here.)
+ * `tags` is passed to `sql.insert` through `arrayParam`: one bind parameter, a
+ * Postgres array literal the column types. (`sql.in(...)` is the thing that
+ * turns an array into an `(?, ?, ?)` list — do not reach for it here.)
  */
 export class Encounters extends Context.Service<
   Encounters,
@@ -625,7 +625,7 @@ export class Encounters extends Context.Service<
                     campaign_id: campaignId,
                     name: payload.name,
                     kind: payload.kind,
-                    tags: payload.tags,
+                    tags: arrayParam(payload.tags),
                     visibility: payload.visibility,
                     ...assistantColumns(from),
                   }),
@@ -698,7 +698,7 @@ export class Encounters extends Context.Service<
                 const columns = defined({
                   name: patch.name,
                   kind: patch.kind,
-                  tags: patch.tags,
+                  tags: arrayParam(patch.tags),
                   visibility: patch.visibility,
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));

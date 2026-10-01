@@ -4,6 +4,7 @@ import { Config, Effect, Layer } from "effect";
 import { Migrator, SqlError } from "effect/unstable/sql";
 import { fileURLToPath } from "node:url";
 import { databaseUrl } from "./Config.js";
+import { types } from "./pgTypes.js";
 
 /** Connection pool. Provides both `PgClient` and the generic `SqlClient`. */
 export const layerClient = PgClient.layerConfig({
@@ -11,6 +12,7 @@ export const layerClient = PgClient.layerConfig({
   // `layerConfig` takes a `Config.Wrap`, so every field is a `Config` — even the
   // ones that are not configurable.
   applicationName: Config.succeed("taverns"),
+  types: Config.succeed(types),
 });
 
 /**

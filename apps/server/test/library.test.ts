@@ -633,13 +633,13 @@ describeLayer("library", shared, (it) => {
       Effect.gen(function* () {
         const rows = yield* Effect.flatMap(
           SqlClient.SqlClient,
-          (client) => client<{ readonly count: string }>`
-          select count(*) as count from creature
+          (client) => client<{ readonly count: number }>`
+          select count(*)::int as count from creature
           where origin = 'system' and (campaign_id is not null or account_id is not null)
         `,
         ).pipe(Effect.orDie);
 
-        expect(rows[0]!.count).toBe("0");
+        expect(rows[0]!.count).toBe(0);
       }),
     );
   });
