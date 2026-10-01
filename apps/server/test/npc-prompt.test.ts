@@ -28,8 +28,10 @@ import {
  * material as its own section from its own argument, every field fenced as
  * data, and the version stamped on the result. The snapshot is the contract's
  * exact text for the current `NPC_PROMPT_TEMPLATE_VERSION`; a behaviour change
- * bumps the version and adds a snapshot beside the old one rather than quietly
- * changing what an existing version means.
+ * bumps the version, so the new snapshot is keyed by the new version rather
+ * than quietly changing what an existing version means. Vitest fails CI on an
+ * unchecked snapshot, so the superseded version's entry is removed (`-u`) and
+ * its text stays in git history.
  */
 
 const stamp = DateTime.makeUnsafe("2026-09-08T12:00:00.000Z");
