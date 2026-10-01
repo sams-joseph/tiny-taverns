@@ -13,7 +13,7 @@ This page covers `apps/server` and `packages/api` as a runtime: the Effect v4 id
 
 ## Effect v3 → v4
 
-`@effect/platform` has no v4; its HTTP surface moved into core `effect` under `effect/*`, which may break in minor releases until it graduates to `effect/*`.
+`@effect/platform` has no v4; its HTTP surface moved into core `effect` under `effect/http` and `effect/http-api`. Since rc.118 those paths no longer carry an `unstable` segment, but the modules are still marked `@stability unstable` upstream, so they may still break between releases.
 
 | v3                                        | v4                                                          |
 | ----------------------------------------- | ----------------------------------------------------------- |
