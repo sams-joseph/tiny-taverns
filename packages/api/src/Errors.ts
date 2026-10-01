@@ -5,7 +5,7 @@ import { Schema } from "effect";
  * same error for both: telling a player that a `dm` row exists but is hidden is
  * itself a leak.
  */
-export class NotFound extends Schema.ErrorClass<NotFound>("NotFound")(
+export class NotFound extends Schema.Error<NotFound>("NotFound")(
   {
     _tag: Schema.tag("NotFound"),
     resource: Schema.String,
@@ -15,7 +15,7 @@ export class NotFound extends Schema.ErrorClass<NotFound>("NotFound")(
 ) {}
 
 /** A uniqueness rule was violated — today, only a repeated session number. */
-export class Conflict extends Schema.ErrorClass<Conflict>("Conflict")(
+export class Conflict extends Schema.Error<Conflict>("Conflict")(
   {
     _tag: Schema.tag("Conflict"),
     message: Schema.String,
@@ -24,7 +24,7 @@ export class Conflict extends Schema.ErrorClass<Conflict>("Conflict")(
 ) {}
 
 /** A bounded-cost endpoint refused this request for now. */
-export class RateLimited extends Schema.ErrorClass<RateLimited>("RateLimited")(
+export class RateLimited extends Schema.Error<RateLimited>("RateLimited")(
   {
     _tag: Schema.tag("RateLimited"),
     message: Schema.String,

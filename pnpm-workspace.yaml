@@ -9,3 +9,17 @@ allowBuilds:
   # here uses msgpack (it backs effect's rpc/cluster/eventlog modules), so
   # decline the native build rather than requiring a toolchain to install.
   msgpackr-extract: false
+overrides:
+  # `@effect/platform-node` depends on its shared half by caret range, which
+  # otherwise resolves to a newer Effect release than the one pinned everywhere
+  # else. Keep it on the same exact version as `effect`; bump them together.
+  "@effect/platform-node-shared": 4.0.0-rc.112
+packageExtensions:
+  # jest-dom's matcher types augment `declare module "vitest"` without declaring
+  # vitest as a peer, so they resolve whichever vitest pnpm hoists. With the
+  # server on a different Vitest major than `apps/web` and `packages/ui`, that
+  # is the wrong one and every `toHaveClass` stops typechecking. The peer makes
+  # each consumer's jest-dom see its own vitest.
+  "@testing-library/jest-dom":
+    peerDependencies:
+      vitest: "*"

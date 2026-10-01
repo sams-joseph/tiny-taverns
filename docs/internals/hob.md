@@ -14,7 +14,7 @@ A `sql` template or an `"effect/unstable/sql"` import anywhere under `src/assist
 
 ## The round loop and the event stream
 
-`LanguageModel.streamText` at the pinned Effect beta is one round trip: it resolves the tool calls a step asked for, emits their results, and stops without sending them back. `round()` in `Hob.ts` supplies the loop through `Chat.fromPrompt`, capped at `MAX_ROUNDS` (4). `hob.test.ts` pins the second request.
+`LanguageModel.streamText` at the pinned Effect version is one round trip: it resolves the tool calls a step asked for, emits their results, and stops without sending them back. `round()` in `Hob.ts` supplies the loop through `Chat.fromPrompt`, capped at `MAX_ROUNDS` (4). `hob.test.ts` pins the second request.
 
 The wire is `POST /campaigns/:c/hob/ask` (and `/worlds/:w/hob/ask`, `/me/hob/ask`) as an SSE stream of `HobEvent` (`began`, `delta`, `tool`, `proposal`, `done`, `failed`; `packages/api/src/Hob.ts`). Three ordering rules matter:
 
@@ -96,7 +96,7 @@ Look at the wire first. `test/support/model.ts` records every request body, and 
 
 **Reasoning inside the budget.** A thinking model spends `HOB_MAX_TOKENS` deliberating first, and reasoning parts are dropped on purpose, so the panel showed `began … done` with nothing between (or, on an endpoint that leaves `<think>` in `content`, prose and no tool call). `truncated` and `silence` in `Hob.ts` turn a `length` finish and an empty answer into `failed` events naming the knob, and a `length` round ends the loop. A `done` that follows nothing is the shape to distrust.
 
-**Framework-side decode failure.** Tool arguments are decoded inside `streamText` before any handler runs, so a handler's refusal cannot reach it, and the stream used to die showing a union complaint naming every tool. `recover` sends the correction back as a `user` message (no tool call reached history for a result to answer), trimmed by `complaint()` to the `["params"]` lines, charged to `MAX_ROUNDS`. Only `InvalidOutputError` and `ToolParameterValidationError` are recovered.
+**Framework-side decode failure.** Tool arguments are decoded inside `streamText` before any handler runs, so a handler's refusal cannot reach it, and the stream used to die showing a union complaint naming every tool. `recover` sends the correction back as a `user` message (no tool call reached history for a result to answer), trimmed by `complaint()` to the lines whose path names an argument, charged to `MAX_ROUNDS`. Only `InvalidOutputError` and `ToolParameterValidationError` are recovered.
 
 **Running out is a failure only when Hob got nowhere.** `gotNowhere` is the one place that judgement lives: a turn that offered a card and then spent its last round is saved with the proposal and a `done`, because a failure before the card contradicts the thing arriving one event later.
 

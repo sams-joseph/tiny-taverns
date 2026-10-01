@@ -5,10 +5,10 @@ This page covers `apps/server` and `packages/api` as a runtime: the Effect v4 id
 ## Workspace pins that are constraints
 
 - **Formatting is root-only Prettier** (`pnpm format` / `pnpm format:check`), not a turbo task. No package has a `format` script, so CI must name `format:check` as its own step. `.prettierignore` keeps `packages/design-system` and `.repos/` out of every pass.
-- **`effect`, `@effect/platform-node`, `@effect/sql-pg` and the server's `@effect/vitest` are pinned exactly at `4.0.0-beta.102`.** Betas are not semver-stable; do not loosen to caret ranges, and bump them together.
+- **`effect`, `@effect/platform-node`, `@effect/sql-pg`, `@effect/ai-openai-compat`, the web app's `@effect/atom-react` and the server's `@effect/vitest` are pinned exactly at `4.0.0-rc.112`.** Release candidates are not semver-stable; do not loosen to caret ranges, and bump them together. `@effect/platform-node` takes `@effect/platform-node-shared` by caret range, so `pnpm-workspace.yaml` overrides it to the same version; bump that line with the rest.
 - **`.repos/effect` is committed on purpose** at that tag; v4's published docs are thin. Start with `.repos/effect/MIGRATION.md` and `migration/*.md`.
 - **`pnpm-workspace.yaml` sets `msgpackr-extract: false` under `allowBuilds`.** `effect` v4 pulls `msgpackr` transitively; without the entry `pnpm install` exits 1 on the ignored build script.
-- **Vite and Vitest stay aligned** (Vitest 3 with Vite 6 in `apps/web` and `packages/ui`); Vitest 2 pulls Vite 5 and the mix produces duplicate-`vite` type errors.
+- **Vite and Vitest stay aligned** (Vitest 3 with Vite 6 in `apps/web` and `packages/ui`); Vitest 2 pulls Vite 5 and the mix produces duplicate-`vite` type errors. `apps/server` is on Vitest 4 because `@effect/vitest` requires it, on the same Vite 6. With two Vitest majors in the workspace, `pnpm-workspace.yaml` gives `@testing-library/jest-dom` a `vitest` peer so its matcher types augment each consumer's own Vitest rather than whichever one pnpm hoists.
 - **`@taverns/tsconfig` exposes each base through an `exports` map**, which is what lets esbuild resolve the nested `extends` chain without warnings. `packages/ui` ships TypeScript source (`exports` → `./src/index.ts`); `packages/api` is the one package that builds to `dist` (below).
 
 ## Effect v3 → v4

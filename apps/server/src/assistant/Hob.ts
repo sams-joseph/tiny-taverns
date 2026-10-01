@@ -1241,7 +1241,7 @@ const recover = <Tools extends AnyTools>(
   outputs: OutputSlots,
   error: AiError.AiError | Schema.SchemaError,
 ): Stream.Stream<HobEvent, AiError.AiError | Schema.SchemaError, LanguageModel.LanguageModel> => {
-  const detail = unreadableCall(error);
+  const detail = unreadableCall(toolkit, error);
   if (detail === undefined) return Stream.fail(error);
   if (budget <= 1) {
     // The same question `exhausted` asks, and it is asked more often here: a
@@ -1280,24 +1280,66 @@ const recover = <Tools extends AnyTools>(
  *
  * Two shapes reach us, from two different points in `streamText`, and both mean
  * the same thing. `ToolParameterValidationError` is the decode `Toolkit.handle`
- * does before calling a handler. `InvalidOutputError` is the decode of the
- * response parts themselves, which is the one that actually fires here — the
- * whole chunk is decoded before any handler is forked, so a bad argument fails
- * there first and the handler never runs.
+ * does before calling a handler, and is the one a bad argument raises (the
+ * malformed-argument case in `hob.test.ts`); the handler never runs.
+ * `InvalidOutputError` is the decode of the response parts themselves, which
+ * is where a bad argument failed at effect 4.0.0-beta.102, and still means
+ * the same thing when it fires.
  *
  * Nothing else is treated as recoverable. `InvalidOutputError` is *only* raised
  * for output the codec refused, so widening this to "anything retryable" would
  * pull in rate limits and provider outages, which another round cannot fix.
  */
-const unreadableCall = (error: AiError.AiError | Schema.SchemaError): string | undefined => {
-  if (Schema.isSchemaError(error)) return complaint(error.message);
+const unreadableCall = <Tools extends AnyTools>(
+  toolkit: Toolkit.WithHandler<Tools>,
+  error: AiError.AiError | Schema.SchemaError,
+): string | undefined => {
+  if (Schema.isSchemaError(error)) return complaint(error.message, partPath);
   if (!AiError.isAiError(error)) return undefined;
   const reason = error.reason;
   if (reason._tag === "ToolParameterValidationError") {
-    return `${reason.toolName} — ${complaint(reason.description)}`;
+    const description = withRefusedValues(toolkit, reason.toolName, reason.toolParams);
+    return `${reason.toolName} — ${complaint(description ?? reason.description, argumentPath)}`;
   }
-  return reason._tag === "InvalidOutputError" ? complaint(reason.description) : undefined;
+  return reason._tag === "InvalidOutputError" ? complaint(reason.description, partPath) : undefined;
 };
+
+/**
+ * The same complaint about a call's arguments, with the values it refused.
+ *
+ * A schema message names the rejected value only when the decode asks for it
+ * (`reportInput`), and `Toolkit.handle` does not. The value is the part a model
+ * can act on — `Expected a UUID, got "not-a-uuid"` says it passed a name where
+ * an id belongs — and the malformed call never reaches the history for the
+ * model to look back at. So the arguments are decoded again against the tool's
+ * own schema, asking for the input this time. `undefined` when there is no such
+ * tool or the second decode somehow succeeds; the caller keeps the original.
+ */
+const withRefusedValues = <Tools extends AnyTools>(
+  toolkit: Toolkit.WithHandler<Tools>,
+  toolName: string,
+  params: unknown,
+): string | undefined => {
+  const tool = Object.hasOwn(toolkit.tools, toolName) ? toolkit.tools[toolName] : undefined;
+  if (tool === undefined || !Schema.isSchema(tool.parametersSchema)) return undefined;
+  const decoded = Schema.decodeUnknownEffect(tool.parametersSchema)(params, { reportInput: true });
+  // Every parameter schema in these toolkits is plain data with no services,
+  // which is what lets this decode run synchronously.
+  return Effect.runSync(
+    Effect.match(decoded as Effect.Effect<unknown, Schema.SchemaError>, {
+      onFailure: (error) => error.message,
+      onSuccess: () => undefined,
+    }),
+  );
+};
+
+/**
+ * Where a complaint's path names the arguments. A response part is decoded
+ * whole, so its paths start at the part's index and its `params` key; a tool's
+ * own parameter decode starts at the arguments.
+ */
+const partPath = /^\s*at \[\d+\]\["params"\](?<rest>.*)$/u;
+const argumentPath = /^\s*at (?<rest>\[.*)$/u;
 
 /**
  * The part of a codec's complaint that is about the model's arguments.
@@ -1308,19 +1350,19 @@ const unreadableCall = (error: AiError.AiError | Schema.SchemaError): string | u
  * "proposeEncounter"`, and eight more like it — around the single line that
  * says what was actually wrong. Sent back whole, that is a page of context a
  * small model spends instead of thinking, and it reads as an instruction to
- * call `listSessions`. So the pairs whose path names `["params"]` are the ones
- * kept, with the response-part index dropped and the JSON pointer written the
- * way a model writes an argument.
+ * call `listSessions`. So the pairs whose path names the arguments (`at`) are
+ * the ones kept, with any response-part prefix dropped and the JSON pointer
+ * written the way a model writes an argument.
  *
  * The fall-through is the first line, capped: for a call naming a tool that
  * does not exist there is no parameter path, and `Expected "searchCampaign",
  * got "frobnicate"` is still the useful sentence.
  */
-const complaint = (description: string): string => {
+const complaint = (description: string, at: RegExp): string => {
   const lines = description.split("\n");
   const kept: Array<string> = [];
   for (let index = 1; index < lines.length; index++) {
-    const path = /^\s*at \[\d+\]\["params"\](?<rest>.*)$/u.exec(lines[index] ?? "")?.groups?.rest;
+    const path = at.exec(lines[index] ?? "")?.groups?.rest;
     if (path === undefined) continue;
     const where = path.replaceAll(/\["([^"]*)"\]/gu, ".$1");
     kept.push(`${(lines[index - 1] ?? "").trim()} at ${where === "" ? "the arguments" : where}`);

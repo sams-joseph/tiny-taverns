@@ -73,7 +73,7 @@ export class Actor extends Schema.Class<Actor>("Actor")({
 export class CurrentActor extends Context.Service<CurrentActor, Actor>()("CurrentActor") {}
 
 /** Returned when a bearer token is missing, malformed, or unknown. */
-export class Unauthorized extends Schema.ErrorClass<Unauthorized>("Unauthorized")(
+export class Unauthorized extends Schema.Error<Unauthorized>("Unauthorized")(
   {
     _tag: Schema.tag("Unauthorized"),
     message: Schema.String,
