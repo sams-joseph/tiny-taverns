@@ -1,4 +1,4 @@
-import { Effect, Option, Schema, SchemaGetter, SchemaIssue } from "effect";
+import { Effect, Schema, SchemaGetter, SchemaIssue } from "effect";
 
 /**
  * Pagination, and the one shape every list endpoint that has it uses.
@@ -95,8 +95,7 @@ export const pageCursor = <Ordering extends Schema.Codec<string, string>>(orderi
       decode: SchemaGetter.transformOrFail((text: string) =>
         Effect.try({
           try: () => JSON.parse(text) as Encoded,
-          catch: (error) =>
-            new SchemaIssue.InvalidValue(Option.some(text), { message: String(error) }),
+          catch: (error) => new SchemaIssue.InvalidValue({ message: String(error) }, text),
         }),
       ),
       encode: SchemaGetter.transform((value: Encoded) => JSON.stringify(value)),

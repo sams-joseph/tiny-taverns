@@ -930,7 +930,7 @@ export const keptFrom = (accepted: HobAccepted): HobKept => {
  * the wire half of `IdentityProvider.disabled`: an opt-in dependency that is
  * absent must degrade, not break.
  */
-export class HobUnavailable extends Schema.ErrorClass<HobUnavailable>("HobUnavailable")(
+export class HobUnavailable extends Schema.Error<HobUnavailable>("HobUnavailable")(
   {
     _tag: Schema.tag("HobUnavailable"),
     message: Schema.String,

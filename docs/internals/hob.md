@@ -14,7 +14,7 @@ A `sql` template or an `"effect/unstable/sql"` import anywhere under `src/assist
 
 ## The round loop and the event stream
 
-`LanguageModel.streamText` at the pinned Effect beta is one round trip: it resolves the tool calls a step asked for, emits their results, and stops without sending them back. `round()` in `Hob.ts` supplies the loop through `Chat.fromPrompt`, capped at `MAX_ROUNDS` (4). `hob.test.ts` pins the second request.
+`LanguageModel.streamText` at the pinned Effect version is one round trip: it resolves the tool calls a step asked for, emits their results, and stops without sending them back. `round()` in `Hob.ts` supplies the loop through `Chat.fromPrompt`, capped at `MAX_ROUNDS` (4). `hob.test.ts` pins the second request.
 
 The wire is `POST /campaigns/:c/hob/ask` (and `/worlds/:w/hob/ask`, `/me/hob/ask`) as an SSE stream of `HobEvent` (`began`, `delta`, `tool`, `proposal`, `done`, `failed`; `packages/api/src/Hob.ts`). Three ordering rules matter:
 
