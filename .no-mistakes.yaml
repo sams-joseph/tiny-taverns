@@ -1,6 +1,7 @@
 # Taverns: the gate runs the checks CI runs (.github/workflows/ci.yml), in
-# databases it owns on the development Postgres server. no-mistakes reads
-# `commands` from the default branch's copy of this file only.
+# databases it owns on the development Postgres server. Neither runs the
+# Playwright suites (`pnpm -F web e2e`, `e2e:auth`); they are run by hand.
+# no-mistakes reads `commands` from the default branch's copy of this file only.
 commands:
   prepare: pnpm install --frozen-lockfile
   lint: pnpm turbo run lint typecheck && pnpm format:check
@@ -9,7 +10,7 @@ commands:
   # with DATABASE_URL pointed at it and the server suite's per-file databases
   # named under it, then drops them all. turbo.json passes DATABASE_URL and
   # TAVERNS_TEST_DATABASE_PREFIX through to `test`.
-  test: scripts/with-private-postgres.sh sh -c 'pnpm turbo run build test --continue && pnpm -F web e2e'
+  test: scripts/with-private-postgres.sh sh -c 'pnpm turbo run build test --continue'
 
 test:
   instructions: |
@@ -31,8 +32,8 @@ test:
     Models: never call a real model or image API. Leave HOB_API_URL, HOB_MODEL and
     PORTRAIT_API_URL unset, or point them at the test suite's scripted stubs.
     Clerk: never create, change or delete a Clerk user; sign in only as the two
-    existing `+clerk_test` users the way `pnpm -F web e2e:auth` does. Skip
-    `e2e:auth` when the CLERK_* keys are absent.
+    existing `+clerk_test` users the way `pnpm -F web e2e:auth` does. Never
+    run the Playwright suites (`pnpm -F web e2e`, `e2e:auth`); they are run by hand.
     Scratch: write every temporary file, log and data directory under the run
     worktree's .scratch/, which git ignores: never /tmp (a uid-wide quota there
     has filled during a server suite run), and never anywhere else in the

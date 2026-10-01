@@ -421,18 +421,15 @@ environment, and skips without them (same README).
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs four jobs in parallel, each on its own runner, after
+`.github/workflows/ci.yml` runs three jobs in parallel, each on its own runner, after
 installing pnpm, the Node in `.node-version`, and `pnpm install --frozen-lockfile`:
 `checks` runs `pnpm turbo run lint typecheck build` and `pnpm format:check`; `server-test`
 runs the server suite against a Postgres service; `web-test` runs the web, `@taverns/ui` and
-`@taverns/api` suites; and `e2e` runs the web Playwright suites and uploads their reports
-when they fail. A newer push to a pull request cancels that pull request's older run; a
-push to `main` always runs to the end. The authenticated suite reads the
-`CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` repository secrets, and on a run
-without them (a fork's pull request) it is skipped with a notice. Each job keeps turbo's
-local cache between runs with `actions/cache`, so a build, lint, typecheck or test whose
-inputs have not changed replays instead of running; `server#test` is never cached, because
-its result depends on the database (`turbo.json`). `.no-mistakes.yaml` pins
-the same commands for the no-mistakes gate, with its tests under
-`scripts/with-private-postgres.sh` so they never touch the `taverns` database; a change
-to what CI runs changes both.
+`@taverns/api` suites. The web Playwright suites run neither in CI nor in the no-mistakes
+gate; they are run by hand. A newer push to a pull request cancels that pull request's older
+run; a push to `main` always runs to the end. Each job keeps turbo's local cache between runs
+with `actions/cache`, so a build, lint, typecheck or test whose inputs have not changed
+replays instead of running; `server#test` is never cached, because its result depends on the
+database (`turbo.json`). `.no-mistakes.yaml` pins the same commands for the no-mistakes gate,
+with its tests under `scripts/with-private-postgres.sh` so they never touch the `taverns`
+database; a change to what CI runs changes both.
