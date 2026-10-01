@@ -31,7 +31,7 @@ Every branch logs one line, as hosted sign-in and Hob do (`server.md`, _Env file
 
 ## Adding a provider
 
-1. **Write the adapter** as a new module in `apps/server/src/storage/`, exporting a `layer` that returns `Layer<ObjectStorage, StorageError, …>`. Read its settings from `Config` (credentials `Config.redacted`) and map every provider failure to `StorageError`, keeping the provider's error as `cause`. A missing object must be `StorageNotFound` from `get` and `None` from `head`, never a `StorageError`.
+1. **Write the adapter** as a new module in `apps/server/src/storage/`, exporting a `layer` that returns `Layer<ObjectStorage, StorageError, …>`. Read its settings from `Config` (credentials `Config.Redacted`) and map every provider failure to `StorageError`, keeping the provider's error as `cause`. A missing object must be `StorageNotFound` from `get` and `None` from `head`, never a `StorageError`.
 2. **Register the driver.** Add its name to the `STORAGE_DRIVER` literals in `apps/server/src/Config.ts`, add a branch to `storageFromConfig` that logs its ON line, and document its variables by name in `apps/server/.env.example`.
 3. **Pass the contract.** Call `objectStorageContract(name, layer)` from `apps/server/test/support/objectStorageContract.ts` and change nothing in it. It builds the layer once and gives each test its own key prefix, so it can run against a real bucket. Behaviour that belongs to one adapter goes in that adapter's own test file. If the adapter cannot meet a contract test, change the interface for every adapter; do not skip the test.
 
