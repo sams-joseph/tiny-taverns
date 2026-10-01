@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /**
  * An NPC's character-style sheet: a level, a class, a race, armour class, hit

@@ -1,9 +1,9 @@
 import { describe, expect } from "@effect/vitest";
 import { type CampaignId, type NoteId, TavernsApi } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { type Person, aCharacterAt, aPerson, admittedTo, campaignVia } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";

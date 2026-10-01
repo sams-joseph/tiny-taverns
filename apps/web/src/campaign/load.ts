@@ -17,7 +17,7 @@ import type {
   PageCursor,
 } from "@taverns/api";
 import { Effect } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads, type Invalidation } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";

@@ -10,7 +10,7 @@ import {
   type PartySeat,
 } from "@taverns/api";
 import { Context, Effect, Layer, Result } from "effect";
-import { SqlClient, Statement } from "effect/unstable/sql";
+import { SqlClient, Statement } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";

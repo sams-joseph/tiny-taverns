@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { expect } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import * as Database from "../src/Database.js";
 import init from "../src/migrations/0001_init.js";
 import clerkIdentity from "../src/migrations/0002_clerk_identity.js";

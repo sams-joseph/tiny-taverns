@@ -14,7 +14,7 @@ import type {
   SessionId,
 } from "@taverns/api";
 import { Effect, Option } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom, writableApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import type { Resource } from "../api/failure";

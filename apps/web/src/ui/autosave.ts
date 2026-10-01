@@ -1,5 +1,5 @@
 import { Effect, Result } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import { useCallback, useEffect, useRef } from "react";
 import { useInvalidate } from "../api/atoms";
 import { runApiResult, type TavernsClient } from "../api/client";

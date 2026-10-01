@@ -22,17 +22,17 @@ import { AbilityBonus, AbilityBonusChoice, AbilityKey } from "./Ruleset.js";
 export const OptionKind = Schema.Literals(["class", "race", "background"]);
 export type OptionKind = typeof OptionKind.Type;
 
-const summary = Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 500)));
-const textLine = Schema.String.check(Schema.isLengthBetween(0, 500));
-const textList = Schema.Array(textLine).check(Schema.isLengthBetween(0, 50));
-const longTextLine = Schema.String.check(Schema.isLengthBetween(0, 10_000));
-const longTextList = Schema.Array(longTextLine).check(Schema.isLengthBetween(0, 50));
+const summary = Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 500)));
+const textLine = Schema.String.check(Schema.isBetweenLength(0, 500));
+const textList = Schema.Array(textLine).check(Schema.isBetweenLength(0, 50));
+const longTextLine = Schema.String.check(Schema.isBetweenLength(0, 10_000));
+const longTextList = Schema.Array(longTextLine).check(Schema.isBetweenLength(0, 50));
 const hitDie = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
-const unarmouredAc = Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6));
+const unarmouredAc = Schema.Array(AbilityKey).check(Schema.isBetweenLength(0, 6));
 const speed = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 200 }));
 const hpPerLevel = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 20 }));
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
-const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 100));
+const sourceName = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 180));
 const sourceReference = Schema.Struct({ index: sourceKey, name: sourceName });
 const jsonObject = Schema.Record(Schema.String, Schema.Unknown);
 const choiceCount = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 }));
@@ -54,7 +54,7 @@ export const RuleLanguage = Schema.Struct({
   index: sourceKey,
   name: sourceName,
   type: sourceName,
-  script: Schema.NullOr(Schema.String.check(Schema.isLengthBetween(0, 120))),
+  script: Schema.NullOr(Schema.String.check(Schema.isBetweenLength(0, 120))),
   typicalSpeakers: textList,
 });
 export type RuleLanguage = typeof RuleLanguage.Type;
@@ -150,12 +150,12 @@ export const OptionChoiceGroup = Schema.Struct({
   ownerName: Schema.NullOr(sourceName),
   kind: RuleChoiceKind,
   choose: choiceCount,
-  desc: Schema.NullOr(Schema.String.check(Schema.isLengthBetween(0, 1000))),
+  desc: Schema.NullOr(Schema.String.check(Schema.isBetweenLength(0, 1000))),
   ordinal,
-  abilities: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 30)),
-  languages: Schema.Array(RuleLanguage).check(Schema.isLengthBetween(0, 60)),
-  proficiencies: Schema.Array(RuleProficiency).check(Schema.isLengthBetween(0, 140)),
-  traits: Schema.Array(RuleTrait).check(Schema.isLengthBetween(0, 60)),
+  abilities: Schema.Array(OptionAbilityGrant).check(Schema.isBetweenLength(0, 30)),
+  languages: Schema.Array(RuleLanguage).check(Schema.isBetweenLength(0, 60)),
+  proficiencies: Schema.Array(RuleProficiency).check(Schema.isBetweenLength(0, 140)),
+  traits: Schema.Array(RuleTrait).check(Schema.isBetweenLength(0, 60)),
 });
 export type OptionChoiceGroup = typeof OptionChoiceGroup.Type;
 
@@ -196,15 +196,15 @@ export type KitLine = typeof KitLine.Type;
 
 /** One side of an *(a) … or (b) …* choice — its lines, and the label the form draws. */
 export const KitOption = Schema.Struct({
-  label: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240)),
-  lines: Schema.Array(KitLine).check(Schema.isLengthBetween(0, 20)),
+  label: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240)),
+  lines: Schema.Array(KitLine).check(Schema.isBetweenLength(0, 20)),
 });
 export type KitOption = typeof KitOption.Type;
 
 export const KitChoice = Schema.Struct({
   /** The source's own sentence: *"(a) chain mail or (b) leather armor, longbow, and 20 arrows"*. */
-  desc: Schema.String.check(Schema.isLengthBetween(0, 500)),
-  options: Schema.Array(KitOption).check(Schema.isLengthBetween(1, 10)),
+  desc: Schema.String.check(Schema.isBetweenLength(0, 500)),
+  options: Schema.Array(KitOption).check(Schema.isBetweenLength(1, 10)),
 });
 export type KitChoice = typeof KitChoice.Type;
 
@@ -217,8 +217,8 @@ export type KitChoice = typeof KitChoice.Type;
  * same rows. The importer writes all three from one source record.
  */
 export const StartingKit = Schema.Struct({
-  fixed: Schema.Array(KitLine).check(Schema.isLengthBetween(0, 40)),
-  choices: Schema.Array(KitChoice).check(Schema.isLengthBetween(0, 20)),
+  fixed: Schema.Array(KitLine).check(Schema.isBetweenLength(0, 40)),
+  choices: Schema.Array(KitChoice).check(Schema.isBetweenLength(0, 20)),
 });
 export type StartingKit = typeof StartingKit.Type;
 
@@ -258,7 +258,7 @@ export const ClassLevelSpellcasting = Schema.Struct({
   cantripsKnown: Schema.optional(Schema.Int),
   spellsKnown: Schema.optional(Schema.Int),
   /** Slots per spell level, index 0 = 1st level; trailing zeros dropped. */
-  slots: Schema.Array(Schema.Int).check(Schema.isLengthBetween(0, 9)),
+  slots: Schema.Array(Schema.Int).check(Schema.isBetweenLength(0, 9)),
 });
 export type ClassLevelSpellcasting = typeof ClassLevelSpellcasting.Type;
 
@@ -282,30 +282,30 @@ export const OptionClassLevel = Schema.Struct({
   classSpecific: Schema.optional(Schema.Record(Schema.String, Schema.Finite)),
   features: Schema.Array(
     Schema.Struct({ id: FeatureId, index: Schema.NullOr(sourceKey), name: sourceName }),
-  ).check(Schema.isLengthBetween(0, 50)),
+  ).check(Schema.isBetweenLength(0, 50)),
 });
 export type OptionClassLevel = typeof OptionClassLevel.Type;
 
 export const OptionDetails = Schema.Struct({
-  subraces: Schema.Array(OptionSubraceDetail).check(Schema.isLengthBetween(0, 50)),
-  abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isLengthBetween(0, 80)),
-  languages: Schema.Array(OptionLanguageGrant).check(Schema.isLengthBetween(0, 80)),
-  proficiencies: Schema.Array(OptionProficiencyGrant).check(Schema.isLengthBetween(0, 160)),
-  traits: Schema.Array(OptionTraitGrant).check(Schema.isLengthBetween(0, 80)),
-  choices: Schema.Array(OptionChoiceGroup).check(Schema.isLengthBetween(0, 80)),
+  subraces: Schema.Array(OptionSubraceDetail).check(Schema.isBetweenLength(0, 50)),
+  abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isBetweenLength(0, 80)),
+  languages: Schema.Array(OptionLanguageGrant).check(Schema.isBetweenLength(0, 80)),
+  proficiencies: Schema.Array(OptionProficiencyGrant).check(Schema.isBetweenLength(0, 160)),
+  traits: Schema.Array(OptionTraitGrant).check(Schema.isBetweenLength(0, 80)),
+  choices: Schema.Array(OptionChoiceGroup).check(Schema.isBetweenLength(0, 80)),
   /** Class options only: what the class grants at level 1, absent elsewhere. */
   levelOneFeatures: Schema.optional(
-    Schema.Array(OptionFeatureGrant).check(Schema.isLengthBetween(0, 50)),
+    Schema.Array(OptionFeatureGrant).check(Schema.isBetweenLength(0, 50)),
   ),
   /** Class options only: the level-1 `class_level` row's proficiency bonus. */
   proficiencyBonus: Schema.optional(
     Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 20 })),
   ),
   /** Class options only: the kit's rows and the pickable category members. */
-  equipment: Schema.optional(Schema.Array(KitEquipment).check(Schema.isLengthBetween(0, 200))),
+  equipment: Schema.optional(Schema.Array(KitEquipment).check(Schema.isBetweenLength(0, 200))),
   /** Class options only: the class table, one row per level, no prose. */
   classLevels: Schema.optional(
-    Schema.Array(OptionClassLevel).check(Schema.isLengthBetween(0, 100)),
+    Schema.Array(OptionClassLevel).check(Schema.isBetweenLength(0, 100)),
   ),
 });
 export type OptionDetails = typeof OptionDetails.Type;
@@ -322,29 +322,29 @@ export type OptionVocabulary = typeof OptionVocabulary.Type;
 const relationChoiceInput = Schema.Struct({
   kind: RuleChoiceKind,
   choose: choiceCount,
-  desc: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 1000))),
+  desc: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 1000))),
   abilityBonuses: Schema.optional(
     Schema.Array(
       Schema.Struct({
         abilityScoreId: AbilityScoreId,
         amount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 30 })),
       }),
-    ).check(Schema.isLengthBetween(0, 30)),
+    ).check(Schema.isBetweenLength(0, 30)),
   ),
-  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isLengthBetween(0, 60))),
+  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isBetweenLength(0, 60))),
   proficiencyIds: Schema.optional(
-    Schema.Array(ProficiencyId).check(Schema.isLengthBetween(0, 140)),
+    Schema.Array(ProficiencyId).check(Schema.isBetweenLength(0, 140)),
   ),
-  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isLengthBetween(0, 60))),
+  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isBetweenLength(0, 60))),
 });
 
 export const OptionRelationsInput = Schema.Struct({
-  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isLengthBetween(0, 60))),
+  languageIds: Schema.optional(Schema.Array(LanguageId).check(Schema.isBetweenLength(0, 60))),
   proficiencyIds: Schema.optional(
-    Schema.Array(ProficiencyId).check(Schema.isLengthBetween(0, 140)),
+    Schema.Array(ProficiencyId).check(Schema.isBetweenLength(0, 140)),
   ),
-  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isLengthBetween(0, 60))),
-  choices: Schema.optional(Schema.Array(relationChoiceInput).check(Schema.isLengthBetween(0, 80))),
+  traitIds: Schema.optional(Schema.Array(RacialTraitId).check(Schema.isBetweenLength(0, 60))),
+  choices: Schema.optional(Schema.Array(relationChoiceInput).check(Schema.isBetweenLength(0, 80))),
 });
 export type OptionRelationsInput = typeof OptionRelationsInput.Type;
 
@@ -373,8 +373,8 @@ export const ClassBody = Schema.Struct({
 export type ClassBody = typeof ClassBody.Type;
 
 export const SubraceBody = Schema.Struct({
-  name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 60)),
-  abilityBonuses: Schema.Array(AbilityBonus).check(Schema.isLengthBetween(0, 6)),
+  name: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 60)),
+  abilityBonuses: Schema.Array(AbilityBonus).check(Schema.isBetweenLength(0, 6)),
   hpPerLevel: Schema.optional(hpPerLevel),
   traits: textList,
   summary,
@@ -383,19 +383,19 @@ export type SubraceBody = typeof SubraceBody.Type;
 
 export const RaceBody = Schema.Struct({
   speed,
-  size: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 60)),
-  abilityBonuses: Schema.Array(AbilityBonus).check(Schema.isLengthBetween(0, 6)),
+  size: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 60)),
+  abilityBonuses: Schema.Array(AbilityBonus).check(Schema.isBetweenLength(0, 6)),
   abilityBonusChoice: Schema.optional(AbilityBonusChoice),
   hpPerLevel,
   traits: textList,
-  subraces: Schema.Array(SubraceBody).check(Schema.isLengthBetween(0, 50)),
+  subraces: Schema.Array(SubraceBody).check(Schema.isBetweenLength(0, 50)),
   summary,
 });
 export type RaceBody = typeof RaceBody.Type;
 
 export const BackgroundFeature = Schema.Struct({
-  name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
-  text: Schema.String.check(Schema.isLengthBetween(0, 4000)),
+  name: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120)),
+  text: Schema.String.check(Schema.isBetweenLength(0, 4000)),
 });
 export type BackgroundFeature = typeof BackgroundFeature.Type;
 
@@ -423,7 +423,7 @@ export const BackgroundBody = Schema.Struct({
    * `sheetGrantsFor` falls back to `equipment` then.
    */
   startingKit: Schema.optional(StartingKit),
-  gold: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
+  gold: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 80))),
   feature: Schema.optional(BackgroundFeature),
   choices: textList,
   summary,
@@ -485,13 +485,13 @@ export const ClassLevelBody = Schema.Struct({
   classSpecific: Schema.optional(jsonObject),
   subclassSpecific: Schema.optional(jsonObject),
   spellcasting: Schema.optional(jsonObject),
-  features: Schema.Array(sourceReference).check(Schema.isLengthBetween(0, 50)),
+  features: Schema.Array(sourceReference).check(Schema.isBetweenLength(0, 50)),
 });
 export type ClassLevelBody = typeof ClassLevelBody.Type;
 
 export const FeatureBody = Schema.Struct({
   desc: longTextList,
-  prerequisites: Schema.Array(Schema.Unknown).check(Schema.isLengthBetween(0, 50)),
+  prerequisites: Schema.Array(Schema.Unknown).check(Schema.isBetweenLength(0, 50)),
   featureSpecific: Schema.optional(jsonObject),
   reference: Schema.optional(sourceReference),
 });
@@ -572,7 +572,7 @@ export const subraceNamed = (
   return race.subraces.find((subrace) => subrace.name.trim().toLowerCase() === wanted);
 };
 
-const optionName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 60));
+const optionName = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 60));
 
 export const OptionLibraryCreate = Schema.Union([
   Schema.Struct({

@@ -13,9 +13,9 @@ import {
 } from "@taverns/api";
 import { Context, Deferred, type Duration, Effect, Layer, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { HobImages } from "../src/images/HobImages.js";
 import { ImageUrls, expiryFor, signedPath } from "../src/images/ImageUrls.js";

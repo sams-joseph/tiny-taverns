@@ -72,7 +72,7 @@ export class Beat extends Schema.Class<Beat>("Beat")({
  * Long enough for a paragraph the DM types between initiative turns, bounded so
  * a runaway paste is a validation failure rather than a row nothing renders.
  */
-const body = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 4000));
+const body = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 4000));
 
 export const BeatCreate = Schema.Struct({
   body,

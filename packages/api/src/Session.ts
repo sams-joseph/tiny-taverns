@@ -13,7 +13,7 @@ export const SummaryOrigin = Schema.Literals(["authored", "assistant"]);
 export type SummaryOrigin = typeof SummaryOrigin.Type;
 
 /** A night's summary as written: a few sentences, bounded as the column is. */
-export const SessionSummaryText = Schema.String.check(Schema.isLengthBetween(1, 8000));
+export const SessionSummaryText = Schema.String.check(Schema.isBetweenLength(1, 8000));
 
 /**
  * One night at the table. `startedAt`/`endedAt` are the whole lifecycle:

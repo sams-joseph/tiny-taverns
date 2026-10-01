@@ -76,7 +76,7 @@ import {
   subraceNamed,
 } from "@taverns/api";
 import { Effect, Ref, Schema, SchemaGetter } from "effect";
-import { Tool, Toolkit } from "effect/unstable/ai";
+import { Tool, Toolkit } from "effect/ai";
 import type { Acts } from "../repo/Acts.js";
 import type { CampaignStories } from "../repo/CampaignStories.js";
 import type { Creatures } from "../repo/Creatures.js";
@@ -367,7 +367,7 @@ const quoted = (name: string): string => JSON.stringify(name);
  */
 const nameSchema = (names: ReadonlyArray<string>): Schema.Codec<string, string> =>
   names.length === 0 || names.length > OPTION_ENUM_CAP
-    ? Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX))
+    ? Schema.String.check(Schema.isBetweenLength(1, OPTION_NAME_MAX))
     : Schema.Literals(names);
 
 /**
@@ -496,7 +496,7 @@ const absent = <A>(value: A | null | undefined): A | undefined => value ?? undef
  */
 const optionalText = (max: number) =>
   Schema.optionalKey(
-    Schema.Union([Schema.String.check(Schema.isLengthBetween(0, max)), Schema.Null]),
+    Schema.Union([Schema.String.check(Schema.isBetweenLength(0, max)), Schema.Null]),
   );
 
 /** Whitespace, `""` and absent are one answer: nothing was said. */
@@ -554,7 +554,7 @@ export const SearchCampaign = Tool.make("searchCampaign", {
      * The HTTP contract's `SearchFilter.q` is untouched and still requires a
      * word: there, a caller reads a 400 and there is nothing to recover.
      */
-    query: Schema.String.check(Schema.isLengthBetween(0, 200)),
+    query: Schema.String.check(Schema.isBetweenLength(0, 200)),
     /** Absent searches everything. */
     source: optional(SearchSource),
     limit: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 25 }))),
@@ -697,12 +697,12 @@ export const ProposeNpcAwareness = Tool.make("proposeNpcAwareness", {
   parameters: Schema.Struct({
     npcId: NpcId,
     kind: Schema.Literals(["knowledge", "memory"]),
-    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 4000)),
     sourceKind: NpcKnowledgeSourceKind,
     sourceId: optional(Schema.String.check(Schema.isUUID())),
-    sourceLabel: Schema.String.check(Schema.isLengthBetween(0, 200)),
-    sourceExcerpt: Schema.String.check(Schema.isLengthBetween(0, 2000)),
-    rationale: Schema.String.check(Schema.isLengthBetween(0, 2000)),
+    sourceLabel: Schema.String.check(Schema.isBetweenLength(0, 200)),
+    sourceExcerpt: Schema.String.check(Schema.isBetweenLength(0, 2000)),
+    rationale: Schema.String.check(Schema.isBetweenLength(0, 2000)),
   }),
   success: Schema.String,
   failure: toolFailure,
@@ -740,7 +740,7 @@ export const SearchSharedWorldHistory = Tool.make("searchSharedWorldHistory", {
     "words somebody would have written. Entries were shared on purpose; " +
     "campaign prep that was never shared is not in here.",
   parameters: Schema.Struct({
-    query: Schema.String.check(Schema.isLengthBetween(0, 200)),
+    query: Schema.String.check(Schema.isBetweenLength(0, 200)),
   }),
   success: Schema.Array(
     Schema.Struct({
@@ -874,7 +874,7 @@ export const ProposeSharedWorldEntry = Tool.make("proposeSharedWorldEntry", {
     // `optionalText`, not `optional`: a title is prose, and the sentinel that
     // rescues an unset enum would eat one genuinely called "None".
     title: optionalText(200),
-    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 4000)),
   }),
   success: Schema.String,
   failure: toolFailure,
@@ -887,7 +887,7 @@ export const ProposeStorySoFar = Tool.make("proposeStorySoFar", {
     "readStorySoFarSources first and use only its accepted summary and Chronicle " +
     "entries. Nothing is remembered unless a member accepts the proposal.",
   parameters: Schema.Struct({
-    text: Schema.String.check(Schema.isLengthBetween(1, 6000)),
+    text: Schema.String.check(Schema.isBetweenLength(1, 6000)),
   }),
   success: Schema.String,
   failure: toolFailure,
@@ -949,7 +949,7 @@ export const ProposeCampaignStory = Tool.make("proposeCampaignStory", {
     "the Previously to the players, and leave out anything the players were not " +
     "shown. Nothing is saved unless the DM accepts it.",
   parameters: Schema.Struct({
-    text: Schema.String.check(Schema.isLengthBetween(1, CAMPAIGN_STORY_MAX)),
+    text: Schema.String.check(Schema.isBetweenLength(1, CAMPAIGN_STORY_MAX)),
     // `optionalText`, not `optional`: it is prose, and the sentinel that
     // rescues an unset enum would eat a Previously that said "None".
     previously: optionalText(CAMPAIGN_PREVIOUSLY_MAX),
@@ -986,8 +986,8 @@ export const ProposeNote = Tool.make("proposeNote", {
     "is saved unless the DM accepts it. Write the whole note in `body`; do not " +
     "repeat it in your reply.",
   parameters: Schema.Struct({
-    title: Schema.String.check(Schema.isLengthBetween(1, 120)),
-    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    title: Schema.String.check(Schema.isBetweenLength(1, 120)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 4000)),
     /** Read-aloud is a kind of note, not a table — see `NoteKind`. */
     readAloud: optional(Schema.Boolean),
     /**
@@ -1007,7 +1007,7 @@ export const ProposeBeat = Tool.make("proposeBeat", {
     "against tonight's session. Only a suggestion; nothing is saved unless the " +
     "DM accepts it.",
   parameters: Schema.Struct({
-    body: Schema.String.check(Schema.isLengthBetween(1, 1000)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 1000)),
   }),
   success: Schema.String,
   failure: proposalFailure,
@@ -1032,7 +1032,7 @@ export const ProposeNightSummary = Tool.make("proposeNightSummary", {
     "not repeat it in your reply.",
   parameters: Schema.Struct({
     sessionId: SessionId,
-    summary: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    summary: Schema.String.check(Schema.isBetweenLength(1, 4000)),
   }),
   success: Schema.String,
   failure: proposalFailure,
@@ -1065,7 +1065,7 @@ export const ProposeNight = Tool.make("proposeNight", {
   parameters: Schema.Struct({
     title: optionalText(120),
     prep: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, 500))).check(
+      Schema.Array(Schema.String.check(Schema.isBetweenLength(0, 500))).check(
         Schema.isMaxLength(NIGHT_PREP_MAX),
       ),
     ),
@@ -1092,7 +1092,7 @@ export const ProposeAct = Tool.make("proposeAct", {
     "Only a suggestion: nothing is saved unless the DM accepts it. Say one short line " +
     "about it and stop.",
   parameters: Schema.Struct({
-    title: Schema.String.check(Schema.isLengthBetween(1, ACT_TITLE_MAX)),
+    title: Schema.String.check(Schema.isBetweenLength(1, ACT_TITLE_MAX)),
     sessionNumber: optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100_000 }))),
   }),
   success: Schema.String,
@@ -1122,9 +1122,9 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     "is saved unless the DM accepts it, and nothing is offered unless this tool " +
     "says it offered it.",
   parameters: Schema.Struct({
-    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    name: Schema.String.check(Schema.isBetweenLength(1, 120)),
     kind: optional(EncounterKind),
-    tags: optional(Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40)))),
+    tags: optional(Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 40)))),
     /**
      * The battle map's setting line, bounded as the form bounds it. The one
      * thing the map is drawn from, so the card shows it before the DM accepts.
@@ -1140,7 +1140,7 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
       ).check(Schema.isMaxLength(12)),
     ),
     tactics: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, ENCOUNTER_TACTIC_MAX))).check(
+      Schema.Array(Schema.String.check(Schema.isBetweenLength(0, ENCOUNTER_TACTIC_MAX))).check(
         Schema.isMaxLength(ENCOUNTER_TACTICS_MAX),
       ),
     ),
@@ -1159,7 +1159,7 @@ export const ProposeEncounter = Tool.make("proposeEncounter", {
     onFail: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
     duration: optionalText(ENCOUNTER_HAZARD_TEXT_MAX),
     skills: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(0, ENCOUNTER_SKILL_MAX))).check(
+      Schema.Array(Schema.String.check(Schema.isBetweenLength(0, ENCOUNTER_SKILL_MAX))).check(
         Schema.isMaxLength(ENCOUNTER_SKILLS_MAX),
       ),
     ),
@@ -1481,7 +1481,7 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
       "a suggestion: nothing is saved unless the player accepts it. Say one " +
       "short line about it and stop.",
     parameters: Schema.Struct({
-      name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+      name: Schema.String.check(Schema.isBetweenLength(1, 120)),
       /**
        * The race and the class — **this campaign's own vocabulary**, as a
        * closed enum wherever it fits in one.
@@ -1535,13 +1535,13 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
        * which is why the check allows an empty array: a schema refusal here
        * happens before any handler runs and cannot be read by the model.
        */
-      abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
+      abilityOrder: Schema.Array(AbilityKey).check(Schema.isBetweenLength(0, 6)),
       skills: optional(
-        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 40))).check(
-          Schema.isLengthBetween(0, 8),
+        Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 40))).check(
+          Schema.isBetweenLength(0, 8),
         ),
       ),
-      backstory: Schema.String.check(Schema.isLengthBetween(0, 4000)),
+      backstory: Schema.String.check(Schema.isBetweenLength(0, 4000)),
       bond: optionalText(400),
       ideal: optionalText(400),
       flaw: optionalText(400),
@@ -1552,16 +1552,16 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
       appearance: optionalText(APPEARANCE_MAX),
       /** Starting kit, as item names. It becomes `sheet.inventory`. */
       kit: optional(
-        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 80))).check(
-          Schema.isLengthBetween(0, 20),
+        Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 80))).check(
+          Schema.isBetweenLength(0, 20),
         ),
       ),
       /** Spell ids from listStartingSpells. Cantrips are always ready. */
-      cantrips: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 8))),
+      cantrips: optional(Schema.Array(SpellId).check(Schema.isBetweenLength(0, 8))),
       /** Leveled spell ids known, or in a wizard's spellbook. */
-      spells: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 20))),
+      spells: optional(Schema.Array(SpellId).check(Schema.isBetweenLength(0, 20))),
       /** Leveled spell ids prepared for prepared casters and wizards. */
-      preparedSpells: optional(Schema.Array(SpellId).check(Schema.isLengthBetween(0, 20))),
+      preparedSpells: optional(Schema.Array(SpellId).check(Schema.isBetweenLength(0, 20))),
       /**
        * Why these choices — one short line each, the drawn *What Hob did* aside.
        *
@@ -1570,8 +1570,8 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
        * sentence buried in prose above the card is not that.
        */
       rationale: optional(
-        Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
-          Schema.isLengthBetween(0, 8),
+        Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 400))).check(
+          Schema.isBetweenLength(0, 8),
         ),
       ),
     }),
@@ -1587,7 +1587,7 @@ export const proposeCharacterOver = (vocabulary: CharacterVocabulary, rules: Dra
  * composer (`composeNpcSheet`, in `dmHandlersFor`).
  */
 const npcSheetFields = {
-  className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
+  className: Schema.String.check(Schema.isBetweenLength(1, OPTION_NAME_MAX)),
   level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })),
   race: optionalText(OPTION_NAME_MAX),
   /** Optional, and must be one of the subraces contained by the race. */
@@ -1597,7 +1597,7 @@ const npcSheetFields = {
   /** `"1/4"` — the ratings the XP table knows, as the sheet's column does. */
   cr: optional(ChallengeRating),
   /** Six ability keys, most important first; repaired as `proposeCharacter`'s is. */
-  abilityOrder: Schema.Array(AbilityKey).check(Schema.isLengthBetween(0, 6)),
+  abilityOrder: Schema.Array(AbilityKey).check(Schema.isBetweenLength(0, 6)),
 };
 const NpcSheetDraftInput = Schema.Struct(npcSheetFields);
 
@@ -1648,8 +1648,8 @@ export const ProposeNpcSheet = Tool.make("proposeNpcSheet", {
     replace: optional(Schema.Boolean),
     /** Why these choices, one short line each. */
     rationale: optional(
-      Schema.Array(Schema.String.check(Schema.isLengthBetween(1, 400))).check(
-        Schema.isLengthBetween(0, 8),
+      Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 400))).check(
+        Schema.isBetweenLength(0, 8),
       ),
     ),
   }),
@@ -1686,7 +1686,7 @@ export const ProposeNpc = Tool.make("proposeNpc", {
     "instead. Only a suggestion: nothing is saved unless the DM accepts it. Say one " +
     "short line about it and stop.",
   parameters: Schema.Struct({
-    name: Schema.String.check(Schema.isLengthBetween(1, 80)),
+    name: Schema.String.check(Schema.isBetweenLength(1, 80)),
     /** "the ferryman at the crossing" — the Cast card's subtitle. */
     role: optionalText(120),
     summary: optionalText(2000),
@@ -1768,7 +1768,7 @@ const StartingSpellLine = Schema.Struct({
 });
 
 const startingSpellsParameters = Schema.Struct({
-  className: Schema.String.check(Schema.isLengthBetween(1, OPTION_NAME_MAX)),
+  className: Schema.String.check(Schema.isBetweenLength(1, OPTION_NAME_MAX)),
   subclass: optionalText(80),
 });
 
@@ -2050,7 +2050,7 @@ export const proposeCampaignOver = (worlds: ReadonlyArray<CampaignWorld>) => {
       "Only a suggestion: nothing is made unless they keep it. Say one short line " +
       "about it and stop.",
     parameters: Schema.Struct({
-      name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+      name: Schema.String.check(Schema.isBetweenLength(1, 120)),
       partyName: optionalText(120),
       description: optionalText(CAMPAIGN_DESCRIPTION_MAX),
       sharedWorld: optional(nameSchema(names)),
@@ -2081,7 +2081,7 @@ export const ProposeSharedWorld = Tool.make("proposeSharedWorld", {
     "with no campaigns; they connect or start those afterwards. Only a suggestion: " +
     "nothing is made unless they keep it. Say one short line about it and stop.",
   parameters: Schema.Struct({
-    name: Schema.String.check(Schema.isLengthBetween(1, 120)),
+    name: Schema.String.check(Schema.isBetweenLength(1, 120)),
     description: optionalText(SHARED_WORLD_DESCRIPTION_MAX),
   }),
   success: Schema.String,

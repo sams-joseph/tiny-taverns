@@ -7,9 +7,9 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, Deferred, Effect, Layer, Option, Redacted } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { HobImages } from "../src/images/HobImages.js";

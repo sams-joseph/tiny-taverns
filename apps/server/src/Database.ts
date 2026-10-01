@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
 import { Config, Effect, Layer } from "effect";
-import { Migrator, SqlError } from "effect/unstable/sql";
+import { Migrator, SqlError } from "effect/sql";
 import { fileURLToPath } from "node:url";
 import { databaseUrl } from "./Config.js";
 import { types } from "./pgTypes.js";

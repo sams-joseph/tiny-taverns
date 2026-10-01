@@ -1,8 +1,8 @@
 import { RegistryProvider } from "@effect/atom-react";
 import { render, screen } from "@testing-library/react";
 import { Cause, Option, Schema } from "effect";
-import { HttpClientError, HttpClientRequest } from "effect/unstable/http";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { HttpClientError, HttpClientRequest } from "effect/http";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { describe, expect, it } from "vitest";
 import { useApiAtom } from "./atoms";
 import { failureFromCause } from "./failure";

@@ -7,7 +7,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { randomUUID } from "node:crypto";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";

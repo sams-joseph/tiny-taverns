@@ -119,7 +119,7 @@ export const EncounterRunSceneUpdate = Schema.Struct({
 });
 export type EncounterRunSceneUpdate = typeof EncounterRunSceneUpdate.Type;
 
-const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128)));
+const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128)));
 
 /**
  * Log a check or a save.

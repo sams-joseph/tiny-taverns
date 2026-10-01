@@ -1,7 +1,7 @@
 import type { CharacterSpellbook, NpcSpellbook, OwnedCharacter, SheetBody } from "@taverns/api";
 import type { Effect } from "effect";
-import type { AsyncResult, Atom } from "effect/unstable/reactivity";
-import type { HttpClient } from "effect/unstable/http";
+import type { AsyncResult, Atom } from "effect/reactivity";
+import type { HttpClient } from "effect/http";
 import type { TavernsClient } from "../api/client";
 import type { Invalidation } from "../api/keys";
 import { characterSpellsAtom } from "./load";

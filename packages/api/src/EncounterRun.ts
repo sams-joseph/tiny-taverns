@@ -231,7 +231,7 @@ export type EncounterRunUpdate = typeof EncounterRunUpdate.Type;
  * which on a touch device at a table is a matter of when rather than whether.
  * §4.3. Omitting it is legal and simply opts out.
  */
-const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128)));
+const requestId = Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128)));
 
 /**
  * Advance initiative — `EncounterRunner.jsx:112-116`, including the round

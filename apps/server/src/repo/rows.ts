@@ -1,8 +1,8 @@
 import { PgTypes } from "@effect/sql-pg";
 import { type AssistantTurnId, NotFound } from "@taverns/api";
 import { type Cause, Effect, Result, Schema, SchemaGetter, SchemaTransformation } from "effect";
-import { SqlError } from "effect/unstable/sql";
-import type { SqlClient, Statement } from "effect/unstable/sql";
+import { SqlError } from "effect/sql";
+import type { SqlClient, Statement } from "effect/sql";
 
 /**
  * A domain struct read straight off its columns: the same fields, decoded from

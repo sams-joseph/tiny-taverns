@@ -11,7 +11,7 @@ import {
   type SharedWorldId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { PrepItems } from "../src/repo/PrepItems.js";

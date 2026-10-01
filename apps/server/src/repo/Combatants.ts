@@ -16,7 +16,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
   type PortraitSigner,

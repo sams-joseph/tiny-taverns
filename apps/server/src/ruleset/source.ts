@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 
 export type ConcreteSourceId = string;
 

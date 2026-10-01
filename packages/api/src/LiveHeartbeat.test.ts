@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect";
-import { Sse } from "effect/unstable/encoding";
+import { Sse } from "effect/encoding";
 import { describe, expect, it } from "vitest";
 import { PlayerLiveEvent } from "./PlayerLive.js";
 import { LiveEvent } from "./SessionEvent.js";

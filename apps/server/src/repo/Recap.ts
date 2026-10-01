@@ -19,7 +19,7 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { BEATS, BeatRow } from "./Beats.js";
 import { portraitSigner } from "./Characters.js";
 import { combatantColumns, combatantRow } from "./Combatants.js";

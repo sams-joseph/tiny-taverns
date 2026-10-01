@@ -13,7 +13,7 @@ import {
   type Page,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import {
   defined,
   dieOnSqlError,

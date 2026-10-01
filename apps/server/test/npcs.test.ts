@@ -16,7 +16,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { ConfigProvider, Context, Effect, Fiber, Layer, Result, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { npcAgentFromConfig } from "../src/app.js";
 import { NpcAgent } from "../src/assistant/NpcAgent.js";
@@ -1540,7 +1540,7 @@ describeLayer("npcs", shared, (it) => {
       for (const name of files) {
         const source = code(`${assistantDirectory}/${name}`);
         expect(source, name).not.toMatch(/\bsql`/);
-        expect(source, name).not.toContain('"effect/unstable/sql"');
+        expect(source, name).not.toContain('"effect/sql"');
         const repositories = [...source.matchAll(/from "\.\.\/repo\/(\w+)\.js"/g)].map((m) => m[1]);
         expect(repositories.sort(), name).toEqual(
           name === "NpcAgent.ts"

@@ -10,7 +10,7 @@ The campaign is closed over from the path segment and the resolved actor (`handl
 
 ## No SQL under `src/assistant/`
 
-A `sql` template or an `"effect/unstable/sql"` import anywhere under `src/assistant/` fails the seam sweep in `hob.test.ts` (comments stripped first, so the rule can be described in the files it governs). `npcs.test.ts` runs the same sweep over the `Npc*` files and pins the exact repository imports `NpcAgent.ts` may have. A read the repositories do not expose is a new repository method, never a query here.
+A `sql` template or an `"effect/sql"` import anywhere under `src/assistant/` fails the seam sweep in `hob.test.ts` (comments stripped first, so the rule can be described in the files it governs). `npcs.test.ts` runs the same sweep over the `Npc*` files and pins the exact repository imports `NpcAgent.ts` may have. A read the repositories do not expose is a new repository method, never a query here.
 
 ## The round loop and the event stream
 

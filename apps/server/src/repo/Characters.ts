@@ -24,7 +24,7 @@ import {
 import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import {
   assistantColumns,
   type AssistantOrigin,

@@ -14,7 +14,7 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Duration, Effect, Layer, Result, Schedule, Stream } from "effect";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { HttpApiBuilder } from "effect/http-api";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";

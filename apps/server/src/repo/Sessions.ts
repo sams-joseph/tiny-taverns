@@ -13,7 +13,7 @@ import {
   type SessionUpdate,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { RUN } from "./liveTables.js";
 import {

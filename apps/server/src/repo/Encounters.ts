@@ -22,7 +22,7 @@ import {
   PlayerEncounter,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { EncounterCreatures, statBlockXp } from "./EncounterCreatures.js";
 import { RUN } from "./liveTables.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";

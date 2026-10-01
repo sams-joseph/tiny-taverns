@@ -13,7 +13,7 @@ import {
   type SheetBody,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import {
   type AssistantOrigin,

@@ -1,8 +1,8 @@
 import { describe, expect } from "@effect/vitest";
 import { CurrentActor, emptyStatBlock, type EncounterId, TavernsApi } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Creatures } from "../src/repo/Creatures.js";

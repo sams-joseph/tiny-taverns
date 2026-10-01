@@ -1,13 +1,13 @@
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat";
 import { chatCompletionConfig } from "../../src/assistant/modelConfig.js";
 import { Effect, Layer } from "effect";
-import type { LanguageModel } from "effect/unstable/ai";
+import type { LanguageModel } from "effect/ai";
 import {
   HttpClient,
   type HttpClientError,
   type HttpClientRequest,
   HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 
 /**
  * A model that says exactly what a test tells it to.

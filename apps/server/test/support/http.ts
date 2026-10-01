@@ -1,6 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { Layer } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, HttpServer } from "effect/http";
 import { createServer } from "node:http";
 
 /**

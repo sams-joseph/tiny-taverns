@@ -9,7 +9,7 @@ import {
   Subclass,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { dieOnSqlError, fromColumns, orNotFound, timestampColumns } from "./rows.js";
 import { libraryRowReadable } from "./visibility.js";
 

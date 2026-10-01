@@ -1,6 +1,6 @@
 import type { HobAccepted, HobKept } from "@taverns/api";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useEffect } from "react";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";

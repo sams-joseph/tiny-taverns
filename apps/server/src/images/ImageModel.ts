@@ -1,5 +1,5 @@
 import { Context, Data, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 
 /**
  * The image model every Hob-drawn image is drawn by: one OpenAI-shaped call,

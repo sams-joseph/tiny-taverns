@@ -10,18 +10,18 @@ import { queryArray } from "./Query.js";
  * the URL-shaped 5e-bits transport fields are not part of the Taverns document.
  */
 export const SpellReference = Schema.Struct({
-  index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 80)),
-  name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
+  index: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 80)),
+  name: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120)),
 });
 export type SpellReference = typeof SpellReference.Type;
 
-const text = Schema.String.check(Schema.isLengthBetween(0, 20_000));
-const label = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240));
+const text = Schema.String.check(Schema.isBetweenLength(0, 20_000));
+const label = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240));
 const spellLevel = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 9 }));
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 80));
-const sourceKeys = queryArray(sourceKey).check(Schema.isLengthBetween(0, 24));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 80));
+const sourceKeys = queryArray(sourceKey).check(Schema.isBetweenLength(0, 24));
 const levelKey = Schema.Literals(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
-const levels = queryArray(levelKey).check(Schema.isLengthBetween(0, 10));
+const levels = queryArray(levelKey).check(Schema.isBetweenLength(0, 10));
 const diceByLevel = Schema.Record(Schema.String, Schema.String);
 
 /** What 5e-bits records for spell damage. */
@@ -60,7 +60,7 @@ export type SpellArea = typeof SpellArea.Type;
 export const SpellBody = Schema.Struct({
   desc: Schema.Array(text),
   higherLevel: Schema.optional(Schema.Array(text)),
-  components: Schema.Array(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 12))),
+  components: Schema.Array(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 12))),
   material: Schema.optional(text),
   attackType: Schema.optional(label),
   damage: Schema.optional(SpellDamage),
@@ -119,8 +119,8 @@ const SpellDraft = {
   castingTime: label,
   range: label,
   duration: label,
-  classes: Schema.optional(Schema.Array(SpellReference).check(Schema.isLengthBetween(0, 24))),
-  subclasses: Schema.optional(Schema.Array(SpellReference).check(Schema.isLengthBetween(0, 24))),
+  classes: Schema.optional(Schema.Array(SpellReference).check(Schema.isBetweenLength(0, 24))),
+  subclasses: Schema.optional(Schema.Array(SpellReference).check(Schema.isBetweenLength(0, 24))),
   spell: Schema.optional(SpellBody),
 } as const;
 
@@ -142,8 +142,8 @@ const SpellPatch = {
   castingTime: Schema.optional(label),
   range: Schema.optional(label),
   duration: Schema.optional(label),
-  classes: Schema.optional(Schema.Array(SpellReference).check(Schema.isLengthBetween(0, 24))),
-  subclasses: Schema.optional(Schema.Array(SpellReference).check(Schema.isLengthBetween(0, 24))),
+  classes: Schema.optional(Schema.Array(SpellReference).check(Schema.isBetweenLength(0, 24))),
+  subclasses: Schema.optional(Schema.Array(SpellReference).check(Schema.isBetweenLength(0, 24))),
   spell: Schema.optional(SpellBody),
 } as const;
 
@@ -161,7 +161,7 @@ export type SpellSort = typeof SpellSort.Type;
 
 /** The controls shared by the account Library and a campaign's spell list. */
 export const SpellFilter = {
-  q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  q: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 200))),
   levels: Schema.optional(levels),
   schools: Schema.optional(sourceKeys),
   classes: Schema.optional(sourceKeys),

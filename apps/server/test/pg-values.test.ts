@@ -1,6 +1,6 @@
 import { expect } from "@effect/vitest";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { intArray, textArray, uuidArray } from "../src/repo/rows.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";

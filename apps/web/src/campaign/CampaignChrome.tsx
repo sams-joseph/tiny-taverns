@@ -2,7 +2,7 @@ import type { CampaignId, EncounterId } from "@taverns/api";
 import { Button, Icon, Loading } from "@taverns/ui";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
 import { asResource, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";

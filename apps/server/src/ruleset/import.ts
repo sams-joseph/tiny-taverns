@@ -9,7 +9,7 @@ import type {
 } from "@taverns/api";
 import { ABILITY_KEYS } from "@taverns/api";
 import { Effect } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import { syncSystemClassProgression } from "./progression.js";
 import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import { SYSTEM_FEATS, type SystemFeat } from "./systemFeats.js";

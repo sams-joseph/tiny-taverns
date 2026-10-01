@@ -3,8 +3,8 @@ import { NodeFileSystem, NodeHttpClient, NodePath } from "@effect/platform-node"
 import type { PgClient } from "@effect/sql-pg";
 import type { Authorization } from "@taverns/api";
 import { type Config, Effect, Layer, Option, type Redacted } from "effect";
-import { HttpMiddleware, HttpRouter } from "effect/unstable/http";
-import type { SqlClient } from "effect/unstable/sql";
+import { HttpMiddleware, HttpRouter } from "effect/http";
+import type { SqlClient } from "effect/sql";
 import { Accounts } from "./Accounts.js";
 import { Hob } from "./assistant/Hob.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";

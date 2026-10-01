@@ -1,6 +1,6 @@
 import type { CampaignId, PlayerLiveEvent, SessionId } from "@taverns/api";
 import { Duration, Effect, Fiber, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient } from "../api/client";
 import { classifyFailure } from "../api/failure";

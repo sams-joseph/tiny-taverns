@@ -1,5 +1,5 @@
 import type { CampaignId, CampaignInvite, CampaignMember, SeatPrep } from "@taverns/api";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { campaignInvitesAtom, membersAtom } from "../campaign/load";

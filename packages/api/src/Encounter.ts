@@ -18,7 +18,7 @@ export * from "./EncounterKind.js";
  * list the DM invents as they go, at the cost of a join on the card grid that
  * `CampaignHome` renders first.
  */
-const Tag = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+const Tag = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40));
 
 /** One playing of an encounter, as its list row and its log link need it. */
 export const EncounterPlayed = Schema.Struct({
@@ -151,7 +151,7 @@ export class Encounter extends Schema.Class<Encounter>("Encounter")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-const tags = Schema.Array(Tag).check(Schema.isLengthBetween(0, 16));
+const tags = Schema.Array(Tag).check(Schema.isBetweenLength(0, 16));
 
 /**
  * How the DM means to run it — `"Archers open from the reeds with full

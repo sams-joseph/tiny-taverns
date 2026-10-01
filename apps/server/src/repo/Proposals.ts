@@ -16,7 +16,7 @@ import {
   sharedWorldCreateFrom,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Acts } from "./Acts.js";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";

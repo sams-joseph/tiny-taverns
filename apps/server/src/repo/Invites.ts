@@ -16,7 +16,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../Accounts.js";
 import { admitToGroup } from "./Groups.js";

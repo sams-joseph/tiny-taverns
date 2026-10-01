@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
 import { BattleMap, BattleMapUpdate, EncounterRunBoard } from "./BattleMap.js";

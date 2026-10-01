@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import {
   classOptionForRef,
   FIVE_E_BITS_2014_SOURCE,

@@ -1,6 +1,6 @@
 import { type Actor, CurrentActor } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, type Statement } from "effect/unstable/sql";
+import { SqlClient, type Statement } from "effect/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
 import { StorageKey } from "../storage/ObjectStorage.js";
 import { dieOnSqlError, uuidArray } from "./rows.js";

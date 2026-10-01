@@ -1,5 +1,5 @@
 import { Context, Schema } from "effect";
-import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi";
+import { HttpApiMiddleware, HttpApiSecurity } from "effect/http-api";
 import { AccountId, CampaignId, SharedWorldId } from "./Ids.js";
 
 /**

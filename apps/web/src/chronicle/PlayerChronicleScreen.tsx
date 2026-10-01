@@ -1,7 +1,7 @@
 import type { CampaignId } from "@taverns/api";
 import { useSearch } from "@tanstack/react-router";
 import { EmptyState, Loading } from "@taverns/ui";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";

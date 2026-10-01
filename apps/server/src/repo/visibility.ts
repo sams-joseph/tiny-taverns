@@ -7,7 +7,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Effect } from "effect";
-import type { SqlClient, SqlError, Statement } from "effect/unstable/sql";
+import type { SqlClient, SqlError, Statement } from "effect/sql";
 
 /**
  * The visibility seam, in SQL.

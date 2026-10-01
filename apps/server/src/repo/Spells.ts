@@ -19,7 +19,7 @@ import {
   type SpellSort,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import {
   classFromColumns,
   defined,

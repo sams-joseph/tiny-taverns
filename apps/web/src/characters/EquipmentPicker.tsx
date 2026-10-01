@@ -1,6 +1,6 @@
 import type { Equipment } from "@taverns/api";
 import { Badge, Button, Icon, Loading } from "@taverns/ui";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { EQUIPMENT_FACETS, equipmentQueryOf, type EquipmentQuery } from "../equipment/load";

@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { CurrentActor, NotFound, NpcSheetPut, sheetFromStatBlock } from "@taverns/api";
 import { Cause, Context, Effect, Exit, Layer, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { servicesOver } from "../src/app.js";
 import { importSystemMonsters } from "../src/bestiary/import.js";
 import { MONSTER_RAW } from "../src/bestiary/systemMonsters.js";

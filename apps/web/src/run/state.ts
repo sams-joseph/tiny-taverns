@@ -1,7 +1,7 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import type { Combatant, CombatantId, EncounterRun } from "@taverns/api";
 import { Option, Result } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { asResource } from "../api/atoms";
 import { runApiResult } from "../api/client";

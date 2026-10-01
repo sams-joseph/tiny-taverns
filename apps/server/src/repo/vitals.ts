@@ -7,7 +7,7 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Effect, Option, Schema } from "effect";
-import { type SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { type SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { COMBATANT } from "./liveTables.js";
 import { fromColumns, textArray } from "./rows.js";
 import type { AppendEvent } from "./SessionEvents.js";

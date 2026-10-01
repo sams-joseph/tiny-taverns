@@ -6,16 +6,16 @@ import { queryArray } from "./Query.js";
 
 /** A source reference as the product exposes it: a stable key and display label. */
 export const EquipmentReference = Schema.Struct({
-  index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100)),
-  name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 160)),
+  index: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 100)),
+  name: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 160)),
 });
 export type EquipmentReference = typeof EquipmentReference.Type;
 
-const text = Schema.String.check(Schema.isLengthBetween(0, 20_000));
-const label = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240));
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
-const sourceKeys = queryArray(sourceKey).check(Schema.isLengthBetween(0, 48));
-const labels = queryArray(label).check(Schema.isLengthBetween(0, 48));
+const text = Schema.String.check(Schema.isBetweenLength(0, 20_000));
+const label = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 100));
+const sourceKeys = queryArray(sourceKey).check(Schema.isBetweenLength(0, 48));
+const labels = queryArray(label).check(Schema.isBetweenLength(0, 48));
 const nonNegative = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 }));
 const nonNegativeInt = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 }));
 
@@ -82,7 +82,7 @@ export const EquipmentBody = Schema.Struct({
   categoryRange: Schema.optional(label),
   contents: Schema.optional(Schema.Array(EquipmentContent)),
   damage: Schema.optional(EquipmentDamage),
-  image: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 240))),
+  image: Schema.optional(Schema.String.check(Schema.isBetweenLength(1, 240))),
   properties: Schema.optional(Schema.Array(EquipmentReference)),
   quantity: Schema.optional(nonNegative),
   range: Schema.optional(EquipmentRange),
@@ -174,7 +174,7 @@ const EquipmentDraft = {
   range: Schema.optional(EquipmentRange),
   throwRange: Schema.optional(EquipmentThrowRange),
   properties: Schema.optional(
-    Schema.Array(EquipmentReference).check(Schema.isLengthBetween(0, 24)),
+    Schema.Array(EquipmentReference).check(Schema.isBetweenLength(0, 24)),
   ),
   equipment: Schema.optional(EquipmentBody),
 } as const;
@@ -208,7 +208,7 @@ const EquipmentPatch = {
   range: Schema.optional(EquipmentRange),
   throwRange: Schema.optional(EquipmentThrowRange),
   properties: Schema.optional(
-    Schema.Array(EquipmentReference).check(Schema.isLengthBetween(0, 24)),
+    Schema.Array(EquipmentReference).check(Schema.isBetweenLength(0, 24)),
   ),
   equipment: Schema.optional(EquipmentBody),
 } as const;
@@ -227,7 +227,7 @@ export type EquipmentSort = typeof EquipmentSort.Type;
 
 /** Filters the actual Library and campaign equipment screens expose. */
 export const EquipmentFilter = {
-  q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  q: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 200))),
   /**
    * Exactly these rows, by id — what a character sheet asks for the rows its
    * linked gear lines name (`InventoryItem.equipmentId`), in one request over
@@ -236,7 +236,7 @@ export const EquipmentFilter = {
    * what lets a line whose row is gone draw exactly as an unlinked one. Not a
    * reach: nothing here answers a row the Library list would not.
    */
-  ids: Schema.optional(queryArray(EquipmentId).check(Schema.isLengthBetween(0, 200))),
+  ids: Schema.optional(queryArray(EquipmentId).check(Schema.isBetweenLength(0, 200))),
   categories: Schema.optional(sourceKeys),
   gearCategories: Schema.optional(sourceKeys),
   armorCategories: Schema.optional(labels),

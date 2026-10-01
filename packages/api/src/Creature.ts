@@ -93,9 +93,9 @@ export const Trait = Schema.Struct({
 });
 export type Trait = typeof Trait.Type;
 
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 100));
-const sourceName = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 180));
-const longText = Schema.String.check(Schema.isLengthBetween(0, 30_000));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 100));
+const sourceName = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 180));
+const longText = Schema.String.check(Schema.isBetweenLength(0, 30_000));
 const numberOrText = Schema.Union([Schema.Finite, Schema.String]);
 const sourcePayload = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -394,7 +394,7 @@ export class Creature extends Schema.Class<Creature>("Creature")({
  * and lower-casing it here would mean a display map existing only to undo the
  * change.
  */
-const shortLabel = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+const shortLabel = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40));
 
 const ac = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }));
 const hp = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
@@ -405,7 +405,7 @@ const crSort = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1000 
  * the environment chips are a fixed four in the prototype (`Bestiary.jsx:4`)
  * and a DM's own list in reality.
  */
-const environments = Schema.Array(shortLabel).check(Schema.isLengthBetween(0, 16));
+const environments = Schema.Array(shortLabel).check(Schema.isBetweenLength(0, 16));
 
 /**
  * The same vocabulary **as a query parameter**, which is a different schema and
@@ -418,8 +418,8 @@ const environments = Schema.Array(shortLabel).check(Schema.isLengthBetween(0, 16
  * the parameter the defect was found on: `?environments=Cave` was a 400 and
  * `?environments=Cave&environments=River` was a 200.
  */
-const environmentsFilter = queryArray(shortLabel).check(Schema.isLengthBetween(0, 16));
-const facetFilter = queryArray(shortLabel).check(Schema.isLengthBetween(0, 32));
+const environmentsFilter = queryArray(shortLabel).check(Schema.isBetweenLength(0, 16));
+const facetFilter = queryArray(shortLabel).check(Schema.isBetweenLength(0, 32));
 const crFilter = Schema.NumberFromString.check(Schema.isBetween({ minimum: 0, maximum: 1000 }));
 
 /**
@@ -439,9 +439,9 @@ const LibraryCreatureCreate = {
   size: Schema.optional(shortLabel),
   type: shortLabel,
   subtype: Schema.optional(shortLabel),
-  alignment: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 80))),
+  alignment: Schema.optional(Schema.String.check(Schema.isBetweenLength(1, 80))),
   /** Required, because every bestiary card renders `CR {cr}`. `"—"` is a rating. */
-  cr: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 20)),
+  cr: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 20)),
   /** Omit and the server derives it from `cr`. */
   crSort: Schema.optional(crSort),
   ac,
@@ -482,8 +482,8 @@ const LibraryCreatureUpdate = {
   size: Schema.optional(Schema.NullOr(shortLabel)),
   type: Schema.optional(shortLabel),
   subtype: Schema.optional(Schema.NullOr(shortLabel)),
-  alignment: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isLengthBetween(1, 80)))),
-  cr: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 20))),
+  alignment: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isBetweenLength(1, 80)))),
+  cr: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 20))),
   crSort: Schema.optional(crSort),
   ac: Schema.optional(ac),
   hp: Schema.optional(hp),
@@ -534,7 +534,7 @@ export type CreatureSort = typeof CreatureSort.Type;
  * does inside a campaign is the shape this avoids.
  */
 export const LibraryFilter = {
-  q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  q: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 200))),
   /**
    * Any-of, like the toggle row: a creature matches if it lives in any of them.
    *

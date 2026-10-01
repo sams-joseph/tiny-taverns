@@ -69,7 +69,7 @@ import { provenanceFields, Visibility } from "./Provenance.js";
 
 const shortText = (max: number) => Schema.String.check(Schema.isMaxLength(max));
 const shortLines = (max: number) =>
-  Schema.Array(Schema.String.check(Schema.isLengthBetween(1, max))).check(Schema.isMaxLength(12));
+  Schema.Array(Schema.String.check(Schema.isBetweenLength(1, max))).check(Schema.isMaxLength(12));
 
 /** The name, said aloud: pronouns, how to say it, the one-paragraph summary and the look. */
 export const NpcIdentity = Schema.Struct({
@@ -873,7 +873,7 @@ export class NpcPlayerStatus extends Schema.Class<NpcPlayerStatus>("NpcPlayerSta
   sessionState: Schema.optional(NpcSessionState),
 }) {}
 
-const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
+const turnText = Schema.String.check(Schema.isBetweenLength(1, 4000));
 
 /** One line to the NPC, and the thread it continues. Absent starts one. */
 export const NpcRehearse = Schema.Struct({

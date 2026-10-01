@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { type Actor, type CampaignId, CurrentActor, type NpcId, NotFound } from "@taverns/api";
 import { Context, Effect, Layer, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";

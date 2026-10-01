@@ -1,7 +1,7 @@
 import type { CampaignId } from "@taverns/api";
 import { useParams, useSearch } from "@tanstack/react-router";
 import { EmptyState } from "@taverns/ui";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { CampaignChrome, type CampaignChromeSlots } from "../campaign/CampaignChrome";

@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { type Actor, type AssistantTurnId, type CharacterId, CurrentActor } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";

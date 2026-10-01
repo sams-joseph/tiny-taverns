@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /** Browser-rolled character-sheet dice, filed under the night that was open. */
 export default Effect.gen(function* () {

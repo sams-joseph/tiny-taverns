@@ -3,9 +3,9 @@ import { AccountId, CampaignId, RuleArticleId, RuleSectionId } from "./Ids.js";
 import { pageFilter } from "./Page.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
 
-const text = Schema.String.check(Schema.isLengthBetween(0, 50_000));
-const label = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240));
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120));
+const text = Schema.String.check(Schema.isBetweenLength(0, 50_000));
+const label = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120));
 const ordinal = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
 
 export const RuleHeadingBlock = Schema.Struct({
@@ -24,15 +24,15 @@ export type RuleParagraphBlock = typeof RuleParagraphBlock.Type;
 export const RuleListBlock = Schema.Struct({
   kind: Schema.Literal("list"),
   ordered: Schema.Boolean,
-  items: Schema.Array(text).check(Schema.isLengthBetween(1, 200)),
+  items: Schema.Array(text).check(Schema.isBetweenLength(1, 200)),
 });
 export type RuleListBlock = typeof RuleListBlock.Type;
 
 export const RuleTableBlock = Schema.Struct({
   kind: Schema.Literal("table"),
-  columns: Schema.Array(label).check(Schema.isLengthBetween(1, 20)),
-  rows: Schema.Array(Schema.Array(text).check(Schema.isLengthBetween(1, 20))).check(
-    Schema.isLengthBetween(0, 500),
+  columns: Schema.Array(label).check(Schema.isBetweenLength(1, 20)),
+  rows: Schema.Array(Schema.Array(text).check(Schema.isBetweenLength(1, 20))).check(
+    Schema.isBetweenLength(0, 500),
   ),
 });
 export type RuleTableBlock = typeof RuleTableBlock.Type;
@@ -162,7 +162,7 @@ export const blocksToMarkdown = (blocks: ReadonlyArray<RuleBlock>): string =>
 /** One ordered section inside a rules article. */
 export const RuleSectionDraft = Schema.Struct({
   title: label,
-  content: Schema.String.check(Schema.isLengthBetween(0, 80_000)),
+  content: Schema.String.check(Schema.isBetweenLength(0, 80_000)),
 });
 export type RuleSectionDraft = typeof RuleSectionDraft.Type;
 
@@ -173,7 +173,7 @@ export class RuleArticle extends Schema.Class<RuleArticle>("RuleArticle")({
   derivedFrom: Schema.NullOr(RuleArticleId),
   sourceIndex: Schema.NullOr(sourceKey),
   name: label,
-  intro: Schema.Array(RuleBlock).check(Schema.isLengthBetween(0, 1000)),
+  intro: Schema.Array(RuleBlock).check(Schema.isBetweenLength(0, 1000)),
   sectionCount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 500 })),
   visibility: Visibility,
   ...provenanceFields,
@@ -188,19 +188,19 @@ export class RuleSection extends Schema.Class<RuleSection>("RuleSection")({
   sourceIndex: Schema.NullOr(sourceKey),
   title: label,
   ordinal,
-  blocks: Schema.Array(RuleBlock).check(Schema.isLengthBetween(0, 5000)),
+  blocks: Schema.Array(RuleBlock).check(Schema.isBetweenLength(0, 5000)),
 }) {}
 
 export const RuleArticleDetail = Schema.Struct({
   article: RuleArticle,
-  sections: Schema.Array(RuleSection).check(Schema.isLengthBetween(0, 500)),
+  sections: Schema.Array(RuleSection).check(Schema.isBetweenLength(0, 500)),
 });
 export type RuleArticleDetail = typeof RuleArticleDetail.Type;
 
 const RuleArticleDraft = {
   name: label,
-  intro: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80_000))),
-  sections: Schema.optional(Schema.Array(RuleSectionDraft).check(Schema.isLengthBetween(0, 100))),
+  intro: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 80_000))),
+  sections: Schema.optional(Schema.Array(RuleSectionDraft).check(Schema.isBetweenLength(0, 100))),
 } as const;
 
 export const RuleArticleLibraryCreate = Schema.Struct(RuleArticleDraft);
@@ -208,8 +208,8 @@ export type RuleArticleLibraryCreate = typeof RuleArticleLibraryCreate.Type;
 
 const RuleArticlePatch = {
   name: Schema.optional(label),
-  intro: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80_000))),
-  sections: Schema.optional(Schema.Array(RuleSectionDraft).check(Schema.isLengthBetween(0, 100))),
+  intro: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 80_000))),
+  sections: Schema.optional(Schema.Array(RuleSectionDraft).check(Schema.isBetweenLength(0, 100))),
 } as const;
 
 export const RuleArticleLibraryUpdate = Schema.Struct(RuleArticlePatch);
@@ -228,7 +228,7 @@ export const RuleArticleSort = Schema.Literals(["name", "recent"]);
 export type RuleArticleSort = typeof RuleArticleSort.Type;
 
 export const RuleArticleFilter = {
-  q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  q: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 200))),
   sort: Schema.optional(RuleArticleSort),
   ...pageFilter(RuleArticleSort),
 } as const;

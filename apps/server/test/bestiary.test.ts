@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Actor, type CreatureId, CurrentActor } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemCreatures } from "../src/bestiary/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";

@@ -12,7 +12,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
-import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   type AssistantOrigin,

@@ -16,7 +16,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation, Struct } from "effect";
-import { SqlClient, type SqlError, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { liveMemberAccountIds } from "./Memberships.js";

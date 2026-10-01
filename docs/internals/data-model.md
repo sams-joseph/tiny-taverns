@@ -95,7 +95,7 @@ A night keeps two things beside its detail (`0070_session_entry.ts`). `session.s
 
 ## The migration ledger
 
-- Forward only. `effect/unstable/sql/Migrator` has no down concept; a mistake is a new migration.
+- Forward only. `effect/sql/Migrator` has no down concept; a mistake is a new migration.
 - An id below the highest already applied is skipped silently (`Migrator.run` keeps `currentId > latestMigrationId`). Parallel numbering can leave a gap that never fills; renumber the latecomer or reset, and do not read a green boot as proof every file ran.
 - `0001_init.ts` is a rewritten clean baseline. An old development database silently keeps its old shape, so it must be reset: `pnpm db:reset` for the Docker database, or `pnpm -F server db:reset:fresh -- --force` against one the repo's Docker does not own. That is the product's one destructive command and is never startup DDL.
 - The server migrates on boot and refuses a schema it does not know; `pnpm -F server migrate` runs the ledger without holding a port.

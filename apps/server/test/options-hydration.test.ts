@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { Actor, type CharacterOption, CurrentActor, type OptionVocabulary } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { Statement } from "effect/unstable/sql";
+import { Statement } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Campaigns } from "../src/repo/Campaigns.js";

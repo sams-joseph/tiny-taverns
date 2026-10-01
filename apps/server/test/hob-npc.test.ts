@@ -18,8 +18,8 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Redacted, Stream } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { NpcAgent } from "../src/assistant/NpcAgent.js";

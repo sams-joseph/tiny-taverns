@@ -53,7 +53,7 @@ export type AbilityBonus = typeof AbilityBonus.Type;
 /** A source-defined choice, e.g. Half-Elf choosing two +1 bonuses. */
 export const AbilityBonusChoice = Schema.Struct({
   choose: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 6 })),
-  bonuses: Schema.Array(AbilityBonus).check(Schema.isLengthBetween(1, 6)),
+  bonuses: Schema.Array(AbilityBonus).check(Schema.isBetweenLength(1, 6)),
 });
 export type AbilityBonusChoice = typeof AbilityBonusChoice.Type;
 

@@ -4,7 +4,7 @@ import {
   type HttpClientError,
   type HttpClientRequest,
   HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import type { HobImages } from "../../src/images/HobImages.js";
 import { ImageModel } from "../../src/images/ImageModel.js";
 

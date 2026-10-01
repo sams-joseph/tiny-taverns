@@ -11,8 +11,8 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Exit, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { GroupHistory } from "../src/repo/GroupHistory.js";

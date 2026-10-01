@@ -21,7 +21,7 @@ import {
   type RaceBody,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, Struct } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import {
   libraryVocabulary,
   optionDetailsReader,

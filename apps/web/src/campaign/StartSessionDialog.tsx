@@ -10,7 +10,7 @@ import {
   Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";

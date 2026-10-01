@@ -14,7 +14,7 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { type CampaignCreatorActor } from "./CreatorActor.js";
 import { fightName } from "./EncounterRuns.js";
 import { initiativeOrder } from "./liveTables.js";

@@ -31,7 +31,7 @@ export class PrepItem extends Schema.Class<PrepItem>("PrepItem")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
-const label = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 500));
+const label = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 500));
 
 export const PrepItemCreate = Schema.Struct({
   label,

@@ -33,7 +33,7 @@ import {
   Schedule,
   Semaphore,
 } from "effect";
-import { HttpServerResponse } from "effect/unstable/http";
+import { HttpServerResponse } from "effect/http";
 import {
   type ImageFailure,
   type ImageJob,
