@@ -17,7 +17,6 @@ import {
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
-  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -25,6 +24,7 @@ import {
   likeContains,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import {
@@ -133,7 +133,7 @@ const textIn = (
   values: ReadonlyArray<string> | undefined,
 ): Statement.Fragment | undefined => {
   const choices = normalized(values);
-  return choices.length === 0 ? undefined : sql`lower(${column}) = any(${arrayParam(choices)})`;
+  return choices.length === 0 ? undefined : sql`lower(${column}) = any(${textArray(choices)})`;
 };
 
 const arrayOverlaps = (
@@ -142,7 +142,7 @@ const arrayOverlaps = (
   values: ReadonlyArray<string> | undefined,
 ): Statement.Fragment | undefined => {
   const choices = normalized(values);
-  return choices.length === 0 ? undefined : sql`${column} && ${arrayParam(choices)}`;
+  return choices.length === 0 ? undefined : sql`${column} && ${textArray(choices)}`;
 };
 
 const narrowedBy = (
@@ -156,7 +156,7 @@ const narrowedBy = (
   if (filter.environments !== undefined && filter.environments.length > 0) {
     // `&&` is array overlap: matches if the creature lives in any of them,
     // which is what a row of toggles means.
-    clauses.push(sql`creature.environments && ${arrayParam(filter.environments)}`);
+    clauses.push(sql`creature.environments && ${textArray(filter.environments)}`);
   }
   if (filter.crMin !== undefined) clauses.push(sql`creature.cr_sort >= ${filter.crMin}`);
   if (filter.crMax !== undefined) clauses.push(sql`creature.cr_sort <= ${filter.crMax}`);
@@ -343,7 +343,7 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<Cr
  *
  * Stringified rather than handed over as an object: the driver refuses a plain
  * object parameter, and the same insert also carries `environments`, a real
- * `text[]` bound through `arrayParam`. Being explicit about which of the two
+ * `text[]` bound through `textArray`. Being explicit about which of the two
  * structured columns is which is cheaper than remembering the rule at each
  * call site.
  */
@@ -641,12 +641,12 @@ export class Creatures extends Context.Service<
                   cr_sort: payload.crSort ?? crSortFor(payload.cr),
                   ac: payload.ac,
                   hp: payload.hp,
-                  environments: arrayParam(payload.environments),
-                  damage_vulnerabilities: arrayParam(payload.damageVulnerabilities),
-                  damage_resistances: arrayParam(payload.damageResistances),
-                  damage_immunities: arrayParam(payload.damageImmunities),
-                  condition_immunities: arrayParam(payload.conditionImmunities),
-                  movement_modes: arrayParam(payload.movementModes),
+                  environments: textArray(payload.environments),
+                  damage_vulnerabilities: textArray(payload.damageVulnerabilities),
+                  damage_resistances: textArray(payload.damageResistances),
+                  damage_immunities: textArray(payload.damageImmunities),
+                  condition_immunities: textArray(payload.conditionImmunities),
+                  movement_modes: textArray(payload.movementModes),
                   spellcaster: payload.spellcaster,
                   legendary: payload.legendary,
                   body: payload.statBlock && encodeStatBlock(payload.statBlock),
@@ -668,12 +668,12 @@ export class Creatures extends Context.Service<
                 cr_sort: patch.crSort ?? (patch.cr === undefined ? undefined : crSortFor(patch.cr)),
                 ac: patch.ac,
                 hp: patch.hp,
-                environments: arrayParam(patch.environments),
-                damage_vulnerabilities: arrayParam(patch.damageVulnerabilities),
-                damage_resistances: arrayParam(patch.damageResistances),
-                damage_immunities: arrayParam(patch.damageImmunities),
-                condition_immunities: arrayParam(patch.conditionImmunities),
-                movement_modes: arrayParam(patch.movementModes),
+                environments: textArray(patch.environments),
+                damage_vulnerabilities: textArray(patch.damageVulnerabilities),
+                damage_resistances: textArray(patch.damageResistances),
+                damage_immunities: textArray(patch.damageImmunities),
+                condition_immunities: textArray(patch.conditionImmunities),
+                movement_modes: textArray(patch.movementModes),
                 spellcaster: patch.spellcaster,
                 legendary: patch.legendary,
                 body: patch.statBlock && encodeStatBlock(patch.statBlock),

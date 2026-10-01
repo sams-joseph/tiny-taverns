@@ -14,7 +14,7 @@ import {
   type SystemRuleArticle,
   type SystemRuleSection,
 } from "./systemRules.js";
-import { arrayParam } from "../repo/rows.js";
+import { textArray } from "../repo/rows.js";
 
 export interface RuleImportResult {
   readonly articlesInserted: number;
@@ -93,7 +93,7 @@ const syncSystemSections = (
       where article_id = ${articleId}
         and source_corpus = ${FIVE_E_BITS_2014_SOURCE.corpus}
         and source_family = 'rule-sections'
-        and not (source_key = any(${arrayParam(kept)}))
+        and not (source_key = any(${textArray(kept)}))
     `;
   });
 

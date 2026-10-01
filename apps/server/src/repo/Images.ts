@@ -3,7 +3,7 @@ import { Context, Effect, Layer } from "effect";
 import { SqlClient, type Statement } from "effect/unstable/sql";
 import { ALL_IMAGE_KINDS, IMAGE_KINDS, type ImageKind } from "../images/kinds.js";
 import { StorageKey } from "../storage/ObjectStorage.js";
-import { arrayParam, dieOnSqlError } from "./rows.js";
+import { dieOnSqlError, uuidArray } from "./rows.js";
 import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./visibility.js";
 
 /**
@@ -377,7 +377,7 @@ export class ImageRecords extends Context.Service<
                   state = 'failed', failure = 'interrupted', finished_at = now(), updated_at = now()
                 where state = 'generating'
                   and updated_at < now() - make_interval(secs => ${olderThanSeconds})
-                  and id <> all(${arrayParam([...held])})
+                  and id <> all(${uuidArray([...held])})
                 returning storage_prefix
               ), enqueued as (
                 insert into storage_deletion (prefix) select storage_prefix from swept

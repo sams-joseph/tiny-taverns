@@ -12,7 +12,7 @@ import {
   subclassForRef,
 } from "../ruleset/source.js";
 import { ABILITY_SCORE_RAW, DAMAGE_TYPE_RAW, MAGIC_SCHOOL_RAW, SPELL_RAW } from "./systemSpells.js";
-import { arrayParam } from "../repo/rows.js";
+import { textArray } from "../repo/rows.js";
 
 export interface ImportSpellsResult {
   readonly inserted: number;
@@ -301,10 +301,10 @@ export const importSystemSpells = (
               ${spell.castingTime},
               ${spell.range},
               ${spell.duration},
-              ${arrayParam(spell.classes.map((reference) => reference.index))},
-              ${arrayParam(spell.classes.map((reference) => reference.name))},
-              ${arrayParam(spell.subclasses.map((reference) => reference.index))},
-              ${arrayParam(spell.subclasses.map((reference) => reference.name))},
+              ${textArray(spell.classes.map((reference) => reference.index))},
+              ${textArray(spell.classes.map((reference) => reference.name))},
+              ${textArray(spell.subclasses.map((reference) => reference.index))},
+              ${textArray(spell.subclasses.map((reference) => reference.name))},
               ${JSON.stringify(spell.body)},
               'shared'
             )

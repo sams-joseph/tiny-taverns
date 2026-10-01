@@ -18,11 +18,11 @@ import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
-  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
   fromColumns,
+  intArray,
   orNotFound,
   timestampColumns,
 } from "./rows.js";
@@ -297,8 +297,8 @@ export class Rolls extends Context.Service<
                         character_id: payload.characterId,
                         label: payload.label,
                         notation: payload.notation,
-                        dice: arrayParam(payload.dice),
-                        kept: arrayParam(payload.kept),
+                        dice: intArray(payload.dice),
+                        kept: intArray(payload.kept),
                         modifier: payload.modifier,
                         total: payload.total,
                         mode: payload.mode,

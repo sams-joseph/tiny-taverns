@@ -23,7 +23,7 @@ import {
   MONSTER_PROFICIENCY_RAW,
   MONSTER_RAW,
 } from "./systemMonsters.js";
-import { arrayParam } from "../repo/rows.js";
+import { textArray } from "../repo/rows.js";
 
 /** What one run of the import did. */
 export interface ImportResult {
@@ -488,12 +488,12 @@ const writeCreatureCorpus = (
               ${crSort},
               ${creature.ac},
               ${creature.hp},
-              ${arrayParam(creature.environments ?? [])},
-              ${arrayParam(creature.damageVulnerabilities ?? [])},
-              ${arrayParam(creature.damageResistances ?? [])},
-              ${arrayParam(creature.damageImmunities ?? [])},
-              ${arrayParam(creature.conditionImmunities ?? [])},
-              ${arrayParam(creature.movementModes ?? [])},
+              ${textArray(creature.environments ?? [])},
+              ${textArray(creature.damageVulnerabilities ?? [])},
+              ${textArray(creature.damageResistances ?? [])},
+              ${textArray(creature.damageImmunities ?? [])},
+              ${textArray(creature.conditionImmunities ?? [])},
+              ${textArray(creature.movementModes ?? [])},
               ${creature.spellcaster ?? false},
               ${creature.legendary ?? false},
               ${JSON.stringify(stripSourceUrls(statBlock))}
@@ -792,12 +792,12 @@ export const importSystemMonsters = (
               ${monster.crSort ?? crSortFor(monster.cr)},
               ${monster.ac},
               ${monster.hp},
-              ${arrayParam(monster.environments ?? [])},
-              ${arrayParam(monster.damageVulnerabilities ?? [])},
-              ${arrayParam(monster.damageResistances ?? [])},
-              ${arrayParam(monster.damageImmunities ?? [])},
-              ${arrayParam(monster.conditionImmunities ?? [])},
-              ${arrayParam(monster.movementModes ?? [])},
+              ${textArray(monster.environments ?? [])},
+              ${textArray(monster.damageVulnerabilities ?? [])},
+              ${textArray(monster.damageResistances ?? [])},
+              ${textArray(monster.damageImmunities ?? [])},
+              ${textArray(monster.conditionImmunities ?? [])},
+              ${textArray(monster.movementModes ?? [])},
               ${monster.spellcaster ?? false},
               ${monster.legendary ?? false},
               ${JSON.stringify(stripSourceUrls(monster.statBlock ?? emptyStatBlock))}

@@ -26,7 +26,6 @@ import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
-  arrayParam,
   assistantColumns,
   type AssistantOrigin,
   classFromColumns,
@@ -36,7 +35,9 @@ import {
   fromColumns,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
+  uuidArray,
 } from "./rows.js";
 import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
@@ -379,7 +380,7 @@ export const liveFightsOf = (sql: SqlClient.SqlClient, characterIds: ReadonlyArr
         join encounter_run on encounter_run.id = combatant.encounter_run_id
         join session on session.id = encounter_run.session_id
         join campaign on campaign.id = session.campaign_id
-        where combatant.character_id = any(${arrayParam([...ids])})
+        where combatant.character_id = any(${uuidArray([...ids])})
           and encounter_run.ended_at is null
         order by combatant.character_id, encounter_run.created_at desc, encounter_run.id desc
       `,
@@ -451,7 +452,7 @@ export const restCharacterRow = (
         set body = ${encodeSheet(nextSheet)}::jsonb,
             hp_current = ${hpCurrent},
             temp_hp = ${tempHp},
-            conditions = ${arrayParam(nextConditions)},
+            conditions = ${textArray(nextConditions)},
             version = character.version + 1,
             updated_at = now()
         where character.id = ${id}

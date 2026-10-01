@@ -1,14 +1,14 @@
 import { expect } from "@effect/vitest";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { arrayParam } from "../src/repo/rows.js";
+import { intArray, textArray, uuidArray } from "../src/repo/rows.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
  * What the native Postgres client (effect 4.0.0-rc.113 onward) binds and reads
- * differently from `pg`, and the one helper each difference goes through. The
- * expected values are Postgres's own wherever it can say them.
+ * differently from `pg`, and what each difference goes through. The expected
+ * values are Postgres's own wherever it can say them.
  */
 /** Every message down an error's `cause` chain, where the driver's own words are. */
 const said = (error: unknown): string =>
@@ -17,25 +17,31 @@ const said = (error: unknown): string =>
 describeLayer("pg-values", freshDatabase("taverns_test_pg_values"), (it) => {
   const ID = "5b8f8f4e-2a64-4c55-9d0b-7f1e2c3a4b5c";
 
-  it.effect("binds an array as an untyped literal, typed by where it stands", () =>
+  it.effect("binds an array with the element type the call site names", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       // A raw string array binds as `text[]`, which a `uuid` comparison refuses.
-      // This is the reason `arrayParam` exists; if it ever stops failing, the
-      // helper is worth reconsidering.
+      // This is the reason every array goes through a typed helper; if it ever
+      // stops failing, the helpers are worth reconsidering.
       const raw = yield* Effect.flip(sql`select ${ID}::uuid = any(${[ID]}) as hit`);
       expect(said(raw)).toContain("uuid = text");
 
       const [hit] = yield* sql<{ readonly hit: boolean }>`
-        select ${ID}::uuid = any(${arrayParam([ID])}) as hit
+        select ${ID}::uuid = any(${uuidArray([ID])}) as hit
       `;
       expect(hit?.hit).toBe(true);
 
       const [numbers] = yield* sql<{ readonly levels: ReadonlyArray<number> }>`
         select array(select level from unnest(array[1, 2, 3]) as level
-                     where level = any(${arrayParam([1, 3])})) as levels
+                     where level = any(${intArray([1, 3])})) as levels
       `;
       expect(numbers?.levels).toEqual([1, 3]);
+
+      // A typed array needs no cast where Postgres cannot type one from context.
+      const pairs = yield* sql<{ readonly id: string; readonly tag: string }>`
+        select id::text, tag from unnest(${uuidArray([ID])}, ${textArray(["Marsh"])}) as pair (id, tag)
+      `;
+      expect(pairs).toEqual([{ id: ID, tag: "Marsh" }]);
     }),
   );
 
@@ -46,13 +52,16 @@ describeLayer("pg-values", freshDatabase("taverns_test_pg_values"), (it) => {
       expect(said(raw)).toContain("empty array");
 
       const [none] = yield* sql<{ readonly hit: boolean }>`
-        select ${ID}::uuid = any(${arrayParam([])}) as hit
+        select ${ID}::uuid = any(${uuidArray([])}) as hit
       `;
       expect(none?.hit).toBe(false);
-      const [written] = yield* sql<{ readonly tags: ReadonlyArray<string> }>`
-        select ${arrayParam([])}::text[] as tags
+      const [written] = yield* sql<{
+        readonly tags: ReadonlyArray<string>;
+        readonly dice: ReadonlyArray<number>;
+      }>`
+        select ${textArray([])} as tags, ${intArray([])} as dice
       `;
-      expect(written?.tags).toEqual([]);
+      expect(written).toEqual({ tags: [], dice: [] });
     }),
   );
 
@@ -64,6 +73,7 @@ describeLayer("pg-values", freshDatabase("taverns_test_pg_values"), (it) => {
         "with, a comma",
         'with "quotes"',
         "with \\ a backslash",
+        "it's",
         "{braces}",
         "NULL",
         "",
@@ -71,7 +81,7 @@ describeLayer("pg-values", freshDatabase("taverns_test_pg_values"), (it) => {
         "naïve café",
       ];
       const [read] = yield* sql<{ readonly values: ReadonlyArray<string | null> }>`
-        select ${arrayParam([...values, null])}::text[] as values
+        select ${textArray([...values, null])} as values
       `;
       expect(read?.values).toEqual([...values, null]);
     }),

@@ -24,13 +24,13 @@ import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.
 import { initiativeOrder } from "./liveTables.js";
 import { npcImageSigner, playerNpcColumns, playerNpcReadable, playerNpcRow } from "./Npcs.js";
 import {
-  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
   fromColumns,
   orNotFound,
   timestampColumns,
+  uuidArray,
 } from "./rows.js";
 import {
   type Containment,
@@ -615,7 +615,7 @@ export class NpcThreads extends Context.Service<
           select npc_turn.*, account.name as speaker_name
           from npc_turn
           left join account on account.id = npc_turn.account_id
-          where npc_turn.thread_id = any(${arrayParam([...threadIds])})
+          where npc_turn.thread_id = any(${uuidArray([...threadIds])})
           order by npc_turn.thread_id, npc_turn.created_at asc, npc_turn.id asc
         `,
       });
@@ -678,7 +678,7 @@ export class NpcThreads extends Context.Service<
         execute: (threadIds) => sql`
           select npc_proposal.thread_id, count(*)::int as count
           from npc_proposal
-          where npc_proposal.thread_id = any(${arrayParam([...threadIds])})
+          where npc_proposal.thread_id = any(${uuidArray([...threadIds])})
             and npc_proposal.state = 'pending'
           group by npc_proposal.thread_id
         `,
@@ -692,7 +692,7 @@ export class NpcThreads extends Context.Service<
         execute: (threadIds) => sql`
           select distinct on (npc_turn.thread_id) npc_turn.thread_id, npc_turn.finish_reason
           from npc_turn
-          where npc_turn.thread_id = any(${arrayParam([...threadIds])})
+          where npc_turn.thread_id = any(${uuidArray([...threadIds])})
             and npc_turn.who = 'npc'
           order by npc_turn.thread_id, npc_turn.created_at desc, npc_turn.id desc
         `,
@@ -709,7 +709,7 @@ export class NpcThreads extends Context.Service<
           select ${playerNpcColumns(sql)}, npc_thread.session_state
           from npc
           join npc_thread on npc_thread.npc_id = npc.id
-          where npc_thread.id = any(${arrayParam([...threadIds])})
+          where npc_thread.id = any(${uuidArray([...threadIds])})
         `,
       });
       /** The NPCs open at this night's table, as this participant may see them. */

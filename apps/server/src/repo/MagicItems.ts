@@ -14,7 +14,6 @@ import {
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import {
-  arrayParam,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -22,6 +21,7 @@ import {
   likeContains,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import {
@@ -220,10 +220,10 @@ const narrowedBy = (
     clauses.push(matchesQuery(sql, filter.q.trim()));
   }
   if (filter.categories !== undefined && filter.categories.length > 0) {
-    clauses.push(sql`magic_item.category_index = any(${arrayParam(filter.categories)})`);
+    clauses.push(sql`magic_item.category_index = any(${textArray(filter.categories)})`);
   }
   if (filter.rarities !== undefined && filter.rarities.length > 0) {
-    clauses.push(sql`magic_item.rarity_index = any(${arrayParam(filter.rarities)})`);
+    clauses.push(sql`magic_item.rarity_index = any(${textArray(filter.rarities)})`);
   }
   if (
     filter.attunement !== undefined &&

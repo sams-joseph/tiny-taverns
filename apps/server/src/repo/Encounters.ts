@@ -35,7 +35,6 @@ import {
   pageOfRows,
 } from "./paging.js";
 import {
-  arrayParam,
   assistantColumns,
   type AssistantOrigin,
   classFromColumns,
@@ -45,6 +44,7 @@ import {
   orNotFound,
   proseColumn,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import {
@@ -265,9 +265,9 @@ const lastPlayed = (
 /**
  * Reads and writes over `encounter`, the authored template.
  *
- * `tags` is passed to `sql.insert` through `arrayParam`: one bind parameter, a
- * Postgres array literal the column types. (`sql.in(...)` is the thing that
- * turns an array into an `(?, ?, ?)` list — do not reach for it here.)
+ * `tags` is passed to `sql.insert` through `textArray`: one typed `text[]` bind
+ * parameter. (`sql.in(...)` is the thing that turns an array into an
+ * `(?, ?, ?)` list — do not reach for it here.)
  */
 export class Encounters extends Context.Service<
   Encounters,
@@ -625,7 +625,7 @@ export class Encounters extends Context.Service<
                     campaign_id: campaignId,
                     name: payload.name,
                     kind: payload.kind,
-                    tags: arrayParam(payload.tags),
+                    tags: textArray(payload.tags),
                     visibility: payload.visibility,
                     ...assistantColumns(from),
                   }),
@@ -698,7 +698,7 @@ export class Encounters extends Context.Service<
                 const columns = defined({
                   name: patch.name,
                   kind: patch.kind,
-                  tags: arrayParam(patch.tags),
+                  tags: textArray(patch.tags),
                   visibility: patch.visibility,
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));

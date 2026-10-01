@@ -1,5 +1,6 @@
+import { PgTypes } from "@effect/sql-pg";
 import { type AssistantTurnId, NotFound } from "@taverns/api";
-import { type Cause, Effect, Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { type Cause, Effect, Result, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import type { SqlClient, Statement } from "effect/unstable/sql";
 
@@ -138,32 +139,41 @@ export const timestampColumns = {
 } as const;
 
 /**
- * A JS array as a statement parameter, bound the way the `pg` driver bound one:
- * an untyped array literal (`{"a","b"}`), so Postgres takes its type from where
- * it stands — `uuid[]` beside a `uuid` column, `integer[]` beside an `integer`
- * one — and `{}` is an empty array of that type.
+ * A JS array as a statement parameter, typed by the driver's own `PgTypes.array`
+ * with the element type the call site names: `uuidArray` beside a `uuid`
+ * column, `textArray` beside `text` or a `text[]` column, `intArray` beside
+ * `integer` or an `integer[]` one.
  *
- * The native driver types a raw array from its elements instead. A string array
- * binds as `text[]`, which `uuid = any($1)` refuses (`operator does not exist:
- * uuid = text`), and an empty one cannot be typed at all, so the statement fails
- * before it is sent. Every array a statement binds goes through this; a
- * position Postgres cannot type from context (`unnest`) casts it, as it had to
- * under `pg` too.
+ * The driver types a raw JS array from its elements: a string array binds as
+ * `text[]`, which `uuid = any($1)` refuses (`operator does not exist: uuid =
+ * text`), and an empty one cannot be typed at all, so the statement fails before
+ * it is sent. A typed array carries its own OID, so an empty array is an empty
+ * array of that type and `unnest` reads it with no cast. Elements go over the
+ * wire in binary, so nothing in a value needs escaping. Every array a statement
+ * binds goes through one of these.
  *
  * `undefined` stays `undefined`, so a patch's absent column is still dropped by
  * {@link defined}.
  */
-export function arrayParam(values: ReadonlyArray<ArrayElement>): string;
-export function arrayParam(values: ReadonlyArray<ArrayElement> | undefined): string | undefined;
-export function arrayParam(values: ReadonlyArray<ArrayElement> | undefined): string | undefined {
-  if (values === undefined) return undefined;
-  const elements = values.map((value) =>
-    value === null ? "NULL" : `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`,
-  );
-  return `{${elements.join(",")}}`;
-}
+const typedArray = <Element>(elementOid: number) => {
+  function param(values: ReadonlyArray<Element | null>): PgTypes.Parameter;
+  function param(values: ReadonlyArray<Element | null> | undefined): PgTypes.Parameter | undefined;
+  function param(values: ReadonlyArray<Element | null> | undefined): PgTypes.Parameter | undefined {
+    // `PgTypes.array` fails only for an element OID with no array type, and
+    // every OID here is one of the driver's built-ins.
+    return values === undefined ? undefined : Result.getOrThrow(PgTypes.array(values, elementOid));
+  }
+  return param;
+};
 
-type ArrayElement = string | number | boolean | null;
+/** A `uuid[]` parameter: ids, compared with `= any(…)` or written to a `uuid[]`. */
+export const uuidArray = typedArray<string>(PgTypes.OID.uuid);
+
+/** A `text[]` parameter. */
+export const textArray = typedArray<string>(PgTypes.OID.text);
+
+/** An `integer[]` parameter. */
+export const intArray = typedArray<number>(PgTypes.OID.int4);
 
 /**
  * `SqlSchema.findOne`'s "no row" as the domain's refusal.
