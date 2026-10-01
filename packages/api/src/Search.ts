@@ -182,7 +182,7 @@ export type SearchHit = typeof SearchHit.Type;
  * expresses exactly. Two-of-three has no surface asking for it.
  */
 export const SearchFilter = {
-  q: Schema.String.check(Schema.isLengthBetween(1, 200)),
+  q: Schema.String.check(Schema.isBetweenLength(1, 200)),
   /** Absent means every arm. */
   source: Schema.optional(SearchSource),
   limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),

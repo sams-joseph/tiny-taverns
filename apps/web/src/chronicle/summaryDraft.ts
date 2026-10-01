@@ -1,6 +1,6 @@
 import type { AssistantThreadId, CampaignId, HobEvent, Session } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient } from "../api/client";
 import { classifyFailure } from "../api/failure";

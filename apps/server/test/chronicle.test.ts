@@ -9,8 +9,8 @@ import {
   type Visibility,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Invites } from "../src/repo/Invites.js";
 import { aCharacterAt, admittedTo, aPerson, asDm } from "./support/actors.js";

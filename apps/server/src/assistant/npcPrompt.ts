@@ -1,6 +1,6 @@
 import type { Npc, NpcKnowledgeFact, NpcMemory, NpcTurn } from "@taverns/api";
 import { DateTime } from "effect";
-import type { Prompt } from "effect/unstable/ai";
+import type { Prompt } from "effect/ai";
 
 /**
  * The NPC prompt contract — server-owned, versioned, assembled from structured

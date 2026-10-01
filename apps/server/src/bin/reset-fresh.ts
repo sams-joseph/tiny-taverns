@@ -1,7 +1,7 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Config, Console, Effect, Layer, Redacted } from "effect";
 import { PgClient } from "@effect/sql-pg";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { databaseUrl } from "../Config.js";
 import * as Database from "../Database.js";
 

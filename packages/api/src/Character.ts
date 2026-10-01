@@ -650,9 +650,9 @@ export const SheetHitPoints = Schema.Int.check(Schema.isBetween({ minimum: 0, ma
 /** Bounded the way the column is: generously, to refuse a typo rather than epic play. */
 export const SheetLevel = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
 /** A race, subrace or class name. */
-export const SheetLabel = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+export const SheetLabel = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40));
 const sheetUrl = Schema.String.check(
-  Schema.isLengthBetween(1, 2000),
+  Schema.isBetweenLength(1, 2000),
   Schema.isPattern(/^https?:\/\//i),
 );
 
@@ -747,7 +747,7 @@ export type CharacterOwnCreate = typeof CharacterOwnCreate.Type;
 export const CharacterDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CharacterDamage = typeof CharacterDamage.Type;
 
@@ -762,9 +762,9 @@ export type CharacterDamage = typeof CharacterDamage.Type;
  * repeated request is answered from the row without applying the delta again.
  */
 export const CharacterResourceSpend = Schema.Struct({
-  resourceId: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
+  resourceId: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120)),
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CharacterResourceSpend = typeof CharacterResourceSpend.Type;
 
@@ -781,6 +781,6 @@ export const CharacterRest = Schema.Struct({
   kind: RestKind,
   /** Number of hit dice to spend during a short rest. Ignored for a long rest. */
   hitDice: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }))),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CharacterRest = typeof CharacterRest.Type;

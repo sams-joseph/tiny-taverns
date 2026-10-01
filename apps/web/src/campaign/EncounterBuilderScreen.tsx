@@ -37,7 +37,7 @@ import {
   Toggle,
 } from "@taverns/ui";
 import { DateTime, Effect, Result } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { apiAtom, useApiAtom, useInvalidate } from "../api/atoms";
 import { reads } from "../api/keys";

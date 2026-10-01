@@ -1,6 +1,6 @@
 import { EquipmentBody } from "@taverns/api";
 import { Effect, Schema } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import {
   damageTypeForRef,
   equipmentCategoryForRef,

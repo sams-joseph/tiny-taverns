@@ -1,11 +1,11 @@
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 /**
  * Foundation schema: accounts, groups, campaigns, participation, sessions,
  * characters, notes.
  *
- * Migrations are forward-only — `effect/unstable/sql/Migrator` has no
+ * Migrations are forward-only — `effect/sql/Migrator` has no
  * down-migration concept and none is invented here. A mistake is corrected by a
  * new migration, never by reversing this one.
  *

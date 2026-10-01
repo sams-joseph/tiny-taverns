@@ -12,7 +12,7 @@ import {
   CharacterId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { initiativeOrderKeys, RUNS } from "./liveTables.js";

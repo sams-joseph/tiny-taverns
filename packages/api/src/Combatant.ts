@@ -37,9 +37,9 @@ export type InitiativeSetBy = typeof InitiativeSetBy.Type;
  * back to `secondary` for anything else, which is a UI that expects to meet
  * words it does not know.
  */
-const Condition = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40));
+const Condition = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40));
 
-const conditions = Schema.Array(Condition).check(Schema.isLengthBetween(0, 24));
+const conditions = Schema.Array(Condition).check(Schema.isBetweenLength(0, 24));
 
 /**
  * A token's square on its fight's board (`EncounterRunBoard`): zero-based,
@@ -215,7 +215,7 @@ export type CombatantUpdate = typeof CombatantUpdate.Type;
 export const CombatantDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */
   amount: Schema.Int.check(Schema.isBetween({ minimum: -10_000, maximum: 10_000 })),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantDamage = typeof CombatantDamage.Type;
 
@@ -232,7 +232,7 @@ export type CombatantDamage = typeof CombatantDamage.Type;
  */
 export const CombatantMove = Schema.Struct({
   position: Schema.NullOr(CombatantPosition),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantMove = typeof CombatantMove.Type;
 
@@ -253,8 +253,8 @@ export type InitiativeEntry = typeof InitiativeEntry.Type;
  * one already applied (`requestId`) changes nothing.
  */
 export const InitiativeSet = Schema.Struct({
-  entries: Schema.Array(InitiativeEntry).check(Schema.isLengthBetween(1, 200)),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  entries: Schema.Array(InitiativeEntry).check(Schema.isBetweenLength(1, 200)),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type InitiativeSet = typeof InitiativeSet.Type;
 

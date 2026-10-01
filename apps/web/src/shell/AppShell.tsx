@@ -19,7 +19,7 @@ import {
   navPillVariants,
   type IconName,
 } from "@taverns/ui";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import campaignsHero1x from "./heroes/campaigns-448.webp";
 import campaignsHero2x from "./heroes/campaigns-768.webp";
 import libraryHero1x from "./heroes/library-448.webp";

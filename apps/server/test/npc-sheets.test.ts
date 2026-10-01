@@ -11,9 +11,9 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Stream } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { NpcAgent } from "../src/assistant/NpcAgent.js";
 import { importSystemEquipment } from "../src/equipment/import.js";

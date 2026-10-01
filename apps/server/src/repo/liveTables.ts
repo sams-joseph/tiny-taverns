@@ -1,4 +1,4 @@
-import type { SqlClient, Statement } from "effect/unstable/sql";
+import type { SqlClient, Statement } from "effect/sql";
 import { type Containment, inCampaign, type NestedTable, under } from "./visibility.js";
 
 /**

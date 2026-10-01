@@ -1,6 +1,6 @@
 import type { CampaignId } from "@taverns/api";
 import { Effect } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import { nightToOpen, type NightToOpen } from "../session/start";

@@ -10,7 +10,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { ConfigProvider, Context, Effect, Layer, Stream } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { assistantFromConfig } from "../src/app.js";
 import {
@@ -2101,7 +2101,7 @@ describeLayer("hob", shared, (it) => {
       const offenders = sources(assistantDirectory)
         .filter((path) => {
           const source = code(path);
-          return /\bsql`/.test(source) || /"effect\/unstable\/sql"/.test(source);
+          return /\bsql`/.test(source) || /"effect\/sql"/.test(source);
         })
         .map((path) => path.slice(assistantDirectory.length + 1));
 

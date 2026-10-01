@@ -5,7 +5,7 @@ import type {
   SharedWorldId,
 } from "@taverns/api";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useApiAtom } from "../api/atoms";
 import { membershipsAtom } from "../campaign/load";
 

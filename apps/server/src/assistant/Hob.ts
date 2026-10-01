@@ -33,7 +33,7 @@ import {
   type Response,
   type Tool,
   type Toolkit,
-} from "effect/unstable/ai";
+} from "effect/ai";
 import { Acts } from "../repo/Acts.js";
 import { Campaigns } from "../repo/Campaigns.js";
 import { CampaignStories } from "../repo/CampaignStories.js";

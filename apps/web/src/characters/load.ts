@@ -11,7 +11,7 @@ import type {
 } from "@taverns/api";
 import { linkedEquipmentIds, MAX_PAGE_SIZE } from "@taverns/api";
 import { Effect } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import { reads } from "../api/keys";

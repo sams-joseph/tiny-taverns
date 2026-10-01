@@ -1,5 +1,5 @@
 import { Deferred, Effect, Predicate, Schema, Stream } from "effect";
-import { AiError, LanguageModel, type Response, type Tool, type Toolkit } from "effect/unstable/ai";
+import { AiError, LanguageModel, type Response, type Tool, type Toolkit } from "effect/ai";
 
 /**
  * A language model that reads every tool call in a response against its tool's

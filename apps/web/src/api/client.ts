@@ -1,7 +1,7 @@
 import { TavernsApi } from "@taverns/api";
 import { Effect, Result } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { classifyFailure, type ApiFailure } from "./failure";
 
 /**

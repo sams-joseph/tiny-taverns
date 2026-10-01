@@ -51,7 +51,7 @@ match `.repos/effect/packages/*`, and `.repos` is listed in `.prettierignore` an
 shared ESLint `ignores`.
 
 `.repos/effect` is the [Effect](https://github.com/Effect-TS/effect) repo at tag
-`effect@4.0.0-rc.117`, added as a squashed subtree so the v4 source is available
+`effect@4.0.0-rc.118`, added as a squashed subtree so the v4 source is available
 locally (v4's published docs are thin — the source and its tests are the authoritative
 reference). It is pinned to a tag, not a branch, so it stays in lockstep with the
 `effect` version `apps/server` installs. To move it to a newer tag:
@@ -370,7 +370,7 @@ only with their token.
 
 The server is structured idiomatically with **Effect v4** (currently a release candidate,
 pinned to exact versions). In v4 there is no `@effect/platform` package — the HTTP layer lives in core
-`effect` under `effect/unstable/http`. `docs/internals/server.md` records the full v3 → v4 mapping, and
+`effect` under `effect/http`. `docs/internals/server.md` records the full v3 → v4 mapping, and
 `.repos/effect` vendors the matching upstream source as the authoritative reference.
 
 ## Testing

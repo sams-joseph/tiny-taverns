@@ -1,9 +1,9 @@
 import { describe, expect } from "@effect/vitest";
 import { type HobEvent, type SharedWorldId, TavernsApi } from "@taverns/api";
 import { Context, Effect, Layer, Stream } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";

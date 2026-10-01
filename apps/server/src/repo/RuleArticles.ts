@@ -13,7 +13,7 @@ import {
   type RuleSectionDraft,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { encodeRuleBlocks, sectionDraftsFrom } from "../ruleset/rules.js";
 import {
   classFromColumns,

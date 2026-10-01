@@ -1,6 +1,6 @@
 import { emptyStatBlock, StatBlock, type CreatureCreate } from "@taverns/api";
 import { Effect, Schema } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import { SPELL_RAW } from "../spells/systemSpells.js";
 import { crSortFor } from "../repo/Creatures.js";
 import {

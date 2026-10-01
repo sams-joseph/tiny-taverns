@@ -69,8 +69,8 @@ export class SharedWorldHistoryEntry extends Schema.Class<SharedWorldHistoryEntr
   createdAt: Schema.DateTimeUtcFromString,
 }) {}
 
-const title = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 200));
-const body = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 20_000));
+const title = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 200));
+const body = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 20_000));
 
 /**
  * A manual entry — any live member writing the Shared World's chronicle by hand.

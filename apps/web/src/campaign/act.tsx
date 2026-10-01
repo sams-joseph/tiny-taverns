@@ -2,7 +2,7 @@ import type { CampaignId, Encounter, EncounterId, EncounterPlayed } from "@taver
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams, type LinkProps } from "@tanstack/react-router";
 import type { IconName } from "@taverns/ui";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { sceneNoun } from "../run/scene";
 import { campaignNightAtom, type CampaignNight } from "./load";

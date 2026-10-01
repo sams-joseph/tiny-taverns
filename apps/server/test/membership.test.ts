@@ -8,7 +8,7 @@ import {
 } from "@taverns/api";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

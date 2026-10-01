@@ -1,8 +1,8 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { TavernsApi } from "@taverns/api";
 import { Cause, Effect, Option } from "effect";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/unstable/reactivity";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { AsyncResult, Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { useMemo } from "react";
 import { fetchCredential } from "../auth/credential";
 import type { TavernsClient } from "./client";

@@ -6,16 +6,16 @@ import { queryArray } from "./Query.js";
 
 /** A source reference as the product exposes it: a stable key and display label. */
 export const MagicItemReference = Schema.Struct({
-  index: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120)),
-  name: Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240)),
+  index: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120)),
+  name: Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240)),
 });
 export type MagicItemReference = typeof MagicItemReference.Type;
 
-const text = Schema.String.check(Schema.isLengthBetween(0, 30_000));
-const label = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 240));
-const note = Schema.String.check(Schema.isLengthBetween(0, 600));
-const sourceKey = Schema.NonEmptyString.check(Schema.isLengthBetween(1, 120));
-const sourceKeys = queryArray(sourceKey).check(Schema.isLengthBetween(0, 80));
+const text = Schema.String.check(Schema.isBetweenLength(0, 30_000));
+const label = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 240));
+const note = Schema.String.check(Schema.isBetweenLength(0, 600));
+const sourceKey = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 120));
+const sourceKeys = queryArray(sourceKey).check(Schema.isBetweenLength(0, 80));
 const nonNegativeInt = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
 
 /** The preserved 5e-bits display document for one magic item. */
@@ -24,11 +24,11 @@ export const MagicItemBody = Schema.Struct({
   equipmentCategory: MagicItemReference,
   rarity: MagicItemReference,
   desc: Schema.optional(Schema.Array(text)),
-  image: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 260))),
+  image: Schema.optional(Schema.String.check(Schema.isBetweenLength(1, 260))),
   requiresAttunement: Schema.optional(Schema.Boolean),
   attunementRequirement: Schema.optional(note),
   variant: Schema.optional(Schema.Boolean),
-  variants: Schema.optional(Schema.Array(MagicItemReference).check(Schema.isLengthBetween(0, 80))),
+  variants: Schema.optional(Schema.Array(MagicItemReference).check(Schema.isBetweenLength(0, 80))),
   baseItem: Schema.optional(MagicItemReference),
 });
 export type MagicItemBody = typeof MagicItemBody.Type;
@@ -61,7 +61,7 @@ export class MagicItem extends Schema.Class<MagicItem>("MagicItem")({
   baseItemName: Schema.NullOr(label),
   variantIds: Schema.Array(MagicItemId),
   variantNames: Schema.Array(label),
-  image: Schema.NullOr(Schema.String.check(Schema.isLengthBetween(1, 260))),
+  image: Schema.NullOr(Schema.String.check(Schema.isBetweenLength(1, 260))),
   magicItem: MagicItemBody,
   visibility: Visibility,
   ...provenanceFields,
@@ -76,7 +76,7 @@ const MagicItemDraft = {
   requiresAttunement: Schema.optional(Schema.Boolean),
   attunementRequirement: Schema.optional(note),
   desc: Schema.optional(Schema.Array(text)),
-  image: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 260))),
+  image: Schema.optional(Schema.String.check(Schema.isBetweenLength(1, 260))),
   magicItem: Schema.optional(MagicItemBody),
 } as const;
 
@@ -96,7 +96,7 @@ const MagicItemPatch = {
   requiresAttunement: Schema.optional(Schema.Boolean),
   attunementRequirement: Schema.optional(note),
   desc: Schema.optional(Schema.Array(text)),
-  image: Schema.optional(Schema.String.check(Schema.isLengthBetween(1, 260))),
+  image: Schema.optional(Schema.String.check(Schema.isBetweenLength(1, 260))),
   magicItem: Schema.optional(MagicItemBody),
 } as const;
 
@@ -120,14 +120,14 @@ export type MagicItemVariantState = typeof MagicItemVariantState.Type;
 
 /** Filters the Library and campaign magic item screens expose. */
 export const MagicItemFilter = {
-  q: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 200))),
+  q: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 200))),
   categories: Schema.optional(sourceKeys),
   rarities: Schema.optional(sourceKeys),
   attunement: Schema.optional(
-    queryArray(MagicItemAttunementFilter).check(Schema.isLengthBetween(0, 2)),
+    queryArray(MagicItemAttunementFilter).check(Schema.isBetweenLength(0, 2)),
   ),
   variantStates: Schema.optional(
-    queryArray(MagicItemVariantState).check(Schema.isLengthBetween(0, 3)),
+    queryArray(MagicItemVariantState).check(Schema.isBetweenLength(0, 3)),
   ),
   sort: Schema.optional(MagicItemSort),
   ...pageFilter(MagicItemSort),

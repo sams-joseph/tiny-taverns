@@ -1,6 +1,6 @@
 import { MagicItemBody } from "@taverns/api";
 import { Effect, Schema } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import { EQUIPMENT_CATEGORY_RAW } from "../equipment/systemEquipment.js";
 import {
   equipmentCategoryForRef,

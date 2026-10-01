@@ -10,7 +10,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { playerNpcReadable } from "./Npcs.js";
 import { NPC } from "./NpcThreads.js";

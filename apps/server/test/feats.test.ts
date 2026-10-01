@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { CurrentActor, type Actor } from "@taverns/api";
 import { Effect, Exit, Layer } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Groups } from "../src/repo/Groups.js";

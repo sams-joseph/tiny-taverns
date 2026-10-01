@@ -88,7 +88,7 @@ export class IssuedInvite extends Schema.Class<IssuedInvite>("IssuedInvite")({
 
 /** Minting a seat at one campaign. The campaign comes from the URL. */
 export const CampaignInviteCreate = Schema.Struct({
-  label: Schema.optional(Schema.String.check(Schema.isLengthBetween(0, 80))),
+  label: Schema.optional(Schema.String.check(Schema.isBetweenLength(0, 80))),
 });
 export type CampaignInviteCreate = typeof CampaignInviteCreate.Type;
 

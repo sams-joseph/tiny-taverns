@@ -14,7 +14,7 @@ import {
   Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import {

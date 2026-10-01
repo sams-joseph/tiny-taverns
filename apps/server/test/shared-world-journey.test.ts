@@ -1,8 +1,8 @@
 import { describe, expect } from "@effect/vitest";
 import { TavernsApi } from "@taverns/api";
 import { DateTime, Effect, Layer, Stream } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Hob } from "../src/assistant/Hob.js";

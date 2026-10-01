@@ -15,7 +15,7 @@ import {
   type Visibility,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { RUNS } from "./liveTables.js";
 import { classFromColumns, defined, dieOnSqlError, timestampColumns } from "./rows.js";

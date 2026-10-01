@@ -10,9 +10,9 @@ import {
   TavernsApi,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { NPC_PROMPT_TEMPLATE_VERSION } from "../src/assistant/npcPrompt.js";
 import { aPerson, campaignVia } from "./support/actors.js";

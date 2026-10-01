@@ -6,7 +6,7 @@ import {
   type RuleArticleUpdate,
 } from "@taverns/api";
 import { Effect } from "effect";
-import { SqlClient, type SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/sql";
 import { FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import {
   SYSTEM_RULE_ARTICLES,

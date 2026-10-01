@@ -8,7 +8,7 @@ import type {
   NpcTurn as RecordedTurn,
 } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { makeClient, runApiResult } from "../api/client";
 import { classifyFailure, type ApiFailure } from "../api/failure";

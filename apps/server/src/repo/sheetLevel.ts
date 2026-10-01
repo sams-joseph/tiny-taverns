@@ -8,7 +8,7 @@ import {
   spellActionFor,
 } from "@taverns/api";
 import { Effect, Schema, Struct } from "effect";
-import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import { fromColumns, uuidArray } from "./rows.js";
 import type { Vocabulary } from "./visibility.js";
 

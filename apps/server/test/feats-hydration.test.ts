@@ -7,7 +7,7 @@ import {
   type FeatLibraryCreate,
 } from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
-import { SqlClient, Statement } from "effect/unstable/sql";
+import { SqlClient, Statement } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { importSystemEquipment } from "../src/equipment/import.js";
 import { Feats } from "../src/repo/Feats.js";

@@ -28,15 +28,7 @@ import {
   NoteKind,
 } from "@taverns/api";
 import { Cause, Context, DateTime, Effect, Layer, Ref, Result, Schema, Stream } from "effect";
-import {
-  AiError,
-  Chat,
-  LanguageModel,
-  type Prompt,
-  type Response,
-  Tool,
-  Toolkit,
-} from "effect/unstable/ai";
+import { AiError, Chat, LanguageModel, type Prompt, type Response, Tool, Toolkit } from "effect/ai";
 
 /**
  * The tool set of a loop with no tools — what `LanguageModel.streamText`
@@ -737,7 +729,7 @@ const ProposeNpcMemory = Tool.make("proposeNpcMemory", {
   description:
     "Offer the campaign creator a memory this NPC should remember. It is only a suggestion: accepting it creates a draft memory, and that draft is still not prompt-visible until the creator approves it.",
   parameters: Schema.Struct({
-    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 4000)),
   }),
   success: Schema.String,
   failure: ProposalFailure,
@@ -748,8 +740,8 @@ const ProposeCampaignNote = Tool.make("proposeCampaignNote", {
   description:
     "Offer the campaign creator a note to save. It is only a suggestion: no note is written unless an authorized creator accepts the stored proposal.",
   parameters: Schema.Struct({
-    title: Schema.String.check(Schema.isLengthBetween(1, 80)),
-    body: Schema.String.check(Schema.isLengthBetween(1, 4000)),
+    title: Schema.String.check(Schema.isBetweenLength(1, 80)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 4000)),
     noteKind: NoteKind,
   }),
   success: Schema.String,
@@ -761,7 +753,7 @@ const ProposeCampaignBeat = Tool.make("proposeCampaignBeat", {
   description:
     "Offer the campaign creator one line recording what just happened at the table. It is only a suggestion: no beat is written unless an authorized creator accepts it.",
   parameters: Schema.Struct({
-    body: Schema.String.check(Schema.isLengthBetween(1, 1000)),
+    body: Schema.String.check(Schema.isBetweenLength(1, 1000)),
   }),
   success: Schema.String,
   failure: ProposalFailure,

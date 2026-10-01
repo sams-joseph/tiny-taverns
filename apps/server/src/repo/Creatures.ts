@@ -15,7 +15,7 @@ import {
   type StatBlock,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
-import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import {
   classFromColumns,
   defined,

@@ -15,7 +15,7 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import {
   classFromColumns,
   defined,

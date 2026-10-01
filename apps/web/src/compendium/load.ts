@@ -5,7 +5,7 @@ import type {
   RuleArticleId,
   RuleArticleSort,
 } from "@taverns/api";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { Effect } from "effect";
 import { apiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";

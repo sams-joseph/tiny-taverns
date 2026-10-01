@@ -1,6 +1,6 @@
 import { PlayerCharacterCombatant, PlayerMonsterCombatant } from "@taverns/api";
 import { Schema } from "effect";
-import type { SqlClient, Statement } from "effect/unstable/sql";
+import type { SqlClient, Statement } from "effect/sql";
 import { fromColumns } from "./rows.js";
 
 /**

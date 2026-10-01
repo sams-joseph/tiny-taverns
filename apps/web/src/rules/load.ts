@@ -7,7 +7,7 @@ import type {
   FeatSort,
   OptionVocabulary,
 } from "@taverns/api";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
 import { collectPages, WHOLE_LIST } from "../api/page";

@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest";
 import { Actor, CurrentActor, MagicItemId, type MagicItemCreate } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { servicesOver } from "../src/app.js";
 import { importSystemMagicItems } from "../src/magic-items/import.js";

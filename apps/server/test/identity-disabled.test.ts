@@ -1,9 +1,9 @@
 import { describe, expect } from "@effect/vitest";
 import { TavernsApi } from "@taverns/api";
 import { ConfigProvider, Context, Effect, Layer, Option } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
-import { SqlClient } from "effect/unstable/sql";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { applicationOver, identityFromConfig, servicesOver } from "../src/app.js";
 import { IdentityProvider } from "../src/IdentityProvider.js";

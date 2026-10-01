@@ -1,6 +1,6 @@
 import type { Equipment, EquipmentSort, Page, PageCursor } from "@taverns/api";
 import { Effect, Result } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { runApiResult, type TavernsClient } from "../api/client";
 import type { ApiFailure, Resource } from "../api/failure";

@@ -9,7 +9,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {
   classFromColumns,

@@ -8,7 +8,7 @@ import type {
   Session,
 } from "@taverns/api";
 import { DateTime, Effect } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { CarriedFight } from "../chronicle/fight";

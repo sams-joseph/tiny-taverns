@@ -131,7 +131,7 @@ export const HobWho = Schema.Literals(["user", "hob"]);
 export type HobWho = typeof HobWho.Type;
 
 /** One line of a thread, whoever said it. Bounded so a paste is a 400, not a row. */
-const turnText = Schema.String.check(Schema.isLengthBetween(1, 4000));
+const turnText = Schema.String.check(Schema.isBetweenLength(1, 4000));
 
 /**
  * One creature on a proposed roster, resolved.

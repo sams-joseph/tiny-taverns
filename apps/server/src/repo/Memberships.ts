@@ -11,8 +11,8 @@ import {
   NotFound,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import type { SqlError, Statement } from "effect/unstable/sql";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import type { SqlError, Statement } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { campaignImageColumns, campaignImageSigner, campaignRow } from "./Campaigns.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { classFromColumns, classWithRow, dieOnSqlError, orNotFound } from "./rows.js";

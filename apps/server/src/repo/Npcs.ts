@@ -15,7 +15,7 @@ import {
   PlayerNpc,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import {

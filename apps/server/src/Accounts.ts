@@ -1,7 +1,7 @@
 import { type AccountId, AccountIdentity, Actor, CurrentActor } from "@taverns/api";
 import { Context, Effect, Layer, Option } from "effect";
-import type { SqlError } from "effect/unstable/sql";
-import { SqlClient } from "effect/unstable/sql";
+import type { SqlError } from "effect/sql";
+import { SqlClient } from "effect/sql";
 import { createHash, randomBytes } from "node:crypto";
 import type { VerifiedIdentity } from "./IdentityProvider.js";
 import { dieOnSqlError } from "./repo/rows.js";

@@ -13,7 +13,7 @@ import {
   SearchSource,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, SqlSchema, type Statement } from "effect/sql";
 import { BEATS } from "./Beats.js";
 import { dieOnSqlError, fromColumns, likeContains, timestampColumns } from "./rows.js";
 import {

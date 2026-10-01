@@ -6,7 +6,7 @@ import {
   type NpcId,
 } from "@taverns/api";
 import { Effect } from "effect";
-import { type SqlClient, type Statement } from "effect/unstable/sql";
+import { type SqlClient, type Statement } from "effect/sql";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { ownedRowReadable, rowWritable } from "./visibility.js";
 

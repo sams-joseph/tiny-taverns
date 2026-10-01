@@ -28,7 +28,7 @@ import {
   Loading,
 } from "@taverns/ui";
 import { Result } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { useCallback, useEffect, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { useNpcSessionChat } from "../cast/playerChat";

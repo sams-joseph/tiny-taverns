@@ -1,6 +1,6 @@
 import type { NpcId, NpcSheetSummary, NpcSource } from "@taverns/api";
 import { Effect } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { apiAtom, combine } from "../api/atoms";
 import { reads } from "../api/keys";
 import { linkedGear } from "../characters/load";

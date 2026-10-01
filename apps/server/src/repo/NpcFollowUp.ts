@@ -9,7 +9,7 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { npcAwarenessCandidateFields } from "./NpcAwareness.js";
 import { npcImageColumns, npcImageFromId, type NpcImageSigner, npcImageSigner } from "./Npcs.js";

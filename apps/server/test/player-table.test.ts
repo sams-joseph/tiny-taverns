@@ -34,7 +34,7 @@ import {
 import { migratedDatabase } from "./support/database.js";
 import { aFightUnderWay } from "./support/fights.js";
 import { describeLayer } from "./support/suite.js";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 
 const services = Layer.mergeAll(
   Accounts.layer,

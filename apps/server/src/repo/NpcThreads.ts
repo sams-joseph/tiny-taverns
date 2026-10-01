@@ -18,7 +18,7 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Array as Arr, Context, Effect, Layer, Option, Schema } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
 import { initiativeOrder } from "./liveTables.js";

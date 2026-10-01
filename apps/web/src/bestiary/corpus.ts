@@ -1,7 +1,7 @@
 import type { Creature, CreatureSort, Page, PageCursor } from "@taverns/api";
 import { Effect, Result } from "effect";
-import type { HttpClient } from "effect/unstable/http";
-import type { AsyncResult, Atom } from "effect/unstable/reactivity";
+import type { HttpClient } from "effect/http";
+import type { AsyncResult, Atom } from "effect/reactivity";
 import type { FilterInputFacet, FilterInputOption } from "@taverns/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApiAtom } from "../api/atoms";

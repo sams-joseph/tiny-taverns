@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_SIZE, type CursorKey, type Page, type PageCursor } from "@taverns/api";
 import { DateTime } from "effect";
-import type { SqlClient, Statement } from "effect/unstable/sql";
+import type { SqlClient, Statement } from "effect/sql";
 
 /**
  * Keyset pagination, as clauses a list query composes.

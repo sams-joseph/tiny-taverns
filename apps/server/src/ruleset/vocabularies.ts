@@ -25,7 +25,7 @@ import {
   StartingKit,
 } from "@taverns/api";
 import { Effect, Schema, Struct } from "effect";
-import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
+import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
 import { fileUnder, fromColumns, textArray, uuidArray } from "../repo/rows.js";
 import { damageTypeIdByKey, FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import {

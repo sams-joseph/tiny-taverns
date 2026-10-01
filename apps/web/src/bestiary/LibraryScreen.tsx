@@ -1,6 +1,6 @@
 import type { Creature, CreatureId, CreatureSort, PageCursor } from "@taverns/api";
 import { Button, Icon, EmptyState, Loading } from "@taverns/ui";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { useCallback, useState } from "react";
 import { apiAtom } from "../api/atoms";
 import { reads } from "../api/keys";

@@ -13,7 +13,7 @@ import {
   type Visibility,
 } from "@taverns/api";
 import { Effect } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { Accounts } from "../../src/Accounts.js";
 import { Campaigns } from "../../src/repo/Campaigns.js";
 import { Characters } from "../../src/repo/Characters.js";

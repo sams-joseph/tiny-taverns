@@ -92,8 +92,8 @@ export const PartySeatUpdate = Schema.Struct({
    * the old DM character PATCH carried, now on the row the campaign owns.
    */
   conditions: Schema.optional(
-    Schema.Array(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 40))).check(
-      Schema.isLengthBetween(0, 24),
+    Schema.Array(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40))).check(
+      Schema.isBetweenLength(0, 24),
     ),
   ),
   /** Inspiration, awarded or spent — live on the shared character, with no combatant copy. */
@@ -111,7 +111,7 @@ export type PartySeatUpdate = typeof PartySeatUpdate.Type;
  */
 export const PartyRest = Schema.Struct({
   kind: Schema.Literal("long"),
-  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isLengthBetween(1, 128))),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type PartyRest = typeof PartyRest.Type;
 

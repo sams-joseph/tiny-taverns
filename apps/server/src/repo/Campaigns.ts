@@ -12,7 +12,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Schema, SchemaGetter, SchemaTransformation } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { foundGroup, moveToOwnContext } from "./Groups.js";

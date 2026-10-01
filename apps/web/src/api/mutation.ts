@@ -1,5 +1,5 @@
 import { Effect, Result } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import { useCallback, useState } from "react";
 import { useCredential } from "../auth/credential";
 import { useInvalidate } from "./atoms";

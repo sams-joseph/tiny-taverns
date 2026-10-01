@@ -11,7 +11,7 @@ import type {
 } from "@taverns/api";
 import { keptFrom } from "@taverns/api";
 import { Effect, Fiber, Result, Stream } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInvalidate } from "../api/atoms";
 import { makeClient, runApiResult, type TavernsClient } from "../api/client";

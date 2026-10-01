@@ -1,8 +1,8 @@
 import { describe, expect } from "@effect/vitest";
 import { CurrentActor, type Note, type NoteId, TavernsApi } from "@taverns/api";
 import { Context, DateTime, Effect, Layer } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { applicationOver, servicesOver } from "../src/app.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { aPerson, admittedTo, campaignVia } from "./support/actors.js";
