@@ -5,9 +5,12 @@ import { Schema } from "effect";
  * `AccountId` can never be passed where a `CampaignId` is wanted — the ids are
  * structurally identical strings and the compiler is the only thing that can
  * tell them apart.
+ *
+ * `Schema.brand` only accepts one concrete brand name, so the parameter takes
+ * its exact argument type rather than a bare `Name`.
  */
-const id = <const Name extends string>(name: Name) =>
-  Schema.String.check(Schema.isUUID()).pipe(Schema.brand(name));
+const id = <const Name extends string>(name: Parameters<typeof Schema.brand<Name>>[0]) =>
+  Schema.String.check(Schema.isUUID()).pipe(Schema.brand<Name>(name));
 
 export const AccountId = id("AccountId");
 export type AccountId = typeof AccountId.Type;

@@ -5,7 +5,7 @@ This page covers `apps/server` and `packages/api` as a runtime: the Effect v4 id
 ## Workspace pins that are constraints
 
 - **Formatting is root-only Prettier** (`pnpm format` / `pnpm format:check`), not a turbo task. No package has a `format` script, so CI must name `format:check` as its own step. `.prettierignore` keeps `packages/design-system` and `.repos/` out of every pass.
-- **`effect`, `@effect/platform-node`, `@effect/sql-pg`, `@effect/ai-openai-compat`, the web app's `@effect/atom-react` and the server's `@effect/vitest` are pinned exactly at `4.0.0-rc.118`.** Release candidates are not semver-stable; do not loosen to caret ranges, and bump them together. `@effect/platform-node` takes `@effect/platform-node-shared` by caret range, so `pnpm-workspace.yaml` overrides it to the same version; bump that line with the rest.
+- **`effect`, `@effect/platform-node`, `@effect/sql-pg`, `@effect/ai-openai-compat`, the web app's `@effect/atom-react` and the server's `@effect/vitest` are pinned exactly at `4.0.0`.** Upstream releases every Effect package together under one version, and the HTTP, HTTP API, SQL and AI modules we use are tagged `@stability unstable`, which may break in a minor release; do not loosen to caret ranges, and bump them together. `@effect/platform-node` takes `@effect/platform-node-shared` by caret range, so `pnpm-workspace.yaml` overrides it to the same version; bump that line with the rest.
 - **`.repos/effect` is committed on purpose** at that tag; v4's published docs are thin. Start with `.repos/effect/MIGRATION.md` and `migration/*.md`.
 - **`pnpm-workspace.yaml` sets `msgpackr-extract: false` under `allowBuilds`.** `effect` v4 pulls `msgpackr` transitively; without the entry `pnpm install` exits 1 on the ignored build script.
 - **Vite and Vitest stay aligned** (Vitest 3 with Vite 6 in `apps/web` and `packages/ui`); Vitest 2 pulls Vite 5 and the mix produces duplicate-`vite` type errors. `apps/server` is on Vitest 5 because `@effect/vitest` requires it, on the same Vite 6. With two Vitest majors in the workspace, `pnpm-workspace.yaml` gives `@testing-library/jest-dom` a `vitest` peer so its matcher types augment each consumer's own Vitest rather than whichever one pnpm hoists.
@@ -13,7 +13,7 @@ This page covers `apps/server` and `packages/api` as a runtime: the Effect v4 id
 
 ## Effect v3 → v4
 
-`@effect/platform` has no v4; its HTTP surface moved into core `effect` under `effect/http` and `effect/http-api`. Since rc.118 those paths no longer carry an `unstable` segment, but the modules are still marked `@stability unstable` upstream, so they may still break between releases.
+`@effect/platform` has no v4; its HTTP surface moved into core `effect` under `effect/http` and `effect/http-api`. Those paths carry no `unstable` segment, but in 4.0.0 the modules are still marked `@stability unstable` upstream, so they may break in a minor release.
 
 | v3                                        | v4                                                          |
 | ----------------------------------------- | ----------------------------------------------------------- |
