@@ -35,8 +35,8 @@ import {
   pageOfRows,
 } from "./paging.js";
 import {
-  type AssistantOrigin,
   assistantColumns,
+  type AssistantOrigin,
   classFromColumns,
   defined,
   dieOnSqlError,
@@ -44,6 +44,7 @@ import {
   orNotFound,
   proseColumn,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import {
@@ -129,8 +130,8 @@ const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 /**
  * The prep's columns from a payload. The documents go in as JSON text, which
  * Postgres casts to `jsonb` on the way in — `Creatures.ts`'s rule, and here for
- * the same reason: a bare JS array bound to a statement becomes a Postgres
- * array literal. Each line is trimmed, as the treasure is; the wire has
+ * the same reason: the driver binds a bare JS array as a Postgres array, not
+ * as JSON. Each line is trimmed, as the treasure is; the wire has
  * already refused a blank one.
  */
 const prepColumns = (payload: {
@@ -171,8 +172,8 @@ const ROSTER: NestedTable = {
  * It counts what *this actor* can see, through the same visibility rule a read
  * of the roster itself would apply — so the number on the card and the list
  * behind it always agree. `coalesce(..., 0)` because an empty roster sums to
- * null, and `::int` because Postgres widens `sum` to a bigint, which the pg
- * driver would hand back as a string.
+ * null, and `::int` because Postgres widens `sum` to a bigint, which the
+ * driver would hand back as a JS `bigint`.
  */
 const creatureCount = (
   sql: SqlClient.SqlClient,
@@ -264,9 +265,8 @@ const lastPlayed = (
 /**
  * Reads and writes over `encounter`, the authored template.
  *
- * `tags` is passed to `sql.insert` as a plain JS array: a bare array in a
- * statement becomes one bind parameter, which `pg` serialises to a Postgres
- * array literal. (`sql.in(...)` is the thing that turns an array into an
+ * `tags` is passed to `sql.insert` through `textArray`: one typed `text[]` bind
+ * parameter. (`sql.in(...)` is the thing that turns an array into an
  * `(?, ?, ?)` list — do not reach for it here.)
  */
 export class Encounters extends Context.Service<
@@ -625,7 +625,7 @@ export class Encounters extends Context.Service<
                     campaign_id: campaignId,
                     name: payload.name,
                     kind: payload.kind,
-                    tags: payload.tags,
+                    tags: textArray(payload.tags),
                     visibility: payload.visibility,
                     ...assistantColumns(from),
                   }),
@@ -698,7 +698,7 @@ export class Encounters extends Context.Service<
                 const columns = defined({
                   name: patch.name,
                   kind: patch.kind,
-                  tags: patch.tags,
+                  tags: textArray(patch.tags),
                   visibility: patch.visibility,
                 });
                 yield* change({ campaignId, id, columns }).pipe(orNotFound("encounter", id));

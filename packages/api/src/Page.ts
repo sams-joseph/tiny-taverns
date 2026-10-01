@@ -92,7 +92,7 @@ export const pageCursor = <Ordering extends Schema.Codec<string, string>>(orderi
       // `SchemaGetter.parseJson` would do this and types as `unknown`, which the
       // target's encoded type will not accept. Spelled out so the failure stays
       // a schema issue — a forged cursor is a 400 with a message, not a 500.
-      decode: SchemaGetter.transformOrFail((text: string) =>
+      decode: SchemaGetter.transformEffect((text: string) =>
         Effect.try({
           try: () => JSON.parse(text) as Encoded,
           catch: (error) => new SchemaIssue.InvalidValue({ message: String(error) }, text),

@@ -685,6 +685,39 @@ describeLayer("api", shared, (it) => {
       }),
     );
 
+    it.effect(
+      "writes an empty tag list, keeps quotes and backslashes, and clears back to none",
+      () =>
+        Effect.gen(function* () {
+          const { token } = yield* Fixture;
+          // Each write binds `tags` as a typed `text[]`: an empty array has no
+          // elements for the driver to infer a type from, and a value with quotes
+          // or a backslash is sent as it is, with nothing to escape.
+          const seen = yield* Effect.gen(function* () {
+            const client = yield* clientFor(token);
+            const campaign = yield* campaignVia(client, { name: "Tags" });
+            const params = { campaignId: campaign.id };
+            const created = yield* client.encounters.create({
+              params,
+              payload: { name: "The ford", tags: [] },
+            });
+            const tagged = yield* client.encounters.update({
+              params: { ...params, encounterId: created.id },
+              payload: { tags: ['the "Old" Ford', "back\\slash", "it's"] },
+            });
+            const cleared = yield* client.encounters.update({
+              params: { ...params, encounterId: created.id },
+              payload: { tags: [] },
+            });
+            return { created, tagged, cleared };
+          }).pipe(Effect.orDie);
+
+          expect(seen.created.tags).toEqual([]);
+          expect(seen.tagged.tags).toEqual(['the "Old" Ford', "back\\slash", "it's"]);
+          expect(seen.cleared.tags).toEqual([]);
+        }),
+    );
+
     it.effect("refuses a prep item under a session in a different campaign", () =>
       Effect.gen(function* () {
         const { token } = yield* Fixture;
@@ -806,6 +839,41 @@ describeLayer("api", shared, (it) => {
         expect(seen.readBack.origin).toBe("authored");
         expect(seen.readBack.derivedFrom).toBeNull();
         expect(seen.readBack.campaignId).toBeNull();
+      }),
+    );
+
+    it.effect("writes a Library creature with no environments, and clears them back to none", () =>
+      Effect.gen(function* () {
+        const { token } = yield* Fixture;
+        const seen = yield* Effect.gen(function* () {
+          const client = yield* clientFor(token);
+          const created = yield* client.library.create({
+            payload: {
+              name: "Reed Stalker",
+              size: "Medium",
+              type: "Beast",
+              cr: "1/2",
+              ac: 13,
+              hp: 22,
+              environments: [],
+              damageResistances: [],
+            },
+          });
+          const placed = yield* client.library.update({
+            params: { creatureId: created.id },
+            payload: { environments: ["Marsh", "River"] },
+          });
+          const cleared = yield* client.library.update({
+            params: { creatureId: created.id },
+            payload: { environments: [] },
+          });
+          return { created, placed, cleared };
+        }).pipe(Effect.orDie);
+
+        expect(seen.created.environments).toEqual([]);
+        expect(seen.created.damageResistances).toEqual([]);
+        expect(seen.placed.environments).toEqual(["Marsh", "River"]);
+        expect(seen.cleared.environments).toEqual([]);
       }),
     );
 

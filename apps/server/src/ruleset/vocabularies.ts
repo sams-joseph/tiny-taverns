@@ -26,7 +26,7 @@ import {
 } from "@taverns/api";
 import { Effect, Schema, Struct } from "effect";
 import { SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
-import { fileUnder, fromColumns } from "../repo/rows.js";
+import { fileUnder, fromColumns, textArray, uuidArray } from "../repo/rows.js";
 import { damageTypeIdByKey, FIVE_E_BITS_2014_SOURCE, sourceKeyFor } from "./source.js";
 import {
   ABILITY_SCORE_RAW,
@@ -244,7 +244,7 @@ const upsertLanguages = (sql: SqlClient.SqlClient): Effect.Effect<void, SqlError
           ${rawText(row, "name")},
           ${rawText(row, "type")},
           ${optionalText(row, "script") ?? null},
-          ${speakers}
+          ${textArray(speakers)}
         )
         on conflict (source_corpus, source_key)
         do update set
@@ -1263,7 +1263,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
     execute: (ids) => sql`
       select option_id, id::text, name, source_key as index, ordinal
       from character_option_subrace
-      where option_id = any(${[...ids]})
+      where option_id = any(${uuidArray([...ids])})
       order by ordinal
     `,
   });
@@ -1286,7 +1286,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       from character_option_ability_bonus
       join ability_score on ability_score.id = character_option_ability_bonus.ability_score_id
       left join character_option_subrace on character_option_subrace.id = character_option_ability_bonus.subrace_id
-      where character_option_ability_bonus.option_id = any(${[...ids]})
+      where character_option_ability_bonus.option_id = any(${uuidArray([...ids])})
       order by character_option_ability_bonus.subrace_id nulls first, character_option_ability_bonus.ordinal
     `,
   });
@@ -1309,7 +1309,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       from character_option_language
       join language on language.id = character_option_language.language_id
       left join character_option_subrace on character_option_subrace.id = character_option_language.subrace_id
-      where character_option_language.option_id = any(${[...ids]})
+      where character_option_language.option_id = any(${uuidArray([...ids])})
       order by character_option_language.subrace_id nulls first, character_option_language.ordinal
     `,
   });
@@ -1344,7 +1344,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       from (
         select option_id, subrace_id, proficiency_id, ordinal::bigint as sort_key, null::uuid as source_trait_id
         from character_option_proficiency
-        where option_id = any(${[...ids]})
+        where option_id = any(${uuidArray([...ids])})
         union all
         select character_option_trait.option_id,
                character_option_trait.subrace_id,
@@ -1353,7 +1353,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
                character_option_trait.trait_id as source_trait_id
         from character_option_trait
         join racial_trait_proficiency on racial_trait_proficiency.trait_id = character_option_trait.trait_id
-        where character_option_trait.option_id = any(${[...ids]})
+        where character_option_trait.option_id = any(${uuidArray([...ids])})
       ) as source
       join proficiency on proficiency.id = source.proficiency_id
       left join racial_trait as source_trait on source_trait.id = source.source_trait_id
@@ -1379,7 +1379,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       from character_option_trait
       join racial_trait on racial_trait.id = character_option_trait.trait_id
       left join character_option_subrace on character_option_subrace.id = character_option_trait.subrace_id
-      where character_option_trait.option_id = any(${[...ids]})
+      where character_option_trait.option_id = any(${uuidArray([...ids])})
       order by character_option_trait.subrace_id nulls first, character_option_trait.ordinal
     `,
   });
@@ -1408,12 +1408,12 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       from (
         select id as group_id, option_id
         from rule_choice_group
-        where option_id = any(${[...ids]})
+        where option_id = any(${uuidArray([...ids])})
         union
         select rule_choice_group.id, character_option_trait.option_id
         from rule_choice_group
         join character_option_trait on character_option_trait.trait_id = rule_choice_group.trait_id
-        where character_option_trait.option_id = any(${[...ids]})
+        where character_option_trait.option_id = any(${uuidArray([...ids])})
       ) as offered
       join rule_choice_group on rule_choice_group.id = offered.group_id
       left join character_option_subrace on character_option_subrace.id = rule_choice_group.subrace_id
@@ -1439,7 +1439,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              null::text as subrace_name
       from rule_choice_ability
       join ability_score on ability_score.id = rule_choice_ability.ability_score_id
-      where rule_choice_ability.group_id = any(${[...ids]})
+      where rule_choice_ability.group_id = any(${uuidArray([...ids])})
       order by rule_choice_ability.ordinal
     `,
   });
@@ -1452,7 +1452,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              language.script, language.typical_speakers
       from rule_choice_language
       join language on language.id = rule_choice_language.language_id
-      where rule_choice_language.group_id = any(${[...ids]})
+      where rule_choice_language.group_id = any(${uuidArray([...ids])})
       order by rule_choice_language.ordinal
     `,
   });
@@ -1467,7 +1467,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              proficiency.ability_score_id::text as ability_score_id
       from rule_choice_proficiency
       join proficiency on proficiency.id = rule_choice_proficiency.proficiency_id
-      where rule_choice_proficiency.group_id = any(${[...ids]})
+      where rule_choice_proficiency.group_id = any(${uuidArray([...ids])})
       order by rule_choice_proficiency.ordinal
     `,
   });
@@ -1481,7 +1481,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              coalesce(racial_trait.body -> 'desc', '[]'::jsonb) as desc
       from rule_choice_trait
       join racial_trait on racial_trait.id = rule_choice_trait.trait_id
-      where rule_choice_trait.group_id = any(${[...ids]})
+      where rule_choice_trait.group_id = any(${uuidArray([...ids])})
       order by rule_choice_trait.ordinal
     `,
   });
@@ -1501,7 +1501,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              feature.name,
              coalesce(feature.body -> 'desc', '[]'::jsonb) as desc
       from feature
-      where feature.class_option_id = any(${[...ids]})
+      where feature.class_option_id = any(${uuidArray([...ids])})
         and feature.level = 1
         and feature.subclass_id is null
         and feature.parent_feature_id is null
@@ -1518,7 +1518,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
              body -> 'classSpecific' as class_specific,
              body -> 'spellcasting' as spellcasting
       from class_level
-      where class_option_id = any(${[...ids]})
+      where class_option_id = any(${uuidArray([...ids])})
         and subclass_id is null
       order by level
     `,
@@ -1529,7 +1529,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
     execute: (ids) => sql`
       select class_option_id as option_id, id::text, source_key as index, name, level
       from feature
-      where class_option_id = any(${[...ids]})
+      where class_option_id = any(${uuidArray([...ids])})
         and subclass_id is null
         and parent_feature_id is null
       order by level, lower(name)
@@ -1541,7 +1541,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
     execute: (ids) => sql`
       select id as option_id, body -> 'startingKit' as kit
       from character_option
-      where id = any(${[...ids]})
+      where id = any(${uuidArray([...ids])})
     `,
   });
   /**
@@ -1595,12 +1595,12 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
         from (
           select option_id, equipment_id
           from character_option_equipment_reference
-          where option_id = any(${[...optionIds]})
+          where option_id = any(${uuidArray([...optionIds])})
           union
           select kit_category.option_id, category_member.equipment_id
           from unnest(
-                 ${categories.map((line) => line.optionId)}::uuid[],
-                 ${categories.map((line) => line.category)}::text[]
+                 ${uuidArray(categories.map((line) => line.optionId))},
+                 ${textArray(categories.map((line) => line.category))}
                ) as kit_category (option_id, category)
           join (${members}) as category_member on category_member.category = kit_category.category
         ) as owner

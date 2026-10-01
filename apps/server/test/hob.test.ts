@@ -71,6 +71,7 @@ import {
   scriptedModel,
   textChunks,
   toolCallChunks,
+  toolCallsChunks,
 } from "./support/model.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -353,6 +354,78 @@ const withGoblin = (chunks: ReadonlyArray<unknown>) =>
       ) as ReadonlyArray<unknown>,
   );
 
+/** A live fight in which Hob may spend Brannoc's Second Wind directly. */
+const aDirectFight = Effect.gen(function* () {
+  const campaigns = yield* Campaigns;
+  const characters = yield* Characters;
+  const encounters = yield* Encounters;
+  const runs = yield* EncounterRuns;
+  const party = yield* Party;
+  const sessions = yield* Sessions;
+
+  const dm = yield* anAccount("Direct Hob DM");
+  const as = withActor(dm);
+  const campaign = yield* as(createCampaign({ name: "The Direct Road", visibility: "shared" }));
+  const player = yield* aPlayerAt(campaign.id, "Brannoc");
+  const character = yield* withActor(player)(
+    characters.createOwn(campaign.id, {
+      name: "Brannoc",
+      playerName: "Pim",
+      level: 3,
+      className: "Fighter",
+      ac: 18,
+      hpMax: 31,
+      sheet: {
+        notes: "",
+        abilities: [],
+        traits: [],
+        resources: [
+          {
+            id: "res:second-wind",
+            name: "Second Wind",
+            used: 0,
+            max: 1,
+            recharge: "short",
+          },
+        ],
+      },
+    }),
+  );
+  yield* withActor(player)(party.join(campaign.id, { characterId: character.id }));
+  const session = yield* as(sessions.create(campaign.id, { number: 1, visibility: "shared" }));
+  yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
+  const encounter = yield* as(
+    encounters.create(campaign.id, { name: "The Direct Fight", visibility: "shared" }),
+  );
+  const proof = yield* asDm(dm, campaign.id);
+  const run = yield* runs.start(proof, session.id, {
+    encounterId: encounter.id,
+    includeParty: true,
+    visibility: "shared",
+  });
+  const enabled = yield* runs.update(proof, session.id, run.id, {
+    allowHobDirectWrites: true,
+  });
+  return { dm, campaign, session, run: enabled, character };
+}).pipe(Effect.orDie);
+
+/** Brannoc's Second Wind as the sheet holds it, and every direct write Hob made. */
+const secondWind = (direct: Effect.Success<typeof aDirectFight>) =>
+  Effect.gen(function* () {
+    const writes = yield* HobDirectWrites;
+    const proof = yield* asDm(direct.dm, direct.campaign.id);
+    const updates = yield* writes.list(proof, direct.session.id, direct.run.id);
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ readonly used: number }>`
+      select (resource.value ->> 'used')::integer as used
+      from character
+      cross join lateral jsonb_array_elements(character.body -> 'resources') as resource(value)
+      where character.id = ${direct.character.id}
+        and resource.value ->> 'id' = 'res:second-wind'
+    `;
+    return { updates, used: rows[0]?.used };
+  }).pipe(withActor(direct.dm), Effect.orDie);
+
 describeLayer("hob", shared, (it) => {
   describe("answering", () => {
     it.effect("streams the reply in pieces rather than in one finished paragraph", () =>
@@ -520,63 +593,7 @@ describeLayer("hob", shared, (it) => {
 
     it.effect("adds the direct resource spend tool only when this live fight enables it", () =>
       Effect.gen(function* () {
-        const direct = yield* Effect.gen(function* () {
-          const campaigns = yield* Campaigns;
-          const characters = yield* Characters;
-          const encounters = yield* Encounters;
-          const runs = yield* EncounterRuns;
-          const party = yield* Party;
-          const sessions = yield* Sessions;
-
-          const dm = yield* anAccount("Direct Hob DM");
-          const as = withActor(dm);
-          const campaign = yield* as(
-            createCampaign({ name: "The Direct Road", visibility: "shared" }),
-          );
-          const player = yield* aPlayerAt(campaign.id, "Brannoc");
-          const character = yield* withActor(player)(
-            characters.createOwn(campaign.id, {
-              name: "Brannoc",
-              playerName: "Pim",
-              level: 3,
-              className: "Fighter",
-              ac: 18,
-              hpMax: 31,
-              sheet: {
-                notes: "",
-                abilities: [],
-                traits: [],
-                resources: [
-                  {
-                    id: "res:second-wind",
-                    name: "Second Wind",
-                    used: 0,
-                    max: 1,
-                    recharge: "short",
-                  },
-                ],
-              },
-            }),
-          );
-          yield* withActor(player)(party.join(campaign.id, { characterId: character.id }));
-          const session = yield* as(
-            sessions.create(campaign.id, { number: 1, visibility: "shared" }),
-          );
-          yield* as(campaigns.update(campaign.id, { currentSessionId: session.id }));
-          const encounter = yield* as(
-            encounters.create(campaign.id, { name: "The Direct Fight", visibility: "shared" }),
-          );
-          const proof = yield* asDm(dm, campaign.id);
-          const run = yield* runs.start(proof, session.id, {
-            encounterId: encounter.id,
-            includeParty: true,
-            visibility: "shared",
-          });
-          const enabled = yield* runs.update(proof, session.id, run.id, {
-            allowHobDirectWrites: true,
-          });
-          return { dm, campaign, session, run: enabled, character };
-        }).pipe(Effect.orDie);
+        const direct = yield* aDirectFight;
 
         const { events, requests } = yield* ask(direct.dm, direct.campaign.id, {
           text: "Spend Brannoc's Second Wind.",
@@ -608,20 +625,7 @@ describeLayer("hob", shared, (it) => {
           ),
         ).toEqual(["spendCharacterResource:called", "spendCharacterResource:answered"]);
 
-        const checked = yield* Effect.gen(function* () {
-          const writes = yield* HobDirectWrites;
-          const proof = yield* asDm(direct.dm, direct.campaign.id);
-          const updates = yield* writes.list(proof, direct.session.id, direct.run.id);
-          const sql = yield* SqlClient.SqlClient;
-          const rows = yield* sql<{ readonly used: number }>`
-          select (resource.value ->> 'used')::integer as used
-          from character
-          cross join lateral jsonb_array_elements(character.body -> 'resources') as resource(value)
-          where character.id = ${direct.character.id}
-            and resource.value ->> 'id' = 'res:second-wind'
-        `;
-          return { updates, used: rows[0]?.used };
-        }).pipe(withActor(direct.dm), Effect.orDie);
+        const checked = yield* secondWind(direct);
 
         expect(checked.used).toBe(1);
         expect(checked.updates).toHaveLength(1);
@@ -632,6 +636,64 @@ describeLayer("hob", shared, (it) => {
           beforeUsed: 0,
           afterUsed: 1,
         });
+      }),
+    );
+
+    it.effect("runs none of a response's calls when one of them cannot be read", () =>
+      Effect.gen(function* () {
+        const direct = yield* aDirectFight;
+        // Two calls that would each write (a direct spend, a note offer) sit
+        // in one response beside a third whose argument does not decode. The round
+        // is the unit: none of its calls is drawn or run, the model is told, and
+        // its corrected round runs each of them exactly once.
+        const spend = { name: "spendCharacterResource", params: { target: "target:1", amount: 1 } };
+        const note = {
+          name: "proposeNote",
+          params: { title: "The ambush", body: "Goblins in the reeds." },
+        };
+        const { events, requests } = yield* ask(direct.dm, direct.campaign.id, {
+          text: "Spend Brannoc's Second Wind and note the ambush.",
+          rounds: [
+            toolCallsChunks([
+              { ...spend, id: "call_spend" },
+              { ...note, id: "call_note" },
+              {
+                name: "searchCampaign",
+                params: { query: "ferryman", limit: "lots" },
+                id: "call_search",
+              },
+            ]),
+            toolCallsChunks([
+              { ...spend, id: "call_spend_again" },
+              { ...note, id: "call_note_again" },
+            ]),
+            textChunks("Second Wind is spent and the ambush is noted."),
+          ] as never,
+        });
+
+        expect(requests).toHaveLength(3);
+        expect(requests[1]?.messages?.some((message) => "tool_calls" in message)).toBe(false);
+        expect(String(requests[1]?.messages?.at(-1)?.content ?? "")).toContain("could not be read");
+        expect(
+          events
+            .flatMap((event) =>
+              event.event === "tool" ? [`${event.data.name}:${event.data.phase}`] : [],
+            )
+            .sort(),
+        ).toEqual([
+          "proposeNote:answered",
+          "proposeNote:called",
+          "spendCharacterResource:answered",
+          "spendCharacterResource:called",
+        ]);
+        expect(
+          events.flatMap((event) => (event.event === "proposal" ? [event.data] : [])),
+        ).toHaveLength(1);
+        expect(apologies(events)).toEqual([]);
+
+        const checked = yield* secondWind(direct);
+        expect(checked.used).toBe(1);
+        expect(checked.updates).toHaveLength(1);
       }),
     );
 
@@ -927,6 +989,9 @@ describeLayer("hob", shared, (it) => {
 
         // The model was told, in a message it can act on, and it did.
         expect(requests).toHaveLength(3);
+        // The unreadable call never reached the history: no tool call is left in
+        // it with nothing answering, which a provider refuses outright.
+        expect(requests[1]?.messages?.some((message) => "tool_calls" in message)).toBe(false);
         const correction = String(requests[1]?.messages?.at(-1)?.content ?? "");
         expect(correction).toContain("could not be read");
         // **What it says is one precise thing, not the codec's whole complaint.** A
@@ -1788,6 +1853,41 @@ describeLayer("hob", shared, (it) => {
           rounds: [reasoningChunks("Hmm, what lives in a marsh.")] as never,
         });
 
+        expect(apologies(events)).toHaveLength(1);
+        expect(apologies(events)[0]).toContain("HOB_MAX_TOKENS");
+      }),
+    );
+
+    it.effect("runs no tool a round that ran out of room asked for", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // Since effect 4.0.0-rc.113 a response that stops for `length` resolves its
+        // tool calls with a synthesized failure instead of running their handlers:
+        // a call written in the last tokens before the cap is not trusted to be the
+        // call the model meant. So a well-formed offer in a truncated round makes no
+        // card, and what the DM is told is the knob, once.
+        const cutOff = (yield* withGoblin(
+          toolCallChunks("proposeEncounter", {
+            name: "Ambush in the reeds",
+            creatures: [{ creatureId: "", count: 3 }],
+          }),
+        )).map((chunk) =>
+          typeof chunk === "string"
+            ? chunk
+            : JSON.parse(
+                JSON.stringify(chunk).replace(
+                  '"finish_reason":"tool_calls"',
+                  '"finish_reason":"length"',
+                ),
+              ),
+        );
+        const { events, requests } = yield* ask(fixture.dm, fixture.campaign.id, {
+          text: "Build me an encounter for the reeds.",
+          rounds: [cutOff] as never,
+        });
+
+        expect(requests).toHaveLength(1);
+        expect(events.some((event) => event.event === "proposal")).toBe(false);
         expect(apologies(events)).toHaveLength(1);
         expect(apologies(events)[0]).toContain("HOB_MAX_TOKENS");
       }),

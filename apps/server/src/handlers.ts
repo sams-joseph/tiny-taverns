@@ -1024,7 +1024,6 @@ const PlayerTableLive = HttpApiBuilder.group(
       );
       const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
         Stream.map((): PlayerLiveEvent => ({
-          id: undefined,
           event: "heartbeat",
           data: new PlayerLiveHeartbeat({ seq: cursor }),
         })),
@@ -1798,13 +1797,12 @@ const LiveLive = HttpApiBuilder.group(
               ),
             );
 
-            // No `id` on a heartbeat, deliberately: `Sse.encoder` omits the line
-            // entirely for `undefined`, so a browser keeps the last real `seq` as
-            // its `Last-Event-ID` and a reconnect after a quiet minute still
-            // resumes from the right place rather than from the beginning.
+            // No `id` on a heartbeat, deliberately: `Sse.encoder` writes no `id`
+            // line for an event without one, so a browser keeps the last real
+            // `seq` as its `Last-Event-ID` and a reconnect after a quiet minute
+            // still resumes from the right place rather than from the beginning.
             const heartbeats = Stream.fromSchedule(Schedule.spaced(heartbeat)).pipe(
               Stream.map((): LiveEvent => ({
-                id: undefined,
                 event: "heartbeat",
                 data: new Heartbeat({ seq: cursor }),
               })),

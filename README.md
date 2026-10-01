@@ -51,7 +51,7 @@ match `.repos/effect/packages/*`, and `.repos` is listed in `.prettierignore` an
 shared ESLint `ignores`.
 
 `.repos/effect` is the [Effect](https://github.com/Effect-TS/effect) repo at tag
-`effect@4.0.0-rc.112`, added as a squashed subtree so the v4 source is available
+`effect@4.0.0-rc.117`, added as a squashed subtree so the v4 source is available
 locally (v4's published docs are thin — the source and its tests are the authoritative
 reference). It is pinned to a tag, not a branch, so it stays in lockstep with the
 `effect` version `apps/server` installs. To move it to a newer tag:

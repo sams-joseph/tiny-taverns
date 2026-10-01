@@ -23,6 +23,7 @@ import {
   orNotFound,
   setClause,
   timestampColumns,
+  uuidArray,
 } from "./rows.js";
 import {
   orderClause,
@@ -182,7 +183,7 @@ export class Feats extends Context.Service<
         Result: DescriptionRow,
         execute: (ids) => sql`
           select feat_id, text from feat_description
-          where feat_id = any(${[...ids]})
+          where feat_id = any(${uuidArray([...ids])})
           order by feat_id, ordinal, id
         `,
       });
@@ -208,7 +209,7 @@ export class Feats extends Context.Service<
           join feat_prerequisite_ability_score
             on feat_prerequisite_ability_score.group_id = feat_prerequisite_group.id
           join ability_score on ability_score.id = feat_prerequisite_ability_score.ability_score_id
-          where feat_prerequisite_group.feat_id = any(${[...ids]})
+          where feat_prerequisite_group.feat_id = any(${uuidArray([...ids])})
           order by feat_prerequisite_group.feat_id, feat_prerequisite_group.ordinal,
             feat_prerequisite_ability_score.ordinal, feat_prerequisite_ability_score.id
         `,

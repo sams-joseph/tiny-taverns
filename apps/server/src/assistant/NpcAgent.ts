@@ -51,6 +51,7 @@ import { NpcProposals } from "../repo/NpcProposals.js";
 import { Npcs } from "../repo/Npcs.js";
 import { NpcThreads, type PlayerNpcRateLimits } from "../repo/NpcThreads.js";
 import { assembleNpcPrompt, npcPromptMetadata, type NpcPromptContext } from "./npcPrompt.js";
+import { decodeToolCalls } from "./toolArguments.js";
 
 /**
  * An NPC answers, in character, to its own creator.
@@ -205,7 +206,7 @@ export class NpcAgent extends Context.Service<
   > =>
     Layer.effect(this)(
       Effect.gen(function* () {
-        const languageModel = yield* LanguageModel.LanguageModel;
+        const languageModel = decodeToolCalls(yield* LanguageModel.LanguageModel);
         const npcs = yield* Npcs;
         const knowledge = yield* NpcKnowledge;
         const memories = yield* NpcMemories;
@@ -829,7 +830,7 @@ const npcConversation = <Tools extends Record<string, Tool.Any>>(
   );
 
 const npcRound = <Tools extends Record<string, Tool.Any>>(
-  chat: Chat.Service,
+  chat: Chat.Chat,
   toolkit: Toolkit.WithHandler<Tools>,
   budget: number,
   finished: Ref.Ref<string>,

@@ -9,7 +9,7 @@ import {
 import { Effect, Option, Schema } from "effect";
 import { type SqlClient, SqlSchema, type Statement } from "effect/unstable/sql";
 import { COMBATANT } from "./liveTables.js";
-import { fromColumns } from "./rows.js";
+import { fromColumns, textArray } from "./rows.js";
 import type { AppendEvent } from "./SessionEvents.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
@@ -146,7 +146,7 @@ export const writeThroughToCharacter = (
 ): Effect.Effect<void, never> => {
   const columns: Record<string, unknown> = {};
   if (vitals.hpCurrent !== undefined) columns["hp_current"] = vitals.hpCurrent;
-  if (vitals.conditions !== undefined) columns["conditions"] = vitals.conditions;
+  if (vitals.conditions !== undefined) columns["conditions"] = textArray(vitals.conditions);
   if (Object.keys(columns).length === 0) return Effect.void;
 
   return sql<{ readonly id: CharacterId }>`
@@ -187,7 +187,7 @@ export const writeThroughToLiveCombatants = (
   conditions: ReadonlyArray<string>,
 ): Effect.Effect<void, never> =>
   sql`
-    update combatant set conditions = ${conditions}, updated_at = now()
+    update combatant set conditions = ${textArray(conditions)}, updated_at = now()
     where combatant.character_id = ${characterId}
       and exists (select 1 from encounter_run
                   where encounter_run.id = combatant.encounter_run_id

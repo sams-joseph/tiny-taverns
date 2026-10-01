@@ -22,7 +22,9 @@ import {
   likeContains,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
+  uuidArray,
 } from "./rows.js";
 import {
   orderClause,
@@ -179,8 +181,8 @@ const createColumns = (payload: EquipmentLibraryCreate, owner: Record<string, un
     range_long: range?.long,
     throw_range_normal: throwRange?.normal,
     throw_range_long: throwRange?.long,
-    property_indexes: indexesOf(properties),
-    property_names: namesOf(properties),
+    property_indexes: textArray(indexesOf(properties)),
+    property_names: textArray(namesOf(properties)),
     body: encodeBody(storedBody),
     visibility: "visibility" in payload ? payload.visibility : undefined,
   });
@@ -254,8 +256,8 @@ const updateColumns = (patch: EquipmentLibraryUpdate): Record<string, unknown> =
     range_long: range?.long,
     throw_range_normal: throwRange?.normal,
     throw_range_long: throwRange?.long,
-    property_indexes: properties === undefined ? undefined : indexesOf(properties),
-    property_names: properties === undefined ? undefined : namesOf(properties),
+    property_indexes: properties === undefined ? undefined : textArray(indexesOf(properties)),
+    property_names: properties === undefined ? undefined : textArray(namesOf(properties)),
     body: storedBody,
     visibility: "visibility" in patch ? patch.visibility : undefined,
   });
@@ -279,32 +281,32 @@ const narrowedBy = (
     // Exactly these rows — a sheet asking for the rows its gear names. An
     // empty list is an empty answer, not the whole shelf.
     clauses.push(
-      filter.ids.length === 0 ? sql`false` : sql`equipment.id = any(${[...filter.ids]})`,
+      filter.ids.length === 0 ? sql`false` : sql`equipment.id = any(${uuidArray([...filter.ids])})`,
     );
   }
   if (filter.categories !== undefined && filter.categories.length > 0) {
-    clauses.push(sql`equipment.category_index = any(${filter.categories})`);
+    clauses.push(sql`equipment.category_index = any(${textArray(filter.categories)})`);
   }
   if (filter.gearCategories !== undefined && filter.gearCategories.length > 0) {
-    clauses.push(sql`equipment.gear_category_index = any(${filter.gearCategories})`);
+    clauses.push(sql`equipment.gear_category_index = any(${textArray(filter.gearCategories)})`);
   }
   if (filter.armorCategories !== undefined && filter.armorCategories.length > 0) {
-    clauses.push(sql`equipment.armor_category = any(${filter.armorCategories})`);
+    clauses.push(sql`equipment.armor_category = any(${textArray(filter.armorCategories)})`);
   }
   if (filter.weaponCategories !== undefined && filter.weaponCategories.length > 0) {
-    clauses.push(sql`equipment.weapon_category = any(${filter.weaponCategories})`);
+    clauses.push(sql`equipment.weapon_category = any(${textArray(filter.weaponCategories)})`);
   }
   if (filter.weaponRanges !== undefined && filter.weaponRanges.length > 0) {
-    clauses.push(sql`equipment.weapon_range = any(${filter.weaponRanges})`);
+    clauses.push(sql`equipment.weapon_range = any(${textArray(filter.weaponRanges)})`);
   }
   if (filter.toolCategories !== undefined && filter.toolCategories.length > 0) {
-    clauses.push(sql`equipment.tool_category = any(${filter.toolCategories})`);
+    clauses.push(sql`equipment.tool_category = any(${textArray(filter.toolCategories)})`);
   }
   if (filter.vehicleCategories !== undefined && filter.vehicleCategories.length > 0) {
-    clauses.push(sql`equipment.vehicle_category = any(${filter.vehicleCategories})`);
+    clauses.push(sql`equipment.vehicle_category = any(${textArray(filter.vehicleCategories)})`);
   }
   if (filter.properties !== undefined && filter.properties.length > 0) {
-    clauses.push(sql`equipment.property_indexes && ${filter.properties}`);
+    clauses.push(sql`equipment.property_indexes && ${textArray(filter.properties)}`);
   }
   return clauses;
 };
@@ -432,7 +434,7 @@ export class EquipmentRepo extends Context.Service<
               select * from equipment
               where equipment.campaign_id is null
                 and equipment.account_id is null
-                and lower(equipment.name) = any(${[...wanted]})
+                and lower(equipment.name) = any(${textArray([...wanted])})
                 and ${libraryRowReadable(sql, "equipment", actor)}
               order by lower(equipment.name), equipment.id
             `,

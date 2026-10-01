@@ -33,6 +33,7 @@ import {
   fromColumns,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
@@ -416,7 +417,7 @@ export class Combatants extends Context.Service<
                       hp_max: payload.hpMax,
                       hp_current: payload.hpCurrent ?? hpMax,
                       ac: payload.ac,
-                      conditions: payload.conditions,
+                      conditions: textArray(payload.conditions),
                       visibility: payload.visibility,
                     }),
                   }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
@@ -451,7 +452,7 @@ export class Combatants extends Context.Service<
                     hp_current: patch.hpCurrent,
                     hp_max: patch.hpMax,
                     ac: patch.ac,
-                    conditions: patch.conditions,
+                    conditions: textArray(patch.conditions),
                     visibility: patch.visibility,
                   });
                   const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(

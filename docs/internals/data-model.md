@@ -61,9 +61,13 @@ The one survivor that pointed back into the campaign is a character a player kep
 
 ## Driver shapes
 
-- `encounter.tags` is `text[]`, not a join table. A bare JS array interpolated into a `sql` template is one bind parameter that `pg` serialises to an array literal. `sql.in(...)` expands an array into `(?, ?, ?)` and is for id lists (`Recap.ts`), not here.
-- `pg` returns `numeric` as a string, so `creature.cr_sort` is `double precision`; every rating is an integer or 1/8, 1/4, 1/2, all exact in binary. `cr` stays the string the DM wrote and `cr_sort` is derived on write.
-- `session_event.seq` is a `bigint` from one global sequence and comes back as a string; `repo/SessionEvents.ts` narrows it once.
+The driver is `@effect/sql-pg`'s native client: binary results, prepared statements, and parameter types inferred from the JS value. Each rule below is a statement that fails, or a row that does not decode, without it.
+
+- `encounter.tags` is `text[]`, not a join table. **Every array a statement binds is a typed driver array** (`PgTypes.array`), through `uuidArray`, `textArray` or `intArray` in `repo/rows.ts`, the call site naming the element type of the column it meets. A bare JS array is typed from its elements, so a string array is `text[]` and `uuid = any($1)` refuses it, and an empty one cannot be typed and fails the statement before it is sent. `sql.in(...)` expands an array into `(?, ?, ?)` and is for id lists (`Recap.ts`), not here.
+- A `jsonb` value is written as `JSON.stringify(…)` (an untyped string Postgres reads as JSON). A plain object parameter is refused rather than serialised.
+- The driver returns `numeric` as a string, so `creature.cr_sort` is `double precision`; every rating is an integer or 1/8, 1/4, 1/2, all exact in binary. `cr` stays the string the DM wrote and `cr_sort` is derived on write.
+- `int8` comes back as a JS `bigint`, so no column the app reads is one. `session_event.seq`, the Chronicle's `group_seq` and `last_group_seq`, and both sequences behind them are `integer` (`0081`); an aggregate the wire reads is cast in SQL (`count(*)::int`).
+- `src/pgTypes.ts` registers a codec for `tsvector`, which the driver has none for: it would decode the binary as UTF-8, fail, and close the connection, so every `select *` over a searchable table needs it. Every client that reads the schema takes that registry, the test harness's included (`test/support/database.ts`).
 - One statement per `sql` call. The extended protocol rejects several in one query.
 
 ## Campaign search

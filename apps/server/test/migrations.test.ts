@@ -31,6 +31,7 @@ import initiativePhase from "../src/migrations/0066_initiative_phase.js";
 import noteCategoryPin from "../src/migrations/0068_note_category_pin.js";
 import npcLinks from "../src/migrations/0074_npc_links.js";
 import encounterOrder from "../src/migrations/0078_encounter_order.js";
+import integerSequences from "../src/migrations/0081_integer_sequences.js";
 import { freshDatabase } from "./support/database.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -83,6 +84,8 @@ const noteDatabase = freshDatabase("taverns_test_migrations_note");
 const noteLinkDatabase = freshDatabase("taverns_test_migrations_note_link");
 /** A nineteenth, for encounters made before the DM could put them in order. */
 const orderDatabase = freshDatabase("taverns_test_migrations_order");
+/** A twentieth, for a log and a Chronicle numbered by `bigint` sequences. */
+const sequencesDatabase = freshDatabase("taverns_test_migrations_sequences");
 
 /**
  * A campaign as the clean baseline requires one: its group, the owner's
@@ -350,6 +353,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 78, name: "encounter_order" },
         { migration_id: 79, name: "shared_world_origin" },
         { migration_id: 80, name: "assistant_turn_discard" },
+        { migration_id: 81, name: "integer_sequences" },
       ]);
     }),
   );
@@ -441,6 +445,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 78, name: "encounter_order" },
         { migration_id: 79, name: "shared_world_origin" },
         { migration_id: 80, name: "assistant_turn_discard" },
+        { migration_id: 81, name: "integer_sequences" },
       ]);
     }),
   );
@@ -1042,7 +1047,7 @@ describeLayer("adding source provenance after the starter bundle existed", sourc
             origin: "system",
             kind: "class",
             name: "Legacy Druid",
-            body: { hitDie: 8, unarmouredAc: ["DEX"] },
+            body: JSON.stringify({ hitDie: 8, unarmouredAc: ["DEX"] }),
             visibility: "shared",
           })}
         `;
@@ -1904,6 +1909,120 @@ describeLayer(
         expect(measured.shared).toContain("encounter_prep_campaign_position_key");
         expect(measured.negative).toContain("encounter_prep_position_nonnegative");
       }),
+    );
+  },
+);
+
+describeLayer(
+  "upgrading a database whose log and Chronicle count in bigint",
+  sequencesDatabase,
+  (it) => {
+    it.effect(
+      "keeps every number already handed out, carries on from it, and reads it as one",
+      () =>
+        Effect.gen(function* () {
+          const measured = yield* Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            yield* migrate;
+            // The shape `0005` and `0030` left: both sequences and the three columns
+            // they fill are `bigint`.
+            yield* sql`alter sequence session_event_seq as bigint`;
+            yield* sql`alter table session_event alter column seq type bigint`;
+            yield* sql`alter sequence group_history_seq as bigint`;
+            yield* sql`alter table group_history_entry alter column group_seq type bigint`;
+            yield* sql`alter table group_history_summary alter column last_group_seq type bigint`;
+
+            const account = (yield* sql<{ readonly id: string }>`
+          insert into account ${sql.insert({ name: "Jo", token_hash: "sequences-hash" })}
+          returning id
+        `)[0]!.id;
+            const campaign = yield* rawCampaign(sql, account, "The Salt Road");
+            const group = (yield* sql<{ readonly group_id: string }>`
+          select group_id from campaign where id = ${campaign}
+        `)[0]!.group_id;
+            const session = (yield* sql<{ readonly id: string }>`
+          insert into session ${sql.insert({ campaign_id: campaign, number: 1 })} returning id
+        `)[0]!.id;
+            const before = yield* sql<{ readonly seq: unknown }>`
+          insert into session_event ${sql.insert({ session_id: session, kind: "run-started" })}
+          returning seq
+        `;
+            const entryBefore = yield* sql<{ readonly group_seq: unknown }>`
+          insert into group_history_entry ${sql.insert({
+            group_id: group,
+            source_kind: "manual",
+            body: "The road was remembered.",
+          })}
+          returning group_seq
+        `;
+            yield* sql`
+          insert into group_history_summary ${sql.insert({
+            group_id: group,
+            status: "draft",
+            last_group_seq: 1,
+            text: "So far.",
+            origin: "authored",
+          })}
+        `;
+
+            yield* integerSequences;
+
+            const types = yield* sql<{ readonly column_name: string; readonly data_type: string }>`
+          select table_name || '.' || column_name as column_name, data_type
+          from information_schema.columns
+          where (table_name, column_name) in (
+            ('session_event', 'seq'),
+            ('group_history_entry', 'group_seq'),
+            ('group_history_summary', 'last_group_seq')
+          )
+          order by 1
+        `;
+            const sequences = yield* sql<{
+              readonly sequencename: string;
+              readonly data_type: string;
+            }>`
+          select sequencename, data_type::text as data_type from pg_sequences
+          where sequencename in ('session_event_seq', 'group_history_seq')
+          order by sequencename
+        `;
+            const kept = yield* sql<{ readonly seq: unknown }>`select seq from session_event`;
+            const after = yield* sql<{ readonly seq: unknown }>`
+          insert into session_event ${sql.insert({ session_id: session, kind: "run-ended" })}
+          returning seq
+        `;
+            const entryAfter = yield* sql<{ readonly group_seq: unknown }>`
+          insert into group_history_entry ${sql.insert({
+            group_id: group,
+            source_kind: "manual",
+            body: "And then the ford.",
+          })}
+          returning group_seq
+        `;
+            const summary = yield* sql<{ readonly last_group_seq: unknown }>`
+          select last_group_seq from group_history_summary
+        `;
+            return { types, sequences, before, kept, after, entryBefore, entryAfter, summary };
+          }).pipe(Effect.orDie);
+
+          expect(measured.types).toEqual([
+            { column_name: "group_history_entry.group_seq", data_type: "integer" },
+            { column_name: "group_history_summary.last_group_seq", data_type: "integer" },
+            { column_name: "session_event.seq", data_type: "integer" },
+          ]);
+          expect(measured.sequences).toEqual([
+            { sequencename: "group_history_seq", data_type: "integer" },
+            { sequencename: "session_event_seq", data_type: "integer" },
+          ]);
+          // The driver reads `int8` as a JS `bigint`; as `integer` these are numbers.
+          expect(typeof measured.before[0]?.seq).toBe("bigint");
+          const first = Number(measured.before[0]!.seq);
+          expect(measured.kept).toEqual([{ seq: first }]);
+          expect(measured.after[0]?.seq).toBe(first + 1);
+          expect(measured.entryAfter[0]?.group_seq).toBe(
+            Number(measured.entryBefore[0]!.group_seq) + 1,
+          );
+          expect(measured.summary).toEqual([{ last_group_seq: 1 }]);
+        }),
     );
   },
 );

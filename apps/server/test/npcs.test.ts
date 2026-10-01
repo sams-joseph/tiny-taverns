@@ -55,6 +55,7 @@ import {
   scriptedModel,
   textChunks,
   toolCallChunks,
+  toolCallsChunks,
 } from "./support/model.js";
 import { describeLayer } from "./support/suite.js";
 
@@ -1267,6 +1268,69 @@ describeLayer("npcs", shared, (it) => {
             status: "draft",
           });
         }),
+    );
+
+    it.effect("ends the reply on an offer whose arguments it cannot read", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // An empty memory is refused by the tool's own parameter schema. Since
+        // effect 4.0.0-rc.113 that refusal would be handed to the model as a tool
+        // result and the reply would go on; the agent keeps it where it has always
+        // been, before the call is drawn or answered (`assistant/toolArguments.ts`).
+        const { events, requests } = yield* rehearse(
+          fixture.dm,
+          fixture.campaign.id,
+          fixture.cazril.id,
+          {
+            rounds: [
+              toolCallChunks("proposeNpcMemory", { body: "" }),
+              textChunks("I will keep that ready for your review."),
+            ],
+          },
+        );
+
+        expect(requests).toHaveLength(1);
+        expect(events.some((event) => event.event === "tool")).toBe(false);
+        expect(proposalsIn(events)).toEqual([]);
+        expect(apologies(events)).toHaveLength(1);
+      }),
+    );
+
+    it.effect("offers nothing from a reply when any of its calls cannot be read", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        // A readable beat and an unreadable memory in one response: the reply ends
+        // before either is drawn or run, so nothing is offered for review.
+        const { events, requests } = yield* rehearse(
+          fixture.dm,
+          fixture.campaign.id,
+          fixture.cazril.id,
+          {
+            rounds: [
+              toolCallsChunks([
+                {
+                  name: "proposeCampaignBeat",
+                  params: { body: "Mara paid Cazril in pearls." },
+                  id: "call_beat",
+                },
+                { name: "proposeNpcMemory", params: { body: "" }, id: "call_memory" },
+              ]),
+              textChunks("I will keep that ready for your review."),
+            ],
+          },
+        );
+
+        expect(requests).toHaveLength(1);
+        expect(events.some((event) => event.event === "tool")).toBe(false);
+        expect(proposalsIn(events)).toEqual([]);
+        expect(apologies(events)).toHaveLength(1);
+        const stored = yield* Effect.flatMap(NpcProposals, (repo) =>
+          repo.list(fixture.creator, fixture.cazril.id),
+        );
+        expect(
+          stored.filter((proposal) => JSON.stringify(proposal).includes("paid Cazril in pearls")),
+        ).toEqual([]);
+      }),
     );
 
     it.effect(

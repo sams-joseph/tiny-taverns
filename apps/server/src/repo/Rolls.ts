@@ -22,6 +22,7 @@ import {
   defined,
   dieOnSqlError,
   fromColumns,
+  intArray,
   orNotFound,
   timestampColumns,
 } from "./rows.js";
@@ -296,8 +297,8 @@ export class Rolls extends Context.Service<
                         character_id: payload.characterId,
                         label: payload.label,
                         notation: payload.notation,
-                        dice: payload.dice,
-                        kept: payload.kept,
+                        dice: intArray(payload.dice),
+                        kept: intArray(payload.kept),
                         modifier: payload.modifier,
                         total: payload.total,
                         mode: payload.mode,

@@ -89,7 +89,7 @@ const ThreadRow = classFromColumns(
 
 /**
  * An `assistant_turn` row as the wire reads it: `text` is `body`, and
- * `proposal` is the `jsonb` document the pg driver has already parsed.
+ * `proposal` is the `jsonb` document the driver has already parsed.
  */
 const TurnRow = classFromColumns(
   HobTurn,

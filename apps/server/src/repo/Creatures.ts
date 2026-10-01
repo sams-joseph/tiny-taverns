@@ -24,6 +24,7 @@ import {
   likeContains,
   orNotFound,
   setClause,
+  textArray,
   timestampColumns,
 } from "./rows.js";
 import {
@@ -132,7 +133,7 @@ const textIn = (
   values: ReadonlyArray<string> | undefined,
 ): Statement.Fragment | undefined => {
   const choices = normalized(values);
-  return choices.length === 0 ? undefined : sql`lower(${column}) = any(${choices})`;
+  return choices.length === 0 ? undefined : sql`lower(${column}) = any(${textArray(choices)})`;
 };
 
 const arrayOverlaps = (
@@ -141,7 +142,7 @@ const arrayOverlaps = (
   values: ReadonlyArray<string> | undefined,
 ): Statement.Fragment | undefined => {
   const choices = normalized(values);
-  return choices.length === 0 ? undefined : sql`${column} && ${choices}`;
+  return choices.length === 0 ? undefined : sql`${column} && ${textArray(choices)}`;
 };
 
 const narrowedBy = (
@@ -155,7 +156,7 @@ const narrowedBy = (
   if (filter.environments !== undefined && filter.environments.length > 0) {
     // `&&` is array overlap: matches if the creature lives in any of them,
     // which is what a row of toggles means.
-    clauses.push(sql`creature.environments && ${filter.environments}`);
+    clauses.push(sql`creature.environments && ${textArray(filter.environments)}`);
   }
   if (filter.crMin !== undefined) clauses.push(sql`creature.cr_sort >= ${filter.crMin}`);
   if (filter.crMax !== undefined) clauses.push(sql`creature.cr_sort <= ${filter.crMax}`);
@@ -340,11 +341,11 @@ const orderingsOf = (sql: SqlClient.SqlClient): Record<CreatureSort, Ordering<Cr
 /**
  * The stat block on its way into a `jsonb` column, as text.
  *
- * Stringified rather than handed over as an object, because the same insert
- * also carries `environments`, a real `text[]`: a bare JS array becomes one
- * bind parameter that `pg` serialises to a Postgres *array literal*, and being
- * explicit about which of the two structured columns is which is cheaper than
- * remembering the rule at each call site.
+ * Stringified rather than handed over as an object: the driver refuses a plain
+ * object parameter, and the same insert also carries `environments`, a real
+ * `text[]` bound through `textArray`. Being explicit about which of the two
+ * structured columns is which is cheaper than remembering the rule at each
+ * call site.
  */
 const encodeStatBlock = (statBlock: StatBlock): string => JSON.stringify(statBlock);
 
@@ -640,12 +641,12 @@ export class Creatures extends Context.Service<
                   cr_sort: payload.crSort ?? crSortFor(payload.cr),
                   ac: payload.ac,
                   hp: payload.hp,
-                  environments: payload.environments,
-                  damage_vulnerabilities: payload.damageVulnerabilities,
-                  damage_resistances: payload.damageResistances,
-                  damage_immunities: payload.damageImmunities,
-                  condition_immunities: payload.conditionImmunities,
-                  movement_modes: payload.movementModes,
+                  environments: textArray(payload.environments),
+                  damage_vulnerabilities: textArray(payload.damageVulnerabilities),
+                  damage_resistances: textArray(payload.damageResistances),
+                  damage_immunities: textArray(payload.damageImmunities),
+                  condition_immunities: textArray(payload.conditionImmunities),
+                  movement_modes: textArray(payload.movementModes),
                   spellcaster: payload.spellcaster,
                   legendary: payload.legendary,
                   body: payload.statBlock && encodeStatBlock(payload.statBlock),
@@ -667,12 +668,12 @@ export class Creatures extends Context.Service<
                 cr_sort: patch.crSort ?? (patch.cr === undefined ? undefined : crSortFor(patch.cr)),
                 ac: patch.ac,
                 hp: patch.hp,
-                environments: patch.environments,
-                damage_vulnerabilities: patch.damageVulnerabilities,
-                damage_resistances: patch.damageResistances,
-                damage_immunities: patch.damageImmunities,
-                condition_immunities: patch.conditionImmunities,
-                movement_modes: patch.movementModes,
+                environments: textArray(patch.environments),
+                damage_vulnerabilities: textArray(patch.damageVulnerabilities),
+                damage_resistances: textArray(patch.damageResistances),
+                damage_immunities: textArray(patch.damageImmunities),
+                condition_immunities: textArray(patch.conditionImmunities),
+                movement_modes: textArray(patch.movementModes),
                 spellcaster: patch.spellcaster,
                 legendary: patch.legendary,
                 body: patch.statBlock && encodeStatBlock(patch.statBlock),

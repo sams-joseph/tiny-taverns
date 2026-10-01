@@ -9,7 +9,7 @@ import {
 } from "@taverns/api";
 import { Effect, Schema, Struct } from "effect";
 import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect/unstable/sql";
-import { fromColumns } from "./rows.js";
+import { fromColumns, uuidArray } from "./rows.js";
 import type { Vocabulary } from "./visibility.js";
 
 /**
@@ -88,7 +88,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
               select id, name, level, school_name, ritual, concentration, casting_time,
                      spell_range, body
               from spell
-              where id = any(${ids})
+              where id = any(${uuidArray(ids)})
                 and ${vocabulary("spell")}
                 and (level = 0 or level <= ${highest})
                 and ${

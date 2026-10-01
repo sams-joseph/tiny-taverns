@@ -440,14 +440,14 @@ describeLayer(
                 readonly account_id: string;
                 readonly origin: string;
                 readonly assistant_turn_id: string | null;
-                readonly seats: string;
-                readonly portraits: string;
+                readonly seats: number;
+                readonly portraits: number;
               }>`
         select character.account_id, character.origin, character.assistant_turn_id,
                (select count(*) from campaign_character
-                where campaign_character.character_id = character.id) as seats,
+                where campaign_character.character_id = character.id)::int as seats,
                (select count(*) from character_portrait
-                where character_portrait.character_id = character.id) as portraits
+                where character_portrait.character_id = character.id)::int as portraits
         from character where character.id = ${accepted.character.id}
       `,
             );
@@ -456,8 +456,8 @@ describeLayer(
                 account_id: fresh.actor.accountId,
                 origin: "assistant",
                 assistant_turn_id: turnId,
-                seats: "0",
-                portraits: "1",
+                seats: 0,
+                portraits: 1,
               },
             ]);
 

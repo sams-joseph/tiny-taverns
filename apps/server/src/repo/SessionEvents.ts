@@ -31,17 +31,11 @@ import {
 
 /**
  * A `session_event` row as the wire reads it, decoded off `session_event.*`
- * by `SqlSchema`.
- *
- * `seq` is a `bigint`, and therefore a **string** off the wire: `pg` hands
- * back `int8` as text to protect a precision JavaScript cannot hold — the same
- * reason `creature.cr_sort` is `double precision` rather than `numeric`. Here
- * the width is genuinely wanted (it is a sequence that only ever climbs) and
- * the value is nowhere near 2^53, so the decode narrows it once, here.
+ * by `SqlSchema`. `seq` is an `integer` column (`0081`), so it reads as the
+ * wire's number with no decode of its own.
  */
 const SessionEventRow = classFromColumns(SessionEvent, {
   ...SessionEvent.fields,
-  seq: Schema.NumberFromString.pipe(Schema.decodeTo(SessionEvent.fields.seq)),
   ...timestampColumns,
 });
 

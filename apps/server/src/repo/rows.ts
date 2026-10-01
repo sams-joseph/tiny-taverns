@@ -1,5 +1,6 @@
+import { PgTypes } from "@effect/sql-pg";
 import { type AssistantTurnId, NotFound } from "@taverns/api";
-import { type Cause, Effect, Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { type Cause, Effect, Result, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import type { SqlClient, Statement } from "effect/unstable/sql";
 
@@ -136,6 +137,43 @@ export const timestampColumns = {
   createdAt: Schema.DateTimeUtcFromDate,
   updatedAt: Schema.DateTimeUtcFromDate,
 } as const;
+
+/**
+ * A JS array as a statement parameter, typed by the driver's own `PgTypes.array`
+ * with the element type the call site names: `uuidArray` beside a `uuid`
+ * column, `textArray` beside `text` or a `text[]` column, `intArray` beside
+ * `integer` or an `integer[]` one.
+ *
+ * The driver types a raw JS array from its elements: a string array binds as
+ * `text[]`, which `uuid = any($1)` refuses (`operator does not exist: uuid =
+ * text`), and an empty one cannot be typed at all, so the statement fails before
+ * it is sent. A typed array carries its own OID, so an empty array is an empty
+ * array of that type and `unnest` reads it with no cast. Elements go over the
+ * wire in binary, so nothing in a value needs escaping. Every array a statement
+ * binds goes through one of these.
+ *
+ * `undefined` stays `undefined`, so a patch's absent column is still dropped by
+ * {@link defined}.
+ */
+const typedArray = <Element>(elementOid: number) => {
+  function param(values: ReadonlyArray<Element | null>): PgTypes.Parameter;
+  function param(values: ReadonlyArray<Element | null> | undefined): PgTypes.Parameter | undefined;
+  function param(values: ReadonlyArray<Element | null> | undefined): PgTypes.Parameter | undefined {
+    // `PgTypes.array` fails only for an element OID with no array type, and
+    // every OID here is one of the driver's built-ins.
+    return values === undefined ? undefined : Result.getOrThrow(PgTypes.array(values, elementOid));
+  }
+  return param;
+};
+
+/** A `uuid[]` parameter: ids, compared with `= any(…)` or written to a `uuid[]`. */
+export const uuidArray = typedArray<string>(PgTypes.OID.uuid);
+
+/** A `text[]` parameter. */
+export const textArray = typedArray<string>(PgTypes.OID.text);
+
+/** An `integer[]` parameter. */
+export const intArray = typedArray<number>(PgTypes.OID.int4);
 
 /**
  * `SqlSchema.findOne`'s "no row" as the domain's refusal.
