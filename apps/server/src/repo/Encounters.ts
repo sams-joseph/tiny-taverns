@@ -130,8 +130,8 @@ const Columns = Schema.toType(Schema.Record(Schema.String, Schema.Unknown));
 /**
  * The prep's columns from a payload. The documents go in as JSON text, which
  * Postgres casts to `jsonb` on the way in — `Creatures.ts`'s rule, and here for
- * the same reason: a bare JS array bound to a statement becomes a Postgres
- * array literal. Each line is trimmed, as the treasure is; the wire has
+ * the same reason: the driver binds a bare JS array as a Postgres array, not
+ * as JSON. Each line is trimmed, as the treasure is; the wire has
  * already refused a blank one.
  */
 const prepColumns = (payload: {
