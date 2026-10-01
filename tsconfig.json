@@ -1,14 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "compilerOptions": {
-    "strict": true,
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  },
   "include": [],
-  "exclude": ["node_modules", "dist"]
+  "references": [
+    { "path": "tsconfig.packages.json" },
+    { "path": "tsconfig.tests.json" }
+  ]
 }
