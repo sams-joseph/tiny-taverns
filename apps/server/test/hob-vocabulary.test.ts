@@ -310,7 +310,8 @@ const toolNames = (request: ChatRequest | undefined): ReadonlyArray<string> =>
  */
 const enumOf = (request: ChatRequest | undefined, tool: string, parameter: string) => {
   const parameters = toolNamed(request, tool)?.parameters as
-    { readonly properties?: Record<string, { readonly enum?: ReadonlyArray<string> }> } | undefined;
+    | { readonly properties?: Record<string, { readonly enum?: ReadonlyArray<string> }> }
+    | undefined;
   return parameters?.properties?.[parameter]?.enum;
 };
 

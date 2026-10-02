@@ -8,7 +8,7 @@ import type { HobArtifact, HobContextChip, HobStarter, HobTurn } from "./transcr
  * `ChatPanel.jsx`'s `SEED` and `REPLIES`, and the artifact bodies are the
  * hard-coded ones in `ChatParts.jsx`. Copied here rather than imported, because
  * that package is the designers' artefact — vendored byte for byte, outside its
- * own `exports` map, and ESLint forbids reaching into `ui_kits/`.
+ * own `exports` map, and oxlint forbids reaching into `ui_kits/`.
  *
  * **Only the first three are wired into the running app.** The thread is a
  * specimen: it is what the tests assert against.

@@ -57,7 +57,13 @@ import { TabRow, type Collapse } from "../shell/TabRow";
  * composer replaced by the reason.
  */
 type NpcTab =
-  "profile" | "stats" | "rehearsal" | "knowledge" | "memory" | "awareness" | "proposals";
+  | "profile"
+  | "stats"
+  | "rehearsal"
+  | "knowledge"
+  | "memory"
+  | "awareness"
+  | "proposals";
 
 const NPC_TABS: ReadonlyArray<{
   readonly id: NpcTab;

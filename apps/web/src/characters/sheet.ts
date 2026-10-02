@@ -205,7 +205,13 @@ export type DrawnSheet = SheetBody &
   Partial<Pick<CharacterSheet, "notes" | "journal" | "story" | "levelUps">>;
 
 export type SheetSectionId =
-  "abilities" | "actions" | "magic" | "features" | "gear" | "story" | "log";
+  | "abilities"
+  | "actions"
+  | "magic"
+  | "features"
+  | "gear"
+  | "story"
+  | "log";
 
 export interface SheetSectionSpec {
   readonly id: SheetSectionId;

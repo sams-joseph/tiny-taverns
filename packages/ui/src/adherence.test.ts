@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * The designers' adherence rules, checked at the level ESLint cannot reach.
+ * The designers' adherence rules, checked at the level oxlint cannot reach.
  *
- * `packages/eslint-config/design-system.js` catches raw hex and raw px in
+ * `packages/oxlint-config/design-system.json` catches raw hex and raw px in
  * TypeScript. These tests cover the CSS — where the same rules matter most,
  * because the theme bridge is the one place a value could quietly be restated
  * instead of referenced — plus the two structural guarantees the port rests on.

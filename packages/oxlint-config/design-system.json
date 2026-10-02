@@ -1,0 +1,74 @@
+// Design-system adherence rules.
+//
+// The designers shipped these as oxlint config (`_adherence.oxlintrc.json`, kept in
+// `packages/design-system/` for the record). Three of the four original rule groups carry
+// over with the designers' esquery selectors:
+//
+//   1. no raw hex colours     -> use a token from tokens/colors.css
+//   2. no raw px literals     -> use a token, or a Tailwind scale step
+//   3. no component internals -> import from the package root
+//
+// oxlint has no native `no-restricted-syntax`, so the selectors run through
+// `taverns/no-restricted-syntax` (`no-restricted-syntax.js`, ESLint's rule as a JS plugin).
+//
+// The fourth group (per-component prop and variant whitelists, e.g. "<Badge> variant must
+// be one of ...") is deliberately not ported: those rules exist to give a JavaScript
+// design system the checking a type system gives for free. Here the components are
+// TypeScript with `cva` variant unions, so `tsc` already rejects an unknown prop or an
+// invalid variant, with a better message and at the call site.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["./no-restricted-syntax.js"],
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx,js,jsx}"],
+      "rules": {
+        "taverns/no-restricted-syntax": [
+          "error",
+          {
+            "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+            "message": "Raw hex colour. Use a design-system colour token — see packages/design-system/tokens/colors.css, bridged to Tailwind in packages/ui/src/styles.css."
+          },
+          {
+            "selector": "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]",
+            "message": "Raw hex colour. Use a design-system colour token — see packages/design-system/tokens/colors.css, bridged to Tailwind in packages/ui/src/styles.css."
+          },
+          {
+            "selector": "Literal[value=/\\b\\d+px\\b/]",
+            "message": "Raw px literal. Use a design-system token (h-control, p-card, rounded-card, …) or a Tailwind spacing step."
+          },
+          {
+            "selector": "TemplateElement[value.raw=/\\b\\d+px\\b/]",
+            "message": "Raw px literal. Use a design-system token (h-control, p-card, rounded-card, …) or a Tailwind spacing step."
+          },
+          {
+            "selector": "Literal[value=/font-family\\s*:/i]",
+            "message": "Font family set by hand. Use --font-display / --font-serif / --font-sans / --font-mono, or the font-* utilities."
+          },
+          {
+            "selector": "TemplateElement[value.raw=/font-family\\s*:/i]",
+            "message": "Font family set by hand. Use --font-display / --font-serif / --font-sans / --font-mono, or the font-* utilities."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@taverns/ui/src/**", "@taverns/ui/dist/**", "@taverns/ui/components/**"],
+                "message": "Import components from '@taverns/ui', not from package internals."
+              },
+              {
+                "group": [
+                  "@taverns/design-system/components/**",
+                  "@taverns/design-system/ui_kits/**"
+                ],
+                "message": "Those are the designers' prototypes — the visual specification, not shippable code. Import the real component from '@taverns/ui'."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -77,7 +77,8 @@ const SEARCH_SETTLE_MS = 250;
  * `LibraryFilter`), so the picker is one list over either.
  */
 export type BestiaryScope =
-  { readonly kind: "campaign"; readonly campaignId: CampaignId } | { readonly kind: "library" };
+  | { readonly kind: "campaign"; readonly campaignId: CampaignId }
+  | { readonly kind: "library" };
 
 /**
  * One page of the reachable bestiary, keyed on where it is read from, the

@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": [
+    "../../packages/oxlint-config/react.json",
+    "../../packages/oxlint-config/design-system.json",
+    "../../packages/oxlint-config/shadcn.json"
+  ],
+  "settings": {
+    "shadcn": {
+      // The rules name the stylesheet they read; ours only imports the theme.
+      "note": "Our theme is bridged in packages/ui/src/styles.css from the read-only packages/design-system tokens; a value the delivery lacks goes in packages/ui/src/local-tokens.css. See docs/internals/design-system.md."
+    }
+  },
+  "ignorePatterns": ["vite.config.ts", "vitest.setup.ts", "src/routeTree.gen.ts"],
+  "overrides": [
+    {
+      // The Playwright suite runs in Node and measures pixels: a `2000px` spacer is a
+      // probe rather than styling, and a fixture's `use` is Playwright's, not React's.
+      "files": ["e2e/**/*.ts"],
+      "rules": { "taverns/no-restricted-syntax": "off", "react/rules-of-hooks": "off" }
+    }
+  ]
+}

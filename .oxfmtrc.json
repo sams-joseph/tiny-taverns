@@ -1,0 +1,28 @@
+// Prettier's style, as the repo has always been formatted. oxfmt's own default sorts
+// package.json fields; that stays off so manifests keep the order they are written in.
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "coverage",
+    ".turbo",
+    "pnpm-lock.yaml",
+    ".claude",
+    ".repos",
+    // Agents' and gate runs' throwaway files.
+    ".scratch",
+    // The designers' delivery, kept byte-for-byte (see packages/design-system/PORT-NOTES.md).
+    "packages/design-system",
+    // The @AGENTS.md pointer, kept in its exact two-line form by firstmate's fm-ensure-agents-md.sh.
+    "CLAUDE.md",
+    // Written by the router plugin (apps/web/src/router.ts), in its own formatting.
+    "apps/web/src/routeTree.gen.ts"
+  ]
+}

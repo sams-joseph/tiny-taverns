@@ -6,17 +6,17 @@ backend, sharing config and a component library across a pnpm + Turborepo worksp
 
 ## Stack
 
-| Concern         | Choice                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| Package manager | [pnpm](https://pnpm.io) workspaces                                                           |
-| Task runner     | [Turborepo](https://turborepo.dev)                                                           |
-| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)       |
-| Backend         | [Effect](https://effect.website) v4 HTTP server + `@effect/platform-node`                    |
-| Language        | TypeScript (`strict`, ESM everywhere)                                                        |
-| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens      |
-| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives              |
-| Lint / format   | ESLint (flat config) + Prettier                                                              |
-| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library), [Playwright](https://playwright.dev) |
+| Concern         | Choice                                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| Package manager | [pnpm](https://pnpm.io) workspaces                                                                    |
+| Task runner     | [Turborepo](https://turborepo.dev)                                                                    |
+| Frontend        | [Vite](https://vite.dev) + [React](https://react.dev) 19 SPA (TypeScript, client-only)                |
+| Backend         | [Effect](https://effect.website) v4 HTTP server + `@effect/platform-node`                             |
+| Language        | TypeScript (`strict`, ESM everywhere)                                                                 |
+| Styling         | [Tailwind](https://tailwindcss.com) v4 (`@theme`) bridged onto the design-system tokens               |
+| Components      | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives                       |
+| Lint / format   | [oxlint](https://oxc.rs/docs/guide/usage/linter) + [oxfmt](https://oxc.rs/docs/guide/usage/formatter) |
+| Tests           | [Vitest](https://vitest.dev) (+ React Testing Library), [Playwright](https://playwright.dev)          |
 
 ## Layout
 
@@ -33,7 +33,7 @@ taverns/
                          tokens/ is the SINGLE SOURCE OF TRUTH for every design value.
     ui/                  @taverns/ui — the 14 shadcn components, on Base UI
     tsconfig/            @taverns/tsconfig — shared tsconfig bases
-    eslint-config/       @taverns/eslint-config — shared flat ESLint config
+    oxlint-config/       @taverns/oxlint-config — shared oxlint config
   .repos/
     effect/              vendored upstream Effect source (read-only reference)
   compose.yaml           the local development database
@@ -47,8 +47,8 @@ taverns/
 purpose** (not gitignored) so the exact source matching our installed dependency travels
 with the repo. Nothing in it is built, linted, formatted, or installed: the
 `pnpm-workspace.yaml` globs are root-anchored (`apps/*`, `packages/*`) so they do not
-match `.repos/effect/packages/*`, and `.repos` is listed in `.prettierignore` and in the
-shared ESLint `ignores`.
+match `.repos/effect/packages/*`, `.repos` is listed in `.oxfmtrc.json`'s `ignorePatterns`,
+and oxlint runs only inside each package.
 
 `.repos/effect` is the [Effect](https://github.com/Effect-TS/effect) repo at tag
 `effect@4.0.0`, added as a squashed subtree so the v4 source is available
@@ -63,7 +63,7 @@ git subtree pull --squash -P .repos/effect https://github.com/Effect-TS/effect e
 Internal packages use the `@taverns/*` scope. `apps/web` really consumes `@taverns/ui` and
 `@taverns/design-system` (tokens, the Alegreya font files and the brand icons all resolve
 through normal Vite imports), plus the shared `@taverns/tsconfig` and
-`@taverns/eslint-config` packages — so the wiring is proven, not decorative.
+`@taverns/oxlint-config` packages — so the wiring is proven, not decorative.
 
 ## The design system
 
@@ -82,8 +82,8 @@ no toggle.
 files are the _visual specification_, not code to ship — see
 `packages/design-system/PORT-NOTES.md`.
 
-Two adherence rules from the designers are enforced in ESLint
-(`packages/eslint-config/design-system.js`): no raw hex colours or `px` literals in component
+Two adherence rules from the designers are enforced in oxlint
+(`packages/oxlint-config/design-system.json`): no raw hex colours or `px` literals in component
 code, and no importing component internals. `packages/ui/src/adherence.test.ts` extends the
 same checks to the CSS and asserts the structural guarantees (dark-only, Base-UI-only).
 
@@ -204,10 +204,10 @@ build order) and caches results.
 | ------------------- | --------------------------------------- |
 | `pnpm dev`          | Run every app's dev server (persistent) |
 | `pnpm build`        | Build all apps and packages             |
-| `pnpm lint`         | ESLint across the workspace             |
+| `pnpm lint`         | oxlint across the workspace             |
 | `pnpm typecheck`    | `tsc --noEmit` across the workspace     |
 | `pnpm test`         | Vitest across the workspace             |
-| `pnpm format`       | Format the repo with Prettier           |
+| `pnpm format`       | Format the repo with oxfmt              |
 | `pnpm format:check` | Verify formatting (used in CI)          |
 | `pnpm db:up`        | Start the development database          |
 | `pnpm db:down`      | Stop it, keeping the data               |

@@ -60,7 +60,7 @@ const landsOn = (path: string): { readonly at: string; readonly params: unknown 
   const leaf = matches[matches.length - 1];
   // `_splat` and `*` are the router's own bookkeeping on a splat match, not
   // something a screen reads; dropping them keeps these assertions about ids.
-  const { _splat, "*": _star, ...params } = leaf?.params as Record<string, unknown>;
+  const { _splat, "*": _star, ...params } = (leaf?.params ?? {}) as Record<string, unknown>;
   // The full path rather than the id: the id carries the pathless layout the
   // route sits in (`/_shell/…`), and these assertions are about where a link
   // lands, not which layout draws it.

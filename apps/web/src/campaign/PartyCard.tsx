@@ -83,7 +83,8 @@ export function PartyCard(
     readonly party: ReadonlyArray<PartySeat>;
     readonly campaignId: CampaignId;
   } & (
-    { readonly audience: "creator"; readonly playerCount: number } | { readonly audience: "player" }
+    | { readonly audience: "creator"; readonly playerCount: number }
+    | { readonly audience: "player" }
   ),
 ) {
   const { party, campaignId } = props;

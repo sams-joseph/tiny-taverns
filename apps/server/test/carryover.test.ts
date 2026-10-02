@@ -368,7 +368,7 @@ describeLayer("carryover", shared, (it) => {
         const resumedEvent = log.find((row) => row.kind === "run-resumed");
         expect(resumedEvent?.encounterRunId).toEqual(resumed.id);
         expect(
-          (resumedEvent?.payload as { readonly continuedFrom?: string }).continuedFrom,
+          (resumedEvent?.payload as { readonly continuedFrom?: string } | undefined)?.continuedFrom,
         ).toEqual(run.id);
       }),
     );

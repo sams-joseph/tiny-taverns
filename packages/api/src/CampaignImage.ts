@@ -43,7 +43,10 @@ export interface CampaignImageOptions {
 }
 
 const clean = (text: string | null | undefined, max = LABEL_MAX): string | undefined => {
-  const trimmed = (text ?? "").replace(/\s+/g, " ").replace(/["“”]/g, "").trim();
+  const trimmed = (text ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/["“”]/g, "")
+    .trim();
   return trimmed === "" ? undefined : trimmed.slice(0, max).trim();
 };
 

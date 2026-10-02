@@ -35,7 +35,14 @@ const ignoreSection = () => undefined;
 
 /** Which of the sheet's dialogs is open. */
 type Editing =
-  "identity" | "start" | "bestiary" | "abilities" | "skills" | "spells" | "gear" | "remove";
+  | "identity"
+  | "start"
+  | "bestiary"
+  | "abilities"
+  | "skills"
+  | "spells"
+  | "gear"
+  | "remove";
 
 /**
  * An NPC's stats: **the character sheet's own document and its own section
