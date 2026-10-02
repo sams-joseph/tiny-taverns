@@ -32,6 +32,10 @@ export type CampaignActId = typeof CampaignActId.Type;
 export const CharacterId = id("CharacterId");
 export type CharacterId = typeof CharacterId.Type;
 
+/** One level a character gained through a level-up (`character_advancement`). */
+export const CharacterAdvancementId = id("CharacterAdvancementId");
+export type CharacterAdvancementId = typeof CharacterAdvancementId.Type;
+
 export const NoteId = id("NoteId");
 export type NoteId = typeof NoteId.Type;
 

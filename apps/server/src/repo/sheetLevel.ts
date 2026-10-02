@@ -19,6 +19,7 @@ import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect
 import { optionDetailsReader } from "../ruleset/vocabularies.js";
 import { OptionRow } from "./Options.js";
 import { fromColumns, uuidArray } from "./rows.js";
+import { spellMode } from "./Spells.js";
 import { libraryRowReadable, type Vocabulary } from "./visibility.js";
 
 /**
@@ -61,7 +62,16 @@ export const recomputeForLevel = <Body extends SheetBody>(
     readonly race: string | null;
     readonly subrace: string | null;
     /** The level and class the body was written at — what a stored number is compared with. */
-    readonly from: { readonly level: number | null; readonly className: string | null };
+    readonly from: {
+      readonly level: number | null;
+      readonly className: string | null;
+      /**
+       * The sheet as its stored numbers were written, when more than the level
+       * moved with it: a level-up's ability score increase or new expertise
+       * (`repo/Advancement.ts`). Absent, it is `body` itself.
+       */
+      readonly body?: SheetBody | undefined;
+    };
     readonly vocabulary: Vocabulary;
     /** Who writes: a derived weapon line may name their own Library's row, as the Gear picker offers it. */
     readonly actor: Actor;
@@ -112,6 +122,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
             ...sources,
             classOption: formerOption,
             level: Math.max(1, input.from.level ?? 1),
+            abilities: input.from.body?.abilities ?? body.abilities,
           });
 
     const weaponIds = [
@@ -147,7 +158,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
             `,
           })(weaponIds);
 
-    const leveled = withLevel(body, { from, to, equipment });
+    const leveled = withLevel(body, { from, to, equipment, written: input.from.body });
     return yield* withKnownSpellsAt(sql, {
       body: leveled,
       level,
@@ -206,8 +217,12 @@ const LevelEquipmentRow = fromColumns(KitEquipment);
  * The known spells at the new level, and their lines: kept while the class
  * (or subclass) list still reaches them at `highest` in this vocabulary, and
  * every derived spell line written again from the kept ones at the casting
- * numbers `withLevel` just moved. An aside left holding only an empty list —
- * a class that no longer casts — goes.
+ * numbers `withLevel` just moved — a cantrip's, a prepared spell's, and every
+ * spell a known caster knows, as the picker draws them (`spellMode`). A spell
+ * a level-up learned past the list (`SpellKnown.learnedBy`: *Magical
+ * Secrets*, *Mystic Arcanum*) is kept while the vocabulary has it, whatever
+ * the list and the slots say. An aside left holding only an empty list — a
+ * class that no longer casts — goes.
  */
 const withKnownSpellsAt = <Body extends SheetBody>(
   sql: SqlClient.SqlClient,
@@ -224,8 +239,22 @@ const withKnownSpellsAt = <Body extends SheetBody>(
     const knownIds = (body.spellcasting?.known ?? []).flatMap((spell) =>
       spell.spellId === undefined || spell.spellId === null ? [] : [spell.spellId],
     );
+    const learnedIds = (body.spellcasting?.known ?? []).flatMap((spell) =>
+      spell.learnedBy === undefined || spell.spellId === undefined || spell.spellId === null
+        ? []
+        : [spell.spellId],
+    );
     const subclassName = present(body.identity?.subclass);
     const onClassList = sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${className}))`;
+    const onList = sql.and([
+      sql`(level = 0 or level <= ${highest})`,
+      subclassName === undefined
+        ? onClassList
+        : sql.or([
+            onClassList,
+            sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
+          ]),
+    ]);
     const spellRows =
       knownIds.length === 0
         ? []
@@ -238,18 +267,15 @@ const withKnownSpellsAt = <Body extends SheetBody>(
               from spell
               where id = any(${uuidArray(ids)})
                 and ${vocabulary("spell")}
-                and (level = 0 or level <= ${highest})
                 and ${
-                  subclassName === undefined
-                    ? onClassList
-                    : sql.or([
-                        onClassList,
-                        sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
-                      ])
+                  learnedIds.length === 0
+                    ? onList
+                    : sql.or([onList, sql`id = any(${uuidArray(learnedIds)})`])
                 }
             `,
           })(knownIds);
     const spellById = new Map(spellRows.map((row) => [row.id, row]));
+    const drawsKnown = spellMode(className) === "known";
     const keptKnown = (body.spellcasting?.known ?? []).filter(
       (spell) =>
         spell.spellId !== undefined && spell.spellId !== null && spellById.has(spell.spellId),
@@ -258,7 +284,14 @@ const withKnownSpellsAt = <Body extends SheetBody>(
       if (known.spellId === undefined || known.spellId === null) return [];
       const row = spellById.get(known.spellId);
       if (row === undefined) return [];
-      if (row.level > 0 && known.prepared !== true) return [];
+      if (
+        row.level > 0 &&
+        known.prepared !== true &&
+        !drawsKnown &&
+        known.learnedBy === undefined
+      ) {
+        return [];
+      }
       return [
         spellActionFor(
           { spell: row },

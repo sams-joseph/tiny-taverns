@@ -16,6 +16,7 @@ import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Acts } from "../src/repo/Acts.js";
+import { Advancement } from "../src/repo/Advancement.js";
 import { Beats } from "../src/repo/Beats.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { CampaignStories } from "../src/repo/CampaignStories.js";
@@ -31,6 +32,7 @@ import { Invites } from "../src/repo/Invites.js";
 import { LibraryShares } from "../src/repo/LibraryShares.js";
 import { Memberships } from "../src/repo/Memberships.js";
 import { Notes } from "../src/repo/Notes.js";
+import { Options } from "../src/repo/Options.js";
 import { NpcPreps } from "../src/repo/NpcPrep.js";
 import { NpcSheets } from "../src/repo/NpcSheets.js";
 import { Npcs } from "../src/repo/Npcs.js";
@@ -61,6 +63,7 @@ import { describeLayer } from "./support/suite.js";
 const live = LiveEvents.layer;
 const services = Layer.mergeAll(
   Accounts.layer,
+  Advancement.layer.pipe(Layer.provide(live)),
   Beats.layer.pipe(Layer.provide(live)),
   CampaignCreatorActors.layer,
   Campaigns.layer,
@@ -77,6 +80,7 @@ const services = Layer.mergeAll(
   Memberships.layer,
   Notes.layer,
   Npcs.layer,
+  Options.layer,
   Party.layer.pipe(Layer.provide(live)),
   Proposals.layer.pipe(
     Layer.provide([
@@ -118,6 +122,17 @@ const refusal = <E, R>(effect: Effect.Effect<unknown, E, R>) =>
 const query = <A extends object>(
   build: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>,
 ) => Effect.flatMap(SqlClient.SqlClient, build).pipe(Effect.orDie);
+
+/** The levels a character's level-up records reached. */
+const levelUpsOf = (characterId: string) =>
+  Effect.map(
+    query(
+      (sql) => sql<{ readonly level: number }>`
+        select level from character_advancement where character_id = ${characterId} order by level
+      `,
+    ),
+    (rows) => rows.map((row) => row.level),
+  );
 
 const deleteCampaign = (actor: Actor, id: CampaignId) =>
   Effect.flatMap(Campaigns, (campaigns) => as(actor)(campaigns.deletePermanently(id)));
@@ -177,8 +192,9 @@ const rowsNamingGroup = (groupId: SharedWorldId) =>
  * A campaign with something in every drawer: a note, a played night with a
  * beat and a planned one, an encounter with a Library creature instanced onto
  * its roster, an NPC, the creator's Hob thread, an open invitation, a player
- * with a seated character, a character that player kept from a Hob draft at
- * this table, and a Chronicle entry the world accepted from it.
+ * with a seated character that has levelled up there, a character that player
+ * kept from a Hob draft at this table, and a Chronicle entry the world accepted
+ * from it.
  */
 const furnish = (creator: Actor, campaign: Campaign, worldId: SharedWorldId | undefined) =>
   Effect.gen(function* () {
@@ -223,7 +239,31 @@ const furnish = (creator: Actor, campaign: Campaign, worldId: SharedWorldId | un
     yield* invites.createForCampaign(proof, { label: "an open seat" });
 
     const player = yield* aPlayerAt(campaign.id, "Pim");
-    const seated = yield* aCharacterAt(campaign.id, player, { name: "Pell" });
+    // Pell is a Spellsword, Pim's own Library class, which the table's rules
+    // reach once Pell sits there, and has gained a level: a record that is
+    // Pell's, not the campaign's.
+    yield* as(accountWide(player))(
+      (yield* Options).libraryCreate({
+        kind: "class",
+        name: "Spellsword",
+        body: { hitDie: 8, unarmouredAc: ["DEX"] },
+      }),
+    );
+    const seated = yield* aCharacterAt(campaign.id, player, {
+      name: "Pell",
+      className: "Spellsword",
+      level: 1,
+      hpMax: 9,
+      sheet: { ...emptyCharacterSheet, abilities: [{ label: "CON", score: "12", modifier: "+1" }] },
+    });
+    const advancement = yield* Advancement;
+    const offer = yield* as(player)(advancement.offer(seated.character.id));
+    yield* as(player)(
+      advancement.levelUp(seated.character.id, {
+        expectedVersion: offer.version,
+        toLevel: offer.toLevel,
+      }),
+    );
 
     // A character Pim kept from a Hob draft at this table: the thread and the
     // turn are the campaign's, the character is Pim's.
@@ -435,6 +475,8 @@ describeLayer("permanent-delete", services, (it) => {
           // Hob drafted this one; the conversation it came from went with the table.
           { id: furnished.drafted.id, origin: "assistant", assistant_turn_id: null, seats: 0 },
         ]);
+        // Pell's level-up was Pell's, not the table's.
+        expect(yield* levelUpsOf(furnished.seated.character.id)).toEqual([2]);
       }),
     );
 
@@ -482,6 +524,18 @@ describeLayer("permanent-delete", services, (it) => {
         expect(yield* rowsNaming(shelved.id)).toEqual({});
         const archived = yield* Effect.flatMap(Memberships, (m) => as(ada)(m.mine("archived")));
         expect(archived.map((row) => row.campaign.id)).not.toContain(shelved.id);
+      }),
+    );
+
+    it.effect("leaves a character's level-ups for its own delete to take", () =>
+      Effect.gen(function* () {
+        const { furnished } = yield* Deleting;
+        const pell = furnished.seated.character.id;
+        expect(yield* levelUpsOf(pell)).toEqual([2]);
+        yield* Effect.flatMap(Characters, (characters) =>
+          as(furnished.player)(characters.removeOwn(pell)),
+        );
+        expect(yield* levelUpsOf(pell)).toEqual([]);
       }),
     );
   });

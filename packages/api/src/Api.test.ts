@@ -26,6 +26,7 @@ import { RuleArticle, RuleArticleLibraryCreate } from "./RuleArticle.js";
 import { Session, SessionCreate } from "./Session.js";
 import { SessionEvent } from "./SessionEvent.js";
 import { Spell, SpellCreate } from "./Spell.js";
+import { CharacterAdvancement, LevelUpPayload } from "./Advancement.js";
 
 /**
  * The runtime shape this file introspects.
@@ -183,10 +184,10 @@ describe("the API declaration", () => {
     // path that names an account.**
     //
     // Asserted as the path shape rather than as "only one endpoint has params",
-    // because that weaker form has already been outgrown twice. Seven endpoints
-    // take a parameter now — a character of the caller's own, six times, and
+    // because that weaker form has already been outgrown twice. Eight endpoints
+    // take a parameter now — a character of the caller's own, seven times, and
     // the campaign a new one goes into, which an insert has no row to derive.
-    // None of the seven is an account, and an `:accountId` appearing under `/me`
+    // None of the eight is an account, and an `:accountId` appearing under `/me`
     // would be the second answer to `members.list` that this test exists to
     // prevent, whether or not it arrived alone.
     const parameterised = endpointsOf(me as GroupShape).filter(
@@ -196,6 +197,7 @@ describe("the API declaration", () => {
       "characterSpells",
       "createCharacter",
       "deleteCharacter",
+      "levelUp",
       "levelUpOffer",
       "restCharacter",
       "spendCharacterResource",
@@ -205,6 +207,7 @@ describe("the API declaration", () => {
       "/me/campaigns/:campaignId/characters",
       "/me/characters/:characterId",
       "/me/characters/:characterId",
+      "/me/characters/:characterId/level-up",
       "/me/characters/:characterId/level-up",
       "/me/characters/:characterId/rest",
       "/me/characters/:characterId/spells",
@@ -428,6 +431,18 @@ describe("every content schema", () => {
     expect(fields).toContain("version");
     expect(fields).not.toContain("visibility");
     expect(fields).not.toContain("campaignId");
+  });
+
+  it("gives a level-up's payload no provenance: only an accept makes one the assistant's", () => {
+    // A confirmed level-up is `authored`; a kept Hob proposal is stamped by
+    // the server. A field here would let a client claim either.
+    const fields = Object.keys(LevelUpPayload.fields);
+    expect(fields).not.toContain("origin");
+    expect(fields).not.toContain("assistantTurnId");
+    // The record a level-up answers with carries the pair, like every accepted row.
+    expect(Object.keys(CharacterAdvancement.fields)).toEqual(
+      expect.arrayContaining(["origin", "assistantTurnId"]),
+    );
   });
 
   it("gives a player's note no visibility and no provenance", () => {

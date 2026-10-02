@@ -1,6 +1,14 @@
 import { Schema } from "effect";
 import { Ability, Trait } from "./Creature.js";
-import { AccountId, CharacterId, EquipmentId, FeatureId, RacialTraitId, SpellId } from "./Ids.js";
+import {
+  AccountId,
+  CharacterId,
+  EquipmentId,
+  FeatId,
+  FeatureId,
+  RacialTraitId,
+  SpellId,
+} from "./Ids.js";
 import { provenanceFields } from "./Provenance.js";
 
 /**
@@ -109,6 +117,14 @@ export const SpellKnown = Schema.Struct({
   /** `"Concentration · 1 min"` */
   note: Schema.optional(Schema.String),
   prepared: Schema.optional(Schema.Boolean),
+  /**
+   * Learned at a level-up past the class list's reach: *Magical Secrets* (a
+   * spell of any list) or *Mystic Arcanum* (a spell above the highest slot).
+   * The level recompute and the spell picker narrow the known list to what
+   * the class list reaches; a row with this mark is kept while the vocabulary
+   * still has the spell, because the list was never what reached it.
+   */
+  learnedBy: Schema.optional(Schema.Literals(["magicalSecrets", "mysticArcanum"])),
 });
 export type SpellKnown = typeof SpellKnown.Type;
 
@@ -316,13 +332,16 @@ export type DeathSaves = typeof DeathSaves.Type;
  * without the flag, which is what the player typed.
  *
  * `pick` marks a player's choice inside a granted feature (*Fighting Style:
- * Archery* under *Fighting Style*): it is kept while the feature that offered
- * it is still granted, and dropped with it on a level down.
+ * Archery* under *Fighting Style*, a feat taken in place of an *Ability Score
+ * Improvement*): it is kept while the feature that offered it is still
+ * granted, and dropped with it on a level down. `featId` names the feat a
+ * line was taken as.
  */
 export const SheetFeature = Schema.Struct({
   ...Trait.fields,
   featureId: Schema.optional(Schema.NullOr(FeatureId)),
   racialTraitId: Schema.optional(Schema.NullOr(RacialTraitId)),
+  featId: Schema.optional(Schema.NullOr(FeatId)),
   derived: Schema.optional(Schema.Boolean),
   pick: Schema.optional(Schema.Struct({ offeredBy: FeatureId })),
 });

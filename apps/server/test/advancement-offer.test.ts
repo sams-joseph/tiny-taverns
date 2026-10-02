@@ -288,9 +288,17 @@ describeLayer(
         expect(metamagic.kind).toBe("feature");
         expect(metamagic.choose).toBe(2);
         if (metamagic.kind !== "feature") return;
-        expect(metamagic.options).toHaveLength(8);
+        // Seven of the eight: the 2014 source gives *Twinned Spell* no parent,
+        // so level 3 grants it outright and it is not a choice.
+        expect(metamagic.options).toHaveLength(7);
         expect(metamagic.options.every((option) => option.available)).toBe(true);
         expect(metamagic.options.map((option) => option.name)).toContain(
+          "Metamagic: Quickened Spell",
+        );
+        expect(metamagic.options.map((option) => option.name)).not.toContain(
+          "Metamagic: Twinned Spell",
+        );
+        expect(offer.automatic.features.map((feature) => feature.name)).toContain(
           "Metamagic: Twinned Spell",
         );
 

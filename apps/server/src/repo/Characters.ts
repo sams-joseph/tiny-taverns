@@ -268,7 +268,80 @@ const OpenSeatSessionRow = fromColumns(
     runId: Schema.NullOr(EncounterRunId),
   }),
 );
-type OpenSeatSession = typeof OpenSeatSessionRow.Type;
+export type OpenSeatSession = typeof OpenSeatSessionRow.Type;
+
+/**
+ * The open nights at the tables where this owner's character sits, and the
+ * character's place in each one's live fight: where an owner's write to the
+ * character is heard. Inside the writer's transaction.
+ */
+export const openSeatSessionsOf = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+  actor: Actor,
+): Effect.Effect<ReadonlyArray<OpenSeatSession>> =>
+  SqlSchema.findAll({
+    Request: Schema.toType(Schema.Struct({ characterId: CharacterId, actor: Actor })),
+    Result: OpenSeatSessionRow,
+    execute: ({ characterId, actor }) => sql`
+      select campaign.current_session_id as session_id,
+             combatant.id as combatant_id,
+             encounter_run.id as run_id
+      from campaign_character
+      join campaign on campaign.id = campaign_character.campaign_id
+      left join session on session.id = campaign.current_session_id
+      left join encounter_run on encounter_run.id = session.active_encounter_run_id
+      left join combatant on combatant.encounter_run_id = encounter_run.id
+                         and combatant.character_id = ${characterId}
+      where campaign_character.character_id = ${characterId}
+        and campaign_character.account_id = ${actor.accountId}
+        and campaign_character.left_at is null
+        and campaign.current_session_id is not null
+    `,
+  })({ characterId, actor }).pipe(Effect.orDie);
+
+/** `character-updated` appended to each open night's log, in the writer's transaction. */
+export const appendSeatSessionsTouched = (
+  sql: SqlClient.SqlClient,
+  characterId: CharacterId,
+  sessions: ReadonlyArray<OpenSeatSession>,
+  detail: Record<string, unknown>,
+  requestId: string | undefined,
+): Effect.Effect<void> =>
+  Effect.forEach(
+    sessions,
+    (session) =>
+      appendCharacterUpdated(sql, {
+        sessionId: session.sessionId,
+        characterId,
+        live:
+          session.combatantId === null || session.runId === null
+            ? undefined
+            : {
+                combatantId: session.combatantId,
+                runId: session.runId,
+                sessionId: session.sessionId,
+              },
+        detail,
+        requestId,
+      }),
+    { discard: true },
+  );
+
+/** The doorbell for each open night, once, after the writer's transaction committed. */
+export const ringSeatSessions = (
+  live: Option.Option<LiveEvents["Service"]>,
+  sessions: ReadonlyArray<OpenSeatSession>,
+): Effect.Effect<void> =>
+  Option.match(live, {
+    onNone: () => Effect.void,
+    onSome: (events) =>
+      Effect.forEach(
+        [...new Set(sessions.map((session) => session.sessionId))],
+        (sessionId) => events.touched(sessionId),
+        { discard: true },
+      ),
+  });
 
 /** The live fight a character is on the table in: which campaign's, and what it is called. */
 const LiveFightRow = fromColumns(
@@ -715,67 +788,16 @@ export class Characters extends Context.Service<
           ),
         );
 
-      const seatSessions = SqlSchema.findAll({
-        Request: Schema.toType(Schema.Struct({ characterId: CharacterId, actor: Actor })),
-        Result: OpenSeatSessionRow,
-        execute: ({ characterId, actor }) => sql`
-          select campaign.current_session_id as session_id,
-                 combatant.id as combatant_id,
-                 encounter_run.id as run_id
-          from campaign_character
-          join campaign on campaign.id = campaign_character.campaign_id
-          left join session on session.id = campaign.current_session_id
-          left join encounter_run on encounter_run.id = session.active_encounter_run_id
-          left join combatant on combatant.encounter_run_id = encounter_run.id
-                             and combatant.character_id = ${characterId}
-          where campaign_character.character_id = ${characterId}
-            and campaign_character.account_id = ${actor.accountId}
-            and campaign_character.left_at is null
-            and campaign.current_session_id is not null
-        `,
-      });
-      const openSeatSessions = (
-        characterId: CharacterId,
-        actor: Actor,
-      ): Effect.Effect<ReadonlyArray<OpenSeatSession>> =>
-        seatSessions({ characterId, actor }).pipe(Effect.orDie);
-
+      const openSeatSessions = (characterId: CharacterId, actor: Actor) =>
+        openSeatSessionsOf(sql, characterId, actor);
       const ringSessions = (sessions: ReadonlyArray<OpenSeatSession>) =>
-        Option.match(live, {
-          onNone: () => Effect.void,
-          onSome: (events) =>
-            Effect.forEach(
-              [...new Set(sessions.map((session) => session.sessionId))],
-              (sessionId) => events.touched(sessionId),
-              { discard: true },
-            ),
-        });
-
+        ringSeatSessions(live, sessions);
       const appendTouched = (
         characterId: CharacterId,
         sessions: ReadonlyArray<OpenSeatSession>,
         detail: Record<string, unknown>,
         requestId: string | undefined,
-      ): Effect.Effect<void> =>
-        Effect.forEach(
-          sessions,
-          (session) =>
-            appendCharacterUpdated(sql, {
-              sessionId: session.sessionId,
-              characterId,
-              live:
-                session.combatantId === null || session.runId === null
-                  ? undefined
-                  : {
-                      combatantId: session.combatantId,
-                      runId: session.runId,
-                      sessionId: session.sessionId,
-                    },
-              detail,
-              requestId,
-            }),
-          { discard: true },
-        );
+      ) => appendSeatSessionsTouched(sql, characterId, sessions, detail, requestId);
 
       return {
         mine: dieOnSqlError(

@@ -850,10 +850,20 @@ export const levelUpOfferFor = (sources: LevelUpOfferSources): LevelUpOffer => {
   const to = grantsAt(toLevel);
 
   const byId = new Map(sources.features.map((row) => [row.id, row]));
+  // What the sheet holds, and what the new level grants by itself: an option
+  // the level grants outright is not a choice (the 2014 source gives
+  // *Metamagic: Twinned Spell* no parent, so sorcerer 3 grants it and
+  // *Metamagic* lists it too).
   const held: Held = {
     toLevel,
-    featureIds: new Set(body.traits.flatMap((trait) => trait.featureId ?? [])),
-    featureNames: new Set(body.traits.map((trait) => wanted(trait.name))),
+    featureIds: new Set([
+      ...body.traits.flatMap((trait) => trait.featureId ?? []),
+      ...to.features.flatMap((feature) => feature.featureId ?? []),
+    ]),
+    featureNames: new Set([
+      ...body.traits.map((trait) => wanted(trait.name)),
+      ...to.features.map((feature) => wanted(feature.name)),
+    ]),
     spellSlugs: new Set((body.spellcasting?.known ?? []).map((spell) => slug(spell.name))),
     byIndex: new Map(
       sources.features.flatMap((row) => (row.index === null ? [] : [[row.index, row] as const])),
