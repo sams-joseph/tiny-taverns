@@ -879,6 +879,60 @@ describeLayer(
           }),
       );
 
+      it.effect("moves the casting ability with the class, and keeps a typed one", () =>
+        Effect.gen(function* () {
+          const { fresh } = yield* Fixture;
+          const options = yield* as(fresh.token, (client) =>
+            client.library.coreOptions({ query: {} }),
+          );
+          const composed = (className: string) =>
+            startingSheetBody({
+              classOption: asClassOption(optionNamed(options, "class", className)),
+              raceOption: asRaceOption(optionNamed(options, "race", "Dwarf")),
+              subrace: "Hill Dwarf",
+              abilities: FIGHTER_ARRAY,
+              level: 3,
+            }).body;
+          const cleric = composed("Cleric");
+          const wizard = composed("Wizard");
+          expect(cleric.spellcasting?.ability).toBe("WIS");
+          const relabelled = (name: string, sheet: typeof cleric) =>
+            Effect.gen(function* () {
+              const created = yield* as(fresh.token, (client) =>
+                client.me.createCoreCharacter({
+                  payload: {
+                    name,
+                    race: "Dwarf",
+                    subrace: "Hill Dwarf",
+                    className: "Cleric",
+                    level: 3,
+                    sheet: { notes: "", ...sheet },
+                  },
+                }),
+              );
+              return yield* as(fresh.token, (client) =>
+                client.me.updateCharacter({
+                  params: { characterId: created.id },
+                  payload: { expectedVersion: created.version, className: "Wizard" },
+                }),
+              );
+            });
+
+          const moved = yield* relabelled("Ansel Brook", cleric);
+          expect(moved.sheet.spellcasting).toMatchObject({
+            ability: "INT",
+            save: wizard.spellcasting?.save,
+            attack: wizard.spellcasting?.attack,
+          });
+
+          const typed = yield* relabelled("Corra Brook", {
+            ...cleric,
+            spellcasting: { ...cleric.spellcasting, ability: "CHA" },
+          });
+          expect(typed.sheet.spellcasting?.ability).toBe("CHA");
+        }),
+      );
+
       it.effect("checks a subrace edit against the core rules", () =>
         Effect.gen(function* () {
           const { fresh } = yield* Fixture;

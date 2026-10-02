@@ -1059,7 +1059,7 @@ const bonusAt = (bonus: number | undefined, modifier: number, times: number): st
  *   twice and nothing typed is removed.
  *
  * The numbers that are not lines — `identity.proficiency` and `hitDice`, a
- * proficient save or skill, the casting save DC and attack — follow
+ * proficient save or skill, the casting ability, save DC and attack — follow
  * compare-and-move (`moved`): rewritten only while they still say what the
  * old level wrote. The casting counts are the table's and always follow it.
  * A class change also moves the class's save marks and proficiency entries:
@@ -1243,8 +1243,8 @@ const proficienciesAt = (
 };
 
 /**
- * The casting aside at the new level: the table's counts, and the save DC and
- * attack by compare-and-move. A class that stops casting (a Paladin back to
+ * The casting aside at the new level: the table's counts, and the ability,
+ * save DC and attack by compare-and-move. A class that stops casting (a Paladin back to
  * level 1) loses the corpus's numbers and keeps what anybody chose or typed;
  * an aside left with nothing but its ability is the corpus's alone and goes.
  */
@@ -1266,7 +1266,7 @@ const castingAt = (
     };
     return Object.keys(left).some((key) => key !== "ability") ? left : undefined;
   }
-  const ability = stored?.ability ?? after.ability;
+  const ability = moved(stored?.ability, before?.ability, after.ability, true);
   const save = moved(stored?.save, before?.save, after.save, true);
   const attack = moved(stored?.attack, before?.attack, after.attack, true);
   return {
