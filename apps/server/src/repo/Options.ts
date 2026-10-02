@@ -59,12 +59,12 @@ const optionRow = <Fields extends Schema.Struct.Fields & { readonly details: Sch
   schema: Schema.Struct<Fields>,
 ) =>
   fromColumns(Schema.Struct({ ...Struct.omit(schema.fields, ["details"]), ...timestampColumns }));
-const OptionRow = Schema.Union([
+export const OptionRow = Schema.Union([
   optionRow(ClassOption),
   optionRow(RaceOption),
   optionRow(BackgroundOption),
 ]);
-type OptionRow = typeof OptionRow.Type;
+export type OptionRow = typeof OptionRow.Type;
 
 const OptionListRequest = Schema.toType(Schema.Struct(OptionFilter));
 const CampaignListRequest = Schema.toType(

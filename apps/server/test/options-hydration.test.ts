@@ -157,13 +157,28 @@ describeLayer("options-hydration", shared, (it) => {
           // the equipment read — but not how many round trips it takes.
           expect(all.statements).toHaveLength(one.statements.length);
         }
-        // One read of the rows and fifteen of their children: eleven keyed by
+        // One read of the rows and sixteen of their children: twelve keyed by
         // option, four by choice group — and, for a campaign's list, the gate that
         // makes an unreachable campaign a 404 rather than an empty picker.
-        expect(core[1].statements).toHaveLength(1 + 15);
-        expect(library[1].statements).toHaveLength(1 + 15);
-        expect(creator[1].statements).toHaveLength(2 + 15);
-        expect(seated[1].statements).toHaveLength(2 + 15);
+        expect(core[1].statements).toHaveLength(1 + 16);
+        expect(library[1].statements).toHaveLength(1 + 16);
+        expect(creator[1].statements).toHaveLength(2 + 16);
+        expect(seated[1].statements).toHaveLength(2 + 16);
+      }),
+    );
+
+    it.effect("carries each class's subclasses and the features they grant, by level", () =>
+      Effect.gen(function* () {
+        const { dm } = yield* Fixture;
+        const core = yield* as(dm)(Effect.flatMap(Options, (options) => options.core({})));
+        const fighter = core.find((option) => option.kind === "class" && option.name === "Fighter");
+        const champion = fighter?.details?.subclasses?.find((row) => row.name === "Champion");
+        expect(champion?.features).toContainEqual(
+          expect.objectContaining({ name: "Improved Critical", level: 3 }),
+        );
+        expect(champion?.features.map((feature) => feature.level)).toEqual([3, 7, 10, 15, 18]);
+        const dwarf = core.find((option) => option.kind === "race" && option.name === "Dwarf");
+        expect(dwarf?.details).not.toHaveProperty("subclasses");
       }),
     );
 

@@ -1,9 +1,14 @@
 import { describe, expect } from "@effect/vitest";
 import {
+  asBackgroundOption,
+  asClassOption,
+  asRaceOption,
   type Character,
   emptyCharacterSheet,
+  optionNamed,
   type RaceBody,
   type SpellLibraryCreate,
+  startingSheetBody,
   TavernsApi,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Redacted } from "effect";
@@ -158,6 +163,65 @@ const coreWizard = (token: string, name: string) =>
       },
     }),
   );
+
+/** The standard array, laid a Fighter's way: STR 15, DEX 14, CON 13, WIS 12, INT 10, CHA 8. */
+const FIGHTER_ARRAY = (
+  [
+    ["STR", 15],
+    ["DEX", 14],
+    ["CON", 13],
+    ["INT", 10],
+    ["WIS", 12],
+    ["CHA", 8],
+  ] as const
+).map(([label, score]) => {
+  const modifier = Math.floor((score - 10) / 2);
+  return {
+    label,
+    score: String(score),
+    modifier: modifier < 0 ? String(modifier) : `+${modifier}`,
+  };
+});
+
+/**
+ * A Hill Dwarf Fighter composed by the core rules at `level`, the way the
+ * create form composes one — and, at 1, created through `POST /me/characters`.
+ */
+const fighterSources = (token: string) =>
+  Effect.map(
+    as(token, (client) => client.library.coreOptions({ query: {} })),
+    (options) => (level: number) =>
+      startingSheetBody({
+        classOption: asClassOption(optionNamed(options, "class", "Fighter")),
+        raceOption: asRaceOption(optionNamed(options, "race", "Dwarf")),
+        subrace: "Hill Dwarf",
+        backgroundOption: asBackgroundOption(optionNamed(options, "background", "Acolyte")),
+        background: "Acolyte",
+        subclass: "Champion",
+        abilities: FIGHTER_ARRAY,
+        level,
+      }),
+  );
+
+const coreFighter = (token: string, name: string) =>
+  Effect.gen(function* () {
+    const composed = yield* fighterSources(token);
+    const one = composed(1);
+    return yield* as(token, (client) =>
+      client.me.createCoreCharacter({
+        payload: {
+          name,
+          race: "Dwarf",
+          subrace: "Hill Dwarf",
+          className: "Fighter",
+          level: 1,
+          ac: one.seed.ac,
+          ...(one.seed.hpMax === undefined ? {} : { hpMax: one.seed.hpMax }),
+          sheet: { notes: "", ...one.body },
+        },
+      }),
+    );
+  });
 
 const spellbookOf = (token: string, character: Character) =>
   as(token, (client) => client.me.characterSpells({ params: { characterId: character.id } }));
@@ -545,6 +609,154 @@ describeLayer(
         }),
       );
 
+      it.effect(
+        "moves everything derived when the Level box moves, and leaves the hit points alone",
+        () =>
+          Effect.gen(function* () {
+            const { fresh, stranger } = yield* Fixture;
+            const composed = yield* fighterSources(fresh.token);
+            const fighter = yield* coreFighter(fresh.token, "Hedda Stonebrook");
+            expect(fighter.sheet.identity).toMatchObject({ proficiency: "+2", hitDice: "1/1 d10" });
+
+            const leveled = yield* as(fresh.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: fighter.id },
+                payload: { expectedVersion: fighter.version, level: 5 },
+              }),
+            );
+            expect(leveled.level).toBe(5);
+            // Hit points are the wizard's to add, never the recompute's.
+            expect(leveled.hpMax).toBe(fighter.hpMax);
+            expect(leveled.sheet.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+            const save = (label: string) =>
+              leveled.sheet.abilities.find((cell) => cell.label === label)?.save;
+            // STR 15 and CON 13 + 2 (Dwarf): +2 each, and the bonus now +3.
+            expect(save("STR")).toBe("+5");
+            expect(save("CON")).toBe("+5");
+            expect(
+              leveled.sheet.resources?.find((row) => row.id === "res:action-surge"),
+            ).toMatchObject({ used: 0, max: 1, derived: true });
+            expect(leveled.sheet.actions?.find((row) => row.id === "feat:second-wind")?.dice).toBe(
+              "1d10+5",
+            );
+            expect(
+              leveled.sheet.actions?.find((row) => row.source === "weapon" && row.derived === true),
+            ).toMatchObject({ text: expect.stringContaining("Attack ×2") });
+            expect(leveled.sheet.traits.map((trait) => trait.name)).toEqual(
+              expect.arrayContaining(["Action Surge (1 use)", "Extra Attack", "Improved Critical"]),
+            );
+            // The whole rules half is what the composer writes at 5.
+            const { notes: _notes, ...rules } = leveled.sheet;
+            expect(rules).toEqual(composed(5).body);
+
+            // Somebody else's character is not there to level.
+            expect(
+              yield* refusal(stranger.token, (client) =>
+                client.me.updateCharacter({
+                  params: { characterId: fighter.id },
+                  payload: { level: 6 },
+                }),
+              ),
+            ).toBe("NotFound");
+          }),
+      );
+
+      it.effect("keeps what a person typed through a level change, both ways", () =>
+        Effect.gen(function* () {
+          const { fresh } = yield* Fixture;
+          const fighter = yield* coreFighter(fresh.token, "Brisk Tallow");
+          const typed = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: {
+                expectedVersion: fighter.version,
+                sheet: {
+                  ...fighter.sheet,
+                  abilities: fighter.sheet.abilities.map((cell) =>
+                    cell.label === "STR" ? { ...cell, save: "+9" } : cell,
+                  ),
+                  traits: [...fighter.sheet.traits, { name: "Lucky Coin", text: "Flip it." }],
+                  resources: [
+                    ...(fighter.sheet.resources ?? []).map((row) =>
+                      row.id === "hit-dice" ? { ...row, used: 1 } : row,
+                    ),
+                    { id: "custom:luck", name: "Luck", used: 1, max: 3, recharge: "long" },
+                  ],
+                },
+              },
+            }),
+          );
+          const five = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: { expectedVersion: typed.version, level: 5 },
+            }),
+          );
+          const strSave = (character: Character) =>
+            character.sheet.abilities.find((cell) => cell.label === "STR")?.save;
+          expect(strSave(five)).toBe("+9");
+          expect(five.sheet.traits).toContainEqual({ name: "Lucky Coin", text: "Flip it." });
+          expect(five.sheet.resources?.find((row) => row.id === "custom:luck")?.used).toBe(1);
+          expect(five.sheet.resources?.find((row) => row.id === "hit-dice")).toMatchObject({
+            used: 1,
+            max: 5,
+          });
+
+          // And back down: the features above 1 go, the typed lines stay.
+          const one = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: { expectedVersion: five.version, level: 1 },
+            }),
+          );
+          expect(one.sheet.traits.map((trait) => trait.name)).not.toContain("Extra Attack");
+          expect(one.sheet.traits).toContainEqual({ name: "Lucky Coin", text: "Flip it." });
+          expect(strSave(one)).toBe("+9");
+          expect(one.sheet.identity?.proficiency).toBe("+2");
+          expect(one.sheet.resources?.find((row) => row.id === "hit-dice")).toMatchObject({
+            used: 1,
+            max: 1,
+          });
+        }),
+      );
+
+      it.effect("recomputes nothing on a save that resends the same level and class", () =>
+        Effect.gen(function* () {
+          const { fresh } = yield* Fixture;
+          const fighter = yield* coreFighter(fresh.token, "Ott Varn");
+          // A sheet the recompute would rewrite if it ran: a stale bonus.
+          const stale = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: {
+                expectedVersion: fighter.version,
+                level: 5,
+                sheet: fighter.sheet,
+              },
+            }),
+          );
+          expect(stale.sheet.identity?.proficiency).toBe("+2");
+          // The Identity dialog's save: every column resent, only the name changed.
+          const renamed = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: {
+                expectedVersion: stale.version,
+                name: "Ott Varn the Younger",
+                level: 5,
+                race: "Dwarf",
+                subrace: "Hill Dwarf",
+                className: "fighter",
+                ac: stale.ac,
+                hpMax: stale.hpMax,
+              },
+            }),
+          );
+          expect(renamed.version).toBe(stale.version + 1);
+          expect(renamed.sheet).toEqual(stale.sheet);
+        }),
+      );
+
       it.effect("checks a subrace edit against the core rules", () =>
         Effect.gen(function* () {
           const { fresh } = yield* Fixture;
@@ -644,6 +856,18 @@ describeLayer(
             const after = yield* spellbookOf(fresh.token, leveled);
             expect(spellNames(after)).toContain("Magic Missile");
             expect(spellNames(after)).not.toContain("Salt Ward");
+            // A save that resends the level it already has is no level change,
+            // so it prunes nothing the core rules lack.
+            const renamed = yield* as(fresh.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: wizard.id },
+                payload: { expectedVersion: leveled.version, name: "Nell Rook", level: 2 },
+              }),
+            );
+            expect(renamed.sheet.spellcasting?.known?.map((spell) => spell.name)).toEqual([
+              "Magic Missile",
+              "Salt Ward",
+            ]);
           }),
       );
     });

@@ -68,6 +68,12 @@ export const Skill = Schema.Struct({
   bonus: Schema.optional(Schema.String),
   /** Drawn as a mark rather than as text, so a boolean. */
   proficient: Schema.optional(Schema.Boolean),
+  /**
+   * Expertise: the proficiency bonus counts twice. Read by the level recompute
+   * (`withLevel`) to know which bonus a proficient row's number was written
+   * from; nothing draws it yet.
+   */
+  expertise: Schema.optional(Schema.Boolean),
 });
 export type Skill = typeof Skill.Type;
 
@@ -199,10 +205,10 @@ export type ActionSource = typeof ActionSource.Type;
  * line was derived from. **Provenance, never read through** — the same rule as
  * `derived_from` on a campaign copy: a spell the DM later un-shares leaves the
  * line standing with its id set to `null`, and no reader follows the pointer
- * to answer anything. `derived: true` is the level-up contract for a later
- * slice: a recompute rewrites every derived line from the corpus for the new
- * level and leaves every line without the flag — the ones the player typed —
- * alone. Nothing recomputes on a read.
+ * to answer anything. `derived: true` is the level-change contract: a
+ * recompute (`withLevel` in `SheetGrants.ts`) rewrites every derived line from
+ * the corpus for the new level and leaves every line without the flag — the
+ * ones the player typed — alone. Nothing recomputes on a read.
  */
 export const SheetAction = Schema.Struct({
   /** Stable within one sheet: `"atk:longsword"`, `"feat:second-wind"`. */
@@ -295,6 +301,33 @@ export const DeathSaves = Schema.Struct({
 });
 export type DeathSaves = typeof DeathSaves.Type;
 
+/**
+ * One entry on the sheet's Features list: the bestiary's `Trait`, plus where
+ * it came from.
+ *
+ * `Trait` itself stays the stat block's shape (`StatBlock.tsx` draws it and
+ * nothing on a monster has a source row); only the sheet's list widens, and
+ * every key added is optional, so every sheet written before decodes as it
+ * was. The keys follow `SheetAction`'s: `featureId` / `racialTraitId` name the
+ * row a line was granted from, as **provenance, never read through**, and
+ * `derived: true` says the line is the corpus's to rewrite. A level change
+ * (`withLevel` in `SheetGrants.ts`) replaces the derived class and subclass
+ * features with the ones the new level grants, and never touches a line
+ * without the flag, which is what the player typed.
+ *
+ * `pick` marks a player's choice inside a granted feature (*Fighting Style:
+ * Archery* under *Fighting Style*): it is kept while the feature that offered
+ * it is still granted, and dropped with it on a level down.
+ */
+export const SheetFeature = Schema.Struct({
+  ...Trait.fields,
+  featureId: Schema.optional(Schema.NullOr(FeatureId)),
+  racialTraitId: Schema.optional(Schema.NullOr(RacialTraitId)),
+  derived: Schema.optional(Schema.Boolean),
+  pick: Schema.optional(Schema.Struct({ offeredBy: FeatureId })),
+});
+export type SheetFeature = typeof SheetFeature.Type;
+
 /** One entry in the Log tab. `session` is the number, not a `SessionId`. */
 export const LevelUp = Schema.Struct({
   level: Schema.Int,
@@ -361,7 +394,7 @@ export const SheetBody = Schema.Struct({
   /** `STR 10 (+0)` — the same cell a stat block has. */
   abilities: Schema.Array(Ability),
   /** Named blocks: features, spells known, equipment. The sheet's Features list. */
-  traits: Schema.Array(Trait),
+  traits: Schema.Array(SheetFeature),
   /** The tagline's unowned half, and the identity card's numbers. */
   identity: Schema.optional(SheetIdentity),
   skills: Schema.optional(Schema.Array(Skill)),

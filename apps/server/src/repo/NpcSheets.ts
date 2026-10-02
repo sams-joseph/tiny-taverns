@@ -24,7 +24,7 @@ import {
   orNotFound,
   setClause,
 } from "./rows.js";
-import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
+import { levelOrClassMoved, recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { spellbookRulesFor } from "./Spells.js";
 import {
   libraryRowReadable,
@@ -422,15 +422,22 @@ export class NpcSheets extends Context.Service<
                   reach.rules,
                 );
               }
+              const nextLevel = patch.level === undefined ? before.level : patch.level;
+              const nextClass = patch.className === undefined ? before.className : patch.className;
               const body =
                 patch.sheet !== undefined
                   ? patch.sheet
-                  : patch.level !== undefined || patch.className !== undefined
+                  : levelOrClassMoved(
+                        { level: before.level, className: before.className },
+                        { level: nextLevel, className: nextClass },
+                      )
                     ? yield* recomputeForLevel(sql, {
                         body: before.sheet,
-                        level: patch.level === undefined ? before.level : patch.level,
-                        className:
-                          patch.className === undefined ? before.className : patch.className,
+                        level: nextLevel,
+                        className: nextClass,
+                        race: nextRace,
+                        subrace: nextSubrace,
+                        from: { level: before.level, className: before.className },
                         vocabulary: reach.vocabulary,
                       })
                     : undefined;

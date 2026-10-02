@@ -307,6 +307,28 @@ export const OptionClassLevel = Schema.Struct({
 });
 export type OptionClassLevel = typeof OptionClassLevel.Type;
 
+/**
+ * One subclass of a class, projected for the sheet the way `OptionClassLevel`
+ * projects the class table: its name, and the top-level features it grants at
+ * each level, by name and id with no prose. A sheet whose `identity.subclass`
+ * names one (case-insensitively) is granted these beside the class's own, at
+ * creation and on every level change, through `levelGrantsFor`.
+ */
+export const OptionSubclassFeature = Schema.Struct({
+  id: FeatureId,
+  index: Schema.NullOr(sourceKey),
+  name: sourceName,
+  level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+});
+export type OptionSubclassFeature = typeof OptionSubclassFeature.Type;
+
+export const OptionSubclass = Schema.Struct({
+  id: SubclassId,
+  name: sourceName,
+  features: Schema.Array(OptionSubclassFeature).check(Schema.isBetweenLength(0, 100)),
+});
+export type OptionSubclass = typeof OptionSubclass.Type;
+
 export const OptionDetails = Schema.Struct({
   subraces: Schema.Array(OptionSubraceDetail).check(Schema.isBetweenLength(0, 50)),
   abilityBonuses: Schema.Array(OptionAbilityGrant).check(Schema.isBetweenLength(0, 80)),
@@ -328,6 +350,8 @@ export const OptionDetails = Schema.Struct({
   classLevels: Schema.optional(
     Schema.Array(OptionClassLevel).check(Schema.isBetweenLength(0, 100)),
   ),
+  /** Class options only: each subclass and the features it grants by level, no prose. */
+  subclasses: Schema.optional(Schema.Array(OptionSubclass).check(Schema.isBetweenLength(0, 50))),
 });
 export type OptionDetails = typeof OptionDetails.Type;
 

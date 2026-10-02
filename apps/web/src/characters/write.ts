@@ -129,6 +129,9 @@ export const restOwnCharacter = (
  * the continuity decision: one shared character can sit at several tables, and
  * a level-up moves `descriptor` on *each* of their party screens. Naming the
  * resource per seat is what reaches them without knowing which screens exist.
+ * `reads.encounters(...)` per seat is the same reach for a number the write
+ * never sent: an encounter's difficulty is worked out from the seated
+ * characters' levels, so a level change moves it on every table's list.
  *
  * It is one function rather than several spellings for the reason `api/keys.ts`
  * exists at all: the surfaces that write a sheet (identity, backstory, gear, a
@@ -153,7 +156,10 @@ export const characterJoinWritesAt = (campaignId: CampaignId): Invalidation => [
 export const ownCharacterWrites = (owned: OwnedCharacter): Invalidation => [
   reads.myCharacters,
   reads.characterSpells(owned.character.id),
-  ...owned.seats.map((seat) => reads.party(seat.campaignId)),
+  ...owned.seats.flatMap((seat) => [
+    reads.party(seat.campaignId),
+    reads.encounters(seat.campaignId),
+  ]),
 ];
 
 /**

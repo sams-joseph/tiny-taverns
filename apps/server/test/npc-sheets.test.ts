@@ -1,5 +1,8 @@
 import { describe, expect } from "@effect/vitest";
 import {
+  type Ability,
+  asClassOption,
+  asRaceOption,
   type CampaignId,
   CHALLENGE_RATINGS,
   CurrentActor,
@@ -7,7 +10,9 @@ import {
   type NpcId,
   type NpcSheetPut,
   type NpcSheetUpdate,
+  optionNamed,
   type SheetBody,
+  startingSheetBody,
   TavernsApi,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Stream } from "effect";
@@ -544,6 +549,68 @@ describeLayer(
               sheet: { abilities: [], traits: [] },
             });
             expect(sent.sheet).toEqual({ abilities: [], traits: [] });
+            yield* removeSheet(table, hollis);
+          }),
+      );
+
+      it.effect(
+        "moves a Fighter's sheet by the character's own rule, and only on a real level change",
+        () =>
+          Effect.gen(function* () {
+            const { table, hollis, ilse } = yield* Fixture;
+            const options = yield* asJo((client) => client.library.coreOptions({ query: {} }));
+            const abilities: ReadonlyArray<Ability> = [
+              { label: "STR", score: "16", modifier: "+3" },
+              { label: "DEX", score: "12", modifier: "+1" },
+              { label: "CON", score: "14", modifier: "+2" },
+              { label: "INT", score: "10", modifier: "+0" },
+              { label: "WIS", score: "10", modifier: "+0" },
+              { label: "CHA", score: "8", modifier: "-1" },
+            ];
+            const composed = (level: number) =>
+              startingSheetBody({
+                classOption: asClassOption(optionNamed(options, "class", "Fighter")),
+                raceOption: asRaceOption(optionNamed(options, "race", "Half-Orc")),
+                subclass: "Champion",
+                abilities,
+                level,
+              });
+            const one = composed(1);
+            const started = yield* putSheet(table, hollis, {
+              level: 1,
+              race: "Half-Orc",
+              className: "Fighter",
+              hpMax: one.seed.hpMax ?? null,
+              sheet: one.body,
+            });
+
+            const five = yield* patchSheet(table, hollis, {
+              expectedVersion: started.version,
+              level: 5,
+            });
+            expect(five.sheet).toEqual(composed(5).body);
+            expect(five.sheet.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+            expect(five.hpMax).toBe(started.hpMax);
+
+            // The same level resent beside another column is no level change.
+            const stale = yield* patchSheet(table, hollis, { sheet: one.body });
+            const resent = yield* patchSheet(table, hollis, {
+              expectedVersion: stale.version,
+              level: 5,
+              className: "Fighter",
+              hpMax: 40,
+            });
+            expect(resent.hpMax).toBe(40);
+            expect(resent.sheet).toEqual(one.body);
+
+            // A player at the table cannot reach the sheet to level it.
+            const refused = yield* attempt(ilse.token, (client) =>
+              client.npcs.updateSheet({
+                params: { campaignId: table, npcId: hollis },
+                payload: { level: 6 },
+              }),
+            );
+            expect(refused).toMatchObject({ ok: false, tag: "NotFound" });
             yield* removeSheet(table, hollis);
           }),
       );
