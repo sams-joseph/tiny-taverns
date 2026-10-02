@@ -1,12 +1,15 @@
 import {
   type Actor,
   AdvancementApplied,
+  AdvancementChoices,
   asClassOption,
   asRaceOption,
   averageHitDie,
   CharacterAdvancement,
+  CharacterAdvancementId,
   CharacterId,
   type CharacterLeveledUp,
+  type CharacterLevelUpUndone,
   CharacterSheet,
   Conflict,
   CurrentActor,
@@ -19,6 +22,7 @@ import {
   levelUpHitPointGain,
   levelUpOfferFor,
   type LevelUpPayload,
+  levelUpUndone,
   levelUpWideSpells,
   NotFound,
   SHEET_LEVEL_MAX,
@@ -150,6 +154,22 @@ const levelUpWhileFighting = (campaignName: string): Conflict =>
     message: `Level up after the fight at ${campaignName}; this character is on the table there.`,
   });
 
+const undoWhileFighting = (campaignName: string): Conflict =>
+  new Conflict({
+    message: `Undo the level-up after the fight at ${campaignName}; this character is on the table there.`,
+  });
+
+/** What an undo reads of the record it reverses. */
+const UndoRow = fromColumns(
+  Schema.Struct({
+    id: CharacterAdvancementId,
+    level: Schema.Int,
+    choices: AdvancementChoices,
+    applied: AdvancementApplied,
+    latest: Schema.Int,
+  }),
+);
+
 const ClassOptionIdRequest = Schema.toType(Schema.String);
 const SubclassIdsRequest = Schema.toType(Schema.Array(SubclassId));
 
@@ -157,10 +177,11 @@ const SubclassIdsRequest = Schema.toType(Schema.Array(SubclassId));
  * **A character's advancement**: what its next level offers, and taking it,
  * for its owner in its own vocabulary.
  *
- * | method    | predicate                                              |
- * | --------- | ------------------------------------------------------ |
- * | `offer`   | `ownCharacter`, then `characterVocabulary`             |
- * | `levelUp` | `ownCharacter` (row locked), then `characterVocabulary` |
+ * | method        | predicate                                               |
+ * | ------------- | ------------------------------------------------------- |
+ * | `offer`       | `ownCharacter`, then `characterVocabulary`              |
+ * | `levelUp`     | `ownCharacter` (row locked), then `characterVocabulary` |
+ * | `undoLevelUp` | `ownCharacter` (row locked), then `characterVocabulary` |
  *
  * The first vocabulary-aware read of the class progression. The class and
  * race resolve by name the way the level recompute resolves them
@@ -201,6 +222,22 @@ export class Advancement extends Context.Service<
        */
       from?: AssistantOrigin,
     ) => Effect.Effect<CharacterLeveledUp, NotFound | Conflict, CurrentActor>;
+    /**
+     * **The undo**: the latest level-up taken back, in one transaction. The
+     * row is locked; a character in a live fight is refused, as the level-up
+     * is; the record must be the latest, and the character still at its level
+     * (the Level box moving it since is a `Conflict`: the record no longer
+     * describes the sheet). Then `levelUpUndone` reverses what the record says
+     * it applied, the hit point maximum loses what it gained, the level below's
+     * recompute runs against the sheet as it stood, current hit points are
+     * clamped, the record is deleted, the version bumped, and
+     * `character-updated` appended at every open night where the character
+     * sits.
+     */
+    readonly undoLevelUp: (
+      id: CharacterId,
+      level: number,
+    ) => Effect.Effect<CharacterLevelUpUndone, NotFound | Conflict, CurrentActor>;
   }
 >()("Advancement") {
   static readonly layer = Layer.effect(this)(
@@ -562,6 +599,104 @@ export class Advancement extends Context.Service<
                     undefined,
                   );
                   return { result: { character, advancement }, sessions };
+                }),
+              );
+              yield* ringSeatSessions(live, done.sessions);
+              return done.result;
+            }),
+          ),
+
+        undoLevelUp: (id, level) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const done = yield* sql.withTransaction(
+                Effect.gen(function* () {
+                  const locked = yield* SqlSchema.findOneOption({
+                    Request: Schema.Void,
+                    Result: CharacterRow,
+                    execute: () => sql`
+                      select character.*, ${portraitColumns(sql)} from character
+                      where character.id = ${id} and ${ownCharacter(sql, actor)}
+                      for update of character
+                    `,
+                  })(undefined);
+                  if (Option.isNone(locked)) {
+                    return yield* new NotFound({ resource: "character", id });
+                  }
+                  const before = locked.value;
+                  const fight = (yield* liveFightsOf(sql, [id])).get(id);
+                  if (fight !== undefined) return yield* undoWhileFighting(fight.campaignName);
+
+                  const found = yield* SqlSchema.findOneOption({
+                    Request: Schema.Void,
+                    Result: UndoRow,
+                    execute: () => sql`
+                      select id, level, choices, applied,
+                             (select max(latest.level) from character_advancement latest
+                              where latest.character_id = ${id}) as latest
+                      from character_advancement
+                      where character_id = ${id} and level = ${level}
+                    `,
+                  })(undefined);
+                  if (Option.isNone(found)) {
+                    return yield* new NotFound({
+                      resource: "character_advancement",
+                      id: `${id}/${String(level)}`,
+                    });
+                  }
+                  const record = found.value;
+                  const current = Math.max(1, before.level ?? 1);
+                  if (current !== record.latest) {
+                    return yield* new Conflict({
+                      message: `This character is level ${String(current)} now, set in Edit your character since it reached level ${String(record.latest)}, so the level-up no longer describes the sheet. Change its level there instead.`,
+                    });
+                  }
+                  if (record.level !== record.latest) {
+                    return yield* new Conflict({
+                      message: `Only the latest level-up can be undone: undo level ${String(record.latest)} first.`,
+                    });
+                  }
+
+                  const vocabulary = yield* characterVocabulary(sql, id, actor);
+                  const { body, keptScores } = levelUpUndone(
+                    before.sheet,
+                    record.applied,
+                    record.choices,
+                  );
+                  const toLevel = record.level - 1;
+                  const sheet = yield* recomputeForLevel(sql, {
+                    body,
+                    level: toLevel,
+                    className: before.className,
+                    race: before.race,
+                    subrace: before.subrace,
+                    from: { level: before.level, className: before.className, body: before.sheet },
+                    vocabulary,
+                    actor,
+                  });
+                  // What the level-up added, whatever the maximum was typed as since.
+                  const { from: hpFrom, to: hpTo } = record.applied.hpMax;
+                  const gained = hpFrom === null || hpTo === null ? 0 : hpTo - hpFrom;
+                  const hpMax = before.hpMax === null ? null : Math.max(0, before.hpMax - gained);
+
+                  const character = yield* levelledRow(actor)({
+                    id,
+                    level: toLevel,
+                    hpMax,
+                    body: JSON.stringify(sheet),
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+                  yield* sql`delete from character_advancement where id = ${record.id}`;
+
+                  const sessions = yield* openSeatSessionsOf(sql, id, actor);
+                  yield* appendSeatSessionsTouched(
+                    sql,
+                    id,
+                    sessions,
+                    { levelUndone: { level: record.level } },
+                    undefined,
+                  );
+                  return { result: { character, keptScores }, sessions };
                 }),
               );
               yield* ringSeatSessions(live, done.sessions);

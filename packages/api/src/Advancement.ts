@@ -215,6 +215,29 @@ export const AdvancementApplied = Schema.Struct({
 });
 export type AdvancementApplied = typeof AdvancementApplied.Type;
 
+/**
+ * A score an undo left as it stands: somebody changed it after the level-up
+ * raised it, so the score is theirs now and the raise is not taken back.
+ */
+export const LevelUpKeptScore = Schema.Struct({
+  label: text,
+  /** The score as it stands, and stays. */
+  score: text,
+  /** What the level-up raised it from and to. */
+  raised: Schema.Struct({ from: text, to: text }),
+});
+export type LevelUpKeptScore = typeof LevelUpKeptScore.Type;
+
+/**
+ * An undo's answer: the character back at the level below, and every score it
+ * left alone because it was changed by hand since the level-up.
+ */
+export const CharacterLevelUpUndone = Schema.Struct({
+  character: Character,
+  keptScores: Schema.Array(LevelUpKeptScore),
+});
+export type CharacterLevelUpUndone = typeof CharacterLevelUpUndone.Type;
+
 /** What {@link levelUpChosen} answers for a payload the offer allows. */
 export interface LevelUpChosen<Body extends SheetBody> {
   /** The sheet with every choice applied, before the level's recompute. */
@@ -711,3 +734,125 @@ export const levelUpHitPointGain = (
   constitution: { readonly from: number; readonly to: number },
   toLevel: number,
 ): number => die + hitPoints.bonus + (constitution.to - constitution.from) * toLevel;
+
+/** What {@link levelUpUndone} answers: the sheet with a level-up's choices taken back. */
+export interface LevelUpUndone<Body extends SheetBody> {
+  /** The sheet before the level's own recompute, which is the caller's. */
+  readonly body: Body;
+  readonly keptScores: ReadonlyArray<LevelUpKeptScore>;
+}
+
+/**
+ * **The reverse of {@link levelUpChosen}**: what one level-up's record says it
+ * applied (`AdvancementApplied`), taken back off the sheet. Pure, beside the
+ * rule it reverses, so the two cannot drift.
+ *
+ * It reverses exactly what was recorded and guesses nothing:
+ *
+ * - a raised score goes back while it still states what the level-up wrote,
+ *   and its modifier while that still states the level-up's; a score changed
+ *   since is left as it stands and answered in `keptScores`;
+ * - the subclass label goes back to what it was while it still names the one
+ *   taken;
+ * - each pick and feat line goes, by name, and only a line still marked as a
+ *   pick (a typed line with the same name is somebody's own);
+ * - an expertise mark comes off its skill, and a row added for it goes;
+ * - the spells learned go, and a swapped spell comes back.
+ *
+ * Hit points and the level's recompute (at the level below, against the sheet
+ * as it stands, so a lowered score moves what it feeds) are the caller's.
+ */
+export const levelUpUndone = <Body extends SheetBody>(
+  body: Body,
+  applied: AdvancementApplied,
+  choices: AdvancementChoices,
+): LevelUpUndone<Body> => {
+  const keptScores: Array<LevelUpKeptScore> = [];
+  const abilities = body.abilities.map((cell): Ability => {
+    const change = applied.abilities.find(
+      (entry) => entry.label.trim().toUpperCase() === cell.label.trim().toUpperCase(),
+    );
+    if (change === undefined) return cell;
+    if (cell.score.trim() !== change.score.to.trim()) {
+      keptScores.push({ label: cell.label, score: cell.score, raised: change.score });
+      return cell;
+    }
+    return {
+      ...cell,
+      score: change.score.from,
+      modifier:
+        cell.modifier.trim() === change.modifier.to.trim() ? change.modifier.from : cell.modifier,
+    };
+  });
+
+  const identity = body.identity ?? {};
+  const subclass = applied.subclass;
+  const restoredIdentity =
+    subclass === undefined || wanted(identity.subclass) !== wanted(subclass.to)
+      ? undefined
+      : (() => {
+          const { subclass: _taken, ...rest } = identity;
+          return subclass.from === undefined ? rest : { ...rest, subclass: subclass.from };
+        })();
+
+  // One line per recorded name, and only one still marked as a pick.
+  const picked = [...applied.traits];
+  const traits = body.traits.filter((trait) => {
+    if (trait.derived !== true || trait.pick === undefined) return true;
+    const index = picked.indexOf(trait.name);
+    if (index < 0) return true;
+    picked.splice(index, 1);
+    return false;
+  });
+
+  const expertise = new Map(applied.expertise.map((entry) => [wanted(entry.skill), entry]));
+  const skills = body.skills?.flatMap((skill): ReadonlyArray<Skill> => {
+    const entry = expertise.get(wanted(skill.name));
+    if (entry === undefined || skill.expertise !== true) return [skill];
+    if (entry.added) return [];
+    const { expertise: _mark, ...row } = skill;
+    return [row];
+  });
+
+  // The spells learned go, one row each; a spell given up in a swap comes back.
+  const added = [...applied.knownAdded];
+  const knownBefore = body.spellcasting?.known ?? [];
+  const kept = knownBefore.filter((spell) => {
+    const index =
+      spell.spellId === undefined || spell.spellId === null ? -1 : added.indexOf(spell.spellId);
+    if (index < 0) return true;
+    added.splice(index, 1);
+    return false;
+  });
+  const restored = applied.knownRemoved.flatMap((removed): ReadonlyArray<SpellKnown> => {
+    const id = removed.spellId ?? undefined;
+    if (
+      kept.some((spell) => (id !== undefined ? spell.spellId === id : spell.name === removed.name))
+    ) {
+      return [];
+    }
+    const level = choices.replaced?.from.spellId === id ? choices.replaced?.from.level : undefined;
+    return [
+      {
+        name: removed.name,
+        ...(level === undefined ? {} : { level }),
+        ...(id === undefined ? {} : { spellId: id }),
+      },
+    ];
+  });
+  const knownMoved = kept.length !== knownBefore.length || restored.length > 0;
+
+  return {
+    body: {
+      ...body,
+      abilities,
+      traits,
+      ...(restoredIdentity === undefined ? {} : { identity: restoredIdentity }),
+      ...(skills === undefined ? {} : { skills }),
+      ...(knownMoved
+        ? { spellcasting: { ...body.spellcasting, known: [...kept, ...restored] } }
+        : {}),
+    },
+    keptScores,
+  };
+};

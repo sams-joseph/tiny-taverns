@@ -844,7 +844,9 @@ describeLayer("creator-actor", shared, (it) => {
       // `Advancement.levelUp` is the one hundred and seventy-eighth, for
       // `Characters.rest`'s reason: an owner-only write to a character in no
       // campaign, so a proof that the caller runs a table answers nothing.
-      expect(ungated).toBe(178);
+      // `Advancement.undoLevelUp` is the one hundred and seventy-ninth, for
+      // the same reason: the level-up's reverse, on the same row.
+      expect(ungated).toBe(179);
     });
   });
 });

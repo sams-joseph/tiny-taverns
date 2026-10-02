@@ -32,7 +32,7 @@ The doorbell is keyed on the session. `currentSessionOf` answers the campaign's 
 
 ## What a player may write
 
-The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characters`, `POST /me/characters`, `PATCH /me/characters/:characterId`, `DELETE /me/characters/:characterId`, plus `spend` and `rest` below and the level-up. Two boundaries, and neither may stand in for the other:
+The `me` group holds every owner write: `POST /me/campaigns/:campaignId/characters`, `POST /me/characters`, `PATCH /me/characters/:characterId`, `DELETE /me/characters/:characterId`, plus `spend` and `rest` below and the level-up and its undo. Two boundaries, and neither may stand in for the other:
 
 - Which rows: `ownCharacter` in `repo/visibility.ts`, `character.account_id = <actor>`, compared to nothing a caller supplied. Credential scope is deliberately not applied, because a top-level character is in no campaign for a scope to be about.
 - Which columns: `CharacterOwnUpdate`, a second schema rather than a field filter over a DM type. It carries the durable columns and the whole `sheet`. `hpCurrent`, `tempHp`, `conditions`, `inspiration`, `visibility` and `accountId` have no field, so a control for them does not compile. Excess keys are dropped on encode and on decode, so a payload naming only live keys is an empty patch answering `200` unchanged.
@@ -63,6 +63,10 @@ What it writes, beside the bumped `version`:
 - A `character_advancement` row (`0083`): the level reached, the class, how the hit points were found, `choices` (`AdvancementChoices`, by id and by name so the Log can draw it without the corpus) and `applied` (`AdvancementApplied`, the deltas an undo reverses, never on the wire). No payload carries `origin`; only an accept would stamp `assistant` and the turn. A record at or above the level reached is one the Level box has since taken back, and gaining that level again replaces it.
 
 It appends `character-updated` at every open night where the character sits and rings after commit, as a rest does. The subclass spells the offer lists as automatic are not written: the sheet has no "always prepared" line to hold them, and a prepared row would count against the picker's limit. `character-level-up.test.ts` drives it over the corpus; `Advancement.test.ts` pins the rule.
+
+## Undoing a level-up
+
+The reverse state is `DELETE /me/characters/:id/level-ups/:level` (`Advancement.undoLevelUp`). It takes back the latest record only, and only while the character is still at that record's level: an earlier one, or a level the Level box has moved since, is a `Conflict`, because the record no longer describes the sheet. Levels with no record go down through the Level box. One transaction, under the same lock and live-fight refusal as the level-up. The pure `levelUpUndone`, beside `levelUpChosen`, reverses exactly what `applied` says and guesses nothing: a raised score goes back while it still states what the level-up wrote (one changed by hand since is left and answered in `keptScores`), the subclass label while it still names the one taken, pick and feat lines by name while still marked as picks, expertise marks and the rows added for them, learned spells, and a swapped spell comes back. The hit point maximum loses what the record says it gained, CON carried back included, and the level below's recompute runs against the sheet as it stood, so a lowered score moves what it feeds. Current hit points are clamped, the record deleted, the version bumped, and open nights rung.
 
 ## Creation: a rules context first, then an explicit seat
 
