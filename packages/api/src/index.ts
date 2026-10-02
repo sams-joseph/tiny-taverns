@@ -32,6 +32,7 @@ export * from "./SharedWorldHistory.js";
 export * from "./SharedWorldImage.js";
 export * from "./LibraryShare.js";
 export * from "./Invite.js";
+export * from "./LevelUp.js";
 export * from "./MagicItem.js";
 export * from "./Membership.js";
 export * from "./Note.js";

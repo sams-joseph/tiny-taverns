@@ -42,6 +42,7 @@ import { Characters } from "./repo/Characters.js";
 import { Party } from "./repo/Party.js";
 import { SeatPreps } from "./repo/SeatPrep.js";
 import { Acts } from "./repo/Acts.js";
+import { Advancement } from "./repo/Advancement.js";
 import { ClassProgression } from "./repo/ClassProgression.js";
 import { Combatants } from "./repo/Combatants.js";
 import { Creatures } from "./repo/Creatures.js";
@@ -457,6 +458,7 @@ export const servicesOver = <E>(
   > = hobImagesFromConfig,
 ): Layer.Layer<
   | Accounts
+  | Advancement
   | Authorization
   | Beats
   | Campaigns
@@ -559,6 +561,9 @@ export const servicesOver = <E>(
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
+    // What a character's next level offers its owner, read in the character's
+    // vocabulary. Read-only.
+    Advancement.layer,
     // The live repositories ring the in-process fan-out after they commit, so
     // they take it as a dependency. It is merged in as well, because the
     // streaming handler subscribes to it — and `Layer` memoises by identity, so
@@ -811,6 +816,7 @@ export const services = servicesOver(Database.layer);
 export const applicationOver = <E>(
   serviceLayer: Layer.Layer<
     | Accounts
+    | Advancement
     | Authorization
     | Beats
     | Campaigns

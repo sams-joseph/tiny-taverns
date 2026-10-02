@@ -172,8 +172,12 @@ export const levelOrClassMoved = (
   (present(before.className)?.toLowerCase() ?? "") !==
     (present(after.className)?.toLowerCase() ?? "");
 
-/** One option of a kind by name in a vocabulary, the bundle's row first when two share it. */
-const optionNamedIn = (
+/**
+ * One option of a kind by name in a vocabulary, the bundle's row first when
+ * two share it. The level-up offer (`repo/Advancement.ts`) resolves the class
+ * and race through here too, so it reads the rows this recompute would.
+ */
+export const optionNamedIn = (
   sql: SqlClient.SqlClient,
   input: {
     readonly kind: "class" | "race";
