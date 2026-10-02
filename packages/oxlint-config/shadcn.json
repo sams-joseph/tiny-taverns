@@ -1,0 +1,43 @@
+// `@shadcn/lint`: Tailwind class checks with messages written for an agent to act on, run
+// as an oxlint JS plugin. It reads the theme a package's stylesheet builds
+// (`packages/ui/src/styles.css`, which `apps/web/src/index.css` imports), so a class is
+// judged against our tokens, not Tailwind's defaults.
+//
+// Off, deliberately:
+//   - `no-restyle`: our screens tune shared components at the call site (a Card's
+//     padding, an Icon's colour). Which classes each component should accept is a design
+//     policy nobody has written yet, and its class grammar reads our own theme names
+//     (`p-card`, `h-control-sm`, `z-chrome`) as misspellings.
+//   - `require-static-classes`: it only feeds `no-restyle`.
+//
+// oxlint does not carry `settings` through `extends`, so each package that extends this
+// file declares `settings.shadcn` itself, with the same `note`.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["@shadcn/lint"],
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx}"],
+      "rules": {
+        // Tailwind emits nothing for a name the theme lacks, so a typo fails silently.
+        "shadcn/no-unknown-classes": "error",
+        "shadcn/no-raw-colors": "error",
+        "shadcn/no-arbitrary-values": [
+          "error",
+          {
+            // Grid tracks, viewport caps and `calc()` over tokens are layout, not restated
+            // design values. A `transition-[…]` list names properties, not a value.
+            "allow": ["layout", "transition-*"]
+          }
+        ],
+        "shadcn/no-inline-styles": [
+          "error",
+          {
+            // Geometry computed from data (a bar's fill, a mark's position) has no class.
+            "allow": ["width", "height", "left", "top", "flex-grow", "aspect-ratio"]
+          }
+        ]
+      }
+    }
+  ]
+}

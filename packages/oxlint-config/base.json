@@ -1,0 +1,126 @@
+// Every TypeScript package: ESLint's and typescript-eslint's recommended sets, ported
+// rule for rule. oxlint's default `correctness` category is off so the rule set is
+// exactly this list.
+//
+// oxlint does not carry `settings` or `ignorePatterns` through `extends`, so a package
+// declares its own. Every lint runs from a package directory, where oxlint already skips
+// what git ignores (`dist/`, `coverage/`, `.turbo/`, `.scratch/`); the vendored `.repos/`
+// sits outside every package.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript"],
+  "categories": { "correctness": "off" },
+  "rules": {
+    "for-direction": "error",
+    "no-async-promise-executor": "error",
+    "no-case-declarations": "error",
+    "no-compare-neg-zero": "error",
+    "no-cond-assign": ["error", "except-parens"],
+    "no-constant-binary-expression": "error",
+    "no-constant-condition": ["error", { "checkLoops": "allExceptWhileTrue" }],
+    "no-control-regex": "error",
+    "no-debugger": "error",
+    "no-delete-var": "error",
+    "no-dupe-else-if": "error",
+    "no-duplicate-case": "error",
+    "no-empty": ["error", { "allowEmptyCatch": false }],
+    "no-empty-character-class": "error",
+    "no-empty-pattern": "error",
+    "no-empty-static-block": "error",
+    "no-ex-assign": "error",
+    "no-extra-boolean-cast": "error",
+    "no-fallthrough": [
+      "error",
+      { "allowEmptyCase": false, "reportUnusedFallthroughComment": false }
+    ],
+    "no-global-assign": "error",
+    "no-invalid-regexp": "error",
+    "no-irregular-whitespace": [
+      "error",
+      {
+        "skipComments": false,
+        "skipJSXText": false,
+        "skipRegExps": false,
+        "skipStrings": true,
+        "skipTemplates": false
+      }
+    ],
+    "no-loss-of-precision": "error",
+    "no-misleading-character-class": "error",
+    "no-nonoctal-decimal-escape": "error",
+    "no-prototype-builtins": "error",
+    "no-regex-spaces": "error",
+    "no-self-assign": ["error", { "props": true }],
+    "no-shadow-restricted-names": "error",
+    "no-sparse-arrays": "error",
+    "no-unexpected-multiline": "error",
+    "no-unsafe-finally": "error",
+    "no-unsafe-optional-chaining": ["error", { "disallowArithmeticOperators": false }],
+    "no-unused-labels": "error",
+    "no-unused-private-class-members": "error",
+    "no-useless-backreference": "error",
+    "no-useless-catch": "error",
+    "no-useless-escape": "error",
+    "no-var": "error",
+    "prefer-const": ["error", { "destructuring": "any", "ignoreReadBeforeAssign": false }],
+    "prefer-rest-params": "error",
+    "prefer-spread": "error",
+    "require-yield": "error",
+    "use-isnan": ["error", { "enforceForIndexOf": false, "enforceForSwitchCase": true }],
+    "valid-typeof": ["error", { "requireStringLiterals": false }],
+
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-array-constructor": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-unused-expressions": [
+      "error",
+      { "allowShortCircuit": false, "allowTaggedTemplates": false, "allowTernary": false }
+    ],
+    "typescript/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/triple-slash-reference": "error"
+  },
+  "overrides": [
+    {
+      // What the compiler checks in a .ts file, which ESLint's recommended set keeps on
+      // for plain JavaScript. `no-undef` is the one rule that reads the globals.
+      "files": ["**/*.{js,mjs,cjs,jsx}"],
+      "env": { "es2022": true, "node": true },
+      "rules": {
+        "constructor-super": "error",
+        "getter-return": "error",
+        "no-class-assign": "error",
+        "no-const-assign": "error",
+        "no-dupe-class-members": "error",
+        "no-dupe-keys": "error",
+        "no-func-assign": "error",
+        "no-import-assign": "error",
+        "no-new-native-nonconstructor": "error",
+        "no-obj-calls": "error",
+        "no-redeclare": "error",
+        "no-setter-return": "error",
+        "no-this-before-super": "error",
+        "no-undef": "error",
+        "no-unreachable": "error",
+        "no-unsafe-negation": "error",
+        "no-with": "error"
+      }
+    }
+  ]
+}

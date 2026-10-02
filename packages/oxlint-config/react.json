@@ -1,0 +1,18 @@
+// React packages: the base set plus the hooks and fast-refresh rules
+// (`eslint-plugin-react-hooks` recommended, `eslint-plugin-react-refresh`), which oxlint
+// implements natively in its react plugin.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["./base.json"],
+  "plugins": ["eslint", "typescript", "react"],
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx}"],
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/only-export-components": ["warn", { "allowConstantExport": true }]
+      }
+    }
+  ]
+}

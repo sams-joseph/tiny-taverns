@@ -18,7 +18,7 @@ else. `packages/ui/src/styles.css` bridges these tokens into Tailwind's theme la
 | `components/` | `.prompt.md` (intent + measurements), `.d.ts` (API contract), `.jsx` (visual spec), `*.card.html` (state sheets). |
 | `ui_kits/` | The designers' reference compositions for the DM screen and marketing site — the Hob chat panel, the Chronicle, the fourth delivery's player side (seats, characters, sheet, table view), the sixth's two-tier navigation with the campaign view split into `CampaignScreens.jsx`, and the seventh's continuous character sheet (`CharacterSheetB.jsx`). Reference for later screen work. |
 | `readme.md`, `SKILL.md` | Guidance material. |
-| `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to ESLint in `packages/eslint-config/design-system.js`. |
+| `_adherence.oxlintrc.json` | The designers' lint rules, kept as the record of intent. Ported to `packages/oxlint-config/design-system.json`. |
 
 **Every other file here is byte-identical to the delivery.** Two are *edited*, both
 structural rather than visual, and both are re-applied by hand on each update:

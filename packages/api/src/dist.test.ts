@@ -40,7 +40,7 @@ import { describe, expect, it } from "vitest";
  * - **`<package>^...`, not `@taverns/api`.** `^...` selects the package's own
  *   declared dependencies, so the clause stays the same statement `turbo.json`
  *   makes and cannot drift out of step with what a package actually depends on.
- * - **`lint` and `dev` are out.** `eslint` here reads no cross-package types and
+ * - **`lint` and `dev` are out.** `oxlint` here reads no cross-package types and
  *   was measured clean with `dist` deleted; `dev` is the one task `turbo.json`
  *   deliberately declares no `^build` for, and a script that disagreed with the
  *   declaration would be a second answer to the same question.
