@@ -838,7 +838,10 @@ describeLayer("creator-actor", shared, (it) => {
       // accept's turn lock, whose `"dm"` arm is already the creator predicate
       // and whose other arms are a player's own thread, a Shared World's or an
       // account's — no campaign for a proof to name.
-      expect(ungated).toBe(176);
+      // `Advancement.offer` is the one hundred and seventy-seventh, for
+      // `Spells.forCharacter`'s reason: the next level of a character of the
+      // caller's own, whose reach is `ownCharacter` — no campaign to prove.
+      expect(ungated).toBe(177);
     });
   });
 });
