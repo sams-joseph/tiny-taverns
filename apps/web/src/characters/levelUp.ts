@@ -14,6 +14,7 @@ import {
   type LevelUpOffer,
   type LevelUpPayload,
   type LevelUpPick,
+  type SeatLevelUp,
   type SheetBody,
   type SpellId,
   type SubclassId,
@@ -368,30 +369,52 @@ export interface LogEntry {
   readonly recorded: boolean;
 }
 
+/** A level-up record as its owner reads it: the hit points, and every choice in the record's words. */
+export const recordEntry = (record: CharacterAdvancement): LogEntry => ({
+  level: record.level,
+  className: record.className,
+  hitPoints:
+    record.hitPoints.method === "fixed"
+      ? `${signed(record.hitPoints.gain)} hit points, fixed`
+      : `${signed(record.hitPoints.gain)} hit points, rolled ${String(record.hitPoints.die)}`,
+  lines: choiceLines(record.choices),
+  note: record.note ?? undefined,
+  session: undefined,
+  at: record.createdAt,
+  recorded: true,
+});
+
+/**
+ * A level-up as the table reads it on the seat (`SeatLevelUp`): the subclass,
+ * the feat and the picks by name, and no hit points.
+ */
+export const seatEntry = (levelUp: SeatLevelUp): LogEntry => ({
+  level: levelUp.level,
+  className: levelUp.className,
+  hitPoints: undefined,
+  lines: [
+    ...(levelUp.subclass === null ? [] : [`Subclass: ${levelUp.subclass}`]),
+    ...(levelUp.feat === null ? [] : [`Feat: ${levelUp.feat}`]),
+    ...levelUp.picks,
+  ],
+  note: levelUp.note ?? undefined,
+  session: undefined,
+  at: levelUp.createdAt,
+  recorded: true,
+});
+
 /**
  * The Log, latest first: the level-up records, and any line the document's
  * own `levelUps` holds for a level no record covers (written before the
  * records existed; nothing writes them now).
  */
 export const logEntries = (
-  records: ReadonlyArray<CharacterAdvancement>,
+  records: ReadonlyArray<LogEntry>,
   legacy: ReadonlyArray<LevelUp> | undefined,
 ): ReadonlyArray<LogEntry> => {
   const recorded = new Set(records.map((record) => record.level));
   return [
-    ...records.map((record): LogEntry => ({
-      level: record.level,
-      className: record.className,
-      hitPoints:
-        record.hitPoints.method === "fixed"
-          ? `${signed(record.hitPoints.gain)} hit points, fixed`
-          : `${signed(record.hitPoints.gain)} hit points, rolled ${String(record.hitPoints.die)}`,
-      lines: choiceLines(record.choices),
-      note: record.note ?? undefined,
-      session: undefined,
-      at: record.createdAt,
-      recorded: true,
-    })),
+    ...records,
     ...(legacy ?? [])
       .filter((entry) => !recorded.has(entry.level))
       .map((entry): LogEntry => ({

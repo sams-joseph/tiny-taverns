@@ -72,7 +72,7 @@ The reverse state is `DELETE /me/characters/:id/level-ups/:level` (`Advancement.
 
 ## The Log: a character's level-ups
 
-The owner reads the records through `GET /me/characters/:id/level-ups` (`Advancement.levelUps`, `ownCharacter`; anybody else gets `NotFound`): `CharacterAdvancement`, latest first, without `applied`. Only the levels the character holds now are listed, the predicate `undoLevelUp` uses, because a record above the level is one the Level box has taken back and describes nothing on the sheet. The document's own `levelUps` lines stay in the schema so every row decodes; nothing writes them, and the sheet draws any that exist for a level no record covers.
+The owner reads the records through `GET /me/characters/:id/level-ups` (`Advancement.levelUps`, `ownCharacter`; anybody else gets `NotFound`): `CharacterAdvancement`, latest first, without `applied`, for the levels the character holds, as the seat's log is. It is the owner's wider view of what the table reads on the seat, with the hit points and every choice by kind. The document's own `levelUps` lines stay in the schema so every row decodes; nothing writes them, and both sheets draw any that exist for a level no record covers.
 
 ## Creation: a rules context first, then an explicit seat
 

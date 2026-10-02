@@ -300,6 +300,39 @@ describe("the character's sheet, read through the seat", () => {
     expect(screen.queryByText(/Take the standard array/)).not.toBeInTheDocument();
   });
 
+  it("draws the seat's level-up log beside the document's older lines, with nothing to undo", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: [
+        {
+          ...brannocSheetSeat,
+          levelUps: [
+            {
+              level: 5,
+              className: "Paladin",
+              subclass: "Oath of Devotion",
+              feat: null,
+              picks: ["Fighting Style: Defense"],
+              note: "Took the oath at the ferry crossing.",
+              createdAt: "2026-09-30T20:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+    await renderSeat();
+    await screen.findByRole("region", { name: "Brannoc's sheet" });
+
+    const log = within(document.getElementById("sheet-log")!);
+    expect(log.getByText("Subclass: Oath of Devotion · Fighting Style: Defense")).toBeVisible();
+    expect(log.getByText("Took the oath at the ferry crossing.")).toBeVisible();
+    // Level 4 has no record, so the document's own line is still drawn.
+    expect(log.getByText("+2 Charisma.")).toBeVisible();
+    // The table reads no hit point roll, and nobody undoes another account's level.
+    expect(log.queryByText(/hit points/)).not.toBeInTheDocument();
+    expect(log.queryAllByRole("button")).toEqual([]);
+  });
+
   it("draws only the sections the document fills", async () => {
     server.routes.set(`GET /campaigns/${campaignId}/party`, {
       status: 200,

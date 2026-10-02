@@ -31,7 +31,7 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SpellPickerDialog } from "./SpellPickerDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { characterLevelUpsAtom, levelUpOfferAtom, loadCharacterSheet } from "./load";
-import { type LogEntry, logEntries } from "./levelUp";
+import { type LogEntry, logEntries, recordEntry } from "./levelUp";
 import { LevelUpDialog } from "./LevelUpDialog";
 import { UndoLevelUpDialog } from "./UndoLevelUpDialog";
 import { drawnSections, hitPoints, sectionInView, type SheetSectionId } from "./sheet";
@@ -803,7 +803,7 @@ export function CharacterSheetScreen() {
    * server would say so.
    */
   const entries = logEntries(
-    records.state === "ready" ? records.value : [],
+    records.state === "ready" ? records.value.map(recordEntry) : [],
     character?.sheet.levelUps,
   );
   const latest = records.state === "ready" ? records.value[0] : undefined;

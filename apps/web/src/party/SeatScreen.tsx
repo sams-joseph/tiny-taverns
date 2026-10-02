@@ -24,6 +24,7 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CampaignChrome } from "../campaign/CampaignChrome";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
+import { logEntries, seatEntry } from "../characters/levelUp";
 import { drawnSections } from "../characters/sheet";
 import { SheetDocument } from "../characters/SheetDocument";
 import { HpTrack, StatPill } from "../characters/SheetParts";
@@ -162,6 +163,9 @@ function SeatBody({
   readonly prep: SeatPrep | undefined;
 }) {
   const character = row.character;
+  // The character's level-ups as the table reads them, with the document's
+  // older lines; read-only, so nothing here undoes one.
+  const entries = logEntries(row.levelUps.map(seatEntry), character?.sheet.levelUps);
   return (
     /* The settings beside the sheet where the column is wide enough, above it
        where it is not — `@4xl`, the step the Party tab docks its aside at. */
@@ -179,10 +183,11 @@ function SeatBody({
           <SheetDocument
             sheet={character.sheet}
             gearRows={[]}
-            sections={drawnSections(character.sheet, false)}
+            sections={drawnSections(character.sheet, false, entries.length > 0)}
             register={ignoreSection}
             edits={undefined}
             play={undefined}
+            log={{ entries, undo: undefined, failure: undefined }}
           />
         </section>
       )}
