@@ -84,6 +84,7 @@ const seatWith = (overrides: Partial<Record<keyof typeof character, unknown>>) =
     displayName: String(overrides.name ?? character.name),
   },
   character: { ...character, id: "2b1f2a1e-0000-4000-8000-000000000902", ...overrides },
+  levelUps: [],
 });
 
 describe("the party card", () => {

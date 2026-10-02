@@ -52,6 +52,7 @@ interface RawSeat {
         readonly name: string;
       })
     | null;
+  readonly levelUps: ReadonlyArray<unknown>;
 }
 
 /** The same seat, re-owned and re-levelled — for the derivations that count. */
@@ -83,6 +84,7 @@ const seatWith = (
               level: changes.level === undefined ? base.character.level : changes.level,
               name: changes.name ?? base.character.name,
             },
+    levelUps: base.levelUps,
   });
 
 const at = (iso: string): DateTime.Utc =>

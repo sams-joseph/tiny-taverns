@@ -316,10 +316,11 @@ describe("the spotlight", () => {
     server.routes.set(`GET /campaigns/${campaignId}/party`, {
       status: 200,
       body: [
-        { seat: { ...characterSeat, campaignId }, character },
+        { seat: { ...characterSeat, campaignId }, character, levelUps: [] },
         {
           seat: { ...characterSeat, campaignId, id: odoSeatId, displayName: "Odo" },
           character: null,
+          levelUps: [],
         },
       ],
     });

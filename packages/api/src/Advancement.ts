@@ -182,6 +182,28 @@ export const CharacterAdvancement = Schema.Struct({
 });
 export type CharacterAdvancement = typeof CharacterAdvancement.Type;
 
+/**
+ * **One level-up as the table reads it**, on the seat (`PartySeat.levelUps`):
+ * the creator's and seat-mates' view of a character's log, wherever they may
+ * read the seat. It is cut from the record in SQL and narrower than the
+ * owner's `CharacterAdvancement`: the level, the class, what was taken by name,
+ * and the note, with no hit point roll, no ids and no provenance.
+ */
+export const SeatLevelUp = Schema.Struct({
+  /** The level reached. */
+  level: Schema.Int,
+  className: text,
+  /** The subclass taken at this level, by name. */
+  subclass: Schema.NullOr(text),
+  /** The feat taken in place of an ASI, by name. */
+  feat: Schema.NullOr(text),
+  /** The names of what was picked: features, expertise, a favored enemy or terrain. */
+  picks: Schema.Array(text),
+  note: Schema.NullOr(text),
+  createdAt: Schema.DateTimeUtcFromString,
+});
+export type SeatLevelUp = typeof SeatLevelUp.Type;
+
 /** A level-up's answer: the character at its new level, and the record of how it got there. */
 export const CharacterLeveledUp = Schema.Struct({
   character: Character,

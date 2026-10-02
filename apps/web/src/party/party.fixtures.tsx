@@ -106,6 +106,7 @@ export const sorrelSeat = {
     displayName: "Sorrel Ash",
   },
   character: sorrelCharacter,
+  levelUps: [],
 };
 
 /** A third seated character, at Brannoc's level, over Sorrel's: a party with a span. */
@@ -130,6 +131,7 @@ export const pellSeat = {
     displayName: "Pell",
   },
   character: pellCharacter,
+  levelUps: [],
 };
 
 /**
@@ -179,6 +181,7 @@ export const sorrelSheetSeat = {
  * cleric's Spell DC, two conditions and no saves written.
  */
 export const pellSheetSeat = {
+  ...pellSeat,
   seat: { ...pellSeat.seat, visibility: "shared" },
   character: {
     ...pellSeat.character,
@@ -215,6 +218,7 @@ export const goneSeat = {
     displayName: "Odo",
   },
   character: null,
+  levelUps: [],
 };
 
 /**
@@ -258,6 +262,7 @@ export const deletedSeat = {
     playerDisplayName: "Kofi",
   },
   character: null,
+  levelUps: [],
 };
 
 /**
