@@ -648,6 +648,10 @@ export interface LevelGrants {
   readonly proficiencyBonus?: number;
   /** The class's hit die size — `10` for a d10. */
   readonly hitDie?: number;
+  /** The class's proficient saving throws. */
+  readonly savingThrows: ReadonlyArray<AbilityKey>;
+  /** The class's proficiencies, as `classProficiencies` reads them. */
+  readonly proficiencies: ReadonlyArray<string>;
   /** Class features to this level, then the named subclass's. */
   readonly features: ReadonlyArray<SheetFeature>;
   /** Slots, hit dice, then the overlay's counters, class first and then the race's. */
@@ -752,6 +756,8 @@ export const levelGrantsFor = (sources: LevelGrantSources): LevelGrants => {
     level,
     ...(proficiencyBonus === undefined ? {} : { proficiencyBonus }),
     ...(hitDie === undefined ? {} : { hitDie }),
+    savingThrows: savingThrowsOf(classOption),
+    proficiencies: classProficiencies(classOption),
     features: featureTraits(features),
     resources: [
       ...slotResources(row, slotRecharge(classOption?.name)),
@@ -791,7 +797,7 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
   });
 
   const proficiencies = dedupe([
-    ...classProficiencies(classOption),
+    ...grants.proficiencies,
     ...raceDetailNames(raceOption?.details, sources.subraceName),
     ...(background?.proficiencies ?? []),
     ...(background?.languages ?? []),
@@ -830,7 +836,7 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
       ...backgroundFeature(background),
     ],
     proficiencies,
-    savingThrows: savingThrowsOf(classOption),
+    savingThrows: grants.savingThrows,
     ...(grants.proficiencyBonus === undefined ? {} : { proficiencyBonus: grants.proficiencyBonus }),
     inventory: [...kitInventory(kitLines), ...backgroundInventory(backgroundOption, sources)],
     ...(gold === undefined ? {} : { gold }),
@@ -1056,6 +1062,9 @@ const bonusAt = (bonus: number | undefined, modifier: number, times: number): st
  * proficient save or skill, the casting save DC and attack — follow
  * compare-and-move (`moved`): rewritten only while they still say what the
  * old level wrote. The casting counts are the table's and always follow it.
+ * A class change also moves the class's save marks and proficiency entries:
+ * the new class's are added, and the old class's go unless the new one grants
+ * them too or a save's number was typed; anything else on those lists stays.
  *
  * Hit points and ability scores are not derived and are not touched; known
  * spells and their lines are the server's, since they need the spell rows.
@@ -1067,9 +1076,25 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   const before = from?.proficiencyBonus;
   const after = to.proficiencyBonus;
 
+  // A class change moves the class's save marks: the new class's are marked,
+  // and the old class's go while their number is still the old level's.
+  const formerSaves = new Set<string>(from?.savingThrows ?? []);
+  const saves = new Set<string>(to.savingThrows);
   const abilities = body.abilities.map((ability): Ability => {
+    const key = ability.label.trim().toUpperCase();
     const modifier = statedModifier(ability);
-    if (ability.proficient !== true || modifier === undefined) return ability;
+    if (ability.proficient !== true) {
+      if (!saves.has(key) || formerSaves.has(key)) return ability;
+      const save = modifier === undefined ? undefined : bonusAt(after, modifier, 1);
+      return { ...ability, proficient: true, ...(save === undefined ? {} : { save }) };
+    }
+    if (formerSaves.has(key) && !saves.has(key)) {
+      const written = modifier === undefined ? undefined : bonusAt(before, modifier, 1);
+      if (ability.save !== undefined && ability.save.trim() !== written) return ability;
+      const { proficient: _proficient, save: _save, ...cell } = ability;
+      return cell;
+    }
+    if (modifier === undefined) return ability;
     const save = moved(
       ability.save,
       bonusAt(before, modifier, 1),
@@ -1161,7 +1186,7 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   // Actions: the overlay's lines are replaced; a derived weapon line whose row
   // is in hand is worked out again at the new bonus and attack count.
   const equipment = new Map((change.equipment ?? []).map((row) => [row.id, row]));
-  const proficiencies = body.proficiencies ?? [];
+  const proficiencies = proficienciesAt(body.proficiencies, from?.proficiencies, to.proficiencies);
   const ownsAction = (action: SheetAction): boolean =>
     action.derived === true &&
     (action.source === "feature" || (to.race && action.source === "racial"));
@@ -1186,6 +1211,7 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
     abilities,
     traits,
     ...(skills === undefined ? {} : { skills }),
+    ...(proficiencies.length === 0 && body.proficiencies === undefined ? {} : { proficiencies }),
     ...(body.identity === undefined && Object.keys(nextIdentity).length === 0
       ? {}
       : { identity: nextIdentity }),
@@ -1195,6 +1221,25 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   };
   if (spellcasting === undefined) delete (next as { spellcasting?: Spellcasting }).spellcasting;
   return next;
+};
+
+/**
+ * The proficiency list after a class change: the old class's entries the new
+ * one does not grant go, the new class's that the old did not are added, and
+ * every other entry — the race's, the background's, a typed one — stays.
+ */
+const proficienciesAt = (
+  stored: ReadonlyArray<string> | undefined,
+  before: ReadonlyArray<string> | undefined,
+  after: ReadonlyArray<string>,
+): ReadonlyArray<string> => {
+  const former = new Set((before ?? []).map(wanted));
+  const granted = new Set(after.map(wanted));
+  const kept = (stored ?? []).filter(
+    (name) => granted.has(wanted(name)) || !former.has(wanted(name)),
+  );
+  const have = new Set(kept.map(wanted));
+  return [...kept, ...after.filter((name) => !former.has(wanted(name)) && !have.has(wanted(name)))];
 };
 
 /**

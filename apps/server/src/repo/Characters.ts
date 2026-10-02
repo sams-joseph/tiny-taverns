@@ -858,6 +858,7 @@ export class Characters extends Context.Service<
                       subrace: nextSubrace,
                       from: { level: rowBefore.level, className: rowBefore.className },
                       vocabulary: yield* characterVocabulary(sql, id, actor),
+                      actor,
                     })
                   : undefined;
               const columns = defined({

@@ -5,8 +5,12 @@ import {
   asRaceOption,
   type Character,
   emptyCharacterSheet,
+  type EquipmentLibraryCreate,
+  gearLineFor,
+  kitEquipmentOf,
   optionNamed,
   type RaceBody,
+  sheetWithGear,
   type SpellLibraryCreate,
   startingSheetBody,
   TavernsApi,
@@ -221,6 +225,39 @@ const coreFighter = (token: string, name: string) =>
         },
       }),
     );
+  });
+
+/** A martial melee weapon for somebody's Library, as the Gear picker offers it. */
+const libraryGlaive: EquipmentLibraryCreate = {
+  name: "Bog Glaive",
+  equipmentCategory: { index: "weapon", name: "Weapon" },
+  cost: { quantity: 20, unit: "gp" },
+  weaponCategory: "Martial",
+  weaponRange: "Melee",
+  categoryRange: "Martial Melee",
+  damage: { damageDice: "1d10", damageType: { index: "slashing", name: "Slashing" } },
+};
+
+/** The character carrying a Library-original glaive, picked in Gear: its derived attack line with it. */
+const withLibraryGlaive = (token: string, character: Character) =>
+  Effect.gen(function* () {
+    const glaive = yield* as(token, (client) =>
+      client.library.createEquipment({ payload: libraryGlaive }),
+    );
+    const sheet = sheetWithGear(
+      character.sheet,
+      [...(character.sheet.inventory ?? []), gearLineFor(glaive)],
+      [kitEquipmentOf(glaive)],
+    );
+    const carrying = yield* as(token, (client) =>
+      client.me.updateCharacter({
+        params: { characterId: character.id },
+        payload: { expectedVersion: character.version, sheet },
+      }),
+    );
+    const line = (of: Character) =>
+      of.sheet.actions?.find((action) => action.equipmentId === glaive.id);
+    return { carrying, line };
   });
 
 const spellbookOf = (token: string, character: Character) =>
@@ -755,6 +792,91 @@ describeLayer(
           expect(renamed.version).toBe(stale.version + 1);
           expect(renamed.sheet).toEqual(stale.sheet);
         }),
+      );
+
+      it.effect("moves a weapon line whose row is the owner's Library original", () =>
+        Effect.gen(function* () {
+          const { fresh } = yield* Fixture;
+          const fighter = yield* coreFighter(fresh.token, "Wren Marsh");
+          const { carrying, line } = yield* withLibraryGlaive(fresh.token, fighter);
+          // STR 15: +2, and proficient through Martial Weapons at +2.
+          expect(line(carrying)).toMatchObject({ hit: "+4", derived: true });
+          expect(line(carrying)?.text ?? "").not.toContain("Attack ×2");
+
+          const five = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: { expectedVersion: carrying.version, level: 5 },
+            }),
+          );
+          expect(line(five)).toMatchObject({
+            hit: "+5",
+            text: expect.stringContaining("Attack ×2"),
+          });
+        }),
+      );
+
+      it.effect(
+        "moves the class's saves and proficiencies on a class change, keeping hand marks",
+        () =>
+          Effect.gen(function* () {
+            const { fresh } = yield* Fixture;
+            const options = yield* as(fresh.token, (client) =>
+              client.library.coreOptions({ query: {} }),
+            );
+            const three = startingSheetBody({
+              classOption: asClassOption(optionNamed(options, "class", "Wizard")),
+              raceOption: asRaceOption(optionNamed(options, "race", "Dwarf")),
+              subrace: "Hill Dwarf",
+              abilities: FIGHTER_ARRAY,
+              level: 3,
+            });
+            const created = yield* as(fresh.token, (client) =>
+              client.me.createCoreCharacter({
+                payload: {
+                  name: "Tamsin Reed",
+                  race: "Dwarf",
+                  subrace: "Hill Dwarf",
+                  className: "Wizard",
+                  level: 3,
+                  sheet: {
+                    notes: "",
+                    ...three.body,
+                    // A save the player marked by hand.
+                    abilities: three.body.abilities.map((cell) =>
+                      cell.label === "DEX" ? { ...cell, proficient: true, save: "+4" } : cell,
+                    ),
+                  },
+                },
+              }),
+            );
+            const cell = (character: Character, label: string) =>
+              character.sheet.abilities.find((ability) => ability.label === label);
+            expect(cell(created, "INT")).toMatchObject({ proficient: true, save: "+2" });
+            const { carrying, line } = yield* withLibraryGlaive(fresh.token, created);
+            // A Wizard has no martial weapons: STR +2 alone.
+            expect(line(carrying)?.hit).toBe("+2");
+
+            const fighter = yield* as(fresh.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: created.id },
+                payload: { expectedVersion: carrying.version, className: "Fighter" },
+              }),
+            );
+            // STR 15 and CON 13 + 2: +2 each, with the bonus +2 at level 3.
+            expect(cell(fighter, "STR")).toMatchObject({ proficient: true, save: "+4" });
+            expect(cell(fighter, "CON")).toMatchObject({ proficient: true, save: "+4" });
+            for (const label of ["INT", "WIS"]) {
+              expect(cell(fighter, label)).not.toHaveProperty("proficient");
+              expect(cell(fighter, label)).not.toHaveProperty("save");
+            }
+            expect(cell(fighter, "DEX")).toMatchObject({ proficient: true, save: "+4" });
+            expect(fighter.sheet.proficiencies).toEqual(
+              expect.arrayContaining(["Martial Weapons", "All armor"]),
+            );
+            expect(fighter.sheet.proficiencies).not.toContain("Quarterstaffs");
+            expect(line(fighter)?.hit).toBe("+4");
+          }),
       );
 
       it.effect("checks a subrace edit against the core rules", () =>

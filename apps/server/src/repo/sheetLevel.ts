@@ -1,4 +1,5 @@
 import {
+  type Actor,
   asClassOption,
   asRaceOption,
   type CharacterOption,
@@ -18,7 +19,7 @@ import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect
 import { optionDetailsReader } from "../ruleset/vocabularies.js";
 import { OptionRow } from "./Options.js";
 import { fromColumns, uuidArray } from "./rows.js";
-import type { Vocabulary } from "./visibility.js";
+import { libraryRowReadable, type Vocabulary } from "./visibility.js";
 
 /**
  * **The one level change for a sheet's rules half** — a character's and an
@@ -31,7 +32,8 @@ import type { Vocabulary } from "./visibility.js";
  * It resolves what the pure rule needs, in that vocabulary and nowhere else —
  * the class before and after (with its table, features and subclasses), the
  * race (whose overlay lines scale with level), and the rows the derived
- * weapon lines name — and hands them to `withLevel` (`@taverns/api`
+ * weapon lines name (in the vocabulary or the writer's own Library, where the
+ * Gear picker finds them) — and hands them to `withLevel` (`@taverns/api`
  * `SheetGrants.ts`), the rule creation's `levelGrantsFor` shares. That moves
  * the proficiency bonus, the saves and skills, the casting numbers, the
  * identity strings, the counters, the class and subclass features, the weapon
@@ -61,6 +63,8 @@ export const recomputeForLevel = <Body extends SheetBody>(
     /** The level and class the body was written at — what a stored number is compared with. */
     readonly from: { readonly level: number | null; readonly className: string | null };
     readonly vocabulary: Vocabulary;
+    /** Who writes: a derived weapon line may name their own Library's row, as the Gear picker offers it. */
+    readonly actor: Actor;
   },
 ): Effect.Effect<Body, SqlError.SqlError | Schema.SchemaError> =>
   Effect.gen(function* () {
@@ -139,7 +143,7 @@ export const recomputeForLevel = <Body extends SheetBody>(
                      equipment.gear_category_index, equipment.tool_category
               from equipment
               where equipment.id = any(${uuidArray(ids)})
-                and ${vocabulary("equipment")}
+                and ${sql.or([vocabulary("equipment"), libraryRowReadable(sql, "equipment", input.actor)])}
             `,
           })(weaponIds);
 

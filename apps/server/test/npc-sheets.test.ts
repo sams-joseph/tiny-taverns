@@ -10,8 +10,11 @@ import {
   type NpcId,
   type NpcSheetPut,
   type NpcSheetUpdate,
+  gearLineFor,
+  kitEquipmentOf,
   optionNamed,
   type SheetBody,
+  sheetWithGear,
   startingSheetBody,
   TavernsApi,
 } from "@taverns/api";
@@ -613,6 +616,70 @@ describeLayer(
             expect(refused).toMatchObject({ ok: false, tag: "NotFound" });
             yield* removeSheet(table, hollis);
           }),
+      );
+
+      it.effect("moves a Library original's weapon line whose row is the owner's own", () =>
+        Effect.gen(function* () {
+          const options = yield* asJo((client) => client.library.coreOptions({ query: {} }));
+          const one = startingSheetBody({
+            classOption: asClassOption(optionNamed(options, "class", "Fighter")),
+            raceOption: asRaceOption(optionNamed(options, "race", "Half-Orc")),
+            abilities: [
+              { label: "STR", score: "16", modifier: "+3" },
+              { label: "DEX", score: "12", modifier: "+1" },
+              { label: "CON", score: "14", modifier: "+2" },
+              { label: "INT", score: "10", modifier: "+0" },
+              { label: "WIS", score: "10", modifier: "+0" },
+              { label: "CHA", score: "8", modifier: "-1" },
+            ],
+            level: 1,
+          });
+          const glaive = yield* asJo((client) =>
+            client.library.createEquipment({
+              payload: {
+                name: "Fen Glaive",
+                equipmentCategory: { index: "weapon", name: "Weapon" },
+                cost: { quantity: 20, unit: "gp" },
+                weaponCategory: "Martial",
+                weaponRange: "Melee",
+                categoryRange: "Martial Melee",
+                damage: { damageDice: "1d10", damageType: { index: "slashing", name: "Slashing" } },
+              },
+            }),
+          );
+          const npcId = (yield* asJo((client) =>
+            client.library.createNpc({ payload: { name: "Sergeant Mott", role: "a guard" } }),
+          )).id;
+          const started = yield* asJo((client) =>
+            client.library.putNpcSheet({
+              params: { npcId },
+              payload: {
+                level: 1,
+                race: "Half-Orc",
+                className: "Fighter",
+                sheet: sheetWithGear(
+                  one.body,
+                  [...(one.body.inventory ?? []), gearLineFor(glaive)],
+                  [kitEquipmentOf(glaive)],
+                ),
+              },
+            }),
+          );
+          const line = (sheet: SheetBody) =>
+            sheet.actions?.find((action) => action.equipmentId === glaive.id);
+          expect(line(started.sheet)?.hit).toBe("+6");
+
+          const five = yield* asJo((client) =>
+            client.library.updateNpcSheet({
+              params: { npcId },
+              payload: { expectedVersion: started.version, level: 5 },
+            }),
+          );
+          expect(line(five.sheet)).toMatchObject({
+            hit: "+7",
+            text: expect.stringContaining("Attack ×2"),
+          });
+        }),
       );
 
       it.effect("checks a subrace against its race in the campaign's rules", () =>
