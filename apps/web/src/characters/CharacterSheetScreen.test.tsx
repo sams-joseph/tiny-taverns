@@ -279,6 +279,8 @@ describe("a character sheet", () => {
   it("offers no control the payload cannot carry", async () => {
     await renderSheet();
     await screen.findByRole("navigation", { name: "Sheet sections" });
+    // The offer is its own read; the list below is taken once it has landed.
+    await screen.findByRole("button", { name: "Level up" });
 
     const pressable = () =>
       screen
@@ -301,13 +303,14 @@ describe("a character sheet", () => {
     // *Ask Hob* is the shell's own chrome on every campaign-less screen — the
     // bar the designers drew, with no handler here — not a sheet control. The
     // vitals toggle opens the narrow summary and writes nothing. Everything
-    // else is a write the payload carries: the bar's *Edit* and *Delete*, the
-    // resource spend/rest controls, the five section actions, and the six
-    // death-save pips.
+    // else is a write the payload carries: the bar's *Edit*, *Level up* and
+    // *Delete*, the resource spend/rest controls, the five section actions,
+    // and the six death-save pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
       "Add to campaign",
       "Delete Brannoc Duskharrow",
+      "Level up",
       "Edit",
       "Show vitals",
       "−",

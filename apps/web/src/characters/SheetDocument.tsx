@@ -11,10 +11,14 @@ import type {
 import { Badge, Button, Card, CardContent, cn, Icon, SectionHeading } from "@taverns/ui";
 import { Result } from "effect";
 import { useState, type ReactNode } from "react";
+import { ApiFailureNotice } from "../api/ApiFailureNotice";
+import type { ApiFailure } from "../api/failure";
 import { useMutation } from "../api/mutation";
+import { dayOf } from "../chronicle/format";
 import { DetailFacts } from "../ui/detail";
 import { SaveFailure } from "../ui/form";
 import { compactGearLine, gearFacts, gearWeight } from "./gearFacts";
+import { type LogEntry, logEntries } from "./levelUp";
 import {
   notationForD20,
   parseDiceExpression,
@@ -532,6 +536,19 @@ export interface SheetPlay {
 }
 
 /**
+ * The Log as its reader has it: the level-up records, latest first, with the
+ * document's own older lines among them (`logEntries`), and the owner's
+ * *Undo* on the one entry that can be taken back.
+ */
+export interface SheetLog {
+  readonly entries: ReadonlyArray<LogEntry>;
+  /** The latest level-up, while the character is still at its level. */
+  readonly undo: { readonly level: number; readonly onUndo: () => void } | undefined;
+  /** The records could not be read: said in the section, with a retry. */
+  readonly failure: { readonly failure: ApiFailure; readonly onRetry: () => void } | undefined;
+}
+
+/**
  * The sheet's continuous document: its sections in order, each drawn by
  * `drawnSections`. Read-only when `edits` is undefined — pass
  * `drawnSections(sheet, false)` then, so no section is drawn only to hold the
@@ -549,6 +566,7 @@ export function SheetDocument({
   register,
   edits,
   play,
+  log: recorded,
 }: {
   readonly sheet: DrawnSheet;
   /** The equipment rows the gear lines name — see `CharacterSheetView.gear`. */
@@ -557,6 +575,8 @@ export function SheetDocument({
   readonly register: (id: SheetSectionId, element: HTMLElement | null) => void;
   readonly edits: SheetEdits | undefined;
   readonly play: SheetPlay | undefined;
+  /** The Log with its records; absent, the document's own `levelUps` lines. */
+  readonly log?: SheetLog;
 }) {
   const spellcasting = sheet.spellcasting;
   const slots = slotRows(sheet);
@@ -686,6 +706,7 @@ export function SheetDocument({
   const gear = drawn("gear");
   const storySection = drawn("story");
   const log = drawn("log");
+  const logged = recorded?.entries ?? logEntries([], sheet.levelUps);
 
   return (
     /* **The document is its own `@container`**, so every grid inside it turns
@@ -1036,27 +1057,69 @@ export function SheetDocument({
 
       {log !== undefined && (
         <DocumentSection section={log} register={register}>
-          {(sheet.levelUps ?? []).map((levelUp, index) => (
+          {recorded?.failure !== undefined && (
+            <ApiFailureNotice
+              failure={recorded.failure.failure}
+              onRetry={recorded.failure.onRetry}
+            />
+          )}
+          {logged.map((entry, index) => (
             <div
-              key={levelUp.level}
+              key={entry.level}
               className={cn("flex gap-4 py-3", index === 0 ? "" : "border-t border-hairline")}
             >
               <div className="flex w-11 shrink-0 flex-col items-center gap-0.5">
                 <span className="font-display text-display-s leading-none font-semibold text-accent-ink">
-                  {levelUp.level}
+                  {entry.level}
                 </span>
                 <span className="text-micro leading-none text-faint">level</span>
               </div>
-              <div className="min-w-0 flex-1">
-                {levelUp.session !== undefined && (
-                  <Badge variant="outline">Session {levelUp.session}</Badge>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                {(entry.session !== undefined ||
+                  entry.className !== undefined ||
+                  entry.at !== undefined) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {entry.session !== undefined && (
+                      <Badge variant="outline">Session {entry.session}</Badge>
+                    )}
+                    {entry.className !== undefined && (
+                      <span className="text-body-s leading-snug font-semibold text-heading">
+                        {entry.className}
+                      </span>
+                    )}
+                    {entry.at !== undefined && (
+                      <span className="text-micro leading-none text-faint">{dayOf(entry.at)}</span>
+                    )}
+                  </div>
                 )}
-                {levelUp.note !== undefined && levelUp.note !== "" && (
-                  <p className="mt-1.5 max-w-measure text-body-s leading-body text-foreground">
-                    {levelUp.note}
+                {(entry.hitPoints !== undefined || entry.lines.length > 0) && (
+                  <p className="max-w-measure text-caption leading-body text-muted-foreground">
+                    {[entry.hitPoints, ...entry.lines]
+                      .filter((line): line is string => line !== undefined)
+                      .join(" · ")}
+                  </p>
+                )}
+                {entry.note !== undefined && entry.note !== "" && (
+                  <p className="max-w-measure text-body-s leading-body text-foreground">
+                    {entry.note}
                   </p>
                 )}
               </div>
+              {recorded?.undo !== undefined &&
+                entry.recorded &&
+                entry.level === recorded.undo.level && (
+                  <div className="shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Undo level ${String(entry.level)}`}
+                      onClick={recorded.undo.onUndo}
+                    >
+                      <Icon name="history" size={14} />
+                      Undo
+                    </Button>
+                  </div>
+                )}
             </div>
           ))}
         </DocumentSection>

@@ -846,7 +846,10 @@ describeLayer("creator-actor", shared, (it) => {
       // campaign, so a proof that the caller runs a table answers nothing.
       // `Advancement.undoLevelUp` is the one hundred and seventy-ninth, for
       // the same reason: the level-up's reverse, on the same row.
-      expect(ungated).toBe(179);
+      // `Advancement.levelUps` is the one hundred and eightieth, for `offer`'s
+      // reason: the Log of a character of the caller's own, reached by
+      // `ownCharacter` alone.
+      expect(ungated).toBe(180);
     });
   });
 });

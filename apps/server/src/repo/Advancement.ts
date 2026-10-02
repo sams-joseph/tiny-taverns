@@ -170,6 +170,9 @@ const UndoRow = fromColumns(
   }),
 );
 
+/** A character row the actor owns, by id alone: whether the Log has anybody to answer for. */
+const OwnedCharacterIdRow = fromColumns(Schema.Struct({ id: CharacterId }));
+
 const ClassOptionIdRequest = Schema.toType(Schema.String);
 const SubclassIdsRequest = Schema.toType(Schema.Array(SubclassId));
 
@@ -182,6 +185,7 @@ const SubclassIdsRequest = Schema.toType(Schema.Array(SubclassId));
  * | `offer`       | `ownCharacter`, then `characterVocabulary`              |
  * | `levelUp`     | `ownCharacter` (row locked), then `characterVocabulary` |
  * | `undoLevelUp` | `ownCharacter` (row locked), then `characterVocabulary` |
+ * | `levelUps`    | `ownCharacter`                                          |
  *
  * The first vocabulary-aware read of the class progression. The class and
  * race resolve by name the way the level recompute resolves them
@@ -239,6 +243,14 @@ export class Advancement extends Context.Service<
       id: CharacterId,
       level: number,
     ) => Effect.Effect<CharacterLevelUpUndone, NotFound | Conflict, CurrentActor>;
+    /**
+     * **The Log**: the character's level-up records, latest first, for the
+     * levels it holds now. A record above its level is one the Level box has
+     * since taken back, and describes nothing on the sheet.
+     */
+    readonly levelUps: (
+      id: CharacterId,
+    ) => Effect.Effect<ReadonlyArray<CharacterAdvancement>, NotFound, CurrentActor>;
   }
 >()("Advancement") {
   static readonly layer = Layer.effect(this)(
@@ -702,6 +714,36 @@ export class Advancement extends Context.Service<
               );
               yield* ringSeatSessions(live, done.sessions);
               return done.result;
+            }),
+          ),
+
+        levelUps: (id) =>
+          dieOnSqlError(
+            Effect.gen(function* () {
+              const actor = yield* CurrentActor;
+              const owned = yield* SqlSchema.findOneOption({
+                Request: Schema.Void,
+                Result: OwnedCharacterIdRow,
+                execute: () => sql`
+                  select character.id from character
+                  where character.id = ${id} and ${ownCharacter(sql, actor)}
+                `,
+              })(undefined);
+              if (Option.isNone(owned)) {
+                return yield* new NotFound({ resource: "character", id });
+              }
+              return yield* SqlSchema.findAll({
+                Request: Schema.Void,
+                Result: AdvancementRow,
+                execute: () => sql`
+                  select ${advancementColumns(sql)}
+                  from character_advancement
+                  join character on character.id = character_advancement.character_id
+                  where character.id = ${id} and ${ownCharacter(sql, actor)}
+                    and character_advancement.level <= greatest(1, coalesce(character.level, 1))
+                  order by character_advancement.level desc
+                `,
+              })(undefined);
             }),
           ),
       };

@@ -1,10 +1,12 @@
 import type {
   CampaignId,
   CampaignMembership,
+  CharacterAdvancement,
   CharacterId,
   CharacterOption,
   CharacterSpellbook,
   Equipment,
+  LevelUpOffer,
   OwnedCharacter,
   PlayerLiveTable,
   SheetBody,
@@ -124,6 +126,30 @@ export const characterSpellsAtom = Atom.family((characterId: CharacterId) =>
     (client): Effect.Effect<CharacterSpellbook, unknown> =>
       client.me.characterSpells({ params: { characterId } }),
     [reads.characterSpells(characterId), reads.myCharacters],
+  ),
+);
+
+/**
+ * What one character's next level offers: the level-up wizard's read, and
+ * what decides whether the sheet offers a level-up at all. The offer is a
+ * function of the row (every write to it names `myCharacters`) and of the
+ * tables it sits at (a join or a leave names `myCharacters` too), so that is
+ * the key it answers; a level-up re-reads it through the same key.
+ */
+export const levelUpOfferAtom = Atom.family((characterId: CharacterId) =>
+  apiAtom(
+    (client): Effect.Effect<LevelUpOffer, unknown> =>
+      client.me.levelUpOffer({ params: { characterId } }),
+    [reads.myCharacters],
+  ),
+);
+
+/** One character's level-up records, latest first: its Log. */
+export const characterLevelUpsAtom = Atom.family((characterId: CharacterId) =>
+  apiAtom(
+    (client): Effect.Effect<ReadonlyArray<CharacterAdvancement>, unknown> =>
+      client.me.levelUps({ params: { characterId } }),
+    [reads.characterLevelUps(characterId), reads.myCharacters],
   ),
 );
 

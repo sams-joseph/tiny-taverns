@@ -234,7 +234,12 @@ import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
 import { CharacterSpellbook, NpcSpellbook } from "./Spellbook.js";
-import { CharacterLeveledUp, CharacterLevelUpUndone, LevelUpPayload } from "./Advancement.js";
+import {
+  CharacterAdvancement,
+  CharacterLeveledUp,
+  CharacterLevelUpUndone,
+  LevelUpPayload,
+} from "./Advancement.js";
 import { LevelUpOffer } from "./LevelUp.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
@@ -622,6 +627,20 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { characterId: CharacterId, level: Schema.Int },
       success: CharacterLevelUpUndone,
       error: [NotFound, Conflict],
+    }),
+    /**
+     * One owned character's level-ups, latest first: the records its Log
+     * draws, each with the hit points it gained and what it chose, for the
+     * levels the character holds now (a record above its level is one the
+     * Level box has since taken back, and is not listed). The table's view of
+     * the same log is narrower and travels on the seat.
+     *
+     * `ownCharacter`: somebody else's character is the ordinary `NotFound`.
+     */
+    HttpApiEndpoint.get("levelUps", "/characters/:characterId/level-ups", {
+      params: { characterId: CharacterId },
+      success: Schema.Array(CharacterAdvancement),
+      error: NotFound,
     }),
     /**
      * **The first write in the product a player may make**, and the only

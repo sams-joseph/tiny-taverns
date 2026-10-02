@@ -312,6 +312,14 @@ export const reads = {
   /** One character's bounded spell vocabulary. */
   characterSpells: (characterId: CharacterId): ReadKey => key`me:characters:${characterId}:spells`,
 
+  /**
+   * One character's level-up records: the Log on its owner's sheet. A
+   * level-up and its undo name it. Which records it lists also moves with the
+   * character's level, so its read answers `myCharacters` too.
+   */
+  characterLevelUps: (characterId: CharacterId): ReadKey =>
+    key`me:characters:${characterId}:level-ups`,
+
   /** The account's Library: the creatures it authored, plus the bundle. */
   library: "library" as ReadKey,
 

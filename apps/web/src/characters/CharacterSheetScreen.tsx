@@ -30,12 +30,15 @@ import { characterSheetTarget } from "./sheetTarget";
 import { SkillsDialog } from "./SkillsDialog";
 import { SpellPickerDialog } from "./SpellPickerDialog";
 import { type LiveBanner, liveBanner } from "./live";
-import { loadCharacterSheet } from "./load";
+import { characterLevelUpsAtom, levelUpOfferAtom, loadCharacterSheet } from "./load";
+import { type LogEntry, logEntries } from "./levelUp";
+import { LevelUpDialog } from "./LevelUpDialog";
+import { UndoLevelUpDialog } from "./UndoLevelUpDialog";
 import { drawnSections, hitPoints, sectionInView, type SheetSectionId } from "./sheet";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { DeathSaveRow, HpTrack, SectionSpine, StatPill } from "./SheetParts";
-import { SheetDocument } from "./SheetDocument";
+import { SheetDocument, type SheetLog } from "./SheetDocument";
 import { ownCharacterWrites, restOwnCharacter, saveOwnCharacter, sheetWith } from "./write";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
@@ -82,8 +85,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * rule, spelled over the seven sections the continuous sheet has. *Abilities &
  * skills*, *Gear & coin* and *Story* are drawn on a writable sheet whether or
  * not they hold anything, because each carries the affordance that creates its
- * own contents; *Actions*, *Spellcasting*, *Features & traits* and *Level ups*
- * appear only when the document fills them. Spellcasting is editable once it
+ * own contents; *Actions*, *Spellcasting* and *Features & traits* appear only
+ * when the document fills them, and *Level ups* when the level-up records (or
+ * the document's older lines) do. Spellcasting is editable once it
  * exists because the authoritative picker needs the class context already on
  * the row; the others remain content-driven. The spine lists exactly the drawn
  * sections and nothing else.
@@ -95,7 +99,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * whole-document race is written down. The durable columns are the top bar's
  * *Edit*; the six cells, the skill list, spell preparation, the backstory and
  * the carried list are their sections' own header actions; a death save is the
- * pip itself. **Every
+ * pip itself. A level-up and its undo are the two writes beside it, each its
+ * own endpoint behind its own dialog (`LevelUpDialog`, `UndoLevelUpDialog`),
+ * because the server composes what they change. **Every
  * one of them re-reads the screen afterwards** rather than patching what it
  * holds, because a write here changes something it did not send: `descriptor`
  * is a generated column, so editing the level rewrites the line under the name.
@@ -527,6 +533,7 @@ function SheetLayout({
   onEdit,
   onReload,
   rollCampaignId,
+  log,
 }: {
   readonly owned: OwnedCharacter;
   readonly gearRows: ReadonlyArray<Equipment>;
@@ -539,6 +546,7 @@ function SheetLayout({
   readonly scrollTopRef: { current: number };
   readonly onEdit: (what: "abilities" | "skills" | "spells" | "backstory" | "gear") => void;
   readonly onReload: () => void;
+  readonly log: SheetLog;
 }) {
   const spine = useRef<HTMLElement>(null);
   const sectionElements = useRef(new Map<SheetSectionId, HTMLElement>());
@@ -546,7 +554,11 @@ function SheetLayout({
   // Writable, so the three starting sections are drawn whether or not they hold
   // anything — otherwise the affordance that fills a section would live behind
   // the section it fills, and a sheet nobody has written could never be started.
-  const sections = drawnSections(owned.character.sheet, true);
+  const sections = drawnSections(
+    owned.character.sheet,
+    true,
+    log.entries.length > 0 || log.failure !== undefined,
+  );
 
   const register = (id: SheetSectionId, element: HTMLElement | null) => {
     if (element === null) sectionElements.current.delete(id);
@@ -661,6 +673,7 @@ function SheetLayout({
             onEditSpells: () => onEdit("spells"),
           }}
           play={{ owned, rollCampaignId }}
+          log={log}
         />
       </div>
     </div>
@@ -700,6 +713,17 @@ export function CharacterSheetScreen() {
    * *not here*.
    */
   const [resource, reload] = useApiAtom(sheetAtom(characterId));
+  /**
+   * The next level's offer — read beside the sheet rather than when the
+   * wizard opens, because it is what says whether there is a level to take:
+   * a class the character's rules do not resolve has no hit die to level up
+   * with (`hitPoints` absent), and the highest level a sheet holds answers
+   * `Conflict`. Either way *Level up* is not drawn, and the Level box in
+   * *Edit* stays the way to change the level. The wizard reads the same atom.
+   */
+  const [offer] = useApiAtom(levelUpOfferAtom(characterId));
+  /** The Log's records, latest first. */
+  const [records, reloadRecords] = useApiAtom(characterLevelUpsAtom(characterId));
   const view = resource.state === "ready" ? resource.value : undefined;
   const owned = view?.characters.find((row) => row.character.id === characterId);
   const character = owned?.character;
@@ -744,6 +768,9 @@ export function CharacterSheetScreen() {
     | "gear"
     | "join"
     | "delete"
+    | "levelUp"
+    /** The Log entry an undo takes back, held here so the dialog outlives the entry's re-read. */
+    | { readonly undo: LogEntry }
     | undefined
   >();
   /**
@@ -769,7 +796,32 @@ export function CharacterSheetScreen() {
   // The lit section must be a drawn one — a section can stop being drawn
   // between renders — so the held value falls back to the first rather than
   // being trusted.
-  const drawn = character === undefined ? [] : drawnSections(character.sheet, true);
+  /**
+   * The Log: the records, with any older line the document holds, and *Undo*
+   * on the latest record while the character is still at its level — a level
+   * the Level box has moved since is not the record's to take back, and the
+   * server would say so.
+   */
+  const entries = logEntries(
+    records.state === "ready" ? records.value : [],
+    character?.sheet.levelUps,
+  );
+  const latest = records.state === "ready" ? records.value[0] : undefined;
+  const latestEntry = entries.find((entry) => entry.recorded && entry.level === latest?.level);
+  const log: SheetLog = {
+    entries,
+    undo:
+      latest === undefined || latestEntry === undefined || latest.level !== character?.level
+        ? undefined
+        : { level: latest.level, onUndo: () => setEditing({ undo: latestEntry }) },
+    failure:
+      records.state === "failed" ? { failure: records.failure, onRetry: reloadRecords } : undefined,
+  };
+  const canLevelUp = offer.state === "ready" && offer.value.hitPoints !== undefined;
+  const drawn =
+    character === undefined
+      ? []
+      : drawnSections(character.sheet, true, entries.length > 0 || log.failure !== undefined);
   const lit = drawn.some((section) => section.id === active)
     ? active
     : (drawn[0]?.id ?? "abilities");
@@ -842,6 +894,16 @@ export function CharacterSheetScreen() {
             Delete
           </Button>
         )}
+        {/* **The next level, beside the level the line above names.** A
+              guided level-up rather than the Level box: the wizard walks the
+              offer and the server holds every choice to it. Absent when there
+              is no level to take — see the offer's read above. */}
+        {character !== undefined && canLevelUp && (
+          <Button variant="secondary" size="sm" onClick={() => setEditing("levelUp")}>
+            <Icon name="arrow-big-up-dash" size={14} />
+            Level up
+          </Button>
+        )}
         {/* The durable columns, and the one write with no drawn home of its
               own — the delivery gives the identity card no edit affordance, so
               it goes where a screen's own action goes. It is absent until the
@@ -878,6 +940,7 @@ export function CharacterSheetScreen() {
             onEdit={setEditing}
             onReload={reload}
             rollCampaignId={view.live?.campaignId}
+            log={log}
           />
         ))}
 
@@ -926,6 +989,17 @@ export function CharacterSheetScreen() {
           memberships={view.memberships}
           onClose={close}
           onJoined={reload}
+        />
+      )}
+      {owned !== undefined && editing === "levelUp" && (
+        <LevelUpDialog owned={owned} onClose={close} onDone={close} onReload={reload} />
+      )}
+      {owned !== undefined && typeof editing === "object" && (
+        <UndoLevelUpDialog
+          owned={owned}
+          entry={editing.undo}
+          onClose={close}
+          onReload={reloadAndClose}
         />
       )}
       {owned !== undefined && editing === "delete" && (

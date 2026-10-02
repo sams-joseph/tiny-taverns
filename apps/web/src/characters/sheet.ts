@@ -366,7 +366,16 @@ export const usesNote = (
   return recharge === undefined ? count : `${count} · ${recharge}`;
 };
 
-export const sheetSections = (sheet: DrawnSheet, writable = false): SheetSections => {
+/**
+ * `logged` is whether the Log has anything to draw, when the reader has the
+ * level-up records (the owner's sheet); absent, the document's own
+ * `levelUps` lines decide, as they do wherever no records are read.
+ */
+export const sheetSections = (
+  sheet: DrawnSheet,
+  writable = false,
+  logged?: boolean,
+): SheetSections => {
   const spellcasting = sheet.spellcasting;
   const story = sheet.story;
 
@@ -393,7 +402,7 @@ export const sheetSections = (sheet: DrawnSheet, writable = false): SheetSection
       some(sheet.journal) ||
       (story !== undefined &&
         [story.appearance, story.personality, story.ideal, story.bond, story.flaw].some(written)),
-    log: some(sheet.levelUps),
+    log: logged ?? some(sheet.levelUps),
   };
 
   return { ...sections, empty: !Object.values(sections).some(Boolean) };
@@ -403,8 +412,9 @@ export const sheetSections = (sheet: DrawnSheet, writable = false): SheetSection
 export const drawnSections = (
   sheet: DrawnSheet,
   writable = false,
+  logged?: boolean,
 ): ReadonlyArray<SheetSectionSpec> => {
-  const drawn = sheetSections(sheet, writable);
+  const drawn = sheetSections(sheet, writable, logged);
   return SHEET_SECTIONS.filter((section) => drawn[section.id]);
 };
 

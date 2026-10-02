@@ -4,6 +4,7 @@ import type {
   CharacterOwnCreate,
   CharacterOwnUpdate,
   CharacterSheet,
+  LevelUpPayload,
   OwnedCharacter,
 } from "@taverns/api";
 import type { TavernsClient } from "../api/client";
@@ -160,6 +161,28 @@ export const ownCharacterWrites = (owned: OwnedCharacter): Invalidation => [
     reads.party(seat.campaignId),
     reads.encounters(seat.campaignId),
   ]),
+];
+
+/** One level up, with what the owner chose against the offer they read. */
+export const levelUpOwnCharacter = (
+  client: TavernsClient,
+  character: Character,
+  payload: LevelUpPayload,
+) => client.me.levelUp({ params: { characterId: character.id }, payload });
+
+/** The latest level-up taken back: back to the level below. */
+export const undoOwnLevelUp = (client: TavernsClient, character: Character, level: number) =>
+  client.me.undoLevelUp({ params: { characterId: character.id, level } });
+
+/**
+ * What a level-up and its undo change: everything a sheet write changes —
+ * the descriptor on every party screen, and every table's encounter
+ * difficulty, which reads the level — and the Log, which they alone write.
+ * The next offer is re-read through `myCharacters`.
+ */
+export const levelUpWrites = (owned: OwnedCharacter): Invalidation => [
+  ...ownCharacterWrites(owned),
+  reads.characterLevelUps(owned.character.id),
 ];
 
 /**
