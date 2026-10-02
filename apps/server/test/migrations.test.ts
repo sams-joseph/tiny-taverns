@@ -178,6 +178,7 @@ describeLayer("migrations", database, (it) => {
         "campaign_member",
         "campaign_story",
         "character",
+        "character_advancement",
         "character_banner",
         "character_option",
         "character_option_ability_bonus",
@@ -356,6 +357,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 80, name: "assistant_turn_discard" },
         { migration_id: 81, name: "integer_sequences" },
         { migration_id: 82, name: "subclass_spells" },
+        { migration_id: 83, name: "character_advancement" },
       ]);
     }),
   );
@@ -449,6 +451,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 80, name: "assistant_turn_discard" },
         { migration_id: 81, name: "integer_sequences" },
         { migration_id: 82, name: "subclass_spells" },
+        { migration_id: 83, name: "character_advancement" },
       ]);
     }),
   );

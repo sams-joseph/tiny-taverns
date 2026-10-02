@@ -234,6 +234,7 @@ import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
 import { CharacterSpellbook, NpcSpellbook } from "./Spellbook.js";
+import { CharacterLeveledUp, LevelUpPayload } from "./Advancement.js";
 import { LevelUpOffer } from "./LevelUp.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
@@ -579,6 +580,28 @@ class MeGroup extends HttpApiGroup.make("me")
     HttpApiEndpoint.get("levelUpOffer", "/characters/:characterId/level-up", {
       params: { characterId: CharacterId },
       success: LevelUpOffer,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Level one owned character up by one level, with what the owner chose
+     * (`LevelUpPayload`) against the offer above. One transaction: the row is
+     * locked and its version checked, the offer is re-derived in the
+     * character's vocabulary and every choice held to it (`levelUpChosen`),
+     * the hit points are fixed or rolled here, the level's recompute runs,
+     * and a `character_advancement` record is written beside the bumped row.
+     * Open seat sessions hear `character-updated`.
+     *
+     * `ownCharacter`: somebody else's character is the ordinary `NotFound`.
+     * `Conflict` is a stale version, a character on the table in a live fight
+     * at any campaign, a class the character's rules do not resolve, a level
+     * past the last, or a choice the offer does not allow (every reason in the
+     * message). There is no `origin` to send; a confirmed level-up is
+     * `authored`.
+     */
+    HttpApiEndpoint.post("levelUp", "/characters/:characterId/level-up", {
+      params: { characterId: CharacterId },
+      payload: LevelUpPayload,
+      success: CharacterLeveledUp,
       error: [NotFound, Conflict],
     }),
     /**

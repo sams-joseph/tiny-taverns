@@ -37,17 +37,26 @@ const initialKnown = (
   const byName = new Map(
     book.spells.map((option) => [option.spell.name.trim().toLowerCase(), option]),
   );
-  return eligibleKnownSpells(
-    book,
-    current.flatMap((row) => {
-      const option =
-        row.spellId === undefined || row.spellId === null
-          ? byName.get(row.name.trim().toLowerCase())
-          : byId.get(row.spellId);
-      if (option === undefined) return [];
-      return [spellKnownFor(option, row.prepared === true)];
-    }),
-  );
+  return [
+    ...eligibleKnownSpells(
+      book,
+      current.flatMap((row) => {
+        const option =
+          row.spellId === undefined || row.spellId === null
+            ? byName.get(row.name.trim().toLowerCase())
+            : byId.get(row.spellId);
+        if (option === undefined) return [];
+        return [spellKnownFor(option, row.prepared === true)];
+      }),
+    ),
+    ...current.filter(
+      (row) =>
+        row.learnedBy === "magicalSecrets" &&
+        row.spellId !== undefined &&
+        row.spellId !== null &&
+        !byId.has(row.spellId),
+    ),
+  ];
 };
 
 const replace = (

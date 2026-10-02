@@ -1510,6 +1510,56 @@ describe("withLevel", () => {
     });
   });
 
+  it("moves what a raised score or new expertise feeds, read off the sheet as it was written", () => {
+    const three = composed(3);
+    const written = {
+      ...three,
+      abilities: three.abilities.map((cell) =>
+        cell.label === "DEX" ? { ...cell, save: "+2" } : cell,
+      ),
+      identity: { ...three.identity, initiative: "+2" },
+      skills: [
+        { name: "Athletics", ability: "STR", bonus: "+6", proficient: true },
+        { name: "Stealth", ability: "DEX", bonus: "+4", proficient: true },
+        { name: "Acrobatics", ability: "DEX", bonus: "+2" },
+        { name: "Sleight of Hand", ability: "DEX", bonus: "+5" },
+      ],
+    };
+    // A level-up's choices: DEX 14 → 16, and expertise in Stealth.
+    const chosen = {
+      ...written,
+      abilities: written.abilities.map((cell) =>
+        cell.label === "DEX" ? { ...cell, score: "16", modifier: "+3" } : cell,
+      ),
+      skills: written.skills.map((skill) =>
+        skill.name === "Stealth" ? { ...skill, expertise: true } : skill,
+      ),
+    };
+    const four = withLevel(chosen, {
+      from: grantsAt(written, 3),
+      to: grantsAt(chosen, 4),
+      equipment: FIGHTER.details?.equipment,
+      written,
+    });
+    // The unproficient DEX save and the initiative stated the old +2.
+    expect(four.abilities.find((cell) => cell.label === "DEX")?.save).toBe("+3");
+    expect(four.identity?.initiative).toBe("+3");
+    expect(four.skills).toEqual([
+      { name: "Athletics", ability: "STR", bonus: "+6", proficient: true },
+      // +3 and twice the bonus of 2: written once, now expert.
+      { name: "Stealth", ability: "DEX", bonus: "+7", proficient: true, expertise: true },
+      { name: "Acrobatics", ability: "DEX", bonus: "+3" },
+      // +5 was never DEX's +2: typed, so it stays.
+      { name: "Sleight of Hand", ability: "DEX", bonus: "+5" },
+    ]);
+    // The crossbow reads DEX: +3 and the bonus.
+    expect(four.actions?.find((action) => action.id === "atk:crossbow-light")?.hit).toBe("+5");
+    // Without `written`, the same body moves nothing the score fed.
+    const blind = withLevel(chosen, { from: grantsAt(chosen, 3), to: grantsAt(chosen, 4) });
+    expect(blind.identity?.initiative).toBe("+2");
+    expect(blind.skills?.find((skill) => skill.name === "Stealth")?.bonus).toBe("+4");
+  });
+
   it("moves no number it cannot compare: a class whose old table is unknown", () => {
     const one = composed(1);
     const typed = { ...one, identity: { ...one.identity, proficiency: "+2" } };

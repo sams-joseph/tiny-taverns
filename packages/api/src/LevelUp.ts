@@ -222,7 +222,8 @@ export type LevelUpAutomatic = typeof LevelUpAutomatic.Type;
  * rule (the spell picker's: `mode`, the limits, the lists).
  *
  * - `cantrips` and `spells` are how many new ones: the table's growth for a
- *   known caster, two for a wizard's spellbook, none for a prepared caster
+ *   known caster (less the Magical Secrets, which the Spells Known column
+ *   already counts), two for a wizard's spellbook, none for a prepared caster
  *   (who re-prepares at any time with the picker; `prepared` is the new limit).
  * - `replace`: a known caster may swap one spell it knows for another.
  * - `options` are the class (and subclass) list at the new level's highest
@@ -747,8 +748,12 @@ const spellsOf = (
   );
   const grow = (key: "cantripsKnown" | "spellsKnown") =>
     Math.max(0, (to.limits[key] ?? 0) - (from.limits[key] ?? 0));
+  const wide = levelUpWideSpells(classOption, fromLevel);
   const cantrips = grow("cantripsKnown");
-  const spells = to.mode === "known" || to.mode === "spellbook" ? grow("spellsKnown") : 0;
+  const spells =
+    to.mode === "known" || to.mode === "spellbook"
+      ? Math.max(0, grow("spellsKnown") - (wide.magicalSecrets?.count ?? 0))
+      : 0;
   const replace = to.mode === "known";
   const options = to.spells.flatMap((option) =>
     known.has(option.spell.id) ||
@@ -756,7 +761,6 @@ const spellsOf = (
       ? []
       : [spellOptionOf(option.spell, option.list)],
   );
-  const wide = levelUpWideSpells(classOption, fromLevel);
   const everySpell = (sources.wideSpells ?? []).filter((spell) => !known.has(spell.id));
   const prepared = numberChange(from.limits.prepared, to.limits.prepared);
   return {
@@ -850,10 +854,20 @@ export const levelUpOfferFor = (sources: LevelUpOfferSources): LevelUpOffer => {
   const to = grantsAt(toLevel);
 
   const byId = new Map(sources.features.map((row) => [row.id, row]));
+  // What the sheet holds, and what the new level grants by itself: an option
+  // the level grants outright is not a choice (the 2014 source gives
+  // *Metamagic: Twinned Spell* no parent, so sorcerer 3 grants it and
+  // *Metamagic* lists it too).
   const held: Held = {
     toLevel,
-    featureIds: new Set(body.traits.flatMap((trait) => trait.featureId ?? [])),
-    featureNames: new Set(body.traits.map((trait) => wanted(trait.name))),
+    featureIds: new Set([
+      ...body.traits.flatMap((trait) => trait.featureId ?? []),
+      ...to.features.flatMap((feature) => feature.featureId ?? []),
+    ]),
+    featureNames: new Set([
+      ...body.traits.map((trait) => wanted(trait.name)),
+      ...to.features.map((feature) => wanted(feature.name)),
+    ]),
     spellSlugs: new Set((body.spellcasting?.known ?? []).map((spell) => slug(spell.name))),
     byIndex: new Map(
       sources.features.flatMap((row) => (row.index === null ? [] : [[row.index, row] as const])),

@@ -841,7 +841,10 @@ describeLayer("creator-actor", shared, (it) => {
       // `Advancement.offer` is the one hundred and seventy-seventh, for
       // `Spells.forCharacter`'s reason: the next level of a character of the
       // caller's own, whose reach is `ownCharacter` — no campaign to prove.
-      expect(ungated).toBe(177);
+      // `Advancement.levelUp` is the one hundred and seventy-eighth, for
+      // `Characters.rest`'s reason: an owner-only write to a character in no
+      // campaign, so a proof that the caller runs a table answers nothing.
+      expect(ungated).toBe(178);
     });
   });
 });

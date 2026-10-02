@@ -1014,6 +1014,13 @@ export interface LevelChange {
   readonly to: LevelGrants;
   /** The rows the sheet's derived weapon lines name, as far as the caller could reach them. */
   readonly equipment?: ReadonlyArray<KitEquipment> | undefined;
+  /**
+   * The sheet as its stored numbers were written, when the change moved more
+   * than the level: a level-up's ability score increase or new expertise
+   * (`levelUpChosen`). Compare-and-move then compares against that sheet's
+   * modifiers and expertise marks. Absent, it is the body's own.
+   */
+  readonly written?: SheetBody | undefined;
 }
 
 /**
@@ -1066,7 +1073,10 @@ const bonusAt = (bonus: number | undefined, modifier: number, times: number): st
  * The numbers that are not lines — `identity.proficiency` and `hitDice`, a
  * proficient save or skill, the casting ability, save DC and attack — follow
  * compare-and-move (`moved`): rewritten only while they still say what the
- * old level wrote. The casting counts are the table's and always follow it.
+ * old level wrote. When `written` says a modifier or an expertise mark moved
+ * with the level, "what the old level wrote" is read off it, and a save, a
+ * skill or the initiative that stated the old modifier alone moves too. The
+ * casting counts are the table's and always follow it.
  * A class change also moves the class's save marks and proficiency entries:
  * the new class's are added, and the old class's go unless the new one grants
  * them too or a save's number was typed; anything else on those lists stays.
@@ -1080,6 +1090,15 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   const { from, to } = change;
   const before = from?.proficiencyBonus;
   const after = to.proficiencyBonus;
+  const written = change.written ?? body;
+  const cellOf = (cells: ReadonlyArray<Ability>, label: string | undefined) =>
+    cells.find((ability) => ability.label.trim().toUpperCase() === label);
+  /** The modifier a stored number was written from: the written sheet's, else the cell's own. */
+  const formerModifier = (label: string, modifier: number | undefined): number | undefined =>
+    statedModifier(cellOf(written.abilities, label)) ?? modifier;
+  /** A number that stated the bare modifier, moved with it. */
+  const movedModifier = (stored: string | undefined, was: number | undefined, now: number) =>
+    was === undefined || was === now ? stored : moved(stored, signed(was), signed(now), false);
 
   // A class change moves the class's save marks: the new class's are marked,
   // and the old class's go while their number is still the old level's.
@@ -1088,37 +1107,54 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   const abilities = body.abilities.map((ability): Ability => {
     const key = ability.label.trim().toUpperCase();
     const modifier = statedModifier(ability);
+    const was = formerModifier(key, modifier);
     if (ability.proficient !== true) {
-      if (!saves.has(key) || formerSaves.has(key)) return ability;
+      if (!saves.has(key) || formerSaves.has(key)) {
+        if (modifier === undefined) return ability;
+        const save = movedModifier(ability.save, was, modifier);
+        return save === ability.save
+          ? ability
+          : { ...ability, ...(save === undefined ? {} : { save }) };
+      }
       const save = modifier === undefined ? undefined : bonusAt(after, modifier, 1);
       return { ...ability, proficient: true, ...(save === undefined ? {} : { save }) };
     }
     if (formerSaves.has(key) && !saves.has(key)) {
-      const written = modifier === undefined ? undefined : bonusAt(before, modifier, 1);
-      if (ability.save !== undefined && ability.save.trim() !== written) return ability;
+      const stated = was === undefined ? undefined : bonusAt(before, was, 1);
+      if (ability.save !== undefined && ability.save.trim() !== stated) return ability;
       const { proficient: _proficient, save: _save, ...cell } = ability;
       return cell;
     }
     if (modifier === undefined) return ability;
     const save = moved(
       ability.save,
-      bonusAt(before, modifier, 1),
+      was === undefined ? undefined : bonusAt(before, was, 1),
       bonusAt(after, modifier, 1),
       true,
     );
     return save === undefined || save === ability.save ? ability : { ...ability, save };
   });
 
+  const writtenSkills = new Map((written.skills ?? []).map((skill) => [wanted(skill.name), skill]));
   const skills = body.skills?.map((skill): Skill => {
     const label = skill.ability?.trim().toUpperCase();
-    const modifier = statedModifier(
-      abilities.find((ability) => ability.label.trim().toUpperCase() === label),
-    );
-    if (skill.proficient !== true || modifier === undefined) return skill;
+    const modifier = statedModifier(cellOf(abilities, label));
+    if (modifier === undefined || label === undefined) return skill;
+    const was = formerModifier(label, modifier);
+    if (skill.proficient !== true) {
+      const bonus = movedModifier(skill.bonus, was, modifier);
+      return bonus === skill.bonus
+        ? skill
+        : { ...skill, ...(bonus === undefined ? {} : { bonus }) };
+    }
     const times = skill.expertise === true ? 2 : 1;
+    const former = writtenSkills.get(wanted(skill.name)) ?? skill;
+    const timesBefore = former.proficient !== true ? undefined : former.expertise === true ? 2 : 1;
     const bonus = moved(
       skill.bonus,
-      bonusAt(before, modifier, times),
+      was === undefined || timesBefore === undefined
+        ? undefined
+        : bonusAt(before, was, timesBefore),
       bonusAt(after, modifier, times),
       false,
     );
@@ -1126,6 +1162,11 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   });
 
   const identity: SheetIdentity = body.identity ?? {};
+  const dexterity = statedModifier(cellOf(abilities, "DEX"));
+  const initiative =
+    dexterity === undefined
+      ? identity.initiative
+      : movedModifier(identity.initiative, formerModifier("DEX", dexterity), dexterity);
   const proficiency = moved(
     identity.proficiency,
     before === undefined ? undefined : signed(before),
@@ -1145,6 +1186,7 @@ export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChang
   })();
   const nextIdentity: SheetIdentity = {
     ...identity,
+    ...(initiative === undefined ? {} : { initiative }),
     ...(proficiency === undefined ? {} : { proficiency }),
     ...(hitDice === undefined ? {} : { hitDice }),
   };

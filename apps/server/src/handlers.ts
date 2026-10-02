@@ -236,6 +236,9 @@ const MeLive = HttpApiBuilder.group(
         .handle("characters", () => characters.mine)
         .handle("characterSpells", ({ params }) => spells.forCharacter(params.characterId))
         .handle("levelUpOffer", ({ params }) => advancement.offer(params.characterId))
+        .handle("levelUp", ({ params, payload }) =>
+          advancement.levelUp(params.characterId, payload),
+        )
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )

@@ -262,6 +262,11 @@ describeLayer("schema", shared, (it) => {
           // assistant's when kept from a Hob draft. See 0072_campaign_story.ts.
           "campaign_story",
           "character",
+          // A character's level-ups, one row per level gained: account-owned
+          // with its character, and the assistant's when a kept Hob proposal
+          // wrote it. Its visibility is as inert as `character`'s. See
+          // 0083_character_advancement.ts.
+          "character_advancement",
           // A class or a race — the pieces a character is built from, in the
           // same three-owner shape a `creature` has. Content, and it carries the
           // whole tail: an option can be the assistant's the day something proposes

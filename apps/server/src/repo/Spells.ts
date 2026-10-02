@@ -273,7 +273,8 @@ const highestSlot = (spellcasting: ClassLevelSpellcasting | undefined): number =
 const highestSheetSlot = (body: SpellSourceBody): number =>
   Math.max(0, ...(body.spellcasting?.slots ?? []).map((slot) => (slot.total > 0 ? slot.level : 0)));
 
-const spellMode = (className: string | undefined): CharacterSpellbook["mode"] => {
+/** How a class keeps its spells, by the 2014 rule: the picker's and the level recompute's. */
+export const spellMode = (className: string | undefined): CharacterSpellbook["mode"] => {
   switch ((className ?? "").trim().toLowerCase()) {
     case "cleric":
     case "druid":

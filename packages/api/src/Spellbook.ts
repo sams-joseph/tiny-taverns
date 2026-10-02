@@ -281,21 +281,51 @@ export const sheetWithRecomputedDerived = (
  * The sheet with its picked spells replaced, and the spell action lines that
  * follow. Any sheet's rules half — a character's, an NPC's — comes back as the
  * same kind of sheet it went in as.
+ *
+ * A spell a level-up learned past the list (`SpellKnown.learnedBy`) that the
+ * picker's list does not hold is not the picker's to drop: it stays, with its
+ * line. One the list does hold is the picker's like any other, and keeps its
+ * mark while it stays picked.
  */
 export const sheetWithSpellSelection = <Sheet extends SheetBody>(
   sheet: Sheet,
   book: CharacterSpellRules,
   known: ReadonlyArray<SpellKnown>,
-): Sheet => ({
-  ...sheet,
-  actions: [
-    ...(sheet.actions ?? []).filter(
-      (action) => !(action.derived === true && action.source === "spell"),
+): Sheet => {
+  const options = spellById(book);
+  const learnedBy = new Map(
+    (sheet.spellcasting?.known ?? []).flatMap((spell) =>
+      spell.learnedBy === undefined || spell.spellId === undefined || spell.spellId === null
+        ? []
+        : [[spell.spellId, spell] as const],
     ),
-    ...spellActionsFromKnown(book, eligibleKnownSpells(book, known), sheet),
-  ],
-  spellcasting: { ...(sheet.spellcasting ?? {}), known: eligibleKnownSpells(book, known) },
-});
+  );
+  const picked = eligibleKnownSpells(book, known).map((spell) => {
+    const mark =
+      spell.spellId === undefined || spell.spellId === null
+        ? undefined
+        : learnedBy.get(spell.spellId)?.learnedBy;
+    return mark === undefined ? spell : { ...spell, learnedBy: mark };
+  });
+  const beyond = [...learnedBy].flatMap(([spellId, spell]) =>
+    options.has(spellId) ? [] : [spell],
+  );
+  const beyondIds = new Set<string>(beyond.flatMap((spell) => spell.spellId ?? []));
+  return {
+    ...sheet,
+    actions: [
+      ...(sheet.actions ?? []).filter(
+        (action) =>
+          !(action.derived === true && action.source === "spell") ||
+          (action.spellId !== undefined &&
+            action.spellId !== null &&
+            beyondIds.has(action.spellId)),
+      ),
+      ...spellActionsFromKnown(book, picked, sheet),
+    ],
+    spellcasting: { ...(sheet.spellcasting ?? {}), known: [...picked, ...beyond] },
+  };
+};
 
 export const selectedSpellCounts = (
   book: CharacterSpellRules,
@@ -309,7 +339,10 @@ export const selectedSpellCounts = (
     if (row.spellId === undefined) continue;
     if (row.spellId === null) continue;
     const spell = options.get(row.spellId)?.spell;
-    if (spell === undefined) continue;
+    if (spell === undefined) {
+      if (row.learnedBy === "magicalSecrets" && (row.level ?? 0) > 0) leveledKnown += 1;
+      continue;
+    }
     if (spell.level === 0) cantrips += 1;
     else {
       leveledKnown += 1;

@@ -561,9 +561,11 @@ export const servicesOver = <E>(
     // The concrete class progression rows under the Rules shelves. Read-only;
     // the importer and option derive path are the only writers today.
     ClassProgression.layer,
-    // What a character's next level offers its owner, read in the character's
-    // vocabulary. Read-only.
-    Advancement.layer,
+    // What a character's next level offers its owner, and the level-up that
+    // takes it, in the character's vocabulary. A level-up is heard at every
+    // open night where the character sits, as a rest is, and answers the
+    // character with its signed pictures, so it takes both.
+    Advancement.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // The live repositories ring the in-process fan-out after they commit, so
     // they take it as a dependency. It is merged in as well, because the
     // streaming handler subscribes to it — and `Layer` memoises by identity, so

@@ -646,6 +646,61 @@ describeLayer(
         }),
       );
 
+      it.effect("keeps the line of every spell a known caster knows through a level change", () =>
+        Effect.gen(function* () {
+          const { fresh } = yield* Fixture;
+          const warlock = yield* as(fresh.token, (client) =>
+            client.me.createCoreCharacter({
+              payload: {
+                name: "Ash Wold",
+                race: "Tiefling",
+                className: "Warlock",
+                level: 1,
+                sheet: { ...emptyCharacterSheet, identity: { hitDice: "d8" } },
+              },
+            }),
+          );
+          const spell = (yield* spellbookOf(fresh.token, warlock)).spells.find(
+            (row) => row.spell.level === 1,
+          )!.spell;
+          // A known caster's pick, as the picker writes it: known, never prepared.
+          const picked = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: warlock.id },
+              payload: {
+                expectedVersion: warlock.version,
+                sheet: {
+                  ...warlock.sheet,
+                  spellcasting: {
+                    ...warlock.sheet.spellcasting,
+                    known: [{ name: spell.name, level: spell.level, spellId: spell.id as never }],
+                  },
+                  actions: [
+                    {
+                      id: `spell:${spell.id}`,
+                      name: spell.name,
+                      source: "spell",
+                      spellId: spell.id as never,
+                      derived: true,
+                    },
+                  ],
+                },
+              },
+            }),
+          );
+          const leveled = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: warlock.id },
+              payload: { expectedVersion: picked.version, level: 3 },
+            }),
+          );
+          expect(leveled.sheet.actions?.find((row) => row.spellId === spell.id)).toMatchObject({
+            name: spell.name,
+            derived: true,
+          });
+        }),
+      );
+
       it.effect(
         "moves everything derived when the Level box moves, and leaves the hit points alone",
         () =>
