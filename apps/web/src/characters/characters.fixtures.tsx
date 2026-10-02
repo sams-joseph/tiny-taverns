@@ -247,6 +247,55 @@ export const sorrel = {
 };
 
 /**
+ * What Brannoc's sixth level offers, as `GET /me/characters/:id/level-up`
+ * sends it: a paladin's Aura of Protection, a bigger Lay on Hands pool, one
+ * more prepared spell, and a d10's hit points with CON's +3. No choices.
+ */
+export const brannocOffer = {
+  characterId: brannocId,
+  version: 1,
+  className: "Paladin",
+  fromLevel: 5,
+  toLevel: 6,
+  hitPoints: { die: 10, bonus: 3, fixed: 9, rolled: { minimum: 4, maximum: 13 } },
+  automatic: {
+    features: [
+      {
+        featureId: "2b1f2a1e-0000-4000-8000-0000000f0601",
+        name: "Aura of Protection",
+        level: 6,
+        desc: [
+          "Whenever you or a friendly creature within 10 feet of you must make a saving throw, the creature gains a bonus to the saving throw equal to your Charisma modifier.",
+        ],
+      },
+    ],
+    resources: [{ id: "res:lay-on-hands", name: "Lay on Hands", from: 25, to: 30, unit: "hp" }],
+    subclassSpells: [],
+  },
+  choices: [],
+  spells: {
+    mode: "prepared",
+    highestSlotLevel: { from: 2, to: 2 },
+    cantrips: 0,
+    spells: 0,
+    replace: false,
+    prepared: { from: 6, to: 7 },
+    options: [],
+  },
+};
+
+/** A class her rules do not have: the offer has nothing to level up with. */
+export const sorrelOffer = {
+  characterId: sorrelId,
+  version: 1,
+  className: "Druid",
+  fromLevel: 1,
+  toLevel: 2,
+  automatic: { features: [], resources: [], subclassSpells: [] },
+  choices: [],
+};
+
+/**
  * The seats — where each character sits, as `GET /me/characters` answers them.
  *
  * Under the continuity decision a character is account-owned and campaign-
@@ -500,6 +549,14 @@ export const twoTables = (): Map<string, Answer> =>
     ["GET /me", { status: 200, body: account }],
     ...hobRoutes(),
     ["GET /me/characters", { status: 200, body: [ownedBrannoc, ownedSorrel] }],
+    // The level-up wizard's offer and the Log's records. Brannoc's next level
+    // asks for nothing but its hit points; Sorrel's class resolves to nothing
+    // in her rules, so there is no hit die to level up with. Neither has a
+    // record yet: Brannoc's Log is the document's own older lines.
+    [`GET /me/characters/${brannocId}/level-up`, { status: 200, body: brannocOffer }],
+    [`GET /me/characters/${sorrelId}/level-up`, { status: 200, body: sorrelOffer }],
+    [`GET /me/characters/${brannocId}/level-ups`, { status: 200, body: [] }],
+    [`GET /me/characters/${sorrelId}/level-ups`, { status: 200, body: [] }],
     // The two pickers' vocabulary — what *this table* offers, which since a
     // campaign can have its own classes is a read rather than a constant. It is
     // the campaign list rather than the Library one because a player cannot

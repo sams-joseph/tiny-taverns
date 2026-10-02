@@ -1350,6 +1350,74 @@ describeLayer(
         }),
       );
 
+      it.effect("is the owner's Log: latest first, the levels the character holds now", () =>
+        Effect.gen(function* () {
+          const { owner, stranger, options } = yield* Fixture;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Thyra",
+            className: "Fighter",
+            race: "Human",
+            level: 1,
+            scores: FIGHTER,
+          });
+          const log = (character: Character) =>
+            as(owner.token, (client) =>
+              client.me.levelUps({ params: { characterId: character.id } }),
+            );
+          expect(yield* log(fighter)).toEqual([]);
+
+          const { character: atTwo } = yield* levelUp(
+            owner,
+            fighter,
+            answering(yield* offerOf(owner, fighter), { note: "After the bridge." }),
+          );
+          const third = yield* offerOf(owner, atTwo);
+          const champion = third.subclass!.options.find((option) => option.name === "Champion")!;
+          const { character: atThree } = yield* levelUp(
+            owner,
+            atTwo,
+            answering(third, {
+              hitPoints: "rolled",
+              subclass: { subclassId: champion.subclassId },
+            }),
+          );
+
+          const both = yield* log(atThree);
+          expect(both.map((record) => record.level)).toEqual([3, 2]);
+          expect(both[0]).toMatchObject({
+            characterId: fighter.id,
+            className: "Fighter",
+            hitPoints: { method: "rolled", die: 8, gain: 10 },
+            choices: { subclass: { name: "Champion", subclassId: champion.subclassId } },
+            note: null,
+            origin: "authored",
+          });
+          expect(both[1]).toMatchObject({
+            hitPoints: { method: "fixed", die: 6, gain: 8 },
+            note: "After the bridge.",
+          });
+
+          // Somebody else's character is not found, and says nothing about its log.
+          const theirs = yield* refusal(stranger.token, (client) =>
+            client.me.levelUps({ params: { characterId: fighter.id } }),
+          );
+          expect(theirs.tag).toBe("NotFound");
+
+          // An undo takes its entry off the Log.
+          const { character: backAtTwo } = yield* undo(owner, atThree, 3);
+          expect((yield* log(backAtTwo)).map((record) => record.level)).toEqual([2]);
+
+          // A level the Level box has taken back is not listed while it is gone.
+          const lowered = yield* as(owner.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: { expectedVersion: backAtTwo.version, level: 1 },
+            }),
+          );
+          expect(yield* log(lowered)).toEqual([]);
+        }),
+      );
+
       it.effect("goes with its character when the character is deleted", () =>
         Effect.gen(function* () {
           const { owner, options } = yield* Fixture;
