@@ -165,4 +165,7 @@ export const importSystemRuleArticles = (
   });
 
 export type RuleArticleWrite =
-  RuleArticleDerive | RuleArticleLibraryCreate | RuleArticleLibraryUpdate | RuleArticleUpdate;
+  | RuleArticleDerive
+  | RuleArticleLibraryCreate
+  | RuleArticleLibraryUpdate
+  | RuleArticleUpdate;

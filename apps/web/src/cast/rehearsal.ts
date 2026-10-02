@@ -55,7 +55,8 @@ export interface Rehearsal {
    * standing size in `status`.
    */
   readonly lastPrompt:
-    { readonly templateVersion: string; readonly estimatedTokens: number } | undefined;
+    | { readonly templateVersion: string; readonly estimatedTokens: number }
+    | undefined;
   /** Forget the thread on screen; the next line starts a new one. */
   readonly reset: (() => void) | undefined;
 }

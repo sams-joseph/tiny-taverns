@@ -30,7 +30,13 @@ import { campaignWritable, groupWritable, ownCharacter, rowCampaign } from "./vi
  */
 
 export type ImageFailure =
-  "refused" | "provider" | "timeout" | "interrupted" | "storage" | "skipped" | "capped";
+  | "refused"
+  | "provider"
+  | "timeout"
+  | "interrupted"
+  | "storage"
+  | "skipped"
+  | "capped";
 
 /** A row the worker is to draw. */
 export interface ImageJob {
