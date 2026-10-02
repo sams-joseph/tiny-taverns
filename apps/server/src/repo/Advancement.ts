@@ -646,15 +646,15 @@ export class Advancement extends Context.Service<
                     });
                   }
                   const record = found.value;
-                  if (record.latest !== record.level) {
+                  const current = Math.max(1, before.level ?? 1);
+                  if (current !== record.latest) {
                     return yield* new Conflict({
-                      message: `Only the latest level-up can be undone: undo level ${String(record.latest)} first.`,
+                      message: `This character is level ${String(current)} now, set in Edit your character since it reached level ${String(record.latest)}, so the level-up no longer describes the sheet. Change its level there instead.`,
                     });
                   }
-                  const current = Math.max(1, before.level ?? 1);
-                  if (current !== record.level) {
+                  if (record.level !== record.latest) {
                     return yield* new Conflict({
-                      message: `This character is level ${String(current)} now, set in Edit your character since it reached level ${String(record.level)}, so the level-up no longer describes the sheet. Change its level there instead.`,
+                      message: `Only the latest level-up can be undone: undo level ${String(record.latest)} first.`,
                     });
                   }
 
