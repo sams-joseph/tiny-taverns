@@ -339,7 +339,10 @@ export const selectedSpellCounts = (
     if (row.spellId === undefined) continue;
     if (row.spellId === null) continue;
     const spell = options.get(row.spellId)?.spell;
-    if (spell === undefined) continue;
+    if (spell === undefined) {
+      if (row.learnedBy === "magicalSecrets" && (row.level ?? 0) > 0) leveledKnown += 1;
+      continue;
+    }
     if (spell.level === 0) cantrips += 1;
     else {
       leveledKnown += 1;

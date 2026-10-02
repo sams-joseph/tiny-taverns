@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { SheetBody } from "./Character.js";
 import type { SpellId } from "./Ids.js";
 import { Spell, emptySpellBody } from "./Spell.js";
-import { type CharacterSpellRules, sheetWithSpellSelection, spellKnownFor } from "./Spellbook.js";
+import {
+  type CharacterSpellRules,
+  sheetWithSpellSelection,
+  spellKnownFor,
+  spellSelectionProblems,
+} from "./Spellbook.js";
 
 /**
  * The picker's save over a sheet that holds spells a level-up learned past
@@ -104,5 +109,34 @@ describe("sheetWithSpellSelection", () => {
     expect(saved.spellcasting?.known).toContainEqual(
       expect.objectContaining({ name: "Shatter", learnedBy: "magicalSecrets" }),
     );
+  });
+});
+
+describe("spellSelectionProblems", () => {
+  it("counts Magical Secrets off the list against a bard's spells known", () => {
+    const classSpells = Array.from({ length: 13 }, (_, index) =>
+      spellNamed(`Bard Spell ${String(index + 1)}`, 1),
+    );
+    const book: CharacterSpellRules = {
+      ...BOOK,
+      spells: classSpells.map((spell) => ({ spell, list: "class" as const })),
+    };
+    const secrets = [
+      { name: "Fireball", level: 3, spellId: FIREBALL.id as SpellId, learnedBy: "magicalSecrets" },
+      {
+        name: "Counterspell",
+        level: 3,
+        spellId: uuidOf("Counterspell") as SpellId,
+        learnedBy: "magicalSecrets",
+      },
+    ] as const;
+    const known = (count: number) => [
+      ...classSpells.slice(0, count).map((spell) => spellKnownFor({ spell, list: "class" })),
+      ...secrets,
+    ];
+    expect(spellSelectionProblems(book, known(12))).toEqual([]);
+    expect(spellSelectionProblems(book, known(13))).toEqual([
+      "Choose at most 14 leveled spells known.",
+    ]);
   });
 });
