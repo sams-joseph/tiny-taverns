@@ -234,7 +234,7 @@ import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
 import { CharacterSpellbook, NpcSpellbook } from "./Spellbook.js";
-import { CharacterLeveledUp, LevelUpPayload } from "./Advancement.js";
+import { CharacterLeveledUp, CharacterLevelUpUndone, LevelUpPayload } from "./Advancement.js";
 import { LevelUpOffer } from "./LevelUp.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
@@ -602,6 +602,25 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { characterId: CharacterId },
       payload: LevelUpPayload,
       success: CharacterLeveledUp,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Undo one owned character's latest level-up: back to the level below,
+     * taking back exactly what its `character_advancement` record says it
+     * applied (`levelUpUndone`), then the level's recompute, in one
+     * transaction. The record is deleted, the version bumped, and open seat
+     * sessions hear `character-updated`. A score changed by hand since the
+     * level-up is left as it stands and named in `keptScores`.
+     *
+     * `ownCharacter`: somebody else's character, or a level with no record, is
+     * the ordinary `NotFound`. `Conflict` is a record that is not the latest,
+     * a character the Level box has moved since, or one on the table in a
+     * live fight at any campaign. Levels with no record go down through the
+     * Level box.
+     */
+    HttpApiEndpoint.delete("undoLevelUp", "/characters/:characterId/level-ups/:level", {
+      params: { characterId: CharacterId, level: Schema.Int },
+      success: CharacterLevelUpUndone,
       error: [NotFound, Conflict],
     }),
     /**

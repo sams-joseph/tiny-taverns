@@ -239,6 +239,9 @@ const MeLive = HttpApiBuilder.group(
         .handle("levelUp", ({ params, payload }) =>
           advancement.levelUp(params.characterId, payload),
         )
+        .handle("undoLevelUp", ({ params }) =>
+          advancement.undoLevelUp(params.characterId, params.level),
+        )
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )

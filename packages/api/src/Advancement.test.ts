@@ -1,6 +1,11 @@
 import { Result } from "effect";
 import { describe, expect, it } from "vitest";
-import { type LevelUpPayload, levelUpChosen, levelUpHitPointGain } from "./Advancement.js";
+import {
+  type LevelUpPayload,
+  levelUpChosen,
+  levelUpHitPointGain,
+  levelUpUndone,
+} from "./Advancement.js";
 import type { SheetBody } from "./Character.js";
 import type { Ability } from "./Creature.js";
 import type { CharacterId, FeatId, FeatureId, SpellId, SubclassId } from "./Ids.js";
@@ -401,6 +406,98 @@ describe("levelUpChosen", () => {
       name: "Road",
       subclassId: uuidOf("road"),
     });
+  });
+});
+
+describe("levelUpUndone", () => {
+  /** A level-up of `BODY` with every kind of change, then its record. */
+  const everything: LevelUpPayload = {
+    ...COMPLETE,
+    picks: [
+      ...COMPLETE.picks!.filter((pick) => pick.offeredBy !== EXPERTISE.featureId),
+      { offeredBy: EXPERTISE.featureId, value: "Stealth" },
+      { offeredBy: EXPERTISE.featureId, value: "Thieves' Tools" },
+    ],
+    spells: {
+      cantrips: [spellId("Light")],
+      learned: [spellId("Shatter")],
+      replace: { from: spellId("Thunderwave"), to: spellId("Sleep") },
+      magicalSecrets: [spellId("Cure Wounds")],
+    },
+  };
+  const undone = (body: SheetBody, payload: LevelUpPayload = everything) => {
+    const { choices, applied } = chosen(payload);
+    return levelUpUndone(body, { ...applied, hpMax: { from: 20, to: 27 } }, choices);
+  };
+
+  it("takes back everything a level-up applied, to the sheet it started from", () => {
+    const { body, keptScores } = undone(chosen(everything).body);
+    expect(keptScores).toEqual([]);
+    expect(body.abilities).toEqual(BODY.abilities);
+    expect(body.identity?.subclass).toBeUndefined();
+    expect(body.traits).toEqual(BODY.traits);
+    expect(body.skills).toEqual(BODY.skills);
+    // The swapped spell comes back with the level it had; the learned ones go.
+    expect(body.spellcasting?.known).toEqual(BODY.spellcasting?.known);
+  });
+
+  it("leaves a score changed since alone, and says so", () => {
+    const after = chosen(everything).body;
+    const edited = {
+      ...after,
+      abilities: after.abilities.map((cell) =>
+        cell.label === "STR" ? { ...cell, score: "18", modifier: "+4" } : cell,
+      ),
+    };
+    const { body, keptScores } = undone(edited);
+    expect(body.abilities.find((cell) => cell.label === "STR")).toEqual({
+      label: "STR",
+      score: "18",
+      modifier: "+4",
+    });
+    expect(body.abilities.find((cell) => cell.label === "CON")).toEqual({
+      label: "CON",
+      score: "13",
+      modifier: "+1",
+    });
+    expect(keptScores).toEqual([{ label: "STR", score: "18", raised: { from: "15", to: "16" } }]);
+  });
+
+  it("keeps a line typed with a pick's name, a subclass renamed since, and a modifier typed since", () => {
+    const after = chosen(everything).body;
+    const edited = {
+      ...after,
+      identity: { ...after.identity, subclass: "Road of Ash" },
+      traits: [...after.traits, { name: "Fighting Style: Archery", text: "My own words." }],
+      abilities: after.abilities.map((cell) =>
+        cell.label === "CON" ? { ...cell, modifier: "+5" } : cell,
+      ),
+    };
+    const { body } = undone(edited);
+    expect(body.identity?.subclass).toBe("Road of Ash");
+    expect(body.traits).toEqual([
+      ...BODY.traits,
+      { name: "Fighting Style: Archery", text: "My own words." },
+    ]);
+    expect(body.abilities.find((cell) => cell.label === "CON")).toEqual({
+      label: "CON",
+      score: "13",
+      modifier: "+5",
+    });
+  });
+
+  it("puts back the subclass named before, and takes a feat's line away", () => {
+    const named = { ...BODY, identity: { subclass: "Old Road" } };
+    const payload: LevelUpPayload = { ...COMPLETE, abilityScoreImprovement: { featId: GRAPPLER } };
+    const {
+      body: after,
+      choices,
+      applied,
+    } = levelUpChosen(OFFER, named, payload).pipe(Result.getOrThrow);
+    expect(after.identity?.subclass).toBe("Road");
+    const { body } = levelUpUndone(after, { ...applied, hpMax: { from: null, to: null } }, choices);
+    expect(body.identity?.subclass).toBe("Old Road");
+    expect(body.traits.map((trait) => trait.name)).toEqual(["Second Wind"]);
   });
 });
 

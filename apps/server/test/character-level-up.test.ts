@@ -29,9 +29,10 @@ import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
- * **Levelling a character up** — `POST /me/characters/:id/level-up`, over the
- * real application and the imported 2014 corpus, through the client derived
- * from the contract.
+ * **Levelling a character up**, and undoing it — `POST
+ * /me/characters/:id/level-up` and `DELETE …/level-ups/:level`, over the real
+ * application and the imported 2014 corpus, through the client derived from
+ * the contract.
  *
  * Each character is composed the way the create form composes one, created
  * through `POST /me/characters`, and levelled with picks taken from the offer
@@ -189,6 +190,22 @@ const levelUp = (person: Person, character: Character, payload: LevelUpPayload) 
 const refusedLevelUp = (person: Person, character: Character, payload: LevelUpPayload) =>
   refusal(person.token, (client) =>
     client.me.levelUp({ params: { characterId: character.id }, payload }),
+  );
+
+const undo = (person: Person, character: Character, level: number) =>
+  as(person.token, (client) =>
+    client.me.undoLevelUp({ params: { characterId: character.id, level } }),
+  );
+
+const refusedUndo = (person: Person, character: Character, level: number) =>
+  refusal(person.token, (client) =>
+    client.me.undoLevelUp({ params: { characterId: character.id, level } }),
+  );
+
+/** One level up for a character whose next level asks for nothing. */
+const plainLevelUp = (person: Person, character: Character) =>
+  Effect.flatMap(offerOf(person, character), (offer) =>
+    levelUp(person, character, answering(offer)),
   );
 
 /** The one choice a feature of this name offers. */
@@ -913,6 +930,250 @@ describeLayer(
       );
     });
 
+    describe("the undo", () => {
+      it.effect("takes back what the level-up applied and recomputes at the level below", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const warlock = yield* aCoreCharacter(owner, options, {
+            name: "Asta",
+            className: "Warlock",
+            race: "Tiefling",
+            subclass: "Fiend",
+            level: 1,
+            scores: [8, 14, 13, 10, 12, 15],
+          });
+          const offer = yield* offerOf(owner, warlock);
+          const invocations = choiceBy(offer, "Eldritch Invocations");
+          const by = invocations.offeredBy.featureId;
+          const learned = offer.spells!.options.find((option) => option.level === 1)!;
+          const { character: levelled } = yield* levelUp(
+            owner,
+            warlock,
+            answering(offer, {
+              hitPoints: "rolled",
+              picks: [
+                {
+                  offeredBy: by,
+                  featureId: optionId(invocations, "Eldritch Invocation: Beast Speech"),
+                },
+                {
+                  offeredBy: by,
+                  featureId: optionId(invocations, "Eldritch Invocation: Mask of Many Faces"),
+                },
+              ],
+              spells: { learned: [learned.spellId] },
+            }),
+          );
+          expect(levelled.sheet.traits.map((trait) => trait.name)).toContain(
+            "Eldritch Invocation: Beast Speech",
+          );
+          expect(levelled.sheet.spellcasting?.known).toContainEqual(
+            expect.objectContaining({ spellId: learned.spellId }),
+          );
+
+          const { character, keptScores } = yield* undo(owner, levelled, 2);
+          expect(keptScores).toEqual([]);
+          expect(character).toMatchObject({
+            level: 1,
+            hpMax: warlock.hpMax,
+            version: levelled.version + 1,
+          });
+          // The picks, the spell, the slot and every number the level moved
+          // are back where level 1 had them: the sheet it started from, its
+          // known list now empty rather than unwritten.
+          expect(character.sheet).toEqual({
+            ...warlock.sheet,
+            spellcasting: { ...warlock.sheet.spellcasting, known: [] },
+          });
+          expect(yield* recordsOf(character)).toEqual([]);
+          // And it can be taken again.
+          const again = yield* offerOf(owner, character);
+          expect(again).toMatchObject({ fromLevel: 1, toLevel: 2, version: character.version });
+        }),
+      );
+
+      it.effect("lowers a raised score, the subclass it took, and what they fed", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Bera",
+            className: "Fighter",
+            race: "Human",
+            level: 2,
+            scores: FIGHTER,
+          });
+          const third = yield* offerOf(owner, fighter);
+          const champion = third.subclass!.options.find((option) => option.name === "Champion")!;
+          const { character: atThree } = yield* levelUp(
+            owner,
+            fighter,
+            answering(third, { subclass: { subclassId: champion.subclassId } }),
+          );
+          const fourth = yield* offerOf(owner, atThree);
+          const { character: atFour } = yield* levelUp(
+            owner,
+            atThree,
+            answering(fourth, {
+              abilityScoreImprovement: { increases: [{ ability: "CON", amount: 2 }] },
+            }),
+          );
+          // CON 15 → 17 moved the modifier, so every level's hit points moved.
+          expect(ability(atFour.sheet, "CON")).toMatchObject({ score: "17", modifier: "+3" });
+
+          const four = yield* undo(owner, atFour, 4);
+          expect(four.character).toMatchObject({ level: 3, hpMax: atThree.hpMax });
+          expect(four.character.sheet).toEqual(atThree.sheet);
+
+          const three = yield* undo(owner, four.character, 3);
+          expect(three.character).toMatchObject({ level: 2, hpMax: fighter.hpMax });
+          expect(three.character.sheet.identity?.subclass).toBeUndefined();
+          expect(three.character.sheet.traits.map((trait) => trait.name)).not.toContain(
+            "Improved Critical",
+          );
+          expect(three.character.sheet).toEqual(fighter.sheet);
+        }),
+      );
+
+      it.effect("leaves a score changed by hand since alone, and says so", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Dagny",
+            className: "Fighter",
+            race: "Human",
+            subclass: "Champion",
+            level: 3,
+            scores: FIGHTER,
+          });
+          const offer = yield* offerOf(owner, fighter);
+          const { character: levelled } = yield* levelUp(
+            owner,
+            fighter,
+            answering(offer, {
+              abilityScoreImprovement: {
+                increases: [
+                  { ability: "STR", amount: 1 },
+                  { ability: "DEX", amount: 1 },
+                ],
+              },
+            }),
+          );
+          expect(ability(levelled.sheet, "STR")?.score).toBe("17");
+          // A belt of giant strength, written in by hand.
+          const edited = yield* as(owner.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: {
+                expectedVersion: levelled.version,
+                sheet: {
+                  ...levelled.sheet,
+                  abilities: levelled.sheet.abilities.map((cell) =>
+                    cell.label === "STR" ? { ...cell, score: "21", modifier: "+5" } : cell,
+                  ),
+                },
+              },
+            }),
+          );
+
+          const { character, keptScores } = yield* undo(owner, edited, 4);
+          expect(keptScores).toEqual([
+            { label: "STR", score: "21", raised: { from: "16", to: "17" } },
+          ]);
+          expect(ability(character.sheet, "STR")).toMatchObject({ score: "21", modifier: "+5" });
+          expect(ability(character.sheet, "DEX")).toEqual(ability(fighter.sheet, "DEX"));
+          expect(character).toMatchObject({ level: 3, hpMax: fighter.hpMax });
+        }),
+      );
+
+      it.effect("clamps current hit points to the maximum it leaves", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const sql = yield* SqlClient.SqlClient;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Eir",
+            className: "Fighter",
+            race: "Human",
+            level: 1,
+            scores: FIGHTER,
+          });
+          const { character: levelled } = yield* plainLevelUp(owner, fighter);
+          // Healed to the new maximum at the table.
+          yield* sql`update character set hp_current = hp_max where id = ${fighter.id}`.pipe(
+            Effect.orDie,
+          );
+          const { character } = yield* undo(owner, levelled, 2);
+          expect(character).toMatchObject({ hpMax: 12, hpCurrent: 12 });
+        }),
+      );
+
+      it.effect("refuses anything but the latest, and a level the Level box has moved", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Frida",
+            className: "Fighter",
+            race: "Human",
+            level: 1,
+            scores: FIGHTER,
+          });
+          const { character: atTwo } = yield* plainLevelUp(owner, fighter);
+          const third = yield* offerOf(owner, atTwo);
+          const champion = third.subclass!.options.find((option) => option.name === "Champion")!;
+          const { character: atThree } = yield* levelUp(
+            owner,
+            atTwo,
+            answering(third, { subclass: { subclassId: champion.subclassId } }),
+          );
+
+          const earlier = yield* refusedUndo(owner, atThree, 2);
+          expect(earlier).toEqual({
+            tag: "Conflict",
+            message: "Only the latest level-up can be undone: undo level 3 first.",
+          });
+          const none = yield* refusedUndo(owner, atThree, 5);
+          expect(none.tag).toBe("NotFound");
+
+          // The Level box takes the character on to 4 by hand.
+          const boxed = yield* as(owner.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: fighter.id },
+              payload: { expectedVersion: atThree.version, level: 4 },
+            }),
+          );
+          const moved = yield* refusedUndo(owner, boxed, 3);
+          expect(moved).toEqual({
+            tag: "Conflict",
+            message:
+              "This character is level 4 now, set in Edit your character since it reached level 3, so the level-up no longer describes the sheet. Change its level there instead.",
+          });
+          expect((yield* recordsOf(fighter)).map((row) => row.level)).toEqual([2, 3]);
+          const after = yield* offerOf(owner, boxed);
+          expect(after).toMatchObject({ version: boxed.version, fromLevel: 4 });
+        }),
+      );
+
+      it.effect("answers another account's character as not found, and changes nothing", () =>
+        Effect.gen(function* () {
+          const { owner, stranger, options } = yield* Fixture;
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Gudrun",
+            className: "Fighter",
+            race: "Human",
+            level: 1,
+            scores: FIGHTER,
+          });
+          const { character } = yield* plainLevelUp(owner, fighter);
+          const theirs = yield* refusedUndo(stranger, character, 2);
+          expect(theirs.tag).toBe("NotFound");
+          expect((yield* recordsOf(fighter)).map((row) => row.level)).toEqual([2]);
+          expect(yield* offerOf(owner, character)).toMatchObject({
+            version: character.version,
+            fromLevel: 2,
+          });
+        }),
+      );
+    });
+
     describe("at a table", () => {
       it.effect("rings the open night, and is refused while the character is in a live fight", () =>
         Effect.gen(function* () {
@@ -982,6 +1243,64 @@ describeLayer(
               "Level up after the fight at The Salt Road; this character is on the table there.",
           });
           expect((yield* recordsOf(character)).map((row) => row.level)).toEqual([2]);
+
+          const undoFighting = yield* refusedUndo(owner, character, 2);
+          expect(undoFighting).toEqual({
+            tag: "Conflict",
+            message:
+              "Undo the level-up after the fight at The Salt Road; this character is on the table there.",
+          });
+          expect((yield* recordsOf(character)).map((row) => row.level)).toEqual([2]);
+        }),
+      );
+
+      it.effect("rings the open night when a level-up is undone", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const sql = yield* SqlClient.SqlClient;
+          const dm = yield* aPerson("Hal");
+          const campaign = yield* as(dm.token, (client) =>
+            campaignVia(client, { name: "The Long Ford", visibility: "shared" }),
+          );
+          yield* admittedTo(campaign.id, owner.actor, "Ilse");
+          const fighter = yield* aCoreCharacter(owner, options, {
+            name: "Inga",
+            className: "Fighter",
+            race: "Human",
+            level: 1,
+            scores: FIGHTER,
+          });
+          yield* as(owner.token, (client) =>
+            client.party.join({
+              params: { campaignId: campaign.id },
+              payload: { characterId: fighter.id },
+            }),
+          );
+          const session = yield* as(dm.token, (client) =>
+            client.sessions.create({
+              params: { campaignId: campaign.id },
+              payload: { number: 1, title: "Across", visibility: "shared" },
+            }),
+          );
+          yield* as(dm.token, (client) =>
+            client.campaigns.update({
+              params: { campaignId: campaign.id },
+              payload: { currentSessionId: session.id },
+            }),
+          );
+          const { character } = yield* plainLevelUp(owner, fighter);
+          const undone = () =>
+            sql<{ readonly count: number }>`
+                select count(*)::int as count from session_event
+                where session_id = ${session.id} and kind = 'character-updated'
+                  and payload::text like '%levelUndone%'
+              `.pipe(
+              Effect.map((rows) => rows[0]!.count),
+              Effect.orDie,
+            );
+          expect(yield* undone()).toBe(0);
+          yield* undo(owner, character, 2);
+          expect(yield* undone()).toBe(1);
         }),
       );
     });

@@ -1054,8 +1054,8 @@ describeLayer("membership", shared, (it) => {
               -- portrait, through the character's own shipped reads.
               'character_banner',
               -- A level-up's record is answered only by the owner's level-up
-              -- write, behind ownCharacter; a stranger's refusal there is
-              -- covered in character-level-up.test.ts.
+              -- write and its undo, behind ownCharacter; a stranger's refusal
+              -- at both is covered in character-level-up.test.ts.
               'character_advancement',
               -- A portrait is read only as a field of the character, through
               -- the character's own shipped reads; it has no read of its own.
