@@ -113,7 +113,7 @@ const aCoreCharacter = (
   person: Person,
   options: ReadonlyArray<CharacterOption>,
   recipe: Recipe,
-): Effect.Effect<Character> => {
+) => {
   const composed = startingSheetBody({
     classOption: asClassOption(optionNamed(options, "class", recipe.className)),
     raceOption: asRaceOption(optionNamed(options, "race", recipe.race)),
@@ -141,7 +141,7 @@ const aCoreCharacter = (
   );
 };
 
-const offerOf = (person: Person, character: Character): Effect.Effect<LevelUpOffer> =>
+const offerOf = (person: Person, character: Character) =>
   as(person.token, (client) => client.me.levelUpOffer({ params: { characterId: character.id } }));
 
 /** The one choice a feature of this name offers. */
