@@ -912,7 +912,7 @@ export class Characters extends Context.Service<
                   if (Option.isSome(row) && patch.level !== undefined) {
                     yield* sql`
                       delete from character_advancement
-                      where character_id = ${id} and level > ${row.value.level}
+                      where character_id = ${id} and level > ${row.value.level ?? 1}
                     `;
                   }
                   return row;

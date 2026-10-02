@@ -1159,6 +1159,11 @@ describeLayer(
           );
           expect((yield* refusedUndo(owner, lowered, 3)).tag).toBe("NotFound");
           expect((yield* recordsOf(fighter)).map((row) => row.level)).toEqual([2]);
+
+          // The record at the level it was lowered to is now the latest, and undoes.
+          const { character: atOne } = yield* undo(owner, lowered, 2);
+          expect(atOne.level).toBe(1);
+          expect(yield* recordsOf(fighter)).toEqual([]);
         }),
       );
 

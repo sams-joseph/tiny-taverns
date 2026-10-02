@@ -401,7 +401,7 @@ describeLayer(
             expect((yield* levelsRecorded).map((row) => row.level)).toEqual([2]);
 
             // Regaining the level by the Level box brings no record back.
-            yield* as(ilse.token, (client) =>
+            const raised = yield* as(ilse.token, (client) =>
               client.me.updateCharacter({
                 params: { characterId: wren.id },
                 payload: { expectedVersion: lowered.version, level: 3 },
@@ -410,6 +410,24 @@ describeLayer(
             const regained = seatIn(yield* partyOf(jo, table), joined.seat.id)!;
             expect(regained.levelUps.map((entry) => entry.level)).toEqual([2]);
             expect((yield* levelsRecorded).map((row) => row.level)).toEqual([2]);
+
+            // A cleared box takes every record, and setting it again brings none back.
+            const cleared = yield* as(ilse.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: wren.id },
+                payload: { expectedVersion: raised.version, level: null },
+              }),
+            );
+            expect((yield* levelsRecorded).map((row) => row.level)).toEqual([]);
+            yield* as(ilse.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: wren.id },
+                payload: { expectedVersion: cleared.version, level: 3 },
+              }),
+            );
+            const reset = seatIn(yield* partyOf(jo, table), joined.seat.id)!;
+            expect(reset.levelUps).toEqual([]);
+            expect((yield* levelsRecorded).map((row) => row.level)).toEqual([]);
           }),
       );
     });
