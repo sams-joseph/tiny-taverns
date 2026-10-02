@@ -1245,8 +1245,9 @@ const proficienciesAt = (
 /**
  * The casting aside at the new level: the table's counts, and the ability,
  * save DC and attack by compare-and-move. A class that stops casting (a Paladin back to
- * level 1) loses the corpus's numbers and keeps what anybody chose or typed;
- * an aside left with nothing but its ability is the corpus's alone and goes.
+ * level 1) loses the corpus's numbers and its ability, unless a typed number
+ * still needs it, and keeps what anybody chose or typed; an aside left with
+ * nothing but its ability goes.
  */
 const castingAt = (
   stored: Spellcasting | undefined,
@@ -1255,12 +1256,17 @@ const castingAt = (
 ): Spellcasting | undefined => {
   if (after === undefined) {
     if (stored === undefined || before === undefined) return stored;
+    const save = stored.save === undefined || stored.save === before.save ? undefined : stored.save;
+    const attack =
+      stored.attack === undefined || stored.attack === before.attack ? undefined : stored.attack;
+    const ability =
+      stored.ability !== before.ability || save !== undefined || attack !== undefined
+        ? stored.ability
+        : undefined;
     const left: Spellcasting = {
-      ...(stored.ability === undefined ? {} : { ability: stored.ability }),
-      ...(stored.save === undefined || stored.save === before.save ? {} : { save: stored.save }),
-      ...(stored.attack === undefined || stored.attack === before.attack
-        ? {}
-        : { attack: stored.attack }),
+      ...(ability === undefined ? {} : { ability }),
+      ...(save === undefined ? {} : { save }),
+      ...(attack === undefined ? {} : { attack }),
       ...(stored.slots === undefined ? {} : { slots: stored.slots }),
       ...(stored.known === undefined ? {} : { known: stored.known }),
     };

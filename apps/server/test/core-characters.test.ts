@@ -856,13 +856,20 @@ describeLayer(
             const { carrying, line } = yield* withLibraryGlaive(fresh.token, created);
             // A Wizard has no martial weapons: STR +2 alone.
             expect(line(carrying)?.hit).toBe("+2");
+            const missile = (yield* spellbookOf(fresh.token, carrying)).spells.find(
+              (row) => row.spell.name === "Magic Missile",
+            )!.spell;
+            const picked = yield* picking(fresh.token, carrying, missile);
 
             const fighter = yield* as(fresh.token, (client) =>
               client.me.updateCharacter({
                 params: { characterId: created.id },
-                payload: { expectedVersion: carrying.version, className: "Fighter" },
+                payload: { expectedVersion: picked.version, className: "Fighter" },
               }),
             );
+            // A Fighter casts nothing: the Wizard's aside and its spell lines go.
+            expect(fighter.sheet.spellcasting).toBeUndefined();
+            expect(fighter.sheet.actions?.some((action) => action.source === "spell")).toBe(false);
             // STR 15 and CON 13 + 2: +2 each, with the bonus +2 at level 3.
             expect(cell(fighter, "STR")).toMatchObject({ proficient: true, save: "+4" });
             expect(cell(fighter, "CON")).toMatchObject({ proficient: true, save: "+4" });

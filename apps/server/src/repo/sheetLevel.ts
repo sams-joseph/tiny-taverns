@@ -202,7 +202,8 @@ const LevelEquipmentRow = fromColumns(KitEquipment);
  * The known spells at the new level, and their lines: kept while the class
  * (or subclass) list still reaches them at `highest` in this vocabulary, and
  * every derived spell line written again from the kept ones at the casting
- * numbers `withLevel` just moved.
+ * numbers `withLevel` just moved. An aside left holding only an empty list —
+ * a class that no longer casts — goes.
  */
 const withKnownSpellsAt = <Body extends SheetBody>(
   sql: SqlClient.SqlClient,
@@ -269,13 +270,21 @@ const withKnownSpellsAt = <Body extends SheetBody>(
       (action) => !(action.derived === true && action.source === "spell"),
     );
     const actions = [...otherActions, ...spellActions];
-    return {
+    const next: Body = {
       ...body,
       ...(actions.length === 0 && body.actions === undefined ? {} : { actions }),
       ...(body.spellcasting?.known === undefined
         ? {}
         : { spellcasting: { ...body.spellcasting, known: keptKnown } }),
     };
+    if (
+      keptKnown.length === 0 &&
+      next.spellcasting?.known !== undefined &&
+      Object.keys(next.spellcasting).every((key) => key === "known")
+    ) {
+      delete (next as { spellcasting?: SheetBody["spellcasting"] }).spellcasting;
+    }
+    return next;
   });
 
 const present = (value: string | null | undefined): string | undefined => {
