@@ -288,6 +288,7 @@ export const partySeatAnswer = (row: typeof brannoc, at: string = campaignId): A
       updatedAt: "2026-07-12T10:00:00.000Z",
     },
     character: row,
+    levelUps: [],
   },
 });
 

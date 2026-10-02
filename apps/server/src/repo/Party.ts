@@ -11,6 +11,7 @@ import {
   NotFound,
   PartySeat,
   type PartyJoin,
+  SeatLevelUp,
   type PartyRest,
   type PartySeatUpdate,
   type SessionId,
@@ -30,6 +31,7 @@ import {
   classFromColumns,
   defined,
   dieOnSqlError,
+  fromColumns,
   orNotFound,
   textArray,
   timestampColumns,
@@ -76,6 +78,15 @@ import {
  * history, and every reach through the seat (reads, deltas, condition writes)
  * requires `left_at is null` — so a retired seat is inert everywhere at once.
  */
+
+/** One record of a seat's level-up log, with the seat it is filed under. */
+const SeatLevelUpRow = fromColumns(
+  Schema.Struct({
+    campaignCharacterId: CampaignCharacterId,
+    ...SeatLevelUp.fields,
+    createdAt: Schema.DateTimeUtcFromDate,
+  }),
+);
 
 /** A `campaign_character` row as the wire reads it, decoded off `campaign_character.*`. */
 const SeatRow = classFromColumns(CampaignCharacter, {
@@ -194,34 +205,87 @@ export class Party extends Context.Service<
       });
 
       /**
-       * Seats with the character each holds, when it still exists: the seats,
-       * then one statement for every seat's character, filed back by id.
+       * The level-up logs these seats' characters carry, latest first, cut
+       * from `character_advancement` in SQL to the narrow `SeatLevelUp`: the
+       * hit point columns and the applied deltas are never selected. The
+       * seat's own predicate is applied again here rather than trusted from
+       * the seat read, so the log is exactly as readable as the seat. Only the
+       * levels the character holds are listed.
        */
-      const withCharacters = (read: ReadonlyArray<CampaignCharacter>) =>
-        Effect.gen(function* () {
-          const ids = read.flatMap((one) => (one.characterId === null ? [] : [one.characterId]));
-          const characters = ids.length === 0 ? [] : yield* seated(ids);
-          const byId = new Map(characters.map((character) => [character.id, character]));
-          return read.map(
-            (one) =>
-              new PartySeat({
-                seat: one,
-                character: one.characterId === null ? null : (byId.get(one.characterId) ?? null),
-              }),
-          );
-        });
+      const levelUpsAt = SqlSchema.findAll({
+        Request: Schema.toType(
+          Schema.Struct({
+            campaignId: CampaignId,
+            ids: Schema.Array(CampaignCharacterId),
+            actor: Actor,
+          }),
+        ),
+        Result: SeatLevelUpRow,
+        execute: ({ campaignId, ids, actor }) => sql`
+          select campaign_character.id as campaign_character_id,
+                 character_advancement.level, character_advancement.class_name,
+                 character_advancement.choices #>> '{subclass,name}' as subclass,
+                 character_advancement.choices #>> '{feat,name}' as feat,
+                 array(
+                   select picked.pick ->> 'name'
+                   from jsonb_array_elements(character_advancement.choices -> 'picks')
+                     with ordinality as picked (pick, position)
+                   order by picked.position
+                 ) as picks,
+                 character_advancement.note, character_advancement.created_at
+          from campaign_character
+          join character on character.id = campaign_character.character_id
+          join character_advancement
+            on character_advancement.character_id = character.id
+           and character_advancement.level <= character.level
+          where campaign_character.id = any(${uuidArray([...ids])})
+            and campaign_character.left_at is null
+            and ${ownedRowReadable(sql, "campaign_character", campaignId, actor)}
+          order by campaign_character.id, character_advancement.level desc
+        `,
+      });
+
+      /**
+       * Seats with the character each holds, when it still exists, and its
+       * level-up log: the seats, then one statement for every seat's character
+       * and one for every seat's log, filed back by id.
+       */
+      const withCharacters =
+        (campaignId: CampaignId, actor: Actor) => (read: ReadonlyArray<CampaignCharacter>) =>
+          Effect.gen(function* () {
+            const ids = read.flatMap((one) => (one.characterId === null ? [] : [one.characterId]));
+            const characters = ids.length === 0 ? [] : yield* seated(ids);
+            const byId = new Map(characters.map((character) => [character.id, character]));
+            const logs = new Map<CampaignCharacterId, Array<SeatLevelUp>>();
+            if (ids.length > 0) {
+              const rows = yield* levelUpsAt({ campaignId, ids: read.map((one) => one.id), actor });
+              for (const { campaignCharacterId, ...levelUp } of rows) {
+                const log = logs.get(campaignCharacterId) ?? [];
+                log.push(levelUp);
+                logs.set(campaignCharacterId, log);
+              }
+            }
+            return read.map(
+              (one) =>
+                new PartySeat({
+                  seat: one,
+                  character: one.characterId === null ? null : (byId.get(one.characterId) ?? null),
+                  levelUps: logs.get(one.id) ?? [],
+                }),
+            );
+          });
 
       /** One seat with its character, through the reader's own predicate. */
       const readSeat = (campaignId: CampaignId, id: CampaignCharacterId, actor: Actor) =>
         seat({ campaignId, id, actor }).pipe(
           orNotFound("campaign_character", id),
-          Effect.flatMap((one) => withCharacters([one])),
+          Effect.flatMap((one) => withCharacters(campaignId, actor)([one])),
           Effect.map((read) => read[0]!),
         );
 
       /** Every live seat this actor may see, with its character. */
       const readSeats = (campaignId: CampaignId, actor: Actor) =>
-        Effect.flatMap(seats({ campaignId, actor }), withCharacters);
+        Effect.flatMap(seats({ campaignId, actor }), withCharacters(campaignId, actor));
 
       /**
        * Every character at a live seat here, locked in id order so two rests

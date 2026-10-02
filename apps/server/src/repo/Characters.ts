@@ -900,10 +900,23 @@ export class Characters extends Context.Service<
                       : encodeSheet(recomputedSheet)
                     : encodeSheet(patch.sheet),
               });
-              const updated = yield* updateOwnRow(
-                patch.expectedVersion === undefined
-                  ? { id, columns }
-                  : { id, columns, expectedVersion: patch.expectedVersion },
+              const updated = yield* sql.withTransaction(
+                Effect.gen(function* () {
+                  const row = yield* updateOwnRow(
+                    patch.expectedVersion === undefined
+                      ? { id, columns }
+                      : { id, columns, expectedVersion: patch.expectedVersion },
+                  );
+                  // A level the Level box takes back takes its records with it;
+                  // gaining it again by the box writes none.
+                  if (Option.isSome(row) && patch.level !== undefined) {
+                    yield* sql`
+                      delete from character_advancement
+                      where character_id = ${id} and level > ${row.value.level ?? 1}
+                    `;
+                  }
+                  return row;
+                }),
               );
               if (Option.isNone(updated)) {
                 if (patch.expectedVersion !== undefined) {

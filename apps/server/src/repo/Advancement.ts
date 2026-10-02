@@ -226,8 +226,9 @@ export class Advancement extends Context.Service<
      * **The undo**: the latest level-up taken back, in one transaction. The
      * row is locked; a character in a live fight is refused, as the level-up
      * is; the record must be the latest, and the character still at its level
-     * (the Level box moving it since is a `Conflict`: the record no longer
-     * describes the sheet). Then `levelUpUndone` reverses what the record says
+     * (the Level box raising it since is a `Conflict`: the record no longer
+     * describes the sheet; lowering it deletes the records above, so the one
+     * at the level it left is the latest). Then `levelUpUndone` reverses what the record says
      * it applied, the hit point maximum loses what it gained, the level below's
      * recompute runs against the sheet as it stood, current hit points are
      * clamped, the record is deleted, the version bumped, and

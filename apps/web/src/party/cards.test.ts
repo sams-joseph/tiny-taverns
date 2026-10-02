@@ -37,6 +37,7 @@ const brannocWith = (
   seat({
     seat: { ...brannocSeat.seat, ...seatFields },
     character: { ...brannocSeat.character, ...character },
+    levelUps: brannocSeat.levelUps,
   } satisfies Record<keyof RawSeat, unknown>);
 
 const sheet = (fields: Partial<CharacterSheet>): CharacterSheet => ({
@@ -398,7 +399,11 @@ describe("betweenThem", () => {
   });
 
   it("answers nothing for sheets that say none of it, and passes over a deleted character", () => {
-    const deleted = seat({ seat: { ...brannocSeat.seat, characterId: null }, character: null });
+    const deleted = seat({
+      seat: { ...brannocSeat.seat, characterId: null },
+      character: null,
+      levelUps: [],
+    });
     expect(betweenThem([withSheet("Brannoc", {}), deleted], vocabulary)).toEqual({
       languages: undefined,
       darkvision: undefined,

@@ -23,6 +23,7 @@ const seat = (id: CampaignCharacterId, displayName: string): PartySeat =>
   Schema.decodeUnknownSync(PartySeat)({
     seat: { ...characterSeat, id, displayName },
     character: null,
+    levelUps: [],
   });
 
 const party = [
@@ -71,6 +72,7 @@ describe("the counts", () => {
     const kept = Schema.decodeUnknownSync(PartySeat)({
       seat: { ...characterSeat, id: ids.brannoc, displayName: "Bran" },
       character,
+      levelUps: [],
     });
     const tally = spotlightTally([kept, seat(ids.odo, "Odo")], nights(ids.brannoc));
 

@@ -137,6 +137,7 @@ export const runParty = [
   {
     seat: characterSeat,
     character: { ...character, sheet: { ...character.sheet, identity: { speed: "25 ft." } } },
+    levelUps: [],
   },
 ];
 

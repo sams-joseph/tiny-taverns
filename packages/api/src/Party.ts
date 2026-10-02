@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { SeatLevelUp } from "./Advancement.js";
 import { Character } from "./Character.js";
 import { AccountId, CampaignCharacterId, CampaignId, CharacterId } from "./Ids.js";
 import { provenanceFields, Visibility } from "./Provenance.js";
@@ -67,6 +68,13 @@ export class CampaignCharacter extends Schema.Class<CampaignCharacter>("Campaign
 export class PartySeat extends Schema.Class<PartySeat>("PartySeat")({
   seat: CampaignCharacter,
   character: Schema.NullOr(Character),
+  /**
+   * The character's level-ups, latest first: the levels it holds now, so a
+   * record the Level box has since taken back is absent. Read through the
+   * seat's own predicate, so whoever may read the seat reads its log, and
+   * empty when the character has been deleted (its records went with it).
+   */
+  levelUps: Schema.Array(SeatLevelUp),
 }) {}
 
 /**

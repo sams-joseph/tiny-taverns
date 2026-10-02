@@ -672,7 +672,7 @@ export const characterSeat = {
 };
 
 /** What `party.list` answers: the seat, and the shared character it holds. */
-export const partySeat = { seat: characterSeat, character };
+export const partySeat = { seat: characterSeat, character, levelUps: [] };
 
 export const prepItem = {
   id: prepItemId,
