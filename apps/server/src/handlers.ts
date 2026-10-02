@@ -16,6 +16,7 @@ import {
 import { Duration, Effect, Layer, Result, Schedule, Stream } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { Accounts } from "./Accounts.js";
+import { Advancement } from "./repo/Advancement.js";
 import { Hob } from "./assistant/Hob.js";
 import { NpcAgent } from "./assistant/NpcAgent.js";
 import { liveHeartbeatSeconds } from "./Config.js";
@@ -219,6 +220,7 @@ const MeLive = HttpApiBuilder.group(
     const memberships = yield* Memberships;
     const characters = yield* Characters;
     const spells = yield* Spells;
+    const advancement = yield* Advancement;
     const images = yield* HobImages;
     return (
       handlers
@@ -233,6 +235,7 @@ const MeLive = HttpApiBuilder.group(
         .handle("archivedCampaigns", () => memberships.mine("archived"))
         .handle("characters", () => characters.mine)
         .handle("characterSpells", ({ params }) => spells.forCharacter(params.characterId))
+        .handle("levelUpOffer", ({ params }) => advancement.offer(params.characterId))
         .handle("updateCharacter", ({ params, payload }) =>
           characters.updateOwn(params.characterId, payload),
         )

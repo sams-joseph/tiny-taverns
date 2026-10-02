@@ -229,9 +229,14 @@ interface GrantedFeature {
 
 /**
  * The class table's row for this level — or the highest row at or below it,
- * so a class whose table stops short still answers what it can.
+ * so a class whose table stops short still answers what it can. Exported for
+ * the level-up offer (`LevelUp.ts`), which reads the counters on both sides of
+ * a level.
  */
-const levelRow = (option: ClassOption | undefined, level: number): OptionClassLevel | undefined => {
+export const classLevelAt = (
+  option: ClassOption | undefined,
+  level: number,
+): OptionClassLevel | undefined => {
   const rows = option?.details?.classLevels ?? [];
   let best: OptionClassLevel | undefined;
   for (const row of rows) {
@@ -685,7 +690,7 @@ export const levelGrantsFor = (sources: LevelGrantSources): LevelGrants => {
       : undefined;
   const level = levelOf(sources.level);
   const abilities = sources.abilities ?? [];
-  const row = levelRow(classOption, level);
+  const row = classLevelAt(classOption, level);
   const proficiencyBonus =
     row?.proficiencyBonus ?? (level === 1 ? classOption?.details?.proficiencyBonus : undefined);
   const features = grantedFeatures(classOption, sources.subclass, level);

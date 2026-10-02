@@ -680,8 +680,12 @@ export class Character extends Schema.Class<Character>("Character")({
  */
 export const SheetArmorClass = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 40 }));
 export const SheetHitPoints = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }));
+/** The highest level a sheet holds; the level-up offer has no level past it. */
+export const SHEET_LEVEL_MAX = 100;
 /** Bounded the way the column is: generously, to refuse a typo rather than epic play. */
-export const SheetLevel = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
+export const SheetLevel = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: SHEET_LEVEL_MAX }),
+);
 /** A race, subrace or class name. */
 export const SheetLabel = Schema.NonEmptyString.check(Schema.isBetweenLength(1, 40));
 const sheetUrl = Schema.String.check(

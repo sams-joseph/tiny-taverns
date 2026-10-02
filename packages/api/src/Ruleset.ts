@@ -105,6 +105,13 @@ const DEX_ONLY: ReadonlyArray<AbilityKey> = ["DEX"];
 export const STARTING_LEVEL = 1;
 
 /**
+ * The 2014 fixed hit-point value for one level above the first: the hit die's
+ * average rounded up (a d10 is 6). The seed reads it for every level past 1,
+ * and the level-up offer (`LevelUp.ts`) for the one level it adds.
+ */
+export const averageHitDie = (hitDie: number): number => Math.floor(hitDie / 2) + 1;
+
+/**
  * A level as the rules read it: a whole number, at least 1, and
  * {@link STARTING_LEVEL} when nobody said. The seed and the sheet's grants read
  * the level through this, so the hit points and the features agree.
@@ -168,7 +175,7 @@ export const seedFor = (input: {
   const hp =
     classEntry.hitDie +
     constitution +
-    (Math.floor(classEntry.hitDie / 2) + 1 + constitution) * (level - 1) +
+    (averageHitDie(classEntry.hitDie) + constitution) * (level - 1) +
     ((raceEntry?.hpPerLevel ?? 0) + (subraceEntry?.hpPerLevel ?? 0)) * level;
   return { level, ac, hpMax: Math.max(1, hp), abilities, appliedBonuses };
 };

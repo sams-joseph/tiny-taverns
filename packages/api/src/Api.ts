@@ -234,6 +234,7 @@ import { SearchFilter, SearchHit } from "./Search.js";
 import { Session, SessionCreate, SessionUpdate } from "./Session.js";
 import { Spell, SpellFilter, SpellLibraryCreate, SpellLibraryUpdate, SpellSort } from "./Spell.js";
 import { CharacterSpellbook, NpcSpellbook } from "./Spellbook.js";
+import { LevelUpOffer } from "./LevelUp.js";
 import { LiveEvent, SessionEvent, SessionLogFilter } from "./SessionEvent.js";
 
 /** Liveness. The one endpoint with no actor and no campaign. */
@@ -563,6 +564,22 @@ class MeGroup extends HttpApiGroup.make("me")
       params: { characterId: CharacterId },
       success: CharacterSpellbook,
       error: NotFound,
+    }),
+    /**
+     * What the next level offers one owned character: the changes it makes on
+     * its own, and every choice it asks for with its options, computed from
+     * the character's vocabulary (every table it sits at, or the core rules).
+     * See `LevelUpOffer`. A read only: it records nothing, and it is answered
+     * during a fight as at any other time.
+     *
+     * `ownCharacter`, as the spell picker beside it: somebody else's character
+     * is the ordinary `NotFound`. `Conflict` is a character already at the
+     * highest level a sheet can hold.
+     */
+    HttpApiEndpoint.get("levelUpOffer", "/characters/:characterId/level-up", {
+      params: { characterId: CharacterId },
+      success: LevelUpOffer,
+      error: [NotFound, Conflict],
     }),
     /**
      * **The first write in the product a player may make**, and the only
