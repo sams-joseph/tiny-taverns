@@ -182,6 +182,12 @@ export function Hob({ hob }: { readonly hob: HobPanelState }) {
               to: "/characters/$characterId",
               params: { characterId: kept.id },
             });
+          // A kept level-up is on the character's sheet, and its Log.
+          case "levelUp":
+            return navigate({
+              to: "/characters/$characterId",
+              params: { characterId: kept.characterId },
+            });
           case "sharedWorldHistory":
             return navigate({
               to: "/worlds/$worldId/chronicle",

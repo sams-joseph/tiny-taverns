@@ -11,12 +11,14 @@ import {
   asBackgroundOption,
   asClassOption,
   asRaceOption,
+  averageHitDie,
   CAMPAIGN_DESCRIPTION_MAX,
   SHARED_WORLD_DESCRIPTION_MAX,
   CAMPAIGN_PREVIOUSLY_MAX,
   CAMPAIGN_STORY_MAX,
   CampaignId,
   ChallengeRating,
+  type CharacterId,
   type CharacterOption,
   type CharacterSheet,
   type CharacterSpellRules,
@@ -44,6 +46,14 @@ import {
   NpcAttitude,
   NpcStatus,
   isRaceOption,
+  type LevelUpChoice,
+  type LevelUpFeatureOption,
+  type LevelUpOffer,
+  type LevelUpPayload,
+  type LevelUpPick,
+  type LevelUpSpellOption,
+  levelUpChosen,
+  levelUpHitPointGain,
   modifierFor,
   NotFound,
   NpcId,
@@ -69,13 +79,14 @@ import {
   SessionId,
   SessionRecap,
   type SharedWorldId,
+  type SheetBody,
   SheetLabel,
   type Skill,
   type RaceEntry,
   type SubraceEntry,
   subraceNamed,
 } from "@taverns/api";
-import { Effect, Ref, Schema, SchemaGetter } from "effect";
+import { Effect, Ref, Result, Schema, SchemaGetter } from "effect";
 import { Tool, Toolkit } from "effect/ai";
 import type { Acts } from "../repo/Acts.js";
 import type { CampaignStories } from "../repo/CampaignStories.js";
@@ -2124,6 +2135,219 @@ export const accountToolkitListing = (
     ProposeSharedWorld,
   );
 
+/**
+ * How long a name the level-up offer lists may be in a tool's grammar: the
+ * corpus's longest feature name is about sixty characters, and a homebrew one
+ * is bounded by the option it belongs to.
+ */
+const OFFER_NAME_MAX = 120;
+
+/**
+ * The names one of a level-up's choices lists, de-duplicated case-insensitively
+ * with the first spelling kept — `namesOf`'s rule, for the reason it gives.
+ */
+const offerNames = (names: ReadonlyArray<string>): ReadonlyArray<string> => {
+  const seen = new Set<string>();
+  return names.filter((name) => {
+    const key = name.trim().toLowerCase();
+    if (key === "" || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+/**
+ * {@link nameSchema}'s three shapes over a level-up's names: the names
+ * themselves as a closed enum where they fit, and bounded free text above
+ * {@link OPTION_ENUM_CAP} (a wizard's spell list), which the handler resolves
+ * against the same list and refuses in words, pointing at `readLevelUpOffer`.
+ */
+const offerNameSchema = (names: ReadonlyArray<string>): Schema.Codec<string, string> =>
+  names.length === 0 || names.length > OPTION_ENUM_CAP
+    ? Schema.String.check(Schema.isBetweenLength(1, OFFER_NAME_MAX))
+    : Schema.Literals(names);
+
+/** The options a choice lists that can be taken now: a feature whose prerequisites are met, or a word. */
+const takeable = (choice: LevelUpChoice): ReadonlyArray<string> =>
+  choice.kind === "feature"
+    ? choice.options.flatMap((option) => (option.available ? [option.name] : []))
+    : choice.options;
+
+/** A class spell the sheet knows that a known caster may give up in a swap. */
+const swappable = (body: SheetBody): ReadonlyArray<SpellKnown> =>
+  (body.spellcasting?.known ?? []).filter(
+    (spell) =>
+      spell.spellId !== undefined &&
+      spell.spellId !== null &&
+      (spell.level ?? 0) > 0 &&
+      spell.learnedBy === undefined,
+  );
+
+/** Every name a level-up's offer lists, by the parameter `proposeLevelUp` takes it in. */
+const offerNameLists = (offer: LevelUpOffer, body: SheetBody) => {
+  const spells = offer.spells;
+  const levelled = (spells?.options ?? []).filter((option) => option.level > 0);
+  return {
+    subclasses: offerNames((offer.subclass?.options ?? []).map((option) => option.name)),
+    picks: offerNames(
+      [
+        ...offer.choices,
+        ...(offer.subclass?.options ?? []).flatMap((option) => option.choices),
+      ].flatMap(takeable),
+    ),
+    feats: offerNames((offer.abilityScoreImprovement?.feats ?? []).map((feat) => feat.name)),
+    cantrips: offerNames(
+      spells === undefined || spells.cantrips === 0
+        ? []
+        : spells.options.filter((option) => option.level === 0).map((option) => option.name),
+    ),
+    spells: offerNames(levelled.map((option) => option.name)),
+    known: offerNames(spells?.replace === true ? swappable(body).map((spell) => spell.name) : []),
+    magicalSecrets: offerNames(
+      (spells?.magicalSecrets?.options ?? []).map((option) => option.name),
+    ),
+    mysticArcanum: offerNames((spells?.mysticArcanum?.options ?? []).map((option) => option.name)),
+  };
+};
+
+/**
+ * Every parameter `proposeLevelUp` can take, before the offer decides which
+ * of them this level has. Each is optional and none is free text but a name
+ * over the cap and the rationale, so the {@link optional} sentinel is safe.
+ */
+const levelUpFields = (names: ReturnType<typeof offerNameLists>) => ({
+  subclass: optional(offerNameSchema(names.subclasses)),
+  picks: optional(Schema.Array(offerNameSchema(names.picks)).check(Schema.isBetweenLength(0, 24))),
+  /**
+   * The points of an Ability Score Improvement, as the wizard takes them —
+   * never a score. The amounts are checked in the handler, where a refusal
+   * is something the model can hear.
+   */
+  abilityScoreImprovement: optional(
+    Schema.Array(Schema.Struct({ ability: AbilityKey, points: Schema.Int })).check(
+      Schema.isBetweenLength(0, 2),
+    ),
+  ),
+  feat: optional(offerNameSchema(names.feats)),
+  cantrips: optional(
+    Schema.Array(offerNameSchema(names.cantrips)).check(Schema.isBetweenLength(0, 8)),
+  ),
+  spells: optional(Schema.Array(offerNameSchema(names.spells)).check(Schema.isBetweenLength(0, 8))),
+  replaceSpell: optional(
+    Schema.Struct({ give: offerNameSchema(names.known), take: offerNameSchema(names.spells) }),
+  ),
+  magicalSecrets: optional(
+    Schema.Array(offerNameSchema(names.magicalSecrets)).check(Schema.isBetweenLength(0, 8)),
+  ),
+  mysticArcanum: optional(offerNameSchema(names.mysticArcanum)),
+  rationale: optional(
+    Schema.Array(Schema.String.check(Schema.isBetweenLength(1, 400))).check(
+      Schema.isBetweenLength(0, 8),
+    ),
+  ),
+});
+
+type LevelUpFields = ReturnType<typeof levelUpFields>;
+
+/**
+ * What the next level brings and asks for, read out — **the same offer the
+ * wizard reads** (`GET /me/characters/:id/level-up`), read once when the
+ * question was asked and closed over, so this tool and `proposeLevelUp`'s
+ * grammar, built from the same read, cannot disagree.
+ */
+export const ReadLevelUpOffer = Tool.make("readLevelUpOffer", {
+  description:
+    "What this character's next level brings by itself and what it asks them to choose: " +
+    "the subclass, each feature's picks, an Ability Score Improvement or a feat, and new " +
+    "spells, with which options are not available yet and why. Call it before " +
+    "proposeLevelUp, and copy every name back exactly as it came.",
+  success: Schema.Struct({ level: Schema.String, offer: Schema.String }),
+  failure: NotFound,
+  failureMode: "return",
+});
+
+/**
+ * **What Hob offers the owner of a character: its next level**, every choice
+ * it asks for, built per request from that character's offer
+ * (`LevelUpOffer`, the wizard's read).
+ *
+ * Each name is a closed enum of what the offer lists — the subclasses, the
+ * options each choice can take now (an option whose prerequisites are not met
+ * is not in it), the feats, the spells — and a parameter for something this
+ * level does not ask for is absent rather than offered. There is no hit point
+ * method (Hob's level-ups take the fixed value), no score (the only way a
+ * score moves is an Ability Score Improvement's points), no level (always the
+ * next) and no character (closed over from the request). The handler holds
+ * the answer to the offer with `levelUpChosen`, the rule the write holds it
+ * to, before anything is offered.
+ */
+export const proposeLevelUpOver = (offer: LevelUpOffer, body: SheetBody) => {
+  const names = offerNameLists(offer, body);
+  const all = levelUpFields(names);
+  const spells = offer.spells;
+  const asi = offer.abilityScoreImprovement;
+  const has: Record<keyof LevelUpFields, boolean> = {
+    subclass: offer.subclass !== undefined && names.subclasses.length > 0,
+    picks: names.picks.length > 0,
+    abilityScoreImprovement: asi !== undefined,
+    feat: names.feats.length > 0,
+    cantrips: names.cantrips.length > 0,
+    spells: spells !== undefined && spells.spells > 0 && names.spells.length > 0,
+    replaceSpell: names.known.length > 0 && names.spells.length > 0,
+    magicalSecrets: names.magicalSecrets.length > 0,
+    mysticArcanum: names.mysticArcanum.length > 0,
+    rationale: true,
+  };
+  // Every key is optional, so the struct of the ones this level has decodes
+  // to the same type as the struct of all of them: a key the schema lacks
+  // simply never arrives.
+  const fields = Object.fromEntries(
+    Object.entries(all).filter(([key]) => has[key as keyof LevelUpFields]),
+  ) as LevelUpFields;
+  const says = [
+    has.subclass ? "the subclass in subclass" : undefined,
+    has.picks ? "each feature's picks in picks" : undefined,
+    has.abilityScoreImprovement
+      ? has.feat
+        ? "the Ability Score Improvement's points in abilityScoreImprovement (or one feat in feat instead)"
+        : "the Ability Score Improvement's points in abilityScoreImprovement"
+      : undefined,
+    has.cantrips ? "new cantrips in cantrips" : undefined,
+    has.spells ? "new spells in spells" : undefined,
+    has.replaceSpell ? "a known spell to swap in replaceSpell, if it suits them" : undefined,
+    has.magicalSecrets ? "Magical Secrets in magicalSecrets" : undefined,
+    has.mysticArcanum ? "a Mystic Arcanum in mysticArcanum" : undefined,
+  ].filter((part) => part !== undefined);
+  return Tool.make("proposeLevelUp", {
+    description:
+      `Offer them level ${String(offer.toLevel)} for this character, with every choice the ` +
+      "level asks for chosen. " +
+      (says.length === 0
+        ? "This level asks for no choices, so give only your reasons. "
+        : `Give ${says.join("; ")}: names exactly as readLevelUpOffer lists them. `) +
+      "The hit points are the fixed value and are worked out for you: never roll, and never " +
+      "give a score — a score moves only through an Ability Score Improvement's points (2 to " +
+      "one, or 1 each to two). Choose only from the offer; an option that is not available " +
+      "yet cannot be taken. Give a short reason for each real choice in rationale. Only a " +
+      "suggestion: nothing changes unless they keep it. Say one short line about it and stop.",
+    parameters: Schema.Struct(fields),
+    success: Schema.String,
+    failure: proposalFailure,
+    failureMode: "return",
+  });
+};
+
+type LevelUpDraft = Tool.Parameters<ReturnType<typeof proposeLevelUpOver>>;
+
+/**
+ * **The level-up composer's toolkit** (`/me/hob` with `intent: "levelUp"`):
+ * the character's offer read out, and the proposal built from it — nothing
+ * else. It reads no campaign, drafts nothing new, and holds no write; the
+ * owner's keep is the only thing that applies a level.
+ */
+export const levelUpToolkitOver = (offer: LevelUpOffer, body: SheetBody) =>
+  Toolkit.make(ReadLevelUpOffer, proposeLevelUpOver(offer, body));
+
 /** The repositories a DM Hob tool call may reach — read-only, except the conditional direct counter writer. */
 export interface HobRepositories {
   readonly search: (typeof Search)["Service"];
@@ -3718,6 +3942,471 @@ export const playerBindListing = (
     toolkit.toHandlers(
       toolkit.of(playerHandlersFor(repositories, actor, campaignId, proposal, vocabulary)),
     ),
+    (bound) => Effect.provideContext(toolkit, bound),
+  );
+};
+
+/** What the level-up composer's Hob is built over: one owned character, and its offer. */
+export interface LevelUpDraftContext {
+  readonly characterId: CharacterId;
+  readonly name: string;
+  readonly offer: LevelUpOffer;
+  readonly sheet: SheetBody;
+}
+
+/** A source's prose, as one line a model can hold: whitespace folded, cut at `max`. */
+const gist = (lines: ReadonlyArray<string>, max: number): string => {
+  const text = lines.join(" ").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+const signed = (value: number): string => (value < 0 ? String(value) : `+${String(value)}`);
+
+const fromTo = (change: { readonly from?: number | string; readonly to: number | string }) =>
+  change.from === undefined ? String(change.to) : `${String(change.from)} → ${String(change.to)}`;
+
+/** Why an option is not available yet, in the prerequisites' own terms. */
+const unmet = (option: LevelUpFeatureOption): string =>
+  option.prerequisites
+    .filter((prerequisite) => !prerequisite.met)
+    .map((prerequisite) =>
+      prerequisite.type === "level"
+        ? `level ${String(prerequisite.level)}`
+        : prerequisite.type === "spell"
+          ? `knowing ${prerequisite.name}`
+          : prerequisite.name,
+    )
+    .join(", ");
+
+/** One choice, read out: what offers it, how many, and each option. */
+const choiceLines = (choice: LevelUpChoice, indent: string): ReadonlyArray<string> => {
+  const head = `${indent}- ${quoted(choice.offeredBy.name)}: choose ${String(choice.choose)}`;
+  if (choice.kind !== "feature") {
+    return [
+      `${head} of ${choice.options.map(quoted).join(", ")}${
+        choice.kind === "text" && choice.desc !== undefined ? ` (${gist([choice.desc], 160)})` : ""
+      }`,
+    ];
+  }
+  return [
+    `${head}:`,
+    ...choice.options.map(
+      (option) =>
+        `${indent}  - ${quoted(option.name)}${
+          option.available ? "" : ` (not available yet: needs ${unmet(option)})`
+        }: ${gist(option.desc, 140)}`,
+    ),
+  ];
+};
+
+/**
+ * The offer as `readLevelUpOffer` reads it out: one block of plain lines in
+ * the order the wizard walks it, every name quoted exactly as the grammar
+ * spells it ({@link quoted}), and each feature's prose cut to a line. Ids are
+ * left out: the proposal takes names, and the handler resolves them.
+ */
+const offerText = (context: LevelUpDraftContext): string => {
+  const { offer, sheet } = context;
+  const automatic = offer.automatic;
+  const spells = offer.spells;
+  const asi = offer.abilityScoreImprovement;
+  const comes = [
+    automatic.proficiencyBonus === undefined
+      ? undefined
+      : `proficiency bonus ${fromTo(automatic.proficiencyBonus)}`,
+    automatic.attacksPerAction === undefined
+      ? undefined
+      : `attacks per Attack action ${fromTo(automatic.attacksPerAction)}`,
+    automatic.spellcasting?.save === undefined
+      ? undefined
+      : `spell save DC ${fromTo(automatic.spellcasting.save)}`,
+    automatic.spellcasting?.attack === undefined
+      ? undefined
+      : `spell attack ${fromTo(automatic.spellcasting.attack)}`,
+    ...automatic.resources.map((resource) => `${resource.name} ${fromTo(resource)}`),
+    ...automatic.subclassSpells.map((spell) => `${spell.name} (always prepared)`),
+  ].filter((part) => part !== undefined);
+  return [
+    `${quoted(context.name)} is a level ${String(offer.fromLevel)} ${offer.className ?? "character"}; ` +
+      `this is level ${String(offer.toLevel)}.`,
+    offer.hitPoints === undefined
+      ? "Their class is not in their rules, so this level cannot be taken here."
+      : `Hit points: ${signed(offer.hitPoints.fixed)}, the fixed value (the d${String(
+          offer.hitPoints.die,
+        )}'s average and ${signed(offer.hitPoints.bonus)}). Nothing to choose.`,
+    ...(comes.length === 0 ? [] : [`Comes with the level: ${comes.join("; ")}.`]),
+    ...(automatic.features.length === 0
+      ? []
+      : [
+          "New features:",
+          ...automatic.features.map(
+            (feature) => `- ${quoted(feature.name)}: ${gist(feature.desc, 240)}`,
+          ),
+        ]),
+    ...(offer.subclass === undefined
+      ? []
+      : [
+          `Subclass, taken at level ${String(offer.subclass.level)}: choose one, in subclass` +
+            (offer.subclass.current === undefined
+              ? "."
+              : ` (the sheet says ${quoted(offer.subclass.current)}, which names none of these, so it may stay as it is).`),
+          ...offer.subclass.options.flatMap((option) => [
+            `- ${quoted(option.name)}: ${gist(
+              [...(option.flavor === null ? [] : [option.flavor]), ...option.desc],
+              200,
+            )}` +
+              (option.features.length === 0
+                ? ""
+                : ` Brings ${option.features.map((feature) => quoted(feature.name)).join(", ")}.`),
+            ...(option.choices.length === 0
+              ? []
+              : [
+                  "  and, taking it, asks (in picks):",
+                  ...option.choices.flatMap((choice) => choiceLines(choice, "  ")),
+                ]),
+          ]),
+        ]),
+    ...(offer.choices.length === 0
+      ? []
+      : [
+          "Choices, each picked name in picks:",
+          ...offer.choices.flatMap((choice) => choiceLines(choice, "")),
+        ]),
+    ...(asi === undefined
+      ? []
+      : [
+          `Ability Score Improvement: ${String(asi.points)} points in abilityScoreImprovement — ` +
+            `2 to one score or 1 each to two, none above ${String(asi.maximum)}. Scores now: ` +
+            `${sheet.abilities.map((cell) => `${cell.label} ${cell.score}`).join(", ")}.`,
+          ...(asi.feats === undefined
+            ? []
+            : [
+                "Or one feat in feat instead of the points:",
+                ...asi.feats.map(
+                  (feat) =>
+                    `- ${quoted(feat.name)}${
+                      feat.prerequisites.length === 0
+                        ? ""
+                        : ` (needs ${feat.prerequisites
+                            .map((need) => `${need.ability} ${String(need.minimum)}`)
+                            .join(", ")})`
+                    }: ${gist(feat.description, 200)}`,
+                ),
+              ]),
+        ]),
+    ...(spells === undefined
+      ? []
+      : [
+          ...(spells.cantrips === 0
+            ? []
+            : [
+                `Learn ${String(spells.cantrips)} new cantrip${spells.cantrips === 1 ? "" : "s"}, in cantrips, from: ` +
+                  spells.options
+                    .filter((option) => option.level === 0)
+                    .map((option) => quoted(option.name))
+                    .join(", "),
+              ]),
+          ...(spells.spells === 0
+            ? []
+            : [
+                `Learn ${String(spells.spells)} new spell${spells.spells === 1 ? "" : "s"}, in spells, from: ` +
+                  spells.options
+                    .filter((option) => option.level > 0)
+                    .map((option) => `${quoted(option.name)} (level ${String(option.level)})`)
+                    .join(", "),
+              ]),
+          ...(spells.replace && swappable(sheet).length > 0
+            ? [
+                "They may swap one spell they know for one of the spells above, in replaceSpell " +
+                  `(give, then take). They know: ${swappable(sheet)
+                    .map((spell) => quoted(spell.name))
+                    .join(", ")}.`,
+              ]
+            : []),
+          ...(spells.prepared === undefined
+            ? []
+            : [
+                `They prepare spells from their whole list whenever they like; how many goes ${fromTo(spells.prepared)}.`,
+              ]),
+          ...(spells.magicalSecrets === undefined
+            ? []
+            : [
+                `Magical Secrets: ${String(spells.magicalSecrets.count)} spells of level ` +
+                  `${String(spells.magicalSecrets.maximumLevel)} or lower from any list, in magicalSecrets, from: ` +
+                  spells.magicalSecrets.options.map((option) => quoted(option.name)).join(", "),
+              ]),
+          ...(spells.mysticArcanum === undefined
+            ? []
+            : [
+                `Mystic Arcanum: one level ${String(spells.mysticArcanum.level)} spell, in mysticArcanum, from: ` +
+                  spells.mysticArcanum.options.map((option) => quoted(option.name)).join(", "),
+              ]),
+        ]),
+  ].join("\n");
+};
+
+/** Two names are one when they differ only in case and surrounding space. */
+const sameName = (left: string, right: string): boolean =>
+  left.trim().toLowerCase() === right.trim().toLowerCase();
+
+/** A name the offer does not list where the model put it, said so it can be corrected. */
+const notListed = (name: string, where: string): string =>
+  `${quoted(name)} is not one of the ${where} this level offers; call readLevelUpOffer and copy a name exactly.`;
+
+/**
+ * The model's names, as the payload the owner's write takes: each name
+ * resolved to the id the offer gave it, against the list the parameter was
+ * built from. Answers every name that resolves to nothing, at once.
+ */
+const levelUpPayloadFrom = (
+  context: LevelUpDraftContext,
+  draft: LevelUpDraft,
+): Result.Result<LevelUpPayload, ReadonlyArray<string>> => {
+  const { offer, sheet } = context;
+  const problems: Array<string> = [];
+
+  // The subclass, by name; its own choices join the level's.
+  const subclassName = absent(draft.subclass);
+  const subclassOption =
+    subclassName === undefined
+      ? undefined
+      : offer.subclass?.options.find((option) => sameName(option.name, subclassName));
+  if (subclassName !== undefined && subclassOption === undefined) {
+    problems.push(
+      offer.subclass === undefined
+        ? "No subclass is taken at this level; leave subclass out."
+        : notListed(subclassName, "subclasses"),
+    );
+  }
+
+  // Each picked name, given to the first choice that lists it and still has
+  // room, preferring an option that can be taken now; `levelUpChosen` then
+  // says what is wrong with the counts.
+  const choices = [...offer.choices, ...(subclassOption?.choices ?? [])];
+  const taken = choices.map(() => 0);
+  const picks: Array<LevelUpPick> = [];
+  for (const name of absent(draft.picks) ?? []) {
+    interface Candidate {
+      readonly index: number;
+      readonly available: boolean;
+      readonly pick: LevelUpPick;
+    }
+    const candidates = choices.flatMap((choice, index): ReadonlyArray<Candidate> =>
+      choice.kind === "feature"
+        ? choice.options
+            .filter((option) => sameName(option.name, name))
+            .map((option) => ({
+              index,
+              available: option.available,
+              pick: { offeredBy: choice.offeredBy.featureId, featureId: option.featureId },
+            }))
+        : choice.options
+            .filter((value) => sameName(value, name))
+            .map((value) => ({
+              index,
+              available: true,
+              pick: { offeredBy: choice.offeredBy.featureId, value },
+            })),
+    );
+    const chosen =
+      candidates.find(
+        (candidate) =>
+          candidate.available && taken[candidate.index]! < choices[candidate.index]!.choose,
+      ) ?? candidates[0];
+    if (chosen === undefined) {
+      problems.push(notListed(name, "picks"));
+      continue;
+    }
+    taken[chosen.index]! += 1;
+    picks.push(chosen.pick);
+  }
+
+  // The Ability Score Improvement's points, or a feat in their place.
+  const points = absent(draft.abilityScoreImprovement) ?? [];
+  const featName = absent(draft.feat);
+  for (const increase of points) {
+    if (increase.points !== 1 && increase.points !== 2) {
+      problems.push(
+        `An Ability Score Improvement gives 2 points to one score or 1 each to two; ${String(increase.points)} to ${increase.ability} is neither.`,
+      );
+    }
+  }
+  if (points.length > 0 && featName !== undefined) {
+    problems.push("Give the Ability Score Improvement's points or a feat, not both.");
+  }
+  const feat =
+    featName === undefined
+      ? undefined
+      : offer.abilityScoreImprovement?.feats?.find((entry) => sameName(entry.name, featName));
+  if (featName !== undefined && feat === undefined) problems.push(notListed(featName, "feats"));
+
+  // The spells, each from the list its parameter was built from.
+  const spells = offer.spells;
+  const spellIds = (
+    names: ReadonlyArray<string> | null | undefined,
+    options: ReadonlyArray<LevelUpSpellOption>,
+    where: string,
+  ): ReadonlyArray<SpellId> =>
+    (names ?? []).flatMap((name) => {
+      const option = options.find((entry) => sameName(entry.name, name));
+      if (option === undefined) {
+        problems.push(notListed(name, where));
+        return [];
+      }
+      return [option.spellId];
+    });
+  const options = spells?.options ?? [];
+  const cantrips = spellIds(
+    absent(draft.cantrips),
+    options.filter((option) => option.level === 0),
+    "cantrips",
+  );
+  const learned = spellIds(
+    absent(draft.spells),
+    options.filter((option) => option.level > 0),
+    "spells",
+  );
+  const secrets = spellIds(
+    absent(draft.magicalSecrets),
+    spells?.magicalSecrets?.options ?? [],
+    "Magical Secrets",
+  );
+  const arcanumName = absent(draft.mysticArcanum);
+  const arcanum =
+    arcanumName === undefined
+      ? []
+      : spellIds([arcanumName], spells?.mysticArcanum?.options ?? [], "Mystic Arcanum spells");
+  const swap = absent(draft.replaceSpell);
+  const given =
+    swap === undefined
+      ? undefined
+      : swappable(sheet).find((spell) => sameName(spell.name, swap.give));
+  if (swap !== undefined && given === undefined) {
+    problems.push(`${quoted(swap.give)} is not a class spell they know to swap.`);
+  }
+  const replacing =
+    swap === undefined
+      ? []
+      : spellIds(
+          [swap.take],
+          options.filter((option) => option.level > 0),
+          "spells",
+        );
+
+  if (problems.length > 0) return Result.fail(problems);
+
+  const anySpells =
+    cantrips.length + learned.length + secrets.length + arcanum.length > 0 || swap !== undefined;
+  return Result.succeed({
+    expectedVersion: offer.version,
+    toLevel: offer.toLevel,
+    // Hob's level-ups always take the fixed value; a roll is the owner's, in the wizard.
+    hitPoints: "fixed",
+    ...(subclassOption === undefined
+      ? {}
+      : { subclass: { subclassId: subclassOption.subclassId } }),
+    ...(feat !== undefined
+      ? { abilityScoreImprovement: { featId: feat.featId } }
+      : points.length > 0
+        ? {
+            abilityScoreImprovement: {
+              increases: points.map((increase) => ({
+                ability: increase.ability,
+                amount: increase.points,
+              })),
+            },
+          }
+        : {}),
+    ...(picks.length === 0 ? {} : { picks }),
+    ...(anySpells
+      ? {
+          spells: {
+            ...(cantrips.length === 0 ? {} : { cantrips }),
+            ...(learned.length === 0 ? {} : { learned }),
+            ...(given?.spellId === undefined || given.spellId === null || replacing[0] === undefined
+              ? {}
+              : { replace: { from: given.spellId, to: replacing[0] } }),
+            ...(secrets.length === 0 ? {} : { magicalSecrets: secrets }),
+            ...(arcanum[0] === undefined ? {} : { mysticArcanum: arcanum[0] }),
+          },
+        }
+      : {}),
+  });
+};
+
+/** A level-up the offer does not allow, refused so the model can correct it. */
+const notLevelled = (problems: ReadonlyArray<string>) =>
+  new Conflict({
+    message: `${problems.join(" ")} Nothing was offered: fix that and call proposeLevelUp again.`,
+  });
+
+/**
+ * The level-up composer's two handlers, over the offer read when the question
+ * was asked. `proposeLevelUp` resolves the names to the offer's ids, then
+ * holds the answer to the offer with `levelUpChosen` — the same rule, over the
+ * same offer, that the owner's write will hold it to when it is kept — and
+ * offers the card only when it passes, with the record's choices by name and
+ * the fixed hit points the keep will add.
+ */
+const levelUpHandlersFor = (actor: Actor, proposal: ProposalSlot, context: LevelUpDraftContext) => {
+  const { offer } = context;
+  return {
+    readLevelUpOffer: () =>
+      Effect.succeed({
+        level: `Level ${String(offer.fromLevel)} → ${String(offer.toLevel)}`,
+        offer: offerText(context),
+      }),
+
+    proposeLevelUp: (draft: LevelUpDraft) =>
+      Effect.gen(function* () {
+        const hitPoints = offer.hitPoints;
+        if (hitPoints === undefined || offer.className === null) {
+          return yield* new Conflict({
+            message:
+              "This character's class is not in their rules, so there is no level to offer here. " +
+              "Tell them to change the level in Edit your character instead.",
+          });
+        }
+        const payload = levelUpPayloadFrom(context, draft);
+        if (Result.isFailure(payload)) return yield* notLevelled(payload.failure);
+        const chosen = levelUpChosen(offer, context.sheet, payload.success);
+        if (Result.isFailure(chosen)) return yield* notLevelled(chosen.failure);
+        return yield* bind(actor, proposal).offer(
+          {
+            target: "levelUp",
+            characterId: context.characterId,
+            characterName: context.name,
+            className: offer.className,
+            fromLevel: offer.fromLevel,
+            toLevel: offer.toLevel,
+            hitPointGain: levelUpHitPointGain(
+              hitPoints,
+              averageHitDie(hitPoints.die),
+              chosen.success.constitution,
+              offer.toLevel,
+            ),
+            payload: payload.success,
+            choices: chosen.success.choices,
+            rationale: (absent(draft.rationale) ?? [])
+              .map((line) => line.trim())
+              .filter((line) => line !== ""),
+          },
+          `Offered level ${String(offer.toLevel)} for ${context.name}. They can keep it or ask for ` +
+            "changes; say one short line about it and stop — the card is already on their screen.",
+        );
+      }),
+  };
+};
+
+/** {@link levelUpToolkitOver}, bound to {@link levelUpHandlersFor}. */
+export const levelUpBindOver = (
+  actor: Actor,
+  proposal: ProposalSlot,
+  context: LevelUpDraftContext,
+) => {
+  const toolkit = levelUpToolkitOver(context.offer, context.sheet);
+  return Effect.flatMap(
+    toolkit.toHandlers(toolkit.of(levelUpHandlersFor(actor, proposal, context))),
     (bound) => Effect.provideContext(toolkit, bound),
   );
 };

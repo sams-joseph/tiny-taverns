@@ -2483,12 +2483,16 @@ class HobGroup extends HttpApiGroup.make("hob")
  * (`conversationReachable`'s `"account"` arm), so another account's thread id
  * is the ordinary `NotFound`. Its toolkits hold no campaign or Shared World
  * read: character drafting over the core rules (`coreRulesUsable`), plus
- * campaign and Shared World drafting on the panel (`HobDraftAsk.intent`).
+ * campaign and Shared World drafting on the panel, or one owned character's
+ * next level on the sheet's level-up composer (`HobDraftAsk.intent`). That
+ * composer's `ask` is `NotFound` for a character that is not the asker's and
+ * `Conflict` for one with no next level, before a byte of stream.
  * `accept` can make a character, through the insert `me.createCoreCharacter`
  * uses; a campaign, through the insert `campaigns.create` (or a Shared World's
  * `createCampaign`) uses; or a Shared World, through the insert
- * `sharedWorlds.create` uses. A kept campaign or world has its one cover drawn
- * after the accept commits.
+ * `sharedWorlds.create` uses; or apply a level-up, through the write
+ * `me.levelUp` takes. A kept campaign or world has its one cover drawn after
+ * the accept commits.
  */
 class MeHobGroup extends HttpApiGroup.make("meHob")
   .add(
@@ -2498,7 +2502,7 @@ class MeHobGroup extends HttpApiGroup.make("meHob")
     HttpApiEndpoint.post("ask", "/ask", {
       payload: HobDraftAsk,
       success: HttpApiSchema.StreamSse({ events: HobEvent }),
-      error: [NotFound, HobUnavailable],
+      error: [NotFound, Conflict, HobUnavailable],
     }),
     HttpApiEndpoint.get("threads", "/threads", {
       success: Schema.Array(HobThread),

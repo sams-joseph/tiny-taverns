@@ -355,6 +355,39 @@ function NpcSheetBody({ artifact }: { readonly artifact: HobArtifact & { kind: "
   );
 }
 
+/**
+ * A character's next level Hob chose: what the keep will apply, label by
+ * label, and Hob's reasons. The character and the levels are the card's
+ * title and meta line.
+ */
+function LevelUpBody({ artifact }: { readonly artifact: HobArtifact & { kind: "levelUp" } }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <dl className="flex flex-col gap-1">
+        {artifact.lines.map(([label, value]) => (
+          <div key={label} className="flex gap-2 text-body-s leading-body">
+            <dt className="shrink-0 text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 text-foreground">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {artifact.rationale.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {artifact.rationale.map((line) => (
+            <li
+              key={line}
+              className="flex items-start gap-2 text-caption leading-body text-muted-foreground"
+            >
+              <Icon name="wand-sparkles" size={12} className="mt-0.5 shrink-0 text-faint" />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
   switch (artifact.kind) {
     case "encounter":
@@ -383,6 +416,8 @@ function ArtifactBody({ artifact }: { readonly artifact: HobArtifact }) {
       return <CharacterBody artifact={artifact} />;
     case "npcSheet":
       return <NpcSheetBody artifact={artifact} />;
+    case "levelUp":
+      return <LevelUpBody artifact={artifact} />;
     default:
       return <RulesBody artifact={artifact} />;
   }
@@ -423,6 +458,7 @@ export function ArtifactCard({
   const npc = artifact.kind === "npc";
   const night = artifact.kind === "checklist";
   const act = artifact.kind === "act";
+  const levelUp = artifact.kind === "levelUp";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(artifact.title ?? "");
 
@@ -541,7 +577,9 @@ export function ArtifactCard({
                                     : `Planned as session ${String(artifact.plannedAs)}`
                                   : act
                                     ? "In the Chronicle"
-                                    : "In tonight’s session"}
+                                    : levelUp
+                                      ? "On the sheet"
+                                      : "In tonight’s session"}
             </span>
           </>
         ) : (
@@ -556,7 +594,14 @@ export function ArtifactCard({
                       ? "Keep as the story so far"
                       : chronicle
                         ? "Add to Chronicle"
-                        : campaign || sharedWorld || character || npc || npcSheet || night || act
+                        : campaign ||
+                            sharedWorld ||
+                            character ||
+                            npc ||
+                            npcSheet ||
+                            night ||
+                            act ||
+                            levelUp
                           ? "Keep it"
                           : "Save to session"}
               </Button>

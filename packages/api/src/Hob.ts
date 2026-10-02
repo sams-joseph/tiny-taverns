@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AdvancementChoices, CharacterAdvancement, LevelUpPayload } from "./Advancement.js";
 import { Beat } from "./Beat.js";
 import { Campaign, CAMPAIGN_DESCRIPTION_MAX } from "./Campaign.js";
 import { CampaignAct } from "./CampaignAct.js";
@@ -26,6 +27,7 @@ import {
 } from "./Ids.js";
 import { Note, NoteCategory, NoteKind } from "./Note.js";
 import { Npc, NpcAttitude, NpcPersona, NpcPrivateMaterial, NpcSheet, NpcStatus } from "./Npc.js";
+import { OwnedCharacter } from "./Party.js";
 import { PrepItem } from "./PrepItem.js";
 import { Session } from "./Session.js";
 import { SharedWorld, SHARED_WORLD_DESCRIPTION_MAX } from "./SharedWorld.js";
@@ -166,8 +168,9 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * `encounter` (a template and its roster), a `character` (the asker's own,
  * drafted for them), the Shared World's Chronicle entry and Story So Far, a
  * campaign's own story so far (`campaignStory`), a new campaign NPC (`npc`),
- * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table) and a
- * `sharedWorld` (the asker's new world). The union is discriminated on `target` for the reason
+ * an NPC's sheet (`npcSheet`), a `campaign` (the asker's new table), a
+ * `sharedWorld` (the asker's new world) and a `levelUp` (the next level of a
+ * character the asker owns). The union is discriminated on `target` for the reason
  * `SearchHit` is discriminated on `source` — `roster` exists only on an
  * encounter and `title` only on the thing that has one, and a nullable field
  * the client renders anyway is the failure this schema style exists to
@@ -180,9 +183,10 @@ export type HobRosterLine = typeof HobRosterLine.Type;
  * composer's has `proposeCharacter` and nothing else (`HobAsk.intent` and
  * `HobDraftAsk.intent` pick it); the
  * account's own panel has `proposeCharacter`, `proposeCampaign` and
- * `proposeSharedWorld`. So the halves of this union are reachable from
- * disjoint conversations: a character, a campaign or a Shared World proposal
- * only ever lives in the asker's *own* thread and
+ * `proposeSharedWorld`; the level-up composer (`HobDraftAsk.intent:
+ * "levelUp"`) has `proposeLevelUp` and nothing else. So the halves of this
+ * union are reachable from disjoint conversations: a character, a campaign, a
+ * Shared World or a level-up proposal only ever lives in the asker's *own* thread and
  * materialises into their own ownership, and a member who cannot write the
  * campaign holds no thread an encounter could be accepted from. That is a set
  * of predicates, not a check anywhere. See `assistant/toolkit.ts` and
@@ -517,6 +521,41 @@ export const HobProposal = Schema.Union([
       Schema.String.check(Schema.isMaxLength(SHARED_WORLD_DESCRIPTION_MAX)),
     ),
   }),
+  /**
+   * The next level of a character the asker owns, chosen for them by the
+   * level-up composer's Hob (`HobDraftAsk` with `intent: "levelUp"`) — the
+   * one member that changes a row rather than making one.
+   *
+   * `payload` is what the accept sends to the owner's own level-up write
+   * (`POST /me/characters/:id/level-up`), **resolved when the proposal is
+   * made**: every pick by the id the offer named it with, `expectedVersion`
+   * the version the offer was read at, and `hitPoints` always `fixed` — Hob
+   * never rolls and has no score to set but an Ability Score Improvement's.
+   * The accept takes no content of its own, so a kept proposal is applied
+   * exactly as the card showed it, stamped `origin = 'assistant'` with the
+   * turn; a sheet changed since the offer refuses the keep with the write's
+   * own stale-version `Conflict`.
+   *
+   * `choices` is the card's display half: the record's own shape, by name,
+   * as `levelUpChosen` worked it out against the offer when Hob proposed —
+   * the same rule the write holds the payload to. `characterName`,
+   * `className`, the two levels and `hitPointGain` are snapshots, as a roster
+   * line's creature name is. `rationale` is *What Hob did*, kept on the turn
+   * and not carried onto the record.
+   */
+  Schema.Struct({
+    target: Schema.Literal("levelUp"),
+    characterId: CharacterId,
+    characterName: Schema.String,
+    className: Schema.String,
+    fromLevel: Schema.Int,
+    toLevel: Schema.Int,
+    /** What the level adds to the hit point maximum: the fixed value, CON's change included. */
+    hitPointGain: Schema.Int,
+    payload: LevelUpPayload,
+    choices: AdvancementChoices,
+    rationale: Schema.Array(Schema.String),
+  }),
 ]);
 export type HobProposal = typeof HobProposal.Type;
 
@@ -577,6 +616,7 @@ export const HobKept = Schema.Union([
   Schema.Struct({ accepted: Schema.Literal("npcSheet"), npcId: NpcId }),
   Schema.Struct({ accepted: Schema.Literal("campaign"), id: CampaignId }),
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), id: SharedWorldId }),
+  Schema.Struct({ accepted: Schema.Literal("levelUp"), characterId: CharacterId }),
 ]);
 export type HobKept = typeof HobKept.Type;
 
@@ -678,18 +718,28 @@ export type HobCampaignAsk = typeof HobCampaignAsk.Type;
 /**
  * A question to the account's own Hob, with no campaign (`/me/hob/ask`).
  *
- * Two surfaces share this endpoint, as two share `HobAsk`'s: the character
- * create screen's drafting composer and the docked panel on every screen
- * outside a campaign or Shared World. `intent: "character"` is the composer
- * saying so, and it gets the character-drafting toolkit and nothing else.
- * Absent means the panel, whose toolkit drafts a character, a campaign or a
- * Shared World.
+ * Three surfaces share this endpoint. `intent: "character"` is the character
+ * create screen's drafting composer, and it gets the character-drafting
+ * toolkit and nothing else. `intent: "levelUp"` is the character sheet's
+ * level-up composer, naming the character: it gets a toolkit built from that
+ * character's next-level offer (`readLevelUpOffer`, `proposeLevelUp`) and
+ * nothing else, and a character that is not the asker's is the ordinary
+ * `NotFound` before a byte of stream. Absent means the docked panel, whose
+ * toolkit drafts a character, a campaign or a Shared World.
  */
-export const HobDraftAsk = Schema.Struct({
-  threadId: Schema.optional(AssistantThreadId),
-  text: turnText,
-  intent: Schema.optional(Schema.Literal("character")),
-});
+export const HobDraftAsk = Schema.Union([
+  Schema.Struct({
+    threadId: Schema.optional(AssistantThreadId),
+    text: turnText,
+    intent: Schema.optional(Schema.Literal("character")),
+  }),
+  Schema.Struct({
+    threadId: Schema.optional(AssistantThreadId),
+    text: turnText,
+    intent: Schema.Literal("levelUp"),
+    characterId: CharacterId,
+  }),
+]);
 export type HobDraftAsk = typeof HobDraftAsk.Type;
 
 /**
@@ -876,6 +926,18 @@ export const HobAccepted = Schema.Union([
    * commits. The asker is its owner.
    */
   Schema.Struct({ accepted: Schema.Literal("sharedWorld"), sharedWorld: SharedWorld }),
+  /**
+   * The level-up an owner kept from their own conversation, applied by the
+   * same write the wizard's confirm takes: the character at its new level
+   * with everywhere it is seated (the roster's row, so the screens a level
+   * moves can be named), and the record, carrying `origin: "assistant"` and
+   * the turn.
+   */
+  Schema.Struct({
+    accepted: Schema.Literal("levelUp"),
+    owned: OwnedCharacter,
+    advancement: CharacterAdvancement,
+  }),
 ]);
 export type HobAccepted = typeof HobAccepted.Type;
 
@@ -918,6 +980,8 @@ export const keptFrom = (accepted: HobAccepted): HobKept => {
       return { accepted: "campaign", id: accepted.campaign.id };
     case "sharedWorld":
       return { accepted: "sharedWorld", id: accepted.sharedWorld.id };
+    case "levelUp":
+      return { accepted: "levelUp", characterId: accepted.owned.character.id };
   }
 };
 

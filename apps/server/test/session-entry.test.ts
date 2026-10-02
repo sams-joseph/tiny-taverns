@@ -12,6 +12,7 @@ import { Context, DateTime, Effect, Layer, Stream } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { Advancement } from "../src/repo/Advancement.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Acts } from "../src/repo/Acts.js";
 import { Beats } from "../src/repo/Beats.js";
@@ -67,6 +68,7 @@ import { describeLayer } from "./support/suite.js";
 const services = Layer.mergeAll(
   Accounts.layer,
   Beats.layer.pipe(Layer.provide(LiveEvents.layer)),
+  Advancement.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   CampaignStories.layer,
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -90,6 +92,7 @@ const services = Layer.mergeAll(
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   Proposals.layer.pipe(
     Layer.provide([
+      Advancement.layer.pipe(Layer.provide(LiveEvents.layer)),
       Groups.layer,
       CampaignCreatorActors.layer,
       NpcSheets.layer,

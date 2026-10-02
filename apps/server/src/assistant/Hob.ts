@@ -3,6 +3,7 @@ import {
   type AssistantTurnId,
   type Campaign,
   type CampaignId,
+  type Conflict,
   CurrentActor,
   SharedWorldHobStatus,
   type SharedWorldId,
@@ -35,6 +36,7 @@ import {
   type Toolkit,
 } from "effect/ai";
 import { Acts } from "../repo/Acts.js";
+import { Advancement } from "../repo/Advancement.js";
 import { Campaigns } from "../repo/Campaigns.js";
 import { CampaignStories } from "../repo/CampaignStories.js";
 import { GroupHistory } from "../repo/GroupHistory.js";
@@ -66,6 +68,8 @@ import {
   dmBindWithDirect,
   dmHandlersFor,
   groupHandlersFor,
+  type LevelUpDraftContext,
+  levelUpBindOver,
   SharedWorldToolkit,
   HobToolkit,
   NO_VOCABULARY,
@@ -161,14 +165,15 @@ export class Hob extends Context.Service<
     /** `status`, for drafting a character with no campaign. Names nothing. */
     readonly draftStatus: Effect.Effect<HobDraftStatus, never, CurrentActor>;
     /**
-     * Drafting a character with no campaign — `ask`'s protocol over the core
-     * drafting toolkit (`coreBindOver`) and a thread of the asker's own
-     * account (`"account"` reach). A thread id that is not theirs is a
-     * `NotFound` before a byte of stream.
+     * Drafting with no campaign — `ask`'s protocol over the account's own
+     * toolkits and a thread of the asker's own account (`"account"` reach). A
+     * thread id that is not theirs is a `NotFound` before a byte of stream;
+     * so is a level-up composer's character the asker does not own, and one
+     * with no next level is that offer's `Conflict`.
      */
     readonly askDraft: (
       ask: HobDraftAsk,
-    ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | HobUnavailable, CurrentActor>;
+    ) => Effect.Effect<Stream.Stream<HobEvent>, NotFound | Conflict | HobUnavailable, CurrentActor>;
   }
 >()("Hob") {
   /**
@@ -179,43 +184,52 @@ export class Hob extends Context.Service<
    * assistant is switched off here" must not be a way to probe which campaigns
    * exist.
    */
-  static readonly unavailable: Layer.Layer<Hob, never, Campaigns | Groups> = Layer.effect(this)(
-    Effect.gen(function* () {
-      const campaigns = yield* Campaigns;
-      const groups = yield* Groups;
-      const off = new HobUnavailable({
-        message:
-          "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
-          "apps/server/.env.local (see .env.example) and restart the server.",
-      });
-      return {
-        status: (campaignId) =>
-          Effect.map(
-            campaigns.findById(campaignId),
-            (campaign) => new HobStatus({ available: false, model: null, campaign: campaign.name }),
-          ),
-        ask: (campaignId) => Effect.andThen(campaigns.findById(campaignId), Effect.fail(off)),
-        // Same shape as the campaign pair: the group is still resolved, so
-        // "the assistant is off" is not a cheaper way to probe which groups
-        // exist.
-        sharedWorldStatus: (groupId) =>
-          Effect.map(
-            groups.findById(groupId),
-            (group) =>
-              new SharedWorldHobStatus({
-                available: false,
-                model: null,
-                sharedWorld: group.name,
-              }),
-          ),
-        askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
-        // Nothing to resolve first: the path names no campaign and no world,
-        // so there is nothing a denial here could disclose.
-        draftStatus: Effect.succeed(new HobDraftStatus({ available: false, model: null })),
-        askDraft: () => Effect.fail(off),
-      };
-    }),
-  );
+  static readonly unavailable: Layer.Layer<Hob, never, Advancement | Campaigns | Groups> =
+    Layer.effect(this)(
+      Effect.gen(function* () {
+        const campaigns = yield* Campaigns;
+        const groups = yield* Groups;
+        const advancement = yield* Advancement;
+        const off = new HobUnavailable({
+          message:
+            "Hob has no model behind it. Set HOB_API_URL and HOB_MODEL in " +
+            "apps/server/.env.local (see .env.example) and restart the server.",
+        });
+        return {
+          status: (campaignId) =>
+            Effect.map(
+              campaigns.findById(campaignId),
+              (campaign) =>
+                new HobStatus({ available: false, model: null, campaign: campaign.name }),
+            ),
+          ask: (campaignId) => Effect.andThen(campaigns.findById(campaignId), Effect.fail(off)),
+          // Same shape as the campaign pair: the group is still resolved, so
+          // "the assistant is off" is not a cheaper way to probe which groups
+          // exist.
+          sharedWorldStatus: (groupId) =>
+            Effect.map(
+              groups.findById(groupId),
+              (group) =>
+                new SharedWorldHobStatus({
+                  available: false,
+                  model: null,
+                  sharedWorld: group.name,
+                }),
+            ),
+          askSharedWorld: (groupId) => Effect.andThen(groups.findById(groupId), Effect.fail(off)),
+          // Nothing to resolve first: the path names no campaign and no world,
+          // so there is nothing a denial here could disclose — except the
+          // level-up composer's character, which is resolved as `ask`'s
+          // campaign is, so "the assistant is off" is no cheaper probe of
+          // whose characters exist.
+          draftStatus: Effect.succeed(new HobDraftStatus({ available: false, model: null })),
+          askDraft: (ask) =>
+            ask.intent === "levelUp"
+              ? Effect.andThen(advancement.offerToDraft(ask.characterId), Effect.fail(off))
+              : Effect.fail(off),
+        };
+      }),
+    );
 
   /**
    * Hob with a model behind it.
@@ -230,6 +244,7 @@ export class Hob extends Context.Service<
     Hob,
     never,
     | Acts
+    | Advancement
     | Campaigns
     | CampaignStories
     | Creatures
@@ -259,6 +274,9 @@ export class Hob extends Context.Service<
         const groups = yield* Groups;
         const dmActors = yield* CampaignCreatorActors;
         const threads = yield* HobThreads;
+        // The level-up composer's one read: an owned character's next-level
+        // offer, which decides the shape of `proposeLevelUp`.
+        const advancement = yield* Advancement;
         const repositories = {
           search: yield* Search,
           sessions: yield* Sessions,
@@ -771,7 +789,22 @@ export class Hob extends Context.Service<
             Effect.gen(function* () {
               const actor = yield* CurrentActor;
               const account = actor.accountId;
-              const panel = ask.intent !== "character";
+              const panel = ask.intent === undefined;
+              /**
+               * The level-up composer's character and its next-level offer,
+               * read before a byte of stream: a character this account does
+               * not own is a 404, one with no next level a 409, and the model
+               * is never called. The offer decides the shape of
+               * `proposeLevelUp`, so it is read here, while `CurrentActor` is
+               * ambient, for the reason the vocabulary is.
+               */
+              const levelling: LevelUpDraftContext | undefined =
+                ask.intent === "levelUp"
+                  ? {
+                      characterId: ask.characterId,
+                      ...(yield* advancement.offerToDraft(ask.characterId)),
+                    }
+                  : undefined;
 
               // Resolved before a byte of stream, so a thread id that is not
               // this account's is a 404 and the model is never called.
@@ -792,8 +825,12 @@ export class Hob extends Context.Service<
               const finished = yield* Ref.make("stop");
 
               // Read here, while `CurrentActor` is ambient, for the reason the
-              // campaign vocabulary is: they decide the shape of a tool.
-              const vocabulary = vocabularyOf(yield* repositories.options.core({}));
+              // campaign vocabulary is: they decide the shape of a tool. The
+              // level-up composer drafts no character, so it reads none.
+              const vocabulary =
+                levelling === undefined
+                  ? vocabularyOf(yield* repositories.options.core({}))
+                  : NO_VOCABULARY;
               const worlds = panel
                 ? (yield* groups.mine).map(({ sharedWorld }) => ({
                     id: sharedWorld.id,
@@ -804,48 +841,63 @@ export class Hob extends Context.Service<
                 spells: repositories.spells,
                 equipment: repositories.equipment,
               };
-              const system = panel ? accountPrompt() : corePrompt();
+              const system =
+                levelling !== undefined
+                  ? levelUpPrompt(levelling)
+                  : panel
+                    ? accountPrompt()
+                    : corePrompt();
               const answering: Stream.Stream<
                 HobEvent,
                 AiError.AiError | Schema.SchemaError,
                 LanguageModel.LanguageModel
-              > = panel
-                ? vocabulary.listed
+              > =
+                levelling !== undefined
                   ? conversation(
-                      accountBindListing(drafting, actor, proposal, vocabulary, worlds),
+                      levelUpBindOver(actor, proposal, levelling),
                       system,
                       history,
                       ask,
                       finished,
                       { proposal },
                     )
-                  : conversation(
-                      accountBindOver(drafting, actor, proposal, vocabulary, worlds),
-                      system,
-                      history,
-                      ask,
-                      finished,
-                      { proposal },
-                    )
-                : vocabulary.listed
-                  ? conversation(
-                      coreBindListing(drafting, actor, proposal, vocabulary),
-                      system,
-                      history,
-                      ask,
-                      finished,
-                      { proposal },
-                    )
-                  : conversation(
-                      coreBindOver(drafting, actor, proposal, vocabulary),
-                      system,
-                      history,
-                      ask,
-                      finished,
-                      { proposal },
-                    );
+                  : panel
+                    ? vocabulary.listed
+                      ? conversation(
+                          accountBindListing(drafting, actor, proposal, vocabulary, worlds),
+                          system,
+                          history,
+                          ask,
+                          finished,
+                          { proposal },
+                        )
+                      : conversation(
+                          accountBindOver(drafting, actor, proposal, vocabulary, worlds),
+                          system,
+                          history,
+                          ask,
+                          finished,
+                          { proposal },
+                        )
+                    : vocabulary.listed
+                      ? conversation(
+                          coreBindListing(drafting, actor, proposal, vocabulary),
+                          system,
+                          history,
+                          ask,
+                          finished,
+                          { proposal },
+                        )
+                      : conversation(
+                          coreBindOver(drafting, actor, proposal, vocabulary),
+                          system,
+                          history,
+                          ask,
+                          finished,
+                          { proposal },
+                        );
 
-              // The composer's drafting gates: a draft is wanted unless this
+              // The composers' drafting gates: a draft is wanted unless this
               // was a question about the one on screen. The panel is general
               // chat, so only an explicit build ask earns the report there.
               return yield* deliver({
@@ -855,7 +907,7 @@ export class Hob extends Context.Service<
                 proposal,
                 finished,
                 asked: ask.text,
-                surface: panel ? "account" : "own",
+                surface: levelling !== undefined ? "levelUp" : panel ? "account" : "own",
                 save: (turn) =>
                   threads
                     .append("account", account, thread.id, turn)
@@ -1771,10 +1823,12 @@ export const aQuestionAboutIt = (asked: string): boolean => {
 
 /**
  * Whose gates apply: a campaign's creator's panel (`dm`), a drafting composer
- * (`own`), or the account's own panel (`account`), which is general chat like
- * the creator's and builds a campaign, a Shared World or a character.
+ * (`own`), the account's own panel (`account`), which is general chat like
+ * the creator's and builds a campaign, a Shared World or a character, or the
+ * sheet's level-up composer (`levelUp`), which proposes by default as a
+ * drafting composer does.
  */
-export type BuildSurface = "dm" | "own" | "account";
+export type BuildSurface = "dm" | "own" | "account" | "levelUp";
 
 /** The judgement, once. See the block comment above for all four gates. */
 const wouldNotBuild = (
@@ -1790,7 +1844,8 @@ const wouldNotBuild = (
     ? askedForABuild(asked)
     : surface === "account"
       ? askedForABuild(asked, ACCOUNT_NOUNS)
-      : !aQuestionAboutIt(asked));
+      : // A drafting composer and the level-up composer propose by default.
+        !aQuestionAboutIt(asked));
 
 /**
  * What the person is told, in their own terms.
@@ -1810,13 +1865,17 @@ const unbuilt = (surface: BuildSurface): HobEvent => ({
         ? "Hob answered in words and drafted nothing you can keep — this model did not make " +
           "a usable drafting call, which smaller models often do not. Ask again, or start " +
           "it yourself from the Campaigns, Shared Worlds or Characters screen."
-        : surface === "dm"
-          ? "Hob answered in words and built nothing you can save — this model did not make " +
-            "a usable build tool call, which smaller models often do not. Ask again, or " +
-            "write it yourself; a model that handles tool calls better offers a card more often."
-          : "Hob answered in words and drafted no sheet — this model did not make a usable " +
-            "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
-            "in yourself; you can change any of it afterwards.",
+        : surface === "levelUp"
+          ? "Hob answered in words and proposed no level-up — this model did not make a " +
+            "usable proposal call, which smaller models often do not. Ask again, or choose " +
+            "the level yourself with Level up."
+          : surface === "dm"
+            ? "Hob answered in words and built nothing you can save — this model did not make " +
+              "a usable build tool call, which smaller models often do not. Ask again, or " +
+              "write it yourself; a model that handles tool calls better offers a card more often."
+            : "Hob answered in words and drafted no sheet — this model did not make a usable " +
+              "drafting call, which smaller models often do not. Ask again, or fill the sheet " +
+              "in yourself; you can change any of it afterwards.",
   }),
 });
 
@@ -2118,6 +2177,40 @@ const accountPrompt = (): string =>
   ].join("\n");
 
 /**
+ * What Hob is told on the **sheet's level-up composer**: one character, its
+ * next level, and nothing else.
+ *
+ * The character's name and its two levels are here and nothing else from the
+ * sheet: the offer, scores included, arrives through `readLevelUpOffer`. It
+ * says what Hob may not decide in the words the tool does — fixed hit points,
+ * no score but an Ability Score Improvement's points, only what the offer
+ * lists — so the prompt and the grammar cannot drift.
+ */
+const levelUpPrompt = (levelling: LevelUpDraftContext): string =>
+  [
+    "You are Hob, the assistant behind the bar in Tiny Taverns. You are helping somebody",
+    `level up their character ${JSON.stringify(levelling.name)}, a level ${String(
+      levelling.offer.fromLevel,
+    )} ${levelling.offer.className ?? "character"}, to level ${String(levelling.offer.toLevel)}.`,
+    "",
+    "Call readLevelUpOffer to see what the level brings and what it asks them to choose,",
+    "then offer the whole level at once with proposeLevelUp: every choice it asks for,",
+    "chosen to suit the character and anything they told you, with a short reason for each",
+    "real choice in rationale. Do not ask clarifying questions first: choose, and let them",
+    "correct it. Nothing you offer changes the sheet until they keep it.",
+    ...REFUSED_OFFERS,
+    "",
+    "Choose only from the offer, spelled exactly as it lists them; an option that is not",
+    "available yet cannot be taken. The hit points are the fixed value and are worked out",
+    "for you: never roll them. Never set a score: one moves only through an Ability Score",
+    "Improvement's points. One level at a time, and only this character's.",
+    "",
+    "If they ask for a change — a different subclass, another fighting style — offer the",
+    "whole level again, keeping everything they did not ask you to change. Keep replies to",
+    "a sentence or two.",
+  ].join("\n");
+
+/**
  * How much of a saved conversation is sent back to the model.
  *
  * A thread is durable now and can run to hundreds of turns; a local model's
@@ -2345,6 +2438,32 @@ const offered = (turn: HobTurn): string | undefined => {
         proposal.replaces === null ? undefined : "replacing the sheet they had",
       ].filter((part) => part !== undefined);
       return `[You offered the DM a sheet for ${proposal.npcName} — ${kept}: ${parts.join("; ")}]`;
+    }
+    // Read back by name, so "a different fighting style" redrafts the level
+    // offered rather than choosing everything again from nothing.
+    case "levelUp": {
+      const choices = proposal.choices;
+      const parts = [
+        `${proposal.className} level ${String(proposal.fromLevel)} to ${String(proposal.toLevel)}`,
+        `hit points +${String(proposal.hitPointGain)} (fixed)`,
+        choices.subclass === undefined ? undefined : `subclass ${choices.subclass.name}`,
+        choices.abilityScores === undefined
+          ? undefined
+          : `abilityScoreImprovement ${choices.abilityScores
+              .map((score) => `${score.ability} ${String(score.from)} to ${String(score.to)}`)
+              .join(", ")}`,
+        choices.feat === undefined ? undefined : `feat ${choices.feat.name}`,
+        choices.picks.length === 0
+          ? undefined
+          : `picks ${choices.picks.map((pick) => pick.name).join(", ")}`,
+        choices.spells.length === 0
+          ? undefined
+          : `spells ${choices.spells.map((spell) => spell.name).join(", ")}`,
+        choices.replaced === undefined
+          ? undefined
+          : `swapped ${choices.replaced.from.name} for ${choices.replaced.to.name}`,
+      ].filter((part) => part !== undefined);
+      return `[You offered a level-up for ${JSON.stringify(proposal.characterName)} — ${draft}: ${parts.join("; ")}]`;
     }
     case "nightSummary":
       return `[You offered the DM a summary of session ${String(proposal.sessionNumber)} for the Chronicle — ${kept}: ${proposal.text}]`;

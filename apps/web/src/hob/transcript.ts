@@ -9,12 +9,13 @@ import type { IconName } from "@taverns/ui";
 /**
  * What a Hob conversation is made of.
  *
- * **Eleven kinds of artifact are produced here.** `encounter`, `note`
+ * **Twelve kinds of artifact are produced here.** `encounter`, `note`
  * (and read-aloud), `beat`, `npc`, `npcSheet`, `checklist` (the next night
  * Hob planned, drawn as the delivered prep list) and `act` are what campaign
  * Hob can materialise; `chronicle`
  * and `story` are Shared World Hob's; `campaign` and `character` are what the
- * account's own panel drafts outside any campaign. The rest of the union is the
+ * account's own panel drafts outside any campaign, and `levelUp` is the next
+ * level the sheet's level-up composer chose for a character. The rest of the union is the
  * delivered specimen set, held by `hob.fixtures.ts` for the tests: nothing
  * produces a `rules` card, because there is no table
  * for one to be saved into and a *Save to session* button that could only fail
@@ -37,13 +38,14 @@ import type { IconName } from "@taverns/ui";
  * body. They come back when the designers draw them.
  *
  * **`note`, `beat`, `summary`, `campaign`, `sharedWorld`, `character`,
- * `npcSheet` and `act` are ours.** The delivery has no entry for any of them,
- * and each is something Hob can actually offer to keep. All eight take glyphs
- * the delivery already asked for (`pencil`, `flag` — the beat's, and the
- * Chronicle's *Start a new act here* —, `history` — the Chronicle's own —,
- * `layers` — the Campaigns item on the global row —, `map` — a Shared World's
- * own in the bar —, `user-round` and `shield-half`, the sheet's armour
- * class), so the icon table did not grow.
+ * `npcSheet`, `act` and `levelUp` are ours.** The delivery has no entry for
+ * any of them, and each is something Hob can actually offer to keep. All nine
+ * take glyphs the delivery already asked for (`pencil`, `flag` — the beat's,
+ * and the Chronicle's *Start a new act here* —, `history` — the Chronicle's
+ * own —, `layers` — the Campaigns item on the global row —, `map` — a Shared
+ * World's own in the bar —, `user-round`, `shield-half`, the sheet's armour
+ * class, and `arrow-big-up-dash`, the sheet's *Level up*), so the icon table
+ * did not grow.
  */
 export const ARTIFACT_KINDS = {
   encounter: { icon: "swords", label: "Encounter", variant: "default" },
@@ -62,6 +64,7 @@ export const ARTIFACT_KINDS = {
   sharedWorld: { icon: "map", label: "Shared World", variant: "default" },
   character: { icon: "user-round", label: "Character", variant: "magic" },
   npcSheet: { icon: "shield-half", label: "NPC sheet", variant: "magic" },
+  levelUp: { icon: "arrow-big-up-dash", label: "Level up", variant: "magic" },
 } as const satisfies Record<
   string,
   { readonly icon: IconName; readonly label: string; readonly variant: string }
@@ -200,6 +203,17 @@ export type HobArtifact =
       /** Hob's reasons, one line each. */
       readonly rationale: ReadonlyArray<string>;
     })
+  | (ArtifactBase & {
+      /**
+       * A character's next level, as the keep will apply it: its title is the
+       * character, its meta the class and the two levels.
+       */
+      readonly kind: "levelUp";
+      /** What the level takes, as label and value — `["Hit points", "+8 (fixed)"]`. */
+      readonly lines: ReadonlyArray<readonly [string, string]>;
+      /** Hob's reasons, one line each. */
+      readonly rationale: ReadonlyArray<string>;
+    })
   | (ArtifactBase & { readonly kind: "rules"; readonly answer: string });
 
 /**
@@ -260,6 +274,55 @@ const sheetStats = (sheet: DraftedSheet): ReadonlyArray<readonly [string, string
   ...(sheet.ac === null ? [] : [["AC", String(sheet.ac)] as const]),
   ...(sheet.hpMax === null ? [] : [["HP", String(sheet.hpMax)] as const]),
 ];
+
+/** The spells a level-up learned, by the picker that took them. */
+const SPELL_KINDS = [
+  ["cantrip", "Cantrips"],
+  ["learned", "Spells"],
+  ["magicalSecrets", "Magical Secrets"],
+  ["mysticArcanum", "Mystic Arcanum"],
+] as const;
+
+/**
+ * What a proposed level-up takes, as the card sets it out: the hit points it
+ * adds, then the record's own choices by name (`AdvancementChoices`), each
+ * feature's picks under the feature that offered them. Only what was chosen —
+ * a level that asks for nothing is its hit points alone.
+ */
+export const levelUpLines = (
+  proposal: Extract<HobProposal, { target: "levelUp" }>,
+): ReadonlyArray<readonly [string, string]> => {
+  const { choices } = proposal;
+  const offeredBy = new Map<string, Array<string>>();
+  for (const pick of choices.picks) {
+    offeredBy.set(pick.offeredBy.name, [...(offeredBy.get(pick.offeredBy.name) ?? []), pick.name]);
+  }
+  return [
+    ["Hit points", `+${String(proposal.hitPointGain)} (fixed)`],
+    ...(choices.subclass === undefined ? [] : [["Subclass", choices.subclass.name] as const]),
+    ...(choices.abilityScores === undefined
+      ? []
+      : [
+          [
+            "Ability scores",
+            choices.abilityScores
+              .map((score) => `${score.ability} ${String(score.from)} → ${String(score.to)}`)
+              .join(", "),
+          ] as const,
+        ]),
+    ...(choices.feat === undefined ? [] : [["Feat", choices.feat.name] as const]),
+    ...[...offeredBy].map(([name, picked]) => [name, picked.join(", ")] as const),
+    ...SPELL_KINDS.flatMap(([kind, label]) => {
+      const learned = choices.spells.filter((spell) => spell.kind === kind);
+      return learned.length === 0
+        ? []
+        : [[label, learned.map((spell) => spell.name).join(", ")] as const];
+    }),
+    ...(choices.replaced === undefined
+      ? []
+      : [["Swapped", `${choices.replaced.from.name} for ${choices.replaced.to.name}`] as const]),
+  ];
+};
 
 /**
  * A proposal from the wire, as the card the designers drew.
@@ -450,6 +513,20 @@ export const artifactFrom = (turnId: AssistantTurnId, proposal: HobProposal): Ho
      * it accelerates; here it is a card among the conversation's, with the
      * descriptor and Hob's reasons, and the sheet is one *Open it* away.
      */
+    /**
+     * A character's next level the level-up composer chose: the character,
+     * its class and the two levels, and what the keep will apply.
+     */
+    case "levelUp":
+      return {
+        id: turnId,
+        kind: "levelUp",
+        title: proposal.characterName,
+        meta: `${proposal.className} · Level ${String(proposal.fromLevel)} → ${String(proposal.toLevel)}`,
+        chips: [],
+        lines: levelUpLines(proposal),
+        rationale: proposal.rationale,
+      };
     case "character": {
       const descriptor = [proposal.race, proposal.className]
         .filter((part): part is string => part !== null)

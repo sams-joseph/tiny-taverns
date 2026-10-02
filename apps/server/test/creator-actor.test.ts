@@ -849,7 +849,12 @@ describeLayer("creator-actor", shared, (it) => {
       // `Advancement.levelUps` is the one hundred and eightieth, for `offer`'s
       // reason: the Log of a character of the caller's own, reached by
       // `ownCharacter` alone.
-      expect(ungated).toBe(180);
+      // `Advancement.offerToDraft` is the one hundred and eighty-first, for
+      // `offer`'s reason: the same offer, with the sheet it was read from, for
+      // the level-up composer's Hob. `Advancement.levelUpForAccept` is the
+      // one hundred and eighty-second, for `levelUp`'s: the same write, for
+      // the owner's keep of a Hob proposal in their own account thread.
+      expect(ungated).toBe(182);
     });
   });
 });

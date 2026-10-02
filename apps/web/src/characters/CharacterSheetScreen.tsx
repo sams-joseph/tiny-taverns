@@ -32,6 +32,7 @@ import { SpellPickerDialog } from "./SpellPickerDialog";
 import { type LiveBanner, liveBanner } from "./live";
 import { characterLevelUpsAtom, levelUpOfferAtom, loadCharacterSheet } from "./load";
 import { type LogEntry, logEntries, recordEntry } from "./levelUp";
+import { HobLevelUpDialog } from "./HobLevelUpDialog";
 import { LevelUpDialog } from "./LevelUpDialog";
 import { UndoLevelUpDialog } from "./UndoLevelUpDialog";
 import { drawnSections, hitPoints, sectionInView, type SheetSectionId } from "./sheet";
@@ -769,6 +770,7 @@ export function CharacterSheetScreen() {
     | "join"
     | "delete"
     | "levelUp"
+    | "hobLevelUp"
     /** The Log entry an undo takes back, held here so the dialog outlives the entry's re-read. */
     | { readonly undo: LogEntry }
     | undefined
@@ -904,6 +906,15 @@ export function CharacterSheetScreen() {
             Level up
           </Button>
         )}
+        {/* The same level, chosen by Hob: a proposal the owner keeps or
+              discards, applied through the same write. Beside *Level up*
+              and absent with it. */}
+        {character !== undefined && canLevelUp && (
+          <Button variant="ghost" size="sm" onClick={() => setEditing("hobLevelUp")}>
+            <Icon name="wand-sparkles" size={14} />
+            Level up with Hob
+          </Button>
+        )}
         {/* The durable columns, and the one write with no drawn home of its
               own — the delivery gives the identity card no edit affordance, so
               it goes where a screen's own action goes. It is absent until the
@@ -993,6 +1004,15 @@ export function CharacterSheetScreen() {
       )}
       {owned !== undefined && editing === "levelUp" && (
         <LevelUpDialog owned={owned} onClose={close} onDone={close} onReload={reload} />
+      )}
+      {owned !== undefined && editing === "hobLevelUp" && offer.state === "ready" && (
+        <HobLevelUpDialog
+          owned={owned}
+          toLevel={offer.value.toLevel}
+          onClose={close}
+          onDone={close}
+          onReload={reloadAndClose}
+        />
       )}
       {owned !== undefined && typeof editing === "object" && (
         <UndoLevelUpDialog
