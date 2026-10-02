@@ -1,5 +1,8 @@
 import { describe, expect } from "@effect/vitest";
 import {
+  type Ability,
+  asClassOption,
+  asRaceOption,
   type CampaignId,
   CHALLENGE_RATINGS,
   CurrentActor,
@@ -7,7 +10,12 @@ import {
   type NpcId,
   type NpcSheetPut,
   type NpcSheetUpdate,
+  gearLineFor,
+  kitEquipmentOf,
+  optionNamed,
   type SheetBody,
+  sheetWithGear,
+  startingSheetBody,
   TavernsApi,
 } from "@taverns/api";
 import { Context, DateTime, Effect, Layer, Stream } from "effect";
@@ -546,6 +554,132 @@ describeLayer(
             expect(sent.sheet).toEqual({ abilities: [], traits: [] });
             yield* removeSheet(table, hollis);
           }),
+      );
+
+      it.effect(
+        "moves a Fighter's sheet by the character's own rule, and only on a real level change",
+        () =>
+          Effect.gen(function* () {
+            const { table, hollis, ilse } = yield* Fixture;
+            const options = yield* asJo((client) => client.library.coreOptions({ query: {} }));
+            const abilities: ReadonlyArray<Ability> = [
+              { label: "STR", score: "16", modifier: "+3" },
+              { label: "DEX", score: "12", modifier: "+1" },
+              { label: "CON", score: "14", modifier: "+2" },
+              { label: "INT", score: "10", modifier: "+0" },
+              { label: "WIS", score: "10", modifier: "+0" },
+              { label: "CHA", score: "8", modifier: "-1" },
+            ];
+            const composed = (level: number) =>
+              startingSheetBody({
+                classOption: asClassOption(optionNamed(options, "class", "Fighter")),
+                raceOption: asRaceOption(optionNamed(options, "race", "Half-Orc")),
+                subclass: "Champion",
+                abilities,
+                level,
+              });
+            const one = composed(1);
+            const started = yield* putSheet(table, hollis, {
+              level: 1,
+              race: "Half-Orc",
+              className: "Fighter",
+              hpMax: one.seed.hpMax ?? null,
+              sheet: one.body,
+            });
+
+            const five = yield* patchSheet(table, hollis, {
+              expectedVersion: started.version,
+              level: 5,
+            });
+            expect(five.sheet).toEqual(composed(5).body);
+            expect(five.sheet.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+            expect(five.hpMax).toBe(started.hpMax);
+
+            // The same level resent beside another column is no level change.
+            const stale = yield* patchSheet(table, hollis, { sheet: one.body });
+            const resent = yield* patchSheet(table, hollis, {
+              expectedVersion: stale.version,
+              level: 5,
+              className: "Fighter",
+              hpMax: 40,
+            });
+            expect(resent.hpMax).toBe(40);
+            expect(resent.sheet).toEqual(one.body);
+
+            // A player at the table cannot reach the sheet to level it.
+            const refused = yield* attempt(ilse.token, (client) =>
+              client.npcs.updateSheet({
+                params: { campaignId: table, npcId: hollis },
+                payload: { level: 6 },
+              }),
+            );
+            expect(refused).toMatchObject({ ok: false, tag: "NotFound" });
+            yield* removeSheet(table, hollis);
+          }),
+      );
+
+      it.effect("moves a Library original's weapon line whose row is the owner's own", () =>
+        Effect.gen(function* () {
+          const options = yield* asJo((client) => client.library.coreOptions({ query: {} }));
+          const one = startingSheetBody({
+            classOption: asClassOption(optionNamed(options, "class", "Fighter")),
+            raceOption: asRaceOption(optionNamed(options, "race", "Half-Orc")),
+            abilities: [
+              { label: "STR", score: "16", modifier: "+3" },
+              { label: "DEX", score: "12", modifier: "+1" },
+              { label: "CON", score: "14", modifier: "+2" },
+              { label: "INT", score: "10", modifier: "+0" },
+              { label: "WIS", score: "10", modifier: "+0" },
+              { label: "CHA", score: "8", modifier: "-1" },
+            ],
+            level: 1,
+          });
+          const glaive = yield* asJo((client) =>
+            client.library.createEquipment({
+              payload: {
+                name: "Fen Glaive",
+                equipmentCategory: { index: "weapon", name: "Weapon" },
+                cost: { quantity: 20, unit: "gp" },
+                weaponCategory: "Martial",
+                weaponRange: "Melee",
+                categoryRange: "Martial Melee",
+                damage: { damageDice: "1d10", damageType: { index: "slashing", name: "Slashing" } },
+              },
+            }),
+          );
+          const npcId = (yield* asJo((client) =>
+            client.library.createNpc({ payload: { name: "Sergeant Mott", role: "a guard" } }),
+          )).id;
+          const started = yield* asJo((client) =>
+            client.library.putNpcSheet({
+              params: { npcId },
+              payload: {
+                level: 1,
+                race: "Half-Orc",
+                className: "Fighter",
+                sheet: sheetWithGear(
+                  one.body,
+                  [...(one.body.inventory ?? []), gearLineFor(glaive)],
+                  [kitEquipmentOf(glaive)],
+                ),
+              },
+            }),
+          );
+          const line = (sheet: SheetBody) =>
+            sheet.actions?.find((action) => action.equipmentId === glaive.id);
+          expect(line(started.sheet)?.hit).toBe("+6");
+
+          const five = yield* asJo((client) =>
+            client.library.updateNpcSheet({
+              params: { npcId },
+              payload: { expectedVersion: started.version, level: 5 },
+            }),
+          );
+          expect(line(five.sheet)).toMatchObject({
+            hit: "+7",
+            text: expect.stringContaining("Attack ×2"),
+          });
+        }),
       );
 
       it.effect("checks a subrace against its race in the campaign's rules", () =>

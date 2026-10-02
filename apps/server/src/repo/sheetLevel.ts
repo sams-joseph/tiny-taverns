@@ -1,36 +1,53 @@
 import {
+  type Actor,
+  asClassOption,
+  asRaceOption,
+  type CharacterOption,
   Conflict,
+  KitEquipment,
+  levelGrantsFor,
   type RaceBody,
   type SheetBody,
-  type SheetResource,
-  slotRecharge,
   Spell,
   SpellId,
   spellActionFor,
+  subraceNamed,
+  withLevel,
 } from "@taverns/api";
-import { Effect, Schema, Struct } from "effect";
+import { Effect, Option, Schema, Struct } from "effect";
 import { type SqlClient, type SqlError, SqlSchema, type Statement } from "effect/sql";
+import { optionDetailsReader } from "../ruleset/vocabularies.js";
+import { OptionRow } from "./Options.js";
 import { fromColumns, uuidArray } from "./rows.js";
-import type { Vocabulary } from "./visibility.js";
+import { libraryRowReadable, type Vocabulary } from "./visibility.js";
 
 /**
- * **The one level-up rule for a sheet's rules half** — a character's and an
- * NPC's (`repo/NpcSheets.ts`). A level or class change with no sheet in the
- * same write runs this, against the vocabulary the caller says the sheet is
- * written in (a character's is `characterVocabulary`, a campaign NPC's its
- * campaign's). It checks no reach: the caller has already proven the write is
- * theirs. The subrace check below is shared the same way.
+ * **The one level change for a sheet's rules half** — a character's and an
+ * NPC's (`repo/NpcSheets.ts`). A write that really moves the level or the
+ * class, with no sheet in it, runs this against the vocabulary the caller
+ * says the sheet is written in (a character's is `characterVocabulary`, a
+ * campaign NPC's its campaign's). It checks no reach: the caller has already
+ * proven the write is theirs. The subrace check below is shared the same way.
  *
- * It rewrites the derived half only, and keeps what a person typed:
+ * It resolves what the pure rule needs, in that vocabulary and nowhere else —
+ * the class before and after (with its table, features and subclasses), the
+ * race (whose overlay lines scale with level), and the rows the derived
+ * weapon lines name (in the vocabulary or the writer's own Library, where the
+ * Gear picker finds them) — and hands them to `withLevel` (`@taverns/api`
+ * `SheetGrants.ts`), the rule creation's `levelGrantsFor` shares. That moves
+ * the proficiency bonus, the saves and skills, the casting numbers, the
+ * identity strings, the counters, the class and subclass features, the weapon
+ * to-hits and *Extra Attack*, and the hit dice; it keeps every line a person
+ * typed and leaves the hit points and the scores alone.
  *
- * - the spell slots and hit dice the class table gives at the new level, with
- *   what was already spent carried over and clamped;
- * - the known spells, narrowed to what the class (or subclass) list still
- *   reaches at the new level's highest slot, and their derived action lines
- *   rewritten at the new level (a cantrip's dice grow).
+ * The known spells are this file's half, because they need the spell rows:
+ * narrowed to what the class (or subclass) list still reaches at the new
+ * level's highest slot in this vocabulary, and their derived action lines
+ * rewritten at the new level and the new casting numbers (a cantrip's dice
+ * grow).
  *
- * Its limits are the same for every caller: it adds no features, and it moves
- * neither the proficiency bonus nor the hit points.
+ * A class that resolves to nothing in the vocabulary leaves the body as it
+ * was: there is no table to read, and absent beats a guess.
  */
 export const recomputeForLevel = <Body extends SheetBody>(
   sql: SqlClient.SqlClient,
@@ -40,7 +57,14 @@ export const recomputeForLevel = <Body extends SheetBody>(
     readonly level: number | null;
     /** The class after the write; blank or `null` leaves the body as it was. */
     readonly className: string | null;
+    /** The race and subrace after the write: the racial lines that scale with level. */
+    readonly race: string | null;
+    readonly subrace: string | null;
+    /** The level and class the body was written at — what a stored number is compared with. */
+    readonly from: { readonly level: number | null; readonly className: string | null };
     readonly vocabulary: Vocabulary;
+    /** Who writes: a derived weapon line may name their own Library's row, as the Gear picker offers it. */
+    readonly actor: Actor;
   },
 ): Effect.Effect<Body, SqlError.SqlError | Schema.SchemaError> =>
   Effect.gen(function* () {
@@ -48,37 +72,156 @@ export const recomputeForLevel = <Body extends SheetBody>(
     const level = Math.max(1, input.level ?? 1);
     const className = present(input.className);
     if (className === undefined) return body;
-    const classRows = yield* sql<{
-      readonly id: string;
-      readonly name: string;
-      readonly body: { readonly hitDie?: number; readonly spellcastingAbility?: string };
-    }>`
-      select id, name, body from character_option
-      where kind = 'class'
-        and lower(name) = lower(${className})
-        and ${vocabulary("character_option")}
+    const named = (kind: "class" | "race", name: string | undefined) =>
+      name === undefined
+        ? Effect.succeed(undefined)
+        : Effect.map(
+            optionNamedIn(sql, { kind, name, vocabulary: vocabulary("character_option") }),
+            Option.getOrUndefined,
+          );
+    const classRow = yield* named("class", className);
+    if (classRow === undefined) return body;
+    const formerName = present(input.from.className);
+    const formerRow =
+      formerName === undefined
+        ? undefined
+        : formerName.toLowerCase() === className.toLowerCase()
+          ? classRow
+          : yield* named("class", formerName);
+    const raceRow = yield* named("race", present(input.race));
+    const rows = [classRow, formerRow, raceRow].flatMap((row) => (row === undefined ? [] : [row]));
+    const details = yield* optionDetailsReader(sql)([...new Set(rows.map((row) => row.id))]);
+    const hydrated = (row: OptionRow | undefined): CharacterOption | undefined =>
+      row === undefined ? undefined : { ...row, details: details.get(row.id)! };
+    const classOption = asClassOption(hydrated(classRow));
+    const formerOption = asClassOption(hydrated(formerRow));
+    const raceOption = asRaceOption(hydrated(raceRow));
+
+    const typedSubrace = present(input.subrace);
+    const sources = {
+      raceOption,
+      subraceName: subraceNamed(raceOption?.body, typedSubrace)?.name ?? typedSubrace,
+      subclass: present(body.identity?.subclass),
+      abilities: body.abilities,
+    };
+    const to = levelGrantsFor({ ...sources, classOption, level });
+    const from =
+      formerOption === undefined
+        ? undefined
+        : levelGrantsFor({
+            ...sources,
+            classOption: formerOption,
+            level: Math.max(1, input.from.level ?? 1),
+          });
+
+    const weaponIds = [
+      ...new Set(
+        (body.actions ?? []).flatMap((action) =>
+          action.derived === true &&
+          action.source === "weapon" &&
+          action.equipmentId !== undefined &&
+          action.equipmentId !== null
+            ? [action.equipmentId]
+            : [],
+        ),
+      ),
+    ];
+    const equipment =
+      weaponIds.length === 0
+        ? []
+        : yield* SqlSchema.findAll({
+            Request: Schema.toType(Schema.Array(Schema.String)),
+            Result: LevelEquipmentRow,
+            execute: (ids) => sql`
+              select equipment.id::text, equipment.source_key as index, equipment.name,
+                     equipment.weapon_category, equipment.weapon_range, equipment.category_range,
+                     equipment.armor_category, equipment.damage_dice,
+                     equipment.damage_type_name as damage_type, equipment.two_handed_damage_dice,
+                     equipment.range_normal, equipment.range_long,
+                     equipment.throw_range_normal, equipment.throw_range_long,
+                     equipment.property_names as properties, equipment.weight,
+                     equipment.gear_category_index, equipment.tool_category
+              from equipment
+              where equipment.id = any(${uuidArray(ids)})
+                and ${sql.or([vocabulary("equipment"), libraryRowReadable(sql, "equipment", input.actor)])}
+            `,
+          })(weaponIds);
+
+    const leveled = withLevel(body, { from, to, equipment });
+    return yield* withKnownSpellsAt(sql, {
+      body: leveled,
+      level,
+      className: classOption?.name ?? className,
+      highest: to.resources.reduce((best, resource) => {
+        const slot = /^slot:(\d+)$/.exec(resource.id)?.[1];
+        return slot !== undefined && resource.max > 0 ? Math.max(best, Number(slot)) : best;
+      }, 0),
+      vocabulary,
+    });
+  });
+
+/**
+ * Whether a write moves the level or the class — what makes it a level change
+ * at all. A class relabelled only in case or spacing is the same class.
+ */
+export const levelOrClassMoved = (
+  before: { readonly level: number | null; readonly className: string | null },
+  after: { readonly level: number | null; readonly className: string | null },
+): boolean =>
+  Math.max(1, before.level ?? 1) !== Math.max(1, after.level ?? 1) ||
+  (present(before.className)?.toLowerCase() ?? "") !==
+    (present(after.className)?.toLowerCase() ?? "");
+
+/** One option of a kind by name in a vocabulary, the bundle's row first when two share it. */
+const optionNamedIn = (
+  sql: SqlClient.SqlClient,
+  input: {
+    readonly kind: "class" | "race";
+    readonly name: string;
+    readonly vocabulary: Statement.Fragment;
+  },
+) =>
+  SqlSchema.findOneOption({
+    Request: Schema.Void,
+    Result: OptionRow,
+    execute: () => sql`
+      select * from character_option
+      where kind = ${input.kind}
+        and lower(name) = lower(${input.name})
+        and ${input.vocabulary}
       order by case when account_id is null and campaign_id is null then 0 else 1 end,
                created_at asc, id asc
       limit 1
-    `;
-    const classOption = classRows[0];
-    if (classOption === undefined) return body;
-    const levelRows = yield* sql<{
-      readonly body: { readonly spellcasting?: Record<string, unknown> };
-    }>`
-      select body from class_level
-      where class_option_id = ${classOption.id}
-        and subclass_id is null
-        and level <= ${level}
-      order by level desc
-      limit 1
-    `;
-    const slots = rawSlots(levelRows[0]?.body.spellcasting);
-    const highest = slots.reduce((best, count, index) => (count > 0 ? index + 1 : best), 0);
+    `,
+  })(undefined);
+
+/** The weapon columns of an `equipment` row, as `weaponAttack` reads them. */
+const LevelEquipmentRow = fromColumns(KitEquipment);
+
+/**
+ * The known spells at the new level, and their lines: kept while the class
+ * (or subclass) list still reaches them at `highest` in this vocabulary, and
+ * every derived spell line written again from the kept ones at the casting
+ * numbers `withLevel` just moved. An aside left holding only an empty list —
+ * a class that no longer casts — goes.
+ */
+const withKnownSpellsAt = <Body extends SheetBody>(
+  sql: SqlClient.SqlClient,
+  input: {
+    readonly body: Body;
+    readonly level: number;
+    readonly className: string;
+    readonly highest: number;
+    readonly vocabulary: Vocabulary;
+  },
+): Effect.Effect<Body, SqlError.SqlError | Schema.SchemaError> =>
+  Effect.gen(function* () {
+    const { body, level, className, highest, vocabulary } = input;
     const knownIds = (body.spellcasting?.known ?? []).flatMap((spell) =>
       spell.spellId === undefined || spell.spellId === null ? [] : [spell.spellId],
     );
     const subclassName = present(body.identity?.subclass);
+    const onClassList = sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${className}))`;
     const spellRows =
       knownIds.length === 0
         ? []
@@ -94,9 +237,9 @@ export const recomputeForLevel = <Body extends SheetBody>(
                 and (level = 0 or level <= ${highest})
                 and ${
                   subclassName === undefined
-                    ? sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`
+                    ? onClassList
                     : sql.or([
-                        sql`exists (select 1 from unnest(spell.class_names) as class_name where lower(class_name) = lower(${classOption.name}))`,
+                        onClassList,
                         sql`exists (select 1 from unnest(spell.subclass_names) as subclass_name where lower(subclass_name) = lower(${subclassName}))`,
                       ])
                 }
@@ -123,25 +266,25 @@ export const recomputeForLevel = <Body extends SheetBody>(
         ),
       ];
     });
-    return {
+    const otherActions = (body.actions ?? []).filter(
+      (action) => !(action.derived === true && action.source === "spell"),
+    );
+    const actions = [...otherActions, ...spellActions];
+    const next: Body = {
       ...body,
-      resources: levelUpResources(
-        body,
-        level,
-        classOption.body.hitDie,
-        slots,
-        slotRecharge(classOption.name),
-      ),
-      actions: [
-        ...(body.actions ?? []).filter(
-          (action) => !(action.derived === true && action.source === "spell"),
-        ),
-        ...spellActions,
-      ],
-      ...(body.spellcasting === undefined
+      ...(actions.length === 0 && body.actions === undefined ? {} : { actions }),
+      ...(body.spellcasting?.known === undefined
         ? {}
         : { spellcasting: { ...body.spellcasting, known: keptKnown } }),
     };
+    if (
+      keptKnown.length === 0 &&
+      next.spellcasting?.known !== undefined &&
+      Object.keys(next.spellcasting).every((key) => key === "known")
+    ) {
+      delete (next as { spellcasting?: SheetBody["spellcasting"] }).spellcasting;
+    }
+    return next;
   });
 
 const present = (value: string | null | undefined): string | undefined => {
@@ -149,7 +292,7 @@ const present = (value: string | null | undefined): string | undefined => {
   return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 };
 
-/** A known spell as a level-up rewrites its action line: `spellActionFor`'s half of a `spell` row. */
+/** A known spell as a level change rewrites its action line: `spellActionFor`'s half of a `spell` row. */
 const LevelSpellRow = fromColumns(
   Schema.Struct(
     Struct.pick(Spell.fields, [
@@ -166,78 +309,6 @@ const LevelSpellRow = fromColumns(
   ),
   { range: "spell_range", spell: "body" },
 );
-
-const ordinal = (n: number): string =>
-  `${String(n)}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
-
-const slotResourcesFor = (
-  slots: ReadonlyArray<number>,
-  previous: ReadonlyArray<SheetResource>,
-  recharge: "short" | "long",
-): ReadonlyArray<SheetResource> => {
-  const used = new Map(previous.map((resource) => [resource.id, resource.used]));
-  return slots.flatMap((count, index) => {
-    if (count <= 0) return [];
-    const id = `slot:${String(index + 1)}`;
-    return [
-      {
-        id,
-        name: `${ordinal(index + 1)}-level slots`,
-        used: Math.max(0, Math.min(count, used.get(id) ?? 0)),
-        max: count,
-        recharge,
-        derived: true,
-      },
-    ];
-  });
-};
-
-const levelUpResources = (
-  sheet: SheetBody,
-  level: number,
-  hitDie: number | undefined,
-  slots: ReadonlyArray<number>,
-  recharge: "short" | "long",
-): ReadonlyArray<SheetResource> => {
-  const previous = sheet.resources ?? [];
-  const customAndNonSlots = previous.filter(
-    (resource) =>
-      !(
-        resource.derived === true &&
-        (resource.id.startsWith("slot:") || resource.id === "hit-dice")
-      ),
-  );
-  const hitDice =
-    hitDie === undefined
-      ? []
-      : [
-          {
-            id: "hit-dice",
-            name: "Hit dice",
-            used: Math.max(
-              0,
-              Math.min(level, previous.find((r) => r.id === "hit-dice")?.used ?? 0),
-            ),
-            max: level,
-            recharge: "long" as const,
-            unit: `d${String(hitDie)}`,
-            derived: true,
-          },
-        ];
-  return [...customAndNonSlots, ...slotResourcesFor(slots, previous, recharge), ...hitDice];
-};
-
-const rawSlots = (raw: Record<string, unknown> | undefined): ReadonlyArray<number> => {
-  if (raw === undefined) return [];
-  if (Array.isArray(raw.slots))
-    return raw.slots.filter((value): value is number => typeof value === "number");
-  const slots = Array.from({ length: 9 }, (_, index) => {
-    const value = raw[`spell_slots_level_${String(index + 1)}`];
-    return typeof value === "number" && Number.isFinite(value) ? value : 0;
-  });
-  while (slots.length > 0 && slots[slots.length - 1] === 0) slots.pop();
-  return slots;
-};
 
 const subraceMismatch = (race: string, subrace: string, place: string): Conflict =>
   new Conflict({

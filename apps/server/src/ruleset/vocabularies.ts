@@ -13,6 +13,8 @@ import {
   OptionLanguageGrant,
   OptionProficiencyGrant,
   type OptionRelationsInput,
+  OptionSubclass,
+  OptionSubclassFeature,
   OptionSubraceDetail,
   OptionTraitGrant,
   type OptionVocabulary,
@@ -1227,6 +1229,15 @@ const ClassFeatureRow = fromColumns(
     level: OptionClassLevel.fields.level,
   }),
 );
+/** One top-level feature of one subclass, beside the subclass it belongs to. */
+const SubclassFeatureRow = fromColumns(
+  Schema.Struct({
+    ...optionKey,
+    subclassId: OptionSubclass.fields.id,
+    subclassName: OptionSubclass.fields.name,
+    feature: Schema.NullOr(OptionSubclassFeature),
+  }),
+);
 const KitRow = fromColumns(Schema.Struct({ ...optionKey, kit: Schema.NullOr(StartingKit) }));
 const KitEquipmentRow = fromColumns(Schema.Struct({ ...optionKey, ...KitEquipment.fields }));
 const KitEquipmentRequest = Schema.toType(
@@ -1537,6 +1548,33 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       order by level, lower(name)
     `,
   });
+  /**
+   * Each subclass of the class and its top-level features, by name and id —
+   * a pick inside one (*Hunter's Prey: Colossus Slayer*) is the player's, as
+   * at the class's own level. A subclass with no features still answers its
+   * name. `subclass_class_same_scope_fkey` keeps every row in its class's
+   * scope, so the class's reach is theirs.
+   */
+  const subclassFeatures = SqlSchema.findAll({
+    Request: OptionIds,
+    Result: SubclassFeatureRow,
+    execute: (ids) => sql`
+      select subclass.class_option_id as option_id,
+             subclass.id::text as subclass_id,
+             subclass.name as subclass_name,
+             case when feature.id is null then null else jsonb_build_object(
+               'id', feature.id::text,
+               'index', feature.source_key,
+               'name', feature.name,
+               'level', feature.level
+             ) end as feature
+      from subclass
+      left join feature on feature.subclass_id = subclass.id
+                       and feature.parent_feature_id is null
+      where subclass.class_option_id = any(${uuidArray([...ids])})
+      order by lower(subclass.name), subclass.id, feature.level, lower(feature.name)
+    `,
+  });
   const kits = SqlSchema.findAll({
     Request: OptionIds,
     Result: KitRow,
@@ -1648,6 +1686,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
       const levelOneFeaturesOf = fileUnder(yield* levelOneFeatures(optionIds), "optionId");
       const classLevelsOf = fileUnder(yield* classLevels(optionIds), "optionId");
       const classFeaturesOf = fileUnder(yield* classFeatures(optionIds), "optionId");
+      const subclassesOf = fileUnder(yield* subclassFeatures(optionIds), "optionId");
 
       const categories = (yield* kits(optionIds)).flatMap(({ optionId, kit }) => {
         const named = new Set<string>();
@@ -1672,6 +1711,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
           const proficiencyBonus =
             levelRows.find((row) => row.level === 1)?.proficiencyBonus ?? null;
           const table = levelRows.map((row) => classLevelOf(row, featureRows));
+          const subclasses = subclassesOn(subclassesOf.get(optionId) ?? []);
           return [
             optionId,
             {
@@ -1688,6 +1728,7 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
               ...(proficiencyBonus === null ? {} : { proficiencyBonus }),
               ...(equipment.length === 0 ? {} : { equipment }),
               ...(table.length === 0 ? {} : { classLevels: table }),
+              ...(subclasses.length === 0 ? {} : { subclasses }),
             },
           ];
         }),
@@ -1755,6 +1796,23 @@ const slotCreationOf = (value: unknown): ReadonlyArray<SlotCreation> =>
         return slotLevel > 0 ? [{ slotLevel, cost }] : [];
       })
     : [];
+
+/** The subclass rows, one per feature, folded into one entry per subclass in read order. */
+const subclassesOn = (
+  rows: ReadonlyArray<Omit<typeof SubclassFeatureRow.Type, "optionId">>,
+): ReadonlyArray<OptionSubclass> => {
+  const byId = new Map<string, { -readonly [K in keyof OptionSubclass]: OptionSubclass[K] }>();
+  for (const row of rows) {
+    const entry = byId.get(row.subclassId) ?? {
+      id: row.subclassId,
+      name: row.subclassName,
+      features: [],
+    };
+    if (row.feature !== null) entry.features = [...entry.features, row.feature];
+    byId.set(row.subclassId, entry);
+  }
+  return [...byId.values()];
+};
 
 const maybeObject = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value)

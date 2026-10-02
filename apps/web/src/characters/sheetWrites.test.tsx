@@ -902,7 +902,9 @@ describe("what a player still cannot reach", () => {
    * named: `reads.myCharacters` is this screen's own, `reads.characterSpells`
    * is the picker vocabulary that depends on the same level/class pair, and
    * `reads.party` is one per table the character is seated at — plural since
-   * the continuity decision let one shared character sit at several.
+   * the continuity decision let one shared character sit at several. Beside
+   * each party, `reads.encounters`: a level moves every encounter's
+   * difficulty at that table without an encounter row being sent.
    *
    * It is a unit assertion because the two halves are two accounts and cannot
    * be on screen at once. The mechanism the name relies on is pinned in
@@ -923,7 +925,9 @@ describe("what a player still cannot reach", () => {
       reads.myCharacters,
       reads.characterSpells(brannocId),
       reads.party(table),
+      reads.encounters(table),
       reads.party(otherTable),
+      reads.encounters(otherTable),
     ]);
   });
 

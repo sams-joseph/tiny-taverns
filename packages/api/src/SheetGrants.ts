@@ -3,8 +3,10 @@ import type {
   InventoryItem,
   SheetAction,
   SheetBody,
+  SheetFeature,
   SheetIdentity,
   SheetResource,
+  Skill,
   Spellcasting,
 } from "./Character.js";
 import type { Ability, Trait } from "./Creature.js";
@@ -99,6 +101,8 @@ export interface SheetGrantSources {
   readonly raceOption?: RaceOption | undefined;
   /** Already resolved through `subraceNamed`; the campaign's own spelling. */
   readonly subraceName?: string | undefined;
+  /** The subclass label, as `identity.subclass` will hold it; see `levelGrantsFor`. */
+  readonly subclass?: string | undefined;
   readonly backgroundOption?: BackgroundOption | undefined;
   /** The level the sheet is written for; `STARTING_LEVEL` when absent. */
   readonly level?: number | undefined;
@@ -128,8 +132,8 @@ export interface KitPick {
 }
 
 export interface SheetGrants {
-  /** Level-1 class features, then race/subrace traits, then the background feature. */
-  readonly traits: ReadonlyArray<Trait>;
+  /** Class and subclass features to the level, then race/subrace traits, then the background feature. */
+  readonly traits: ReadonlyArray<SheetFeature>;
   /** Armour, weapons, tools and languages — class, race and background grants, deduplicated. */
   readonly proficiencies: ReadonlyArray<string>;
   /** The class's proficient saving throws, as ability labels. */
@@ -205,15 +209,17 @@ const raceDetailNames = (
 const raceTraits = (
   option: RaceOption | undefined,
   subraceName: string | undefined,
-): ReadonlyArray<Trait> =>
+): ReadonlyArray<SheetFeature> =>
   option?.details === undefined
     ? []
     : forSubrace(option.details.traits, subraceName).map((grant) => ({
         name: grant.trait.name,
         text: prose(grant.trait.desc),
+        racialTraitId: grant.trait.id,
+        derived: true,
       }));
 
-/** One class feature the level grants: level 1 with its paragraphs, higher up by name. */
+/** One class or subclass feature the level grants: level 1 with its paragraphs, higher up by name. */
 interface GrantedFeature {
   readonly id: FeatureId;
   readonly index: string | null;
@@ -235,12 +241,15 @@ const levelRow = (option: ClassOption | undefined, level: number): OptionClassLe
 };
 
 /**
- * Every top-level feature the class grants at or below this level. Level 1
- * comes off `levelOneFeatures`, which carries the prose the Features section
- * draws; the higher levels come off the class table by name and id.
+ * Every top-level feature the class grants at or below this level, then the
+ * subclass's when `subclass` names one of the class's own. Level 1 comes off
+ * `levelOneFeatures`, which carries the prose the Features section draws; the
+ * higher levels and every subclass feature come off the projected tables by
+ * name and id.
  */
 const grantedFeatures = (
   option: ClassOption | undefined,
+  subclass: string | undefined,
   level: number,
 ): ReadonlyArray<GrantedFeature> => {
   const levelOne = (option?.details?.levelOneFeatures ?? []).map((feature) => ({
@@ -259,11 +268,30 @@ const grantedFeatures = (
         desc: [] as ReadonlyArray<string>,
       })),
     );
-  return [...levelOne, ...higher];
+  const named = wanted(subclass);
+  const subclassFeatures =
+    named === ""
+      ? []
+      : (option?.details?.subclasses ?? [])
+          .filter((row) => wanted(row.name) === named)
+          .flatMap((row) => row.features)
+          .filter((feature) => feature.level <= level)
+          .map((feature) => ({
+            id: feature.id,
+            index: feature.index,
+            name: feature.name,
+            desc: [] as ReadonlyArray<string>,
+          }));
+  return [...levelOne, ...higher, ...subclassFeatures];
 };
 
-const classFeatureTraits = (features: ReadonlyArray<GrantedFeature>): ReadonlyArray<Trait> =>
-  features.map((feature) => ({ name: feature.name, text: prose(feature.desc) }));
+const featureTraits = (features: ReadonlyArray<GrantedFeature>): ReadonlyArray<SheetFeature> =>
+  features.map((feature) => ({
+    name: feature.name,
+    text: prose(feature.desc),
+    featureId: feature.id,
+    derived: true,
+  }));
 
 const backgroundFeature = (body: BackgroundBody | undefined): ReadonlyArray<Trait> =>
   body?.feature === undefined ? [] : [{ name: body.feature.name, text: body.feature.text }];
@@ -594,7 +622,59 @@ const backgroundInventory = (
   );
 };
 
-export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
+/** What {@link levelGrantsFor} reads: the resolved class and race, the subclass label, the level and the cells. */
+export interface LevelGrantSources {
+  readonly classOption?: ClassOption | undefined;
+  readonly raceOption?: RaceOption | undefined;
+  /** Already resolved through `subraceNamed`; the campaign's own spelling. */
+  readonly subraceName?: string | undefined;
+  /** `identity.subclass` as written; its features are granted when it names one of the class's. */
+  readonly subclass?: string | undefined;
+  /** The level the grants are for; `STARTING_LEVEL` when absent. */
+  readonly level?: number | undefined;
+  /** The six cells — what a counter's ceiling and a casting number are read from. */
+  readonly abilities?: ReadonlyArray<Ability> | undefined;
+}
+
+/**
+ * **The level-scaled half of a sheet**: everything the class table, the
+ * class's and subclass's features and the overlay say at one level, and
+ * nothing a person chose. Every line in it is `derived: true` and carries its
+ * source row.
+ */
+export interface LevelGrants {
+  readonly level: number;
+  /** The proficiency bonus at this level, when the class has progression rows. */
+  readonly proficiencyBonus?: number;
+  /** The class's hit die size — `10` for a d10. */
+  readonly hitDie?: number;
+  /** The class's proficient saving throws. */
+  readonly savingThrows: ReadonlyArray<AbilityKey>;
+  /** The class's proficiencies, as `classProficiencies` reads them. */
+  readonly proficiencies: ReadonlyArray<string>;
+  /** Class features to this level, then the named subclass's. */
+  readonly features: ReadonlyArray<SheetFeature>;
+  /** Slots, hit dice, then the overlay's counters, class first and then the race's. */
+  readonly resources: ReadonlyArray<SheetResource>;
+  /** The overlay's feature and racial lines. Weapon lines are the caller's: they need the gear. */
+  readonly actions: ReadonlyArray<SheetAction>;
+  /** Attacks per Attack action — *Extra Attack*, read off the overlay. */
+  readonly attacksPerAction: number;
+  /** The casting aside's derived keys, when the class casts at this level. */
+  readonly spellcasting?: Spellcasting;
+  /** Whether a race resolved, which makes its overlay lines this answer's to rewrite. */
+  readonly race: boolean;
+}
+
+/**
+ * **The one answer to "what does level N grant"** — creation's
+ * (`sheetGrantsFor`, through `startingSheetBody`) and a level change's
+ * (`withLevel`, through the server's `recomputeForLevel`), so a Fighter
+ * composed at 5 and a Fighter 1 moved to 5 cannot disagree.
+ * `apps/server/test/level-grants.test.ts` pins that over every imported class
+ * at every level.
+ */
+export const levelGrantsFor = (sources: LevelGrantSources): LevelGrants => {
   const classOption =
     sources.classOption !== undefined && isClassOption(sources.classOption)
       ? sources.classOption
@@ -603,29 +683,16 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
     sources.raceOption !== undefined && isRaceOption(sources.raceOption)
       ? sources.raceOption
       : undefined;
-  const backgroundOption =
-    sources.backgroundOption !== undefined && isBackgroundOption(sources.backgroundOption)
-      ? sources.backgroundOption
-      : undefined;
-  const background = backgroundOption?.body;
   const level = levelOf(sources.level);
   const abilities = sources.abilities ?? [];
   const row = levelRow(classOption, level);
   const proficiencyBonus =
     row?.proficiencyBonus ?? (level === 1 ? classOption?.details?.proficiencyBonus : undefined);
-  const gold = goldPieces(background);
-  const features = grantedFeatures(classOption, level);
+  const features = grantedFeatures(classOption, sources.subclass, level);
   const racialTraits =
     raceOption?.details === undefined
       ? []
       : forSubrace(raceOption.details.traits, sources.subraceName);
-
-  const proficiencies = dedupe([
-    ...classProficiencies(classOption),
-    ...raceDetailNames(raceOption?.details, sources.subraceName),
-    ...(background?.proficiencies ?? []),
-    ...(background?.languages ?? []),
-  ]);
 
   const context: OverlayContext = {
     level,
@@ -637,11 +704,11 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
   // The overlay's half: counted features and the ones with a cost, class
   // first and then the race's traits, one resource per counter.
   const resources = new Map<string, SheetResource>();
-  const featureActions: Array<SheetAction> = [];
+  const actions: Array<SheetAction> = [];
   let attacksPerAction = 1;
   const apply = (grant: ReturnType<typeof overlayGrants>) => {
     if (grant.resource !== undefined) resources.set(grant.resource.id, grant.resource);
-    if (grant.action !== undefined) featureActions.push(grant.action);
+    if (grant.action !== undefined) actions.push(grant.action);
     if (grant.attacks !== undefined) attacksPerAction = Math.max(attacksPerAction, grant.attacks);
   };
   for (const feature of features) {
@@ -668,32 +735,6 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
     );
   }
 
-  // The kit, as picked, and the weapon attacks its rows derive — one per
-  // distinct weapon, so two handaxes are one line.
-  const kitLines = kitLinesFor(
-    classOption?.body.startingKit,
-    classOption?.details?.equipment ?? [],
-    sources.kitChoices,
-  );
-  const equipmentById = new Map((classOption?.details?.equipment ?? []).map((e) => [e.id, e]));
-  const seenWeapons = new Set<string>();
-  const weaponActions: Array<SheetAction> = [];
-  for (const line of kitLines) {
-    if (line.equipmentId === undefined || seenWeapons.has(line.equipmentId)) continue;
-    const equipment = equipmentById.get(line.equipmentId);
-    if (equipment === undefined) continue;
-    const attack = weaponAttack(
-      equipment,
-      abilities,
-      proficiencyBonus,
-      proficiencies,
-      attacksPerAction,
-    );
-    if (attack === undefined) continue;
-    seenWeapons.add(line.equipmentId);
-    weaponActions.push(attack);
-  }
-
   const hitDie = classOption?.body.hitDie;
   const hitDice: ReadonlyArray<SheetResource> =
     hitDie === undefined
@@ -712,26 +753,99 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
   const spellcasting = spellcastingOf(classOption, row, abilities, proficiencyBonus);
 
   return {
-    traits: [
-      ...classFeatureTraits(features),
-      ...raceTraits(raceOption, sources.subraceName),
-      ...backgroundFeature(background),
-    ],
-    proficiencies,
-    savingThrows: savingThrowsOf(classOption),
-    ...(proficiencyBonus === undefined ? {} : { proficiencyBonus }),
-    inventory: [...kitInventory(kitLines), ...backgroundInventory(backgroundOption, sources)],
-    ...(gold === undefined ? {} : { gold }),
-    ...(raceOption === undefined ? {} : { speed: raceOption.body.speed }),
-    ...(hitDie === undefined ? {} : { hitDie }),
     level,
-    actions: [...weaponActions, ...featureActions],
+    ...(proficiencyBonus === undefined ? {} : { proficiencyBonus }),
+    ...(hitDie === undefined ? {} : { hitDie }),
+    savingThrows: savingThrowsOf(classOption),
+    proficiencies: classProficiencies(classOption),
+    features: featureTraits(features),
     resources: [
       ...slotResources(row, slotRecharge(classOption?.name)),
       ...hitDice,
       ...resources.values(),
     ],
+    actions,
+    attacksPerAction,
     ...(spellcasting === undefined ? {} : { spellcasting }),
+    race: raceOption !== undefined,
+  };
+};
+
+export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
+  const classOption =
+    sources.classOption !== undefined && isClassOption(sources.classOption)
+      ? sources.classOption
+      : undefined;
+  const raceOption =
+    sources.raceOption !== undefined && isRaceOption(sources.raceOption)
+      ? sources.raceOption
+      : undefined;
+  const backgroundOption =
+    sources.backgroundOption !== undefined && isBackgroundOption(sources.backgroundOption)
+      ? sources.backgroundOption
+      : undefined;
+  const background = backgroundOption?.body;
+  const abilities = sources.abilities ?? [];
+  const gold = goldPieces(background);
+  const grants = levelGrantsFor({
+    classOption,
+    raceOption,
+    subraceName: sources.subraceName,
+    subclass: sources.subclass,
+    level: sources.level,
+    abilities,
+  });
+
+  const proficiencies = dedupe([
+    ...grants.proficiencies,
+    ...raceDetailNames(raceOption?.details, sources.subraceName),
+    ...(background?.proficiencies ?? []),
+    ...(background?.languages ?? []),
+  ]);
+
+  // The kit, as picked, and the weapon attacks its rows derive — one per
+  // distinct weapon, so two handaxes are one line.
+  const kitLines = kitLinesFor(
+    classOption?.body.startingKit,
+    classOption?.details?.equipment ?? [],
+    sources.kitChoices,
+  );
+  const equipmentById = new Map((classOption?.details?.equipment ?? []).map((e) => [e.id, e]));
+  const seenWeapons = new Set<string>();
+  const weaponActions: Array<SheetAction> = [];
+  for (const line of kitLines) {
+    if (line.equipmentId === undefined || seenWeapons.has(line.equipmentId)) continue;
+    const equipment = equipmentById.get(line.equipmentId);
+    if (equipment === undefined) continue;
+    const attack = weaponAttack(
+      equipment,
+      abilities,
+      grants.proficiencyBonus,
+      proficiencies,
+      grants.attacksPerAction,
+    );
+    if (attack === undefined) continue;
+    seenWeapons.add(line.equipmentId);
+    weaponActions.push(attack);
+  }
+
+  return {
+    traits: [
+      ...grants.features,
+      ...raceTraits(raceOption, sources.subraceName),
+      ...backgroundFeature(background),
+    ],
+    proficiencies,
+    savingThrows: grants.savingThrows,
+    ...(grants.proficiencyBonus === undefined ? {} : { proficiencyBonus: grants.proficiencyBonus }),
+    inventory: [...kitInventory(kitLines), ...backgroundInventory(backgroundOption, sources)],
+    ...(gold === undefined ? {} : { gold }),
+    ...(raceOption === undefined ? {} : { speed: raceOption.body.speed }),
+    ...(grants.hitDie === undefined ? {} : { hitDie: grants.hitDie }),
+    level: grants.level,
+    actions: [...weaponActions, ...grants.actions],
+    resources: grants.resources,
+    ...(grants.spellcasting === undefined ? {} : { spellcasting: grants.spellcasting }),
   };
 };
 
@@ -773,10 +887,12 @@ export const identityGrants = (
   ...(grants.proficiencyBonus === undefined
     ? {}
     : { proficiency: signed(grants.proficiencyBonus) }),
-  ...(grants.hitDie === undefined
-    ? {}
-    : { hitDice: `${String(grants.level)}/${String(grants.level)} d${String(grants.hitDie)}` }),
+  ...(grants.hitDie === undefined ? {} : { hitDice: hitDiceLine(grants.level, grants.hitDie) }),
 });
+
+/** `identity.hitDice` as the corpus writes it: `"5/5 d10"`. */
+const hitDiceLine = (level: number, hitDie: number): string =>
+  `${String(level)}/${String(level)} d${String(hitDie)}`;
 
 /** The resolved option of a kind, told apart for `SheetGrantSources`. */
 export const asClassOption = (option: CharacterOption | undefined): ClassOption | undefined =>
@@ -850,17 +966,18 @@ export const startingSheetBody = (
   const seed = startingSeed(sources);
   const subrace = subraceNamed(sources.raceOption?.body, sources.subrace);
   const typedSubrace = sources.subrace?.trim();
+  const subclass = sources.subclass?.trim();
   const grants = sheetGrantsFor({
     classOption: sources.classOption,
     raceOption: sources.raceOption,
     subraceName: subrace?.name ?? (typedSubrace === "" ? undefined : typedSubrace),
+    subclass,
     backgroundOption: sources.backgroundOption,
     level: seed.level,
     abilities: seed.abilities,
     kitChoices: sources.kitChoices,
     backgroundKitChoices: sources.backgroundKitChoices,
   });
-  const subclass = sources.subclass?.trim();
   const background = sources.background?.trim();
   const identity: SheetIdentity = {
     ...identityGrants(grants),
@@ -879,4 +996,292 @@ export const startingSheetBody = (
     ...(grants.gold === undefined ? {} : { currency: { gp: grants.gold } }),
   };
   return { body, seed };
+};
+
+/** What a level change moves, and from where. */
+export interface LevelChange {
+  /**
+   * What the sheet's level and class **before** the change granted — what a
+   * stored number is compared against. Absent when that class resolved to
+   * nothing, and then no stored number is taken for the corpus's.
+   */
+  readonly from?: LevelGrants | undefined;
+  readonly to: LevelGrants;
+  /** The rows the sheet's derived weapon lines name, as far as the caller could reach them. */
+  readonly equipment?: ReadonlyArray<KitEquipment> | undefined;
+}
+
+/**
+ * **Compare-and-move.** A stored number the corpus wrote moves to the new
+ * level's value only while it still says what the old level's numbers would
+ * have produced; anything else is somebody's typing and stays. An absent one
+ * is written when `fill` says the corpus writes that key at creation.
+ */
+const moved = (
+  stored: string | undefined,
+  before: string | undefined,
+  after: string | undefined,
+  fill: boolean,
+): string | undefined => {
+  if (after === undefined) return stored;
+  if (stored === undefined) return fill ? after : undefined;
+  return before !== undefined && stored.trim() === before ? after : stored;
+};
+
+/** `"3/5 d10"`: anything before the slash, then the level and the die the line was written for. */
+const HIT_DICE_LINE = /^\s*\d+\s*\/\s*(\d+)\s*d(\d+)\s*$/i;
+
+/** The modifier a cell states, when it states a whole number. */
+const statedModifier = (cell: Ability | undefined): number | undefined => {
+  const value = Number(cell?.modifier.trim());
+  return cell !== undefined && Number.isInteger(value) ? value : undefined;
+};
+
+const bonusAt = (bonus: number | undefined, modifier: number, times: number): string | undefined =>
+  bonus === undefined ? undefined : signed(modifier + times * bonus);
+
+/**
+ * **A sheet moved to another level** — the level change's whole rule, for a
+ * character and an NPC alike (the server's `recomputeForLevel` resolves the
+ * inputs and calls this). A sheet holds three kinds of content and each is
+ * treated differently:
+ *
+ * - **Derived lines are rewritten.** The class and subclass features, the
+ *   slots, the hit dice, the overlay's counters and lines (the race's too,
+ *   when the race resolved), and the derived weapon lines whose rows the
+ *   caller reached — to-hit at the new bonus, *Attack ×N* at the new count.
+ *   A counter's `used` is carried over and clamped to the new ceiling.
+ * - **Picks follow the feature that offered them**: kept while it is still
+ *   granted, dropped with it.
+ * - **Hand lines are kept**, untouched: anything without `derived`. A typed
+ *   feature that shares a granted one's name (every sheet written before
+ *   features carried `featureId`) stands in for it, so nothing is listed
+ *   twice and nothing typed is removed.
+ *
+ * The numbers that are not lines — `identity.proficiency` and `hitDice`, a
+ * proficient save or skill, the casting ability, save DC and attack — follow
+ * compare-and-move (`moved`): rewritten only while they still say what the
+ * old level wrote. The casting counts are the table's and always follow it.
+ * A class change also moves the class's save marks and proficiency entries:
+ * the new class's are added, and the old class's go unless the new one grants
+ * them too or a save's number was typed; anything else on those lists stays.
+ *
+ * Hit points and ability scores are not derived and are not touched; known
+ * spells and their lines are the server's, since they need the spell rows.
+ * `withLevel(composed at 1, to N)` equals the sheet composed at N, which is
+ * what `apps/server/test/level-grants.test.ts` pins for every class.
+ */
+export const withLevel = <Body extends SheetBody>(body: Body, change: LevelChange): Body => {
+  const { from, to } = change;
+  const before = from?.proficiencyBonus;
+  const after = to.proficiencyBonus;
+
+  // A class change moves the class's save marks: the new class's are marked,
+  // and the old class's go while their number is still the old level's.
+  const formerSaves = new Set<string>(from?.savingThrows ?? []);
+  const saves = new Set<string>(to.savingThrows);
+  const abilities = body.abilities.map((ability): Ability => {
+    const key = ability.label.trim().toUpperCase();
+    const modifier = statedModifier(ability);
+    if (ability.proficient !== true) {
+      if (!saves.has(key) || formerSaves.has(key)) return ability;
+      const save = modifier === undefined ? undefined : bonusAt(after, modifier, 1);
+      return { ...ability, proficient: true, ...(save === undefined ? {} : { save }) };
+    }
+    if (formerSaves.has(key) && !saves.has(key)) {
+      const written = modifier === undefined ? undefined : bonusAt(before, modifier, 1);
+      if (ability.save !== undefined && ability.save.trim() !== written) return ability;
+      const { proficient: _proficient, save: _save, ...cell } = ability;
+      return cell;
+    }
+    if (modifier === undefined) return ability;
+    const save = moved(
+      ability.save,
+      bonusAt(before, modifier, 1),
+      bonusAt(after, modifier, 1),
+      true,
+    );
+    return save === undefined || save === ability.save ? ability : { ...ability, save };
+  });
+
+  const skills = body.skills?.map((skill): Skill => {
+    const label = skill.ability?.trim().toUpperCase();
+    const modifier = statedModifier(
+      abilities.find((ability) => ability.label.trim().toUpperCase() === label),
+    );
+    if (skill.proficient !== true || modifier === undefined) return skill;
+    const times = skill.expertise === true ? 2 : 1;
+    const bonus = moved(
+      skill.bonus,
+      bonusAt(before, modifier, times),
+      bonusAt(after, modifier, times),
+      false,
+    );
+    return bonus === undefined || bonus === skill.bonus ? skill : { ...skill, bonus };
+  });
+
+  const identity: SheetIdentity = body.identity ?? {};
+  const proficiency = moved(
+    identity.proficiency,
+    before === undefined ? undefined : signed(before),
+    after === undefined ? undefined : signed(after),
+    true,
+  );
+  const hitDice = ((): string | undefined => {
+    if (to.hitDie === undefined) return identity.hitDice;
+    if (identity.hitDice === undefined) return hitDiceLine(to.level, to.hitDie);
+    const written = HIT_DICE_LINE.exec(identity.hitDice);
+    return written !== null &&
+      from?.hitDie !== undefined &&
+      Number(written[1]) === from.level &&
+      Number(written[2]) === from.hitDie
+      ? hitDiceLine(to.level, to.hitDie)
+      : identity.hitDice;
+  })();
+  const nextIdentity: SheetIdentity = {
+    ...identity,
+    ...(proficiency === undefined ? {} : { proficiency }),
+    ...(hitDice === undefined ? {} : { hitDice }),
+  };
+
+  // Features: the grants' own replace the derived ones; a pick stays while
+  // what offered it is granted; everything else stays where it was.
+  const granted = new Set(to.features.flatMap((feature) => feature.featureId ?? []));
+  const keptTraits = body.traits.filter((trait) => {
+    if (trait.derived !== true) return true;
+    if (trait.pick !== undefined) return granted.has(trait.pick.offeredBy);
+    return trait.featureId === undefined;
+  });
+  const typed = new Set(
+    keptTraits.filter((trait) => trait.derived !== true).map((trait) => wanted(trait.name)),
+  );
+  const traits = [
+    ...to.features.filter((feature) => !typed.has(wanted(feature.name))),
+    ...keptTraits,
+  ];
+
+  // Counters: every derived one the grants answer is replaced, `used` carried.
+  const previous = body.resources ?? [];
+  const ownsResource = (resource: SheetResource): boolean =>
+    resource.derived === true &&
+    (resource.id.startsWith("slot:") ||
+      resource.id === "hit-dice" ||
+      resource.featureId !== undefined ||
+      (to.race && resource.racialTraitId !== undefined));
+  const usedOf = new Map(
+    previous.filter(ownsResource).map((resource) => [resource.id, resource.used]),
+  );
+  const keptResources = previous.filter((resource) => !ownsResource(resource));
+  const handResourceIds = new Set(keptResources.map((resource) => resource.id));
+  const resources = [
+    ...to.resources
+      .filter((resource) => !handResourceIds.has(resource.id))
+      .map((resource) => ({
+        ...resource,
+        used: Math.max(0, Math.min(resource.max, usedOf.get(resource.id) ?? 0)),
+      })),
+    ...keptResources,
+  ];
+
+  // Actions: the overlay's lines are replaced; a derived weapon line whose row
+  // is in hand is worked out again at the new bonus and attack count.
+  const equipment = new Map((change.equipment ?? []).map((row) => [row.id, row]));
+  const proficiencies = proficienciesAt(body.proficiencies, from?.proficiencies, to.proficiencies);
+  const ownsAction = (action: SheetAction): boolean =>
+    action.derived === true &&
+    (action.source === "feature" || (to.race && action.source === "racial"));
+  const keptActions = (body.actions ?? []).flatMap((action): ReadonlyArray<SheetAction> => {
+    if (ownsAction(action)) return [];
+    if (action.derived !== true || action.source !== "weapon" || after === undefined)
+      return [action];
+    const row =
+      action.equipmentId === undefined || action.equipmentId === null
+        ? undefined
+        : equipment.get(action.equipmentId);
+    if (row === undefined) return [action];
+    return [weaponAttack(row, abilities, after, proficiencies, to.attacksPerAction) ?? action];
+  });
+  const keptActionIds = new Set(keptActions.map((action) => action.id));
+  const actions = [...keptActions, ...to.actions.filter((action) => !keptActionIds.has(action.id))];
+
+  const spellcasting = castingAt(body.spellcasting, from?.spellcasting, to.spellcasting);
+
+  const next: Body = {
+    ...body,
+    abilities,
+    traits,
+    ...(skills === undefined ? {} : { skills }),
+    ...(proficiencies.length === 0 && body.proficiencies === undefined ? {} : { proficiencies }),
+    ...(body.identity === undefined && Object.keys(nextIdentity).length === 0
+      ? {}
+      : { identity: nextIdentity }),
+    ...(actions.length === 0 && body.actions === undefined ? {} : { actions }),
+    ...(resources.length === 0 && body.resources === undefined ? {} : { resources }),
+    ...(spellcasting === undefined ? {} : { spellcasting }),
+  };
+  if (spellcasting === undefined) delete (next as { spellcasting?: Spellcasting }).spellcasting;
+  return next;
+};
+
+/**
+ * The proficiency list after a class change: the old class's entries the new
+ * one does not grant go, the new class's that the old did not are added, and
+ * every other entry — the race's, the background's, a typed one — stays.
+ */
+const proficienciesAt = (
+  stored: ReadonlyArray<string> | undefined,
+  before: ReadonlyArray<string> | undefined,
+  after: ReadonlyArray<string>,
+): ReadonlyArray<string> => {
+  const former = new Set((before ?? []).map(wanted));
+  const granted = new Set(after.map(wanted));
+  const kept = (stored ?? []).filter(
+    (name) => granted.has(wanted(name)) || !former.has(wanted(name)),
+  );
+  const have = new Set(kept.map(wanted));
+  return [...kept, ...after.filter((name) => !former.has(wanted(name)) && !have.has(wanted(name)))];
+};
+
+/**
+ * The casting aside at the new level: the table's counts, and the ability,
+ * save DC and attack by compare-and-move. A class that stops casting (a Paladin back to
+ * level 1) loses the corpus's numbers and its ability, unless a typed number
+ * still needs it, and keeps what anybody chose or typed; an aside left with
+ * nothing but its ability goes.
+ */
+const castingAt = (
+  stored: Spellcasting | undefined,
+  before: Spellcasting | undefined,
+  after: Spellcasting | undefined,
+): Spellcasting | undefined => {
+  if (after === undefined) {
+    if (stored === undefined || before === undefined) return stored;
+    const save = stored.save === undefined || stored.save === before.save ? undefined : stored.save;
+    const attack =
+      stored.attack === undefined || stored.attack === before.attack ? undefined : stored.attack;
+    const ability =
+      stored.ability !== before.ability || save !== undefined || attack !== undefined
+        ? stored.ability
+        : undefined;
+    const left: Spellcasting = {
+      ...(ability === undefined ? {} : { ability }),
+      ...(save === undefined ? {} : { save }),
+      ...(attack === undefined ? {} : { attack }),
+      ...(stored.slots === undefined ? {} : { slots: stored.slots }),
+      ...(stored.known === undefined ? {} : { known: stored.known }),
+    };
+    return Object.keys(left).some((key) => key !== "ability") ? left : undefined;
+  }
+  const ability = moved(stored?.ability, before?.ability, after.ability, true);
+  const save = moved(stored?.save, before?.save, after.save, true);
+  const attack = moved(stored?.attack, before?.attack, after.attack, true);
+  return {
+    ...(ability === undefined ? {} : { ability }),
+    ...(save === undefined ? {} : { save }),
+    ...(attack === undefined ? {} : { attack }),
+    ...(after.cantripsKnown === undefined ? {} : { cantripsKnown: after.cantripsKnown }),
+    ...(after.spellsKnown === undefined ? {} : { spellsKnown: after.spellsKnown }),
+    ...(stored?.slots === undefined ? {} : { slots: stored.slots }),
+    ...(stored?.known === undefined ? {} : { known: stored.known }),
+  };
 };

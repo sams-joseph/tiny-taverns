@@ -39,7 +39,7 @@ import {
   timestampColumns,
   uuidArray,
 } from "./rows.js";
-import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
+import { levelOrClassMoved, recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { appendCharacterUpdated, clampedCharacterHp } from "./vitals.js";
 import {
   characterSeatedAt,
@@ -839,14 +839,26 @@ export class Characters extends Context.Service<
                   CHARACTER_RULES,
                 );
               }
+              // Only a real move recomputes: the Identity dialog resends every
+              // column on every save, and a rename is not a level change.
+              const nextLevel = patch.level === undefined ? rowBefore.level : patch.level;
+              const nextClass =
+                patch.className === undefined ? rowBefore.className : patch.className;
               const recomputedSheet =
                 patch.sheet === undefined &&
-                (patch.level !== undefined || patch.className !== undefined)
+                levelOrClassMoved(
+                  { level: rowBefore.level, className: rowBefore.className },
+                  { level: nextLevel, className: nextClass },
+                )
                   ? yield* recomputeForLevel(sql, {
                       body: rowBefore.sheet,
-                      level: patch.level ?? rowBefore.level,
-                      className: patch.className ?? rowBefore.className,
+                      level: nextLevel,
+                      className: nextClass,
+                      race: nextRace,
+                      subrace: nextSubrace,
+                      from: { level: rowBefore.level, className: rowBefore.className },
                       vocabulary: yield* characterVocabulary(sql, id, actor),
+                      actor,
                     })
                   : undefined;
               const columns = defined({

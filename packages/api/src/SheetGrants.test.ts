@@ -6,6 +6,7 @@ import {
   type OptionDetails,
   RaceOption,
 } from "./CharacterOption.js";
+import type { SheetBody } from "./Character.js";
 import type { Ability } from "./Creature.js";
 import type { KitEquipment, OptionClassLevel } from "./CharacterOption.js";
 import { FEATURE_OVERLAY, RACIAL_TRAIT_OVERLAY } from "./ActionOverlay.js";
@@ -14,9 +15,11 @@ import {
   defaultKitPicks,
   identityGrants,
   kitLinesFor,
+  levelGrantsFor,
   sheetGrantsFor,
   startingSeed,
   startingSheetBody,
+  withLevel,
   withSavingThrows,
 } from "./SheetGrants.js";
 
@@ -512,6 +515,16 @@ const FIGHTER: ClassOption = Schema.decodeUnknownSync(ClassOption)({
       levelRow(5, 3, [feature("extra-attack-1", "Extra Attack")], {
         classSpecific: { action_surges: 1, extra_attacks: 1 },
       }),
+    ],
+    subclasses: [
+      {
+        id: uuidOf("s-champion") as never,
+        name: "Champion",
+        features: [
+          { ...feature("improved-critical", "Improved Critical"), level: 3 },
+          { ...feature("remarkable-athlete", "Remarkable Athlete"), level: 7 },
+        ],
+      },
     ],
   },
 });
@@ -1321,5 +1334,188 @@ describe("startingSheetBody", () => {
       level: 7,
     };
     expect(startingSeed(sources)).toEqual(startingSheetBody(sources).seed);
+  });
+});
+
+describe("withLevel", () => {
+  // STR 16, DEX 14, CON 15 — the Fighter's array; the Half-Orc moves STR and CON.
+  const sources = {
+    classOption: FIGHTER,
+    raceOption: HALF_ORC,
+    subclass: "Champion",
+    abilities: cells([16, 14, 15, 8, 12, 10]),
+  } as const;
+  const composed = (level: number) => startingSheetBody({ ...sources, level }).body;
+  const grantsAt = (body: SheetBody, level: number) =>
+    levelGrantsFor({
+      classOption: FIGHTER,
+      raceOption: HALF_ORC,
+      subclass: body.identity?.subclass,
+      abilities: body.abilities,
+      level,
+    });
+  const moved = (body: SheetBody, from: number, to: number) =>
+    withLevel(body, {
+      from: grantsAt(body, from),
+      to: grantsAt(body, to),
+      equipment: FIGHTER.details?.equipment,
+    });
+
+  it("moves a Fighter 1 to the Fighter composed at 5, every derived line and number with it", () => {
+    const five = moved(composed(1), 1, 5);
+    expect(five).toEqual(composed(5));
+    expect(five.identity).toMatchObject({ proficiency: "+3", hitDice: "5/5 d10" });
+    // STR 18 and CON 16, proficient: +4 and +3, then the bonus.
+    expect(five.abilities.find((cell) => cell.label === "STR")?.save).toBe("+7");
+    expect(five.abilities.find((cell) => cell.label === "CON")?.save).toBe("+6");
+    expect(five.actions?.find((action) => action.id === "atk:crossbow-light")).toMatchObject({
+      hit: "+5",
+      text: expect.stringContaining("Attack ×2"),
+    });
+    expect(five.actions?.find((action) => action.id === "feat:second-wind")?.dice).toBe("1d10+5");
+    expect(five.resources?.find((resource) => resource.id === "res:action-surge")?.max).toBe(1);
+    // The subclass the identity names is granted with the class's own.
+    expect(five.traits.map((trait) => trait.name)).toEqual(
+      expect.arrayContaining(["Action Surge", "Extra Attack", "Improved Critical"]),
+    );
+    expect(five.traits.map((trait) => trait.name)).not.toContain("Remarkable Athlete");
+  });
+
+  it("goes back down by the same rule, carrying what was spent and clamping it", () => {
+    const five = composed(5);
+    const spent = {
+      ...five,
+      resources: five.resources?.map((resource) =>
+        resource.id === "hit-dice" || resource.id === "res:action-surge"
+          ? { ...resource, used: resource.id === "hit-dice" ? 4 : 1 }
+          : resource,
+      ),
+    };
+    const two = moved(spent, 5, 2);
+    expect(two.resources?.find((resource) => resource.id === "hit-dice")).toMatchObject({
+      used: 2,
+      max: 2,
+    });
+    expect(two.resources?.find((resource) => resource.id === "res:action-surge")?.used).toBe(1);
+    expect(two.traits.map((trait) => trait.name)).not.toContain("Extra Attack");
+    expect(two.actions?.find((action) => action.id === "atk:crossbow-light")?.text).not.toContain(
+      "Attack ×",
+    );
+    const one = moved(two, 2, 1);
+    expect(one.resources?.find((resource) => resource.id === "hit-dice")?.used).toBe(1);
+    const rested = (body: SheetBody) => ({
+      ...body,
+      resources: body.resources?.map((resource) => ({ ...resource, used: 0 })),
+    });
+    expect(rested(one)).toEqual(composed(1));
+  });
+
+  it("keeps every line a person typed, and a number they changed", () => {
+    const one = composed(1);
+    const typed = {
+      ...one,
+      abilities: one.abilities.map((cell) =>
+        cell.label === "STR" ? { ...cell, save: "+9" } : cell,
+      ),
+      skills: [
+        { name: "Athletics", ability: "STR", bonus: "+6", proficient: true },
+        { name: "Stealth", ability: "DEX", bonus: "+6", proficient: true, expertise: true },
+        { name: "Intimidation", ability: "CHA", bonus: "+7", proficient: true },
+      ],
+      traits: [...one.traits, { name: "Lucky Coin", text: "Flip it." }],
+      actions: [
+        ...(one.actions ?? []),
+        { id: "custom:headbutt", name: "Headbutt", source: "other" as const },
+      ],
+      resources: [
+        ...(one.resources ?? []),
+        { id: "custom:luck", name: "Luck", used: 1, max: 3, recharge: "long" as const },
+      ],
+    };
+    const five = moved(typed, 1, 5);
+    expect(five.abilities.find((cell) => cell.label === "STR")?.save).toBe("+9");
+    expect(five.abilities.find((cell) => cell.label === "CON")?.save).toBe("+6");
+    expect(five.skills).toEqual([
+      // STR +4 and the bonus, moved from +2 to +3.
+      { name: "Athletics", ability: "STR", bonus: "+7", proficient: true },
+      // DEX +2 and twice the bonus.
+      { name: "Stealth", ability: "DEX", bonus: "+8", proficient: true, expertise: true },
+      // CHA +0 and +2 is not +7: typed, so it stays.
+      { name: "Intimidation", ability: "CHA", bonus: "+7", proficient: true },
+    ]);
+    expect(five.traits).toContainEqual({ name: "Lucky Coin", text: "Flip it." });
+    expect(five.actions).toContainEqual({
+      id: "custom:headbutt",
+      name: "Headbutt",
+      source: "other",
+    });
+    expect(five.resources).toContainEqual({
+      id: "custom:luck",
+      name: "Luck",
+      used: 1,
+      max: 3,
+      recharge: "long",
+    });
+  });
+
+  it("lets a feature written before features carried their row stand in for the granted one", () => {
+    const one = composed(1);
+    const legacy = {
+      ...one,
+      traits: one.traits.map((trait) => ({ name: trait.name, text: trait.text })),
+    };
+    const five = moved(legacy, 1, 5);
+    const names = five.traits.map((trait) => trait.name);
+    expect(names.filter((name) => name === "Second Wind")).toHaveLength(1);
+    expect(five.traits.find((trait) => trait.name === "Second Wind")?.derived).toBeUndefined();
+    expect(five.traits.find((trait) => trait.name === "Action Surge")?.derived).toBe(true);
+    // And a level down never removes one.
+    expect(moved(five, 5, 1).traits.map((trait) => trait.name)).toContain("Second Wind");
+  });
+
+  it("keeps a pick while the feature that offered it is granted, and drops it with it", () => {
+    const five = composed(5);
+    const style = five.traits.find((trait) => trait.name === "Fighting Style")!.featureId!;
+    const surge = five.traits.find((trait) => trait.name === "Action Surge")!.featureId!;
+    const picked = {
+      ...five,
+      traits: [
+        ...five.traits,
+        { name: "Fighting Style: Archery", text: "", derived: true, pick: { offeredBy: style } },
+        { name: "Surge pick", text: "", derived: true, pick: { offeredBy: surge } },
+      ],
+    };
+    const one = moved(picked, 5, 1).traits.map((trait) => trait.name);
+    expect(one).toContain("Fighting Style: Archery");
+    expect(one).not.toContain("Surge pick");
+  });
+
+  it("starts the casting aside when the class starts casting, and takes back only its own numbers", () => {
+    const paladin = (level: number) =>
+      startingSheetBody({ classOption: PALADIN, abilities: cells([16, 10, 14, 8, 12, 16]), level })
+        .body;
+    const at = (body: SheetBody, level: number) =>
+      levelGrantsFor({ classOption: PALADIN, abilities: body.abilities, level });
+    const one = paladin(1);
+    expect(one.spellcasting).toBeUndefined();
+    const two = withLevel(one, { from: at(one, 1), to: at(one, 2) });
+    expect(two).toEqual(paladin(2));
+    expect(two.spellcasting).toEqual({ ability: "CHA", save: "13", attack: "+5" });
+    expect(withLevel(two, { from: at(two, 2), to: at(two, 1) })).toEqual(one);
+    // A save DC somebody typed survives the class giving up casting.
+    const typed = { ...two, spellcasting: { ...two.spellcasting, save: "15" } };
+    expect(withLevel(typed, { from: at(two, 2), to: at(two, 1) }).spellcasting).toEqual({
+      ability: "CHA",
+      save: "15",
+    });
+  });
+
+  it("moves no number it cannot compare: a class whose old table is unknown", () => {
+    const one = composed(1);
+    const typed = { ...one, identity: { ...one.identity, proficiency: "+2" } };
+    const five = withLevel(typed, { to: grantsAt(typed, 5) });
+    // No old table, so +2 cannot be shown to be the corpus's.
+    expect(five.identity?.proficiency).toBe("+2");
+    expect(five.traits.map((trait) => trait.name)).toContain("Extra Attack");
   });
 });

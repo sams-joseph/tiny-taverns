@@ -24,7 +24,7 @@ import {
   orNotFound,
   setClause,
 } from "./rows.js";
-import { recomputeForLevel, validateSubrace } from "./sheetLevel.js";
+import { levelOrClassMoved, recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { spellbookRulesFor } from "./Spells.js";
 import {
   libraryRowReadable,
@@ -118,6 +118,8 @@ interface Reach {
   readonly vocabulary: Vocabulary;
   /** Where a subrace is checked, as a refusal names it. */
   readonly rules: string;
+  /** Who writes: whose Library a level change reads weapon rows from. */
+  readonly actor: Actor;
 }
 
 /**
@@ -132,6 +134,7 @@ const campaignReach = (sql: SqlClient.SqlClient, creator: CampaignCreatorActor):
     writable: npc,
     vocabulary: vocabularyAt(sql, [creator.campaign], creator.actor),
     rules: "in this campaign's rules",
+    actor: creator.actor,
   };
 };
 
@@ -147,6 +150,7 @@ const libraryReach = (sql: SqlClient.SqlClient, actor: Actor): Reach => ({
   writable: libraryRowWritable(sql, "npc", actor),
   vocabulary: vocabularyAt(sql, [], actor),
   rules: "in the core rules",
+  actor,
 });
 
 export class NpcSheets extends Context.Service<
@@ -422,16 +426,24 @@ export class NpcSheets extends Context.Service<
                   reach.rules,
                 );
               }
+              const nextLevel = patch.level === undefined ? before.level : patch.level;
+              const nextClass = patch.className === undefined ? before.className : patch.className;
               const body =
                 patch.sheet !== undefined
                   ? patch.sheet
-                  : patch.level !== undefined || patch.className !== undefined
+                  : levelOrClassMoved(
+                        { level: before.level, className: before.className },
+                        { level: nextLevel, className: nextClass },
+                      )
                     ? yield* recomputeForLevel(sql, {
                         body: before.sheet,
-                        level: patch.level === undefined ? before.level : patch.level,
-                        className:
-                          patch.className === undefined ? before.className : patch.className,
+                        level: nextLevel,
+                        className: nextClass,
+                        race: nextRace,
+                        subrace: nextSubrace,
+                        from: { level: before.level, className: before.className },
                         vocabulary: reach.vocabulary,
+                        actor: reach.actor,
                       })
                     : undefined;
               const columns = defined({
