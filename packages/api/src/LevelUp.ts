@@ -222,7 +222,8 @@ export type LevelUpAutomatic = typeof LevelUpAutomatic.Type;
  * rule (the spell picker's: `mode`, the limits, the lists).
  *
  * - `cantrips` and `spells` are how many new ones: the table's growth for a
- *   known caster, two for a wizard's spellbook, none for a prepared caster
+ *   known caster (less the Magical Secrets, which the Spells Known column
+ *   already counts), two for a wizard's spellbook, none for a prepared caster
  *   (who re-prepares at any time with the picker; `prepared` is the new limit).
  * - `replace`: a known caster may swap one spell it knows for another.
  * - `options` are the class (and subclass) list at the new level's highest
@@ -747,8 +748,12 @@ const spellsOf = (
   );
   const grow = (key: "cantripsKnown" | "spellsKnown") =>
     Math.max(0, (to.limits[key] ?? 0) - (from.limits[key] ?? 0));
+  const wide = levelUpWideSpells(classOption, fromLevel);
   const cantrips = grow("cantripsKnown");
-  const spells = to.mode === "known" || to.mode === "spellbook" ? grow("spellsKnown") : 0;
+  const spells =
+    to.mode === "known" || to.mode === "spellbook"
+      ? Math.max(0, grow("spellsKnown") - (wide.magicalSecrets?.count ?? 0))
+      : 0;
   const replace = to.mode === "known";
   const options = to.spells.flatMap((option) =>
     known.has(option.spell.id) ||
@@ -756,7 +761,6 @@ const spellsOf = (
       ? []
       : [spellOptionOf(option.spell, option.list)],
   );
-  const wide = levelUpWideSpells(classOption, fromLevel);
   const everySpell = (sources.wideSpells ?? []).filter((spell) => !known.has(spell.id));
   const prepared = numberChange(from.limits.prepared, to.limits.prepared);
   return {

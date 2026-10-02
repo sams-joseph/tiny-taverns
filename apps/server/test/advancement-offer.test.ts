@@ -449,6 +449,8 @@ describeLayer(
         const offer = yield* offerOf(owner, bard);
         const secrets = offer.spells?.magicalSecrets;
         expect(secrets).toMatchObject({ count: 2, maximumLevel: 5 });
+        // The column's 12 → 14 is the two Magical Secrets, not two more.
+        expect(offer.spells?.spells).toBe(0);
         const fireball = secrets?.options.find((option) => option.name === "Fireball");
         expect(fireball).toMatchObject({ level: 3, list: "any" });
         expect(secrets?.options.every((option) => option.level <= 5)).toBe(true);

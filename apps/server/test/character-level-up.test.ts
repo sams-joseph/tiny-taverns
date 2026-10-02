@@ -768,6 +768,41 @@ describeLayer(
           }),
       );
 
+      it.effect("refuses a bard's Magical Secrets learned twice, as secrets and as spells", () =>
+        Effect.gen(function* () {
+          const { owner, options } = yield* Fixture;
+          const bard = yield* aCoreCharacter(owner, options, {
+            name: "Ragna",
+            className: "Bard",
+            race: "Human",
+            subclass: "Lore",
+            level: 9,
+            scores: [8, 14, 13, 10, 12, 15],
+          });
+          const offer = yield* offerOf(owner, bard);
+          const learned = offer
+            .spells!.options.filter((option) => option.level > 0)
+            .slice(0, 2)
+            .map((option) => option.spellId);
+          const secrets = offer
+            .spells!.magicalSecrets!.options.filter((option) => !learned.includes(option.spellId))
+            .slice(0, 2)
+            .map((option) => option.spellId);
+          expect(learned).toHaveLength(2);
+          expect(secrets).toHaveLength(2);
+          const refused = yield* refusedLevelUp(
+            owner,
+            bard,
+            answering(offer, { spells: { learned, magicalSecrets: secrets } }),
+          );
+          expect(refused.tag).toBe("Conflict");
+          expect(refused.message).toContain(
+            "This level lets the character learn 0 spells; 2 were chosen.",
+          );
+          expect(yield* recordsOf(bard)).toEqual([]);
+        }),
+      );
+
       it.effect("refuses a score past 20, and a feat whose prerequisite is not met", () =>
         Effect.gen(function* () {
           const { owner, options } = yield* Fixture;
