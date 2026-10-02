@@ -11,7 +11,13 @@ import {
   sourceKeyFor,
   subclassForRef,
 } from "../ruleset/source.js";
-import { ABILITY_SCORE_RAW, DAMAGE_TYPE_RAW, MAGIC_SCHOOL_RAW, SPELL_RAW } from "./systemSpells.js";
+import {
+  ABILITY_SCORE_RAW,
+  DAMAGE_TYPE_RAW,
+  MAGIC_SCHOOL_RAW,
+  SPELL_RAW,
+  SUBCLASS_RAW,
+} from "./systemSpells.js";
 import { textArray } from "../repo/rows.js";
 
 export interface ImportSpellsResult {
@@ -248,14 +254,131 @@ const syncSpellRelationships = (
     }
   });
 
+/** One line of a subclass's spell list: the spell, the class level it comes at, and the terrain gating it. */
+interface SubclassSpellLine {
+  readonly spell: string;
+  readonly level: string;
+  readonly feature: string | undefined;
+}
+
+/**
+ * The snapshot's `SUBCLASS_RAW[].spells`, by subclass index. Each line's
+ * prerequisites are one `level` (`"druid-3"`, a class-level row) and, for the
+ * Land druid, one `feature` (`"circle-of-the-land-arctic"`); any other shape
+ * is a snapshot this importer does not understand, and it says so.
+ */
+const subclassSpellLines = (
+  raw: ReadonlyArray<Record<string, unknown>>,
+): ReadonlyArray<{
+  readonly subclass: SourceRef;
+  readonly lines: ReadonlyArray<SubclassSpellLine>;
+}> =>
+  raw.flatMap((row) => {
+    const spells = row.spells;
+    if (spells === undefined) return [];
+    if (!Array.isArray(spells))
+      throw new Error(`subclass ${String(row.index)} spells must be an array`);
+    const subclass = refOf(row, "subclass");
+    const lines = spells.map((entry: unknown): SubclassSpellLine => {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(`subclass ${subclass.index} spell lines must be objects`);
+      }
+      const record = entry as Record<string, unknown>;
+      const spell = refOf(record.spell, "subclass spell").index;
+      const prerequisites = Array.isArray(record.prerequisites) ? record.prerequisites : [];
+      let level: string | undefined;
+      let feature: string | undefined;
+      for (const prerequisite of prerequisites) {
+        const reference = refOf(prerequisite, "subclass spell prerequisite");
+        const type = (prerequisite as Record<string, unknown>).type;
+        if (type === "level" && level === undefined) level = reference.index;
+        else if (type === "feature" && feature === undefined) feature = reference.index;
+        else
+          throw new Error(`subclass ${subclass.index} spell ${spell} has an unread prerequisite`);
+      }
+      if (level === undefined)
+        throw new Error(`subclass ${subclass.index} spell ${spell} has no level`);
+      return { spell, level, feature };
+    });
+    return [{ subclass, lines }];
+  });
+
+/**
+ * Rewrites `subclass_spell` for every subclass the snapshot lists spells for,
+ * clearing and reinserting so a re-run lands on the same rows. The class
+ * level and the terrain feature are read off their own rows, and each must
+ * belong to the subclass's class (and the feature to the subclass itself), so
+ * a snapshot that pointed elsewhere fails here rather than granting a spell
+ * on someone else's table.
+ */
+const syncSubclassSpells = (
+  sql: SqlClient.SqlClient,
+  spellIds: ReadonlyMap<string, string>,
+  raw: ReadonlyArray<Record<string, unknown>>,
+): Effect.Effect<void, SqlError.SqlError> =>
+  Effect.gen(function* () {
+    for (const { subclass, lines } of subclassSpellLines(raw)) {
+      const subclassId = yield* subclassForRef(sql, subclass);
+      yield* sql`delete from subclass_spell where subclass_id = ${subclassId}`;
+      for (const [ordinal, line] of lines.entries()) {
+        const spellId = spellIds.get(line.spell);
+        if (spellId === undefined) {
+          throw new Error(`subclass ${subclass.index} names unknown spell ${line.spell}`);
+        }
+        const levelKey = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "class-levels", line.level);
+        const featureKey =
+          line.feature === undefined
+            ? undefined
+            : sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "features", line.feature);
+        const rows = yield* sql<{ readonly level: number; readonly feature_id: string | null }>`
+          select class_level.level,
+                 ${featureKey === undefined ? sql`null::text` : sql`feature.id::text`} as feature_id
+          from subclass
+          join class_level
+            on class_level.class_option_id = subclass.class_option_id
+           and class_level.subclass_id is null
+           and class_level.source_corpus = ${levelKey.sourceCorpus}
+           and class_level.source_family = ${levelKey.sourceFamily}
+           and class_level.source_key = ${levelKey.sourceKey}
+           and class_level.campaign_id is null
+           and class_level.account_id is null
+          ${
+            featureKey === undefined
+              ? sql``
+              : sql`join feature
+                      on feature.subclass_id = subclass.id
+                     and feature.source_corpus = ${featureKey.sourceCorpus}
+                     and feature.source_family = ${featureKey.sourceFamily}
+                     and feature.source_key = ${featureKey.sourceKey}
+                     and feature.campaign_id is null
+                     and feature.account_id is null`
+          }
+          where subclass.id = ${subclassId}
+        `;
+        const row = rows[0];
+        if (row === undefined) {
+          throw new Error(
+            `subclass ${subclass.index} spell ${line.spell}: ${line.level} or ${String(line.feature)} is not its own`,
+          );
+        }
+        yield* sql`
+          insert into subclass_spell (subclass_id, ordinal, spell_id, level, feature_id)
+          values (${subclassId}, ${ordinal}, ${spellId}, ${row.level}, ${row.feature_id})
+        `;
+      }
+    }
+  });
+
 /**
  * Writes the pinned 2014 5e-bits spell corpus into `spell` as global `system`
  * rows. The source is the checked-in snapshot in `systemSpells.ts`; this import
  * performs no network access, and a fresh database should end with exactly 319
- * spell rows.
+ * spell rows. The subclass spell lists (`subclass_spell`) are written in the
+ * same transaction, after the spells they name.
  */
 export const importSystemSpells = (
   raw: ReadonlyArray<Record<string, unknown>> = SPELL_RAW,
+  subclasses: ReadonlyArray<Record<string, unknown>> = SUBCLASS_RAW,
 ): Effect.Effect<ImportSpellsResult, SqlError.SqlError, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -268,6 +391,7 @@ export const importSystemSpells = (
         yield* registerReferenceRows(sql);
 
         const spells = raw.map(transformedSpell);
+        const spellIds = new Map<string, string>();
         for (const spell of spells) {
           const key = sourceKeyFor(FIVE_E_BITS_2014_SOURCE, "spells", spell.sourceIndex);
           const schoolId = yield* magicSchoolForRef(sql, spell.school);
@@ -332,10 +456,13 @@ export const importSystemSpells = (
           `;
           const row = rows[0];
           if (row === undefined) throw new Error(`spell ${spell.sourceIndex} was not written`);
+          spellIds.set(spell.sourceIndex, row.id);
           yield* syncSpellRelationships(sql, row.id, spell);
           if (row.inserted === true) inserted += 1;
           else updated += 1;
         }
+
+        yield* syncSubclassSpells(sql, spellIds, subclasses);
 
         return { inserted, updated, seen: spells.length };
       }),

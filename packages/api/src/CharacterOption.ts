@@ -263,11 +263,28 @@ export const ClassLevelSpellcasting = Schema.Struct({
 export type ClassLevelSpellcasting = typeof ClassLevelSpellcasting.Type;
 
 /**
+ * A counter the class table states as dice rather than a number: the 2014
+ * source's `sneak_attack` (3d6 at rogue 5) and `martial_arts` (1d4 at monk 1).
+ */
+export const ClassDice = Schema.Struct({
+  count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+  die: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+});
+export type ClassDice = typeof ClassDice.Type;
+
+/** One line of the sorcerer's *Creating Spell Slots* table: a slot level and its sorcery-point cost. */
+export const SlotCreation = Schema.Struct({
+  slotLevel: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 9 })),
+  cost: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 })),
+});
+export type SlotCreation = typeof SlotCreation.Type;
+
+/**
  * One row of the class table, projected for the sheet: the proficiency bonus,
  * the casting table, the class-specific counters (`rage_count`,
  * `action_surges`, `channel_divinity_charges` — the 2014 source's own keys,
- * zeros dropped) and the top-level features granted at that level, by name and
- * id. **No prose above level 1** — `levelOneFeatures` carries the level-1
+ * zeros dropped), the ones the source states as dice or as a cost table, and
+ * the top-level features granted at that level, by name and id. **No prose above level 1** — `levelOneFeatures` carries the level-1
  * paragraphs a fresh sheet's Features section draws; a feature granted higher
  * up reaches the sheet as its name, its id and its counters, and the
  * progression endpoint is where its paragraph lives. The options list is the
@@ -280,6 +297,10 @@ export const OptionClassLevel = Schema.Struct({
   spellcasting: Schema.optional(ClassLevelSpellcasting),
   /** The source's counters by its own keys; a challenge rating is a fraction, so finite rather than integer. */
   classSpecific: Schema.optional(Schema.Record(Schema.String, Schema.Finite)),
+  /** The source's dice counters by its own keys (`sneak_attack`, `martial_arts`). */
+  classDice: Schema.optional(Schema.Record(Schema.String, ClassDice)),
+  /** The sorcerer's slot-creation costs, absent from every row that has none. */
+  slotCreation: Schema.optional(Schema.Array(SlotCreation).check(Schema.isBetweenLength(0, 9))),
   features: Schema.Array(
     Schema.Struct({ id: FeatureId, index: Schema.NullOr(sourceKey), name: sourceName }),
   ).check(Schema.isBetweenLength(0, 50)),
@@ -348,6 +369,46 @@ export const OptionRelationsInput = Schema.Struct({
 });
 export type OptionRelationsInput = typeof OptionRelationsInput.Type;
 
+/** One paragraph group of a class's *Spellcasting* feature: *"Spell Slots"* and its text. */
+export const SpellcastingInfo = Schema.Struct({
+  name: sourceName,
+  desc: longTextList,
+});
+export type SpellcastingInfo = typeof SpellcastingInfo.Type;
+
+/** An ability score and the least a character needs in it: *"Strength 13"*. */
+export const AbilityMinimum = Schema.Struct({
+  ability: AbilityKey,
+  minimum: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30 })),
+});
+export type AbilityMinimum = typeof AbilityMinimum.Type;
+
+/**
+ * What the 2014 source says about taking a level in this class as a second
+ * class. Stored and read by nothing yet: multiclassing is out of scope, and
+ * this keeps the door open without a re-import.
+ */
+export const ClassMulticlassing = Schema.Struct({
+  /** Every one of these must be met: the monk's DEX 13 and WIS 13. */
+  prerequisites: Schema.Array(AbilityMinimum).check(Schema.isBetweenLength(0, 6)),
+  /** One of these must be met: the fighter's STR 13 or DEX 13. Absent when the class has none. */
+  prerequisiteChoice: Schema.optional(
+    Schema.Struct({
+      choose: choiceCount,
+      from: Schema.Array(AbilityMinimum).check(Schema.isBetweenLength(1, 6)),
+    }),
+  ),
+  /** Proficiency names the class grants a multiclass character: *"Light Armor"*. */
+  proficiencies: textList,
+  /** The choices it grants beside them: the bard's one skill. */
+  proficiencyChoices: Schema.optional(
+    Schema.Array(Schema.Struct({ choose: choiceCount, from: textList })).check(
+      Schema.isBetweenLength(0, 10),
+    ),
+  ),
+});
+export type ClassMulticlassing = typeof ClassMulticlassing.Type;
+
 export const ClassBody = Schema.Struct({
   hitDie,
   unarmouredAc,
@@ -359,6 +420,16 @@ export const ClassBody = Schema.Struct({
    * has not said.
    */
   spellcastingAbility: Schema.optional(AbilityKey),
+  /**
+   * The *Spellcasting* feature's prose, group by group — where the source says
+   * a warlock regains its slots on a short rest and a known caster may swap a
+   * spell on gaining a level. Display only; absent for a class that does not cast.
+   */
+  spellcastingInfo: Schema.optional(
+    Schema.Array(SpellcastingInfo).check(Schema.isBetweenLength(1, 20)),
+  ),
+  /** See `ClassMulticlassing`; absent when the source has no block. */
+  multiclassing: Schema.optional(ClassMulticlassing),
   /** The structured starting kit — see `StartingKit`. Absent when the source lists none. */
   startingKit: Schema.optional(StartingKit),
   /** Projected creation-facing source facts; the concrete progression rows live beside it. */

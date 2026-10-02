@@ -1,5 +1,11 @@
 import { describe, expect } from "@effect/vitest";
-import { Actor, type CharacterOption, CurrentActor, type OptionVocabulary } from "@taverns/api";
+import {
+  Actor,
+  type CharacterOption,
+  CurrentActor,
+  isClassOption,
+  type OptionVocabulary,
+} from "@taverns/api";
 import { Context, Effect, Layer } from "effect";
 import { Statement } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
@@ -240,6 +246,97 @@ describeLayer("options-hydration", shared, (it) => {
         );
         expect(granted.map((grant) => grant.proficiency.name)).toEqual(["Skill: Perception"]);
         expect(granted.map((grant) => grant.ordinal)).toEqual([10_000]);
+      }),
+    );
+
+    it.effect("carries the class table's dice and slot-creation costs, not only its numbers", () =>
+      Effect.gen(function* () {
+        const { dm } = yield* Fixture;
+        const classes = yield* as(dm)(Effect.flatMap(Options, (o) => o.core({ kind: "class" })));
+        const at = (name: string, level: number) =>
+          classes
+            .find((option) => option.name === name)
+            ?.details?.classLevels?.find((row) => row.level === level);
+
+        expect(at("Rogue", 1)?.classDice).toEqual({ sneak_attack: { count: 1, die: 6 } });
+        expect(at("Rogue", 5)?.classDice).toEqual({ sneak_attack: { count: 3, die: 6 } });
+        expect(at("Monk", 1)?.classDice).toEqual({ martial_arts: { count: 1, die: 4 } });
+        expect(at("Monk", 17)?.classDice).toEqual({ martial_arts: { count: 1, die: 10 } });
+        // The numeric counters beside them are unchanged.
+        expect(at("Monk", 5)?.classSpecific?.ki_points).toBe(5);
+        expect(at("Fighter", 5)?.classDice).toBeUndefined();
+
+        // A sorcerer creates slots from 2nd level; the costs ride on every row from there.
+        expect(at("Sorcerer", 1)?.slotCreation).toBeUndefined();
+        expect(at("Sorcerer", 2)?.slotCreation).toEqual([
+          { slotLevel: 1, cost: 2 },
+          { slotLevel: 2, cost: 3 },
+          { slotLevel: 3, cost: 5 },
+          { slotLevel: 4, cost: 6 },
+          { slotLevel: 5, cost: 7 },
+        ]);
+      }),
+    );
+
+    it.effect("carries a class's spellcasting prose and multiclassing block", () =>
+      Effect.gen(function* () {
+        const { dm } = yield* Fixture;
+        const classes = yield* as(dm)(Effect.flatMap(Options, (o) => o.core({ kind: "class" })));
+        const body = (name: string) => {
+          const option = classes.find((row) => row.name === name);
+          return option !== undefined && isClassOption(option) ? option.body : undefined;
+        };
+
+        const warlockSlots = body("Warlock")?.spellcastingInfo?.find(
+          (group) => group.name === "Spell Slots",
+        );
+        expect(warlockSlots?.desc.join(" ")).toContain(
+          "You regain all expended spell slots when you finish a short or long rest.",
+        );
+        expect(body("Wizard")?.spellcastingInfo?.map((group) => group.name)).toContain("Spellbook");
+        expect(body("Fighter")?.spellcastingInfo).toBeUndefined();
+
+        expect(body("Monk")?.multiclassing).toEqual({
+          prerequisites: [
+            { ability: "DEX", minimum: 13 },
+            { ability: "WIS", minimum: 13 },
+          ],
+          proficiencies: ["Simple Weapons", "Shortswords"],
+        });
+        expect(body("Fighter")?.multiclassing?.prerequisites).toEqual([]);
+        expect(body("Fighter")?.multiclassing?.prerequisiteChoice).toEqual({
+          choose: 1,
+          from: [
+            { ability: "STR", minimum: 13 },
+            { ability: "DEX", minimum: 13 },
+          ],
+        });
+        const bard = body("Bard")?.multiclassing;
+        expect(bard?.proficiencies).toEqual(["Light Armor"]);
+        expect(bard?.proficiencyChoices?.[0]?.choose).toBe(1);
+        expect(bard?.proficiencyChoices?.[0]?.from).toContain("Skill: Arcana");
+      }),
+    );
+
+    it.effect("reads the same class bodies and table after the import runs again", () =>
+      Effect.gen(function* () {
+        const { dm } = yield* Fixture;
+        const read = as(dm)(Effect.flatMap(Options, (o) => o.core({ kind: "class" })));
+        const before = yield* read;
+        const again = yield* importSystemOptions().pipe(Effect.orDie);
+        const after = yield* read;
+
+        expect(again.inserted).toBe(0);
+        // Choice groups are cleared and reinserted with fresh ids, so compare
+        // the body and the class table, which is what this import carries.
+        const shape = (rows: typeof before) =>
+          rows.map(({ id, name, body, details }) => ({
+            id,
+            name,
+            body,
+            classLevels: details?.classLevels,
+          }));
+        expect(shape(after)).toEqual(shape(before));
       }),
     );
 

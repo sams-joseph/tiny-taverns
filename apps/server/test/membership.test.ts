@@ -1126,6 +1126,9 @@ describeLayer("membership", shared, (it) => {
               'spell_damage_type',
               'spell_subclass',
               'storage_deletion',
+              -- Imported for the bundle's subclasses only; nothing reads it
+              -- over the wire yet.
+              'subclass_spell',
               'weapon_property'
             )
           order by table_name

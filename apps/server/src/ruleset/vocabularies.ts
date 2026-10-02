@@ -2,6 +2,7 @@ import {
   type AccountId,
   type CampaignId,
   CharacterOptionId,
+  type ClassDice,
   type CharacterOptionSubraceId,
   KitEquipment,
   OptionAbilityGrant,
@@ -22,6 +23,7 @@ import {
   RuleProficiency,
   type RuleSkill,
   RuleTrait,
+  type SlotCreation,
   StartingKit,
 } from "@taverns/api";
 import { Effect, Schema, Struct } from "effect";
@@ -1694,10 +1696,13 @@ export const optionDetailsReader = (sql: SqlClient.SqlClient) => {
 };
 
 /**
- * One row of the class table, with no prose — see `OptionClassLevel`. Only
- * numeric `classSpecific` values and only the non-zero ones, because every
- * level of a class carries every key and a reader treats absent as zero;
- * slots trimmed of trailing zeros the same way.
+ * One row of the class table, with no prose — see `OptionClassLevel`. Numeric
+ * `classSpecific` values only the non-zero ones, because every level of a
+ * class carries every key and a reader treats absent as zero; slots trimmed of
+ * trailing zeros the same way. The two object shapes the 2014 source uses are
+ * kept typed beside them: `{dice_count, dice_value}` (sneak attack, martial
+ * arts) as `classDice`, and the sorcerer's `creating_spell_slots` list as
+ * `slotCreation`. Anything else that is not a number is left out.
  */
 const classLevelOf = (
   row: Omit<typeof ClassLevelRow.Type, "optionId">,
@@ -1718,20 +1723,38 @@ const classLevelOf = (
           ...(spellsKnown === 0 ? {} : { spellsKnown }),
           slots,
         };
-  const counters = Object.entries(maybeObject(row.classSpecific) ?? {}).flatMap(
-    ([key, value]): ReadonlyArray<readonly [string, number]> =>
-      typeof value === "number" && Number.isFinite(value) && value !== 0 ? [[key, value]] : [],
+  const specific = Object.entries(maybeObject(row.classSpecific) ?? {});
+  const counters = specific.flatMap(([key, value]): ReadonlyArray<readonly [string, number]> =>
+    typeof value === "number" && Number.isFinite(value) && value !== 0 ? [[key, value]] : [],
   );
+  const dice = specific.flatMap(([key, value]): ReadonlyArray<readonly [string, ClassDice]> => {
+    const count = numberAt(maybeObject(value), "dice_count");
+    const die = numberAt(maybeObject(value), "dice_value");
+    return count > 0 && die > 0 ? [[key, { count, die }]] : [];
+  });
+  const slotCreation = slotCreationOf(maybeObject(row.classSpecific)?.creating_spell_slots);
   return {
     level: row.level,
     proficiencyBonus: row.proficiencyBonus,
     ...(spellcasting === undefined ? {} : { spellcasting }),
     ...(counters.length === 0 ? {} : { classSpecific: Object.fromEntries(counters) }),
+    ...(dice.length === 0 ? {} : { classDice: Object.fromEntries(dice) }),
+    ...(slotCreation.length === 0 ? {} : { slotCreation }),
     features: featureRows
       .filter((feature) => feature.level === row.level)
       .map(({ id, index, name }) => ({ id, index, name })),
   };
 };
+
+/** `[{spell_slot_level: 1, sorcery_point_cost: 2}, …]` → `[{slotLevel: 1, cost: 2}, …]`. */
+const slotCreationOf = (value: unknown): ReadonlyArray<SlotCreation> =>
+  Array.isArray(value)
+    ? value.flatMap((entry): ReadonlyArray<SlotCreation> => {
+        const slotLevel = numberAt(maybeObject(entry), "spell_slot_level");
+        const cost = numberAt(maybeObject(entry), "sorcery_point_cost");
+        return slotLevel > 0 ? [{ slotLevel, cost }] : [];
+      })
+    : [];
 
 const maybeObject = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value)

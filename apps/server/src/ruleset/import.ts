@@ -1,10 +1,13 @@
 import type {
   AbilityKey,
+  AbilityMinimum,
   BackgroundBody,
   ClassBody,
+  ClassMulticlassing,
   KitChoice,
   KitLine,
   KitOption,
+  SpellcastingInfo,
   StartingKit,
 } from "@taverns/api";
 import { ABILITY_KEYS } from "@taverns/api";
@@ -64,15 +67,8 @@ const walkEquipmentOptions = (value: unknown, found: EquipmentReference[]): void
   for (const child of Object.values(record)) walkEquipmentOptions(child, found);
 };
 
-/**
- * `"wis"` → `"WIS"`: the source's `spellcasting.spellcasting_ability.index`,
- * which the importer used to drop — no sheet could say a spell save DC until
- * it reached `ClassBody.spellcastingAbility`.
- */
-const spellcastingAbilityOf = (raw: unknown): AbilityKey | undefined => {
-  const record = maybeRecord(raw);
-  const index = sourceIndexOf(maybeRecord(record?.spellcasting)?.spellcasting_ability);
-  const key = index?.toUpperCase();
+const abilityKeyOf = (value: unknown): AbilityKey | undefined => {
+  const key = sourceIndexOf(value)?.toUpperCase();
   return key !== undefined && (ABILITY_KEYS as ReadonlyArray<string>).includes(key)
     ? (key as AbilityKey)
     : undefined;
@@ -81,6 +77,103 @@ const spellcastingAbilityOf = (raw: unknown): AbilityKey | undefined => {
 const nameOf = (value: unknown): string | undefined => {
   const name = maybeRecord(value)?.name;
   return typeof name === "string" && name.trim() !== "" ? name : undefined;
+};
+
+/**
+ * `"wis"` → `"WIS"`: the source's `spellcasting.spellcasting_ability.index`,
+ * which the importer used to drop — no sheet could say a spell save DC until
+ * it reached `ClassBody.spellcastingAbility`.
+ */
+const spellcastingAbilityOf = (raw: unknown): AbilityKey | undefined => {
+  const record = maybeRecord(raw);
+  return abilityKeyOf(maybeRecord(record?.spellcasting)?.spellcasting_ability);
+};
+
+const texts = (value: unknown): ReadonlyArray<string> =>
+  Array.isArray(value) ? value.filter((line): line is string => typeof line === "string") : [];
+
+/**
+ * The source's `spellcasting.info`: the *Spellcasting* feature's prose in its
+ * named groups, which is where the 2014 text says a warlock's slots come back
+ * on a short rest and a known caster may swap a spell on gaining a level.
+ */
+const spellcastingInfoOf = (raw: unknown): ReadonlyArray<SpellcastingInfo> | undefined => {
+  const info = maybeRecord(maybeRecord(raw)?.spellcasting)?.info;
+  if (!Array.isArray(info)) return undefined;
+  const groups = info.flatMap((entry): ReadonlyArray<SpellcastingInfo> => {
+    const name = nameOf(entry);
+    return name === undefined ? [] : [{ name, desc: texts(maybeRecord(entry)?.desc) }];
+  });
+  return groups.length === 0 ? undefined : groups;
+};
+
+/** `{ability_score: {index: "str"}, minimum_score: 13}` → `{ability: "STR", minimum: 13}`. */
+const abilityMinimumOf = (value: unknown): AbilityMinimum => {
+  const record = maybeRecord(value);
+  const ability = abilityKeyOf(record?.ability_score);
+  const minimum = record?.minimum_score;
+  if (ability === undefined || typeof minimum !== "number" || !Number.isInteger(minimum)) {
+    throw new Error(
+      `multiclassing prerequisite is not an ability minimum: ${JSON.stringify(value)}`,
+    );
+  }
+  return { ability, minimum };
+};
+
+/** The `"Skill: Arcana"` names a source proficiency choice offers. */
+const proficiencyChoiceOf = (
+  value: unknown,
+): { readonly choose: number; readonly from: ReadonlyArray<string> } | undefined => {
+  const record = maybeRecord(value);
+  const choose = record?.choose;
+  const options = maybeRecord(record?.from)?.options;
+  if (typeof choose !== "number" || !Array.isArray(options)) return undefined;
+  const from = options.flatMap((option) => {
+    const name = nameOf(maybeRecord(option)?.item);
+    return name === undefined ? [] : [name];
+  });
+  return from.length === 0 ? undefined : { choose, from };
+};
+
+/**
+ * The source's `multi_classing` block — the ability minimums (all of
+ * `prerequisites`, or `choose` of `prerequisite_options`) and the
+ * proficiencies a second class grants. Kept so multiclassing can be built
+ * without a re-import; nothing reads it yet.
+ */
+const multiclassingOf = (raw: unknown): ClassMulticlassing | undefined => {
+  const block = maybeRecord(maybeRecord(raw)?.multi_classing);
+  if (block === undefined) return undefined;
+  const prerequisites = Array.isArray(block.prerequisites)
+    ? block.prerequisites.map(abilityMinimumOf)
+    : [];
+  const options = maybeRecord(block.prerequisite_options);
+  const optionList = maybeRecord(options?.from)?.options;
+  const prerequisiteChoice =
+    options === undefined
+      ? undefined
+      : {
+          choose: typeof options.choose === "number" ? options.choose : 1,
+          from: Array.isArray(optionList) ? optionList.map(abilityMinimumOf) : [],
+        };
+  const proficiencies = Array.isArray(block.proficiencies)
+    ? block.proficiencies.flatMap((item) => {
+        const name = nameOf(item);
+        return name === undefined ? [] : [name];
+      })
+    : [];
+  const proficiencyChoices = Array.isArray(block.proficiency_choices)
+    ? block.proficiency_choices.flatMap((choice) => {
+        const read = proficiencyChoiceOf(choice);
+        return read === undefined ? [] : [read];
+      })
+    : [];
+  return {
+    prerequisites,
+    ...(prerequisiteChoice === undefined ? {} : { prerequisiteChoice }),
+    proficiencies,
+    ...(proficiencyChoices.length === 0 ? {} : { proficiencyChoices }),
+  };
 };
 
 /** *"Martial Weapons"* → *"Any martial weapon"*: what a category line is called on a sheet. */
@@ -216,12 +309,16 @@ const classBodyOf = (
 ): Effect.Effect<ClassBody, SqlError.SqlError> =>
   Effect.gen(function* () {
     const spellcastingAbility = spellcastingAbilityOf(option.raw);
+    const spellcastingInfo = spellcastingInfoOf(option.raw);
+    const multiclassing = multiclassingOf(option.raw);
     const startingKit = yield* startingKitOf(option.raw, {
       equipmentId: (index) => systemEquipmentId(sql, index),
     });
     return {
       ...option.body,
       ...(spellcastingAbility === undefined ? {} : { spellcastingAbility }),
+      ...(spellcastingInfo === undefined ? {} : { spellcastingInfo }),
+      ...(multiclassing === undefined ? {} : { multiclassing }),
       ...(startingKit === undefined ? {} : { startingKit }),
     };
   });
