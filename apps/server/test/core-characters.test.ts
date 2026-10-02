@@ -494,6 +494,57 @@ describeLayer(
         }),
       );
 
+      it.effect("keeps a warlock's Pact Magic slots on a short rest through a level-up", () =>
+        Effect.gen(function* () {
+          const { fresh, stranger } = yield* Fixture;
+          const warlock = yield* as(fresh.token, (client) =>
+            client.me.createCoreCharacter({
+              payload: {
+                name: "Wren Ashby",
+                race: "Tiefling",
+                className: "Warlock",
+                level: 1,
+                sheet: { ...emptyCharacterSheet, identity: { hitDice: "d8" } },
+              },
+            }),
+          );
+          const leveled = yield* as(fresh.token, (client) =>
+            client.me.updateCharacter({
+              params: { characterId: warlock.id },
+              payload: { expectedVersion: warlock.version, level: 5 },
+            }),
+          );
+          expect(
+            leveled.sheet.resources?.find((resource) => resource.id === "slot:3"),
+          ).toMatchObject({ max: 2, used: 0, recharge: "short", derived: true });
+
+          yield* as(fresh.token, (client) =>
+            client.me.spendCharacterResource({
+              params: { characterId: warlock.id },
+              payload: { resourceId: "slot:3", amount: 2 },
+            }),
+          );
+          const rested = yield* as(fresh.token, (client) =>
+            client.me.restCharacter({
+              params: { characterId: warlock.id },
+              payload: { kind: "short" },
+            }),
+          );
+          expect(rested.sheet.resources?.find((resource) => resource.id === "slot:3")?.used).toBe(
+            0,
+          );
+
+          expect(
+            yield* refusal(stranger.token, (client) =>
+              client.me.restCharacter({
+                params: { characterId: warlock.id },
+                payload: { kind: "short" },
+              }),
+            ),
+          ).toBe("NotFound");
+        }),
+      );
+
       it.effect("checks a subrace edit against the core rules", () =>
         Effect.gen(function* () {
           const { fresh } = yield* Fixture;
