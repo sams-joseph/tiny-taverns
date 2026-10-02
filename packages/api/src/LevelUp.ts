@@ -174,17 +174,6 @@ export const LevelUpAbilityScoreImprovement = Schema.Struct({
 });
 export type LevelUpAbilityScoreImprovement = typeof LevelUpAbilityScoreImprovement.Type;
 
-/**
- * How the hit points the level adds are worked out: the hit die's average
- * rounded up (`fixed`, the default and what Hob always takes), or a roll the
- * server makes when the level is taken (`rolled`).
- */
-export const LevelUpHitPointMethod = Schema.Literals(["fixed", "rolled"]);
-export type LevelUpHitPointMethod = typeof LevelUpHitPointMethod.Type;
-
-/** The default method; Hob's proposals never take another. */
-export const DEFAULT_HIT_POINT_METHOD: LevelUpHitPointMethod = "fixed";
-
 export const LevelUpHitPoints = Schema.Struct({
   /** The class's hit die: `10` for a d10. */
   die: Schema.Int,
