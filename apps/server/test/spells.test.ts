@@ -143,6 +143,65 @@ describeLayer("spells", shared, (it) => {
         }),
     );
 
+    it.effect("records when a subclass gains each of its spells, and the terrain gating it", () =>
+      Effect.gen(function* () {
+        const lines = sql(
+          (client) => client<{
+            readonly subclass: string;
+            readonly spell: string;
+            readonly level: number;
+            readonly terrain: string | null;
+          }>`
+            select subclass.source_key as subclass,
+                   spell.source_key as spell,
+                   subclass_spell.level,
+                   feature.name as terrain
+            from subclass_spell
+            join subclass on subclass.id = subclass_spell.subclass_id
+            join spell on spell.id = subclass_spell.spell_id
+            left join feature on feature.id = subclass_spell.feature_id
+            order by subclass.source_key, subclass_spell.ordinal
+          `,
+        );
+        const before = yield* lines;
+
+        const of = (subclass: string) => before.filter((line) => line.subclass === subclass);
+        expect(of("life")).toHaveLength(9);
+        expect(of("devotion")).toHaveLength(10);
+        expect(of("fiend")).toHaveLength(10);
+        expect(of("land")).toHaveLength(56);
+        expect(of("life")).toContainEqual({
+          subclass: "life",
+          spell: "bless",
+          level: 1,
+          terrain: null,
+        });
+        // A Land druid's circle spells come at druid 3, 5, 7 and 9, by terrain.
+        const arctic = of("land").filter((line) => line.terrain === "Circle of the Land: Arctic");
+        expect(arctic.map(({ spell, level }) => ({ spell, level }))).toEqual([
+          { spell: "hold-person", level: 3 },
+          { spell: "spike-growth", level: 3 },
+          { spell: "sleet-storm", level: 5 },
+          { spell: "slow", level: 5 },
+          { spell: "freedom-of-movement", level: 7 },
+          { spell: "ice-storm", level: 7 },
+          { spell: "commune-with-nature", level: 9 },
+          { spell: "cone-of-cold", level: 9 },
+        ]);
+        expect(new Set(of("land").map((line) => line.terrain)).size).toBe(7);
+        // The same spell under two terrains is two lines.
+        expect(
+          of("land")
+            .filter((line) => line.spell === "spike-growth")
+            .map((line) => line.terrain),
+        ).toEqual(["Circle of the Land: Arctic", "Circle of the Land: Mountain"]);
+
+        // A re-run lands on the same lines.
+        yield* importSystemSpells().pipe(Effect.orDie);
+        expect(yield* lines).toEqual(before);
+      }),
+    );
+
     it.effect("filters in SQL by one-value arrays and spell-specific booleans", () =>
       Effect.gen(function* () {
         const { actor } = yield* dmCampaign("The Spell Road");

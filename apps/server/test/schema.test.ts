@@ -163,6 +163,9 @@ const NOT_CONTENT = [
   "spell_class",
   "spell_damage_type",
   "spell_subclass",
+  // A subclass's spell list, imported for the bundle's subclasses only and
+  // reached through the subclass. See 0082_subclass_spells.ts.
+  "subclass_spell",
   // Prefixes whose stored files must be deleted: an outbox, not content.
   "storage_deletion",
   "weapon_property",

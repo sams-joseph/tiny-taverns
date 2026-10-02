@@ -266,6 +266,7 @@ describeLayer("migrations", database, (it) => {
         "spell_subclass",
         "storage_deletion",
         "subclass",
+        "subclass_spell",
         "weapon_property",
       ]);
       // Numbering is load-bearing and the failure is silent: `Migrator.run` keeps
@@ -354,6 +355,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 79, name: "shared_world_origin" },
         { migration_id: 80, name: "assistant_turn_discard" },
         { migration_id: 81, name: "integer_sequences" },
+        { migration_id: 82, name: "subclass_spells" },
       ]);
     }),
   );
@@ -446,6 +448,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 79, name: "shared_world_origin" },
         { migration_id: 80, name: "assistant_turn_discard" },
         { migration_id: 81, name: "integer_sequences" },
+        { migration_id: 82, name: "subclass_spells" },
       ]);
     }),
   );

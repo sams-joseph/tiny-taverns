@@ -22,7 +22,7 @@ The order matters on a fresh database and is written in `README.md`:
 
 1. `equipment:import`: background and class kit lines resolve to equipment rows;
 2. `ruleset:import`: options, feats and rule articles; seeds the vocabularies (`syncSystemVocabularies`) and the class progression that spells and feats point at;
-3. `spell:import`: `spell_subclass` needs `subclass` to exist;
+3. `spell:import`: `spell_subclass` needs `subclass` to exist, and `subclass_spell` its class levels and features;
 4. `bestiary:import`: monster relationships reference spells and equipment;
 5. `magic-item:import`.
 
@@ -77,6 +77,7 @@ How homebrew reaches players: an account's Library serves all of its own tables 
 
 Spells, equipment, magic items, feats and rule articles are dedicated tables, not `character_option` kinds: each needs its own filters and document shape. All use the three-owner model unchanged; do not add a corpus-specific reach rule.
 
+- A spell's subclass link has two tables. `spell_subclass` is list membership, what the picker reads. `subclass_spell` (`0082_subclass_spells.ts`) is the subclass's own spell list as the source orders it: the class level each spell is gained at and, for the Land druid, the terrain feature gating it, so one spell can appear under several terrains. Only the bundle's subclasses have one; nothing authors it.
 - `equipment` is mundane only: no magic items, shops, encumbrance or inventory. Sheet lines link to it by `equipmentId` as provenance, never read through.
 - `magic_item` variant/base links come from source refs, not name parsing, and `magic_item_base_same_scope_fkey` (`0023_magic_items.ts`) stops a variant pointing at a base in another owner's scope. Authored originals are standalone; no variant metadata is inherited.
 - `feat` prerequisites are child rows with an FK into `ability_score` (grouped by `feat_prerequisite_group`), which is why feats import inside `ruleset:import` after the vocabularies. Grappler is the whole pinned corpus.
