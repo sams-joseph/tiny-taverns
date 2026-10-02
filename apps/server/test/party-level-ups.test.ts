@@ -362,7 +362,7 @@ describeLayer(
 
     describe("the log", () => {
       it.effect(
-        "comes with the join, latest first, and leaves out a level the Level box took back",
+        "comes with the join, latest first, and loses a level the Level box took back",
         () =>
           Effect.gen(function* () {
             const { jo, ilse, options, table } = yield* Fixture;
@@ -384,7 +384,7 @@ describeLayer(
             const joined = yield* seatAt(ilse, table, wren);
             expect(joined.levelUps.map((entry) => entry.level)).toEqual([3, 2]);
 
-            yield* as(ilse.token, (client) =>
+            const lowered = yield* as(ilse.token, (client) =>
               client.me.updateCharacter({
                 params: { characterId: wren.id },
                 payload: { expectedVersion: third.character.version, level: 2 },
@@ -393,13 +393,23 @@ describeLayer(
             const read = seatIn(yield* partyOf(jo, table), joined.seat.id)!;
             expect(read.levelUps.map((entry) => entry.level)).toEqual([2]);
 
-            // The record itself stands until the level is gained again.
             const sql = yield* SqlClient.SqlClient;
-            const rows = yield* sql<{ readonly level: number }>`
+            const levelsRecorded = sql<{ readonly level: number }>`
               select level from character_advancement where character_id = ${wren.id}
               order by level
             `.pipe(Effect.orDie);
-            expect(rows.map((row) => row.level)).toEqual([2, 3]);
+            expect((yield* levelsRecorded).map((row) => row.level)).toEqual([2]);
+
+            // Regaining the level by the Level box brings no record back.
+            yield* as(ilse.token, (client) =>
+              client.me.updateCharacter({
+                params: { characterId: wren.id },
+                payload: { expectedVersion: lowered.version, level: 3 },
+              }),
+            );
+            const regained = seatIn(yield* partyOf(jo, table), joined.seat.id)!;
+            expect(regained.levelUps.map((entry) => entry.level)).toEqual([2]);
+            expect((yield* levelsRecorded).map((row) => row.level)).toEqual([2]);
           }),
       );
     });

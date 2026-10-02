@@ -209,9 +209,8 @@ export class Party extends Context.Service<
        * from `character_advancement` in SQL to the narrow `SeatLevelUp`: the
        * hit point columns and the applied deltas are never selected. The
        * seat's own predicate is applied again here rather than trusted from
-       * the seat read, so the log is exactly as readable as the seat. A record
-       * above the character's level is one the Level box has taken back, and
-       * describes no level it holds.
+       * the seat read, so the log is exactly as readable as the seat. Only the
+       * levels the character holds are listed.
        */
       const levelUpsAt = SqlSchema.findAll({
         Request: Schema.toType(

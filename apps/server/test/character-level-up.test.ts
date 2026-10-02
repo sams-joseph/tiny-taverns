@@ -1150,24 +1150,15 @@ describeLayer(
           const after = yield* offerOf(owner, boxed);
           expect(after).toMatchObject({ version: boxed.version, fromLevel: 4 });
 
-          // Lowered to 2 by hand, the record at 3 stays; neither record can be undone.
+          // Lowered to 2 by hand, the record at 3 goes with the level.
           const lowered = yield* as(owner.token, (client) =>
             client.me.updateCharacter({
               params: { characterId: fighter.id },
               payload: { expectedVersion: boxed.version, level: 2 },
             }),
           );
-          const lowerBox =
-            "This character is level 2 now, set in Edit your character since it reached level 3, so the level-up no longer describes the sheet. Change its level there instead.";
-          expect(yield* refusedUndo(owner, lowered, 2)).toEqual({
-            tag: "Conflict",
-            message: lowerBox,
-          });
-          expect(yield* refusedUndo(owner, lowered, 3)).toEqual({
-            tag: "Conflict",
-            message: lowerBox,
-          });
-          expect((yield* recordsOf(fighter)).map((row) => row.level)).toEqual([2, 3]);
+          expect((yield* refusedUndo(owner, lowered, 3)).tag).toBe("NotFound");
+          expect((yield* recordsOf(fighter)).map((row) => row.level)).toEqual([2]);
         }),
       );
 
