@@ -458,7 +458,19 @@ const countersAt = (row: OptionClassLevel | undefined): ((key: string) => number
   };
 };
 
-const slotResources = (row: OptionClassLevel | undefined): ReadonlyArray<SheetResource> =>
+/**
+ * When a class's spell slots come back: a warlock's Pact Magic slots on a
+ * short rest, every other caster's on a long one. The class table carries the
+ * counts but not the recharge, so the name answers it, as the server's level
+ * recompute matches the class by name.
+ */
+export const slotRecharge = (className: string | undefined): "short" | "long" =>
+  className?.trim().toLowerCase() === "warlock" ? "short" : "long";
+
+const slotResources = (
+  row: OptionClassLevel | undefined,
+  recharge: "short" | "long",
+): ReadonlyArray<SheetResource> =>
   (row?.spellcasting?.slots ?? []).flatMap((count, index) =>
     count > 0
       ? [
@@ -467,7 +479,7 @@ const slotResources = (row: OptionClassLevel | undefined): ReadonlyArray<SheetRe
             name: `${ordinal(index + 1)}-level slots`,
             used: 0,
             max: count,
-            recharge: "long" as const,
+            recharge,
             derived: true,
           },
         ]
@@ -714,7 +726,11 @@ export const sheetGrantsFor = (sources: SheetGrantSources): SheetGrants => {
     ...(hitDie === undefined ? {} : { hitDie }),
     level,
     actions: [...weaponActions, ...featureActions],
-    resources: [...slotResources(row), ...hitDice, ...resources.values()],
+    resources: [
+      ...slotResources(row, slotRecharge(classOption?.name)),
+      ...hitDice,
+      ...resources.values(),
+    ],
     ...(spellcasting === undefined ? {} : { spellcasting }),
   };
 };

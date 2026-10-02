@@ -3,6 +3,7 @@ import {
   type RaceBody,
   type SheetBody,
   type SheetResource,
+  slotRecharge,
   Spell,
   SpellId,
   spellActionFor,
@@ -124,7 +125,13 @@ export const recomputeForLevel = <Body extends SheetBody>(
     });
     return {
       ...body,
-      resources: levelUpResources(body, level, classOption.body.hitDie, slots),
+      resources: levelUpResources(
+        body,
+        level,
+        classOption.body.hitDie,
+        slots,
+        slotRecharge(classOption.name),
+      ),
       actions: [
         ...(body.actions ?? []).filter(
           (action) => !(action.derived === true && action.source === "spell"),
@@ -166,6 +173,7 @@ const ordinal = (n: number): string =>
 const slotResourcesFor = (
   slots: ReadonlyArray<number>,
   previous: ReadonlyArray<SheetResource>,
+  recharge: "short" | "long",
 ): ReadonlyArray<SheetResource> => {
   const used = new Map(previous.map((resource) => [resource.id, resource.used]));
   return slots.flatMap((count, index) => {
@@ -177,7 +185,7 @@ const slotResourcesFor = (
         name: `${ordinal(index + 1)}-level slots`,
         used: Math.max(0, Math.min(count, used.get(id) ?? 0)),
         max: count,
-        recharge: "long" as const,
+        recharge,
         derived: true,
       },
     ];
@@ -189,6 +197,7 @@ const levelUpResources = (
   level: number,
   hitDie: number | undefined,
   slots: ReadonlyArray<number>,
+  recharge: "short" | "long",
 ): ReadonlyArray<SheetResource> => {
   const previous = sheet.resources ?? [];
   const customAndNonSlots = previous.filter(
@@ -215,7 +224,7 @@ const levelUpResources = (
             derived: true,
           },
         ];
-  return [...customAndNonSlots, ...slotResourcesFor(slots, previous), ...hitDice];
+  return [...customAndNonSlots, ...slotResourcesFor(slots, previous, recharge), ...hitDice];
 };
 
 const rawSlots = (raw: Record<string, unknown> | undefined): ReadonlyArray<number> => {

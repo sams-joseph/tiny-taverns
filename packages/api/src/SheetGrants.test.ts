@@ -866,6 +866,17 @@ describe("the worked examples: a Fighter 1", () => {
   });
 });
 
+describe("Pact Magic", () => {
+  it("gives a warlock's slots a short-rest recharge and every other caster's a long one", () => {
+    const slotsOf = (classOption: ClassOption) =>
+      sheetGrantsFor({ classOption, abilities: cells([10, 10, 10, 10, 10, 16]), level: 5 })
+        .resources?.filter((resource) => resource.id.startsWith("slot:"))
+        .map((resource) => resource.recharge);
+    expect(slotsOf({ ...PALADIN, name: "Warlock" })).toEqual(["short", "short"]);
+    expect(slotsOf(PALADIN)).toEqual(["long", "long"]);
+  });
+});
+
 describe("the worked examples: a Paladin 5", () => {
   // STR 16, CHA 16, the rest as a paladin lays them.
   const abilities = cells([16, 10, 14, 8, 12, 16]);
