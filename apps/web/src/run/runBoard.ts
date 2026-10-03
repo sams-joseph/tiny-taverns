@@ -28,8 +28,12 @@ export interface RunBoardProps {
   /** Its write is in flight. */
   readonly hiding: boolean;
   readonly onHideHostile: (hidden: boolean) => void;
-  /** One write of the Fog tool; resolves once the board holds the server's answer, or it failed. */
-  readonly onFog: (edit: FogEdit) => Promise<unknown>;
+  /**
+   * One write of the Fog tool, sent after every write and re-read before it;
+   * resolves once the board holds the server's answer, or once it failed, and
+   * never rejects.
+   */
+  readonly onFog: (edit: FogEdit) => Promise<void>;
 }
 
 /**
@@ -102,11 +106,12 @@ type Stroke = FogEdit & { readonly kind: "hide" | "reveal" };
  * in the order they were sent, then the stroke under the pointer. So a stroke
  * stays painted from the moment it is drawn, and nothing waits on the network.
  *
- * Writes go one at a time, each after the last has answered, so the board's
+ * `onFog` sends each write after the one before it has settled, so the board's
  * answers arrive in the order the server applied them and an older one never
  * lands over a newer one. A write leaves the queue only once its answer is the
- * board (`onFog`), so the squares it painted never blink back. A refused write
- * leaves the queue too, and the board shows the fog the server holds.
+ * board, so the squares it painted never blink back. A refused write, or one
+ * that never reached the server, leaves the queue too, and the board shows the
+ * fog the server holds.
  */
 function useFogTool({
   board,
@@ -115,7 +120,7 @@ function useFogTool({
 }: {
   readonly board: EncounterRunBoard | null;
   readonly usable: boolean;
-  readonly onFog: (edit: FogEdit) => Promise<unknown>;
+  readonly onFog: (edit: FogEdit) => Promise<void>;
 }) {
   const [chosen, setChosen] = useState(false);
   const on = chosen && usable && board !== null;
@@ -131,14 +136,11 @@ function useFogTool({
     setShownStroke(next);
   };
   const sent = useRef(0);
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
 
   const send = (edit: FogEdit) => {
     const id = ++sent.current;
     setQueued((current) => [...current, { id, edit }]);
-    chain.current = chain.current
-      .then(() => onFog(edit))
-      .then(() => setQueued((current) => current.filter((entry) => entry.id !== id)));
+    void onFog(edit).then(() => setQueued((current) => current.filter((entry) => entry.id !== id)));
   };
 
   const fog =

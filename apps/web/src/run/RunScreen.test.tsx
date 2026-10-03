@@ -24,6 +24,7 @@ import {
 import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
+import { TEST_SESSION, TEST_SESSION_TOKEN } from "../test/session";
 import { boardFogWrites, combatantVisibilityWrites, combatantWrites } from "./load";
 
 /**
@@ -3136,6 +3137,61 @@ describe("the Fog tool, on the canvas", () => {
     paint(layer, [[2, 3]]);
     await screen.findByText("The fog did not change");
     await waitFor(() => expect(dimmed()).toBe(0));
+  });
+
+  it("treats a write that never reached the server as refused, and keeps sending the next", async () => {
+    let offline = false;
+    vi.spyOn(TEST_SESSION, "fetchToken").mockImplementation(() =>
+      offline ? Promise.reject(new Error("offline")) : Promise.resolve(TEST_SESSION_TOKEN),
+    );
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: row3(4) } });
+    const layer = await openFog();
+
+    offline = true;
+    paint(layer, [[2, 3]]);
+    await screen.findByText("The fog did not change");
+    await waitFor(() => expect(dimmed()).toBe(0));
+    expect(fogCalls()).toEqual([]);
+
+    offline = false;
+    paint(layer, [[4, 3]]);
+    await waitFor(() => expect(fogCalls()).toHaveLength(1));
+    expect(fogCalls()[0]).toMatchObject({ hide: row3(4) });
+    await waitFor(() => expect(dimmed()).toBe(1));
+  });
+
+  it("sends a stroke after a re-read of the board it rang for, so the re-read never paints over it", async () => {
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: row3(2) } });
+    const layer = await openFog();
+    await waitFor(() => expect(server.open()).toBeGreaterThan(0));
+    paint(layer, [[2, 3]]);
+    await waitFor(() => expect(dimmed()).toBe(1));
+
+    // The first stroke's doorbell: its re-read is on its way, and answers with
+    // the board as it was before the second stroke.
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, fog: row3(2) },
+    });
+    const release = server.hold(`GET ${serverRunBase()}/board`);
+    server.emit(sessionEvent(20, "board-fog-updated"));
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "GET" && call.pathname.endsWith("/board")),
+      ).toHaveLength(2),
+    );
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: row3(2, 4) } });
+    paint(layer, [[4, 3]]);
+    expect(dimmed()).toBe(2);
+    // The second stroke waits for the re-read.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fogCalls()).toHaveLength(1);
+
+    release();
+    await waitFor(() => expect(fogCalls()).toHaveLength(2));
+    expect(fogCalls()[1]).toMatchObject({ hide: row3(4) });
+    await waitFor(() => expect(screen.queryByText("The fog did not change")).toBeNull());
+    expect(dimmed()).toBe(2);
   });
 
   it("leaves the tool on Esc, but not on an Esc meant for Hob", async () => {

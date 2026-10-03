@@ -30,7 +30,9 @@ import { Result } from "effect";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
+import { runApiResult } from "../api/client";
 import { useMutation } from "../api/mutation";
+import { useCredential } from "../auth/credential";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
@@ -672,8 +674,33 @@ export function RunScreen() {
 
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
-  const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
+  const [boardResource] = useApiAtom(runBoardAtom(path));
   const writeBoard = useAtomSet(runBoardAtom(path));
+  const fetchCredential = useCredential();
+  /**
+   * The board's one line: the Fog tool's writes and every re-read of the board
+   * go through it one at a time, in the order they were asked for. So answers
+   * land in the order the server applied them, and a re-read never lands older
+   * fog over a stroke this tab wrote after it was asked for. A task that fails
+   * leaves the line open for the next.
+   */
+  const boardLine = useRef<Promise<void>>(Promise.resolve());
+  const inBoardLine = useCallback((task: () => Promise<void>): Promise<void> => {
+    const done = boardLine.current.then(task).catch(() => undefined);
+    boardLine.current = done;
+    return done;
+  }, []);
+  const reloadBoard = useCallback(
+    () =>
+      void inBoardLine(async () => {
+        const read = await runApiResult(
+          (client) => client.runs.board({ params: path }),
+          await fetchCredential(),
+        );
+        if (Result.isSuccess(read)) writeBoard(AsyncResult.success(read.success));
+      }),
+    [inBoardLine, fetchCredential, path, writeBoard],
+  );
   // The party's sheets, for a character's speed on the board. A miss is no
   // range, never a guessed one.
   const [partyResource] = useApiAtom(partyAtom(campaignId));
@@ -1109,29 +1136,33 @@ export function RunScreen() {
   };
 
   /**
-   * One write of the Fog tool (`runBoard.ts` sends them one at a time). Its
-   * answer is the board, written straight into the board's atom as a turn's
-   * answer is into the fight's, so the squares stay as painted.
+   * One write of the Fog tool, in the board's line. Its answer is the board,
+   * written straight into the board's atom as a turn's answer is into the
+   * fight's, so the squares stay as painted. A write that never reached the
+   * server is a refusal like any other.
    */
-  const paintFog = async (edit: FogEdit): Promise<void> => {
-    const saved = await fogs.submit(
-      (client) =>
-        client.runs.updateFog({
-          params: path,
-          payload: { ...fogPayload(edit), requestId: newRequestId() },
-        }),
-      boardFogWrites(campaignId),
-    );
-    if (Result.isSuccess(saved)) {
-      writeBoard((current) => AsyncResult.map(current, () => saved.success));
-      return;
-    }
-    toast.add({
-      type: "destructive",
-      title: "The fog did not change",
-      description: "That did not reach the server. The board shows the fog it holds.",
+  const paintFog = (edit: FogEdit): Promise<void> =>
+    inBoardLine(async () => {
+      const saved = await fogs
+        .submit(
+          (client) =>
+            client.runs.updateFog({
+              params: path,
+              payload: { ...fogPayload(edit), requestId: newRequestId() },
+            }),
+          boardFogWrites(campaignId),
+        )
+        .catch(() => undefined);
+      if (saved !== undefined && Result.isSuccess(saved)) {
+        writeBoard((current) => AsyncResult.map(current, () => saved.success));
+        return;
+      }
+      toast.add({
+        type: "destructive",
+        title: "The fog did not change",
+        description: "That did not reach the server. The board shows the fog it holds.",
+      });
     });
-  };
 
   /**
    * How far someone walks, from the front of their speed: the stat block's for
