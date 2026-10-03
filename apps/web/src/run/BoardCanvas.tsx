@@ -227,13 +227,8 @@ export function BoardCanvas({
 
   const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointers.current.delete(event.pointerId)) return;
-    // Only a mouse or pen lifted after a drag sends the click to swallow.
-    if (
-      gesture.current?.moved === true &&
-      event.type === "pointerup" &&
-      event.pointerType !== "touch"
-    )
-      swallowClick.current = true;
+    // A cancelled gesture sends no click to swallow.
+    if (gesture.current?.moved === true && event.type === "pointerup") swallowClick.current = true;
     if (pointers.current.size === 0) gesture.current = undefined;
     else {
       // A pinch down to one finger carries on as a drag from where it is.
@@ -252,7 +247,8 @@ export function BoardCanvas({
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
       onClickCapture={(event) => {
-        if (!swallowClick.current) return;
+        // A click with no press behind it is the keyboard, never a drag's.
+        if (!swallowClick.current || event.detail === 0) return;
         swallowClick.current = false;
         event.stopPropagation();
         event.preventDefault();

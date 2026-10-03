@@ -1529,7 +1529,7 @@ describe("the canvas", () => {
     fireEvent.pointerDown(squares, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(squares, { pointerId: 1, clientX: 160, clientY: 130 });
     fireEvent.pointerUp(squares, { pointerId: 1, clientX: 160, clientY: 130 });
-    fireEvent.click(squares, { clientX: 160, clientY: 130 });
+    fireEvent.click(squares, { detail: 1, clientX: 160, clientY: 130 });
 
     expect(panOf().x).toBeCloseTo(60);
     expect(panOf().y).toBeCloseTo(30);
@@ -1545,7 +1545,7 @@ describe("the canvas", () => {
     );
     fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
     fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
-    fireEvent.click(squares, { clientX: 15, clientY: 15 });
+    fireEvent.click(squares, { detail: 1, clientX: 15, clientY: 15 });
     await waitFor(() =>
       expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(true),
     );
@@ -1572,10 +1572,58 @@ describe("the canvas", () => {
     );
     fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
     fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
-    fireEvent.click(squares, { clientX: 15, clientY: 15 });
+    fireEvent.click(squares, { detail: 1, clientX: 15, clientY: 15 });
     await waitFor(() =>
       expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(true),
     );
+  });
+
+  it("swallows the click of a finger that drifted into a pan, and lets a keyboard press through", async () => {
+    // jsdom has no PointerEvent, so a fired pointer event would carry no pointerType.
+    class TouchPointer extends MouseEvent {
+      readonly pointerId: number;
+      readonly pointerType: string;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 0;
+        this.pointerType = init.pointerType ?? "";
+      }
+    }
+    Object.defineProperty(window, "PointerEvent", { value: TouchPointer, configurable: true });
+    try {
+      await open();
+      await waitFor(() =>
+        expect(within(board()).getByRole("button", { name: /^Brannoc,/ })).toBeInTheDocument(),
+      );
+      const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]")!;
+      server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/move`, {
+        status: 200,
+        body: { ...brannocPlaced, position: { column: 1, row: 1 } },
+      });
+      vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
+        DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+      );
+      const touch = { pointerId: 1, pointerType: "touch", button: 0 };
+
+      fireEvent.pointerDown(squares, { ...touch, clientX: 9, clientY: 15 });
+      fireEvent.pointerMove(squares, { ...touch, clientX: 15, clientY: 15 });
+      fireEvent.pointerUp(squares, { ...touch, clientX: 15, clientY: 15 });
+      fireEvent.click(squares, { detail: 1, clientX: 15, clientY: 15 });
+
+      expect(panOf().x).toBeCloseTo(6);
+
+      fireEvent.pointerDown(squares, { ...touch, pointerId: 2, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(squares, { ...touch, pointerId: 2, clientX: 106, clientY: 100 });
+      fireEvent.pointerUp(squares, { ...touch, pointerId: 2, clientX: 106, clientY: 100 });
+      await userEvent.click(rowFor("Goblin Boss"));
+      const token = within(board()).getByRole("button", { name: /^Brannoc,/ });
+      await waitFor(() => expect(token).toHaveAttribute("aria-pressed", "false"));
+      fireEvent.click(token, { detail: 0 });
+      expect(token).toHaveAttribute("aria-pressed", "true");
+      expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(false);
+    } finally {
+      Reflect.deleteProperty(window, "PointerEvent");
+    }
   });
 
   it("is the grid again for a fight with no board, which has nothing to pan", async () => {
