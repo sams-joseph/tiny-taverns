@@ -290,6 +290,16 @@ export const combatantVisibilityWrites = (campaignId: CampaignId): Invalidation 
 ];
 
 /**
+ * What setting or rolling a party member's death saves changes outside the
+ * fight: the character, which the server writes through to (the party), and
+ * the seated player's table, which draws them on that player's own row.
+ */
+export const deathSaveWrites = (campaignId: CampaignId): Invalidation => [
+  reads.party(campaignId),
+  reads.playerTable(campaignId),
+];
+
+/**
  * The row after `at` in an initiative order, wrapping to the top: who is up
  * next. Nothing when the order is that one row alone. The order is the
  * server's and is never re-sorted here, so this is the row `nextTurn` walks to

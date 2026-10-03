@@ -2,6 +2,7 @@ import type {
   BoardSquare,
   Combatant,
   CombatantId,
+  DeathSaves,
   EncounterRunUpdate,
   HobDirectResourceUpdate,
   Npc,
@@ -52,6 +53,7 @@ import { SceneRunner } from "./SceneRunner";
 import {
   combatantVisibilityWrites,
   combatantWrites,
+  deathSaveWrites,
   hasBoard,
   rollsAtom,
   runBoardAtom,
@@ -690,6 +692,7 @@ export function RunScreen() {
   const direct = useMutation();
   const conditions = useMutation();
   const hiding = useMutation();
+  const saves = useMutation();
   const moves = useMutation();
   const mapShare = useMutation();
 
@@ -913,6 +916,60 @@ export function RunScreen() {
   };
 
   /**
+   * A downed party member's dots, set outright and written through to the
+   * character by the server. Not optimistic: a dot is pressed far less often
+   * than a hit lands, and the row the write answers with is the server's
+   * reading of it.
+   */
+  const setDeathSaves = async (combatant: Combatant, next: DeathSaves) => {
+    const written = await saves.submit(
+      (client) =>
+        client.combatants.setDeathSaves({
+          params: { ...path, combatantId: combatant.id },
+          payload: { ...next, requestId: newRequestId() },
+        }),
+      deathSaveWrites(campaignId),
+    );
+    if (Result.isSuccess(written)) {
+      controller.applyCombatant(written.success);
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: `${combatant.displayName}'s death saves are unchanged`,
+      description: "That did not reach the server. The dots show what it holds.",
+    });
+  };
+
+  /**
+   * *Roll death save*: the d20 is rolled here, into the DM's dice like any
+   * other roll, and its face sent; the server applies the rule
+   * (`deathSaveRolled`), so a natural 20 comes back with one hit point.
+   */
+  const rollDeathSave = async (combatant: Combatant) => {
+    const rolled = dice.roll(`${combatant.displayName} · Death save`, "1d20");
+    const face = rolled?.kept[0];
+    if (face === undefined) return;
+    const written = await saves.submit(
+      (client) =>
+        client.combatants.rollDeathSave({
+          params: { ...path, combatantId: combatant.id },
+          payload: { face, requestId: newRequestId() },
+        }),
+      deathSaveWrites(campaignId),
+    );
+    if (Result.isSuccess(written)) {
+      controller.applyCombatant(written.success);
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: `${combatant.displayName}'s death save was not counted`,
+      description: "That did not reach the server. The dots show what it holds.",
+    });
+  };
+
+  /**
    * Put a token on a square, move it, or take it off. Not optimistic: the token
    * slides when the server has the square, which on a table's network is the
    * blink of the slide itself, and a failed move leaves it where it stands.
@@ -1064,6 +1121,7 @@ export function RunScreen() {
       following={selectedId === undefined}
       disabled={frozen || share.busy}
       conditionsBusy={conditions.busy}
+      deathSavesBusy={saves.busy}
       hiding={hiding.busy}
       rolling={rolling}
       onTheirTurn={() => selected !== undefined && void setActive(selected)}
@@ -1081,6 +1139,8 @@ export function RunScreen() {
       onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
       onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
       onRoll={dice.roll}
+      onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
+      onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
     />
   );
   const boardProps: RunBoardProps | undefined =

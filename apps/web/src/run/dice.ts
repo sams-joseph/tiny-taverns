@@ -6,8 +6,9 @@ import { rollDiceExpression, type LocalRoll } from "../characters/rolls";
  * here and shown here, and nowhere else.
  *
  * **Local on purpose.** A roll is not durable state — only a number it produced
- * is, and the DM types that into whatever it changes — so these never reach
- * the wire and are gone on a reload. Persisting them through `rolls.create`
+ * is, and the DM types that into whatever it changes (a death save's face is
+ * sent for the server's rule to read; the roll itself is not) — so these never
+ * reach the wire and are gone on a reload. Persisting them through `rolls.create`
  * would not be a small step either: a roll with no character takes the night's
  * visibility, `rolls.list` answers shared rows to every member, and the label
  * carries a monster's name. If this is ever sent, it is sent `dm`, with a test.
