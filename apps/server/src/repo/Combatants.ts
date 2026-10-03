@@ -10,12 +10,15 @@ import {
   CombatantId,
   type CombatantMove,
   CombatantPosition,
+  type CombatantTurn,
   type CombatantUpdate,
   concentrationDc,
   Conflict,
   deathSaveRolled,
   type DeathSaves,
+  type DiagonalRule,
   EncounterRunId,
+  feetBetween,
   type InitiativeSet,
   NotFound,
   type SessionId,
@@ -30,7 +33,7 @@ import {
   seatedPortraitColumn,
 } from "./Characters.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { COMBATANT, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
+import { COMBATANT, freshTurn, initiativeOrder, RUN, RUNS, tokenShown } from "./liveTables.js";
 import {
   classFromColumns,
   defined,
@@ -166,6 +169,13 @@ export class Combatants extends Context.Service<
       id: CombatantId,
       payload: CombatantMove,
     ) => Effect.Effect<Combatant, NotFound | Conflict>;
+    readonly turn: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      id: CombatantId,
+      payload: CombatantTurn,
+    ) => Effect.Effect<Combatant, NotFound>;
     readonly setInitiative: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -285,15 +295,22 @@ export class Combatants extends Context.Service<
             'Concentrating' = any(old.conditions) as was_concentrating
         `,
       });
+      /** A token to its square, and the feet it walked onto this turn's count. */
       const place = SqlSchema.findOne({
         Request: Schema.toType(
-          Schema.Struct({ ...inFight, id: CombatantId, to: Schema.NullOr(CombatantPosition) }),
+          Schema.Struct({
+            ...inFight,
+            id: CombatantId,
+            to: Schema.NullOr(CombatantPosition),
+            feet: Schema.Int,
+          }),
         ),
         Result: MovedRow,
-        execute: ({ campaignId, actor, runId, id, to }) => sql`
+        execute: ({ campaignId, actor, runId, id, to, feet }) => sql`
           update combatant
           set board_column = ${to?.column ?? null},
               board_row = ${to?.row ?? null},
+              feet_moved = combatant.feet_moved + ${feet},
               updated_at = now()
           where combatant.id = ${id}
             and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
@@ -845,9 +862,18 @@ export class Combatants extends Context.Service<
          * square past its edge is not a square; both are a `Conflict`. Taking
          * a token off needs no board.
          *
-         * No rule about distance or turns: the DM moves whoever they like,
-         * wherever they like, whenever they like, as they would a miniature.
-         * Two tokens may share a square for the same reason.
+         * No rule refuses a distance or a turn: the DM moves whoever they
+         * like, wherever they like, whenever they like, as they would a
+         * miniature. Two tokens may share a square for the same reason.
+         *
+         * **A move by whoever is up is counted.** While the fight is taking
+         * turns and this combatant holds the marker, the squares from where
+         * it stood to where it lands, at the board's feet per square under the
+         * campaign's diagonal rule (`feetBetween`, the one measure the board
+         * draws with), are added to its `feet_moved`. Putting a token down or
+         * taking it off walks nowhere, and nothing counts for anyone else or
+         * while initiative is being rolled. Going over its speed is not
+         * refused; the runner says so.
          *
          * The log line is shared only while a player's board shows this
          * token: the fight and the combatant are both shared, the map is
@@ -867,21 +893,36 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
+                  // The fight as this move finds it: who is up, its board, and
+                  // the table's diagonal rule. The run is held `for share` so
+                  // the marker cannot move under the count; `nextTurn` waits.
+                  const fights = yield* sql<{
+                    readonly phase: "initiative" | "turns";
+                    readonly active_combatant_id: CombatantId | null;
+                    readonly diagonal_rule: DiagonalRule;
+                    readonly board_columns: number | null;
+                    readonly board_rows: number | null;
+                    readonly feet_per_cell: number | null;
+                  }>`
+                    select encounter_run.phase, encounter_run.active_combatant_id,
+                           campaign.diagonal_rule, encounter_run_board.board_columns,
+                           encounter_run_board.board_rows, encounter_run_board.feet_per_cell
+                    from encounter_run
+                    join session on session.id = encounter_run.session_id
+                    join campaign on campaign.id = session.campaign_id
+                    left join encounter_run_board on encounter_run_board.run_id = encounter_run.id
+                    where encounter_run.id = ${runId}
+                    for share of encounter_run
+                  `;
+                  // Proved writable above, in this transaction.
+                  const fight = fights[0]!;
+
                   const to = payload.position;
                   if (to !== null) {
-                    const boards = yield* sql<{
-                      readonly board_columns: number;
-                      readonly board_rows: number;
-                    }>`
-                      select encounter_run_board.board_columns, encounter_run_board.board_rows
-                      from encounter_run_board
-                      where encounter_run_board.run_id = ${runId}
-                    `;
-                    const board = boards[0];
-                    if (board === undefined) {
+                    if (fight.board_columns === null || fight.board_rows === null) {
                       return yield* new Conflict({ message: "this fight has no board" });
                     }
-                    if (to.column >= board.board_columns || to.row >= board.board_rows) {
+                    if (to.column >= fight.board_columns || to.row >= fight.board_rows) {
                       return yield* new Conflict({ message: "that square is off the board" });
                     }
                   }
@@ -900,12 +941,26 @@ export class Combatants extends Context.Service<
                   const from = before[0];
                   if (from === undefined) return yield* new NotFound({ resource: "combatant", id });
 
+                  const feet =
+                    to !== null &&
+                    from.board_column !== null &&
+                    from.board_row !== null &&
+                    fight.feet_per_cell !== null &&
+                    fight.phase === "turns" &&
+                    fight.active_combatant_id === id
+                      ? feetBetween({ column: from.board_column, row: from.board_row }, to, {
+                          feetPerCell: fight.feet_per_cell,
+                          diagonals: fight.diagonal_rule,
+                        })
+                      : 0;
+
                   const { tokenShown: shown, ...moved } = yield* place({
                     campaignId,
                     actor,
                     runId,
                     id,
                     to,
+                    feet,
                   }).pipe(orNotFound("combatant", id));
                   const combatant = new Combatant(moved, { disableChecks: true });
                   yield* appendEvent(sql, {
@@ -939,9 +994,67 @@ export class Combatants extends Context.Service<
           ),
 
         /**
+         * The DM's ticks on this turn's spending (`CombatantTurn`).
+         *
+         * Only what the payload names is written, and each is an absolute
+         * value, so a repeat lands where the first did; the `requestId` keeps
+         * the log to one line. The line is `dm` whatever the row's
+         * visibility: a turn's spending is the creator's alone, so no player
+         * doorbell rings for it.
+         */
+        turn: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                    return yield* readCombatant(campaignId, runId, id, actor);
+                  }
+
+                  const { requestId, ...ticks } = payload;
+                  const columns = defined({
+                    action_used: ticks.actionUsed,
+                    bonus_used: ticks.bonusUsed,
+                    reaction_used: ticks.reactionUsed,
+                    feet_moved: ticks.feetMoved,
+                  });
+                  if (Object.keys(columns).length === 0) {
+                    return yield* readCombatant(campaignId, runId, id, actor);
+                  }
+                  const combatant = yield* edit({ campaignId, actor, runId, id, columns }).pipe(
+                    orNotFound("combatant", id),
+                  );
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "combatant-updated",
+                    encounterRunId: runId,
+                    combatantId: id,
+                    characterId: combatant.characterId ?? undefined,
+                    payload: { ...ticks },
+                    requestId,
+                    visibility: "dm",
+                  });
+                  return combatant;
+                }),
+              )
+              .pipe(
+                // Two presses that raced past the idempotency check, as for `damage`.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readCombatant(campaignId, runId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
          * Take someone out of the order. The only thing that ever does.
          *
-         * If they were the one up, the marker moves on first. The composite
+         * If they were the one up, the marker moves on first, and whoever it
+         * lands on starts a fresh turn (`freshTurn`). The composite
          * `encounter_run_active_combatant_fkey` would otherwise null it, which
          * is a correct database state and a bad one to hand a DM mid-fight —
          * "nobody is up" is not a turn anyone can take.
@@ -973,6 +1086,7 @@ export class Combatants extends Context.Service<
                       set active_combatant_id = ${next}, updated_at = now()
                       where encounter_run.id = ${runId}
                     `;
+                    if (next !== null) yield* freshTurn(sql, runId, next);
                   }
 
                   const rows = yield* sql<{

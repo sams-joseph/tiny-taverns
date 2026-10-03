@@ -2,6 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  bodyOf,
   campaign,
   campaignId,
   drawnCover,
@@ -105,6 +106,28 @@ describe("the Overview's hero", () => {
     expect(settings).toHaveTextContent("SettingsShared");
     await userEvent.click(settings);
     expect(await screen.findByRole("dialog", { name: "Campaign settings" })).toBeInTheDocument();
+  });
+
+  it("sets the table's diagonal rule from the settings, opening on the stored one", async () => {
+    server.routes.set(`PATCH /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, diagonalRule: "alternating" },
+    });
+    await renderHero();
+    await userEvent.click(screen.getByRole("button", { name: "Settings · Private to you" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Campaign settings" }));
+    const diagonals = dialog.getByRole("combobox", { name: "Diagonals" });
+    expect(diagonals).toHaveTextContent("Every square is 5 ft");
+
+    await userEvent.click(diagonals);
+    await userEvent.click(await screen.findByRole("option", { name: "Alternate 5 ft and 10 ft" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/campaigns/${campaignId}`)).toMatchObject({
+        diagonalRule: "alternating",
+      }),
+    );
   });
 
   it("lays the header over a drawn cover", async () => {

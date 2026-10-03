@@ -1,4 +1,9 @@
-import { type Campaign, CAMPAIGN_DESCRIPTION_MAX, type Visibility } from "@taverns/api";
+import {
+  type Campaign,
+  CAMPAIGN_DESCRIPTION_MAX,
+  type DiagonalRule,
+  type Visibility,
+} from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -8,6 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
@@ -46,7 +56,9 @@ import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
  * now neither was reachable after `NewCampaign` typed a name. `name` is here
  * for the same reason, and `description` because the Overview and the player's
  * page draw it under the cover. Changing it does not redraw the cover, which
- * is drawn once. `currentSessionId` is deliberately absent — which night
+ * is drawn once. `diagonalRule` is the table's grid rule, which the server
+ * counts a creature's movement by, so it is the campaign's and set here.
+ * `currentSessionId` is deliberately absent — which night
  * is current is a transition, owned by `StartRunDialog` and
  * `session/finish.ts`, and a text field pointing at a session is a second
  * answer to a question the server settles with a constraint.
@@ -59,6 +71,12 @@ import { Field, SaveFailure, Textarea, VisibilityField } from "../ui/form";
 
 /** Matches `CampaignUpdate.playerCount`, so the sentence beats the schema to it. */
 const MAX_PLAYERS = 64;
+
+/** What each diagonal rule is called where the DM picks one. */
+const DIAGONAL_RULES: ReadonlyArray<readonly [DiagonalRule, string]> = [
+  ["five", "Every square is 5 ft"],
+  ["alternating", "Alternate 5 ft and 10 ft"],
+];
 
 export function CampaignDialog({
   campaign,
@@ -78,6 +96,7 @@ export function CampaignDialog({
   // answer. `dm` is where a campaign *starts*; `CampaignCreate` is the place
   // that leaves the default alone.
   const [visibility, setVisibility] = useState<Visibility>(campaign.visibility);
+  const [diagonalRule, setDiagonalRule] = useState<DiagonalRule>(campaign.diagonalRule);
   const [showProblems, setShowProblems] = useState(false);
 
   const { busy, failure, submit } = useMutation();
@@ -109,6 +128,7 @@ export function CampaignDialog({
             description: description.trim() === "" ? null : description.trim(),
             playerCount,
             visibility,
+            diagonalRule,
           },
         }),
       // The row itself, and the two lists that draw its name — `GET /me/campaigns`
@@ -190,6 +210,32 @@ export function CampaignDialog({
               onChange={(event) => setPlayerText(event.target.value)}
               className="w-24"
             />
+          </Field>
+
+          <Field
+            label="Diagonals"
+            htmlFor="campaign-diagonals"
+            hint="How a diagonal step counts on a fight's board, and so how far a creature has moved on its turn."
+          >
+            <Select
+              value={diagonalRule}
+              onValueChange={(value) => {
+                if (value === "five" || value === "alternating") setDiagonalRule(value);
+              }}
+            >
+              <SelectTrigger id="campaign-diagonals" className="max-w-sm">
+                <SelectValue>
+                  {(value) => DIAGONAL_RULES.find(([rule]) => rule === value)?.[1]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {DIAGONAL_RULES.map(([rule, label]) => (
+                  <SelectItem key={rule} value={rule}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           {/* The same control every row-level share uses, so the vocabulary at

@@ -35,7 +35,7 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { COMBATANT, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
+import { COMBATANT, freshTurn, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
 import {
   classFromColumns,
   defined,
@@ -162,6 +162,10 @@ interface CarriedCombatantRow {
   readonly death_save_failures: number;
   readonly board_column: number | null;
   readonly board_row: number | null;
+  readonly action_used: boolean;
+  readonly bonus_used: boolean;
+  readonly reaction_used: boolean;
+  readonly feet_moved: number;
   readonly visibility: Visibility;
   readonly origin: Origin;
   readonly assistant_turn_id: AssistantTurnId | null;
@@ -925,6 +929,8 @@ export class EncounterRuns extends Context.Service<
                              combatant.ac, combatant.kind, combatant.conditions,
                              combatant.death_save_successes, combatant.death_save_failures,
                              combatant.board_column, combatant.board_row,
+                             combatant.action_used, combatant.bonus_used,
+                             combatant.reaction_used, combatant.feet_moved,
                              combatant.visibility, combatant.origin, combatant.assistant_turn_id
                       from combatant
                       where ${containedChildWritable(sql, COMBATANT, from.id, campaignId, actor)}
@@ -956,6 +962,12 @@ export class EncounterRuns extends Context.Service<
                         death_save_failures: row.death_save_failures,
                         board_column: row.board_column,
                         board_row: row.board_row,
+                        // Mid-turn, the turn picks up where it was: whoever
+                        // was up has spent what they had spent.
+                        action_used: row.action_used,
+                        bonus_used: row.bonus_used,
+                        reaction_used: row.reaction_used,
+                        feet_moved: row.feet_moved,
                         visibility: row.visibility,
                         origin: row.origin,
                         assistant_turn_id: row.assistant_turn_id,
@@ -1050,6 +1062,10 @@ export class EncounterRuns extends Context.Service<
                   // Nobody is up while initiative is being rolled — the schema
                   // holds it (`encounter_run_nobody_up_while_rolling`), and this
                   // says it as a refusal the DM can read rather than a 404.
+                  //
+                  // Whoever the DM puts the marker on starts a fresh turn, unless
+                  // it is already theirs: pressing it again restarts nothing.
+                  let incoming: CombatantId | undefined;
                   if (patch.activeCombatantId !== undefined && patch.activeCombatantId !== null) {
                     const current = yield* readRun(campaignId, sessionId, id, actor);
                     if (current.phase === "initiative") {
@@ -1057,6 +1073,9 @@ export class EncounterRuns extends Context.Service<
                         message:
                           "nobody is up while initiative is being rolled; start round 1 first",
                       });
+                    }
+                    if (current.activeCombatantId !== patch.activeCombatantId) {
+                      incoming = patch.activeCombatantId;
                     }
                   }
                   const columns = defined({
@@ -1070,6 +1089,7 @@ export class EncounterRuns extends Context.Service<
                   const run = yield* edit({ campaignId, actor, sessionId, id, columns }).pipe(
                     orNotFound("encounter_run", id),
                   );
+                  if (incoming !== undefined) yield* freshTurn(sql, id, incoming);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",
@@ -1099,7 +1119,7 @@ export class EncounterRuns extends Context.Service<
 
         /**
          * Advance initiative — `EncounterRunner.jsx:112-116`, round roll-over
-         * included.
+         * included. Whoever comes up starts a fresh turn (`freshTurn`).
          *
          * Carries a `requestId` because "Next turn" is bound to the space bar
          * and to a button, and a repeat of one already applied returns the run
@@ -1135,6 +1155,7 @@ export class EncounterRuns extends Context.Service<
 
                   const round = current.round + (wrapped ? 1 : 0);
                   const run = yield* setRun(id, { active_combatant_id: activeCombatantId, round });
+                  yield* freshTurn(sql, id, activeCombatantId);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "turn-advanced",
@@ -1207,9 +1228,9 @@ export class EncounterRuns extends Context.Service<
          * Every combatant needs a number first, hidden ones included: they take
          * turns too, and a row with no number has no place in the order to
          * take them from. The marker goes on the first in the order that takes
-         * a turn (`advance` from nobody). The round is left alone — a fresh
-         * fight is at 1, and one that went back to rolling keeps the round it
-         * was in.
+         * a turn (`advance` from nobody), who starts it fresh. The round is
+         * left alone — a fresh fight is at 1, and one that went back to
+         * rolling keeps the round it was in.
          *
          * A fight already taking turns is answered as it is and nothing is
          * logged, so a repeated press cannot restart anybody's turn.
@@ -1248,6 +1269,7 @@ export class EncounterRuns extends Context.Service<
                     phase: "turns",
                     active_combatant_id: activeCombatantId,
                   });
+                  if (activeCombatantId !== null) yield* freshTurn(sql, id, activeCombatantId);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-updated",

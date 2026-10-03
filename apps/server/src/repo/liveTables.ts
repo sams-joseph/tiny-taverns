@@ -88,3 +88,22 @@ export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
 export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`(${boardShown(sql)}
     and (combatant.kind = 'pc' or not encounter_run.hostile_tokens_hidden))`;
+
+/**
+ * A fresh turn for whoever the marker just landed on: nothing spent, no feet
+ * moved (`0085_turn_economy.ts`). **Every write that moves the marker onto a
+ * combatant runs this in its own transaction** — `nextTurn`, `begin`, a
+ * hand-set marker and the removal of whoever was up — so a creature's turn
+ * starts unspent however it came round, and only the incoming row is touched:
+ * a reaction spent off-turn stays spent until its own turn starts.
+ *
+ * Beneath the caller's gate, which has already proved the run writable; the
+ * run in the `where` keeps the statement to that fight's row.
+ */
+export const freshTurn = (sql: SqlClient.SqlClient, runId: string, combatantId: string) =>
+  sql`
+    update combatant
+    set action_used = false, bonus_used = false, reaction_used = false, feet_moved = 0,
+        updated_at = now()
+    where combatant.id = ${combatantId} and combatant.encounter_run_id = ${runId}
+  `;

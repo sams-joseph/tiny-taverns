@@ -176,14 +176,16 @@ export const InventoryItem = Schema.Struct({
 export type InventoryItem = typeof InventoryItem.Type;
 
 /**
- * The action economy, as a cost on each line — **and nothing tracked per turn.**
+ * The action economy, as a cost on each line — **and nothing tracked per turn
+ * on the sheet.**
  *
  * The captain's decision D6 (2026-09-03): draw `1 action` / `bonus` / `reaction`
- * on the line and hold no "spent this turn" state anywhere. A turn's spending is
- * gone when the turn ends, nothing on `combatant` holds one, and a wrong tick
- * would be a lie read out at the table. `free` is the drawn word for a thing
- * that costs no action (Action Surge, an object interaction); absent means the
- * corpus does not say.
+ * on the line, and the sheet holds no "spent this turn" state. A turn's spending
+ * belongs to the fight, not the character: the DM's runner ticks it on the
+ * fight's own row (`Combatant.actionUsed`, the maintainer's decision D2 of
+ * 2026-10-02), and the server clears it when that creature's turn starts.
+ * `free` is the drawn word for a thing that costs no action (Action Surge, an
+ * object interaction); absent means the corpus does not say.
  */
 export const ActionCost = Schema.Literals(["action", "bonus", "reaction", "free"]);
 export type ActionCost = typeof ActionCost.Type;

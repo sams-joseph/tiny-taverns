@@ -59,8 +59,9 @@ const criticalFrom = (roll: LocalRoll): "hit" | "miss" | undefined =>
  * name, a kind line, the to-hit and the notation, plus the cost as a badge.
  *
  * **The cost is drawn and nothing is ticked** — the captain's decision D6: a
- * turn's spending is gone when the turn ends and nothing holds it, so the badge
- * says what a line costs and the sheet keeps no per-turn state. The badge wears
+ * turn's spending belongs to the fight, where the DM's runner ticks it on the
+ * combatant, so the badge says what a line costs and the sheet keeps no
+ * per-turn state. The badge wears
  * the `outline` variant rather than a variant of its own; the system ships none
  * for an economy and inventing a token is not this screen's to do. The dice are
  * rollable when the notation is parseable, and the result stays local to this

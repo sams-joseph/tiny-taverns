@@ -413,6 +413,7 @@ export class Campaigns extends Context.Service<
                 player_count: patch.playerCount,
                 current_session_id: patch.currentSessionId,
                 visibility: patch.visibility,
+                diagonal_rule: patch.diagonalRule,
               });
               return yield* change({ id, columns }).pipe(orNotFound("campaign", id));
             }),
