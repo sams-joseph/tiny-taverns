@@ -72,6 +72,24 @@ const damage = async (name: string, amount: string) => {
 beforeEach(() => server.reset());
 afterEach(() => server.drop());
 
+/**
+ * Put the runner on its canvas. The canvas is chosen by a probe the stylesheet
+ * displays only from `@3xl` of `main` (`RunStage.tsx`'s `useStage`), and jsdom
+ * applies no stylesheet, so the probe is given the width a browser would.
+ */
+const onTheCanvas = () =>
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.dataset.slot === "run-stage-probe" ? 1024 : 0;
+  });
+
+/** The two layouts a fight with a board is drawn in, for what both must do alike. */
+const layouts = [
+  { layout: "the narrow grid", wide: false },
+  { layout: "the canvas", wide: true },
+] as const;
+
 describe("the runner", () => {
   it("renders the initiative list in the order the server sent it", async () => {
     await renderRunner();
@@ -193,8 +211,24 @@ describe("the runner", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
 
     await screen.findByText("Goblin Boss is up · Brannoc next");
-    // Bound to a button and to the space bar, so a repeat must be safe.
+    // A press can be repeated on a slow network, so it is safe to repeat.
     expect((bodyOf(server, "POST", "/next-turn") as { requestId: string }).requestId).toMatch(/.+/);
+  });
+
+  it("moves the turn only from its button: no key is a shortcut for it", async () => {
+    await renderRunner();
+    await screen.findByText("Brannoc is up · Goblin Boss next");
+    expect(screen.getByRole("button", { name: "Next turn" })).not.toHaveAttribute(
+      "aria-describedby",
+    );
+
+    await userEvent.click(document.body);
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("n");
+    await userEvent.keyboard("{Enter}");
+
+    expect(server.calls.some((call) => call.pathname.endsWith("/next-turn"))).toBe(false);
+    expect(screen.getByText("Brannoc is up · Goblin Boss next")).toBeInTheDocument();
   });
 
   it("labels opening an NPC as Open at the table", async () => {
@@ -1052,7 +1086,12 @@ describe("rolling initiative", () => {
   });
 });
 
-describe("the fight's tokens", () => {
+describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
+  beforeEach(() => {
+    if (wide) onTheCanvas();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   const card = () => within(screen.getByRole("region", { name: "Battle map" }));
   const hint = () => card().getByRole("status");
   const moves = () => server.calls.filter((call) => call.pathname.endsWith("/move"));
@@ -1273,7 +1312,12 @@ describe("the fight's tokens", () => {
   });
 });
 
-describe("what the table sees of the map", () => {
+describe.each(layouts)("what the table sees of the map, on $layout", ({ wide }) => {
+  beforeEach(() => {
+    if (wide) onTheCanvas();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   const card = () => within(screen.getByRole("region", { name: "Battle map" }));
   const shareMap = () => screen.getByRole("switch", { name: "Share map" });
   /** Every write to the run itself, in the order they were sent. */
@@ -1368,5 +1412,181 @@ describe("what the table sees of the map", () => {
     await screen.findByText(/came off the table/);
     expect(screen.queryByRole("switch", { name: "Share map" })).toBeNull();
     expect(await card().findByRole("button", { name: "Hide from players" })).toBeDisabled();
+  });
+});
+
+describe("the canvas", () => {
+  beforeEach(() => {
+    onTheCanvas();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const stage = () => document.querySelector<HTMLElement>("[data-slot=run-stage]");
+  const hud = (name: string) => {
+    const found = document.querySelector<HTMLElement>(`[data-slot=run-hud-${name}]`);
+    if (found === null) throw new Error(`no ${name} region on the stage`);
+    return found;
+  };
+  const board = () => screen.getByRole("region", { name: "Battle map" });
+  const content = () =>
+    document.querySelector<HTMLElement>("[data-slot=board-canvas-content]") as HTMLElement;
+  const canvasEl = () => document.querySelector<HTMLElement>("[data-slot=board-canvas]")!;
+  const zoomOf = () => Number(content().style.getPropertyValue("--zoom"));
+  const panOf = () => ({
+    x: parseFloat(content().style.getPropertyValue("--pan-x")),
+    y: parseFloat(content().style.getPropertyValue("--pan-y")),
+  });
+
+  const open = async () => {
+    await renderRunner();
+    await waitFor(() => expect(stage()).not.toBeNull());
+    await waitFor(() => expect(board()).toBeInTheDocument());
+  };
+
+  it("floats every card the runner keeps over the board, each in its home", async () => {
+    await open();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+
+    // No grid: the stage is the layout.
+    expect(document.querySelector("[data-slot=run-layout]")).toBeNull();
+    expect(stage()).toContainElement(board());
+    // The board is the canvas's content, drawn at its plane's own size.
+    expect(content()).toContainElement(board().querySelector("[data-slot=battle-map]"));
+    expect(content().style.getPropertyValue("--board-w")).toBe(`${String(24 * 64)}px`);
+
+    // Initiative, top left.
+    expect(hud("strip")).toContainElement(screen.getByRole("table", { name: "Initiative order" }));
+    // The selected creature leads the right-hand panel, the table's own cards under it.
+    const sheet = screen.getByRole("region", { name: "Selected combatant" });
+    expect(hud("panel").firstElementChild).toBe(sheet);
+    expect(hud("panel")).toContainElement(
+      screen.getByRole("region", { name: "Hob's direct spends" }),
+    );
+    expect(hud("panel")).toContainElement(
+      screen.getByText("Open at the table", { selector: "h3" }),
+    );
+    // The dice, the players' tray and the log, bottom left.
+    expect(hud("rolls").firstElementChild).toBe(screen.getByRole("region", { name: "Dice" }));
+    expect(hud("rolls")).toContainElement(screen.getByRole("region", { name: "Dice tray" }));
+    expect(hud("rolls")).toContainElement(screen.getByRole("log", { name: "What just happened" }));
+    // The board's switches, zoom, hint, tray and size, in the tool dock over it.
+    const tools = within(hud("tools"));
+    expect(tools.getByRole("button", { name: "Grid" })).toBeInTheDocument();
+    expect(tools.getByRole("button", { name: "Hide from players" })).toBeInTheDocument();
+    expect(tools.getByRole("group", { name: "Zoom" })).toBeInTheDocument();
+    expect(tools.getByRole("status")).toHaveTextContent("Click a square to move Brannoc.");
+    expect(tools.getByRole("group", { name: "Not on the board" })).toBeInTheDocument();
+    expect(hud("tools")).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft");
+    // The header keeps the fight's switches and its one peach.
+    expect(screen.getByRole("switch", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
+    // Every floating region is on the one HUD rung.
+    for (const name of ["left", "panel"]) expect(hud(name).className).toMatch(/(^|\s)z-hud(\s|$)/);
+    expect(hud("tools").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
+  });
+
+  it("bounds the screen to the viewport under the chrome, and lets each panel scroll itself", async () => {
+    await open();
+    const screenBox = document.querySelector<HTMLElement>("[data-slot=run-screen]")!;
+    expect(screenBox.className).toContain("var(--chrome-height)");
+    for (const name of ["strip", "rolls", "panel"])
+      expect(hud(name).className).toMatch(/overflow-y-auto/);
+  });
+
+  it("zooms from the dock and fits the board back", async () => {
+    await open();
+    const before = zoomOf();
+    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom in" }));
+    expect(zoomOf()).toBeCloseTo(before * 1.25);
+    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom out" }));
+    await userEvent.click(within(hud("tools")).getByRole("button", { name: "Zoom out" }));
+    expect(zoomOf()).toBeCloseTo(before / 1.25);
+    // Nothing on the canvas is a write.
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+  });
+
+  it("pans on a scroll and zooms on a pinch, and the page itself never scrolls for either", async () => {
+    await open();
+    const zoom = zoomOf();
+    const scrolled = fireEvent.wheel(canvasEl(), { deltaX: 30, deltaY: 40 });
+    expect(scrolled).toBe(false);
+    expect(zoomOf()).toBe(zoom);
+    expect(panOf().x).toBeCloseTo(-30);
+    expect(panOf().y).toBeCloseTo(-40);
+
+    const pinched = fireEvent.wheel(canvasEl(), { deltaY: -100, ctrlKey: true });
+    expect(pinched).toBe(false);
+    expect(zoomOf()).toBeGreaterThan(zoom);
+  });
+
+  it("pans on a drag over the board, and the drag's click moves nobody", async () => {
+    await open();
+    await waitFor(() =>
+      expect(within(board()).getByRole("button", { name: /^Brannoc,/ })).toBeInTheDocument(),
+    );
+    const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]")!;
+
+    fireEvent.pointerDown(squares, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(squares, { pointerId: 1, clientX: 160, clientY: 130 });
+    fireEvent.pointerUp(squares, { pointerId: 1, clientX: 160, clientY: 130 });
+    fireEvent.click(squares, { clientX: 160, clientY: 130 });
+
+    expect(panOf().x).toBeCloseTo(60);
+    expect(panOf().y).toBeCloseTo(30);
+    expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(false);
+
+    // A press that does not travel is still the click that moves the token.
+    server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/move`, {
+      status: 200,
+      body: { ...brannocPlaced, position: { column: 1, row: 1 } },
+    });
+    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    );
+    fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
+    fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
+    fireEvent.click(squares, { clientX: 15, clientY: 15 });
+    await waitFor(() =>
+      expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(true),
+    );
+  });
+
+  it("is the grid again for a fight with no board, which has nothing to pan", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: null });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await waitFor(() =>
+      expect(document.querySelector("[data-slot=run-layout]")?.className).not.toContain("map"),
+    );
+    expect(stage()).toBeNull();
+    expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
+  });
+
+  it("puts Roll initiative where the list stands, and keeps Start round as the one way in", async () => {
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, phase: "initiative", activeCombatantId: null },
+    });
+    await open();
+    const roll = await screen.findByRole("region", { name: "Roll initiative" });
+    expect(hud("strip")).toContainElement(roll);
+    expect(screen.getAllByRole("button", { name: /Start round/ })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
+  });
+
+  it("keeps the ended and behind lines above the stage", async () => {
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, endedAt: liveRun.startedAt } });
+      }
+    }
+    await open();
+    const ended = await screen.findByText(/came off the table/);
+    expect(stage()).not.toContainElement(ended);
+    expect(ended.compareDocumentPosition(stage()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Over, nothing on the board moves.
+    expect(within(hud("tools")).getByRole("status")).toHaveTextContent(
+      "Where everyone stood when it ended.",
+    );
   });
 });

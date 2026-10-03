@@ -331,6 +331,11 @@
                  layer with `z-index: calc(infinity)`, above every dialog and
                  toast; the Encounters list draws its drag itself instead
                  (`campaign/encounterDrag.ts`).
+        hud      the live runner's floating panels (`run/RunStage.tsx`): the
+                 initiative, the selected creature and the docks, over the
+                 fight's board. Above the board's tokens, which are page
+                 content, and below the chrome, which a short window still
+                 scrolls the stage under.
         chrome   sticky page furniture — the app header. Not an overlay at all,
                  and it must lose to the scrim, so it sits far below the band.
         scrim    the modal backdrop.
@@ -358,6 +363,7 @@
    -------------------------------------------------------------------------- */
 @theme {
   --z-index-lifted: 1;
+  --z-index-hud: 5;
   --z-index-chrome: 10;
   --z-index-scrim: 100;
   --z-index-dialog: 110;

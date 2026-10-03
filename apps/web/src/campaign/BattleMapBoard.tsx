@@ -17,8 +17,9 @@ import { apiUrl } from "../api/client";
  * variant drawn is `card` or `full` (both are scaled, never cropped). The
  * strokes do not scale: a line is a line at any width.
  *
- * No pan, no zoom and no scroller of its own: the board is the content
- * column's width and the page grows to hold it.
+ * No pan, no zoom and no scroller of its own: the board is as wide as its
+ * box — the content column, where the page grows to hold it, or the runner's
+ * canvas, which pans and zooms the box around it (`run/BoardCanvas.tsx`).
  *
  * ### Four states, all the board
  *
@@ -43,9 +44,15 @@ export type BattleMapView = Pick<
 
 export function BattleMapBoard({
   map,
+  className,
   children,
 }: {
   readonly map: BattleMapView;
+  /**
+   * The canvas draws the board `box-content`, so its frame sits outside the
+   * plane's size and a square is exactly the size the canvas zoomed it to.
+   */
+  readonly className?: string;
   /**
    * What stands on the board — the runner's tokens (`run/RunTokens.tsx`) —
    * drawn over the picture and the grid in the same box, so a percentage of
@@ -65,7 +72,10 @@ export function BattleMapBoard({
   return (
     <div
       data-slot="battle-map"
-      className="relative w-full overflow-hidden rounded-card border border-hairline bg-surface-sunken"
+      className={cn(
+        "relative w-full overflow-hidden rounded-card border border-hairline bg-surface-sunken",
+        className,
+      )}
       style={{ aspectRatio: `${String(plane.width)} / ${String(plane.height)}` }}
     >
       {showable && image !== null && (

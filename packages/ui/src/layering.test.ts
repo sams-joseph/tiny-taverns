@@ -42,7 +42,7 @@ const themeCss = join(here, "styles.css");
  * everything else — the thing that never happened when each component picked a
  * number by itself.
  */
-const SCALE = ["lifted", "chrome", "scrim", "dialog", "popup", "toast", "tooltip"] as const;
+const SCALE = ["lifted", "hud", "chrome", "scrim", "dialog", "popup", "toast", "tooltip"] as const;
 
 /** Resolve an `@import` the way Vite's Tailwind plugin does — CSS entry first. */
 function resolveStylesheet(id: string, base: string) {
@@ -149,6 +149,14 @@ describe("the layering scale", () => {
     // over is on a rung at all.
     expect(layerOf("lifted")).toBeGreaterThan(0);
     expect(layerOf("lifted")).toBeLessThan(layerOf("chrome"));
+  });
+
+  it("floats the runner's panels over the board and under the sticky chrome", () => {
+    // The stage's panels cover the fight's tokens, which are page content on
+    // or above the `lifted` rung, and a short window scrolls the stage under
+    // the chrome, which must still cover them.
+    expect(layerOf("hud")).toBeGreaterThan(layerOf("lifted"));
+    expect(layerOf("hud")).toBeLessThan(layerOf("chrome"));
   });
 
   it("stacks the toasts within their own viewport, off the toast rung", () => {

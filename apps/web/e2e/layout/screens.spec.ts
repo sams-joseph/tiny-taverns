@@ -205,10 +205,14 @@ for (const width of WIDTHS) {
 
         await test.step("nothing in main scrolls on its own", async () => {
           // Pages scroll with the window. A dialog scrolling its own body is
-          // a separate case, and a sideways strip is not a page scroller.
+          // a separate case, a sideways strip is not a page scroller, and the
+          // runner's canvas is the one named exception: its panels float over
+          // a board bounded to the viewport and scroll inside themselves
+          // (`run/RunStage.tsx`, measured by `run.spec.ts`).
           const scrollers = await page.evaluate(() =>
             [...document.querySelectorAll("main *")]
               .filter((el) => el.closest("[role=dialog]") === null)
+              .filter((el) => el.closest("[data-slot=run-stage]") === null)
               .filter((el) => {
                 const overflow = getComputedStyle(el).overflowY;
                 return (
