@@ -26,6 +26,7 @@ import {
   Input,
   Label,
   Loading,
+  sectionHeadingVariants,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/reactivity";
@@ -146,9 +147,7 @@ function TurnBannerCard({ banner }: { readonly banner: TurnBanner }) {
         <span className="text-label-s leading-none text-muted-foreground">
           Round {String(banner.round)}
         </span>
-        <span className="font-display text-display-m leading-tight font-semibold tracking-display text-heading">
-          {banner.title}
-        </span>
+        <span className={sectionHeadingVariants({ size: "hero" })}>{banner.title}</span>
       </div>
       {banner.upNext !== undefined && (
         <div className="flex min-w-0 flex-col gap-1.5 border-l border-hairline pl-5">
