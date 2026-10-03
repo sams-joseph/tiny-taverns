@@ -2751,6 +2751,20 @@ describe("the board's tools", () => {
     // The pin is a sphere, so the cube's size is the tool's alone.
     expect(areaWrites()).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
+
+    // Back on the pin's shape, the dock takes the pin's size, and + resizes the pin.
+    server.routes.set(`PUT ${areaPath()}`, {
+      status: 200,
+      body: { ...runBoard, area: { ...sphere, feet: 30 } },
+    });
+    await userEvent.click(shapes.getByRole("button", { name: "Sphere" }));
+    expect(shapes.getByText("25 ft")).toBeInTheDocument();
+    expect(areaWrites()).toHaveLength(1);
+    await userEvent.click(shapes.getByRole("button", { name: "Larger" }));
+    expect(shapes.getByText("30 ft")).toBeInTheDocument();
+    await waitFor(() => expect(areaWrites()).toHaveLength(2));
+    expect(JSON.parse(areaWrites()[1]!.body)).toMatchObject({ area: { ...sphere, feet: 30 } });
+    expect(screen.getByRole("img", { name: "Pinned: a 30 ft sphere" })).toBeInTheDocument();
   });
 
   it("clears the pin with Clear, and with Esc on Area unless the key is the Hob panel's", async () => {

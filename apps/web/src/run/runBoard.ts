@@ -284,11 +284,14 @@ function useBoardTools({
     choose,
     shape,
     feet,
-    /** Switching shape starts it at its own size; a pinned template stays on the board. */
+    /**
+     * Switching shape starts it at its own size, or the pinned template's when
+     * it is that shape; a pinned template stays on the board.
+     */
     pickShape: (next: AreaShape) => {
       if (next === shape) return;
       setShape(next);
-      setFeet(startingFeet(next));
+      setFeet(pinned !== null && pinned.shape === next ? pinned.feet : startingFeet(next));
       setHovered(undefined);
     },
     /** − and +: the size, and a pinned template's with it while it is the dock's shape. */
