@@ -234,6 +234,49 @@ describe("PlayerTableScreen", () => {
     expect(server.calls.some((call) => call.pathname.endsWith("/board"))).toBe(false);
   });
 
+  it("covers the squares under fog outright, under the player's own token", async () => {
+    // The table sent the hag's row away with the fog over her square; only the
+    // player's own token still stands under it.
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder.filter((row) => row.kind !== "npc"),
+        board: {
+          ...sharedBoard,
+          fog: [
+            { column: 5, row: 4 },
+            { column: 6, row: 4 },
+          ],
+          tokens: sharedBoard.tokens.filter((token) => token.combatantId === yourCombatantId),
+        },
+      }),
+    );
+    await renderTable();
+
+    const map = within(await screen.findByRole("region", { name: "Battle map" }));
+    const fog = document.querySelector<SVGElement>("[data-slot=battle-map] [data-slot=fog]");
+    expect(fog?.dataset.veil).toBe("opaque");
+    expect(fog?.dataset.squares).toBe("2");
+    // Opaque: the full surface, not the DM's dimmed one.
+    const cover = fog?.querySelector("path");
+    expect(cover?.getAttribute("class")).toBe("fill-surface-sunken");
+    expect(cover?.getAttribute("d")).toBe("M320 256h64v64h-64zM384 256h64v64h-64z");
+    // Over the picture and the grid, under the player's own token.
+    const you = map.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+    expect(fog!.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      document.querySelector("[data-slot=battle-map-grid]")!.compareDocumentPosition(fog!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(map.queryByRole("img", { name: /^Marsh Hag/ })).toBeNull();
+  });
+
+  it("draws no fog over a clear board", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder, board: sharedBoard }));
+    await renderTable();
+    await screen.findByRole("region", { name: "Battle map" });
+    expect(document.querySelector("[data-slot=fog]")).toBeNull();
+  });
+
   it("fades a token that is down, and rings whoever is up", async () => {
     server.routes.set(
       ...playing(campaignId, {

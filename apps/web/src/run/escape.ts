@@ -1,0 +1,24 @@
+import { useEffect, useRef } from "react";
+
+/**
+ * Esc puts away whatever the board is busy with — the attack's pick of a
+ * target, the Fog brush — wherever focus is, except a key meant for the Hob
+ * panel (Esc is its own) or one something else already claimed; and claims it,
+ * so the Hob panel's window listener does not close on it too.
+ */
+export function useEscapeAway(active: boolean, away: () => void): void {
+  const latest = useRef(away);
+  latest.current = away;
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('section[aria-label="Hob"]'))
+        return;
+      event.preventDefault();
+      latest.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [active]);
+}

@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useRef } from "react";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
 import { BoardCanvas, CanvasZoom, type CanvasControls } from "./BoardCanvas";
+import { FogBrush, FogTools } from "./Fog";
 import { BoardToggles } from "./RunBoardCard";
 import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens, TokenTray } from "./RunTokens";
@@ -34,9 +35,10 @@ import { RunTokens, TokenTray } from "./RunTokens";
  *   players' tray and the night's log merged into it (`RollsDock.tsx`).
  * - **banner** — under the strip, between the columns, while a tool waits for
  *   a token: the attack's *Pick a target*.
- * - **tools** — bottom centre, over the board: *Grid*, *Names*, *Hide from
- *   players*, zoom, the hint and the tokens nobody has put down
- *   (`RunBoardStage`).
+ * - **tools** — bottom centre, over the board: the board's tools (*Fog*, with
+ *   its *Reveal all*, *Cover all* and *Reset fog* while it is on), *Grid*,
+ *   *Names*, *Hide from players*, zoom, the hint and the tokens nobody has put
+ *   down (`RunBoardStage`).
  *
  * Below `@3xl` of `main` the board is too small to play on and the runner is
  * the window-scrolling grid it always was (`RunLayout.tsx`); `useStage` asks
@@ -140,13 +142,20 @@ const hudScroller = "pointer-events-auto overflow-y-auto overscroll-contain";
  * The board on the canvas: the same board, tokens and switches as the card
  * (`RunBoardCard.tsx`, through `useRunBoard`), with the card's header and
  * footer gathered into the tool dock floating at the bottom of the stage.
+ *
+ * The dock's tools are the canvas's alone, since only here does the board take
+ * a pointer. *Fog* paints the players' fog of war (`Fog.tsx`): while it is on,
+ * a press or a drag anywhere on the board is the brush, never a token's drag
+ * or the canvas's pan, and Esc, the switch or anything else claiming the board
+ * (an attack's pick, a dialog) puts it away.
  */
 export function RunBoardStage({
   freeArea,
   ...props
 }: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
   const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
-  const { board, gridShown, setGrid, names, setNames, hint, withBoard } = useRunBoard(props);
+  const { board, gridShown, setGrid, names, setNames, hint, withBoard, fogTool } =
+    useRunBoard(props);
   const controls = useRef<CanvasControls | null>(null);
   const dock = useRef<HTMLDivElement>(null);
 
@@ -187,6 +196,7 @@ export function RunBoardStage({
           className="box-content"
         >
           <RunTokens {...withBoard} />
+          {fogTool.on && <FogBrush board={board} stroke={fogTool.stroke} />}
         </BattleMapBoard>
       </BoardCanvas>
       <div className="pointer-events-none absolute inset-x-[calc(var(--spacing-aside)+var(--spacing)*6)] bottom-3 z-hud flex justify-center">
@@ -196,6 +206,18 @@ export function RunBoardStage({
           className="pointer-events-auto max-w-full min-w-0 rounded-card border border-strong bg-surface-card shadow-3"
         >
           <div className="flex flex-wrap items-center justify-center gap-1.5 px-3 py-2">
+            <div
+              role="group"
+              aria-label="Tools"
+              className="flex flex-wrap items-center justify-center gap-1.5"
+            >
+              <FogTools
+                on={fogTool.on}
+                disabled={!fogTool.usable}
+                onChange={fogTool.setOn}
+                onWhole={fogTool.whole}
+              />
+            </div>
             <BoardToggles
               gridShown={gridShown}
               setGrid={setGrid}

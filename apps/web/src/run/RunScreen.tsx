@@ -25,8 +25,9 @@ import {
   Loading,
   cn,
 } from "@taverns/ui";
+import { useAtomSet } from "@effect/atom-react";
 import { Result } from "effect";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { useMutation } from "../api/mutation";
@@ -49,6 +50,8 @@ import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { useDmDice } from "./dice";
 import { EndRunDialog } from "./EndRunDialog";
+import { useEscapeAway } from "./escape";
+import { type FogEdit, fogPayload } from "./fog";
 import { InitiativePhase } from "./InitiativePhase";
 import { InitiativeStrip } from "./InitiativeStrip";
 import { RunBoardCard } from "./RunBoardCard";
@@ -59,6 +62,7 @@ import { useStage } from "./stage";
 import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
 import {
+  boardFogWrites,
   combatantVisibilityWrites,
   combatantWrites,
   deathSaveWrites,
@@ -669,6 +673,7 @@ export function RunScreen() {
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
   const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
+  const writeBoard = useAtomSet(runBoardAtom(path));
   // The party's sheets, for a character's speed on the board. A miss is no
   // range, never a guessed one.
   const [partyResource] = useApiAtom(partyAtom(campaignId));
@@ -724,6 +729,7 @@ export function RunScreen() {
   const saves = useMutation();
   const moves = useMutation();
   const mapShare = useMutation();
+  const fogs = useMutation();
 
   const refresh = controller.refresh;
   const onEvent = useCallback(
@@ -738,9 +744,12 @@ export function RunScreen() {
       refresh();
       reloadScene();
       reloadRolls();
+      // The fog is the board's, which nothing else re-reads: another of the
+      // DM's tabs painted it.
+      if (event.kind === "board-fog-updated") reloadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
-    [refresh, reloadScene, reloadRolls],
+    [refresh, reloadScene, reloadRolls, reloadBoard],
   );
 
   const over = state !== undefined && state.run.endedAt !== null;
@@ -757,6 +766,7 @@ export function RunScreen() {
       refresh();
       reloadScene();
       reloadRolls();
+      reloadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
   });
@@ -786,22 +796,8 @@ export function RunScreen() {
     setAttack(undefined);
   }, [activeId]);
 
-  // Esc puts a pending target away, wherever focus is, except a key meant for
-  // the Hob panel (Esc is its own) or one something else already claimed; and
-  // claims it, so the Hob panel's window listener does not close on it too.
-  const isPicking = picking !== undefined;
-  useEffect(() => {
-    if (!isPicking) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (event.target instanceof Element && event.target.closest('section[aria-label="Hob"]'))
-        return;
-      event.preventDefault();
-      setTargeting(undefined);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [isPicking]);
+  // Esc puts a pending target away.
+  useEscapeAway(picking !== undefined, () => setTargeting(undefined));
 
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
@@ -1113,6 +1109,31 @@ export function RunScreen() {
   };
 
   /**
+   * One write of the Fog tool (`runBoard.ts` sends them one at a time). Its
+   * answer is the board, written straight into the board's atom as a turn's
+   * answer is into the fight's, so the squares stay as painted.
+   */
+  const paintFog = async (edit: FogEdit): Promise<void> => {
+    const saved = await fogs.submit(
+      (client) =>
+        client.runs.updateFog({
+          params: path,
+          payload: { ...fogPayload(edit), requestId: newRequestId() },
+        }),
+      boardFogWrites(campaignId),
+    );
+    if (Result.isSuccess(saved)) {
+      writeBoard((current) => AsyncResult.map(current, () => saved.success));
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: "The fog did not change",
+      description: "That did not reach the server. The board shows the fog it holds.",
+    });
+  };
+
+  /**
    * How far someone walks, from the front of their speed: the stat block's for
    * a creature, the sheet's for a party member, nothing for a row the DM typed.
    */
@@ -1343,6 +1364,7 @@ export function RunScreen() {
           hostileTokensHidden: state.run.hostileTokensHidden,
           hiding: mapShare.busy,
           onHideHostile: (hidden) => void setShown(mapShare, { hostileTokensHidden: hidden }),
+          onFog: paintFog,
         };
 
   return (

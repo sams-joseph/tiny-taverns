@@ -13,6 +13,7 @@ import {
 } from "@taverns/api";
 import { Button, Toggle, Tooltip, TooltipContent, TooltipTrigger, cn } from "@taverns/ui";
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, useRef, useState } from "react";
+import { FogLayer } from "./Fog";
 import { TokenFace } from "./TokenFace";
 import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
 
@@ -61,6 +62,12 @@ import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
  * its ruler's *left* or *over* is against the same feet, so the board and the
  * panel's *This turn* bar agree.
  *
+ * ### Fog
+ *
+ * The squares the DM has put under fog are dimmed over the tokens (`Fog.tsx`):
+ * the DM sees through it, and a token under it is plainly one the players do
+ * not see. It takes no pointer; the Fog tool's brush lies over this layer.
+ *
  * ### Where they sit
  *
  * Every token and range square is a `cellRect` in the plane the board is drawn
@@ -97,6 +104,8 @@ export interface TokenProps {
   readonly hostileTokensHidden: boolean;
   /** Which tokens wear their name (`useTokenNames`). */
   readonly names: TokenNames;
+  /** The squares under fog, as the Fog tool draws them: dimmed over the tokens, under the ruler. */
+  readonly fog: ReadonlyArray<BoardSquare>;
   readonly onSelect: (combatant: Combatant) => void;
   /**
    * Set while an attack waits for its target: a token's click is the target
@@ -274,6 +283,7 @@ export function RunTokens(props: TokenProps) {
     movable,
     hostileTokensHidden,
     names,
+    fog,
     onSelect,
     onTarget,
     onMove,
@@ -475,6 +485,7 @@ export function RunTokens(props: TokenProps) {
             </Tooltip>
           );
         })}
+        <FogLayer board={board} squares={fog} veil="dim" />
         {drag !== undefined && reading !== undefined && (
           <Ruler board={board} from={drag.from} to={drag.over} reading={reading} />
         )}
@@ -500,6 +511,7 @@ export function RunTokens(props: TokenProps) {
             </span>
           );
         })}
+        <FogLayer board={board} squares={fog} veil="dim" />
       </div>
     </>
   );

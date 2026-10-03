@@ -24,7 +24,7 @@ import {
 import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
-import { combatantVisibilityWrites, combatantWrites } from "./load";
+import { boardFogWrites, combatantVisibilityWrites, combatantWrites } from "./load";
 
 /**
  * The runner, against a stub server.
@@ -2430,7 +2430,8 @@ describe("the canvas", () => {
   });
 
   it("swallows the click of a finger that drifted into a pan, and lets a keyboard press through", async () => {
-    // jsdom has no PointerEvent, so a fired pointer event would carry no pointerType.
+    // jsdom's PointerEvent carries no pointerType, so a fired pointer event would have none.
+    const jsdomPointer = Object.getOwnPropertyDescriptor(window, "PointerEvent");
     class TouchPointer extends MouseEvent {
       readonly pointerId: number;
       readonly pointerType: string;
@@ -2473,7 +2474,9 @@ describe("the canvas", () => {
       expect(token).toHaveAttribute("aria-pressed", "true");
       expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(false);
     } finally {
-      Reflect.deleteProperty(window, "PointerEvent");
+      // Put jsdom's own back, which later tests fire pointer events through.
+      if (jsdomPointer === undefined) Reflect.deleteProperty(window, "PointerEvent");
+      else Object.defineProperty(window, "PointerEvent", jsdomPointer);
     }
   });
 
@@ -2987,5 +2990,203 @@ describe("this turn", () => {
       "false",
     );
     expect(document.querySelector("[data-slot=movement]")).toHaveTextContent("0/30 ft");
+  });
+});
+
+describe("the Fog tool, on the canvas", () => {
+  beforeEach(() => {
+    onTheCanvas();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const fogRoute = () => `PATCH ${serverRunBase()}/board/fog`;
+  const fogCalls = () =>
+    server.calls
+      .filter((call) => call.method === "PATCH" && call.pathname.endsWith("/board/fog"))
+      .map((call) => JSON.parse(call.body) as Record<string, unknown>);
+  const fogSwitch = () => screen.getByRole("button", { name: "Fog" });
+  const brush = () => document.querySelector<HTMLElement>("[data-slot=fog-brush]");
+  /** The DM's fog over the wide board: how many squares it dims, or 0 when there is none. */
+  const dimmed = () =>
+    Number(
+      document.querySelector<SVGElement>("[data-slot=run-tokens] [data-slot=fog][data-veil=dim]")
+        ?.dataset.squares ?? 0,
+    );
+
+  /** The runner on its canvas with the Fog tool on, its brush laid out ten pixels a square. */
+  const openFog = async () => {
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await userEvent.click(await screen.findByRole("button", { name: "Fog" }));
+    const layer = brush();
+    if (layer === null) throw new Error("no brush");
+    vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    );
+    return layer;
+  };
+  const middle = (column: number, row: number) => ({
+    clientX: column * 10 + 5,
+    clientY: row * 10 + 5,
+  });
+  /** Press on the first square, carry the brush over the rest, and let go on the last. */
+  const paint = (layer: HTMLElement, path: ReadonlyArray<readonly [number, number]>) => {
+    fireEvent.pointerDown(layer, { pointerId: 3, button: 0, ...middle(...path[0]!) });
+    for (const square of path.slice(1)) {
+      fireEvent.pointerMove(layer, { pointerId: 3, ...middle(...square) });
+    }
+    fireEvent.pointerUp(layer, { pointerId: 3, ...middle(...path.at(-1)!) });
+  };
+  const row3 = (...columns: ReadonlyArray<number>) => columns.map((column) => ({ column, row: 3 }));
+
+  it("hides a stroke's squares in one write, painted before the server answers", async () => {
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: row3(2, 3, 4, 5) } });
+    const release = server.hold("/board/fog");
+    const layer = await openFog();
+    expect(fogSwitch()).toHaveAttribute("aria-pressed", "true");
+
+    // A fast pointer skips a square between two events; the stroke still takes it.
+    paint(layer, [
+      [2, 3],
+      [3, 3],
+      [5, 3],
+    ]);
+
+    await waitFor(() => expect(fogCalls()).toHaveLength(1));
+    expect(fogCalls()[0]).toEqual({ hide: row3(2, 3, 4, 5), requestId: expect.any(String) });
+    // Painted while the write is on its way.
+    expect(dimmed()).toBe(4);
+    release();
+    await waitFor(() => expect(dimmed()).toBe(4));
+    expect(server.calls.filter((call) => call.pathname.endsWith("/move"))).toEqual([]);
+    // It changes what a seated player's board draws, and nothing else outside
+    // the fight; see the condition test above for why the list is what is pinned.
+    expect(boardFogWrites(campaignId)).toEqual([reads.playerTable(campaignId)]);
+  });
+
+  it("reveals with a stroke that starts under fog, whatever it crosses", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, fog: row3(2, 3, 4) },
+    });
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: row3(2) } });
+    const layer = await openFog();
+    await waitFor(() => expect(dimmed()).toBe(3));
+
+    paint(layer, [
+      [3, 3],
+      [4, 3],
+      [5, 3],
+    ]);
+
+    await waitFor(() => expect(fogCalls()).toHaveLength(1));
+    expect(fogCalls()[0]).toEqual({ reveal: row3(3, 4, 5), requestId: expect.any(String) });
+    await waitFor(() => expect(dimmed()).toBe(1));
+  });
+
+  it("paints over a token rather than dragging it", async () => {
+    server.routes.set(fogRoute(), {
+      status: 200,
+      body: { ...runBoard, fog: [{ column: 5, row: 4 }] },
+    });
+    const layer = await openFog();
+    // Brannoc stands on the sixth square across and the fifth down.
+    paint(layer, [[5, 4]]);
+    await waitFor(() => expect(fogCalls()).toHaveLength(1));
+    expect(fogCalls()[0]).toMatchObject({ hide: [{ column: 5, row: 4 }] });
+    expect(server.calls.filter((call) => call.pathname.endsWith("/move"))).toEqual([]);
+    // The DM still sees him, under the fog.
+    await waitFor(() => expect(dimmed()).toBe(1));
+    expect(
+      within(screen.getByRole("region", { name: "Battle map" })).getByRole("button", {
+        name: /^Brannoc, column 6/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("reveals the board, covers it and resets it, one write each", async () => {
+    server.routes.set(fogRoute(), { status: 200, body: { ...runBoard, fog: [] } });
+    const release = server.hold("/board/fog");
+    await openFog();
+    const fog = within(screen.getByRole("group", { name: "Fog" }));
+
+    await userEvent.click(fog.getByRole("button", { name: "Cover all" }));
+    // Covered at once, before the answer.
+    expect(dimmed()).toBe(24 * 16);
+    await waitFor(() => expect(fogCalls()).toHaveLength(1));
+    release();
+    await userEvent.click(fog.getByRole("button", { name: "Reveal all" }));
+    await userEvent.click(fog.getByRole("button", { name: "Reset fog" }));
+
+    await waitFor(() => expect(fogCalls()).toHaveLength(3));
+    expect(fogCalls()).toEqual([
+      { coverAll: true, requestId: expect.any(String) },
+      { revealAll: true, requestId: expect.any(String) },
+      { reset: true, requestId: expect.any(String) },
+    ]);
+    await waitFor(() => expect(dimmed()).toBe(0));
+  });
+
+  it("puts the fog back as the server holds it when a write is refused, and says so", async () => {
+    server.routes.set(fogRoute(), {
+      status: 409,
+      body: { _tag: "Conflict", message: "that square is off the board" },
+    });
+    const layer = await openFog();
+    paint(layer, [[2, 3]]);
+    await screen.findByText("The fog did not change");
+    await waitFor(() => expect(dimmed()).toBe(0));
+  });
+
+  it("leaves the tool on Esc, but not on an Esc meant for Hob", async () => {
+    await openFog();
+    const hob = document.createElement("section");
+    hob.setAttribute("aria-label", "Hob");
+    const input = document.createElement("input");
+    hob.append(input);
+    document.body.append(hob);
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(fogSwitch()).toHaveAttribute("aria-pressed", "true");
+    hob.remove();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(fogSwitch()).toHaveAttribute("aria-pressed", "false"));
+    expect(brush()).toBeNull();
+    expect(screen.queryByRole("group", { name: "Fog" })).toBeNull();
+    expect(fogCalls()).toEqual([]);
+  });
+
+  it("re-reads the board when another of the DM's tabs paints the fog", async () => {
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await waitFor(() => expect(server.open()).toBeGreaterThan(0));
+    const reads = () =>
+      server.calls.filter((call) => call.method === "GET" && call.pathname.endsWith("/board"))
+        .length;
+    const before = reads();
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, fog: row3(7, 8) },
+    });
+    server.emit(sessionEvent(20, "board-fog-updated"));
+    await waitFor(() => expect(reads()).toBeGreaterThan(before));
+    await waitFor(() => expect(dimmed()).toBe(2));
+  });
+});
+
+describe("the fog, on the narrow grid", () => {
+  it("dims the fogged squares for the DM, and offers no brush where the board takes no pointer", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, {
+      status: 200,
+      body: { ...runBoard, fog: [{ column: 0, row: 0 }] },
+    });
+    await renderRunner();
+    await screen.findByRole("region", { name: "Battle map" });
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-slot=run-tokens-view] [data-slot=fog][data-veil=dim]"),
+      ).not.toBeNull(),
+    );
+    expect(screen.queryByRole("button", { name: "Fog" })).toBeNull();
   });
 });

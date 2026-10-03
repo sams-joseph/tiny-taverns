@@ -8,6 +8,7 @@ import {
 import { Card, Icon, SectionHeading, cn } from "@taverns/ui";
 import { useMemo } from "react";
 import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
+import { FogLayer } from "../run/Fog";
 import { TokenFace } from "../run/TokenFace";
 import { labelsInOrder, percentOf } from "../run/tokens";
 
@@ -29,6 +30,12 @@ import { labelsInOrder, percentOf } from "../run/tokens";
  * one whose turn it is ringed peach, yours ringed as the DM's selected token
  * is — and fades when it is down. Nothing takes a click: players do not move
  * tokens.
+ *
+ * Fog of war covers its squares outright (`PlayerLiveBoard.fog`, drawn by the
+ * DM's own `run/Fog.tsx` layer, opaque here where the DM's is dim): the picture
+ * and the grid under it are gone, and so is everything standing there, since
+ * the server sends no token under fog but this player's own, which is drawn
+ * over it.
  *
  * The numbers on two tokens of one name follow this player's order, since the
  * table answers no creation time; they need not match the DM's board.
@@ -61,6 +68,7 @@ export function PlayerBattleMap({
         </SectionHeading>
       </div>
       <BattleMapBoard map={map}>
+        <FogLayer board={map} squares={board.fog} veil="opaque" />
         {board.tokens.map((token) => {
           const row = rows.get(token.combatantId);
           if (row === undefined) return null;
