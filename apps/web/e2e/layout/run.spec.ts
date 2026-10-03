@@ -565,27 +565,33 @@ for (const width of WIDTHS) {
           expect.soft(moves, "no move was sent").toBe(0);
         });
 
-        await test.step("the wheel pans, ⌘/Ctrl and the wheel zoom about the pointer, and the page stays put", async () => {
+        await test.step("the wheel and ⌘/Ctrl with it zoom about the pointer, and the page stays put", async () => {
           const token = map.getByRole("button", { name: /^Brannoc, column/ });
-          const before = await box(token);
-          const view = await viewOf(page);
-          await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
-          await page.mouse.wheel(0, 40);
-          const panned = await viewOf(page);
-          expect.soft(view.y - panned.y, "scrolled the board up").toBeCloseTo(40, 0);
-          expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+          for (const modifier of [undefined, "Control"] as const) {
+            const centre = await box(token);
+            const point = { x: centre.x + centre.width / 2, y: centre.y + centre.height / 2 };
+            await page.mouse.move(point.x, point.y);
+            if (modifier !== undefined) await page.keyboard.down(modifier);
+            await page.mouse.wheel(0, -100);
+            if (modifier !== undefined) await page.keyboard.up(modifier);
+            const zoomed = await box(token);
+            const label = modifier ?? "wheel";
+            expect.soft(zoomed.width, `${label}: zoomed in`).toBeGreaterThan(centre.width * 1.3);
+            // The token under the pointer stayed under it.
+            expect
+              .soft(zoomed.x + zoomed.width / 2, `${label}: pointer x kept`)
+              .toBeCloseTo(point.x, 0);
+            expect
+              .soft(zoomed.y + zoomed.height / 2, `${label}: pointer y kept`)
+              .toBeCloseTo(point.y, 0);
+            expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+          }
 
+          // Down zooms back out about the same point.
           const centre = await box(token);
-          const point = { x: centre.x + centre.width / 2, y: centre.y + centre.height / 2 };
-          await page.mouse.move(point.x, point.y);
-          await page.keyboard.down("Control");
-          await page.mouse.wheel(0, -100);
-          await page.keyboard.up("Control");
-          const zoomed = await box(token);
-          expect.soft(zoomed.width, "zoomed in").toBeGreaterThan(centre.width * 1.3);
-          // The token under the pointer stayed under it.
-          expect.soft(zoomed.x + zoomed.width / 2, "pointer x kept").toBeCloseTo(point.x, 0);
-          expect.soft(zoomed.y + zoomed.height / 2, "pointer y kept").toBeCloseTo(point.y, 0);
+          await page.mouse.move(centre.x + centre.width / 2, centre.y + centre.height / 2);
+          await page.mouse.wheel(0, 100);
+          expect.soft((await box(token)).width, "zoomed out").toBeLessThan(centre.width / 1.3);
           expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
         });
 
@@ -611,15 +617,20 @@ for (const width of WIDTHS) {
           expect.soft(bottom(board), "above the dock").toBeLessThanOrEqual(dock.y + 0.5);
         });
 
-        await test.step("a panel scrolls inside itself, and the window does not", async () => {
-          const panel = page.locator('[data-slot="run-hud-panel"]');
-          const at = await box(panel);
-          const overflows = await panel.evaluate((el) => el.scrollHeight > el.clientHeight);
-          if (!overflows) return;
-          await page.mouse.move(at.x + at.width / 2, at.y + at.height - 20);
-          await page.mouse.wheel(0, 300);
-          await expect.poll(() => panel.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-          expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+        await test.step("a wheel over a floating panel is the panel's, never the board's, and the window does not scroll", async () => {
+          for (const slot of ["run-hud-panel", "run-hud-rolls", "run-hud-tools"]) {
+            const region = page.locator(`[data-slot="${slot}"]`);
+            const at = await box(region);
+            await page.mouse.move(at.x + at.width / 2, at.y + at.height - 10);
+            const view = await viewOf(page);
+            const overflows = await region.evaluate((el) => el.scrollHeight > el.clientHeight);
+            await page.mouse.wheel(0, 300);
+            if (overflows) {
+              await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+            } else await page.waitForTimeout(100);
+            expect.soft(await viewOf(page), `${slot}: the board did not zoom`).toEqual(view);
+            expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
+          }
         });
       } else {
         await test.step("the board is to look at: nothing on it takes a pointer", async () => {
@@ -711,8 +722,10 @@ for (const width of WIDTHS) {
           await order.evaluate((el) => (el.scrollLeft = 0));
           const view = await box(order);
           await page.mouse.move(view.x + view.width / 2, view.y + view.height / 2);
+          const before = await viewOf(page);
           await page.mouse.wheel(0, 200);
           await expect.poll(() => order.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+          expect.soft(await viewOf(page), "the board did not zoom").toEqual(before);
           expect.soft(await page.evaluate(() => window.scrollY), "window scroll").toBe(0);
         });
       }

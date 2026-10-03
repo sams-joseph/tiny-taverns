@@ -120,9 +120,9 @@ export const wheelUnit = (event: { readonly deltaMode: number }): number =>
   event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
 
 /**
- * The zoom factor for one wheel event with ⌘/Ctrl held, which is also what a
- * trackpad pinch sends. A mouse wheel's notch (about 100) is one bounded step;
- * a pinch's stream of small deltas is a smooth one.
+ * The zoom factor for one wheel event over the canvas: a mouse wheel's notch
+ * (about 100) is one bounded step; a trackpad's scroll or pinch, a stream of
+ * small deltas, is a smooth one.
  */
 export const wheelZoomFactor = (deltaY: number): number =>
   2 ** (-Math.min(50, Math.max(-50, deltaY)) / 100);

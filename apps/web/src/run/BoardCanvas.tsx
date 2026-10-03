@@ -28,14 +28,15 @@ import {
  * The fight's board as a canvas: it fills the stage behind the runner's
  * panels, and the DM pans it and zooms it (`canvas.ts` is the arithmetic).
  *
- * - **Pan**: drag anywhere but a token, or scroll (a wheel, a trackpad's two
- *   fingers). A drag that starts on a token moves the token (`RunTokens.tsx`)
+ * - **Pan**: drag anywhere but a token. A drag that starts on a token moves the token (`RunTokens.tsx`)
  *   and never reaches the canvas. A drag that moved is a pan and its click is
  *   swallowed, so letting go over a square never puts a token from the tray
  *   there; a press that did not move is still the click that places it.
- * - **Zoom**: ⌘/Ctrl and the wheel, a trackpad pinch (which the browser sends
- *   as exactly that), two fingers on a touch screen, or the dock's −, + and
- *   *Fit*. The wheel and the fingers zoom about the point under them.
+ * - **Zoom**: the wheel or a trackpad's two-finger scroll, a trackpad pinch
+ *   (which the browser sends as a wheel with Ctrl held), two fingers on a touch
+ *   screen, or the dock's −, + and *Fit*. The wheel and the fingers zoom about
+ *   the point under them. The floating panels are the canvas's siblings, not
+ *   its children, so a wheel over one scrolls it and never reaches the board.
  *
  * The canvas clips rather than hides its overflow: `overflow: hidden` is still
  * a scroller to the browser, and focusing a token past its edge (the arrow
@@ -146,27 +147,23 @@ export function BoardCanvas({
   }, [controlsRef, zoomBy, area, plane, limits]);
 
   // The wheel, bound by hand: React's own listener is passive, and the page
-  // must not scroll or zoom under the board.
+  // must not scroll or zoom under the board. A scroll and a pinch both zoom,
+  // and a sideways scroll (no `deltaY`) does nothing.
   useEffect(() => {
     const element = viewport.current;
     if (element === null) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const unit = wheelUnit(event);
+      if (event.deltaY === 0) return;
       const box = element.getBoundingClientRect();
-      if (event.ctrlKey || event.metaKey) {
-        zoomBy(wheelZoomFactor(event.deltaY * unit), {
-          x: event.clientX - box.left,
-          y: event.clientY - box.top,
-        });
-        return;
-      }
-      const from = current.current;
-      settle({ ...from, x: from.x - event.deltaX * unit, y: from.y - event.deltaY * unit });
+      zoomBy(wheelZoomFactor(event.deltaY * wheelUnit(event)), {
+        x: event.clientX - box.left,
+        y: event.clientY - box.top,
+      });
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
-  }, [zoomBy, settle]);
+  }, [zoomBy]);
 
   // Pointers: one drags the board, two pinch it.
   const pointers = useRef(new Map<number, { x: number; y: number }>());

@@ -69,8 +69,8 @@ export interface FogStroke {
  * The Fog tool's brush: a layer over everything on the DM's board that takes
  * every press while the tool is on, so a stroke over a token paints the square
  * rather than dragging the token, and a stroke never pans the canvas
- * (`BoardCanvas.tsx` pans only a press that reaches it). The wheel still pans
- * and zooms. The square under the pointer is outlined, as the drawing does.
+ * (`BoardCanvas.tsx` pans only a press that reaches it). The wheel still
+ * zooms. The square under the pointer is outlined, as the drawing does.
  */
 export function FogBrush({
   board,
