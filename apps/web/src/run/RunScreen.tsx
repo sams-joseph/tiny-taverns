@@ -1316,6 +1316,8 @@ export function RunScreen() {
           session={view.session}
           encounterName={state?.run.encounterName ?? "this fight"}
           mode={state?.run.mode ?? "combat"}
+          fight={state}
+          hpOf={controller.hpOf}
           onClose={() => setEnding(false)}
           onEnded={() => {
             setEnding(false);

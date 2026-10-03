@@ -1,4 +1,4 @@
-import type { EncounterKind, Session } from "@taverns/api";
+import type { Combatant, EncounterKind, Session } from "@taverns/api";
 import {
   Button,
   Dialog,
@@ -16,8 +16,9 @@ import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { finishSession } from "../session/finish";
 import { SaveFailure } from "../ui/form";
-import type { RunPath } from "./load";
+import type { LiveState, RunPath } from "./load";
 import { sceneNoun } from "./scene";
+import { fightSummary } from "./summary";
 
 /**
  * Taking the fight off the table — `EncounterRunner.jsx:160-171`.
@@ -42,12 +43,18 @@ import { sceneNoun } from "./scene";
  *
  * A conversation, a skill challenge or a hazard ends the same way, and is
  * called what it is: there is no initiative order to save, only its log.
+ *
+ * A fight also says where it stands, in the design's words (`summary.ts`).
+ * There is no XP award: the product has no XP model, and levelling is
+ * milestone-style, so ending a fight awards nothing.
  */
 export function EndRunDialog({
   path,
   session,
   encounterName,
   mode,
+  fight,
+  hpOf,
   onClose,
   onEnded,
 }: {
@@ -55,6 +62,10 @@ export function EndRunDialog({
   readonly session: Session;
   readonly encounterName: string;
   readonly mode: EncounterKind;
+  /** The fight as the runner holds it, for the summary line; without one, there is no line. */
+  readonly fight: LiveState | undefined;
+  /** The hit points the runner draws, so the line agrees with the order on screen. */
+  readonly hpOf: (combatant: Combatant) => number;
   readonly onClose: () => void;
   readonly onEnded: () => void;
 }) {
@@ -100,7 +111,10 @@ export function EndRunDialog({
         <DialogHeader>
           <DialogTitle>End this {noun}?</DialogTitle>
           <DialogDescription>
-            {mode === "combat" ? "The initiative order and hit points" : "The checks and saves"} for{" "}
+            {mode === "combat" && fight !== undefined && `${fightSummary(fight, hpOf)} `}
+            {mode === "combat"
+              ? "The initiative order and hit points"
+              : "The checks and saves"} for{" "}
             {encounterName} are saved to Session {session.number}. Nothing is deleted.
           </DialogDescription>
         </DialogHeader>
