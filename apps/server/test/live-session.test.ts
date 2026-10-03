@@ -665,17 +665,19 @@ describeLayer("live-session", shared, (it) => {
           // Half the damage, rounded down, once that beats ten.
           yield* damage(25);
           expect(yield* lastSave).toBe(12);
-          yield* damage(4);
+          const still = yield* damage(4);
           expect(yield* lastSave).toBe(10);
+          // The log notes the save; it does not rule on it.
+          expect(still.conditions).toEqual(["Concentrating"]);
           // Healing is not damage, and owes no save.
           yield* damage(-5);
           expect(yield* lastSave).toBeUndefined();
-          // Dropped to zero: there is nobody left to make the save.
+          // Dropped to zero: there is nobody left to make the save, and the
+          // concentration ends with the creature.
           const down = yield* damage(999);
           expect(down.hpCurrent).toBe(0);
           expect(yield* lastSave).toBeUndefined();
-          // The log notes the save; it does not rule on it.
-          expect(down.conditions).toEqual(["Concentrating"]);
+          expect(down.conditions).toEqual([]);
         }),
     );
   });

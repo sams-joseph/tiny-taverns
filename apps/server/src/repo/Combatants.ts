@@ -48,8 +48,13 @@ import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import {
   type CharacterVitals,
   clampedCombatantHp,
+  combatantConditionsAfterDelta,
+  combatantConditionsAfterSet,
   combatantDeathSavesAfterDelta,
   combatantDeathSavesAfterSet,
+  type ConditionsChange,
+  conditionsChange,
+  conditionsMoved,
   writeThroughToCharacter,
 } from "./vitals.js";
 import {
@@ -206,12 +211,13 @@ export class Combatants extends Context.Service<
         Schema.Struct({ ...combatantFields(sign), tokenShown: Schema.Boolean }),
         { portrait: "portrait_id" },
       );
-      /** A damaged or healed combatant, and the two facts about it before the hit. */
+      /** A damaged or healed combatant, and what it held before the hit. */
       const HitRow = fromColumns(
         Schema.Struct({
           ...combatantFields(sign),
           hpBefore: Schema.Int,
           wasConcentrating: Schema.Boolean,
+          conditionsBefore: Schema.Array(Schema.String),
         }),
         { portrait: "portrait_id" },
       );
@@ -270,8 +276,8 @@ export class Combatants extends Context.Service<
        * with what the row held before: the clamp throws the old number away,
        * and the log line wants "31 → 19". `old` is Postgres 18's pre-update
        * row, so the before and the after are one statement's two halves rather
-       * than a read another hit could land between. The death saves move in
-       * the same statement (`vitals.ts`).
+       * than a read another hit could land between. The death saves and the
+       * zero-hit-point conditions move in the same statement (`vitals.ts`).
        */
       const hit = SqlSchema.findOne({
         Request: Schema.toType(
@@ -287,12 +293,14 @@ export class Combatants extends Context.Service<
           update combatant
           set hp_current = ${clampedCombatantHp(sql, amount)},
               ${combatantDeathSavesAfterDelta(sql, amount, critical)},
+              conditions = ${combatantConditionsAfterDelta(sql, amount)},
               updated_at = now()
           where combatant.id = ${id}
             and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
           returning ${combatantColumns(sql, campaignId, actor)},
             old.hp_current as hp_before,
-            'Concentrating' = any(old.conditions) as was_concentrating
+            'Concentrating' = any(old.conditions) as was_concentrating,
+            old.conditions as conditions_before
         `,
       });
       /** A token to its square, and the feet it walked onto this turn's count. */
@@ -446,15 +454,16 @@ export class Combatants extends Context.Service<
               death_save_failures: saves.failures,
             },
           }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
-          const written = revived
+          // A natural 20 is healing from zero, so it wakes the PC as well.
+          const { written, woke } = revived
             ? yield* hit({ campaignId, actor, runId, id, amount: -1, critical: false }).pipe(
-                Effect.map(
-                  ({ hpBefore: _b, wasConcentrating: _w, ...rest }) =>
-                    new Combatant(rest, { disableChecks: true }),
-                ),
+                Effect.map(({ hpBefore: _b, wasConcentrating: _w, conditionsBefore, ...rest }) => {
+                  const written = new Combatant(rest, { disableChecks: true });
+                  return { written, woke: conditionsChange(conditionsBefore, written.conditions) };
+                }),
                 Effect.catchTag("NoSuchElementError", Effect.die),
               )
-            : combatant;
+            : { written: combatant, woke: {} };
           yield* appendEvent(sql, {
             sessionId,
             kind: "death-save",
@@ -465,12 +474,14 @@ export class Combatants extends Context.Service<
               ...(detail.face === undefined ? {} : { face: detail.face }),
               ...saves,
               hpCurrent: written.hpCurrent,
+              ...woke,
             },
             requestId,
             visibility: written.visibility,
           });
           yield* writeThrough(campaignId, actor, written, {
             hpCurrent: revived ? written.hpCurrent : undefined,
+            conditions: conditionsMoved(woke) ? written.conditions : undefined,
             deathSaves: saves,
           });
           return written;
@@ -613,16 +624,32 @@ export class Combatants extends Context.Service<
                 Effect.gen(function* () {
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
                   // A total typed over zero is healing from zero, which clears
-                  // the death saves — read against the number before this
-                  // write, so it runs first, and the row stays locked for the
-                  // edit below.
+                  // the death saves and wakes a PC; a total of zero is the drop
+                  // (`vitals.ts`). Read against the number before this write,
+                  // so it runs first, and the row stays locked for the edit
+                  // below. A patch that names its own conditions is the DM's
+                  // list, and the rule leaves it alone.
+                  let crossed: ConditionsChange = {};
                   if (patch.hpCurrent !== undefined) {
-                    yield* sql`
+                    const rows = yield* sql<{
+                      readonly conditions: ReadonlyArray<string>;
+                      readonly conditions_before: ReadonlyArray<string>;
+                    }>`
                       update combatant
                       set ${combatantDeathSavesAfterSet(sql, patch.hpCurrent)}
+                        ${
+                          patch.conditions === undefined
+                            ? sql`, conditions = ${combatantConditionsAfterSet(sql, patch.hpCurrent)}`
+                            : sql``
+                        }
                       where combatant.id = ${id}
                         and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+                      returning combatant.conditions, old.conditions as conditions_before
                     `;
+                    const row = rows[0];
+                    if (row !== undefined) {
+                      crossed = conditionsChange(row.conditions_before, row.conditions);
+                    }
                   }
                   const columns = defined({
                     display_name: patch.displayName,
@@ -646,15 +673,19 @@ export class Combatants extends Context.Service<
                     encounterRunId: runId,
                     combatantId: id,
                     characterId: combatant.characterId ?? undefined,
-                    payload: { ...patch },
+                    payload: { ...patch, ...crossed },
                     visibility: combatant.visibility,
                   });
-                  // Only what the patch actually named. A PATCH that renamed a
-                  // combatant must not write the fight's hit points back over a
-                  // character somebody healed from the party list a moment ago.
+                  // Only what the patch actually named, or moved. A PATCH that
+                  // renamed a combatant must not write the fight's hit points
+                  // back over a character somebody healed from the party list a
+                  // moment ago.
                   yield* writeThrough(campaignId, actor, combatant, {
                     hpCurrent: patch.hpCurrent === undefined ? undefined : combatant.hpCurrent,
-                    conditions: patch.conditions === undefined ? undefined : combatant.conditions,
+                    conditions:
+                      patch.conditions === undefined && !conditionsMoved(crossed)
+                        ? undefined
+                        : combatant.conditions,
                     deathSaves:
                       patch.hpCurrent === undefined
                         ? undefined
@@ -669,29 +700,33 @@ export class Combatants extends Context.Service<
         /**
          * The `minus` button (`EncounterRunner.jsx:41`, `:103-110`).
          *
-         * Three things this deliberately does **not** do, all of them because
-         * the product says so rather than because they were forgotten:
+         * Two things this deliberately does **not** do, both because the
+         * product says so rather than because they were forgotten:
          *
          * - It does not delete the combatant at zero. `:107` — "Still in
          *   initiative — remove them when you're ready." Removal is `remove`.
-         * - It does not add a `Downed` condition. The prototype does (`:108`),
-         *   but a condition the server invents is one the DM cannot clear
-         *   without the server putting it back; "at zero hit points" is already
-         *   derivable from the two numbers on the row, and `HpBar` (`:10`)
-         *   colours itself from exactly that.
          * - It does not move the turn marker. A creature dropping does not end
          *   its turn.
          *
-         * What it does add is to the log line, for the DM's dock: the hit
-         * points before the hit, which the clamp would otherwise lose, and the
-         * Constitution save's DC when a row holding `Concentrating` took damage
-         * and is still standing. The DC is a note, not a ruling: the condition
-         * stays until the DM clears it, whatever the die says.
+         * What it does move beside the number, by the rules in `vitals.ts`, is
+         * written through to the character with the hit points:
          *
-         * What it does move beside the number is a player character's death
-         * saves, by the rule in `vitals.ts`: a hit on a PC already at zero is a
-         * failure (two when `critical`), and healing one off zero clears both.
-         * They are written through to the character with the hit points.
+         * - A player character's death saves: a hit on a PC already at zero is
+         *   a failure (two when `critical`), and healing one off zero clears
+         *   both.
+         * - The conditions zero brings. Dropping to zero ends `Concentrating`,
+         *   and a PC falls `Unconscious`; a PC healed off zero wakes. Only the
+         *   crossing writes, so the DM can toggle either back and the next hit
+         *   at zero leaves the toggle alone. A monster gets no `Unconscious`
+         *   (nor the prototype's `Downed`, `:108`): at zero it is out, which the
+         *   number already says and `HpBar` (`:10`) draws.
+         *
+         * What it adds to the log line, for the DM's dock: the hit points
+         * before the hit, which the clamp would otherwise lose; the
+         * Constitution save's DC when a row holding `Concentrating` took damage
+         * and is still standing, a note rather than a ruling, so the condition
+         * stays until the DM clears it, whatever the die says; and the
+         * conditions the hit added and removed.
          *
          * `greatest`/`least` in SQL rather than in TypeScript so the clamp is
          * atomic with the read: two hits landing together must total both, and
@@ -709,7 +744,7 @@ export class Combatants extends Context.Service<
                   }
 
                   const critical = payload.critical === true;
-                  const { hpBefore, wasConcentrating, ...hurt } = yield* hit({
+                  const { hpBefore, wasConcentrating, conditionsBefore, ...hurt } = yield* hit({
                     campaignId,
                     actor,
                     runId,
@@ -722,6 +757,7 @@ export class Combatants extends Context.Service<
                   // spell, took damage, and is still up to make it.
                   const owesSave =
                     wasConcentrating && payload.amount > 0 && combatant.hpCurrent > 0;
+                  const crossed = conditionsChange(conditionsBefore, combatant.conditions);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "combatant-damaged",
@@ -738,12 +774,14 @@ export class Combatants extends Context.Service<
                       ...(combatant.deathSaves === null
                         ? {}
                         : { deathSaves: combatant.deathSaves }),
+                      ...crossed,
                     },
                     requestId: payload.requestId,
                     visibility: combatant.visibility,
                   });
                   yield* writeThrough(campaignId, actor, combatant, {
                     hpCurrent: combatant.hpCurrent,
+                    conditions: conditionsMoved(crossed) ? combatant.conditions : undefined,
                     deathSaves: combatant.deathSaves ?? undefined,
                   });
                   return combatant;

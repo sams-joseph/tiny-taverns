@@ -220,6 +220,111 @@ export const characterDeathSavesAfter = (
     failuresOnHit: amount > 0 ? 1 : 0,
   });
 
+/**
+ * **The conditions a change of hit points carries**, as the expression for a
+ * `conditions = …` assignment — in the statement that moves the hit points, for
+ * the same reason as {@link deathSavesAfter}.
+ *
+ * - Dropping to zero ends `Concentrating`, for anyone, and a player character
+ *   (`isPc`) falls `Unconscious`.
+ * - A player character healed off zero wakes: `Unconscious` goes.
+ * - Anything else, a hit at zero included, leaves them as they are.
+ *
+ * Only the crossing writes anything, which is what keeps it reversible: a DM
+ * who clears `Unconscious` from a PC still at zero, or puts `Concentrating`
+ * back, is not overruled by the next hit. `base` is the list the change
+ * applies to — the column, or a rest's list.
+ */
+const conditionsAfter = (
+  sql: SqlClient.SqlClient,
+  args: {
+    readonly base: Statement.Fragment;
+    readonly isPc: Statement.Fragment;
+    readonly hpBefore: Statement.Fragment;
+    readonly hpAfter: Statement.Fragment;
+  },
+): Statement.Fragment => {
+  const { base, isPc, hpBefore, hpAfter } = args;
+  return sql`
+    case
+      when ${hpBefore} > 0 and ${hpAfter} = 0
+        then array_remove(${base}, 'Concentrating')
+          || case when (${isPc}) and not ('Unconscious' = any(${base}))
+               then array['Unconscious']::text[] else '{}'::text[] end
+      when (${isPc}) and ${hpBefore} = 0 and ${hpAfter} > 0
+        then array_remove(${base}, 'Unconscious')
+      else ${base}
+    end
+  `;
+};
+
+/**
+ * {@link conditionsAfter} for the fight's copy and a delta through
+ * {@link clampedCombatantHp}. Only a `pc` row falls unconscious; a monster at
+ * zero loses its concentration and nothing else.
+ */
+export const combatantConditionsAfterDelta = (
+  sql: SqlClient.SqlClient,
+  amount: number,
+): Statement.Fragment =>
+  conditionsAfter(sql, {
+    base: sql`combatant.conditions`,
+    isPc: sql`combatant.kind = 'pc'`,
+    hpBefore: sql`combatant.hp_current`,
+    hpAfter: clampedCombatantHp(sql, amount),
+  });
+
+/** {@link conditionsAfter} for the fight's copy and the DM's typed total. */
+export const combatantConditionsAfterSet = (
+  sql: SqlClient.SqlClient,
+  hpCurrent: number,
+): Statement.Fragment =>
+  conditionsAfter(sql, {
+    base: sql`combatant.conditions`,
+    isPc: sql`combatant.kind = 'pc'`,
+    hpBefore: sql`combatant.hp_current`,
+    hpAfter: sql`${hpCurrent}::integer`,
+  });
+
+/**
+ * {@link conditionsAfter} for a character with no fight, against `hpAfter`,
+ * over `base`: `character.conditions`, or the list a rest has already decided.
+ * A character is always a player character.
+ */
+export const characterConditionsAfter = (
+  sql: SqlClient.SqlClient,
+  hpAfter: Statement.Fragment,
+  base: Statement.Fragment,
+): Statement.Fragment =>
+  conditionsAfter(sql, {
+    base,
+    isPc: sql`true`,
+    hpBefore: sql`coalesce(character.hp_current, character.hp_max, 0)`,
+    hpAfter,
+  });
+
+/** What a write moved in a condition list, for its log line: only what is not empty. */
+export type ConditionsChange = {
+  readonly conditionsAdded?: ReadonlyArray<string>;
+  readonly conditionsRemoved?: ReadonlyArray<string>;
+};
+
+export const conditionsChange = (
+  before: ReadonlyArray<string>,
+  after: ReadonlyArray<string>,
+): ConditionsChange => {
+  const added = after.filter((condition) => !before.includes(condition));
+  const removed = before.filter((condition) => !after.includes(condition));
+  return {
+    ...(added.length > 0 ? { conditionsAdded: added } : {}),
+    ...(removed.length > 0 ? { conditionsRemoved: removed } : {}),
+  };
+};
+
+/** Whether {@link conditionsChange} found anything, so the copy needs writing. */
+export const conditionsMoved = (change: ConditionsChange): boolean =>
+  change.conditionsAdded !== undefined || change.conditionsRemoved !== undefined;
+
 /** What a write-through carries. All are optional; none may be null. */
 export interface CharacterVitals {
   readonly hpCurrent?: number | undefined;
@@ -310,6 +415,8 @@ export interface AppliedDelta {
   readonly hpCurrent: number;
   /** The fight it went through, if it went through one. */
   readonly live: LiveCombatant | undefined;
+  /** What crossing zero did to the conditions, for the log line. */
+  readonly conditions: ConditionsChange;
 }
 
 /**
@@ -325,8 +432,9 @@ export interface AppliedDelta {
  * Out of a fight there is nothing to clamp against but the character's own
  * maximum, and nothing else to write.
  *
- * Either way the death saves move with the number, by {@link deathSavesAfter}:
- * this path carries no critical, so a hit at zero is one failure.
+ * Either way the death saves and the conditions move with the number, by
+ * {@link deathSavesAfter} and {@link conditionsAfter}: this path carries no
+ * critical, so a hit at zero is one failure.
  */
 export const applyCharacterDelta = (
   sql: SqlClient.SqlClient,
@@ -343,15 +451,19 @@ export const applyCharacterDelta = (
         readonly kind: "pc" | "npc";
         readonly death_save_successes: number;
         readonly death_save_failures: number;
+        readonly conditions: ReadonlyArray<string>;
+        readonly conditions_before: ReadonlyArray<string>;
       }>`
         update combatant
         set hp_current = ${clampedCombatantHp(sql, amount)},
             ${combatantDeathSavesAfterDelta(sql, amount, false)},
+            conditions = ${combatantConditionsAfterDelta(sql, amount)},
             updated_at = now()
         where combatant.id = ${live.combatantId}
           and ${containedRowWritable(sql, COMBATANT, campaignId, actor)}
         returning combatant.hp_current, combatant.kind,
-                  combatant.death_save_successes, combatant.death_save_failures
+                  combatant.death_save_successes, combatant.death_save_failures,
+                  combatant.conditions, old.conditions as conditions_before
       `.pipe(Effect.orDie);
       // The lookup that produced `live` applied the same predicate one
       // statement ago, in this transaction. A miss here is the same
@@ -363,33 +475,46 @@ export const applyCharacterDelta = (
       }
       const row = rows[0]!;
       const hpCurrent = row.hp_current;
+      const conditions = conditionsChange(row.conditions_before, row.conditions);
       yield* writeThroughToCharacter(sql, characterId, campaignId, actor, {
         hpCurrent,
+        conditions: conditionsMoved(conditions) ? row.conditions : undefined,
         deathSaves:
           row.kind === "pc"
             ? { successes: row.death_save_successes, failures: row.death_save_failures }
             : undefined,
       });
-      return { hpCurrent, live };
+      return { hpCurrent, live, conditions };
     }
 
     // Out of a fight the reach is `characterVitalsWritable`: the character is
     // *seated* at this campaign right now, and the actor is its creator. A
     // retired seat takes the delta path away with it — the campaign has no
     // live claim on the shared row once nobody sits there.
-    const rows = yield* sql<{ readonly hp_current: number }>`
+    const rows = yield* sql<{
+      readonly hp_current: number;
+      readonly conditions: ReadonlyArray<string>;
+      readonly conditions_before: ReadonlyArray<string>;
+    }>`
       update character
       set hp_current = ${clampedCharacterHp(sql, amount)},
           ${characterDeathSavesAfter(sql, clampedCharacterHp(sql, amount), amount)},
+          conditions = ${characterConditionsAfter(sql, clampedCharacterHp(sql, amount), sql`character.conditions`)},
           updated_at = now()
       where character.id = ${characterId}
         and ${characterVitalsWritable(sql, campaignId, actor)}
-      returning character.hp_current
+      returning character.hp_current, character.conditions,
+                old.conditions as conditions_before
     `.pipe(Effect.orDie);
     if (rows.length !== 1) {
       return yield* Effect.die(new Error(`character ${characterId} vanished mid-transaction`));
     }
-    return { hpCurrent: rows[0]!.hp_current, live: undefined };
+    const row = rows[0]!;
+    return {
+      hpCurrent: row.hp_current,
+      live: undefined,
+      conditions: conditionsChange(row.conditions_before, row.conditions),
+    };
   });
 
 /**

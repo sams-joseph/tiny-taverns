@@ -48,8 +48,9 @@ import { SeatCard } from "./SeatCard";
  * What the drawing has that this leaves out, each a decision rather than an
  * omission: *Party stash*, which has no model; *Between them*'s *Healing*,
  * which no field answers; a dash for an unanswered tile,
- * which is a stub (the tile is not drawn); and an *Unconscious* badge at zero,
- * a condition nobody wrote (the bar is empty and the header says who is down).
+ * which is a stub (the tile is not drawn); and an *Unconscious* badge at zero
+ * (the bar is empty and the header says who is down; the condition the server
+ * writes at zero is on the seat's page with the rest).
  */
 export function PartyScreen() {
   const { campaignId } = useParams({ from: "/_shell/campaigns/$campaignId" });
