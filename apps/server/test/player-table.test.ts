@@ -21,7 +21,7 @@ import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Party } from "../src/repo/Party.js";
-import { PlayerTable } from "../src/repo/PlayerTable.js";
+import { liveOrderStatement, PlayerTable } from "../src/repo/PlayerTable.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import {
   aCharacterAt,
@@ -273,6 +273,27 @@ describeLayer("player-table", shared, (it) => {
         expect(numbersIn(answer)).not.toContain(fixture.hag.hpCurrent);
         expect(numbersIn(answer)).not.toContain(fixture.hag.hpMax);
         expect(numbersIn(answer)).not.toContain(fixture.hag.ac!);
+      }),
+    );
+
+    it.effect("selects exact hit points for your own row alone, before any decode", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const sql = yield* SqlClient.SqlClient;
+        const rows: ReadonlyArray<Record<string, unknown>> = yield* liveOrderStatement(
+          sql,
+          { campaignId: fixture.campaign.id, runId: fixture.run.id, mode: fixture.run.mode },
+          fixture.player,
+        ).pipe(Effect.orDie);
+        const hitPoints = (kind: string) =>
+          rows
+            .filter((row) => row.kind === kind)
+            .map(({ hp_current, hp_max, temp_hp }) => ({ hp_current, hp_max, temp_hp }));
+        const none = { hp_current: null, hp_max: null, temp_hp: null };
+
+        expect(hitPoints("you")).toEqual([{ hp_current: 52, hp_max: 52, temp_hp: 0 }]);
+        expect(hitPoints("ally")).toEqual([none]);
+        expect(hitPoints("npc")).toEqual([none]);
       }),
     );
 
