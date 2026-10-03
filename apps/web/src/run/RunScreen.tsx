@@ -774,12 +774,15 @@ export function RunScreen() {
   const onEvent = useCallback(
     (event: SessionEvent) => {
       // Newest first, bounded, deduplicated on `seq` — a reconnect that
-      // overlapped by a row would otherwise show it twice.
-      setLog((current) =>
-        current.some((seen) => seen.seq === event.seq)
-          ? current
-          : [event, ...current].slice(0, LOG_KEPT),
-      );
+      // overlapped by a row would otherwise show it twice. A `roll-made` is
+      // only the doorbell for a row the rolls read already carries, and every
+      // DM throw rings one, so it never takes a place in the log.
+      if (event.kind !== "roll-made")
+        setLog((current) =>
+          current.some((seen) => seen.seq === event.seq)
+            ? current
+            : [event, ...current].slice(0, LOG_KEPT),
+        );
       refresh();
       reloadScene();
       reloadRolls();

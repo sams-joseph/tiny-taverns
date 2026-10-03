@@ -3132,6 +3132,38 @@ describe("the rolls dock", () => {
     expect(text("Goblin Boss · Conditions")).toBe("Goblin Boss · ConditionsConcentrating removed");
     expect(text("Goblin Boss is up")).toBe("Goblin Boss is up");
   });
+
+  it("keeps a damage line through a burst of roll doorbells", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    server.emit(
+      line(11, "combatant-damaged", goblinBoss.id, {
+        amount: 12,
+        hpBefore: 21,
+        hpCurrent: 9,
+        hpMax: 21,
+      }),
+    );
+    for (let seq = 12; seq < 62; seq++) server.emit(sessionEvent(seq, "roll-made"));
+
+    await waitFor(() =>
+      expect(dock().getByRole("button", { name: /^Rolls/ })).toHaveTextContent("1 in log"),
+    );
+    await openDock();
+    expect(dock().getByText("Goblin Boss takes damage")).toBeInTheDocument();
+  });
+
+  it("prints no line in a scene's log for a roll doorbell", async () => {
+    server.routes = liveScene("social");
+    await renderRunner();
+    const log = await screen.findByRole("log", { name: "What just happened" });
+    server.emit(line(11, "turn-advanced", goblinBoss.id, {}));
+    server.emit(sessionEvent(12, "roll-made"));
+    server.emit(sessionEvent(13, "roll-made"));
+
+    await waitFor(() => expect(within(log).getAllByRole("listitem")).toHaveLength(1));
+    expect(within(log).queryByText("A roll hit the tray")).toBeNull();
+  });
 });
 
 describe("this turn", () => {
