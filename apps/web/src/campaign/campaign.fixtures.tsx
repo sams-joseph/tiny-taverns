@@ -509,6 +509,7 @@ export const character = {
   tempHp: 0,
   conditions: [],
   inspiration: false,
+  deathSaves: { successes: 0, failures: 0 },
   sheetUrl: null,
   sheet: { notes: "Owes the ferryman a name.", abilities: [], traits: [] },
   // The optimistic-concurrency counter every write bumps.
@@ -1463,6 +1464,7 @@ export const brannoc = {
   ac: 18,
   kind: "pc",
   conditions: [],
+  deathSaves: { successes: 0, failures: 0 },
   visibility: "dm",
   position: null,
   portrait: null,
@@ -1485,6 +1487,7 @@ export const goblinBoss = {
   ac: 17,
   kind: "npc",
   conditions: ["Hostile"],
+  deathSaves: null,
 };
 
 /**

@@ -180,7 +180,6 @@ export const fullSheet = {
     { name: "Ferryman's token, unspent", quantity: 1, weight: "—", note: "From session 11" },
   ],
   currency: { gp: 84, sp: 12, cp: 40 },
-  deathSaves: { successes: 1, failures: 2 },
   levelUps: [
     { level: 5, session: 10, note: "Extra Attack. Took the oath at the ferry crossing." },
     { level: 4, session: 7, note: "+2 Charisma." },
@@ -218,6 +217,7 @@ export const brannoc = {
   hpMax: 52,
   tempHp: 3,
   conditions: ["Blessed"],
+  deathSaves: { successes: 1, failures: 2 },
   sheetUrl: "https://example.invalid/brannoc",
   sheet: fullSheet,
 };
@@ -446,6 +446,7 @@ export const playing = (
                   hpMax: 52,
                   tempHp: 3,
                   conditions: ["Blessed"],
+                  deathSaves: { successes: 0, failures: 0 },
                   portrait: null,
                 },
               ],
@@ -476,6 +477,7 @@ export const tableOrder: ReadonlyArray<Record<string, unknown>> = [
     hpMax: 52,
     tempHp: 3,
     conditions: ["Blessed"],
+    deathSaves: { successes: 0, failures: 0 },
     portrait: null,
   },
   {

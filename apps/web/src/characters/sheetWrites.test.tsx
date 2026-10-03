@@ -13,7 +13,7 @@ import {
   strangerId,
 } from "./characters.fixtures";
 import { reads } from "../api/keys";
-import { ownCharacterWrites } from "./write";
+import { deathSaveWrites, ownCharacterWrites } from "./write";
 
 /**
  * The player's sheet *writing* — `PATCH /me/characters/:characterId`, which is
@@ -240,16 +240,6 @@ describe("a sheet that moved on under the form", () => {
 
     await screen.findByText(/belongs to someone else/);
     expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
-  });
-
-  it("guards a death-save mark the same way", async () => {
-    server.routes.set(`PATCH ${patchPath}`, conflict);
-    await renderSheet();
-    await userEvent.click(await screen.findByRole("button", { name: "Failures 3" }));
-
-    await screen.findByText(/the sheet moved on while you were editing/);
-    expect(sent()).toMatchObject({ expectedVersion: 1 });
-    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
   });
 });
 
@@ -806,16 +796,28 @@ describe("adding gear", () => {
 });
 
 describe("marking a death save", () => {
-  it("sends the mark and leaves the other row where it was", async () => {
+  const savesPath = `/me/characters/${brannocId}/death-saves`;
+  const marked = () =>
+    bodyOf(server, "POST", savesPath) as
+      | { readonly successes: number; readonly failures: number; readonly requestId: string }
+      | undefined;
+
+  beforeEach(() => {
+    server.routes.set(`POST ${savesPath}`, savedAs(brannoc));
+  });
+
+  /**
+   * Death saves are live columns the DM's runner reads and writes too, so a
+   * mark is its own grain: the two counts, and nothing of the document.
+   */
+  it("sends the mark on its own endpoint and leaves the other row where it was", async () => {
     await renderSheet();
     await userEvent.click(await screen.findByRole("button", { name: "Failures 3" }));
 
-    await waitFor(() => expect(sent()).toBeDefined());
-    const sheet = (sent() as { sheet: Record<string, unknown> }).sheet;
-    expect(sheet["deathSaves"]).toEqual({ successes: 1, failures: 3 });
-    // One key of the document, so the rest of it goes with it untouched.
-    expect(sheet["notes"]).toBe(brannoc.sheet.notes);
-    carriesNothingRefused();
+    await waitFor(() => expect(marked()).toBeDefined());
+    expect(marked()).toMatchObject({ successes: 1, failures: 3 });
+    expect(typeof marked()?.requestId).toBe("string");
+    expect(sent()).toBeUndefined();
   });
 
   /**
@@ -827,28 +829,23 @@ describe("marking a death save", () => {
     await renderSheet();
     await userEvent.click(await screen.findByRole("button", { name: "Successes 1" }));
 
-    await waitFor(() => expect(sent()).toBeDefined());
-    expect((sent() as { sheet: Record<string, unknown> }).sheet["deathSaves"]).toEqual({
-      successes: 0,
-      failures: 2,
-    });
+    await waitFor(() => expect(marked()).toBeDefined());
+    expect(marked()).toMatchObject({ successes: 0, failures: 2 });
   });
 
   it("marks from nought on a character that has never gone down", async () => {
-    server.routes.set(`PATCH /me/characters/${sorrelId}`, savedAs(brannoc));
+    const sorrelPath = `/me/characters/${sorrelId}/death-saves`;
+    server.routes.set(`POST ${sorrelPath}`, savedAs(brannoc));
     await renderSheet(sorrelId);
     await userEvent.click(await screen.findByRole("button", { name: "Failures 1" }));
 
     await waitFor(() =>
-      expect(bodyOf(server, "PATCH", `/me/characters/${sorrelId}`)).toEqual({
-        expectedVersion: 1,
-        sheet: { notes: "", abilities: [], traits: [], deathSaves: { successes: 0, failures: 1 } },
-      }),
+      expect(bodyOf(server, "POST", sorrelPath)).toMatchObject({ successes: 0, failures: 1 }),
     );
   });
 
   it("says so when the mark will not save", async () => {
-    server.routes.set(`PATCH ${patchPath}`, {
+    server.routes.set(`POST ${savesPath}`, {
       status: 404,
       body: { _tag: "NotFound", resource: "character", id: brannocId },
     });
@@ -861,6 +858,19 @@ describe("marking a death save", () => {
     expect(screen.getByRole("button", { name: "Failures 3" }).getAttribute("aria-pressed")).toBe(
       "false",
     );
+  });
+
+  /** It moves the sheet's reads and the player's own table at every seat. */
+  it("names the player's table at each seat as well as the sheet's reads", () => {
+    const table = "2b1f2a1e-0000-4000-8000-0000000000c1" as CampaignId;
+    const owned = {
+      character: brannoc,
+      seats: [{ campaignId: table, joinedAt: "2026-07-01T10:00:00.000Z" }],
+    } as unknown as OwnedCharacter;
+    expect(deathSaveWrites(owned)).toEqual([
+      ...ownCharacterWrites(owned),
+      reads.playerTable(table),
+    ]);
   });
 });
 

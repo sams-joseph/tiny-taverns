@@ -143,8 +143,9 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * exists.**
  *
  * There is no second editor, which is the single biggest simplification
- * campaign-first bought. The sheet's three dialogs and its death saves all go
- * through `saveOwnCharacter` and take a `Character`, so they work here unchanged
+ * campaign-first bought. The sheet's three dialogs go through
+ * `saveOwnCharacter` and its death saves through `setOwnDeathSaves`, and all of
+ * them take a `Character`, so they work here unchanged
  * the moment the row is real — where a wizard holding a client-side draft would
  * have had to refactor all three from `(character, endpoint)` to
  * `(value, onSave)`, or grow a fourth copy of each.

@@ -51,7 +51,7 @@ export interface SheetTarget {
 /**
  * A player's own character: the `/me` write with its version
  * (`saveOwnCharacter`), and the player's half of the document (the notes, the
- * story, the death saves) carried through untouched under whatever the editor
+ * story, the journal) carried through untouched under whatever the editor
  * changed.
  */
 export const characterSheetTarget = (owned: OwnedCharacter): SheetTarget => {

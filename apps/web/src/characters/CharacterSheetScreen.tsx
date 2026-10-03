@@ -40,7 +40,7 @@ import { CharacterPortrait } from "./CharacterPortrait";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import { DeathSaveRow, HpTrack, SectionSpine, StatPill } from "./SheetParts";
 import { SheetDocument, type SheetLog } from "./SheetDocument";
-import { ownCharacterWrites, restOwnCharacter, saveOwnCharacter, sheetWith } from "./write";
+import { deathSaveWrites, ownCharacterWrites, restOwnCharacter, setOwnDeathSaves } from "./write";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -95,14 +95,15 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  *
  * ### What it writes, and where the boundary is
  *
- * Seven durable surfaces, one endpoint — `PATCH /me/characters/:characterId`
+ * Six durable surfaces, one endpoint — `PATCH /me/characters/:characterId`
  * through `write.ts`, which is where the endpoint is named once and where the
  * whole-document race is written down. The durable columns are the top bar's
  * *Edit*; the six cells, the skill list, spell preparation, the backstory and
- * the carried list are their sections' own header actions; a death save is the
- * pip itself. A level-up and its undo are the two writes beside it, each its
- * own endpoint behind its own dialog (`LevelUpDialog`, `UndoLevelUpDialog`),
- * because the server composes what they change. **Every
+ * the carried list are their sections' own header actions. A death save is the
+ * pip itself, on its own endpoint because it is live: the DM's runner reads and
+ * writes the same two columns. A level-up and its undo are the writes beside
+ * them, each its own endpoint behind its own dialog (`LevelUpDialog`,
+ * `UndoLevelUpDialog`), because the server composes what they change. **Every
  * one of them re-reads the screen afterwards** rather than patching what it
  * holds, because a write here changes something it did not send: `descriptor`
  * is a generated column, so editing the level rewrites the line under the name.
@@ -184,15 +185,15 @@ function IdentityCard({
   /** Whether the narrow summary is expanded — screen state, above the resource. */
   readonly open: boolean;
   readonly onToggle: () => void;
-  /** Re-read the sheet after a stale-version refusal on a death-save mark. */
+  /** Re-read the sheet after a refused death-save mark or rest. */
   readonly onReload: () => void;
 }) {
   const character = owned.character;
   const identity = character.sheet.identity;
-  // Absent is nought up and nought down, and on a writable sheet the row is
-  // drawn either way: a player whose character has never gone down still has to
-  // be able to mark the first save on the night they do.
-  const deathSaves = character.sheet.deathSaves ?? { successes: 0, failures: 0 };
+  // Nought up and nought down is the ordinary state, and the row is drawn
+  // either way: a player whose character has never gone down still has to be
+  // able to mark the first save on the night they do.
+  const deathSaves = character.deathSaves;
   const { busy, failure, submit } = useMutation();
   const [hitDiceToSpend, setHitDiceToSpend] = useState(0);
   const hitDiceResource = character.sheet.resources?.find((resource) => resource.id === "hit-dice");
@@ -206,16 +207,14 @@ function IdentityCard({
    * DM flips every few seconds moves before the round trip, and everything that
    * changes the shape of what is on screen waits and re-reads. A death save is
    * neither frequent nor a boolean, and it is the kind of number somebody reads
-   * back out loud, so it waits — the pips are disabled while it does. The whole
-   * document goes with it, which is `sheetWith`'s rule and its race.
+   * back out loud, so it waits — the pips are disabled while it does. It is its
+   * own endpoint rather than the document's PATCH, because the DM's runner
+   * reads and writes the same two numbers.
    */
   const mark = async (part: "successes" | "failures", next: number) => {
     await submit(
-      (client) =>
-        saveOwnCharacter(client, character, {
-          sheet: sheetWith(character, { deathSaves: { ...deathSaves, [part]: next } }),
-        }),
-      ownCharacterWrites(owned),
+      (client) => setOwnDeathSaves(client, character, { ...deathSaves, [part]: next }),
+      deathSaveWrites(owned),
     );
   };
   const rest = async (kind: "short" | "long") => {
@@ -451,17 +450,7 @@ function IdentityCard({
               busy={busy}
               onMark={(next) => void mark("failures", next)}
             />
-            {/* **The drawing's promise, corrected rather than repeated.**
-                `CharacterSheet.jsx` says these "show on your DM's initiative row
-                straight away" and nothing reads them: no delivery of the runner
-                draws a death save, which is exactly why they are a document key
-                and not a column. Saying so here is the honest version of the
-                same line, and the DM-side read is a separate piece of work. */}
-            {failure === undefined ? (
-              <p className="mt-1 text-micro leading-body text-faint">
-                Kept on your sheet. Your DM&rsquo;s screen does not show these yet.
-              </p>
-            ) : (
+            {failure !== undefined && (
               <div className="mt-1">
                 <SaveFailure failure={failure} onReload={onReload} />
               </div>

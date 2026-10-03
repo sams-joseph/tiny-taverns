@@ -120,6 +120,20 @@ export const restOwnCharacter = (
   });
 
 /**
+ * The owner's death saves — their own grain, not the document: they are
+ * columns the DM's runner reads and writes too. Absolute, as the pips are.
+ */
+export const setOwnDeathSaves = (
+  client: TavernsClient,
+  character: Character,
+  saves: { readonly successes: number; readonly failures: number },
+) =>
+  client.me.setCharacterDeathSaves({
+    params: { characterId: character.id },
+    payload: { ...saves, requestId: crypto.randomUUID() },
+  });
+
+/**
  * What a player's write to their own sheet changes — the owner's roster, and
  * **every table the character is seated at.**
  *
@@ -135,8 +149,8 @@ export const restOwnCharacter = (
  * characters' levels, so a level change moves it on every table's list.
  *
  * It is one function rather than several spellings for the reason `api/keys.ts`
- * exists at all: the surfaces that write a sheet (identity, backstory, gear, a
- * death save) all change the same things, and copies of a key list are chances
+ * exists at all: the surfaces that write a sheet (identity, backstory, gear,
+ * spell preparation) all change the same things, and copies of a key list are chances
  * for one of them to fall behind.
  */
 export const characterCreateWrites: Invalidation = [reads.myCharacters];
@@ -161,6 +175,16 @@ export const ownCharacterWrites = (owned: OwnedCharacter): Invalidation => [
     reads.party(seat.campaignId),
     reads.encounters(seat.campaignId),
   ]),
+];
+
+/**
+ * A death save moves what a sheet write does, and the player's own table at
+ * every seat as well: the fight's copy follows the character, and the table
+ * draws it on the asker's own row.
+ */
+export const deathSaveWrites = (owned: OwnedCharacter): Invalidation => [
+  ...ownCharacterWrites(owned),
+  ...owned.seats.map((seat) => reads.playerTable(seat.campaignId)),
 ];
 
 /** One level up, with what the owner chose against the offer they read. */

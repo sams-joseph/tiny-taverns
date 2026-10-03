@@ -252,6 +252,9 @@ const MeLive = HttpApiBuilder.group(
         .handle("restCharacter", ({ params, payload }) =>
           characters.rest(params.characterId, payload),
         )
+        .handle("setCharacterDeathSaves", ({ params, payload }) =>
+          characters.setDeathSaves(params.characterId, payload),
+        )
         // The one handler in this group whose path names a campaign, because a
         // create made in a campaign's context says which. There is still nothing to check
         // here: `ensureCampaignReadable` refuses a campaign this credential does
@@ -1671,6 +1674,16 @@ const CombatantsLive = HttpApiBuilder.group(
       .handle("damage", ({ params, payload }) =>
         dm(params.campaignId, (as) =>
           combatants.damage(as, params.sessionId, params.runId, params.combatantId, payload),
+        ),
+      )
+      .handle("setDeathSaves", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          combatants.setDeathSaves(as, params.sessionId, params.runId, params.combatantId, payload),
+        ),
+      )
+      .handle("rollDeathSave", ({ params, payload }) =>
+        dm(params.campaignId, (as) =>
+          combatants.rollDeathSave(as, params.sessionId, params.runId, params.combatantId, payload),
         ),
       )
       .handle("move", ({ params, payload }) =>

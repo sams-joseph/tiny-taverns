@@ -27,6 +27,12 @@ export const SessionEventKind = Schema.Literals([
   "combatant-updated",
   "combatant-removed",
   "combatant-damaged",
+  /**
+   * A player character's death saves were marked or rolled — by the DM on the
+   * initiative row, or by the player on their sheet while the fight is on.
+   * A rolled one carries `{face}`; every one carries the counts it left.
+   */
+  "death-save",
   /** A token was put on the board, moved, or taken off it. Carries `{from, to}`. */
   "combatant-moved",
   "turn-advanced",

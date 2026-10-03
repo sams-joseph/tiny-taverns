@@ -120,13 +120,11 @@ describe("a character sheet", () => {
   });
 
   /**
-   * Death saves live in the document by decision — no delivery of the runner
-   * draws one, so a column would have no reader but the row that owns it. They
-   * are pressable since the player write landed; what is still not true is the
-   * drawing's promise that a mark *"shows on your DM's initiative row straight
-   * away"*, so the copy beside them says what actually happens instead.
+   * Death saves are the character's own two columns, which the DM's runner
+   * reads and writes too — so the sheet draws them from the character, and no
+   * longer says the DM's screen cannot see them.
    */
-  it("draws death saves as marks a player can press, and does not promise the DM sees them", async () => {
+  it("draws death saves from the character as marks a player can press", async () => {
     await renderSheet();
     await screen.findByText("Death saves");
 
@@ -139,8 +137,7 @@ describe("a character sheet", () => {
       "false",
     );
 
-    expect(screen.queryByText(/initiative row/i)).toBeNull();
-    expect(screen.getByText(/does not show these yet/)).toBeTruthy();
+    expect(screen.queryByText(/does not show these yet/)).toBeNull();
   });
 
   /**

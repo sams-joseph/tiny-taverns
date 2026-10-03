@@ -5,12 +5,16 @@ import {
   Combatant,
   type CombatantCreate,
   type CombatantDamage,
+  type CombatantDeathSaveRoll,
+  type CombatantDeathSaves,
   CombatantId,
   type CombatantMove,
   CombatantPosition,
   type CombatantUpdate,
   concentrationDc,
   Conflict,
+  deathSaveRolled,
+  type DeathSaves,
   EncounterRunId,
   type InitiativeSet,
   NotFound,
@@ -38,7 +42,13 @@ import {
   timestampColumns,
 } from "./rows.js";
 import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
-import { type CharacterVitals, clampedCombatantHp, writeThroughToCharacter } from "./vitals.js";
+import {
+  type CharacterVitals,
+  clampedCombatantHp,
+  combatantDeathSavesAfterDelta,
+  combatantDeathSavesAfterSet,
+  writeThroughToCharacter,
+} from "./vitals.js";
 import {
   containedChildReadable,
   containedChildWritable,
@@ -50,11 +60,13 @@ import {
 
 /**
  * The combatant's own columns, its square as one value (`position`, null while
- * the token is off the board — `0064_combatant_positions.ts`), and its
- * character's portrait id, gated by the seat (`seatedPortraitColumn`). **Every
- * read that becomes a `Combatant` names this** — {@link combatantRow} requires
- * `position` and `portrait_id`, as `characterRow` requires `portraitColumns`,
- * so a path that forgot fails a test rather than dropping the picture.
+ * the token is off the board — `0064_combatant_positions.ts`), its death saves
+ * as one value (`death_saves`, null for an NPC, which makes none —
+ * `0085_death_saves.ts`), and its character's portrait id, gated by the seat
+ * (`seatedPortraitColumn`). **Every read that becomes a `Combatant` names
+ * this** — {@link combatantRow} requires `position`, `death_saves` and
+ * `portrait_id`, as `characterRow` requires `portraitColumns`, so a path that
+ * forgot fails a test rather than dropping the picture.
  */
 export const combatantColumns = (
   sql: SqlClient.SqlClient,
@@ -65,6 +77,10 @@ export const combatantColumns = (
   case when combatant.board_column is not null and combatant.board_row is not null
     then jsonb_build_object('column', combatant.board_column, 'row', combatant.board_row)
   end as position,
+  case when combatant.kind = 'pc'
+    then jsonb_build_object('successes', combatant.death_save_successes,
+                            'failures', combatant.death_save_failures)
+  end as death_saves,
   ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)}
 `;
 
@@ -129,6 +145,20 @@ export class Combatants extends Context.Service<
       id: CombatantId,
       payload: CombatantDamage,
     ) => Effect.Effect<Combatant, NotFound>;
+    readonly setDeathSaves: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      id: CombatantId,
+      payload: CombatantDeathSaves,
+    ) => Effect.Effect<Combatant, NotFound | Conflict>;
+    readonly rollDeathSave: (
+      dm: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      id: CombatantId,
+      payload: CombatantDeathSaveRoll,
+    ) => Effect.Effect<Combatant, NotFound | Conflict>;
     readonly move: (
       dm: CampaignCreatorActor,
       sessionId: SessionId,
@@ -230,14 +260,23 @@ export class Combatants extends Context.Service<
        * with what the row held before: the clamp throws the old number away,
        * and the log line wants "31 → 19". `old` is Postgres 18's pre-update
        * row, so the before and the after are one statement's two halves rather
-       * than a read another hit could land between.
+       * than a read another hit could land between. The death saves move in
+       * the same statement (`vitals.ts`).
        */
       const hit = SqlSchema.findOne({
-        Request: Schema.toType(Schema.Struct({ ...inFight, id: CombatantId, amount: Schema.Int })),
+        Request: Schema.toType(
+          Schema.Struct({
+            ...inFight,
+            id: CombatantId,
+            amount: Schema.Int,
+            critical: Schema.Boolean,
+          }),
+        ),
         Result: HitRow,
-        execute: ({ campaignId, actor, runId, id, amount }) => sql`
+        execute: ({ campaignId, actor, runId, id, amount, critical }) => sql`
           update combatant
           set hp_current = ${clampedCombatantHp(sql, amount)},
+              ${combatantDeathSavesAfterDelta(sql, amount, critical)},
               updated_at = now()
           where combatant.id = ${id}
             and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
@@ -323,6 +362,98 @@ export class Combatants extends Context.Service<
 
       const readOrder = (campaignId: CampaignId, runId: EncounterRunId, actor: Actor) =>
         order({ campaignId, actor, runId });
+
+      /**
+       * The row a death save is about, locked for the rest of the transaction,
+       * so a roll reads the counts it adds to. An NPC makes no death saves:
+       * it is in the fight and the DM can see it, so that is a `Conflict`
+       * rather than a `NotFound`.
+       */
+      const lockedSaver = (
+        campaignId: CampaignId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        actor: Actor,
+      ) =>
+        Effect.gen(function* () {
+          const rows = yield* sql<{
+            readonly kind: "pc" | "npc";
+            readonly hp_current: number;
+            readonly death_save_successes: number;
+            readonly death_save_failures: number;
+          }>`
+            select combatant.kind, combatant.hp_current,
+                   combatant.death_save_successes, combatant.death_save_failures
+            from combatant
+            where combatant.id = ${id}
+              and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+            for update
+          `;
+          const row = rows[0];
+          if (row === undefined) return yield* new NotFound({ resource: "combatant", id });
+          if (row.kind !== "pc") {
+            return yield* new Conflict({ message: "a monster makes no death saves" });
+          }
+          return {
+            hpCurrent: row.hp_current,
+            saves: {
+              successes: row.death_save_successes,
+              failures: row.death_save_failures,
+            } satisfies DeathSaves,
+          };
+        });
+
+      /**
+       * Write a PC's death saves (and, for a natural 20, its one hit point),
+       * log them, and copy both to the character, in the caller's transaction.
+       */
+      const writeDeathSaves = (
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        id: CombatantId,
+        actor: Actor,
+        saves: DeathSaves,
+        detail: { readonly face?: number; readonly revived?: boolean },
+        requestId: string | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const revived = detail.revived === true;
+          const combatant = yield* edit({
+            campaignId,
+            actor,
+            runId,
+            id,
+            columns: {
+              death_save_successes: saves.successes,
+              death_save_failures: saves.failures,
+            },
+          }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+          const written = revived
+            ? yield* hit({ campaignId, actor, runId, id, amount: -1, critical: false }).pipe(
+                Effect.catchTag("NoSuchElementError", Effect.die),
+              )
+            : combatant;
+          yield* appendEvent(sql, {
+            sessionId,
+            kind: "death-save",
+            encounterRunId: runId,
+            combatantId: id,
+            characterId: written.characterId ?? undefined,
+            payload: {
+              ...(detail.face === undefined ? {} : { face: detail.face }),
+              ...saves,
+              hpCurrent: written.hpCurrent,
+            },
+            requestId,
+            visibility: written.visibility,
+          });
+          yield* writeThrough(campaignId, actor, written, {
+            hpCurrent: revived ? written.hpCurrent : undefined,
+            deathSaves: saves,
+          });
+          return written;
+        });
 
       return {
         list: ({ actor, campaign: campaignId }, sessionId, runId) =>
@@ -460,6 +591,18 @@ export class Combatants extends Context.Service<
               .withTransaction(
                 Effect.gen(function* () {
                   yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+                  // A total typed over zero is healing from zero, which clears
+                  // the death saves — read against the number before this
+                  // write, so it runs first, and the row stays locked for the
+                  // edit below.
+                  if (patch.hpCurrent !== undefined) {
+                    yield* sql`
+                      update combatant
+                      set ${combatantDeathSavesAfterSet(sql, patch.hpCurrent)}
+                      where combatant.id = ${id}
+                        and ${containedChildWritable(sql, COMBATANT, runId, campaignId, actor)}
+                    `;
+                  }
                   const columns = defined({
                     display_name: patch.displayName,
                     subtitle: patch.subtitle,
@@ -491,6 +634,10 @@ export class Combatants extends Context.Service<
                   yield* writeThrough(campaignId, actor, combatant, {
                     hpCurrent: patch.hpCurrent === undefined ? undefined : combatant.hpCurrent,
                     conditions: patch.conditions === undefined ? undefined : combatant.conditions,
+                    deathSaves:
+                      patch.hpCurrent === undefined
+                        ? undefined
+                        : (combatant.deathSaves ?? undefined),
                   });
                   return combatant;
                 }),
@@ -520,6 +667,11 @@ export class Combatants extends Context.Service<
          * and is still standing. The DC is a note, not a ruling: the condition
          * stays until the DM clears it, whatever the die says.
          *
+         * What it does move beside the number is a player character's death
+         * saves, by the rule in `vitals.ts`: a hit on a PC already at zero is a
+         * failure (two when `critical`), and healing one off zero clears both.
+         * They are written through to the character with the hit points.
+         *
          * `greatest`/`least` in SQL rather than in TypeScript so the clamp is
          * atomic with the read: two hits landing together must total both, and
          * a read-modify-write here would lose one.
@@ -535,12 +687,14 @@ export class Combatants extends Context.Service<
                     return yield* readCombatant(campaignId, runId, id, actor);
                   }
 
+                  const critical = payload.critical === true;
                   const { hpBefore, wasConcentrating, ...hurt } = yield* hit({
                     campaignId,
                     actor,
                     runId,
                     id,
                     amount: payload.amount,
+                    critical,
                   }).pipe(orNotFound("combatant", id));
                   const combatant = new Combatant(hurt, { disableChecks: true });
                   // The save is owed only by a creature that was holding a
@@ -559,12 +713,17 @@ export class Combatants extends Context.Service<
                       hpCurrent: combatant.hpCurrent,
                       hpMax: combatant.hpMax,
                       ...(owesSave ? { concentrationDc: concentrationDc(payload.amount) } : {}),
+                      ...(critical ? { critical } : {}),
+                      ...(combatant.deathSaves === null
+                        ? {}
+                        : { deathSaves: combatant.deathSaves }),
                     },
                     requestId: payload.requestId,
                     visibility: combatant.visibility,
                   });
                   yield* writeThrough(campaignId, actor, combatant, {
                     hpCurrent: combatant.hpCurrent,
+                    deathSaves: combatant.deathSaves ?? undefined,
                   });
                   return combatant;
                 }),
@@ -573,6 +732,96 @@ export class Combatants extends Context.Service<
                 // Two taps that raced past the idempotency check together. The
                 // unique index refuses the second, and the honest answer is the
                 // state the first one produced.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readCombatant(campaignId, runId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
+         * The DM's dots: a player character's death saves, set as they are
+         * pressed. Absolute, so a repeat is harmless, and it carries a
+         * `requestId` all the same so a repeat is not a second log line.
+         */
+        setDeathSaves: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                    return yield* readCombatant(campaignId, runId, id, actor);
+                  }
+                  yield* lockedSaver(campaignId, runId, id, actor);
+                  return yield* writeDeathSaves(
+                    campaignId,
+                    sessionId,
+                    runId,
+                    id,
+                    actor,
+                    { successes: payload.successes, failures: payload.failures },
+                    {},
+                    payload.requestId,
+                  );
+                }),
+              )
+              .pipe(
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? readCombatant(campaignId, runId, id, actor)
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          ),
+
+        /**
+         * A death save the DM rolled. The browser rolled the face; the rule is
+         * `deathSaveRolled`, applied here to the counts the row holds, under
+         * its lock. A natural 20 is one hit point and both counts cleared.
+         *
+         * Only a creature that is dying rolls: a PC at zero with fewer than
+         * three of either. Anything else is a `Conflict` the DM can read —
+         * stable and dead are both states the row already shows.
+         */
+        rollDeathSave: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>
+          dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* ensureRunWritable(campaignId, sessionId, runId, actor);
+                  if (yield* requestAlreadyApplied(sql, runId, payload.requestId)) {
+                    return yield* readCombatant(campaignId, runId, id, actor);
+                  }
+                  const saver = yield* lockedSaver(campaignId, runId, id, actor);
+                  if (saver.hpCurrent > 0) {
+                    return yield* new Conflict({
+                      message: "only a character at 0 hit points makes death saves",
+                    });
+                  }
+                  if (saver.saves.successes >= 3) {
+                    return yield* new Conflict({ message: "they are stable already" });
+                  }
+                  if (saver.saves.failures >= 3) {
+                    return yield* new Conflict({ message: "they are dead" });
+                  }
+                  const rolled = deathSaveRolled(saver.saves, payload.face);
+                  return yield* writeDeathSaves(
+                    campaignId,
+                    sessionId,
+                    runId,
+                    id,
+                    actor,
+                    rolled.saves,
+                    { face: payload.face, revived: rolled.revived },
+                    payload.requestId,
+                  );
+                }),
+              )
+              .pipe(
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
                     ? readCombatant(campaignId, runId, id, actor)

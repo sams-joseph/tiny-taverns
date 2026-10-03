@@ -9,8 +9,8 @@ import { hpFraction, type SheetSectionId, type SheetSectionSpec } from "./sheet"
  * **A control here is drawn live exactly when there is a write behind it, and
  * drawn as a value when there is not.** Since `PATCH /me/characters/:id` landed
  * that line runs through the middle of the drawing rather than around it: the
- * document is writable, so the prototype's clickable `DeathSaves` are real
- * buttons here — but its `AbilityBlock` rolls a check into a dice tray the
+ * document is writable and death saves have their own grain, so the
+ * prototype's clickable `DeathSaves` are real buttons here — but its `AbilityBlock` rolls a check into a dice tray the
  * product has no endpoint for, its `Portrait`'s upload button has no upload
  * behind it (the plate itself is `CharacterPortrait.tsx`), and spending a spell
  * pip has no drawn place to put the result, so those three stay the information
@@ -229,17 +229,9 @@ export function Mark({
  * Three up, three down — **pressable, because a death save is the player's own
  * to mark.**
  *
- * It is a `deathSaves` key on the sheet document rather than a column, and that
- * has not moved: `Character.ts` argues it at length, and the reason is still
- * that **no delivery of `EncounterRunner.jsx` draws one**, so there is no second
- * holder for a column to be kept in step with. What did move is who may write
- * the document — `PATCH /me/characters/:id` — so the drawing's buttons are real
- * here where the rest of its write affordances still are not.
- *
- * **The drawing's promise beside them is not repeated.** `CharacterSheet.jsx`
- * says the marks *"show on your DM's initiative row straight away"* and nothing
- * reads them, so the screen says what is true instead. The DM-side read is its
- * own piece of work; a sentence here cannot stand in for it.
+ * They are two columns on the character, with a copy on the fight's row the
+ * DM's runner reads and writes (`Character.ts`, `DeathSaves`), and the
+ * owner's mark is its own endpoint, `POST /me/characters/:id/death-saves`.
  *
  * Pressing the pip that is already the last filled one clears it, which is
  * `PlayerParts.jsx`'s own rule and the only way back from a mis-tap: with three
@@ -255,7 +247,7 @@ export function DeathSaveRow({
   readonly label: string;
   readonly count: number;
   readonly tone: "success" | "danger";
-  /** Absent, and the row is what the document holds and nothing more. */
+  /** Absent, and the row is what the character holds and nothing more. */
   readonly onMark?: (next: number) => void;
   readonly busy?: boolean;
 }) {

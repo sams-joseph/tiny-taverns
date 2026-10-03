@@ -10,6 +10,7 @@ import { CampaignStory, CampaignStoryPut, PlayerCampaignStory } from "./Campaign
 import {
   Character,
   CharacterDamage,
+  CharacterDeathSavesSet,
   CharacterOwnCreate,
   CharacterOwnUpdate,
   CharacterResourceSpend,
@@ -37,6 +38,8 @@ import {
   Combatant,
   CombatantCreate,
   CombatantDamage,
+  CombatantDeathSaveRoll,
+  CombatantDeathSaves,
   CombatantMove,
   CombatantUpdate,
   InitiativeSet,
@@ -748,6 +751,18 @@ class MeGroup extends HttpApiGroup.make("me")
       payload: CharacterRest,
       success: Character,
       error: [NotFound, Conflict],
+    }),
+    /**
+     * The owner marking their own death saves. The character is reached by
+     * `ownCharacter`; its copy in a live fight follows only where the owner
+     * holds an active seat at that fight's campaign, so the reach into a
+     * fight is the seat and never the character alone.
+     */
+    HttpApiEndpoint.post("setCharacterDeathSaves", "/characters/:characterId/death-saves", {
+      params: { characterId: CharacterId },
+      payload: CharacterDeathSavesSet,
+      success: Character,
+      error: NotFound,
     }),
     /**
      * Throwing away a character of your own.
@@ -3216,6 +3231,30 @@ class CombatantsGroup extends HttpApiGroup.make("combatants")
       payload: CombatantDamage,
       success: Combatant,
       error: NotFound,
+    }),
+    /** The DM's dots: a PC's death saves, set absolutely and written through. */
+    HttpApiEndpoint.post("setDeathSaves", "/:combatantId/death-saves", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantDeathSaves,
+      success: Combatant,
+      error: [NotFound, Conflict],
+    }),
+    /** A death save the DM rolled: the browser's face, the server's rule. */
+    HttpApiEndpoint.post("rollDeathSave", "/:combatantId/death-save-roll", {
+      params: {
+        campaignId: CampaignId,
+        sessionId: SessionId,
+        runId: EncounterRunId,
+        combatantId: CombatantId,
+      },
+      payload: CombatantDeathSaveRoll,
+      success: Combatant,
+      error: [NotFound, Conflict],
     }),
     HttpApiEndpoint.post("move", "/:combatantId/move", {
       params: {
