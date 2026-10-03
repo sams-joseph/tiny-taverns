@@ -91,7 +91,7 @@ export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
 
 /**
  * A fresh turn for whoever the marker just landed on: nothing spent, no feet
- * moved (`0085_turn_economy.ts`). **Every write that moves the marker onto a
+ * moved (`0086_turn_economy.ts`). **Every write that moves the marker onto a
  * combatant runs this in its own transaction** — `nextTurn`, `begin`, a
  * hand-set marker and the removal of whoever was up — so a creature's turn
  * starts unspent however it came round, and only the incoming row is touched:

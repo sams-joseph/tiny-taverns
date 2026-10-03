@@ -19,7 +19,7 @@ import { testServer } from "./support/http.js";
 import { describeLayer } from "./support/suite.js";
 
 /**
- * **This turn's spending, on the fight's own row** (`0085_turn_economy.ts`):
+ * **This turn's spending, on the fight's own row** (`0086_turn_economy.ts`):
  * the DM's ticks (`Combatants.turn`), the feet a move counts while its mover
  * is up (`Combatants.move`), the fresh turn the server gives whoever the
  * marker lands on (`freshTurn`), and the campaign's diagonal rule the count

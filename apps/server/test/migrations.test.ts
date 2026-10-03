@@ -363,7 +363,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 83, name: "character_advancement" },
         { migration_id: 84, name: "assistant_thread_name" },
         { migration_id: 85, name: "death_saves" },
-        { migration_id: 85, name: "turn_economy" },
+        { migration_id: 86, name: "turn_economy" },
       ]);
     }),
   );
@@ -460,7 +460,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 83, name: "character_advancement" },
         { migration_id: 84, name: "assistant_thread_name" },
         { migration_id: 85, name: "death_saves" },
-        { migration_id: 85, name: "turn_economy" },
+        { migration_id: 86, name: "turn_economy" },
       ]);
     }),
   );
