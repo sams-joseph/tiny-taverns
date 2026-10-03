@@ -17,7 +17,7 @@ export default defineConfig({
   outputDir: "test-results-auth",
   globalSetup: "./e2e/auth/global-setup.ts",
   // One test at a time: they share two Clerk users and one database, and the
-  // suite is three tests long.
+  // suite is four tests long.
   workers: 1,
   fullyParallel: false,
   timeout: 60_000,

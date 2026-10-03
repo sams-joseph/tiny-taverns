@@ -844,10 +844,14 @@ for (const width of WIDTHS) {
               .getByRole("region", { name: "Rolls", exact: true })
               .getByRole("status", { name: "Latest roll" }),
           ).toContainText("Brannoc · Longsword → Goblin Boss");
-          // The one write is his turn's Action (`attackSpends`); no damage until Apply.
+          // The attack's rolls are kept as the DM's: the to-hit, then the
+          // damage when it lands. Beside them the one write is his turn's
+          // Action (`attackSpends`); no damage until Apply.
+          const last = () => writes.map((path) => path.split("/").slice(-1)[0]);
+          await expect.poll(() => last().filter((write) => write !== "rolls")).toEqual(["turn"]);
           await expect
-            .poll(() => writes.map((path) => path.split("/").slice(-1)[0]), { message: "writes" })
-            .toEqual(["turn"]);
+            .poll(() => last().filter((write) => write === "rolls").length, { message: "rolls" })
+            .toBeGreaterThanOrEqual(1);
         });
       });
 

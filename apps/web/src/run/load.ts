@@ -211,13 +211,22 @@ export const runBoardAtom = Atom.family((path: RunPath) =>
   ),
 );
 
-/** The dice tray is a session read. The doorbell refreshes it; payloads do not. */
+/** The most `rolls.list` answers at once (`packages/api` `Roll.ts`). */
+const ROLLS_READ = 100;
+
+/**
+ * The night's rolls: the players' tray and the DM's own dice (`dice.ts`). Both
+ * share this one read and every throw of an act is its own row, so it reads as
+ * many as the API allows and the *Rolls* dock cuts the merged lines to
+ * `DOCK_KEPT`. A session read; the doorbell refreshes it, payloads do not, and
+ * a DM roll names it.
+ */
 export const rollsAtom = Atom.family((path: RunPath) =>
   apiAtom(
     (client): Effect.Effect<ReadonlyArray<Roll>, unknown> =>
       client.rolls.list({
         params: { campaignId: path.campaignId, sessionId: path.sessionId },
-        query: { limit: 12 },
+        query: { limit: ROLLS_READ },
       }),
     [reads.rolls(path.sessionId)],
   ),

@@ -39,16 +39,17 @@ import { partyAtom } from "../campaign/load";
 import { rollFace } from "../characters/rolls";
 import { actionsOf, type ActionLine } from "./actions";
 import {
-  attackLine,
+  attackThrows,
   concentrationSave,
+  concentrationThrow,
   resolveAttack,
-  rollActionLine,
+  rollActionThrows,
   type AttackOutcome,
 } from "./attack";
 import { TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
-import { useDmDice } from "./dice";
+import { isDmRoll, useDmDice } from "./dice";
 import { EndRunDialog } from "./EndRunDialog";
 import { useEscapeAway } from "./escape";
 import { type FogEdit, fogPayload } from "./fog";
@@ -59,7 +60,7 @@ import type { RunBoardProps } from "./runBoard";
 import { RunLayout } from "./RunLayout";
 import { RunBoardStage, RunStage } from "./RunStage";
 import { useStage } from "./stage";
-import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
+import { runSceneAtom, saveModifier, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
 import {
   boardFogWrites,
@@ -134,6 +135,12 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * would be a list nobody scrolls holding memory all night.
  */
 const LOG_KEPT = 40;
+
+/** No rolls read yet: one value, so the DM's dice do not see a new list every render. */
+const NO_ROLLS: ReadonlyArray<Roll> = [];
+
+/** A row the DM typed in has no ability cells to read a save off. */
+const NO_ABILITIES = { abilities: [] };
 
 const runNpcsAtom = Atom.family((path: RunPath) =>
   apiAtom(
@@ -507,6 +514,9 @@ function SessionNpcMonitorDetail({
   );
 }
 
+/** A scene's tray shows the players' newest dozen; the night's list reads as many as the dock keeps. */
+const TRAY_SHOWN = 12;
+
 function DiceTray({
   rolls,
   status,
@@ -701,16 +711,30 @@ export function RunScreen() {
   // The party's sheets, for a character's speed on the board. A miss is no
   // range, never a guessed one.
   const [partyResource] = useApiAtom(partyAtom(campaignId));
-  const dice = useDmDice();
   const stage = useStage();
   const view = resource.state === "ready" ? resource.value : undefined;
-  const trayRolls = rollsResource.state === "ready" ? rollsResource.value : [];
+  // The night's rolls: the DM's own, which their dice file and read back
+  // (`dice.ts`), and the players' tray.
+  const nightRolls = rollsResource.state === "ready" ? rollsResource.value : NO_ROLLS;
+  const trayRolls = useMemo(() => nightRolls.filter((roll) => !isDmRoll(roll)), [nightRolls]);
 
   // The fight's own half, from the same atom the value above is built on — so
   // the rows the screen renders and the rows the controller writes into cannot
   // be two different answers.
   const controller = useRunState(path);
   const state = controller.state;
+  // The server files a DM roll under the campaign's current night and its
+  // active run, so the dice are out only on that run: not on an ended one, and
+  // not on a past night's log.
+  const dice = useDmDice(
+    path,
+    nightRolls,
+    view !== undefined &&
+      state !== undefined &&
+      state.run.endedAt === null &&
+      view.campaign.currentSessionId === sessionId &&
+      view.session.activeEncounterRunId === runId,
+  );
   // The *This turn* toggles, and `spendAction`, which an attack calls.
   const turnTicks = useTurnTicks(path, controller);
 
@@ -741,6 +765,8 @@ export function RunScreen() {
         readonly outcome: AttackOutcome;
         /** What was sent, and the target's hit points before it. */
         readonly applied: { readonly amount: number; readonly hpBefore: number } | undefined;
+        /** The concentration save the hit set up was rolled. */
+        readonly saveRolled: boolean;
       }
     | undefined
   >();
@@ -759,12 +785,15 @@ export function RunScreen() {
   const onEvent = useCallback(
     (event: SessionEvent) => {
       // Newest first, bounded, deduplicated on `seq` — a reconnect that
-      // overlapped by a row would otherwise show it twice.
-      setLog((current) =>
-        current.some((seen) => seen.seq === event.seq)
-          ? current
-          : [event, ...current].slice(0, LOG_KEPT),
-      );
+      // overlapped by a row would otherwise show it twice. A `roll-made` is
+      // only the doorbell for a row the rolls read already carries, and every
+      // DM throw rings one, so it never takes a place in the log.
+      if (event.kind !== "roll-made")
+        setLog((current) =>
+          current.some((seen) => seen.seq === event.seq)
+            ? current
+            : [event, ...current].slice(0, LOG_KEPT),
+        );
       refresh();
       reloadScene();
       reloadRolls();
@@ -961,15 +990,21 @@ export function RunScreen() {
   const strike = (combatant: Combatant) => {
     if (picking === undefined) return;
     const attacker = state?.combatants.find((row) => row.id === picking.attackerId);
-    if (attacker === undefined || combatant.id === attacker.id) return;
+    if (attacker === undefined || combatant.id === attacker.id || dice.file === undefined) return;
     const outcome = resolveAttack({
       attacker: attacker.displayName,
       line: picking.line,
       target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
     });
-    dice.log(attackLine(outcome));
+    dice.file(attackThrows(outcome, { attackerId: attacker.id, targetId: combatant.id }));
     setTargeting(undefined);
-    setAttack({ attackerId: attacker.id, targetId: combatant.id, outcome, applied: undefined });
+    setAttack({
+      attackerId: attacker.id,
+      targetId: combatant.id,
+      outcome,
+      applied: undefined,
+      saveRolled: false,
+    });
     // A swing on its own turn is its action (`attackSpends`); off it, a
     // reaction is the DM's to tick.
     turnTicks.spendAction(attacker);
@@ -1000,6 +1035,20 @@ export function RunScreen() {
     setAttack({ ...attack, applied: { amount, hpBefore: controller.hpOf(target) } });
     const landed = await damage(target, amount, attack.outcome.verdict === "critical");
     if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: undefined }));
+  };
+
+  /** The concentration save the attack's hit set up, filed with the DM's dice; once per hit. */
+  const rollConcentration = (target: Combatant, dc: number, modifier: number) => {
+    if (dice.file === undefined) return;
+    const save = concentrationThrow({
+      target: target.displayName,
+      targetId: target.id,
+      dc,
+      modifier,
+    });
+    if (save === undefined) return;
+    dice.file([save]);
+    setAttack((now) => (now === undefined ? now : { ...now, saveRolled: true }));
   };
 
   /**
@@ -1221,7 +1270,10 @@ export function RunScreen() {
   );
   const rollCards = state !== undefined && (
     <>
-      <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
+      <DiceTray
+        rolls={trayRolls.slice(0, TRAY_SHOWN)}
+        status={over ? "stopped" : connection.status}
+      />
       <SessionLog
         events={log}
         combatants={state.combatants}
@@ -1280,14 +1332,35 @@ export function RunScreen() {
   // The save follows what was sent, from the hit points it was sent against;
   // before that, the whole amount against the target as it stands.
   const struck = state?.combatants.find((row) => row.id === attack?.targetId);
-  const result = attack && {
-    outcome: attack.outcome,
-    applied: attack.applied !== undefined,
-    concentrationDc: concentrationSave(
+  const owed =
+    attack &&
+    concentrationSave(
       attack.outcome,
       attack.applied?.amount ?? attack.outcome.amount,
       attack.applied?.hpBefore ?? (struck === undefined ? 0 : controller.hpOf(struck)),
-    ),
+    );
+  // Once the hit is sent, the target rolls the save it owes off the Con save
+  // its stat block or sheet holds; with none written, nothing is offered
+  // rather than a guess.
+  const struckSource = struck === undefined ? undefined : sourceOf(struck);
+  const conSave =
+    struckSource === undefined
+      ? undefined
+      : saveModifier(struckSource.statBlock ?? struckSource.sheet ?? NO_ABILITIES, "CON");
+  const file = dice.file;
+  const result = attack && {
+    outcome: attack.outcome,
+    applied: attack.applied !== undefined,
+    concentrationDc: owed,
+    onRollSave:
+      file !== undefined &&
+      struck !== undefined &&
+      owed !== undefined &&
+      conSave !== undefined &&
+      attack.applied !== undefined &&
+      !attack.saveRolled
+        ? () => rollConcentration(struck, owed, conSave)
+        : undefined,
   };
   const card = state !== undefined && view !== undefined && (
     <CombatantPanel
@@ -1339,13 +1412,23 @@ export function RunScreen() {
           ? result
           : undefined
       }
-      onAttack={(line) => {
-        if (selected === undefined) return;
-        setAttack(undefined);
-        setTargeting({ attackerId: selected.id, line });
-      }}
-      onRollAction={(line) =>
-        selected !== undefined && dice.log(rollActionLine({ attacker: selected.displayName, line }))
+      onAttack={
+        file === undefined
+          ? undefined
+          : (line) => {
+              if (selected === undefined) return;
+              setAttack(undefined);
+              setTargeting({ attackerId: selected.id, line });
+            }
+      }
+      onRollAction={
+        file === undefined
+          ? undefined
+          : (line) =>
+              selected !== undefined &&
+              file(
+                rollActionThrows({ attacker: selected.displayName, attackerId: selected.id, line }),
+              )
       }
       onApplyResult={(amount) => void applyAttack(amount)}
       onDismissResult={() => setAttack(undefined)}
@@ -1358,7 +1441,7 @@ export function RunScreen() {
   const rollsDock = state !== undefined && (
     <RollsDock
       lines={dockLines({
-        dm: dice.entries,
+        dm: dice.rolls,
         tray: trayRolls,
         events: log,
         combatants: state.combatants,

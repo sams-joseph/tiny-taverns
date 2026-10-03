@@ -13,6 +13,7 @@ import {
   goblin,
   goblinBoss,
   bargainId,
+  dmAccountId,
   liveRun,
   npcId,
   page,
@@ -143,6 +144,36 @@ export const runParty = [
   },
 ];
 
+/** A DM roll as the server keeps it: no character, so `dm`. */
+export const savedDmRoll = {
+  id: "2b1f2a1e-0000-4000-8000-0000000000e1",
+  campaignId,
+  sessionId: sessionIdRaw,
+  encounterRunId: runIdRaw,
+  accountId: dmAccountId,
+  accountName: "Wren Alderby",
+  characterId: null,
+  characterName: null,
+  label: "d20",
+  notation: "1d20",
+  dice: [11],
+  kept: [11],
+  modifier: 0,
+  total: 11,
+  mode: "normal",
+  critical: null,
+  kind: "plain",
+  combatantId: null,
+  targetCombatantId: null,
+  targetAc: null,
+  outcome: null,
+  requestId: "saved-dm-roll",
+  visibility: "dm",
+  origin: "authored",
+  assistantTurnId: null,
+  ...stamps,
+};
+
 /** Everything a fight on the table answers, before a test re-aims it. */
 export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -156,6 +187,9 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${runBase}/combatants`, { status: 200, body: [brannocPlaced, goblinBoss] }],
     [`GET ${base}/party`, { status: 200, body: runParty }],
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
+    // A wire that keeps nothing (the e2e stub) answers every DM roll with one
+    // saved d20; `installRunServer` files what was sent instead.
+    [`POST ${base}/rolls`, { status: 200, body: savedDmRoll }],
     [`GET ${base}/npcs`, { status: 200, body: [cazril] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}`, { status: 200, body: [] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}/monitor`, { status: 200, body: [] }],
@@ -357,6 +391,12 @@ export const liveScene = (mode: SceneMode): Map<string, Answer> => {
 export interface RunStubServer {
   routes: Map<string, Answer>;
   readonly calls: Array<Call>;
+  /**
+   * The night's rolls the stub has kept, newest first: what `rolls.create`
+   * filed, and what the night's list answers while no test re-aims it — so a
+   * second render reads back what the first one rolled, as a reload does.
+   */
+  readonly rolls: Array<Record<string, unknown>>;
   /** Every `?since=` the page has opened a stream with, oldest first. */
   readonly cursors: Array<number>;
   /** How many streams are open right now. */
@@ -406,9 +446,56 @@ export const installRunServer = (): RunStubServer => {
   /** Matches currently gated, each with the requests waiting behind it. */
   const gates = new Map<string, Array<() => void>>();
 
+  const rollsRoute = `GET ${base}/sessions/${sessionIdRaw}/rolls`;
+  const createRoll = `POST ${base}/rolls`;
+  /** The write's answer while no test re-aims it: file what was sent. */
+  const filing: Answer = { status: 200 };
+  const keepRolls = (routes: Map<string, Answer>) =>
+    routes.set(rollsRoute, { status: 200, body: () => [...server.rolls] }).set(createRoll, filing);
+  /** A roll as the server files it: the DM's, on the fight, once per request. */
+  const file = (payload: Record<string, unknown>): Record<string, unknown> => {
+    const seen = server.rolls.find(
+      (roll) => payload["requestId"] !== undefined && roll["requestId"] === payload["requestId"],
+    );
+    if (seen !== undefined) return seen;
+    const at = new Date().toISOString();
+    const roll = {
+      id: `2b1f2a1e-0000-4000-8000-${String(990000000000 + server.rolls.length)}`,
+      campaignId,
+      sessionId: sessionIdRaw,
+      encounterRunId: runIdRaw,
+      accountId: dmAccountId,
+      accountName: "Wren Alderby",
+      characterId: payload["characterId"] ?? null,
+      characterName: null,
+      label: payload["label"],
+      notation: payload["notation"],
+      dice: payload["dice"],
+      kept: payload["kept"],
+      modifier: payload["modifier"],
+      total: payload["total"],
+      mode: payload["mode"],
+      critical: payload["critical"] ?? null,
+      kind: payload["kind"] ?? "plain",
+      combatantId: payload["combatantId"] ?? null,
+      targetCombatantId: payload["targetCombatantId"] ?? null,
+      targetAc: payload["targetAc"] ?? null,
+      outcome: payload["outcome"] ?? null,
+      requestId: payload["requestId"] ?? null,
+      visibility: "dm",
+      origin: "authored",
+      assistantTurnId: null,
+      createdAt: at,
+      updatedAt: at,
+    };
+    server.rolls.unshift(roll);
+    return roll;
+  };
+
   const server: RunStubServer = {
     routes: liveFight(),
     calls: [],
+    rolls: [],
     cursors: [],
     transportDown: false,
     denyStream: false,
@@ -450,8 +537,9 @@ export const installRunServer = (): RunStubServer => {
       controllers = [];
     },
     reset: () => {
-      server.routes = liveFight();
+      server.routes = keepRolls(liveFight());
       server.calls.length = 0;
+      server.rolls.length = 0;
       server.cursors.length = 0;
       server.transportDown = false;
       server.denyStream = false;
@@ -468,18 +556,21 @@ export const installRunServer = (): RunStubServer => {
     },
   };
 
+  keepRolls(server.routes);
+
   vi.stubGlobal("fetch", (url: string | URL, init: RequestInit | undefined) => {
     if (server.transportDown) return Promise.reject(new TypeError("Failed to fetch"));
 
     const { pathname, search } = new URL(String(url));
     const method = init?.method ?? "GET";
     const headers = init?.headers as Record<string, string> | undefined;
+    const sent = init?.body === undefined ? "" : new TextDecoder().decode(init.body as Uint8Array);
     server.calls.push({
       method,
       pathname,
       search,
       authorization: headers?.["authorization"],
-      body: init?.body === undefined ? "" : new TextDecoder().decode(init.body as Uint8Array),
+      body: sent,
     });
 
     if (pathname.includes("/table/sessions/") && pathname.endsWith("/events")) {
@@ -525,6 +616,13 @@ export const installRunServer = (): RunStubServer => {
     // Read at *answer* time rather than at request time, so a route re-aimed
     // while a held request is in flight answers with the new body.
     const answer = () => {
+      // A roll is filed unless a test re-aimed the write.
+      if (`${method} ${pathname}` === createRoll && server.routes.get(createRoll) === filing) {
+        return new Response(JSON.stringify(file(JSON.parse(sent) as Record<string, unknown>)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       const found = server.routes.get(`${method} ${pathname}`) ?? {
         status: 404,
         body: { _tag: "NotFound", resource: "encounter_run", id: runIdRaw },

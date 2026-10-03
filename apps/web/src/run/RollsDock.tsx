@@ -62,6 +62,7 @@ export function RollsDock({
   const [open, setOpen] = useState(false);
   const [latest, ...rest] = lines;
   const older = rest.slice(0, OLDER);
+  const roll = dice.roll;
 
   return (
     <section
@@ -112,19 +113,21 @@ export function RollsDock({
           <Line line={latest} latest />
         )}
       </div>
-      <div className="flex gap-1 border-t border-hairline p-2">
-        {DICE.map((die) => (
-          <button
-            key={die}
-            type="button"
-            aria-label={`Roll a ${die}`}
-            onClick={() => dice.roll(die, `1${die}`)}
-            className="h-control-sm min-w-0 flex-1 cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-label-s font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
-          >
-            {die}
-          </button>
-        ))}
-      </div>
+      {roll !== undefined && (
+        <div className="flex gap-1 border-t border-hairline p-2">
+          {DICE.map((die) => (
+            <button
+              key={die}
+              type="button"
+              aria-label={`Roll a ${die}`}
+              onClick={() => roll(die, `1${die}`)}
+              className="h-control-sm min-w-0 flex-1 cursor-pointer rounded-control border border-strong bg-surface-sunken font-mono text-label-s font-medium text-foreground transition-control outline-none hover:bg-surface-raised focus-visible:ring-focus"
+            >
+              {die}
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

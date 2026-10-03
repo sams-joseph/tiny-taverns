@@ -59,7 +59,8 @@ export function MakeACheck({
   readonly party: ReadonlyArray<Combatant>;
   readonly sheetOf: (combatant: Combatant) => CharacterSheet | undefined;
   readonly disabled: boolean;
-  readonly onRoll: (label: string, notation: string) => LocalRoll | undefined;
+  /** Absent while the DM's dice are put away (`DmDice.roll`). */
+  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
 }) {
   const challenge = scene.challenge?.kind === "challenge" ? scene.challenge : undefined;
   const settled =
@@ -114,7 +115,7 @@ export function MakeACheck({
       : "text-muted-foreground";
 
   const rollForThem = () => {
-    if (who === undefined || modifier === undefined) return;
+    if (who === undefined || modifier === undefined || onRoll === undefined) return;
     const rolled = onRoll(`${who.displayName} · ${trimmedSkill}`, `1d20${signed(modifier)}`);
     if (rolled !== undefined) setTotal(String(rolled.total));
   };
@@ -246,7 +247,7 @@ export function MakeACheck({
           <Button
             variant="ghost"
             size="sm"
-            disabled={off || modifier === undefined}
+            disabled={off || modifier === undefined || onRoll === undefined}
             onClick={rollForThem}
           >
             <Icon name="dice-5" size={13} />

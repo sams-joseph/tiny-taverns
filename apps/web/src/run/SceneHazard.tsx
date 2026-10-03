@@ -97,7 +97,7 @@ function Length({
   readonly confirm: string;
   readonly busy: boolean;
   readonly disabled: boolean;
-  readonly onRoll: (label: string, notation: string) => LocalRoll | undefined;
+  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
   readonly onSet: (stages: number) => void;
   readonly onCancel: (() => void) | undefined;
 }) {
@@ -127,7 +127,7 @@ function Length({
             if (event.key === "Enter" && stages !== undefined) onSet(stages);
           }}
         />
-        {dice !== undefined && (
+        {dice !== undefined && onRoll !== undefined && (
           <Button
             variant="outline"
             size="sm"
@@ -167,6 +167,7 @@ function SaveRow({
   modifier,
   save,
   disabled,
+  rollable,
   conditionsBusy,
   onLog,
   onRemove,
@@ -177,6 +178,8 @@ function SaveRow({
   readonly modifier: number | undefined;
   readonly save: EncounterRunCheck | undefined;
   readonly disabled: boolean;
+  /** The DM's dice are out (`DmDice.roll`). */
+  readonly rollable: boolean;
   readonly conditionsBusy: boolean;
   readonly onLog: (how: { readonly roll: true } | { readonly outcome: CheckOutcome }) => void;
   readonly onRemove: (save: EncounterRunCheck) => void;
@@ -224,7 +227,7 @@ function SaveRow({
             <Button
               variant="outline"
               size="sm"
-              disabled={disabled || modifier === undefined}
+              disabled={disabled || !rollable || modifier === undefined}
               aria-label={`Roll ${name}'s save`}
               onClick={() => onLog({ roll: true })}
             >
@@ -320,7 +323,7 @@ export function SceneHazard({
   readonly disabled: boolean;
   readonly conditionsBusy: boolean;
   readonly onConditions: (combatant: Combatant, next: ReadonlyArray<string>) => void;
-  readonly onRoll: (label: string, notation: string) => LocalRoll | undefined;
+  readonly onRoll: ((label: string, notation: string) => LocalRoll | undefined) | undefined;
   /** The runner's own *End*: a hazard's last stage over is the scene over. */
   readonly onEnd: () => void;
 }) {
@@ -344,7 +347,7 @@ export function SceneHazard({
     if ("roll" in how) {
       const sheet = sheetOf(combatant);
       const modifier = sheet === undefined ? undefined : saveModifier(sheet, ability);
-      if (modifier === undefined) return;
+      if (modifier === undefined || onRoll === undefined) return;
       const rolled = onRoll(
         `${combatant.displayName} · ${ability} save`,
         `1d20${signed(modifier)}`,
@@ -499,6 +502,7 @@ export function SceneHazard({
                   modifier={sheet === undefined ? undefined : saveModifier(sheet, ability)}
                   save={saves.get(combatant.id)}
                   disabled={off}
+                  rollable={onRoll !== undefined}
                   conditionsBusy={conditionsBusy}
                   onLog={(how) => log(combatant, how)}
                   onRemove={remove}

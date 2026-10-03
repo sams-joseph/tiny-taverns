@@ -36,7 +36,8 @@ export function TargetBanner({
  * What the attack came to: the verdict, the d20 against the AC, each damage
  * die, the save a concentrating target owes, and *Apply* / *Half* / *Dismiss*.
  * *Apply* and *Half* send the damage through the panel's own write, once; the
- * card stays, without them, until it is dismissed or the turn moves.
+ * card stays, without them, until it is dismissed or the turn moves. Once the
+ * damage is sent, *Roll save* rolls the target's Con save into the DM's dice.
  */
 export function AttackResultCard({
   outcome,
@@ -44,6 +45,7 @@ export function AttackResultCard({
   concentrationDc,
   disabled,
   onApply,
+  onRollSave,
   onDismiss,
 }: {
   readonly outcome: AttackOutcome;
@@ -55,6 +57,8 @@ export function AttackResultCard({
   readonly disabled: boolean;
   /** Half rounds down, as the SRD does. */
   readonly onApply: (amount: number) => void;
+  /** Offered once the damage is sent, for a target whose Con save is written, until rolled. */
+  readonly onRollSave: (() => void) | undefined;
   readonly onDismiss: () => void;
 }) {
   const landed = lands(outcome.verdict);
@@ -90,9 +94,23 @@ export function AttackResultCard({
         {landed && outcome.damage.length > 0 && <span>{damageLine(outcome.damage)}</span>}
       </div>
       {concentrationDc !== undefined && (
-        <p className="mb-0 text-caption leading-snug text-magic-ink">
-          {outcome.target} is concentrating. Con save DC {concentrationDc}.
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="mb-0 min-w-0 flex-1 text-caption leading-snug text-magic-ink">
+            {outcome.target} is concentrating. Con save DC {concentrationDc}.
+          </p>
+          {onRollSave !== undefined && (
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={`Roll ${outcome.target}'s Con save`}
+              disabled={disabled}
+              onClick={onRollSave}
+            >
+              <Icon name="dice-5" size={13} />
+              Roll save
+            </Button>
+          )}
+        </div>
       )}
       <div className="flex items-center gap-1.5">
         {landed && outcome.amount > 0 && !applied && (

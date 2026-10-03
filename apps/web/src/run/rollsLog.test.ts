@@ -1,11 +1,12 @@
 import { Combatant, Roll, SessionEvent } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import type { DmEntry } from "./dice";
+import type { DmRoll } from "./dice";
 import { brannoc, goblinBoss, sessionEvent } from "./run.fixtures";
 import { DOCK_KEPT, dockLines } from "./rollsLog";
 
 const combatants = [brannoc, goblinBoss].map((row) => Schema.decodeUnknownSync(Combatant)(row));
+const goblinBossId = combatants[1]!.id;
 
 /** A log line at a minute past seven, with the payload the server stamps on its kind. */
 const event = (
@@ -206,7 +207,7 @@ describe("the dock's one list", () => {
     encounterRunId: null,
     accountId: "2b1f2a1e-0000-4000-8000-0000000000a2",
     accountName: "Mara Voss",
-    characterId: null,
+    characterId: brannoc.characterId,
     characterName: "Brannoc Duskharrow",
     label: "Halberd",
     notation: "1d20+7",
@@ -228,14 +229,32 @@ describe("the dock's one list", () => {
     createdAt: "2026-08-04T19:02:30.000Z",
     updatedAt: "2026-08-04T19:02:30.000Z",
   });
-  const dm = (id: number, minute: number): DmEntry => ({
-    id,
-    at: Date.parse(`2026-08-04T19:${String(minute).padStart(2, "0")}:00.000Z`),
+  const at = (minute: number) =>
+    Date.parse(`2026-08-04T19:${String(minute).padStart(2, "0")}:00.000Z`);
+  const dm = (id: number, minute: number, over: Partial<DmRoll> = {}): DmRoll => ({
     label: `d20 #${String(id)}`,
-    detail: "1d20 [4]",
-    total: "4",
-    tone: "accent",
+    notation: "1d20",
+    dice: [4],
+    kept: [4],
+    modifier: 0,
+    total: 4,
+    mode: "normal",
+    critical: null,
+    kind: "plain",
+    targetCombatantId: null,
+    targetAc: null,
+    outcome: null,
+    requestId: `roll-${String(id)}`,
+    at: at(minute),
+    ...over,
   });
+  const dmOnly = (rolls: ReadonlyArray<DmRoll>) =>
+    dockLines({ dm: rolls, tray: [], events: [], combatants, noun: "fight" }).map((line) => [
+      line.label,
+      line.detail,
+      line.total,
+      line.tone,
+    ]);
 
   it("merges the DM's dice, the players' tray and the log, newest first", () => {
     const merged = dockLines({
@@ -249,6 +268,118 @@ describe("the dock's one list", () => {
       ["d20 #1", "1d20 [4]", "4", "accent"],
       ["Halberd", "Mara Voss · Brannoc Duskharrow · 1d20+7 [20]", "27", "success"],
       ["Brannoc is up", "", undefined, "muted"],
+    ]);
+  });
+
+  it("prints an attack's to-hit and the damage it threw as one line", () => {
+    const swing = { label: "Brannoc · Longsword → Goblin Boss", targetCombatantId: goblinBossId };
+    expect(
+      dmOnly([
+        dm(1, 5, {
+          ...swing,
+          kind: "damage",
+          notation: "1d8+4",
+          dice: [5],
+          kept: [5],
+          modifier: 4,
+          total: 9,
+          requestId: "swing:1",
+        }),
+        dm(2, 5, {
+          ...swing,
+          kind: "attack",
+          notation: "1d20+7",
+          dice: [19],
+          kept: [19],
+          modifier: 7,
+          total: 26,
+          targetAc: 17,
+          outcome: "hit",
+          requestId: "swing:0",
+        }),
+      ]),
+    ).toEqual([
+      ["Brannoc · Longsword → Goblin Boss", "d20 19 +7 = 26 vs AC 17 · 1d8+4 = 9", "Hit", "accent"],
+    ]);
+  });
+
+  it("says a crit, a natural 1, a miss and a total with no AC to beat", () => {
+    const swing = (id: number, d20: number, over: Partial<DmRoll>) =>
+      dm(id, id, {
+        label: `Swing ${String(id)}`,
+        kind: "attack",
+        notation: "1d20+3",
+        dice: [d20],
+        kept: [d20],
+        modifier: 3,
+        total: d20 + 3,
+        targetCombatantId: goblinBossId,
+        targetAc: 15,
+        ...over,
+      });
+    expect(
+      dmOnly([
+        swing(4, 9, { targetAc: null }),
+        swing(3, 5, { outcome: "miss" }),
+        swing(2, 1, { outcome: "fumble", critical: "miss" }),
+        swing(1, 20, { outcome: "crit", critical: "hit" }),
+      ]),
+    ).toEqual([
+      ["Swing 4", "d20 9 +3 = 12 vs no AC", "12", "accent"],
+      ["Swing 3", "d20 5 +3 = 8 vs AC 15", "Miss", "muted"],
+      ["Swing 2", "d20 1 +3 = 4 vs AC 15", "Miss", "danger"],
+      ["Swing 1", "d20 20 +3 = 23 vs AC 15", "Crit", "success"],
+    ]);
+  });
+
+  it("prints an action rolled off its turn, damage alone, and a concentration save", () => {
+    expect(
+      dmOnly([
+        dm(1, 7, {
+          label: "Goblin Boss · Concentration save, DC 10",
+          kind: "concentration",
+          notation: "1d20+1",
+          dice: [13],
+          kept: [13],
+          modifier: 1,
+          total: 14,
+          requestId: "save",
+        }),
+        dm(2, 6, {
+          label: "Goblin Boss · Scimitar",
+          kind: "damage",
+          notation: "1d6+2",
+          dice: [4],
+          kept: [4],
+          modifier: 2,
+          total: 6,
+          requestId: "scimitar",
+        }),
+        dm(3, 5, {
+          label: "Goblin Boss · Bow",
+          kind: "damage",
+          notation: "1d6+2",
+          dice: [1],
+          kept: [1],
+          modifier: 2,
+          total: 3,
+          requestId: "bow:1",
+        }),
+        dm(4, 5, {
+          label: "Goblin Boss · Bow",
+          kind: "attack",
+          notation: "1d20+4",
+          dice: [11],
+          kept: [11],
+          modifier: 4,
+          total: 15,
+          requestId: "bow:0",
+        }),
+      ]),
+    ).toEqual([
+      ["Goblin Boss · Concentration save, DC 10", "1d20+1 [13]", "14", "magic"],
+      ["Goblin Boss · Scimitar", "1d6+2 = 6", "6", "accent"],
+      ["Goblin Boss · Bow", "d20 11 +4 = 15 · 1d6+2 = 3", "15", "accent"],
     ]);
   });
 

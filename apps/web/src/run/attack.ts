@@ -1,15 +1,22 @@
-import { concentrationDc } from "@taverns/api";
-import { parseDiceExpression, rollFace, signed, type Random } from "../characters/rolls";
+import { concentrationDc, type CombatantId } from "@taverns/api";
+import {
+  parseDiceExpression,
+  rollDiceExpression,
+  rollFace,
+  signed,
+  type Random,
+} from "../characters/rolls";
 import type { ActionLine } from "./actions";
-import type { DmLine, Tone } from "./dice";
+import { throwOf, type DmThrow } from "./dice";
 
 /**
  * An attack from the creature panel's *Actions* (`Encounter Runner.dc.html`):
  * d20 plus the line's to-hit against the target's AC, a natural 20 a critical
  * that hits with its damage dice doubled, a natural 1 a miss whatever it
- * totals. Rolled here, with the DM's other dice, and never sent (`dice.ts`):
- * what reaches the server is the damage the DM then applies, through the same
- * delta a typed number takes.
+ * totals. Rolled here, and filed with the DM's other dice as the DM's own
+ * rolls (`dice.ts`): the to-hit with who swung, at whom, the AC and the
+ * outcome, then the damage. What changes the target is the damage the DM then
+ * applies, through the same delta a typed number takes.
  *
  * Pure, and `random` is the one source of every face, d20 first and then the
  * damage dice in the line's order, so a test can seed the whole attack.
@@ -20,6 +27,7 @@ export interface DamageRoll {
   /** The dice thrown: `2d8+4`, or `4d8+4` on a critical. */
   readonly notation: string;
   readonly faces: ReadonlyArray<number>;
+  readonly modifier: number;
   /** The faces plus the modifier, never below zero. */
   readonly total: number;
   readonly type: string | undefined;
@@ -58,14 +66,6 @@ export const VERDICT: Record<Verdict, string> = {
   "no-ac": "No AC to beat",
 };
 
-const TONE: Record<Verdict, Tone> = {
-  critical: "success",
-  hit: "accent",
-  "natural-1": "danger",
-  miss: "muted",
-  "no-ac": "accent",
-};
-
 /** Whether the verdict carries damage. */
 export const lands = (verdict: Verdict): boolean =>
   verdict === "critical" || verdict === "hit" || verdict === "no-ac";
@@ -92,6 +92,7 @@ const rollDamage = (
   return {
     notation: `${String(count)}d${String(parsed.faces)}${parsed.modifier === 0 ? "" : signed(parsed.modifier)}`,
     faces,
+    modifier: parsed.modifier,
     total: Math.max(0, sum),
     type,
   };
@@ -178,45 +179,129 @@ export const damageLine = (damage: ReadonlyArray<DamageRoll>): string =>
     )
     .join(" · ");
 
-/** The attack's line in the *Rolls* dock: `Brannoc · Longsword → Goblin Boss`. */
-export const attackLine = (outcome: AttackOutcome): DmLine => ({
-  label: `${outcome.attacker} · ${outcome.title}`,
-  detail: hitLine(outcome),
-  total:
-    outcome.verdict === "critical"
-      ? "Crit"
-      : outcome.verdict === "hit"
-        ? "Hit"
-        : outcome.verdict === "no-ac"
-          ? String(outcome.total)
-          : "Miss",
-  tone: TONE[outcome.verdict],
+/** The server's word for a verdict; a total with no AC to beat has none. */
+const OUTCOME: Record<Verdict, DmThrow["outcome"]> = {
+  critical: "crit",
+  hit: "hit",
+  "natural-1": "fumble",
+  miss: "miss",
+  "no-ac": undefined,
+};
+
+const naturalOf = (d20: number): DmThrow["critical"] =>
+  d20 === 20 ? "hit" : d20 === 1 ? "miss" : null;
+
+/** One damage roll as the throw that files it. */
+const damageThrow = (label: string, roll: DamageRoll, about: Partial<DmThrow>): DmThrow => ({
+  label,
+  notation: roll.notation,
+  dice: roll.faces,
+  kept: roll.faces,
+  modifier: roll.modifier,
+  total: roll.total,
+  mode: "normal",
+  critical: null,
+  kind: "damage",
+  ...about,
 });
 
 /**
- * *Roll* for a creature that is not up: the to-hit and the damage together,
- * with no target, as one line in the dock — `d20 11 +6 = 17 · 2d8+4 = 14`.
+ * The attack as the DM's rolls (`dice.ts`), one act: the to-hit, with who
+ * swung, at whom, the AC it was against and how it came out, then each damage
+ * roll it threw. The log prints them as one line,
+ * `Brannoc · Longsword → Goblin Boss`.
  */
-export const rollActionLine = ({
+export const attackThrows = (
+  outcome: AttackOutcome,
+  who: { readonly attackerId: CombatantId; readonly targetId: CombatantId },
+): ReadonlyArray<DmThrow> => {
+  const label = `${outcome.attacker} · ${outcome.title}`;
+  const about = { combatantId: who.attackerId, targetCombatantId: who.targetId };
+  const verdict = OUTCOME[outcome.verdict];
+  return [
+    {
+      label,
+      notation: `1d20${signed(outcome.toHit)}`,
+      dice: [outcome.d20],
+      kept: [outcome.d20],
+      modifier: outcome.toHit,
+      total: outcome.total,
+      mode: "normal",
+      critical: naturalOf(outcome.d20),
+      kind: "attack",
+      ...about,
+      ...(outcome.ac === null ? {} : { targetAc: outcome.ac }),
+      ...(verdict === undefined ? {} : { outcome: verdict }),
+    },
+    ...outcome.damage.map((roll) => damageThrow(label, roll, about)),
+  ];
+};
+
+/**
+ * *Roll* for a creature that is not up: the to-hit and the damage together,
+ * with no target, as the DM's rolls of one act — the log prints them as one
+ * line, `d20 11 +6 = 17 · 2d8+4 = 14`.
+ */
+export const rollActionThrows = ({
   attacker,
+  attackerId,
   line,
   random = Math.random,
 }: {
   readonly attacker: string;
+  readonly attackerId: CombatantId;
   readonly line: ActionLine;
   readonly random?: Random;
-}): DmLine => {
+}): ReadonlyArray<DmThrow> => {
+  const label = `${attacker} · ${line.name}`;
   const d20 = line.toHit === undefined ? undefined : rollFace(20, random);
   const damage = damageOf(line, false, random);
-  const toHit =
-    d20 === undefined || line.toHit === undefined
-      ? undefined
-      : `d20 ${String(d20)} ${signed(line.toHit)} = ${String(d20 + line.toHit)}`;
-  const thrown = damage.map((roll) => `${roll.notation} = ${String(roll.total)}`);
-  return {
-    label: `${attacker} · ${line.name}`,
-    detail: [toHit, ...thrown].filter((part) => part !== undefined).join(" · "),
-    total: String(d20 === undefined || line.toHit === undefined ? sum(damage) : d20 + line.toHit),
-    tone: d20 === 20 ? "success" : d20 === 1 ? "danger" : "accent",
-  };
+  return [
+    ...(d20 === undefined || line.toHit === undefined
+      ? []
+      : [
+          {
+            label,
+            notation: `1d20${signed(line.toHit)}`,
+            dice: [d20],
+            kept: [d20],
+            modifier: line.toHit,
+            total: d20 + line.toHit,
+            mode: "normal",
+            critical: naturalOf(d20),
+            kind: "attack",
+            combatantId: attackerId,
+          } satisfies DmThrow,
+        ]),
+    ...damage.map((roll) => damageThrow(label, roll, { combatantId: attackerId })),
+  ];
+};
+
+/**
+ * The Con save a concentrating target makes for a hit, as the DM's roll: d20
+ * plus the save its stat block or sheet holds. A roll has no DC of its own, so
+ * the label carries it: `Goblin Boss · Concentration save, DC 10`.
+ */
+export const concentrationThrow = ({
+  target,
+  targetId,
+  dc,
+  modifier,
+  random = Math.random,
+}: {
+  readonly target: string;
+  readonly targetId: CombatantId;
+  readonly dc: number;
+  readonly modifier: number;
+  readonly random?: Random;
+}): DmThrow | undefined => {
+  const rolled = rollDiceExpression(
+    `${target} · Concentration save, DC ${String(dc)}`,
+    `1d20${signed(modifier)}`,
+    "normal",
+    random,
+  );
+  return rolled === undefined
+    ? undefined
+    : throwOf(rolled, { kind: "concentration", combatantId: targetId });
 };

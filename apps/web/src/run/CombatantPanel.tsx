@@ -420,8 +420,9 @@ function Actions({
   readonly disabled: boolean;
   /** The line whose target is being picked, if one is. */
   readonly targeting: ActionLine | undefined;
-  readonly onAttack: (action: ActionLine) => void;
-  readonly onRoll: (action: ActionLine) => void;
+  /** Both absent while the DM's dice are put away (`DmDice.file`). */
+  readonly onAttack: ((action: ActionLine) => void) | undefined;
+  readonly onRoll: ((action: ActionLine) => void) | undefined;
 }) {
   return (
     <section aria-label={`Actions of ${combatant.displayName}`} className="flex flex-col gap-2">
@@ -437,31 +438,32 @@ function Actions({
                 {actionDetail(action)}
               </span>
             </div>
-            {active && attacks(action) ? (
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={`Attack with ${action.name}`}
-                aria-pressed={targeting?.key === action.key}
-                disabled={disabled}
-                onClick={() => onAttack(action)}
-              >
-                <Icon name="swords" size={14} />
-                Attack
-              </Button>
-            ) : (
-              rolls(action) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label={`Roll ${action.name}`}
-                  onClick={() => onRoll(action)}
-                >
-                  <Icon name="dice-5" size={14} />
-                  Roll
-                </Button>
-              )
-            )}
+            {active && attacks(action)
+              ? onAttack !== undefined && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Attack with ${action.name}`}
+                    aria-pressed={targeting?.key === action.key}
+                    disabled={disabled}
+                    onClick={() => onAttack(action)}
+                  >
+                    <Icon name="swords" size={14} />
+                    Attack
+                  </Button>
+                )
+              : rolls(action) &&
+                onRoll !== undefined && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Roll ${action.name}`}
+                    onClick={() => onRoll(action)}
+                  >
+                    <Icon name="dice-5" size={14} />
+                    Roll
+                  </Button>
+                )}
           </li>
         ))}
       </ul>
@@ -477,7 +479,7 @@ function StatBlockDisclosure({
 }: {
   readonly combatant: Combatant;
   readonly creature: Creature;
-  readonly onRoll: (label: string, notation: string) => void;
+  readonly onRoll: ((label: string, notation: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -496,7 +498,12 @@ function StatBlockDisclosure({
         <StatBlockBody
           creature={creature}
           emptyNote="This creature has no stat block written yet. Its numbers above are what the fight is using."
-          onRoll={(label, notation) => onRoll(`${combatant.displayName} · ${label}`, notation)}
+          {...(onRoll === undefined
+            ? {}
+            : {
+                onRoll: (label: string, notation: string) =>
+                  onRoll(`${combatant.displayName} · ${label}`, notation),
+              })}
         />
       )}
     </div>
@@ -645,8 +652,11 @@ export function CombatantPanel({
   readonly onDamage: (amount: number) => void;
   readonly onConditions: (conditions: ReadonlyArray<string>) => void;
   readonly onVisibility: (visibility: Visibility) => void;
-  /** Roll into the DM's local dice, under a label that already names the combatant. */
-  readonly onRoll: (label: string, notation: string) => void;
+  /**
+   * Roll into the DM's dice (`dice.ts`), under a label that already names the
+   * combatant. Absent, with `onAttack` and `onRollAction`, while they are put away.
+   */
+  readonly onRoll: ((label: string, notation: string) => void) | undefined;
   /** The dots: both counts, set outright. */
   readonly onDeathSaves: (saves: DeathSaves) => void;
   /** *Roll death save*: the d20 is rolled by the caller, the rule applied by the server. */
@@ -659,12 +669,14 @@ export function CombatantPanel({
         readonly outcome: AttackOutcome;
         readonly applied: boolean;
         readonly concentrationDc: number | undefined;
+        /** Roll the save the hit set up, once it is sent and the target's save is written. */
+        readonly onRollSave: (() => void) | undefined;
       }
     | undefined;
   /** Start picking a target for one of its lines (`attack.ts`). */
-  readonly onAttack: (action: ActionLine) => void;
+  readonly onAttack: ((action: ActionLine) => void) | undefined;
   /** Roll a line with no target, into the dock. */
-  readonly onRollAction: (action: ActionLine) => void;
+  readonly onRollAction: ((action: ActionLine) => void) | undefined;
   /** Send the attack's damage, whole or halved, to its target. */
   readonly onApplyResult: (amount: number) => void;
   readonly onDismissResult: () => void;
@@ -806,6 +818,7 @@ export function CombatantPanel({
             applied={result.applied}
             concentrationDc={result.concentrationDc}
             disabled={disabled}
+            onRollSave={result.onRollSave}
             onApply={onApplyResult}
             onDismiss={onDismissResult}
           />
