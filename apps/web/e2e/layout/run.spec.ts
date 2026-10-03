@@ -14,7 +14,7 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * card's controls inside its edges, the *Rolls* dock taking a click, a long
  * order scrolling sideways inside the strip, every chip in reach of the
  * keyboard, and, on the canvas, a token dragged onto its square with its ruler
- * on the way and an attack picked on the board. All of it is layout, stacking,
+ * on the way, an attack picked on the board, and the Fog brush painting it. All of it is layout, stacking,
  * cursors and hit-testing, which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`'s
@@ -848,6 +848,187 @@ for (const width of WIDTHS) {
           await expect
             .poll(() => writes.map((path) => path.split("/").slice(-1)[0]), { message: "writes" })
             .toEqual(["turn"]);
+        });
+      });
+
+      test("the Fog brush", async ({ app, page }) => {
+        // The server's fog, as the stub stands in for it: the board's read
+        // answers it, and the Fog tool's write applies itself to it.
+        let fog: Array<{ column: number; row: number }> = [];
+        let board: Record<string, unknown> = {};
+        const key = (square: { column: number; row: number }) =>
+          `${String(square.column)},${String(square.row)}`;
+        await page.route(
+          (url) =>
+            /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/board$/.test(url.pathname),
+          async (route) => {
+            const response = await route.fetch();
+            board = (await response.json()) as Record<string, unknown>;
+            await route.fulfill({ response, json: { ...board, fog } });
+          },
+        );
+        const writes: Array<Record<string, unknown>> = [];
+        await page.route(
+          (url) => url.pathname.endsWith("/board/fog"),
+          async (route) => {
+            const body = route.request().postDataJSON() as {
+              hide?: typeof fog;
+              reveal?: typeof fog;
+              revealAll?: true;
+              coverAll?: true;
+              reset?: true;
+            };
+            writes.push(body);
+            if (body.revealAll === true || body.reset === true) fog = [];
+            if (body.coverAll === true) {
+              fog = Array.from({ length: 16 * 24 }, (_, index) => ({
+                column: index % 24,
+                row: Math.floor(index / 24),
+              }));
+            }
+            const hidden = new Map(fog.map((square) => [key(square), square]));
+            for (const square of body.hide ?? []) hidden.set(key(square), square);
+            for (const square of body.reveal ?? []) hidden.delete(key(square));
+            fog = [...hidden.values()];
+            await route.fulfill({ json: { ...board, fog } });
+          },
+        );
+        let moves = 0;
+        page.on("request", (request) => {
+          if (request.method() === "POST" && request.url().endsWith("/move")) moves++;
+        });
+        await app.open(run);
+        const map = page.getByRole("region", { name: "Battle map" });
+        const tools = page.locator('[data-slot="run-hud-tools"]');
+        const token = map.getByRole("button", { name: /^Brannoc, column/ });
+        await expect(token).toBeVisible();
+        const fogSwitch = tools.getByRole("button", { name: "Fog", exact: true });
+        await fogSwitch.click();
+        // The dock grows with the tool's writes; the whole board goes back
+        // between the panels and above it.
+        await tools.getByRole("button", { name: "Fit", exact: true }).click();
+        await page.waitForTimeout(200);
+        const at = await box(token);
+        const centre = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
+        /** Whether the brush is what a press at this point lands on. */
+        const brushAt = (x: number, y: number) =>
+          page.evaluate(
+            ([px, py]) =>
+              document.elementFromPoint(px!, py!)?.closest("[data-slot=fog-brush]") != null,
+            [x, y],
+          );
+        const veil = map.locator('[data-slot="run-tokens"] [data-slot="fog"]');
+
+        await test.step("Fog is a tool in the dock, and on, its brush takes the board over every token", async () => {
+          await expect(fogSwitch).toHaveAttribute("aria-pressed", "true");
+          await expect(tools.getByRole("status")).toContainText("Click or drag to hide squares");
+          expect.soft(await brushAt(centre.x, centre.y), "the brush is over Brannoc").toBe(true);
+          await expect
+            .soft(map.locator('[data-slot="fog-brush"]'), "the brush's cursor")
+            .toHaveCSS("cursor", "crosshair");
+          // Its board-wide writes sit inside the dock.
+          const dock = await box(tools);
+          for (const name of ["Reveal all", "Cover all", "Reset fog"]) {
+            const button = await box(tools.getByRole("button", { name, exact: true }));
+            expect.soft(button.x, `${name} left`).toBeGreaterThanOrEqual(dock.x);
+            expect.soft(right(button), `${name} right`).toBeLessThanOrEqual(right(dock) + 0.5);
+          }
+        });
+
+        await test.step("a drag paints one stroke from his square, pans nothing and moves nobody", async () => {
+          const view = await viewOf(page);
+          const written = page.waitForRequest(
+            (request) => request.method() === "PATCH" && request.url().endsWith("/board/fog"),
+          );
+          await page.mouse.move(centre.x, centre.y);
+          await page.mouse.down();
+          await page.mouse.move(centre.x + at.width * 1.5, centre.y, { steps: 4 });
+          await page.mouse.move(centre.x + at.width * 3, centre.y, { steps: 4 });
+          await page.mouse.up();
+          const body = (await written).postDataJSON() as { hide: unknown };
+          expect.soft(body.hide, "the squares crossed").toEqual([
+            { column: 5, row: 4 },
+            { column: 6, row: 4 },
+            { column: 7, row: 4 },
+            { column: 8, row: 4 },
+          ]);
+          expect.soft(await viewOf(page), "the stroke panned nothing").toEqual(view);
+          expect.soft(moves, "no move was sent").toBe(0);
+        });
+
+        await test.step("the DM's fog is a dim layer over the token, four squares wide", async () => {
+          await expect(veil).toHaveAttribute("data-squares", "4");
+          const path = veil.locator("path");
+          const fill = await path.evaluate((el) => getComputedStyle(el).fill);
+          expect.soft(fill, "dimmed, not opaque").toMatch(/[ /,]\s*0?\.62\)$/);
+          const over = await box(path);
+          expect.soft(over.x, "from his square").toBeCloseTo(at.x, 0);
+          expect.soft(over.width, "four squares").toBeCloseTo(at.width * 4, 0);
+          // The fog and the brush both stand over the token; the fog takes no
+          // pointer, so it is lent one, and the brush put aside, to be hit-tested.
+          const stacked = await veil.evaluate(
+            (el: SVGElement, [x, y]) => {
+              const brush = document.querySelector<HTMLElement>("[data-slot=fog-brush]");
+              el.style.pointerEvents = "auto";
+              if (brush !== null) brush.style.pointerEvents = "none";
+              const names = document
+                .elementsFromPoint(x!, y!)
+                .map((found) =>
+                  found.closest("[data-slot=fog]") !== null
+                    ? "fog"
+                    : found.closest("[data-slot=token]") !== null
+                      ? "token"
+                      : null,
+                )
+                .filter((name) => name !== null);
+              el.style.pointerEvents = "";
+              if (brush !== null) brush.style.pointerEvents = "";
+              return names;
+            },
+            [centre.x, centre.y],
+          );
+          expect.soft(stacked, "both are there").toEqual(expect.arrayContaining(["fog", "token"]));
+          expect
+            .soft(stacked.indexOf("fog"), "the fog over the token")
+            .toBeLessThan(stacked.indexOf("token"));
+        });
+
+        await test.step("a stroke that starts under fog reveals", async () => {
+          const written = page.waitForRequest(
+            (request) => request.method() === "PATCH" && request.url().endsWith("/board/fog"),
+          );
+          await page.mouse.move(centre.x + at.width, centre.y);
+          await page.mouse.down();
+          await page.mouse.move(centre.x + at.width * 2, centre.y, { steps: 4 });
+          await page.mouse.up();
+          const body = (await written).postDataJSON() as { reveal: unknown };
+          expect.soft(body.reveal, "the squares crossed").toEqual([
+            { column: 6, row: 4 },
+            { column: 7, row: 4 },
+          ]);
+          await expect(veil).toHaveAttribute("data-squares", "2");
+        });
+
+        await test.step("Cover all fogs the whole board, and Reset fog clears it again", async () => {
+          await tools.getByRole("button", { name: "Cover all", exact: true }).click();
+          await expect(veil).toHaveAttribute("data-squares", String(24 * 16));
+          const covered = await box(veil.locator("path"));
+          expect.soft(covered.width, "the board's width").toBeCloseTo(at.width * 24, 0);
+          await tools.getByRole("button", { name: "Reset fog", exact: true }).click();
+          await expect(veil).toHaveCount(0);
+          expect.soft(writes.slice(-2), "one write each").toEqual([
+            { coverAll: true, requestId: expect.any(String) },
+            { reset: true, requestId: expect.any(String) },
+          ]);
+        });
+
+        await test.step("Esc puts the brush away, and the token takes the pointer again", async () => {
+          await page.keyboard.press("Escape");
+          await expect(map.locator('[data-slot="fog-brush"]')).toHaveCount(0);
+          await expect(tools.getByRole("group", { name: "Fog" })).toHaveCount(0);
+          expect
+            .soft(await landsOn(page, centre.x, centre.y), "the token is on top")
+            .toMatch(/^Brannoc, column/);
         });
       });
     }

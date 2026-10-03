@@ -4,7 +4,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * A seated player's table (`play/PlayerTableScreen.tsx`) with the fight's map
  * shared (`play/PlayerBoard.tsx`), at every width: the board fills its column
  * at the picture's shape, each token stands on its own square of it and is what
- * is on top there, and nothing on the board takes a pointer. Where a token
+ * is on top there, nothing on the board takes a pointer, and fog of war covers
+ * its squares opaque with only the player's own token over it. Where a token
  * lands, what covers it and what a tap hits are layout, which jsdom does not
  * compute.
  *
@@ -107,6 +108,90 @@ for (const width of WIDTHS) {
           expect.soft(hit.pressable, "a tap on it presses nothing").toBe(false);
         }
         await expect.soft(card.getByRole("button")).toHaveCount(0);
+      });
+    });
+
+    test("fog on the shared map", async ({ app, page }) => {
+      // The DM fogged Brannoc's square and the one beside it: the table still
+      // sends his own token there, and nothing else.
+      const fogged = [
+        { column: 5, row: 4 },
+        { column: 6, row: 4 },
+      ];
+      await page.route(
+        (url) => /\/stub\/campaigns\/[^/]+\/table$/.test(url.pathname),
+        async (route) => {
+          const response = await route.fetch();
+          const table = (await response.json()) as {
+            fight: { board: Record<string, unknown> | null } | null;
+          };
+          await route.fulfill({
+            response,
+            json:
+              table.fight?.board == null
+                ? table
+                : {
+                    ...table,
+                    fight: { ...table.fight, board: { ...table.fight.board, fog: fogged } },
+                  },
+          });
+        },
+      );
+      await app.open(table);
+      const card = page.getByRole("region", { name: "Battle map" });
+      const board = card.locator('[data-slot="battle-map"]');
+      const fog = board.locator('[data-slot="fog"]');
+      await expect(fog).toHaveAttribute("data-squares", "2");
+
+      await test.step("the fog is opaque, over the picture and the grid, on its two squares", async () => {
+        const path = fog.locator("path");
+        const fill = await path.evaluate((el) => getComputedStyle(el).fill);
+        const sunken = await page.evaluate(() => {
+          const probe = document.createElement("span");
+          probe.style.color = "var(--surface-sunken)";
+          document.body.append(probe);
+          const colour = getComputedStyle(probe).color;
+          probe.remove();
+          return colour;
+        });
+        expect.soft(fill, "the full surface, not a dimmed one").toBe(sunken);
+        const inner = await board.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x + el.clientLeft, y: r.y + el.clientTop, width: el.clientWidth };
+        });
+        const square = inner.width / COLUMNS;
+        const covered = await box(path);
+        expect.soft(covered.x, "from Brannoc's column").toBeCloseTo(inner.x + 5 * square, 0);
+        expect.soft(covered.y, "on his row").toBeCloseTo(inner.y + 4 * square, 0);
+        expect.soft(covered.width, "two squares wide").toBeCloseTo(square * 2, 0);
+        // The square beside him is the fog, painted over the picture and the
+        // grid. The fog takes no pointer, so it is lent one to be hit-tested.
+        const beside = await fog.evaluate(
+          (el: SVGElement, [x, y]) => {
+            el.style.pointerEvents = "auto";
+            const under = document.elementFromPoint(x!, y!);
+            el.style.pointerEvents = "";
+            return under?.closest("[data-slot=fog]") != null
+              ? "fog"
+              : (under?.tagName ?? "nothing");
+          },
+          [inner.x + 6.5 * square, inner.y + 4.5 * square],
+        );
+        expect.soft(beside, "the fog is on top of the picture").toBe("fog");
+      });
+
+      await test.step("the player's own token stands over it", async () => {
+        const you = card.getByRole("img", { name: /^Brannoc Duskharrow \(you\)/ });
+        const at = await box(you);
+        const hit = await page.evaluate(
+          ([x, y]) =>
+            document
+              .elementFromPoint(x!, y!)
+              ?.closest("[data-slot=token]")
+              ?.getAttribute("aria-label") ?? null,
+          [at.x + at.width / 2, at.y + at.height / 2],
+        );
+        expect.soft(hit, "his token is on top").toMatch(/^Brannoc Duskharrow \(you\)/);
       });
     });
   });
