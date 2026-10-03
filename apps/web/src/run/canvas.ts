@@ -113,6 +113,13 @@ export const keepInView = (
 };
 
 /**
+ * Pixels per unit of a wheel event's delta: a mouse wheel in Firefox reports
+ * lines, a few to a notch, where everything else reports pixels.
+ */
+export const wheelUnit = (event: { readonly deltaMode: number }): number =>
+  event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+
+/**
  * The zoom factor for one wheel event with ⌘/Ctrl held, which is also what a
  * trackpad pinch sends. A mouse wheel's notch (about 100) is one bounded step;
  * a pinch's stream of small deltas is a smooth one.

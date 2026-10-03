@@ -40,8 +40,8 @@ import { CombatantPanel } from "./CombatantPanel";
 import { useDmDice } from "./dice";
 import { DmDiceCard } from "./DmDice";
 import { EndRunDialog } from "./EndRunDialog";
-import { InitiativeList } from "./InitiativeList";
 import { InitiativePhase } from "./InitiativePhase";
+import { InitiativeStrip } from "./InitiativeStrip";
 import { RunBoardCard } from "./RunBoardCard";
 import type { RunBoardProps } from "./runBoard";
 import { RunLayout } from "./RunLayout";
@@ -1012,10 +1012,17 @@ export function RunScreen() {
     </>
   );
 
-  /** The fight's pieces, which the canvas and the narrow grid each lay out. */
-  const initiative =
-    state !== undefined &&
-    (rolling && !over ? (
+  // The canvas is for a fight with a board on a screen wide enough to play
+  // on it; anything else is the grid, which closes the gap a missing board
+  // leaves.
+  const canvas = scene === undefined && stage.wide === true && hasBoard(boardResource);
+  /**
+   * The fight's pieces, which the canvas and the narrow grid each lay out:
+   * *Roll initiative* while the fight rolls, and the strip once it takes turns
+   * (or is over, when the strip is how it finished).
+   */
+  const rollPanel =
+    state !== undefined && rolling && !over ? (
       <InitiativePhase
         path={path}
         run={state.run}
@@ -1028,18 +1035,23 @@ export function RunScreen() {
         onWritten={refresh}
         onBegin={() => void begin()}
       />
-    ) : (
-      <InitiativeList
+    ) : null;
+  const strip =
+    state !== undefined && rollPanel === null ? (
+      <InitiativeStrip
         run={state.run}
         combatants={state.combatants}
+        labels={labels}
         hpOf={controller.hpOf}
         selectedId={selected?.id}
+        board={boardResource.state === "ready" && boardResource.value !== null}
+        floating={canvas}
         disabled={frozen}
         onSelect={(combatant) => setSelectedId(combatant.id)}
         onAdd={() => setAdding(true)}
         onReroll={() => void reroll()}
       />
-    ));
+    ) : null;
   const card = state !== undefined && view !== undefined && (
     <CombatantPanel
       combatant={selected}
@@ -1094,10 +1106,6 @@ export function RunScreen() {
           hiding: mapShare.busy,
           onHideHostile: (hidden) => void setShown(mapShare, { hostileTokensHidden: hidden }),
         };
-  // The canvas is for a fight with a board on a screen wide enough to play
-  // on it; anything else is the grid, which closes the gap a missing board
-  // leaves.
-  const canvas = scene === undefined && stage.wide === true && hasBoard(boardResource);
 
   return (
     <TooltipProvider>
@@ -1243,7 +1251,8 @@ export function RunScreen() {
               />
             ) : canvas && boardProps !== undefined ? (
               <RunStage
-                strip={initiative}
+                strip={strip}
+                rolling={rollPanel}
                 panel={
                   <>
                     {card}
@@ -1260,7 +1269,8 @@ export function RunScreen() {
               />
             ) : (
               <RunLayout
-                initiative={initiative}
+                initiative={strip ?? rollPanel}
+                strip={strip !== null}
                 map={
                   hasBoard(boardResource) && boardProps !== undefined ? (
                     <RunBoardCard {...boardProps} />

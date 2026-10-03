@@ -27,8 +27,8 @@ import { newRequestId } from "./state";
 
 /**
  * The fight before its first turn: the redesign's *Roll initiative* panel
- * (`Campaign Overview.dc.html`, the initiative phase), in the initiative list's
- * place while `run.phase` is `initiative`.
+ * (`Campaign Overview.dc.html`, the initiative phase), in the initiative
+ * strip's place (`InitiativeStrip.tsx`) while `run.phase` is `initiative`.
  *
  * Every number on it is the server's, written through as it is entered — typed
  * or rolled, one row or every monster at once, each through the fight's one
