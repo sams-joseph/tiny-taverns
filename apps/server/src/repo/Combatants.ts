@@ -431,6 +431,10 @@ export class Combatants extends Context.Service<
           }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
           const written = revived
             ? yield* hit({ campaignId, actor, runId, id, amount: -1, critical: false }).pipe(
+                Effect.map(
+                  ({ hpBefore: _b, wasConcentrating: _w, ...rest }) =>
+                    new Combatant(rest, { disableChecks: true }),
+                ),
                 Effect.catchTag("NoSuchElementError", Effect.die),
               )
             : combatant;

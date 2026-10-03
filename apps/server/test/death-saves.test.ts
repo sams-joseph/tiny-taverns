@@ -2,7 +2,7 @@ import {
   type Actor,
   type CampaignCharacterId,
   type CharacterId,
-  type Combatant,
+  Combatant,
   type CombatantId,
   Conflict,
   CurrentActor,
@@ -12,7 +12,7 @@ import {
   type SessionId,
 } from "@taverns/api";
 import { describe, expect } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
@@ -454,6 +454,8 @@ describeLayer("death-saves", shared, (it) => {
         const up = yield* roll(dying, dying.id, 20).pipe(Effect.orDie);
         expect(up.hpCurrent).toBe(1);
         expect(savesOf(up)).toEqual({ successes: 0, failures: 0 });
+        // The HTTP layer encodes the answer as a Combatant; a raw hit row is refused.
+        expect(() => Schema.encodeUnknownSync(Combatant)(up)).not.toThrow();
         expect(yield* columnsOf(dying.character.id)).toEqual({
           hpCurrent: 1,
           deathSaves: { successes: 0, failures: 0 },
