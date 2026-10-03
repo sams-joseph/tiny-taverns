@@ -16,13 +16,14 @@ import {
   playerCazril,
   renderRunner,
   runBoard,
+  runParty,
   session,
   sessionEvent,
 } from "./run.fixtures";
 import { apiUrl } from "../api/client";
 import { reads } from "../api/keys";
 import { drawnPortrait } from "../campaign/campaign.fixtures";
-import { combatantWrites } from "./load";
+import { combatantVisibilityWrites, combatantWrites } from "./load";
 
 /**
  * The runner, against a stub server.
@@ -46,6 +47,15 @@ const rowFor = (name: string): HTMLElement => {
   return found;
 };
 const panel = () => within(screen.getByRole("region", { name: "Selected combatant" }));
+/** Open the panel's overflow menu, which portals to the body, and read it. */
+const panelMenu = async (name: string) => {
+  await userEvent.click(panel().getByRole("button", { name: `More for ${name}` }));
+  return within(await screen.findByRole("menu"));
+};
+/** Unfold the selected creature's stat block. */
+const openStatBlock = async () => {
+  await userEvent.click(panel().getByRole("button", { name: "Stat block" }));
+};
 const initiative = () => within(screen.getByRole("table", { name: "Initiative order" }));
 /** The header, whose card the two sentences about visibility live on. */
 const listCard = () => screen.getByText("Initiative").closest("[data-slot=card]") as HTMLElement;
@@ -544,18 +554,28 @@ describe("the runner", () => {
     // Brannoc is up, so the panel is on Brannoc without anyone choosing.
     expect(panel().getByText("Brannoc")).toBeInTheDocument();
     expect(panel().getByText("Party")).toBeInTheDocument();
-    expect(panel().queryByRole("button", { name: "Follow the turn" })).toBeNull();
+    // Following already: the menu has nothing to follow, and nobody to make up.
+    const following = await panelMenu("Brannoc");
+    expect(following.queryByRole("menuitem", { name: "Follow the turn" })).toBeNull();
+    expect(following.queryByRole("menuitem", { name: "Make it their turn" })).toBeNull();
+    await userEvent.keyboard("{Escape}");
 
     await userEvent.click(rowFor("Goblin Boss"));
 
     expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
-    expect(panel().getByRole("button", { name: "Follow the turn" })).toBeInTheDocument();
+    const picked = await panelMenu("Goblin Boss");
+    expect(picked.getByRole("menuitem", { name: "Follow the turn" })).toBeInTheDocument();
+    expect(picked.getByRole("menuitem", { name: "Make it their turn" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    // The stat block is folded under the Actions until the DM wants it.
+    expect(panel().queryByText("17 (chain shirt, shield)")).toBeNull();
+    await openStatBlock();
     // The document half of the creature, which no column holds: the
     // parenthetical is the whole reason `statBlock` is a document and not
     // derived from the `ac` beside it.
     expect(panel().getByText("17 (chain shirt, shield)")).toBeInTheDocument();
     expect(panel().getByText("Nimble Escape")).toBeInTheDocument();
-    expect(panel().getByText("1d6+2")).toBeInTheDocument();
+    expect(panel().getByRole("button", { name: "Roll Scimitar, 1d6+2" })).toBeInTheDocument();
   });
 
   // Heights are the browser's (`pnpm -F web e2e` measures the runner);
@@ -632,7 +652,7 @@ describe("the runner", () => {
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await userEvent.click(rowFor("Goblin Boss"));
-    await userEvent.click(panel().getByRole("button", { name: "Edit" }));
+    await userEvent.click((await panelMenu("Goblin Boss")).getByRole("menuitem", { name: "Edit" }));
 
     const conditions = await screen.findByLabelText("Conditions");
     await userEvent.clear(conditions);
@@ -658,11 +678,30 @@ describe("the runner", () => {
     await userEvent.click(rowFor("Goblin Boss"));
 
     const chips = within(panel().getByRole("group", { name: "Conditions on Goblin Boss" }));
-    // The drawing's five, and the word the row already carries, pressed so it
-    // can be cleared: the vocabulary is open.
-    for (const word of ["Prone", "Poisoned", "Restrained", "Frightened", "Concentrating"])
-      expect(chips.getByRole("button", { name: word })).toHaveAttribute("aria-pressed", "false");
+    // The drawing's fourteen — the SRD's but Exhaustion, which has levels, plus
+    // Concentrating — then the word the row already carries, pressed so it can
+    // be cleared: the vocabulary is open.
+    expect(chips.getAllByRole("button").map((chip) => chip.textContent)).toEqual([
+      "Blinded",
+      "Charmed",
+      "Concentrating",
+      "Deafened",
+      "Frightened",
+      "Grappled",
+      "Incapacitated",
+      "Invisible",
+      "Paralyzed",
+      "Poisoned",
+      "Prone",
+      "Restrained",
+      "Stunned",
+      "Unconscious",
+      "Hostile",
+    ]);
+    for (const chip of chips.getAllByRole("button").slice(0, 14))
+      expect(chip).toHaveAttribute("aria-pressed", "false");
     expect(chips.getByRole("button", { name: "Hostile" })).toHaveAttribute("aria-pressed", "true");
+    expect(panel().getByText("1 active")).toBeInTheDocument();
 
     await userEvent.click(chips.getByRole("button", { name: "Prone" }));
     await waitFor(() =>
@@ -707,6 +746,7 @@ describe("the runner", () => {
     const dice = () => within(screen.getByRole("region", { name: "Dice" }));
     expect(dice().getByText(/Rolls show up here/)).toBeInTheDocument();
 
+    await openStatBlock();
     await userEvent.click(panel().getByRole("button", { name: "Roll DEX check, 1d20+2" }));
     await userEvent.click(panel().getByRole("button", { name: "Roll Scimitar, 1d6+2" }));
     await userEvent.click(dice().getByRole("button", { name: "Roll a d20" }));
@@ -732,16 +772,227 @@ describe("the runner", () => {
     ).toHaveLength(6);
   });
 
-  it("says a party member's sheet stays with their player", async () => {
+  it("reads a party member's speed and actions off their sheet, and has no stat block", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/party`, {
+      status: 200,
+      body: runParty.map((seat) => ({
+        ...seat,
+        character: {
+          ...seat.character,
+          sheet: {
+            ...seat.character.sheet,
+            actions: [
+              {
+                id: "atk:longsword",
+                name: "Longsword",
+                cost: "action",
+                hit: "+7",
+                dice: "1d8+4",
+                damageType: "Slashing",
+                source: "weapon",
+              },
+              { id: "spell:bless", name: "Bless", cost: "action", source: "spell" },
+            ],
+          },
+        },
+      })),
+    });
     await renderRunner();
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+
+    // A person's line in the sans; a monster's in the stat block's serif.
+    expect(panel().getByText("Half-orc paladin · Ilse")).not.toHaveClass("font-serif");
+    const tiles = (label: string) => panel().getByText(label).nextElementSibling?.textContent;
+    expect(tiles("AC")).toBe("18");
+    expect(tiles("HP")).toBe("44/52");
+    // The sheet's "25 ft.", as the board's range reads it.
+    await waitFor(() => expect(tiles("Speed")).toBe("25"));
+    expect(tiles("Init")).toBe("21");
+
+    // What the sheet rolls for; *Bless* has nothing to roll.
+    const actions = within(panel().getByRole("region", { name: "Actions of Brannoc" }));
+    expect(actions.getAllByRole("listitem").map((line) => line.textContent)).toEqual([
+      "Longsword+7 to hit · 1d8+4 slashing",
+    ]);
+    expect(panel().queryByRole("button", { name: "Stat block" })).toBeNull();
+  });
+
+  it("lists a monster's attacks over its folded stat block, in the block's own face", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    expect(panel().getByText("Small humanoid")).toHaveClass("font-serif", "italic");
+    const tiles = (label: string) => panel().getByText(label).nextElementSibling?.textContent;
+    expect(tiles("Speed")).toBe("30");
+    const actions = within(panel().getByRole("region", { name: "Actions of Goblin Boss" }));
+    expect(actions.getAllByRole("listitem").map((line) => line.textContent)).toEqual([
+      "Scimitar1d6+2",
+    ]);
+    expect(panel().getByRole("button", { name: "Stat block" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("draws a creature at zero hit points in red, and a row typed in with no speed or actions", async () => {
+    const guard = {
+      ...goblinBoss,
+      id: "2b1f2a1e-0000-4000-8000-000000000c77",
+      creatureId: null,
+      displayName: "Guard",
+      subtitle: null,
+      hpCurrent: 0,
+      conditions: [],
+    };
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, guard],
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Guard"));
+
+    const hp = panel().getByText("HP").nextElementSibling;
+    expect(hp).toHaveTextContent("0/21");
+    expect(hp).toHaveClass("text-danger");
+    expect(panel().getByText("Speed").nextElementSibling).toHaveTextContent("—");
+    expect(panel().queryByRole("region", { name: "Actions of Guard" })).toBeNull();
+    expect(panel().getByText("None")).toBeInTheDocument();
+  });
+
+  it("hides a creature from the players with the eye, and shows it again", async () => {
+    // The fixture's boss is hidden, as a row added at the table starts.
+    const hidden = { ...goblinBoss, visibility: "dm" };
+    server.routes.set(`PATCH ${serverRunBase()}/combatants/${goblinBoss.id}`, {
+      status: 200,
+      body: { ...goblinBoss, visibility: "shared" },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, hidden],
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    const eye = panel().getByRole("button", {
+      name: "Goblin Boss is hidden from players. Reveal them.",
+    });
+    expect(eye).toHaveAttribute("title", "Hidden from players. Click to reveal.");
+    await userEvent.click(eye);
+
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/combatants/${goblinBoss.id}`)).toEqual({
+        visibility: "shared",
+      }),
+    );
+    // The answer is merged into the fight, and the eye turns over without a re-read.
+    const shown = await panel().findByRole("button", { name: "Hide Goblin Boss from players" });
+    expect(shown).toHaveAttribute("title", "Hide from players");
+    // It changes what a seated player's table answers, and nothing of the party's.
+    expect(combatantVisibilityWrites(campaignId)).toEqual([reads.playerTable(campaignId)]);
+
+    server.routes.set(`PATCH ${serverRunBase()}/combatants/${goblinBoss.id}`, {
+      status: 200,
+      body: hidden,
+    });
+    server.calls.length = 0;
+    await userEvent.click(shown);
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/combatants/${goblinBoss.id}`)).toEqual({
+        visibility: "dm",
+      }),
+    );
+    await panel().findByRole("button", {
+      name: "Goblin Boss is hidden from players. Reveal them.",
+    });
+  });
+
+  it("makes a creature's turn from the menu", async () => {
+    server.routes.set(`PATCH ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    await userEvent.click(
+      (await panelMenu("Goblin Boss")).getByRole("menuitem", { name: "Make it their turn" }),
+    );
+    await waitFor(() =>
+      expect(bodyOf(server, "PATCH", `/runs/${liveRun.id}`)).toEqual({
+        activeCombatantId: goblinBoss.id,
+      }),
+    );
+  });
+
+  it("asks before removing a creature from the fight, and follows the turn after", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(rowFor("Goblin Boss"));
+
+    await userEvent.click(
+      (await panelMenu("Goblin Boss")).getByRole("menuitem", { name: "Remove from the fight" }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText("Remove Goblin Boss from the fight?")).toBeInTheDocument();
+    // Asking is not removing.
+    expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
+    await userEvent.click(dialog.getByRole("button", { name: "Keep them" }));
+    expect(server.calls.some((call) => call.method === "DELETE")).toBe(false);
+    expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
+
+    await userEvent.click(
+      (await panelMenu("Goblin Boss")).getByRole("menuitem", { name: "Remove from the fight" }),
+    );
+    server.routes.set(`GET ${serverRunBase()}/combatants`, { status: 200, body: [brannocPlaced] });
+    await userEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Remove from the fight",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        server.calls.some(
+          (call) =>
+            call.method === "DELETE" && call.pathname.endsWith(`/combatants/${goblinBoss.id}`),
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(panel().getByText("Brannoc")).toBeInTheDocument();
+  });
+
+  it("offers nothing that writes once the fight is over", async () => {
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, endedAt: liveRun.startedAt },
+    });
+    await renderRunner();
+    await screen.findByText(/came off the table/);
+    await userEvent.click(rowFor("Goblin Boss"));
+
     expect(
-      panel().getByText(
-        "Played by Ilse. Their sheet stays with them; track HP and conditions here.",
-      ),
+      panel().getByRole("button", { name: "Goblin Boss is hidden from players. Reveal them." }),
+    ).toBeDisabled();
+    const menu = await panelMenu("Goblin Boss");
+    expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Follow the turn",
+    ]);
+  });
+
+  it("says nothing is selected when the turn marker is on nobody", async () => {
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: null },
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(
+      panel().getByText("Nothing selected. Click a token, or a name in the initiative."),
     ).toBeInTheDocument();
-    // The drawing's Speed is not on a combatant; the third tile is what is.
-    expect(panel().queryByText("Speed")).toBeNull();
   });
 
   it("surfaces live NPC proposal cues only as DM review links", async () => {
@@ -932,7 +1183,10 @@ describe("rolling initiative", () => {
     // The name opens the row on the card; nobody is up, so nobody can be made up.
     await userEvent.click(rollPanel().getByRole("button", { name: "Brannoc" }));
     expect(panel().getByLabelText("Hit points to apply to Brannoc")).toBeInTheDocument();
-    expect(panel().queryByRole("button", { name: /Make it/ })).toBeNull();
+    expect(
+      (await panelMenu("Brannoc")).queryByRole("menuitem", { name: "Make it their turn" }),
+    ).toBeNull();
+    await userEvent.keyboard("{Escape}");
 
     await userEvent.click(document.body);
     await userEvent.keyboard(" ");
@@ -1262,6 +1516,27 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
       expect(card().getByRole("button", { name: "Brannoc, not on the board" })).toBeInTheDocument(),
     );
     expect(hint()).toHaveTextContent("Brannoc is off the board");
+  });
+
+  it("takes a standing token off the board from the panel's menu, where the board is played on", async () => {
+    server.routes.set(brannocMove(), { status: 200, body: { ...brannocPlaced, position: null } });
+    await open();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    const menu = await panelMenu("Brannoc");
+    if (!wide) {
+      // Below the canvas the board is read-only, so its tokens stay put.
+      expect(menu.queryByRole("menuitem", { name: "Take off the board" })).toBeNull();
+      return;
+    }
+    await userEvent.click(menu.getByRole("menuitem", { name: "Take off the board" }));
+    await waitFor(() => expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: null }));
+    await waitFor(() =>
+      expect(card().getByRole("button", { name: "Brannoc, not on the board" })).toBeInTheDocument(),
+    );
+    // Off the board, there is nothing left to take off.
+    expect(
+      (await panelMenu("Brannoc")).queryByRole("menuitem", { name: "Take off the board" }),
+    ).toBeNull();
   });
 
   it("leaves the token where the server has it when a move is refused", async () => {

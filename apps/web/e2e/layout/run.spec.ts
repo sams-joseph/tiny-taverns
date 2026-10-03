@@ -325,7 +325,23 @@ for (const width of WIDTHS) {
         }
       });
 
+      await test.step("the panel's menu opens on top of everything, and its items take the click", async () => {
+        await card.getByRole("button", { name: "More for Goblin Boss" }).click();
+        const item = page.getByRole("menuitem", { name: "Follow the turn" });
+        await expect(item).toBeVisible();
+        const at = await box(item);
+        const hit = await page.evaluate(
+          ([x, y]) => document.elementFromPoint(x!, y!)?.closest("[role=menuitem]")?.textContent,
+          [at.x + at.width / 2, at.y + at.height / 2],
+        );
+        expect.soft(hit, "the menu item is what a click there lands on").toBe("Follow the turn");
+        await page.keyboard.press("Escape");
+        await expect(item).toBeHidden();
+      });
+
       await test.step("a stat on the card rolls into the DM's dice", async () => {
+        // The whole block is folded under the Actions until it is asked for.
+        await card.getByRole("button", { name: "Stat block" }).click();
         const dex = card.getByRole("button", { name: "Roll DEX check, 1d20+2" });
         await dex.scrollIntoViewIfNeeded();
         const target = await box(dex);
