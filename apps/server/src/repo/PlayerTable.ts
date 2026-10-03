@@ -41,6 +41,7 @@ import {
 import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { boardShown, COMBATANT, initiativeOrder, RUNS, tokenShown } from "./liveTables.js";
 import { dieOnSqlError, fromColumns } from "./rows.js";
+import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent } from "./SessionEvents.js";
 import {
   containedRowReadable,
@@ -90,6 +91,71 @@ const liveCombatantRow = (sign: PortraitSigner | undefined) =>
       combatantId: "id",
     }),
   ]);
+
+/**
+ * The fight's rows as this player may know them: an NPC the DM shared or a PC
+ * that still has a live seat here, and the asker's own rows alone when the
+ * scene is not a fight. Exported so a test can read the rows the decode is
+ * handed, not only what the decode leaves.
+ */
+export const liveOrderStatement = (
+  sql: SqlClient.SqlClient,
+  request: {
+    readonly campaignId: CampaignId;
+    readonly runId: EncounterRunId;
+    readonly mode: EncounterKind;
+  },
+  actor: Actor,
+) => {
+  const { campaignId, runId, mode } = request;
+  return sql`
+    select combatant.id,
+           case
+             when combatant.kind = 'npc' then 'npc'
+             when own_seated.id is not null then 'you'
+             else 'ally'
+           end as kind,
+           combatant.character_id,
+           own_seated.id as own_campaign_character_id,
+           combatant.display_name,
+           combatant.subtitle,
+           combatant.player_name,
+           combatant.initiative,
+           case when own_seated.id is not null
+             then combatant.initiative_bonus end as initiative_bonus,
+           case when own_seated.id is not null
+             then combatant.initiative_set_by end as initiative_set_by,
+           combatant.conditions,
+           ${playerLiveHitPointColumns(sql, sql("own_seated.id"))},
+           ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
+           case when ${tokenShown(sql)}
+             and combatant.board_column is not null and combatant.board_row is not null
+             then jsonb_build_object(
+               'column', combatant.board_column, 'row', combatant.board_row)
+           end as token
+    from combatant
+    join encounter_run on encounter_run.id = combatant.encounter_run_id
+    left join character on character.id = combatant.character_id
+    left join campaign_character seated
+      on seated.campaign_id = ${campaignId}
+     and seated.character_id = combatant.character_id
+     and seated.left_at is null
+     and (seated.visibility = 'shared' or seated.account_id = ${actor.accountId})
+    left join campaign_character own_seated
+      on own_seated.campaign_id = ${campaignId}
+     and own_seated.character_id = combatant.character_id
+     and own_seated.account_id = ${actor.accountId}
+     and own_seated.left_at is null
+    where combatant.encounter_run_id = ${runId}
+      and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
+      and (combatant.kind = 'npc' or seated.id is not null)
+      -- A conversation, a skill challenge or a hazard has no
+      -- initiative order to show: only the asker's own rows are
+      -- read, for their seats, and nobody else's at all.
+      and (${mode} = 'combat' or own_seated.id is not null)
+    ${initiativeOrder(sql)}
+  `;
+};
 
 /** The fight's board as a player may see it: the grid and the picture, no setting. */
 const playerBoardRow = (sign: ImageSigner | undefined) =>
@@ -184,76 +250,15 @@ export class PlayerTable extends Context.Service<
             `,
           ),
       });
-      /**
-       * The fight's rows as this player may know them: an NPC the DM shared
-       * or a PC that still has a live seat here, and the asker's own rows
-       * alone when the scene is not a fight.
-       */
+      /** The fight's rows as this player may know them: `liveOrderStatement`. */
       const liveOrder = SqlSchema.findAll({
         Request: Schema.toType(
           Schema.Struct({ campaignId: CampaignId, runId: EncounterRunId, mode: EncounterKind }),
         ),
         Result: LiveCombatantRow,
-        execute: ({ campaignId, runId, mode }) =>
-          Effect.flatMap(
-            Effect.service(CurrentActor),
-            (actor) => sql`
-              select combatant.id,
-                     case
-                       when combatant.kind = 'npc' then 'npc'
-                       when own_seated.id is not null then 'you'
-                       else 'ally'
-                     end as kind,
-                     combatant.character_id,
-                     own_seated.id as own_campaign_character_id,
-                     combatant.display_name,
-                     combatant.subtitle,
-                     combatant.player_name,
-                     combatant.initiative,
-                     case when own_seated.id is not null
-                       then combatant.initiative_bonus end as initiative_bonus,
-                     case when own_seated.id is not null
-                       then combatant.initiative_set_by end as initiative_set_by,
-                     combatant.conditions,
-                     combatant.hp_current,
-                     combatant.hp_max,
-                     coalesce(character.temp_hp, 0) as temp_hp,
-                     case
-                       when combatant.kind = 'pc' then 'unknown'
-                       when combatant.hp_max <= 0 then 'unknown'
-                       when combatant.hp_current <= 0 then 'down'
-                       when combatant.hp_current >= combatant.hp_max then 'unhurt'
-                       when combatant.hp_current * 2 <= combatant.hp_max then 'bloodied'
-                       else 'hurt'
-                     end as hp_band,
-                     ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
-                     case when ${tokenShown(sql)}
-                       and combatant.board_column is not null and combatant.board_row is not null
-                       then jsonb_build_object(
-                         'column', combatant.board_column, 'row', combatant.board_row)
-                     end as token
-              from combatant
-              join encounter_run on encounter_run.id = combatant.encounter_run_id
-              left join character on character.id = combatant.character_id
-              left join campaign_character seated
-                on seated.campaign_id = ${campaignId}
-               and seated.character_id = combatant.character_id
-               and seated.left_at is null
-               and (seated.visibility = 'shared' or seated.account_id = ${actor.accountId})
-              left join campaign_character own_seated
-                on own_seated.campaign_id = ${campaignId}
-               and own_seated.character_id = combatant.character_id
-               and own_seated.account_id = ${actor.accountId}
-               and own_seated.left_at is null
-              where combatant.encounter_run_id = ${runId}
-                and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
-                and (combatant.kind = 'npc' or seated.id is not null)
-                -- A conversation, a skill challenge or a hazard has no
-                -- initiative order to show: only the asker's own rows are
-                -- read, for their seats, and nobody else's at all.
-                and (${mode} = 'combat' or own_seated.id is not null)
-              ${initiativeOrder(sql)}
-            `,
+        execute: (request) =>
+          Effect.flatMap(Effect.service(CurrentActor), (actor) =>
+            liveOrderStatement(sql, request, actor),
           ),
       });
 
