@@ -774,9 +774,10 @@ for (const width of WIDTHS) {
             });
           },
         );
-        let writes = 0;
+        const writes: Array<string> = [];
         page.on("request", (request) => {
-          if (request.method() !== "GET" && request.url().includes("/stub/")) writes++;
+          if (request.method() !== "GET" && request.url().includes("/stub/"))
+            writes.push(new URL(request.url()).pathname);
         });
         await app.open(run);
         const card = page.getByRole("region", { name: "Selected combatant" });
@@ -819,7 +820,7 @@ for (const width of WIDTHS) {
           await expect(page.locator('[data-slot="run-target-banner"]')).toHaveCount(1);
         });
 
-        await test.step("a click on the token resolves it on the attacker's card, and sends nothing", async () => {
+        await test.step("a click on the token resolves it on the attacker's card, and spends his action", async () => {
           const at = await box(goblin);
           expect
             .soft(await landsOn(page, at.x + at.width / 2, at.y + at.height / 2), "token on top")
@@ -843,7 +844,10 @@ for (const width of WIDTHS) {
               .getByRole("region", { name: "Rolls", exact: true })
               .getByRole("status", { name: "Latest roll" }),
           ).toContainText("Brannoc · Longsword → Goblin Boss");
-          expect.soft(writes, "nothing was written").toBe(0);
+          // The one write is his turn's Action (`attackSpends`); no damage until Apply.
+          await expect
+            .poll(() => writes.map((path) => path.split("/").slice(-1)[0]), { message: "writes" })
+            .toEqual(["turn"]);
         });
       });
     }

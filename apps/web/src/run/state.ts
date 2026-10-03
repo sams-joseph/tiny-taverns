@@ -1,5 +1,5 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
-import type { Combatant, CombatantId, EncounterRun } from "@taverns/api";
+import { Combatant, type CombatantId, type EncounterRun } from "@taverns/api";
 import { Option, Result } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -141,6 +141,14 @@ export interface RunController {
    * to stay usable in.
    */
   readonly applyRun: (run: EncounterRun) => void;
+  /**
+   * Take the run a write that put the marker on somebody answered with —
+   * `nextTurn`, `begin`, *Make it their turn* — and start that creature's
+   * turn fresh, as the server did in the same transaction (`freshTurn`,
+   * `Combatant.actionUsed`). The answer is the run, not the row, so this is
+   * the one place the screen clears it rather than re-reading the fight for it.
+   */
+  readonly startTurn: (run: EncounterRun) => void;
   /**
    * Take a combatant row a write just answered with — a condition toggled on
    * the selected card — for the same reason as `applyRun`.
@@ -288,6 +296,29 @@ export function useRunState(path: RunPath): RunController {
     [edit],
   );
 
+  const startTurn = useCallback(
+    (run: EncounterRun) =>
+      edit((current) => ({
+        ...current,
+        run,
+        combatants: current.combatants.map((row) =>
+          row.id === run.activeCombatantId
+            ? new Combatant(
+                {
+                  ...row,
+                  actionUsed: false,
+                  bonusUsed: false,
+                  reactionUsed: false,
+                  feetMoved: 0,
+                },
+                { disableChecks: true },
+              )
+            : row,
+        ),
+      })),
+    [edit],
+  );
+
   /** Swap one row in place — what our own write's answer is worth. */
   const merge = useCallback(
     (row: Combatant) =>
@@ -355,6 +386,7 @@ export function useRunState(path: RunPath): RunController {
     isPending,
     refresh,
     applyRun,
+    startTurn,
     applyCombatant: merge,
     applyDamage,
     staleness,

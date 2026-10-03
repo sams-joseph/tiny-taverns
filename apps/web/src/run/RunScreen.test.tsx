@@ -1982,6 +1982,46 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(range()).toEqual([]);
   });
 
+  it("reaches, and measures a drag against, only what is left of the speed for whoever is up", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [{ ...brannocPlaced, feetMoved: 15 }, goblinBoss],
+    });
+    await open();
+    // 25 ft less the 15 the server counted is two squares every way from (5, 4).
+    await waitFor(() => expect(range()).toContain("3,2"));
+    expect(range()).toContain("7,6");
+    expect(range()).not.toContain("2,4");
+    expect(range()).not.toContain("8,4");
+
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+    drag(
+      brannocToken,
+      [
+        [5, 4],
+        [7, 4],
+      ],
+      "hold",
+    );
+    await waitFor(() => expect(ruler()).toHaveTextContent("10 ft · 0 left"));
+    fireEvent.pointerMove(brannocToken, { pointerId: 7, ...middle(8, 4) });
+    await waitFor(() => expect(ruler()).toHaveTextContent("15 ft · 5 over"));
+    expect(ruler()).toHaveAttribute("data-verdict", "over");
+    fireEvent.pointerCancel(brannocToken, { pointerId: 7 });
+  });
+
+  it("reaches nothing once whoever is up has walked past their speed", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [{ ...brannocPlaced, feetMoved: 30 }, goblinBoss],
+    });
+    await open();
+    await waitFor(() =>
+      expect(document.querySelector("[data-slot=movement]")).toHaveTextContent("30/25 ft"),
+    );
+    expect(range()).toEqual([]);
+  });
+
   it("walks a focused token a square with the arrow keys", async () => {
     await open();
     const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
@@ -2513,6 +2553,10 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
       status: 200,
       body: [brannocPlaced, { ...goblinBoss, position: { column: 7, row: 4 } }],
     });
+    server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/turn`, {
+      status: 200,
+      body: { ...brannocPlaced, actionUsed: true },
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -2575,8 +2619,21 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Hit")).toBeInTheDocument();
     expect(result().getByText("d20 19 +7 = 26 vs AC 17")).toBeInTheDocument();
     expect(result().getByText("1d8+4 [5] = 9 slashing")).toBeInTheDocument();
-    // Picking a target moves nobody and is no write.
-    expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(0);
+    // Picking a target moves nobody; the one write is his turn's Action, spent.
+    await waitFor(() =>
+      expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(1),
+    );
+    expect(bodyOf(server, "POST", "/turn")).toEqual({
+      actionUsed: true,
+      requestId: expect.any(String),
+    });
+    await waitFor(() =>
+      expect(
+        within(panel().getByRole("region", { name: "This turn of Brannoc" })).getByRole("button", {
+          name: "Action",
+        }),
+      ).toHaveAttribute("aria-pressed", "true"),
+    );
     // The attack is in the dock.
     expect(within(dock().getByRole("status", { name: "Latest roll" })).getByText("Hit"));
     expect(dock().getByText("Brannoc · Longsword → Goblin Boss")).toBeInTheDocument();
@@ -2807,5 +2864,128 @@ describe("the rolls dock", () => {
     );
     expect(text("Goblin Boss · Conditions")).toBe("Goblin Boss · ConditionsConcentrating removed");
     expect(text("Goblin Boss is up")).toBe("Goblin Boss is up");
+  });
+});
+
+describe("this turn", () => {
+  const turnRoute = (id: string) => `POST ${serverRunBase()}/combatants/${id}/turn`;
+  const thisTurn = () => within(panel().getByRole("region", { name: /^This turn of / }));
+  const combatantsRead = () =>
+    server.calls.filter(
+      (call) => call.method === "GET" && call.pathname.endsWith(`${liveRun.id}/combatants`),
+    ).length;
+
+  it("is drawn for whoever is up, and for nobody else", async () => {
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    expect(panel().getByRole("region", { name: "This turn of Brannoc" })).toBeInTheDocument();
+
+    await userEvent.click(rowFor("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+    expect(panel().queryByRole("region", { name: /^This turn of / })).toBeNull();
+  });
+
+  it("marks the action used and unmarks it, through the turn write", async () => {
+    server.routes.set(turnRoute(brannoc.id), {
+      status: 200,
+      body: { ...brannocPlaced, actionUsed: true },
+    });
+    await renderRunner();
+    await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
+    const action = thisTurn().getByRole("button", { name: "Action" });
+    expect(action).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(action);
+    await waitFor(() =>
+      expect(thisTurn().getByRole("button", { name: "Action" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(bodyOf(server, "POST", "/turn")).toMatchObject({
+      actionUsed: true,
+      requestId: expect.any(String),
+    });
+
+    server.routes.set(turnRoute(brannoc.id), {
+      status: 200,
+      body: { ...brannocPlaced, actionUsed: false },
+    });
+    server.calls.length = 0;
+    await userEvent.click(thisTurn().getByRole("button", { name: "Action" }));
+    await waitFor(() =>
+      expect(thisTurn().getByRole("button", { name: "Action" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      ),
+    );
+    expect(bodyOf(server, "POST", "/turn")).toMatchObject({ actionUsed: false });
+    // Nothing outside the fight reads a turn's spending.
+    expect(server.calls.filter((call) => call.method === "GET")).toEqual([]);
+  });
+
+  it("says the feet walked against the speed, in red once past it", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [{ ...brannocPlaced, feetMoved: 10 }, goblinBoss],
+    });
+    await renderRunner();
+    const moved = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-slot=movement]");
+      if (found === null) throw new Error("no movement line");
+      return found;
+    });
+    // Brannoc's sheet says 25 ft.
+    expect(moved).toHaveTextContent("10/25 ft");
+    expect(moved).not.toHaveClass("text-danger");
+    expect(document.querySelector("[data-slot=movement-fill]")).toHaveClass("bg-accent");
+  });
+
+  it("goes red once the feet walked are past the speed", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [{ ...brannocPlaced, feetMoved: 35 }, goblinBoss],
+    });
+    await renderRunner();
+    await waitFor(() =>
+      expect(document.querySelector("[data-slot=movement]")).toHaveTextContent("35/25 ft"),
+    );
+    expect(document.querySelector("[data-slot=movement]")).toHaveClass("text-danger");
+    const fill = document.querySelector<HTMLElement>("[data-slot=movement-fill]");
+    expect(fill).toHaveClass("bg-danger");
+    expect(fill?.style.width).toBe("100%");
+  });
+
+  it("starts whoever comes up on a fresh turn, as the server has it", async () => {
+    // The Goblin Boss still holds his last turn's spending until the marker
+    // lands on him; the server clears it then.
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, actionUsed: true, reactionUsed: true, feetMoved: 30 }],
+    });
+    await renderRunner();
+    await screen.findByText("Brannoc is up · Goblin Boss next");
+    const before = combatantsRead();
+
+    await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
+
+    await screen.findByText("Goblin Boss is up · Brannoc next");
+    await waitFor(() =>
+      expect(panel().getByRole("region", { name: "This turn of Goblin Boss" })).toBeInTheDocument(),
+    );
+    // From the write's own answer, so it holds with the stream down: nothing
+    // was re-read to learn it.
+    expect(combatantsRead()).toBe(before);
+    await waitFor(() =>
+      expect(thisTurn().getByRole("button", { name: "Action" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      ),
+    );
+    expect(thisTurn().getByRole("button", { name: "Reaction" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(document.querySelector("[data-slot=movement]")).toHaveTextContent("0/30 ft");
   });
 });
