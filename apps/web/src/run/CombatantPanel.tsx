@@ -20,16 +20,18 @@ import { deathStatusOf, dotPressed, type DeathStatus } from "./deathSaves";
 import { attacks, rolls, type AttackOutcome } from "./attack";
 import { AttackResultCard } from "./AttackResult";
 import { subtitleOf } from "./load";
+import type { TurnTicks } from "./turn";
 
 /**
  * Whoever the DM is looking at: the creature panel of `Encounter Runner.dc.html`,
  * floating at the right of the canvas (and the selected card of the narrow
  * grid). Its header is the creature — a disc ringed by side, the name, *Party*
  * or *Hostile*, the subtitle — with the eye that hides it from players and an
- * overflow menu for the acts the drawing leaves out; then its numbers, the
- * damage box, a party member's death saves while they are at zero, its last
- * attack's result (`AttackResult.tsx`), what it rolls for — *Attack* for
- * whoever is up, *Roll* otherwise — its stat block and its conditions.
+ * overflow menu for the acts the drawing leaves out; then, for whoever is up,
+ * what this turn has spent; then its numbers, the damage box, a party member's
+ * death saves while they are at zero, its last attack's result
+ * (`AttackResult.tsx`), what it rolls for — *Attack* for whoever is up, *Roll*
+ * otherwise — its stat block and its conditions.
  *
  * The panel is layered honestly, because a combatant is a *snapshot* and its
  * creature is a template that may have been edited, deleted, or never been
@@ -310,6 +312,92 @@ function DeathSaveBlock({
   );
 }
 
+/** The drawing's three toggles, by the `CombatantTurn` key each one writes. */
+const TURN_TICKS = [
+  ["actionUsed", "Action"],
+  ["bonusUsed", "Bonus"],
+  ["reactionUsed", "Reaction"],
+] as const;
+
+/**
+ * *This turn*, for the creature whose turn it is: the action, the bonus action
+ * and the reaction, struck through once used, and the feet it has walked
+ * against its speed, red past it. The server counts the feet and clears all
+ * four when the marker moves on (`run/turn.ts`); the toggles are the DM's.
+ */
+function ThisTurn({
+  combatant,
+  speed,
+  disabled,
+  onTick,
+}: {
+  readonly combatant: Combatant;
+  readonly speed: number | undefined;
+  readonly disabled: boolean;
+  readonly onTick: (ticks: TurnTicks) => void;
+}) {
+  const moved = combatant.feetMoved;
+  const over = speed !== undefined && moved > speed;
+  const fraction = speed === undefined || speed <= 0 ? 1 : Math.min(1, moved / speed);
+  return (
+    <section
+      aria-label={`This turn of ${combatant.displayName}`}
+      className="flex flex-col gap-2.5 border-b border-hairline bg-accent/5 p-panel"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <SectionHeading as="h3" className="text-label leading-none font-semibold text-accent-ink">
+          This turn
+        </SectionHeading>
+        <span className="text-label-s leading-none text-muted-foreground">Click to mark used</span>
+      </div>
+      <div className="flex gap-1.5">
+        {TURN_TICKS.map(([key, label]) => (
+          <Toggle
+            key={key}
+            size="sm"
+            className="flex-1 data-pressed:line-through"
+            pressed={combatant[key]}
+            disabled={disabled}
+            onPressedChange={(used) => onTick({ [key]: used })}
+          >
+            {label}
+          </Toggle>
+        ))}
+      </div>
+      <div className="flex items-center gap-2.5">
+        <Icon name="footprints" size={15} className="shrink-0 text-muted-foreground" />
+        {speed !== undefined && (
+          <div
+            data-slot="movement-bar"
+            aria-hidden="true"
+            className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-sunken"
+          >
+            <div
+              data-slot="movement-fill"
+              className={cn(
+                "h-full transition-[width] duration-(--dur-base) ease-out",
+                over ? "bg-danger" : "bg-accent",
+              )}
+              // eslint-disable-next-line shadcn/no-inline-styles -- a share of the track, which is the datum itself; no class can carry it.
+              style={{ width: `${String(Math.round(fraction * 100))}%` }}
+            />
+          </div>
+        )}
+        <span
+          data-slot="movement"
+          className={cn(
+            "ml-auto font-mono text-mono leading-none whitespace-nowrap",
+            over ? "text-danger" : "text-foreground",
+          )}
+        >
+          {/* No speed to measure against is the feet walked alone, never a guessed maximum. */}
+          {speed === undefined ? `${String(moved)} ft` : `${String(moved)}/${String(speed)} ft`}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 /**
  * What the selected creature rolls for, one line each (`actionsOf`). Whoever is
  * up attacks: *Attack* asks for a target and the result lands on this card.
@@ -493,6 +581,7 @@ export function CombatantPanel({
   actions,
   creatures,
   active,
+  turn,
   following,
   disabled,
   conditionsBusy,
@@ -527,6 +616,13 @@ export function CombatantPanel({
   readonly creatures: ReadonlyMap<CreatureId, Creature>;
   /** Whether this is whose turn it is. */
   readonly active: boolean;
+  /**
+   * The *This turn* block's write, present only while this creature is up in a
+   * fight that is taking turns and still on the table.
+   */
+  readonly turn:
+    | { readonly busy: boolean; readonly onTick: (ticks: TurnTicks) => void }
+    | undefined;
   /** Whether the panel is tracking the turn rather than a manual pick. */
   readonly following: boolean;
   readonly disabled: boolean;
@@ -669,6 +765,15 @@ export function CombatantPanel({
           )}
         </div>
       </div>
+
+      {turn !== undefined && (
+        <ThisTurn
+          combatant={combatant}
+          speed={speed}
+          disabled={disabled || turn.busy}
+          onTick={turn.onTick}
+        />
+      )}
 
       <CardContent className="flex flex-col gap-3.5 p-panel">
         <div className="grid grid-cols-4 gap-1.5">

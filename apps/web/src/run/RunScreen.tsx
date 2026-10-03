@@ -76,6 +76,7 @@ import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
 import { leadingFeet, tokenLabels } from "./tokens";
+import { feetLeft, isUp, useTurnTicks } from "./turn";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**
@@ -681,6 +682,8 @@ export function RunScreen() {
   // be two different answers.
   const controller = useRunState(path);
   const state = controller.state;
+  // The *This turn* toggles, and `spendAction`, which an attack calls.
+  const turnTicks = useTurnTicks(path, controller);
 
   // A scene's own state, read only once the run says it is one; a fight reads
   // nothing here. The doorbell re-reads it with the fight.
@@ -804,13 +807,13 @@ export function RunScreen() {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
     // Nothing outside this screen is a function of whose turn it is, so this
     // names no reads — and must not name the fight itself: the runner learns
-    // what it just did from the write's own answer, which is `applyRun` below.
+    // what it just did from the write's own answer, which is `startTurn` below.
     const moved = await turn.submit(
       (client) => client.runs.nextTurn({ params: path, payload: { requestId: newRequestId() } }),
       [],
     );
     if (Result.isSuccess(moved)) {
-      controller.applyRun(moved.success);
+      controller.startTurn(moved.success);
       // Following the turn again: the DM asked for the next creature, so the
       // panel should be showing it rather than whoever they last read about.
       setSelectedId(undefined);
@@ -828,7 +831,7 @@ export function RunScreen() {
       [],
     );
     if (Result.isSuccess(begun)) {
-      controller.applyRun(begun.success);
+      controller.startTurn(begun.success);
       setSelectedId(undefined);
       setTargeting(undefined);
       setAttack(undefined);
@@ -898,7 +901,8 @@ export function RunScreen() {
         client.runs.update({ params: path, payload: { activeCombatantId: combatant.id } }),
       [],
     );
-    if (Result.isSuccess(saved)) controller.applyRun(saved.success);
+    // Offered only for someone not up, so the marker always changes hands.
+    if (Result.isSuccess(saved)) controller.startTurn(saved.success);
   };
 
   /** Resolves true once the server has the hit. */
@@ -946,6 +950,9 @@ export function RunScreen() {
     dice.log(attackLine(outcome));
     setTargeting(undefined);
     setAttack({ attackerId: attacker.id, targetId: combatant.id, outcome, applied: undefined });
+    // A swing on its own turn is its action (`attackSpends`); off it, a
+    // reaction is the DM's to tick.
+    turnTicks.spendAction(attacker);
   };
 
   /** A row of the order: the attack's target while one is picked, otherwise the creature the panel shows. */
@@ -1125,6 +1132,9 @@ export function RunScreen() {
     const { statBlock, sheet } = sourceOf(combatant);
     return leadingFeet(statBlock?.speed ?? sheet?.identity?.speed);
   };
+  /** What is left of that this turn, for the board's range (`feetLeft`). */
+  const feetLeftOf = (combatant: Combatant): number | undefined =>
+    state === undefined ? undefined : feetLeft(combatant, speedOf(combatant), state.run);
   const labels = useMemo(() => tokenLabels(state?.combatants ?? []), [state?.combatants]);
   // Only a fight shows a player its board (`boardShown`, the server's), and
   // only one that has a board; anywhere else the switch would move nothing.
@@ -1239,6 +1249,14 @@ export function RunScreen() {
       actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
       creatures={view.creatures}
       active={selected !== undefined && selected.id === state.run.activeCombatantId}
+      turn={
+        selected !== undefined && !over && isUp(selected, state.run)
+          ? {
+              busy: turnTicks.busy,
+              onTick: (ticks) => void turnTicks.tick(selected, ticks),
+            }
+          : undefined
+      }
       following={selectedId === undefined}
       disabled={frozen || share.busy}
       conditionsBusy={conditions.busy}
@@ -1314,6 +1332,7 @@ export function RunScreen() {
             selected,
             activeId: state.run.activeCombatantId,
             speedOf,
+            feetLeftOf,
             diagonals: view.campaign.diagonalRule,
             movable: !frozen,
             onSelect: (combatant) => setSelectedId(combatant.id),

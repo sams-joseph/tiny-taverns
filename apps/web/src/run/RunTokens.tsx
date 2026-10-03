@@ -53,10 +53,13 @@ import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
  *
  * ### The range
  *
- * While the creature whose turn it is stands selected, the squares its speed
- * reaches are tinted: every square within the leading number of its stat
- * block's or sheet's speed, under the diagonal rule, less the squares others
- * hold (`reachableSquares`). A drag measures from where it started.
+ * While the creature whose turn it is stands selected, the squares what is
+ * left of its speed reaches are tinted: every square within the leading number
+ * of its stat block's or sheet's speed less the feet the server has counted it
+ * walking this turn (`feetLeftOf`), under the diagonal rule, less the squares
+ * others hold (`reachableSquares`). A drag measures from where it started, and
+ * its ruler's *left* or *over* is against the same feet, so the board and the
+ * panel's *This turn* bar agree.
  *
  * ### Where they sit
  *
@@ -77,6 +80,12 @@ export interface TokenProps {
   readonly activeId: CombatantId | null;
   /** Feet the combatant can walk, when its sheet or stat block says. */
   readonly speedOf: (combatant: Combatant) => number | undefined;
+  /**
+   * What is left of that this turn (`run/turn.ts`, `feetLeft`): the speed less
+   * the server's `feetMoved` for whoever is up, the whole speed for anyone
+   * else, negative once past it. The range and the ruler read it.
+   */
+  readonly feetLeftOf: (combatant: Combatant) => number | undefined;
   /** How the campaign counts a diagonal step, as the server counts a move. */
   readonly diagonals: DiagonalRule;
   /** False once the fight is over or a dialog is open: tokens select, nothing moves. */
@@ -123,13 +132,13 @@ function Range({
   readonly from: BoardSquare | null;
   readonly occupied: ReadonlyArray<BoardSquare>;
 }) {
-  const { board, selected, activeId, speedOf, diagonals } = props;
+  const { board, selected, activeId, feetLeftOf, diagonals } = props;
   if (selected === undefined || selected.id !== activeId || from === null) return null;
-  const speed = speedOf(selected);
-  if (speed === undefined) return null;
+  const left = feetLeftOf(selected);
+  if (left === undefined) return null;
   const squares = reachableSquares(board, {
     from,
-    feet: speed,
+    feet: left,
     occupied,
     feetPerCell: board.feetPerCell,
     diagonals,
@@ -260,7 +269,7 @@ export function RunTokens(props: TokenProps) {
     hpOf,
     selected,
     activeId,
-    speedOf,
+    feetLeftOf,
     diagonals,
     movable,
     hostileTokensHidden,
@@ -362,7 +371,7 @@ export function RunTokens(props: TokenProps) {
       ? rulerReading({
           from: drag.from,
           to: drag.over,
-          remaining: dragged.id === activeId ? (speedOf(dragged) ?? null) : null,
+          remaining: dragged.id === activeId ? (feetLeftOf(dragged) ?? null) : null,
           occupied: heldBesides(dragged.id).some((held) => same(held, drag.over)),
           feetPerCell: board.feetPerCell,
           diagonals,
