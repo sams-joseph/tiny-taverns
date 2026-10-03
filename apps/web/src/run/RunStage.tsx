@@ -150,7 +150,7 @@ const hudScroller = "pointer-events-auto overflow-y-auto overscroll-contain";
  * the tokens takes every press, so no token drags: Measure's ruler, Area's
  * pin, or Fog's brush (`Fog.tsx`), which paints the players' fog of war. Esc,
  * Move or anything else claiming the board (an attack's pick, a dialog) puts
- * the tool away. The pinned area is drawn under the tokens whichever tool is
+ * the tool away; only Esc on Area or _Clear_ takes the pin off. The pinned area is drawn under the tokens whichever tool is
  * on, and its banner says who it catches.
  */
 export function RunBoardStage({

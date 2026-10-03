@@ -2738,23 +2738,22 @@ describe("the board's tools", () => {
     );
     expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
 
-    // Switching shape starts it at its own size, and takes the pin off the board.
-    server.routes.set(`PUT ${areaPath()}`, { status: 200, body: { ...runBoard, area: null } });
+    // Switching shape starts it at its own size, and leaves the pin on the board.
     await userEvent.click(shapes.getByRole("button", { name: "Cube" }));
     expect(shapes.getByText("15 ft")).toBeInTheDocument();
-    await waitFor(() => expect(areaWrites()).toHaveLength(2));
-    expect(JSON.parse(areaWrites()[1]!.body)).toMatchObject({ area: null });
-    await waitFor(() => expect(screen.queryByRole("status", { name: "Pinned area" })).toBeNull());
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
 
     for (let press = 0; press < 3; press++) {
       await userEvent.click(shapes.getByRole("button", { name: "Smaller" }));
     }
     expect(shapes.getByText("5 ft")).toBeInTheDocument();
-    // Nothing pinned, so the size is the tool's alone.
-    expect(areaWrites()).toHaveLength(2);
+    // The pin is a sphere, so the cube's size is the tool's alone.
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Pinned: a 25 ft sphere" })).toBeInTheDocument();
   });
 
-  it("clears the pin with Clear, and with Esc unless the key is the Hob panel's", async () => {
+  it("clears the pin with Clear, and with Esc on Area unless the key is the Hob panel's", async () => {
     server.routes.set(`GET ${serverRunBase()}/board`, {
       status: 200,
       body: { ...runBoard, area: sphere },
@@ -2775,6 +2774,17 @@ describe("the board's tools", () => {
     server.emit(sessionEvent(12, "board-area-updated"));
     await screen.findByRole("status", { name: "Pinned area" });
 
+    // Esc on Move does nothing; on Measure or Fog it puts the tool away and leaves the pin.
+    expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(true);
+    for (const name of ["Measure", "Fog"]) {
+      await userEvent.click(tool(name));
+      expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(false);
+      expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
+    }
+    expect(areaWrites()).toHaveLength(1);
+    expect(screen.getByRole("status", { name: "Pinned area" })).toBeInTheDocument();
+
+    await userEvent.click(tool("Area"));
     const hob = document.createElement("section");
     hob.setAttribute("aria-label", "Hob");
     const field = hob.appendChild(document.createElement("textarea"));
@@ -2792,6 +2802,7 @@ describe("the board's tools", () => {
     expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(false);
     await waitFor(() => expect(areaWrites()).toHaveLength(2));
     expect(JSON.parse(areaWrites()[1]!.body)).toMatchObject({ area: null });
+    expect(tool("Move")).toHaveAttribute("aria-pressed", "true");
   });
 
   it("puts the board back as the server holds it when a pin is refused", async () => {

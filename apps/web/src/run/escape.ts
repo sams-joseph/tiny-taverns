@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 /**
  * Esc puts away whatever the board is busy with — the attack's pick of a
- * target, the Fog brush, a tool's ruler or pinned area — wherever focus is,
+ * target, the Fog brush, a tool's ruler, or Area's pinned area — wherever focus is,
  * except a key meant for the Hob panel (Esc is its own), one typed into a field
  * (which clears its own text), or one something else already claimed (a menu
  * closing claims its own); and claims it, so the Hob panel's window listener

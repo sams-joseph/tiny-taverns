@@ -200,10 +200,10 @@ function useBoardTools({
     }
   };
 
-  // Esc puts the tool away, its ruler or brush with it, and clears the pinned area.
-  useEscapeAway(usable && (tool !== "move" || pinned !== null), () => {
+  // Esc puts the tool away, its ruler or brush with it; on Area it also clears the pinned area.
+  useEscapeAway(usable && tool !== "move", () => {
+    if (tool === "area") send(null);
     choose("move");
-    send(null);
   });
 
   /** Where a cone or a line starts: the selected creature's square, else whoever is up. */
@@ -284,20 +284,19 @@ function useBoardTools({
     choose,
     shape,
     feet,
-    /** Switching shape starts it at its own size, and takes the pin off the board. */
+    /** Switching shape starts it at its own size; a pinned template stays on the board. */
     pickShape: (next: AreaShape) => {
       if (next === shape) return;
       setShape(next);
       setFeet(startingFeet(next));
-      send(null);
+      setHovered(undefined);
     },
-    /** − and +: the size, and a pinned template's with it. */
+    /** − and +: the size, and a pinned template's with it while it is the dock's shape. */
     step: (by: 1 | -1) => {
-      const base = pinned ?? { shape, feet };
-      const size = stepFeet(base.feet, by);
-      setShape(base.shape);
+      const resizing = pinned !== null && pinned.shape === shape;
+      const size = stepFeet(resizing ? pinned.feet : feet, by);
       setFeet(size);
-      if (pinned !== null) send({ ...pinned, feet: size });
+      if (resizing) send({ ...pinned, feet: size });
     },
     hovered,
     pointer,
