@@ -86,11 +86,11 @@ describe("a token's look", () => {
     expect(look(boss, boss.hpMax)).toMatchObject({ out: false, struck: false, health: 1 });
   });
 
-  it("leaves a dying party member in the fight, and fades a dead one without striking them", () => {
+  it("leaves a dying party member in the fight, and fades and strikes a dead one", () => {
     const dying = decode({ ...brannoc, deathSaves: { successes: 1, failures: 2 } });
     expect(look(dying, 0)).toMatchObject({ out: false, struck: false });
     const dead = decode({ ...brannoc, deathSaves: { successes: 0, failures: 3 } });
-    expect(look(dead, 0)).toMatchObject({ out: true, struck: false });
+    expect(look(dead, 0)).toMatchObject({ out: true, struck: true });
   });
 
   it("is hidden when its row is held back, or it is a monster while the DM hides them", () => {

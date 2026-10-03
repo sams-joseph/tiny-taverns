@@ -126,8 +126,8 @@ export const percentOf = (
  *   party member with three failed death saves. It fades, as its row does. A
  *   party member at zero who is still making saves is not out: they are dying,
  *   still in the fight, and drawn as anyone else.
- * - **struck**: a monster that is out has its name struck through; a dead PC
- *   fades without it, as drawn.
+ * - **struck**: a creature that is out has its name struck through, monster
+ *   and dead PC alike.
  * - **hidden**: the token is off the players' board — its row is held back
  *   (`visibility: "dm"`), or it is a monster while the DM hides them all — so
  *   the DM's board draws its ring dashed.
@@ -145,11 +145,10 @@ export const tokenState = (
   { hp, hostileTokensHidden }: { readonly hp: number; readonly hostileTokensHidden: boolean },
 ): TokenState => {
   const monster = combatant.kind !== "pc";
-  const struck = monster && hp === 0;
-  const dead = !monster && (combatant.deathSaves?.failures ?? 0) >= 3;
+  const out = monster ? hp === 0 : (combatant.deathSaves?.failures ?? 0) >= 3;
   return {
-    out: struck || dead,
-    struck,
+    out,
+    struck: out,
     hidden: combatant.visibility === "dm" || (monster && hostileTokensHidden),
     health: combatant.hpMax > 0 ? Math.max(0, Math.min(1, hp / combatant.hpMax)) : 0,
   };
