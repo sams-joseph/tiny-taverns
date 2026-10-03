@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -57,7 +58,7 @@ export interface CanvasControls {
 }
 
 export function BoardCanvas({
-  plane,
+  plane: { width, height },
   cellPx,
   freeArea,
   controlsRef,
@@ -77,7 +78,8 @@ export function BoardCanvas({
   /** The free area as the canvas was last measured: what the view opens into. */
   const [opening, setOpening] = useState<PictureRect>();
   const [chosen, setChosen] = useState<CanvasView>();
-  const limits = zoomLimits(cellPx);
+  const plane = useMemo<PictureSize>(() => ({ width, height }), [width, height]);
+  const limits = useMemo(() => zoomLimits(cellPx), [cellPx]);
   const free = useRef(freeArea);
   free.current = freeArea;
 
@@ -172,6 +174,7 @@ export function BoardCanvas({
   const swallowClick = useRef(false);
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    swallowClick.current = false;
     // A token is pressed, not dragged, until the board learns to drag tokens.
     if (event.button !== 0 || (event.target as Element).closest("button") !== null) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -224,7 +227,13 @@ export function BoardCanvas({
 
   const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     if (!pointers.current.delete(event.pointerId)) return;
-    if (gesture.current?.moved === true) swallowClick.current = true;
+    // Only a mouse or pen lifted after a drag sends the click to swallow.
+    if (
+      gesture.current?.moved === true &&
+      event.type === "pointerup" &&
+      event.pointerType !== "touch"
+    )
+      swallowClick.current = true;
     if (pointers.current.size === 0) gesture.current = undefined;
     else {
       // A pinch down to one finger carries on as a drag from where it is.

@@ -1551,6 +1551,33 @@ describe("the canvas", () => {
     );
   });
 
+  it("lets the next click through after a drag that was cancelled", async () => {
+    await open();
+    await waitFor(() =>
+      expect(within(board()).getByRole("button", { name: /^Brannoc,/ })).toBeInTheDocument(),
+    );
+    const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]")!;
+
+    fireEvent.pointerDown(squares, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(squares, { pointerId: 1, clientX: 160, clientY: 130 });
+    fireEvent.pointerCancel(squares, { pointerId: 1, clientX: 160, clientY: 130 });
+    expect(panOf().x).toBeCloseTo(60);
+
+    server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/move`, {
+      status: 200,
+      body: { ...brannocPlaced, position: { column: 1, row: 1 } },
+    });
+    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    );
+    fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
+    fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
+    fireEvent.click(squares, { clientX: 15, clientY: 15 });
+    await waitFor(() =>
+      expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(true),
+    );
+  });
+
   it("is the grid again for a fight with no board, which has nothing to pan", async () => {
     server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: null });
     await renderRunner();
