@@ -227,9 +227,10 @@ export function ToolSurface({
 /**
  * The dock's tools: Move, Measure, Area and Fog, one at a time; while Area is
  * on its shapes and its size beside them, and while Fog is on its board-wide
- * writes (`fog`). Switching shape starts it at its own size; − and + step five
- * feet between the smallest and the largest, and move a pinned template with
- * them.
+ * writes (`fog`). Switching shape starts it at its own size, or the pinned
+ * template's when it is that shape; − and + step five feet between the
+ * smallest and the largest, and resize a pinned template of the dock's shape
+ * with them.
  */
 export function BoardToolPicker({
   tool,
