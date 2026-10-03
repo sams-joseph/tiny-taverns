@@ -39,9 +39,9 @@ import type { Character, PlayerLiveTable } from "@taverns/api";
  * (`ownRowReadable` on the server), so a seat matching this character's id is
  * proof enough and there is nothing here to get wrong about somebody else's row.
  *
- * `upNext` is `null` when the DM has set no marker **or** has hidden the row it
- * names, and the two are indistinguishable on purpose. The banner then says the
- * round and stops, which is true either way.
+ * `upNext` is `null` when the DM has set no marker, and `hidden` when it is on
+ * a row this player may not see, which names nobody. The banner says the round
+ * and stops in both cases, which is true either way.
  */
 export interface LiveBanner {
   /** *"The Salt Road is playing right now"* — the one line in bold. */
@@ -72,8 +72,8 @@ export const liveBanner = (
   const fight = live.fight;
   const seat = fight?.seats.find((row) => row.characterId === character.id);
   const inTheFight = seat !== undefined;
-  const yourTurn =
-    seat !== undefined && fight?.upNext !== null && fight?.upNext.combatantId === seat.combatantId;
+  const up = fight?.upNext?.kind === "visible" ? fight.upNext : undefined;
+  const yourTurn = seat !== undefined && up?.combatantId === seat.combatantId;
 
   const detail: ReadonlyArray<string> = [
     `Session ${String(live.sessionNumber)}`,
@@ -83,11 +83,7 @@ export const liveBanner = (
         ["nothing on the table"]
       : [
           fight.phase === "initiative" ? "rolling initiative" : `round ${String(fight.round)}`,
-          ...(yourTurn
-            ? ["it's your turn"]
-            : fight.upNext === null
-              ? []
-              : [`${fight.upNext.displayName} is up`]),
+          ...(yourTurn ? ["it's your turn"] : up === undefined ? [] : [`${up.displayName} is up`]),
           ...(inTheFight ? [] : [`${character.name} is not in this fight`]),
         ]),
   ];

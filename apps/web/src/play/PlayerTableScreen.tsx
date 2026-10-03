@@ -453,7 +453,8 @@ export function PlayerTableScreen() {
   const seat = fight?.seats[0];
   const owned = view?.characters.find((row) => row.character.id === seat?.characterId);
   const actions = owned === undefined ? [] : actionRows(owned.character.sheet);
-  const yourTurn = you !== undefined && fight?.upNext?.combatantId === you.combatantId;
+  const upNextId = fight?.upNext?.kind === "visible" ? fight.upNext.combatantId : undefined;
+  const yourTurn = you !== undefined && upNextId === you.combatantId;
   const { failure, submit } = useMutation();
   const [rollMode, setRollMode] = useState<RollMode>("normal");
   const [pendingRolls, setPendingRolls] = useState<ReadonlyArray<PendingRoll>>([]);
@@ -606,11 +607,7 @@ export function PlayerTableScreen() {
                 )}
 
                 {fight.board !== null && (
-                  <PlayerBattleMap
-                    board={fight.board}
-                    order={fight.order}
-                    upNextId={fight.upNext?.combatantId}
-                  />
+                  <PlayerBattleMap board={fight.board} order={fight.order} upNextId={upNextId} />
                 )}
 
                 {view.readAloud.length > 0 && (

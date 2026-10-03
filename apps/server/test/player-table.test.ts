@@ -3,6 +3,7 @@ import {
   type Actor,
   type CampaignId,
   type CharacterId,
+  type CombatantId,
   CurrentActor,
   NotFound,
   type PlayerLiveTable,
@@ -193,6 +194,19 @@ const readAs = (actor: Actor, campaignId?: CampaignId) =>
     return yield* withActor(actor)(Effect.result(table.read(campaignId ?? fixture.campaign.id)));
   });
 
+/** The rows `liveOrderStatement` hands the decode, for an actor, as Postgres returns them. */
+const rawOrder = (actor: Actor) =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const sql = yield* SqlClient.SqlClient;
+    const rows: ReadonlyArray<Record<string, unknown>> = yield* liveOrderStatement(
+      sql,
+      { campaignId: fixture.campaign.id, runId: fixture.run.id, mode: fixture.run.mode },
+      actor,
+    ).pipe(Effect.orDie);
+    return rows;
+  });
+
 const seatFor = (answer: PlayerLiveTable | null, characterId: CharacterId) =>
   answer?.fight?.seats.find((seat) => seat.characterId === characterId);
 
@@ -218,7 +232,11 @@ describeLayer("player-table", shared, (it) => {
         expect(answer?.sessionNumber).toBe(12);
         expect(answer?.fight?.id).toBe(fixture.run.id);
         expect(answer?.fight?.round).toBe(fixture.round);
-        expect(answer?.fight?.upNext?.combatantId).toBe(fixture.activeCombatantId);
+        expect(answer?.fight?.upNext).toEqual({
+          kind: "visible",
+          combatantId: fixture.activeCombatantId,
+          displayName: expect.any(String),
+        });
         expect(answer?.fight?.encounterId).toBeTruthy();
         expect(answer?.fight?.order.map((row) => row.kind).sort()).toEqual(["ally", "npc", "you"]);
       }),
@@ -276,24 +294,134 @@ describeLayer("player-table", shared, (it) => {
       }),
     );
 
-    it.effect("selects exact hit points for your own row alone, before any decode", () =>
+    it.effect(
+      "selects exact hit points for you and your allies, temporary ones for you alone, before any decode",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const rows = yield* rawOrder(fixture.player);
+          const hitPoints = (kind: string) =>
+            rows
+              .filter((row) => row.kind === kind)
+              .map(({ hp_current, hp_max, temp_hp, death_saves }) => ({
+                hp_current,
+                hp_max,
+                temp_hp,
+                death_saves,
+              }));
+          const saves = { successes: 0, failures: 0 };
+
+          expect(hitPoints("you")).toEqual([
+            { hp_current: 52, hp_max: 52, temp_hp: 0, death_saves: saves },
+          ]);
+          expect(hitPoints("ally")).toEqual([
+            { hp_current: 34, hp_max: 34, temp_hp: null, death_saves: saves },
+          ]);
+          // A monster has a band and nothing else: no number, no saves.
+          expect(hitPoints("npc")).toEqual([
+            { hp_current: null, hp_max: null, temp_hp: null, death_saves: null },
+          ]);
+        }),
+    );
+
+    it.effect("carries an ally's hit points and death saves only under a seat you may see", () =>
       Effect.gen(function* () {
         const fixture = yield* Fixture;
-        const sql = yield* SqlClient.SqlClient;
-        const rows: ReadonlyArray<Record<string, unknown>> = yield* liveOrderStatement(
-          sql,
-          { campaignId: fixture.campaign.id, runId: fixture.run.id, mode: fixture.run.mode },
-          fixture.player,
-        ).pipe(Effect.orDie);
-        const hitPoints = (kind: string) =>
-          rows
-            .filter((row) => row.kind === kind)
-            .map(({ hp_current, hp_max, temp_hp }) => ({ hp_current, hp_max, temp_hp }));
-        const none = { hp_current: null, hp_max: null, temp_hp: null };
+        const table = yield* PlayerTable;
+        const party = yield* Party;
 
-        expect(hitPoints("you")).toEqual([{ hp_current: 52, hp_max: 52, temp_hp: 0 }]);
-        expect(hitPoints("ally")).toEqual([none]);
-        expect(hitPoints("npc")).toEqual([none]);
+        const answer = yield* asPlayer(table.read(fixture.campaign.id));
+        const ally = answer?.fight?.order.find((row) => row.kind === "ally");
+        expect(ally).toMatchObject({
+          characterId: fixture.nessa.id,
+          hpCurrent: 34,
+          hpMax: 34,
+          deathSaves: { successes: 0, failures: 0 },
+        });
+        expect(ally).not.toHaveProperty("tempHp");
+
+        // The DM hides Nessa's seat: her row, and so her numbers, are not
+        // selected at all, not selected and then dropped.
+        yield* as(party.update(fixture.campaign.id, fixture.nessaSeat, { visibility: "dm" }));
+        const rows = yield* rawOrder(fixture.player);
+        expect(rows.some((row) => row.character_id === fixture.nessa.id)).toBe(false);
+        expect(rows.filter((row) => row.hp_current !== null).map((row) => row.kind)).toEqual([
+          "you",
+        ]);
+        const hidden = yield* asPlayer(table.read(fixture.campaign.id));
+        expect(JSON.stringify(hidden)).not.toContain(fixture.nessa.id);
+
+        yield* as(party.update(fixture.campaign.id, fixture.nessaSeat, { visibility: "shared" }));
+      }),
+    );
+
+    it.effect(
+      "says something moves, naming nobody, when the marker is on a row hidden from you",
+      () =>
+        Effect.gen(function* () {
+          const fixture = yield* Fixture;
+          const table = yield* PlayerTable;
+          const runs = yield* EncounterRuns;
+          const combatants = yield* Combatants;
+          const party = yield* Party;
+          const mark = (activeCombatantId: CombatantId | null) =>
+            as(
+              runs.update(fixture.asDm, fixture.session.id, fixture.run.id, { activeCombatantId }),
+            );
+          const hag = fixture.hag.id;
+
+          yield* mark(hag);
+          expect((yield* asPlayer(table.read(fixture.campaign.id)))?.fight?.upNext).toEqual({
+            kind: "visible",
+            combatantId: hag,
+            displayName: "Marsh Hag",
+          });
+
+          yield* as(
+            combatants.update(fixture.asDm, fixture.session.id, fixture.run.id, hag, {
+              visibility: "dm",
+            }),
+          );
+          const hidden = yield* asPlayer(table.read(fixture.campaign.id));
+          expect(hidden?.fight?.upNext).toEqual({ kind: "hidden" });
+          expect(JSON.stringify(hidden)).not.toContain(hag);
+          expect(JSON.stringify(hidden)).not.toContain("Marsh Hag");
+          yield* as(
+            combatants.update(fixture.asDm, fixture.session.id, fixture.run.id, hag, {
+              visibility: "shared",
+            }),
+          );
+
+          // A character whose seat is hidden from you is a hidden row too.
+          const nessa = (yield* asActor(fixture.other)(table.read(fixture.campaign.id)))?.fight
+            ?.seats[0]?.combatantId;
+          expect(nessa).toBeDefined();
+          yield* mark(nessa!);
+          yield* as(party.update(fixture.campaign.id, fixture.nessaSeat, { visibility: "dm" }));
+          const seatHidden = yield* asPlayer(table.read(fixture.campaign.id));
+          expect(seatHidden?.fight?.upNext).toEqual({ kind: "hidden" });
+          expect(JSON.stringify(seatHidden)).not.toContain(nessa!);
+          // Nessa's own player still sees her own turn.
+          expect(
+            (yield* asActor(fixture.other)(table.read(fixture.campaign.id)))?.fight?.upNext,
+          ).toMatchObject({ kind: "visible", combatantId: nessa });
+          yield* as(party.update(fixture.campaign.id, fixture.nessaSeat, { visibility: "shared" }));
+
+          yield* mark(fixture.activeCombatantId);
+        }),
+    );
+
+    it.effect("answers no turn at all when the DM has set no marker", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const table = yield* PlayerTable;
+        const runs = yield* EncounterRuns;
+        const mark = (activeCombatantId: CombatantId | null) =>
+          as(runs.update(fixture.asDm, fixture.session.id, fixture.run.id, { activeCombatantId }));
+
+        yield* mark(null);
+        expect((yield* asPlayer(table.read(fixture.campaign.id)))?.fight?.upNext).toBeNull();
+        yield* mark(fixture.activeCombatantId);
       }),
     );
 

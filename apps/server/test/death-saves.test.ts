@@ -579,7 +579,7 @@ describeLayer("death-saves", shared, (it) => {
       }),
     );
 
-    it.effect("show on the owner's own row of their table, and on nobody else's", () =>
+    it.effect("show on the owner's own row of their table, and to their allies", () =>
       Effect.gen(function* () {
         const fixture = yield* Fixture;
         const table = yield* PlayerTable;
@@ -597,7 +597,7 @@ describeLayer("death-saves", shared, (it) => {
         });
 
         // Wren is seated too, so the table is theirs to read; Tobin is an ally
-        // there, and an ally carries no death saves.
+        // there, and a party shares its death saves.
         yield* aCharacterAt(
           fixture.campaign.id,
           fixture.other,
@@ -609,7 +609,10 @@ describeLayer("death-saves", shared, (it) => {
         );
         const ally = theirs?.fight?.order.find((row) => row.combatantId === dying.id);
         expect(ally?.kind).toBe("ally");
-        expect(ally).not.toHaveProperty("deathSaves");
+        expect(ally !== undefined && ally.kind === "ally" ? ally.deathSaves : null).toEqual({
+          successes: 1,
+          failures: 2,
+        });
       }),
     );
   });

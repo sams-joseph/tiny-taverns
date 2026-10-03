@@ -126,14 +126,10 @@ export const liveOrderStatement = (
            case when own_seated.id is not null
              then combatant.initiative_set_by end as initiative_set_by,
            combatant.conditions,
-           ${playerLiveHitPointColumns(sql, sql("own_seated.id"))},
-           -- Only the asker's own row: an ally's death saves are not
-           -- theirs to read, and a monster makes none.
-           case when own_seated.id is not null
-             then jsonb_build_object(
-               'successes', combatant.death_save_successes,
-               'failures', combatant.death_save_failures)
-           end as death_saves,
+           ${playerLiveHitPointColumns(sql, {
+             ownSeat: sql("own_seated.id"),
+             seenSeat: sql("seated.id"),
+           })},
            ${seatedPortraitColumn(sql, sql("combatant.character_id"), campaignId, actor)},
            case when ${tokenShown(sql)}
              and combatant.board_column is not null and combatant.board_row is not null
@@ -359,11 +355,20 @@ export class PlayerTable extends Context.Service<
                 ({ token: _token, ...combatant }) => combatant,
               );
               const order = run.mode === "combat" ? present : [];
+              // The order is already what this player may see, so a marker on
+              // a row it lacks is on a row hidden from them: they are told
+              // something moves, and neither its id nor its name.
               const upNextRow = order.find((row) => row.combatantId === run.activeCombatantId);
               const upNext: PlayerLiveTurn | null =
-                upNextRow === undefined
+                run.mode !== "combat" || run.activeCombatantId === null
                   ? null
-                  : { combatantId: upNextRow.combatantId, displayName: upNextRow.displayName };
+                  : upNextRow === undefined
+                    ? { kind: "hidden" }
+                    : {
+                        kind: "visible",
+                        combatantId: upNextRow.combatantId,
+                        displayName: upNextRow.displayName,
+                      };
               const seats: ReadonlyArray<PlayerLiveSeat> = present.flatMap((row) =>
                 row.kind === "you"
                   ? [

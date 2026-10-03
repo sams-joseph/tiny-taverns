@@ -53,7 +53,7 @@ describe("the live banner", () => {
       table({
         id: "r-1",
         round: 3,
-        upNext: { combatantId: "c-mine", displayName: "Brannoc Duskharrow" },
+        upNext: { kind: "visible", combatantId: "c-mine", displayName: "Brannoc Duskharrow" },
         seats: [mySeat],
       } as unknown as PlayerLiveTable["fight"]),
       yours,
@@ -91,7 +91,7 @@ describe("the live banner", () => {
       table({
         id: "r-1",
         round: 3,
-        upNext: { combatantId: "c-hag", displayName: "Marsh Hag" },
+        upNext: { kind: "visible", combatantId: "c-hag", displayName: "Marsh Hag" },
         seats: [mySeat],
       } as unknown as PlayerLiveTable["fight"]),
       yours,
@@ -108,7 +108,7 @@ describe("the live banner", () => {
       table({
         id: "r-1",
         round: 3,
-        upNext: { combatantId: "c-theirs", displayName: "Sorrel Ash" },
+        upNext: { kind: "visible", combatantId: "c-theirs", displayName: "Sorrel Ash" },
         seats: [theirSeat],
       } as unknown as PlayerLiveTable["fight"]),
       yours,
@@ -125,21 +125,22 @@ describe("the live banner", () => {
     expect(banner?.yourTurn).toBe(false);
   });
 
-  it("says the round and stops when the DM has set no marker, or hidden the row it names", () => {
+  it.each([
+    ["the DM has set no marker", null],
+    ["the marker is on a row hidden from you", { kind: "hidden" }],
+  ])("says the round and stops when %s", (_, upNext) => {
     const banner = liveBanner(
       table({
         id: "r-1",
         round: 3,
-        upNext: null,
+        upNext,
         seats: [mySeat],
       } as unknown as PlayerLiveTable["fight"]),
       yours,
       "The Salt Road",
     );
 
-    // The two are indistinguishable here on purpose — the server answers `null`
-    // for both, because *"there is somebody up but you may not know who"* is the
-    // disclosure the seam exists to refuse.
+    // A hidden marker names nobody, so there is nobody to say is up.
     expect(banner?.detail).toBe("Session 12 · round 3");
     expect(banner?.yourTurn).toBe(false);
   });
