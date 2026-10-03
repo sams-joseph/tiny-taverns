@@ -323,9 +323,7 @@ function StripChip({
   return (
     <Tooltip>
       <TooltipTrigger render={chip} />
-      <TooltipContent>
-        {[combatant.displayName, ...combatant.conditions].join(", ")}
-      </TooltipContent>
+      <TooltipContent>{[combatant.displayName, ...combatant.conditions].join(", ")}</TooltipContent>
     </Tooltip>
   );
 }
