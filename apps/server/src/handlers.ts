@@ -1643,6 +1643,9 @@ const RunsLive = HttpApiBuilder.group(
       .handle("updateFog", ({ params, payload }) =>
         dm(params.campaignId, (as) => maps.updateFog(as, params.sessionId, params.runId, payload)),
       )
+      .handle("setArea", ({ params, payload }) =>
+        dm(params.campaignId, (as) => maps.setArea(as, params.sessionId, params.runId, payload)),
+      )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),
       )

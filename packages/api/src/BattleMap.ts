@@ -128,6 +128,66 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}
 
+/** The shapes an area of effect takes on the board; {@link areaSquares} draws each. */
+export const AreaShape = Schema.Literals(["sphere", "cone", "line", "cube"]);
+export type AreaShape = typeof AreaShape.Type;
+
+/** An area's size in feet: the Area tool's 5 to 120, its steps of 5 the tool's own. */
+const areaFeet = Schema.Int.check(Schema.isBetween({ minimum: 5, maximum: 120 }));
+
+/**
+ * An area template pinned on a fight's board: a spell's sphere, cone, line or
+ * cube, shown to the DM and, while the board is on their table, to the players
+ * until the DM clears it. **Temporary**: it is where the spell lands right
+ * now, so the board keeps nothing once the fight ends and a resumed fight
+ * starts with nothing pinned (`0090_run_board_area.ts`). The session log does
+ * keep a `board-area-updated` line per pin and clear, carrying the template.
+ *
+ * A sphere or a cube is centred on `origin`. A cone or a line starts at
+ * `origin` and points at `toward`, which is never `origin` itself. Which
+ * squares it covers is {@link areaSquares} at the board's `feetPerCell`; who
+ * stands in them is the reader's to work out from the tokens they can see, so
+ * no list of the caught is carried.
+ */
+export const BoardArea = Schema.Union([
+  Schema.Struct({
+    shape: Schema.Literals(["sphere", "cube"]),
+    feet: areaFeet,
+    origin: CombatantPosition,
+  }),
+  Schema.Struct({
+    shape: Schema.Literals(["cone", "line"]),
+    feet: areaFeet,
+    origin: CombatantPosition,
+    toward: CombatantPosition,
+  }).check(
+    Schema.makeFilter((area) =>
+      area.origin.column === area.toward.column && area.origin.row === area.toward.row
+        ? "a cone or a line points at a square other than its origin"
+        : undefined,
+    ),
+  ),
+]);
+export type BoardArea = typeof BoardArea.Type;
+
+/** The square a template points at: `toward` for a cone or a line, its own origin otherwise. */
+export const areaToward = (area: BoardArea): CombatantPosition =>
+  "toward" in area ? area.toward : area.origin;
+
+/**
+ * Pin an area template on a fight's board, replacing whatever was pinned, or
+ * clear it with `area: null`: the Area tool's one write, answered with the
+ * board. Clearing a board with nothing pinned changes nothing. `Conflict` for
+ * a fight that is over or has no board, a square off the board, and a
+ * template that covers no square of it. It carries a `requestId`, as a move
+ * does.
+ */
+export const BoardAreaSet = Schema.Struct({
+  area: Schema.NullOr(BoardArea),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+});
+export type BoardAreaSet = typeof BoardAreaSet.Type;
+
 /**
  * A fight's board (`encounter_run_board`) — **the creator's alone**, read on the
  * runner beside the fight it belongs to.
@@ -162,6 +222,8 @@ export class EncounterRunBoard extends Schema.Class<EncounterRunBoard>("Encounte
    * on them but the player's own character (`PlayerLiveBoard.fog`).
    */
   fog: Schema.Array(CombatantPosition),
+  /** The area template pinned on the board, or `null` (`BoardArea`). */
+  area: Schema.NullOr(BoardArea),
 }) {}
 
 /** The most squares one fog write names: every square of the largest board. */
@@ -529,9 +591,6 @@ export const reachableSquares = (
       feetBetween(from, square, measure) <= feet &&
       !occupied.some((taken) => sameSquare(taken, square)),
   );
-
-/** The shapes an area of effect takes on the board. */
-export type AreaShape = "sphere" | "cone" | "line" | "cube";
 
 /**
  * The squares an area of effect `feet` big covers, cut at the board's edge.

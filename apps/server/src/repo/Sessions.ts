@@ -15,7 +15,7 @@ import {
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
-import { RUN } from "./liveTables.js";
+import { clearArea, RUN } from "./liveTables.js";
 import {
   type AssistantOrigin,
   assistantColumns,
@@ -182,13 +182,14 @@ export class Sessions extends Context.Service<
        * re-read the campaign view used to do, which is a real simplification
        * the decision buys.
        *
-       * Three writes, in the transaction that stamped `ended_at`:
+       * Four writes, in the transaction that stamped `ended_at`:
        *
        * - the run is ended with `ended_reason = 'carried'`, which is what makes
        *   it *resumable* — an ended run with no reason looks like a fight the DM
        *   finished;
        * - the session stops pointing at it, exactly as `EncounterRuns.end`
        *   does, because a session must not name a fight that is over;
+       * - its board's pinned area template is cleared, as `end` clears it;
        * - `run-carried` goes in the log, so a recap can say "paused at round 4"
        *   rather than reporting a fight the party is still standing in as
        *   concluded.
@@ -223,6 +224,9 @@ export class Sessions extends Context.Service<
                 update session set active_encounter_run_id = null, updated_at = now()
                 where session.id = ${session.id} and session.active_encounter_run_id = ${run.id}
               `;
+              // A pinned template is the night's, not the fight's: the
+              // resumed fight starts with nothing pinned.
+              yield* clearArea(sql, run.id);
               yield* appendEvent(sql, {
                 sessionId: session.id,
                 kind: "run-carried",

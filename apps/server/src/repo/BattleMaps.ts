@@ -1,7 +1,10 @@
 import {
+  areaSquares,
+  areaToward,
   BattleMap,
   BattleMapImages,
   type BattleMapUpdate,
+  type BoardAreaSet,
   type BoardFogUpdate,
   Conflict,
   EncounterId,
@@ -15,7 +18,7 @@ import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
-import { boardShown, RUNS } from "./liveTables.js";
+import { boardShown, clearArea, RUNS } from "./liveTables.js";
 import {
   classFromColumns,
   defined,
@@ -46,8 +49,8 @@ import { nestedRowWritable, rowWritable } from "./visibility.js";
  *
  * A fight's board (`encounter_run_board`, `0058_encounter_run_boards.ts`) is
  * read here too, because it carries the map's picture and this file is where a
- * map's URL is minted; and its fog of war is written here, because the write
- * answers with the board.
+ * map's URL is minted; and its fog of war and pinned area template are
+ * written here, because each write answers with the board.
  */
 
 /**
@@ -117,6 +120,28 @@ export const fogColumn = (sql: SqlClient.SqlClient) => sql`
      from unnest(encounter_run_board.fog_hidden) as square),
     '[]'::jsonb
   ) as fog
+`;
+
+/**
+ * The area template pinned on a fight's board as the wire spells it
+ * (`BoardArea`), or `null` when nothing is pinned. A fight that is over has
+ * nothing pinned: a template is where a spell lands now
+ * (`0090_run_board_area.ts`), and both ends clear it (`clearArea`).
+ * `encounter_run_board` must be in scope.
+ */
+export const areaColumn = (sql: SqlClient.SqlClient) => sql`
+  case when encounter_run_board.area_shape is not null
+  then jsonb_build_object(
+         'shape', encounter_run_board.area_shape,
+         'feet', encounter_run_board.area_feet,
+         'origin', jsonb_build_object(
+           'column', encounter_run_board.area_origin_column,
+           'row', encounter_run_board.area_origin_row))
+       || case when encounter_run_board.area_toward_column is null then '{}'::jsonb
+          else jsonb_build_object('toward', jsonb_build_object(
+            'column', encounter_run_board.area_toward_column,
+            'row', encounter_run_board.area_toward_row)) end
+  end as area
 `;
 
 /** A board's two dimensions, which the wire calls `columns` and `rows`. */
@@ -233,6 +258,24 @@ export class BattleMaps extends Context.Service<
       runId: EncounterRunId,
       update: BoardFogUpdate,
     ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
+    /**
+     * Pin an area template on a fight's board, replacing what was pinned, or
+     * clear it — the DM's alone, as the board is. `Conflict` for a fight that
+     * is over or has no board, a square off the board, and a template that
+     * covers none of it (`areaSquares`). A repeated `requestId` changes
+     * nothing and answers the board as it stands; clearing a board with
+     * nothing pinned writes nothing and logs nothing.
+     *
+     * The log line is shared while a player's table shows the board
+     * (`liveTables.ts`' `boardShown`), so their doorbell rings and they re-read
+     * a table that carries the template; otherwise it is the DM's own.
+     */
+    readonly setArea: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      update: BoardAreaSet,
+    ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
   }
 >()("BattleMaps") {
   static readonly layer = Layer.effect(this)(
@@ -312,7 +355,8 @@ export class BattleMaps extends Context.Service<
                  encounter_run_board.grid, encounter_run_board.board_columns,
                  encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
                  ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}, ${fogColumn(sql)}
+                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}, ${fogColumn(sql)},
+                 ${areaColumn(sql)}
           from encounter_run_board
           left join battle_map on battle_map.id = encounter_run_board.map_id
             and ${rowWritable(sql, "battle_map", campaign, actor)}
@@ -471,6 +515,116 @@ export class BattleMaps extends Context.Service<
               .pipe(
                 // Two sends of one stroke that raced past the idempotency
                 // check; the unique index refuses the second, as for a move.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? current
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          );
+        },
+
+        setArea: (creator, sessionId, runId, update) => {
+          const current = Effect.flatMap(board({ ...asked(creator), runId }), (found) =>
+            Option.match(found, {
+              onNone: () => Effect.fail(new Conflict({ message: "this fight has no board" })),
+              onSome: Effect.succeed,
+            }),
+          );
+          return dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                    orNotFound("encounter_run", runId),
+                  );
+                  if (yield* requestAlreadyApplied(sql, runId, update.requestId)) {
+                    return yield* current;
+                  }
+
+                  // The fight as this pin finds it, held `for share` so it
+                  // cannot end under the write; `end` waits.
+                  const fights = yield* sql<{
+                    readonly ended: boolean;
+                    readonly shown: boolean;
+                    readonly board_columns: number | null;
+                    readonly board_rows: number | null;
+                    readonly feet_per_cell: number | null;
+                  }>`
+                    select encounter_run.ended_at is not null as ended,
+                           ${boardShown(sql)} as shown,
+                           encounter_run_board.board_columns, encounter_run_board.board_rows,
+                           encounter_run_board.feet_per_cell
+                    from encounter_run
+                    left join encounter_run_board on encounter_run_board.run_id = encounter_run.id
+                    where encounter_run.id = ${runId}
+                    for share of encounter_run
+                  `;
+                  // Proved writable above, in this transaction.
+                  const fight = fights[0]!;
+                  if (fight.ended) {
+                    return yield* new Conflict({ message: "this fight is over" });
+                  }
+                  if (
+                    fight.board_columns === null ||
+                    fight.board_rows === null ||
+                    fight.feet_per_cell === null
+                  ) {
+                    return yield* new Conflict({ message: "this fight has no board" });
+                  }
+                  const size = { columns: fight.board_columns, rows: fight.board_rows };
+
+                  const area = update.area;
+                  if (area === null) {
+                    // Nothing pinned is nothing to clear, and nothing to log.
+                    if ((yield* clearArea(sql, runId)).length === 0) return yield* current;
+                  } else {
+                    const toward = areaToward(area);
+                    if (
+                      [area.origin, toward].some(
+                        (square) => square.column >= size.columns || square.row >= size.rows,
+                      )
+                    ) {
+                      return yield* new Conflict({ message: "that square is off the board" });
+                    }
+                    const covered = areaSquares(size, {
+                      shape: area.shape,
+                      feet: area.feet,
+                      feetPerCell: fight.feet_per_cell,
+                      origin: area.origin,
+                      toward,
+                    });
+                    if (covered.length === 0) {
+                      return yield* new Conflict({
+                        message: "that area covers no square of this board",
+                      });
+                    }
+                    const aimed = "toward" in area ? area.toward : null;
+                    yield* sql`
+                      update encounter_run_board
+                      set area_shape = ${area.shape}, area_feet = ${area.feet},
+                          area_origin_column = ${area.origin.column},
+                          area_origin_row = ${area.origin.row},
+                          area_toward_column = ${aimed?.column ?? null},
+                          area_toward_row = ${aimed?.row ?? null}
+                      where encounter_run_board.run_id = ${runId}
+                    `;
+                  }
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "board-area-updated",
+                    encounterRunId: runId,
+                    payload: { area },
+                    requestId: update.requestId,
+                    visibility: fight.shown ? "shared" : "dm",
+                  });
+                  return yield* current;
+                }),
+              )
+              .pipe(
+                // Two sends of one pin that raced past the idempotency check;
+                // the unique index refuses the second, as for a move.
                 Effect.catch((error) =>
                   SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
                     ? current

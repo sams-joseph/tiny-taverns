@@ -35,7 +35,15 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError, SqlSchema, type Statement } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
-import { COMBATANT, freshTurn, initiativeOrder, ROSTER, RUN, RUNS } from "./liveTables.js";
+import {
+  clearArea,
+  COMBATANT,
+  freshTurn,
+  initiativeOrder,
+  ROSTER,
+  RUN,
+  RUNS,
+} from "./liveTables.js";
 import {
   classFromColumns,
   defined,
@@ -1371,6 +1379,9 @@ export class EncounterRuns extends Context.Service<
                     set active_encounter_run_id = null, updated_at = now()
                     where session.id = ${sessionId} and session.active_encounter_run_id = ${id}
                   `;
+                  // A pinned template goes with the fight; `run-ended` rings
+                  // the doorbell that tells the players.
+                  yield* clearArea(sql, id);
                   yield* appendEvent(sql, {
                     sessionId,
                     kind: "run-ended",

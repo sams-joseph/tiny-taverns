@@ -121,6 +121,7 @@ export const runBoard = {
   image: null,
   imagePending: false,
   fog: [],
+  area: null,
 };
 
 /**

@@ -2,7 +2,13 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
-import { BattleMap, BattleMapUpdate, BoardFogUpdate, EncounterRunBoard } from "./BattleMap.js";
+import {
+  BattleMap,
+  BattleMapUpdate,
+  BoardAreaSet,
+  BoardFogUpdate,
+  EncounterRunBoard,
+} from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { CampaignAct, CampaignActCreate, CampaignActUpdate } from "./CampaignAct.js";
@@ -3174,6 +3180,19 @@ class RunsGroup extends HttpApiGroup.make("runs")
     HttpApiEndpoint.patch("updateFog", "/:runId/board/fog", {
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       payload: BoardFogUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
+    }),
+    /**
+     * Pin an area template on the fight's board, or clear it with `area:
+     * null`, answered with the board. Shown to the players while the board is
+     * on their table. `Conflict` for a fight that is over or has no board, a
+     * square off the board, and a template covering none of it. See
+     * `BoardAreaSet`.
+     */
+    HttpApiEndpoint.put("setArea", "/:runId/board/area", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: BoardAreaSet,
       success: EncounterRunBoard,
       error: [NotFound, Conflict],
     }),
