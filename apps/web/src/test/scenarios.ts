@@ -40,7 +40,7 @@ import {
 import { fullRules } from "../rules/rules.fixtures";
 import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
 import { sseFrames } from "../characters/characters.fixtures";
-import { brannocId, hobThreadId, hobTurnId } from "./ids";
+import { brannocId, hobThreadId, hobTurnId, olderHobThreadId } from "./ids";
 import type { Scenario } from "./screens";
 
 // The campaign's reads, with `twoTables`' memberships seating this account as a
@@ -236,9 +236,62 @@ const creatorHob = (): Map<string, Answer> => {
   return routes;
 };
 
+/**
+ * `creator-hob` with two saved conversations: the newest, which the panel
+ * resumes, and an older one the conversations list opens. Each answers its own
+ * turns, so which one is on screen is visible.
+ */
+const creatorHobThreads = (): Map<string, Answer> => {
+  const routes = creatorHob();
+  const hob = `/campaigns/${campaignId}/hob`;
+  const thread = (id: string, title: string, updatedAt: string) => ({
+    id,
+    campaignId,
+    worldId: null,
+    title,
+    name: null,
+    createdAt: "2026-08-01T19:00:00.000Z",
+    updatedAt,
+  });
+  const said = (threadId: string, n: number, who: "user" | "hob", text: string) => ({
+    id: `2b1f2a1e-0000-4000-8000-00000000c0${String(n).padStart(2, "0")}`,
+    threadId,
+    who,
+    text,
+    proposal: null,
+    acceptedAt: null,
+    discardedAt: null,
+    kept: null,
+    createdAt: "2026-08-01T19:00:00.000Z",
+  });
+  routes.set(`GET ${hob}/threads`, {
+    status: 200,
+    body: [
+      thread(hobThreadId, "Who keeps the toll?", "2026-08-12T20:00:00.000Z"),
+      thread(olderHobThreadId, "Name the ferryman", "2026-08-02T20:00:00.000Z"),
+    ],
+  });
+  routes.set(`GET ${hob}/threads/${hobThreadId}/turns`, {
+    status: 200,
+    body: [
+      said(hobThreadId, 1, "user", "Who keeps the toll?"),
+      said(hobThreadId, 2, "hob", "Grusk, and he counts every coin twice."),
+    ],
+  });
+  routes.set(`GET ${hob}/threads/${olderHobThreadId}/turns`, {
+    status: 200,
+    body: [
+      said(olderHobThreadId, 3, "user", "Name the ferryman"),
+      said(olderHobThreadId, 4, "hob", "Cazril, and he takes only a name."),
+    ],
+  });
+  return routes;
+};
+
 export const scenarios = {
   creator,
   "creator-hob": creatorHob,
+  "creator-hob-threads": creatorHobThreads,
   // Cazril with no sheet yet: the Stats tab's empty state and its quick
   // starts, over the campaign's bestiary.
   "creator-unsheeted": () =>

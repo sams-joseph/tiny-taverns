@@ -24,6 +24,7 @@ import {
   artifactFrom,
   type HobArtifact,
   type HobContextChip,
+  type HobThreadList,
   type HobTurn,
 } from "./transcript";
 
@@ -43,10 +44,14 @@ import {
  * one question. A reload no longer loses the evening — which was the gap — and
  * a client can no longer rewrite what it was told.
  *
- * The panel resumes the *newest* thread and offers no picker over the rest.
- * That is a drawn-surface limit rather than a data one: `hob.threads` returns
- * them all, newest first, and the designers have not drawn a list. *New thread*
- * starts one, which is now exactly what it says.
+ * The panel resumes the *newest* thread. *New thread* starts one, which is
+ * exactly what it says, and the conversations list (`threadList`) is every
+ * thread this reader has in the scope, newest first, read again each time it
+ * is shown; picking one reads its turns back into the panel in place of the
+ * one on screen. Each row is the name Hob gave the conversation after its
+ * first answer, or the question that started it until then. The list is the
+ * same `threads` read the resume takes the front of, so it can never show a
+ * conversation the panel could not open.
  *
  * ### A card is an offer, and Save is the only thing that makes a row
  *
@@ -137,6 +142,16 @@ export interface HobConversation {
   /** Turns a proposal down and asks Hob for another. Undefined while nothing can answer. */
   readonly retry: ((artifact: HobArtifact) => void) | undefined;
   readonly reset: (() => void) | undefined;
+  /** The thread on screen, once it has one: the list marks it. */
+  readonly threadId: string | undefined;
+  /** A thread picked from the list whose turns are on their way. */
+  readonly opening: boolean;
+  /** The reader's conversations in this scope, as last read. */
+  readonly threadList: HobThreadList;
+  /** Reads the list again, which it is each time it is shown. Undefined with no scope. */
+  readonly listThreads: (() => void) | undefined;
+  /** Shows one of them in the panel, in place of the one there. Undefined with no scope. */
+  readonly openThread: ((id: string) => void) | undefined;
 }
 
 /** What a tool step reads as in the panel. Named here, once. */
@@ -201,6 +216,10 @@ const saveFailureFor = (failure: ApiFailure): string =>
     ? `Nothing was saved: ${failure.message}.`
     : `Nothing was saved: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
 
+/** And when a conversation picked from the list could not be read back. */
+const openFailureFor = (failure: ApiFailure): string =>
+  `That conversation could not be opened: ${sentenceFor(failure).replace(/^Hob could not answer: /, "")}`;
+
 /** And when the discard failed, in the same shape. */
 const discardFailureFor = (failure: ApiFailure): string =>
   failure.kind === "conflict"
@@ -242,12 +261,6 @@ const shownAs = (recorded: ReadonlyArray<RecordedTurn>): ReadonlyArray<HobTurn> 
         ];
   });
 
-/** What the panel says it knows, read off whichever status the scope answers. */
-interface Opened {
-  readonly status: ConversationStatus;
-  readonly threads: ReadonlyArray<HobThread>;
-}
-
 /**
  * The six calls of one scope's API group, chosen once.
  *
@@ -257,7 +270,10 @@ interface Opened {
  * the keys a screen behind the panel reads that row through.
  */
 interface ScopeCalls {
-  readonly opened: (client: TavernsClient) => Effect.Effect<Opened, unknown, never>;
+  /** What the panel says it knows, read off whichever status the scope answers. */
+  readonly status: (client: TavernsClient) => Effect.Effect<ConversationStatus, unknown>;
+  /** The reader's conversations in this scope, newest first. */
+  readonly threads: (client: TavernsClient) => Effect.Effect<ReadonlyArray<HobThread>, unknown>;
   readonly turns: (
     client: TavernsClient,
     threadId: AssistantThreadId,
@@ -284,25 +300,14 @@ const callsFor = (scope: HobScope): ScopeCalls => {
     case "campaign": {
       const campaignId = scope.id;
       return {
-        opened: (client) =>
-          Effect.map(
-            Effect.all(
-              {
-                status: client.hob.status({ params: { campaignId } }),
-                threads: client.hob.threads({ params: { campaignId } }),
-              },
-              { concurrency: 2 },
-            ),
-            ({ status, threads }) => ({
-              status: {
-                available: status.available,
-                model: status.model,
-                label: status.campaign,
-                type: "campaign",
-              },
-              threads,
-            }),
-          ),
+        status: (client) =>
+          Effect.map(client.hob.status({ params: { campaignId } }), (status) => ({
+            available: status.available,
+            model: status.model,
+            label: status.campaign,
+            type: "campaign",
+          })),
+        threads: (client) => client.hob.threads({ params: { campaignId } }),
         turns: (client, threadId) => client.hob.turns({ params: { campaignId, threadId } }),
         ask: (client, payload) => client.hob.ask({ params: { campaignId }, payload }),
         accept: (client, threadId, turnId) =>
@@ -355,25 +360,14 @@ const callsFor = (scope: HobScope): ScopeCalls => {
     case "sharedWorld": {
       const worldId = scope.id;
       return {
-        opened: (client) =>
-          Effect.map(
-            Effect.all(
-              {
-                status: client.sharedWorldHob.status({ params: { worldId } }),
-                threads: client.sharedWorldHob.threads({ params: { worldId } }),
-              },
-              { concurrency: 2 },
-            ),
-            ({ status, threads }) => ({
-              status: {
-                available: status.available,
-                model: status.model,
-                label: status.sharedWorld,
-                type: "sharedWorld",
-              },
-              threads,
-            }),
-          ),
+        status: (client) =>
+          Effect.map(client.sharedWorldHob.status({ params: { worldId } }), (status) => ({
+            available: status.available,
+            model: status.model,
+            label: status.sharedWorld,
+            type: "sharedWorld",
+          })),
+        threads: (client) => client.sharedWorldHob.threads({ params: { worldId } }),
         turns: (client, threadId) => client.sharedWorldHob.turns({ params: { worldId, threadId } }),
         ask: (client, payload) => client.sharedWorldHob.ask({ params: { worldId }, payload }),
         accept: (client, threadId, turnId) =>
@@ -387,24 +381,14 @@ const callsFor = (scope: HobScope): ScopeCalls => {
       return {
         // The account's status names nothing it knows: outside a campaign
         // Hob knows the core rules, which are the same for everybody.
-        opened: (client) =>
-          Effect.map(
-            Effect.all(
-              { status: client.meHob.status(), threads: client.meHob.threads() },
-              {
-                concurrency: 2,
-              },
-            ),
-            ({ status, threads }) => ({
-              status: {
-                available: status.available,
-                model: status.model,
-                label: "Core rules",
-                type: "account",
-              },
-              threads,
-            }),
-          ),
+        status: (client) =>
+          Effect.map(client.meHob.status(), (status) => ({
+            available: status.available,
+            model: status.model,
+            label: "Core rules",
+            type: "account",
+          })),
+        threads: (client) => client.meHob.threads(),
         turns: (client, threadId) => client.meHob.turns({ params: { threadId } }),
         // No `intent`: this is the panel, which drafts a campaign, a Shared
         // World or a character. The create screen's composer names its own.
@@ -500,6 +484,22 @@ export function useHobConversation(
    * the second question a stale thread and split one evening into two.
    */
   const thread = useRef<AssistantThreadId | undefined>(undefined);
+  /** `thread`, for rendering: which row the list marks as the one on screen. */
+  const [shownThread, setShownThread] = useState<AssistantThreadId | undefined>(undefined);
+  const follow = useCallback((id: AssistantThreadId | undefined) => {
+    thread.current = id;
+    setShownThread(id);
+  }, []);
+  /**
+   * The thread picked from the list whose turns are still on their way. A
+   * ref for the reason `thread` is one, and it is also the ticket: a reply
+   * for any other thread — or after *New thread* — is dropped.
+   */
+  const pending = useRef<AssistantThreadId | undefined>(undefined);
+  const [opening, setOpening] = useState(false);
+  const [threadList, setThreadList] = useState<HobThreadList>({ state: "loading" });
+  /** Bumped per list read, so only the latest one lands. */
+  const listing = useRef(0);
 
   // Two reads on open, and neither is optional. `status` is the only reason the
   // composer appears — the server answers `available: false` rather than
@@ -519,7 +519,10 @@ export function useHobConversation(
       const token = await credentialRef.current();
       const result = await runApiResult(
         (client) =>
-          calls.opened(client).pipe(
+          Effect.all(
+            { status: calls.status(client), threads: calls.threads(client) },
+            { concurrency: 2 },
+          ).pipe(
             Effect.flatMap(({ status: known, threads }) => {
               const newest = threads[0];
               return newest === undefined
@@ -545,8 +548,9 @@ export function useHobConversation(
       // replacing their turns with the ones the server had a moment ago would
       // lose the question they are watching.
       setTurns((current) => {
-        if (current.length > 0) return current;
-        thread.current = result.success.threadId;
+        // Nor over a thread picked from the list while this was in flight.
+        if (current.length > 0 || pending.current !== undefined) return current;
+        follow(result.success.threadId);
         setSaved(
           result.success.recorded.filter((turn) => turn.acceptedAt !== null).map((turn) => turn.id),
         );
@@ -563,7 +567,7 @@ export function useHobConversation(
     return () => {
       live = false;
     };
-  }, [scopeKey, open]);
+  }, [scopeKey, open, follow]);
 
   /** A half-written answer is abandoned, not left running, when this unmounts. */
   useEffect(
@@ -603,7 +607,7 @@ export function useHobConversation(
           case "began":
             // The thread this evening belongs to, learnt before a word of the
             // answer. The next question continues it.
-            thread.current = event.data.threadId;
+            follow(event.data.threadId);
             return;
           case "delta":
             setActivity(undefined);
@@ -671,7 +675,7 @@ export function useHobConversation(
 
       answering.current = Effect.runFork(answer);
     },
-    [append, asking, say],
+    [append, asking, say, follow],
   );
 
   /**
@@ -795,14 +799,94 @@ export function useHobConversation(
     answering.current = undefined;
     // Forgetting the thread is the whole of *New thread*: the next question
     // starts one, and the old one stays on the server.
-    thread.current = undefined;
+    follow(undefined);
+    pending.current = undefined;
+    setOpening(false);
     setTurns([]);
     setSaved([]);
     setKept({});
     setAsking(false);
     setWriting(false);
     setActivity(undefined);
+  }, [follow]);
+
+  const listThreads = useCallback(() => {
+    const current = scopeRef.current;
+    if (current === undefined) return;
+    const calls = callsFor(current);
+    const ticket = ++listing.current;
+    // A list already drawn stays drawn while it is read again.
+    setThreadList((list) => (list.state === "ready" ? list : { state: "loading" }));
+    void (async () => {
+      const token = await credentialRef.current();
+      const result = await runApiResult((client) => calls.threads(client), token);
+      if (ticket !== listing.current) return;
+      setThreadList(
+        Result.isSuccess(result)
+          ? {
+              state: "ready",
+              // Hob's name for it once there is one, and the question until then.
+              threads: result.success.map((row) => ({
+                id: row.id,
+                title: row.name ?? row.title,
+                updatedAt: row.updatedAt,
+              })),
+            }
+          : { state: "failed" },
+      );
+    })();
   }, []);
+
+  /**
+   * A conversation from the list, in place of the one on screen.
+   *
+   * *New thread* and then a read: whatever was answering is abandoned, and the
+   * picked thread is the one the next question continues from the instant it
+   * is picked. Its turns are put *before* anything asked while they were on
+   * their way, since that question continues it.
+   */
+  const openThread = useCallback(
+    (id: string) => {
+      const current = scopeRef.current;
+      const threadId = id as AssistantThreadId;
+      if (current === undefined || threadId === thread.current) return;
+      const calls = callsFor(current);
+      reset();
+      follow(threadId);
+      pending.current = threadId;
+      setOpening(true);
+      void (async () => {
+        const token = await credentialRef.current();
+        const result = await runApiResult((client) => calls.turns(client, threadId), token);
+        if (pending.current !== threadId) return;
+        pending.current = undefined;
+        setOpening(false);
+        if (Result.isFailure(result)) {
+          // Nothing to continue: the next question starts a thread.
+          follow(undefined);
+          append({
+            id: `hob-${nextId.current++}`,
+            who: "hob",
+            text: openFailureFor(classifyFailure(result.failure)),
+          });
+          return;
+        }
+        const recorded = result.success;
+        setSaved((done) => [
+          ...recorded.filter((turn) => turn.acceptedAt !== null).map((turn) => turn.id),
+          ...done,
+        ]);
+        setKept((made) => ({
+          ...Object.fromEntries(
+            recorded.flatMap((turn) => (turn.kept === null ? [] : [[turn.id, turn.kept] as const])),
+          ),
+          ...made,
+        }));
+        setTurns((asked) => [...shownAs(recorded), ...asked]);
+      })();
+    },
+    [append, follow, reset],
+  );
 
   /**
    * A different scope is a different conversation.
@@ -818,6 +902,8 @@ export function useHobConversation(
     shownFor.current = scopeKey;
     reset();
     setStatus(undefined);
+    listing.current++;
+    setThreadList({ state: "loading" });
   }, [scopeKey, reset]);
 
   return {
@@ -853,5 +939,10 @@ export function useHobConversation(
     // A re-ask needs somebody to answer it; the card holds it while `asking`.
     retry: status?.available === true ? retry : undefined,
     reset: turns.length > 0 ? reset : undefined,
+    threadId: shownThread,
+    opening,
+    threadList,
+    listThreads: scope === undefined ? undefined : listThreads,
+    openThread: scope === undefined ? undefined : openThread,
   };
 }

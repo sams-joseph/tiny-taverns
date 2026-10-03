@@ -29,3 +29,5 @@ export const seatId = "2b1f2a1e-0000-4000-8000-000000000951";
 /** The Hob conversation `creator-hob` offers a note in, and the turn it offers it on. */
 export const hobThreadId = "2b1f2a1e-0000-4000-8000-00000000b0b1";
 export const hobTurnId = "2b1f2a1e-0000-4000-8000-00000000b0b2";
+/** An older conversation `creator-hob-threads` lists beside it. */
+export const olderHobThreadId = "2b1f2a1e-0000-4000-8000-00000000b0b3";

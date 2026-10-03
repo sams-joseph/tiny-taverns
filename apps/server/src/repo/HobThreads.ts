@@ -191,6 +191,18 @@ export class HobThreads extends Context.Service<
       scopeId: ConversationScope,
       firstQuestion: string,
     ) => Effect.Effect<HobThread, NotFound, CurrentActor>;
+    /**
+     * Hob's name for a thread (`assistant/HobNamer.ts`), written once: a
+     * thread that already has one keeps it, and one this actor cannot reach
+     * is left alone. `updated_at` does not move — naming a conversation is
+     * not a turn in it, and the list is ordered by the turns.
+     */
+    readonly name: (
+      reach: ConversationReach,
+      scopeId: ConversationScope,
+      id: AssistantThreadId,
+      name: string,
+    ) => Effect.Effect<void, never, CurrentActor>;
     /** Oldest first: a conversation, read in the order it happened. */
     readonly turns: (
       reach: ConversationReach,
@@ -361,6 +373,19 @@ export class HobThreads extends Context.Service<
               ).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
             }),
           ),
+
+        name: (reach, scopeId, id, name) =>
+          dieOnSqlError(
+            Effect.flatMap(
+              Effect.service(CurrentActor),
+              (actor) => sql`
+                update assistant_thread set name = ${name}
+                where assistant_thread.id = ${id}
+                  and assistant_thread.name is null
+                  and ${conversationReachable(sql, "assistant_thread", reach, scopeId, actor)}
+              `,
+            ),
+          ).pipe(Effect.asVoid),
 
         turns: (reach, scopeId, threadId) =>
           dieOnSqlError(

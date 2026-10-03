@@ -358,6 +358,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 81, name: "integer_sequences" },
         { migration_id: 82, name: "subclass_spells" },
         { migration_id: 83, name: "character_advancement" },
+        { migration_id: 84, name: "assistant_thread_name" },
       ]);
     }),
   );
@@ -452,6 +453,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 81, name: "integer_sequences" },
         { migration_id: 82, name: "subclass_spells" },
         { migration_id: 83, name: "character_advancement" },
+        { migration_id: 84, name: "assistant_thread_name" },
       ]);
     }),
   );

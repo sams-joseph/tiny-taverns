@@ -1,4 +1,5 @@
 import {
+  type Actor,
   type AssistantThreadId,
   type AssistantTurnId,
   type Campaign,
@@ -45,7 +46,8 @@ import { Creatures } from "../repo/Creatures.js";
 import { CampaignCreatorActors } from "../repo/CreatorActor.js";
 import { EquipmentRepo } from "../repo/Equipment.js";
 import { type HobDirectResourceContext, HobDirectWrites } from "../repo/HobDirectWrites.js";
-import { HobThreads, type TurnDraft } from "../repo/HobThreads.js";
+import { type ConversationScope, HobThreads, type TurnDraft } from "../repo/HobThreads.js";
+import type { ConversationReach } from "../repo/visibility.js";
 import { NpcKnowledge } from "../repo/NpcKnowledge.js";
 import { NpcMemories } from "../repo/NpcMemories.js";
 import { NpcAwareness, type NpcAwarenessDraft } from "../repo/NpcAwareness.js";
@@ -80,6 +82,7 @@ import {
   vocabularyOf,
 } from "./toolkit.js";
 import { decodeToolCalls } from "./toolArguments.js";
+import { HobNamer } from "./HobNamer.js";
 
 /**
  * Hob answers.
@@ -274,6 +277,24 @@ export class Hob extends Context.Service<
         const groups = yield* Groups;
         const dmActors = yield* CampaignCreatorActors;
         const threads = yield* HobThreads;
+        /**
+         * A thread a question just started is named once its first answer is
+         * saved, when a namer is provided (`HobNamer`, which says why it is
+         * optional). A question continuing a thread names nothing.
+         */
+        const namer = Option.getOrUndefined(yield* Effect.serviceOption(HobNamer));
+        const naming = (
+          reach: ConversationReach,
+          scopeId: ConversationScope,
+          threadId: AssistantThreadId,
+          ask: { readonly threadId?: AssistantThreadId | undefined; readonly text: string },
+          actor: Actor,
+        ): Effect.Effect<void> =>
+          namer === undefined || ask.threadId !== undefined
+            ? Effect.void
+            : namer
+                .nameSoon(reach, scopeId, threadId, ask.text)
+                .pipe(Effect.provideService(CurrentActor, actor));
         // The level-up composer's one read: an owned character's next-level
         // offer, which decides the shape of `proposeLevelUp`.
         const advancement = yield* Advancement;
@@ -665,7 +686,9 @@ export class Hob extends Context.Service<
                     ),
                   ),
                 ),
-                Stream.ensuring(save),
+                Stream.ensuring(
+                  Effect.andThen(save, naming(reach, campaignId, thread.id, ask, actor)),
+                ),
               );
             }),
 
@@ -760,6 +783,7 @@ export class Hob extends Context.Service<
                   threads
                     .append("sharedWorld", groupId, thread.id, turn)
                     .pipe(Effect.provideService(CurrentActor, actor)),
+                name: naming("sharedWorld", groupId, thread.id, ask, actor),
                 languageModel,
                 failing: "Hob's Shared World answer failed",
               });
@@ -912,6 +936,7 @@ export class Hob extends Context.Service<
                   threads
                     .append("account", account, thread.id, turn)
                     .pipe(Effect.provideService(CurrentActor, actor)),
+                name: naming("account", account, thread.id, ask, actor),
                 languageModel,
                 failing: "Hob's draft with no campaign failed",
               });
@@ -946,6 +971,8 @@ const deliver = (options: {
   readonly asked: string;
   readonly surface: BuildSurface;
   readonly save: (turn: TurnDraft) => Effect.Effect<unknown, unknown>;
+  /** Names a thread this question started, once the turn is saved; or nothing. */
+  readonly name: Effect.Effect<void>;
   readonly languageModel: LanguageModel.LanguageModel;
   /** The log line's opening words when the answer fails. */
   readonly failing: string;
@@ -1019,7 +1046,7 @@ const deliver = (options: {
           ),
         ),
       ),
-      Stream.ensuring(save),
+      Stream.ensuring(Effect.andThen(save, options.name)),
     );
   });
 

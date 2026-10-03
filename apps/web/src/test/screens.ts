@@ -29,6 +29,7 @@ import {
 export type Scenario =
   | "creator"
   | "creator-hob"
+  | "creator-hob-threads"
   | "creator-unsheeted"
   | "creator-social"
   | "creator-challenge"

@@ -562,11 +562,12 @@ export type HobProposal = typeof HobProposal.Type;
 /**
  * One conversation, as a row.
  *
- * `title` is the first question, shortened. It is not decoration: a thread is
- * the unit the panel resumes and the unit a future picker would list, and a
- * conversation with no name is one nobody can choose between. There is no
- * picker drawn yet — the panel resumes the newest thread — so this is the one
- * field here that is ahead of a surface, and it costs a `substring`.
+ * `title` is the first question, shortened, and `name` is what Hob called the
+ * conversation once it had answered that question (`assistant/HobNamer.ts`):
+ * null until then, and for good when no model is behind Hob or it said
+ * nothing usable. The panel's conversations list shows the name and falls
+ * back to the title, because a conversation with no name is one nobody can
+ * choose between. Neither is in any request: the server writes both.
  */
 export class HobThread extends Schema.Class<HobThread>("HobThread")({
   id: AssistantThreadId,
@@ -578,6 +579,7 @@ export class HobThread extends Schema.Class<HobThread>("HobThread")({
   campaignId: Schema.NullOr(CampaignId),
   worldId: Schema.NullOr(SharedWorldId),
   title: Schema.String,
+  name: Schema.NullOr(Schema.String),
   createdAt: Schema.DateTimeUtcFromString,
   updatedAt: Schema.DateTimeUtcFromString,
 }) {}

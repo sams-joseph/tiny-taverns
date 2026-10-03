@@ -1,7 +1,9 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DateTime } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { HobPanel } from "./HobPanel";
+import { useHobPanel } from "./useHobPanel";
 import { SAMPLE_ENCOUNTER, SAMPLE_RULES, SAMPLE_THREAD } from "./hob.fixtures";
 import type { HobTurn } from "./transcript";
 
@@ -238,5 +240,100 @@ describe("Hob's mark, beside a reply that grew", () => {
       // that says neither is the row that stretches.
       expect(row?.className).toMatch(/items-(start|center)/);
     }
+  });
+});
+
+describe("the conversations list", () => {
+  const at = DateTime.makeUnsafe("2026-08-12T20:00:00.000Z");
+  const ready = {
+    state: "ready" as const,
+    threads: [
+      { id: "t-new", title: "Who is the ferryman?", updatedAt: at },
+      { id: "t-old", title: "Build me an ambush in the reeds", updatedAt: at },
+    ],
+  };
+  const listed = () => screen.getByRole("dialog", { name: "Conversations" });
+
+  it("draws no control it was given no list for", () => {
+    render(<HobPanel turns={[]} />);
+    expect(screen.queryByRole("button", { name: "Conversations" })).toBeNull();
+  });
+
+  it("reads the list on opening, and hands back the one picked", async () => {
+    const user = userEvent.setup();
+    const onListThreads = vi.fn();
+    const onOpenThread = vi.fn();
+    render(
+      <HobPanel
+        turns={SAMPLE_THREAD}
+        threadList={ready}
+        threadId="t-new"
+        onListThreads={onListThreads}
+        onOpenThread={onOpenThread}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(onListThreads).toHaveBeenCalledOnce();
+    expect(within(listed()).getByRole("button", { name: /Who is the ferryman/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+
+    await user.click(within(listed()).getByRole("button", { name: /Build me an ambush/ }));
+    expect(onOpenThread).toHaveBeenCalledWith("t-old");
+    expect(screen.queryByRole("dialog", { name: "Conversations" })).toBeNull();
+  });
+
+  it("closes on Escape, and the panel around it stays open", async () => {
+    const user = userEvent.setup();
+    // The real owner of Esc, which closes the whole panel on a key nobody consumed.
+    function Panel() {
+      const hob = useHobPanel();
+      return (
+        <>
+          <output>{hob.open ? "panel open" : "panel closed"}</output>
+          <HobPanel
+            turns={[]}
+            threadList={ready}
+            onListThreads={() => undefined}
+            onOpenThread={() => undefined}
+          />
+        </>
+      );
+    }
+    render(<Panel />);
+    await user.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(listed()).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Conversations" })).toBeNull();
+    expect(screen.getByText("panel open")).toBeInTheDocument();
+
+    // And the next Escape is the panel's, as it was before the list opened.
+    await user.keyboard("{Escape}");
+    expect(screen.getByText("panel closed")).toBeInTheDocument();
+  });
+
+  it("says when there is nothing to list, and offers another read when the list failed", async () => {
+    const user = userEvent.setup();
+    const onListThreads = vi.fn();
+    const props = { turns: [], onListThreads, onOpenThread: () => undefined };
+    render(<HobPanel {...props} threadList={{ state: "ready", threads: [] }} />);
+    await user.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(within(listed()).getByText("No conversations yet")).toBeInTheDocument();
+
+    cleanup();
+    onListThreads.mockClear();
+    render(<HobPanel {...props} threadList={{ state: "failed" }} />);
+    await user.click(screen.getByRole("button", { name: "Conversations" }));
+    await user.click(within(listed()).getByRole("button", { name: "Try again" }));
+    expect(onListThreads).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the starters back while a picked conversation is on its way", () => {
+    render(<HobPanel turns={[]} opening />);
+    expect(screen.queryByText("What are we building tonight?")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Opening the conversation…");
   });
 });

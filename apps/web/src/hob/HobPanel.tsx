@@ -1,5 +1,5 @@
-import { Button, Icon, SidebarContent, SidebarFooter, SidebarHeader } from "@taverns/ui";
-import { useEffect, useRef } from "react";
+import { Button, Icon, Loading, SidebarContent, SidebarFooter, SidebarHeader } from "@taverns/ui";
+import { useEffect, useRef, useState } from "react";
 import { ArtifactCard } from "./ArtifactCard";
 import {
   Composer,
@@ -11,7 +11,8 @@ import {
   Thinking,
   UserTurn,
 } from "./ChatParts";
-import type { HobArtifact, HobContextChip, HobStarter, HobTurn } from "./transcript";
+import { HobThreads } from "./HobThreads";
+import type { HobArtifact, HobContextChip, HobStarter, HobThreadList, HobTurn } from "./transcript";
 
 /**
  * The Hob chat panel — Option A of the designers' three, and the one that ships.
@@ -74,6 +75,19 @@ export interface HobPanelProps {
   readonly openableArtifactIds?: ReadonlyArray<string>;
   /** Start over. Absent while there is no thread to start over from. */
   readonly onNewThread?: () => void;
+  /**
+   * The reader's other conversations, and the header control that lists
+   * them. All three or none: **absent draws no control**, which is a panel
+   * with no scope behind it, where there is nothing to list.
+   */
+  readonly threadList?: HobThreadList;
+  /** Read the list again: each time it is shown, and on *Try again*. */
+  readonly onListThreads?: () => void;
+  readonly onOpenThread?: (id: string) => void;
+  /** The thread on screen, which the list marks. */
+  readonly threadId?: string;
+  /** A thread picked from the list is on its way: no starters while it is. */
+  readonly opening?: boolean;
   readonly onClose?: () => void;
 }
 
@@ -97,9 +111,18 @@ export function HobPanel({
   onOpenArtifact,
   openableArtifactIds = [],
   onNewThread,
+  threadList,
+  onListThreads,
+  onOpenThread,
+  threadId,
+  opening = false,
   onClose,
 }: HobPanelProps) {
   const thread = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const [listing, setListing] = useState(false);
+  const lists =
+    threadList !== undefined && onListThreads !== undefined && onOpenThread !== undefined;
 
   // The newest turn is the one being read. Jump rather than smooth-scroll: the
   // motion rules are about controls settling, not about chasing a growing list,
@@ -114,9 +137,12 @@ export function HobPanel({
   }, [turns, thinking, activity]);
 
   return (
+    // `relative` and `overflow-hidden` are the conversations list's: it is
+    // contained by this box, and must not paint past it.
     <section
+      ref={panel}
       aria-label="Hob"
-      className="flex h-full min-h-0 flex-col bg-surface-card text-foreground"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-surface-card text-foreground"
     >
       <SidebarHeader className="shrink-0 flex-row items-center gap-2.5 border-b border-hairline p-3.5">
         <HobAvatar size={26} />
@@ -126,6 +152,20 @@ export function HobPanel({
             Keeps the ledger behind the bar
           </span>
         </span>
+        {lists && (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="Conversations"
+            aria-expanded={listing}
+            onClick={() => {
+              setListing(true);
+              onListThreads();
+            }}
+          >
+            <Icon name="history" size={14} />
+          </Button>
+        )}
         <Button
           size="sm"
           variant="ghost"
@@ -150,7 +190,9 @@ export function HobPanel({
         ref={thread}
         className="gap-3.5 p-3.5 [scrollbar-width:auto] [&::-webkit-scrollbar]:block"
       >
-        {turns.length === 0 && !thinking ? (
+        {opening && turns.length === 0 ? (
+          <Loading inline label="Opening the conversation…" />
+        ) : turns.length === 0 && !thinking ? (
           <EmptyThread
             onPick={onSend}
             title={emptyTitle}
@@ -198,6 +240,21 @@ export function HobPanel({
           <Composer onSend={onSend} />
         )}
       </SidebarFooter>
+
+      {lists && (
+        <HobThreads
+          open={listing}
+          onOpenChange={setListing}
+          container={panel}
+          list={threadList}
+          current={threadId}
+          onPick={(id) => {
+            setListing(false);
+            onOpenThread(id);
+          }}
+          onRetry={onListThreads}
+        />
+      )}
     </section>
   );
 }

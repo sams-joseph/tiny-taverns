@@ -5,6 +5,7 @@ import {
   type HobProposal,
 } from "@taverns/api";
 import type { IconName } from "@taverns/ui";
+import type { DateTime } from "effect";
 
 /**
  * What a Hob conversation is made of.
@@ -573,3 +574,20 @@ export interface HobStarter {
   readonly title: string;
   readonly sub: string;
 }
+
+/**
+ * One of the reader's conversations in this scope, as the list draws it: what
+ * it is called — Hob's name for it, or the question that started it until Hob
+ * has named it — and when it last moved.
+ */
+export interface HobThreadEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly updatedAt: DateTime.Utc;
+}
+
+/** The conversations list, read each time it opens. */
+export type HobThreadList =
+  | { readonly state: "loading" }
+  | { readonly state: "failed" }
+  | { readonly state: "ready"; readonly threads: ReadonlyArray<HobThreadEntry> };

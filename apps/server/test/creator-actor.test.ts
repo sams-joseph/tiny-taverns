@@ -854,7 +854,10 @@ describeLayer("creator-actor", shared, (it) => {
       // the level-up composer's Hob. `Advancement.levelUpForAccept` is the
       // one hundred and eighty-second, for `levelUp`'s: the same write, for
       // the owner's keep of a Hob proposal in their own account thread.
-      expect(ungated).toBe(182);
+      // `HobThreads.name` is the one hundred and eighty-third, for `discard`'s
+      // reason: Hob's name for a thread, written under the asker's own reach,
+      // whose `"dm"` arm is already the creator predicate.
+      expect(ungated).toBe(183);
     });
   });
 });
