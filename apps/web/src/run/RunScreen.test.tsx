@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +9,7 @@ import {
   campaignId,
   cazril,
   directUpdate,
+  goblin,
   goblinBoss,
   installRunServer,
   liveRun,
@@ -84,6 +85,12 @@ const dockLabels = (): ReadonlyArray<string | null | undefined> => {
           .map((item) => item.querySelector("p")?.textContent)),
   ];
 };
+
+/** What the DM's dice sent to `rolls.create`, oldest first. */
+const filed = (): ReadonlyArray<Record<string, unknown>> =>
+  server.calls
+    .filter((call) => call.method === "POST" && call.pathname === `/campaigns/${campaignId}/rolls`)
+    .map((call) => JSON.parse(call.body) as Record<string, unknown>);
 
 /** Point every route matching a fragment at a new answer. */
 const reaim = (fragment: string, answer: { status: number; body: unknown }) => {
@@ -971,11 +978,10 @@ describe("the runner", () => {
     );
   });
 
-  it("rolls the selected monster's abilities and attacks into the DM's own dice, and sends nothing", async () => {
+  it("rolls the selected monster's abilities and attacks into the DM's own dice, kept as the DM's", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
     await userEvent.click(rowFor("Goblin Boss"));
-    const before = server.calls.filter((call) => call.method !== "GET").length;
 
     expect(dock().getByText(/Nothing rolled yet/)).toBeInTheDocument();
 
@@ -988,8 +994,25 @@ describe("the runner", () => {
     // Newest first, each named for what rolled it.
     expect(dockLabels()).toEqual(["d20", "Goblin Boss · Scimitar", "Goblin Boss · DEX"]);
     expect(dock().getByText(/^1d6\+2 \[\d\]$/)).toBeInTheDocument();
-    // A roll is not durable state: nothing left this browser.
-    expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(before);
+    // Each went to the server as the DM's own, with a request id to dedupe it by.
+    await waitFor(() => expect(filed()).toHaveLength(3));
+    expect(filed()).toEqual([
+      expect.objectContaining({ label: "Goblin Boss · DEX", notation: "1d20+2", visibility: "dm" }),
+      expect.objectContaining({
+        label: "Goblin Boss · Scimitar",
+        notation: "1d6+2",
+        visibility: "dm",
+      }),
+      expect.objectContaining({ label: "d20", notation: "1d20", visibility: "dm" }),
+    ]);
+    for (const body of filed()) {
+      expect(body).toMatchObject({ requestId: expect.any(String) });
+      expect(body).not.toHaveProperty("characterId");
+    }
+    // Saved, and read back: still one line each.
+    await waitFor(() => expect(server.rolls).toHaveLength(3));
+    expect(dock().getByRole("button", { name: /^Rolls/ })).toHaveTextContent("Hide log");
+    expect(dockLabels()).toHaveLength(3);
   });
 
   it("keeps forty lines in the dock, and shows the latest over the twelve before it", async () => {
@@ -2623,9 +2646,47 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Hit")).toBeInTheDocument();
     expect(result().getByText("d20 19 +7 = 26 vs AC 17")).toBeInTheDocument();
     expect(result().getByText("1d8+4 [5] = 9 slashing")).toBeInTheDocument();
-    // Picking a target moves nobody; the one write is his turn's Action, spent.
+    // Picking a target moves nobody; the writes are the attack's rolls, kept
+    // as the DM's, and his turn's Action, spent.
+    await waitFor(() => expect(filed()).toHaveLength(2));
+    expect(filed()).toEqual([
+      {
+        label: "Brannoc · Longsword → Goblin Boss",
+        notation: "1d20+7",
+        dice: [19],
+        kept: [19],
+        modifier: 7,
+        total: 26,
+        mode: "normal",
+        critical: null,
+        kind: "attack",
+        combatantId: brannoc.id,
+        targetCombatantId: goblinBoss.id,
+        targetAc: 17,
+        outcome: "hit",
+        visibility: "dm",
+        requestId: expect.stringMatching(/:0$/),
+      },
+      {
+        label: "Brannoc · Longsword → Goblin Boss",
+        notation: "1d8+4",
+        dice: [5],
+        kept: [5],
+        modifier: 4,
+        total: 9,
+        mode: "normal",
+        critical: null,
+        kind: "damage",
+        combatantId: brannoc.id,
+        targetCombatantId: goblinBoss.id,
+        visibility: "dm",
+        requestId: expect.stringMatching(/:1$/),
+      },
+    ]);
     await waitFor(() =>
-      expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(1),
+      expect(
+        server.calls.filter((call) => call.method !== "GET" && !call.pathname.endsWith("/rolls")),
+      ).toHaveLength(1),
     );
     expect(bodyOf(server, "POST", "/turn")).toEqual({
       actionUsed: true,
@@ -2638,9 +2699,10 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
         }),
       ).toHaveAttribute("aria-pressed", "true"),
     );
-    // The attack is in the dock.
+    // The attack is in the dock, its to-hit and damage one line.
     expect(within(dock().getByRole("status", { name: "Latest roll" })).getByText("Hit"));
     expect(dock().getByText("Brannoc · Longsword → Goblin Boss")).toBeInTheDocument();
+    expect(dock().getByText("d20 19 +7 = 26 vs AC 17 · 1d8+4 = 9")).toBeInTheDocument();
 
     await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
     await waitFor(() => expect(damages()).toHaveLength(1));
@@ -2733,6 +2795,74 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
   });
 
+  it("rolls the save a concentrating target owes, once the hit is sent, off its stat block", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}/creatures/${goblin.id}`, {
+      status: 200,
+      body: {
+        ...goblin,
+        statBlock: {
+          ...goblin.statBlock,
+          abilities: [
+            ...goblin.statBlock.abilities,
+            { label: "CON", score: "12", modifier: "+1", save: "+3" },
+          ],
+        },
+      },
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, position: { column: 7, row: 4 }, conditions: ["Concentrating"] },
+      ],
+    });
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
+    seed(0.9, 0.5);
+    await pick("Goblin Boss");
+    // Nothing is owed until the hit is sent.
+    expect(result().queryByRole("button", { name: "Roll Goblin Boss's Con save" })).toBeNull();
+
+    await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
+    await waitFor(() => expect(damages()).toHaveLength(1));
+    // d20 12, + 3.
+    seed(0.55);
+    await userEvent.click(result().getByRole("button", { name: "Roll Goblin Boss's Con save" }));
+    await waitFor(() => expect(filed()).toHaveLength(3));
+    expect(filed()[2]).toMatchObject({
+      label: "Goblin Boss · Concentration save, DC 10",
+      notation: "1d20+3",
+      dice: [12],
+      total: 15,
+      kind: "concentration",
+      combatantId: goblinBoss.id,
+      visibility: "dm",
+    });
+    const latest = within(dock().getByRole("status", { name: "Latest roll" }));
+    expect(latest.getByText("Goblin Boss · Concentration save, DC 10")).toBeInTheDocument();
+    expect(latest.getByText("15")).toBeInTheDocument();
+    // Once per hit.
+    expect(result().queryByRole("button", { name: "Roll Goblin Boss's Con save" })).toBeNull();
+  });
+
+  it("offers no save for a target whose Con save is not written", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        { ...goblinBoss, position: { column: 7, row: 4 }, conditions: ["Concentrating"] },
+      ],
+    });
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
+    seed(0.9, 0.5);
+    await pick("Goblin Boss");
+    await userEvent.click(result().getByRole("button", { name: "Apply 9 damage" }));
+    await waitFor(() => expect(damages()).toHaveLength(1));
+    expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
+    expect(result().queryByRole("button", { name: /Con save/ })).toBeNull();
+  });
+
   it("puts the pick away on Cancel and on Esc, and the attacker is no target", async () => {
     await open();
     const attack = actions().getByRole("button", { name: "Attack with Longsword" });
@@ -2810,7 +2940,138 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     const latest = within(dock().getByRole("status", { name: "Latest roll" }));
     expect(latest.getByText("Goblin Boss · Scimitar")).toBeInTheDocument();
     expect(latest.getByText("1d6+2 = 6")).toBeInTheDocument();
-    expect(server.calls.filter((call) => call.method !== "GET")).toHaveLength(0);
+    // Kept as the DM's: the Goblin Boss's damage, at nobody.
+    await waitFor(() => expect(filed()).toHaveLength(1));
+    expect(filed()[0]).toMatchObject({
+      label: "Goblin Boss · Scimitar",
+      kind: "damage",
+      combatantId: goblinBoss.id,
+      visibility: "dm",
+    });
+    expect(filed()[0]).not.toHaveProperty("targetCombatantId");
+  });
+});
+
+describe("the DM's rolls, kept by the server", () => {
+  const latest = () => within(dock().getByRole("status", { name: "Latest roll" }));
+  const inLog = () => dock().getByRole("button", { name: /^Rolls/ });
+
+  it("shows a roll before the server has it, and once when it lands", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const release = server.hold(`POST /campaigns/${campaignId}/rolls`);
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d20" }));
+
+    // On screen before the answer.
+    expect(latest().getByText("d20")).toBeInTheDocument();
+    expect(inLog()).toHaveTextContent("1 in log");
+    expect(server.rolls).toHaveLength(0);
+
+    release();
+    await waitFor(() => expect(server.rolls).toHaveLength(1));
+    // The night's list is read again and carries it; the pending copy gives
+    // way to the server's, not beside it.
+    await waitFor(() =>
+      expect(
+        server.calls.filter((call) => call.method === "GET" && call.pathname.endsWith("/rolls"))
+          .length,
+      ).toBeGreaterThan(1),
+    );
+    expect(inLog()).toHaveTextContent("1 in log");
+    expect(latest().getByText(String(server.rolls[0]!["total"]))).toBeInTheDocument();
+  });
+
+  it("reads the log back on a reload", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d8" }));
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d20" }));
+    await waitFor(() => expect(server.rolls).toHaveLength(2));
+    const totals = server.rolls.map((roll) => String(roll["total"]));
+
+    cleanup();
+    await renderRunner();
+    await waitFor(() => expect(inLog()).toHaveTextContent("2 in log"));
+    await openDock();
+    expect(dockLabels()).toEqual(["d20", "d8"]);
+    expect(latest().getByText(totals[0]!)).toBeInTheDocument();
+  });
+
+  it("shows what a second tab rolled when the doorbell rings, and nothing twice", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d6" }));
+    await waitFor(() => expect(server.rolls).toHaveLength(1));
+
+    // The other tab's attack, as the server keeps it: to-hit and damage under one stem.
+    const at = new Date().toISOString();
+    const other = (part: number, over: Record<string, unknown>) => ({
+      ...server.rolls[0],
+      id: `2b1f2a1e-0000-4000-8000-00000000ab0${String(part)}`,
+      label: "Goblin Boss · Scimitar → Brannoc",
+      combatantId: goblinBoss.id,
+      targetCombatantId: brannoc.id,
+      requestId: `other-tab:${String(part)}`,
+      createdAt: at,
+      updatedAt: at,
+      ...over,
+    });
+    server.rolls.unshift(
+      other(1, {
+        notation: "1d6+2",
+        dice: [3],
+        kept: [3],
+        modifier: 2,
+        total: 5,
+        kind: "damage",
+      }),
+      other(0, {
+        notation: "1d20+4",
+        dice: [16],
+        kept: [16],
+        modifier: 4,
+        total: 20,
+        kind: "attack",
+        targetAc: 18,
+        outcome: "hit",
+      }),
+    );
+    server.emit(sessionEvent(7, "roll-made"));
+
+    await waitFor(() => expect(latest().getByText("Goblin Boss · Scimitar → Brannoc")));
+    expect(latest().getByText("d20 16 +4 = 20 vs AC 18 · 1d6+2 = 5")).toBeInTheDocument();
+    expect(latest().getByText("Hit")).toBeInTheDocument();
+    expect(inLog()).toHaveTextContent("2 in log");
+  });
+
+  it("keeps the DM's rolls out of a scene's tray, and in its own dice", async () => {
+    server.routes = liveScene("social");
+    await renderRunner();
+    const tray = await screen.findByRole("region", { name: "Dice tray" });
+    await userEvent.click(screen.getByRole("button", { name: "Roll a d12" }));
+    await waitFor(() => expect(server.rolls).toHaveLength(1));
+    await waitFor(() =>
+      expect(within(screen.getByRole("list", { name: "Your rolls" })).getByText("d12")),
+    );
+    expect(within(tray).queryByText("d12")).toBeNull();
+    expect(within(tray).getByText(/No table rolls yet/)).toBeInTheDocument();
+  });
+
+  it("takes back a roll the server refused, and says what it came to", async () => {
+    server.routes.set(`POST /campaigns/${campaignId}/rolls`, {
+      status: 409,
+      body: { _tag: "Conflict", message: "nobody is playing at that table right now" },
+    });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const release = server.hold(`POST /campaigns/${campaignId}/rolls`);
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d4" }));
+    expect(latest().getByText("d4")).toBeInTheDocument();
+
+    release();
+    expect(await screen.findByText("d4 was not saved")).toBeInTheDocument();
+    expect(screen.getByText(/^It came to \d \(1d4\), but the server did not keep it/)).toBeTruthy();
+    await waitFor(() => expect(dock().getByText(/Nothing rolled yet/)).toBeInTheDocument());
   });
 });
 

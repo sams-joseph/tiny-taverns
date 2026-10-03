@@ -27,7 +27,7 @@ import { notationForD20, parseDiceExpression, signed } from "../characters/rolls
  * ability score rolls its check, an attack bonus its d20 and a damage or trait
  * dice line its dice, each only when the notation parses
  * (`characters/rolls.ts`); anything else stays the chip it is in the bestiary.
- * The roll itself is the caller's — the runner's is local and never sent.
+ * The roll itself is the caller's — the runner files it as the DM's own (`run/dice.ts`).
  */
 
 /** Roll a notation under a label local to the block ("DEX", "Scimitar damage"). */

@@ -645,7 +645,7 @@ export function CombatantPanel({
   readonly onDamage: (amount: number) => void;
   readonly onConditions: (conditions: ReadonlyArray<string>) => void;
   readonly onVisibility: (visibility: Visibility) => void;
-  /** Roll into the DM's local dice, under a label that already names the combatant. */
+  /** Roll into the DM's dice (`dice.ts`), under a label that already names the combatant. */
   readonly onRoll: (label: string, notation: string) => void;
   /** The dots: both counts, set outright. */
   readonly onDeathSaves: (saves: DeathSaves) => void;
@@ -659,6 +659,8 @@ export function CombatantPanel({
         readonly outcome: AttackOutcome;
         readonly applied: boolean;
         readonly concentrationDc: number | undefined;
+        /** Roll the save the hit set up, once it is sent and the target's save is written. */
+        readonly onRollSave: (() => void) | undefined;
       }
     | undefined;
   /** Start picking a target for one of its lines (`attack.ts`). */
@@ -806,6 +808,7 @@ export function CombatantPanel({
             applied={result.applied}
             concentrationDc={result.concentrationDc}
             disabled={disabled}
+            onRollSave={result.onRollSave}
             onApply={onApplyResult}
             onDismiss={onDismissResult}
           />

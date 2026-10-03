@@ -20,6 +20,7 @@ import type { TavernsClient } from "../api/client";
 import type { Resource } from "../api/failure";
 import { reads, type Invalidation } from "../api/keys";
 import { isDead } from "./deathSaves";
+import { DOCK_KEPT } from "./rollsLog";
 
 /**
  * What the runner reads, split by how often it changes — and the atoms over it.
@@ -211,13 +212,17 @@ export const runBoardAtom = Atom.family((path: RunPath) =>
   ),
 );
 
-/** The dice tray is a session read. The doorbell refreshes it; payloads do not. */
+/**
+ * The night's rolls: the players' tray and the DM's own dice (`dice.ts`), as
+ * many as the *Rolls* dock keeps. A session read; the doorbell refreshes it,
+ * payloads do not, and a DM roll names it.
+ */
 export const rollsAtom = Atom.family((path: RunPath) =>
   apiAtom(
     (client): Effect.Effect<ReadonlyArray<Roll>, unknown> =>
       client.rolls.list({
         params: { campaignId: path.campaignId, sessionId: path.sessionId },
-        query: { limit: 12 },
+        query: { limit: DOCK_KEPT },
       }),
     [reads.rolls(path.sessionId)],
   ),

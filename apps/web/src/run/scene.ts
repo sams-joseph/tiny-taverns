@@ -171,7 +171,7 @@ const signedNumber = (text: string | undefined): number | undefined => {
   return trimmed !== undefined && /^-?\d+$/.test(trimmed) ? Number(trimmed) : undefined;
 };
 
-const abilityCell = (sheet: CharacterSheet, ability: string) =>
+const abilityCell = (sheet: Pick<CharacterSheet, "abilities">, ability: string) =>
   sheet.abilities.find((cell) => cell.label.trim().toUpperCase() === ability.toUpperCase());
 
 /**
@@ -195,8 +195,15 @@ export const skillModifier = (sheet: CharacterSheet, skill: string): number | un
   return signedNumber(abilityCell(sheet, keyed)?.modifier);
 };
 
-/** A character's saving throw with this ability: the save written on the sheet, else the modifier. */
-export const saveModifier = (sheet: CharacterSheet, ability: AbilityKey): number | undefined => {
+/**
+ * A saving throw with this ability: the save written on the sheet, else the
+ * modifier. A stat block's ability cells are the sheet's shape (`Ability`), so
+ * a creature's is read the same way.
+ */
+export const saveModifier = (
+  sheet: Pick<CharacterSheet, "abilities">,
+  ability: AbilityKey,
+): number | undefined => {
   const cell = abilityCell(sheet, ability);
   return signedNumber(cell?.save) ?? signedNumber(cell?.modifier);
 };

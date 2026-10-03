@@ -1,15 +1,18 @@
 import { Icon, SectionHeading, cn } from "@taverns/ui";
 import { DICE, TONE_TEXT, type DmDice } from "./dice";
+import { dmLines } from "./rollsLog";
 
 /**
  * The DM's dice in a scene: the seven dice, and the newest six things the DM
- * rolled here, from a die or from a card (`run/dice.ts` says why none of it is
- * sent). A fight's are in its *Rolls* dock (`RollsDock.tsx`).
+ * rolled, from a die or from a card — kept by the server as the DM's own, so a
+ * reload and a second tab show the same six (`run/dice.ts`). A fight's are in
+ * its *Rolls* dock (`RollsDock.tsx`).
  */
 
 const SHOWN = 6;
 
 export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
+  const lines = dmLines(dice.rolls).slice(0, SHOWN);
   return (
     <section
       aria-label="Dice"
@@ -34,15 +37,15 @@ export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
           </button>
         ))}
       </div>
-      {dice.entries.length === 0 ? (
+      {lines.length === 0 ? (
         <p className="text-body-s leading-body text-faint">
           Rolls show up here. Tap a die, a stat or an attack.
         </p>
       ) : (
         <ol aria-label="Your rolls" className="flex flex-col gap-1.5">
-          {dice.entries.slice(0, SHOWN).map((roll, index) => (
+          {lines.map((roll, index) => (
             <li
-              key={roll.id}
+              key={roll.key}
               className={`flex items-center gap-2 rounded-control bg-surface-sunken px-2.5 py-2 ${
                 index === 0 ? "" : "opacity-70"
               }`}
