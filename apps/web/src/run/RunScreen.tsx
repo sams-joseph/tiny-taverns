@@ -35,6 +35,7 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
+import { rollFace } from "../characters/rolls";
 import { actionsOf, type ActionLine } from "./actions";
 import {
   attackLine,
@@ -1051,14 +1052,13 @@ export function RunScreen() {
   };
 
   /**
-   * *Roll death save*: the d20 is rolled here, into the DM's dice like any
-   * other roll, and its face sent; the server applies the rule
-   * (`deathSaveRolled`), so a natural 20 comes back with one hit point.
+   * *Roll death save*: the d20 is rolled here and its face sent; the server
+   * applies the rule (`deathSaveRolled`), so a natural 20 comes back with one
+   * hit point. It is not in the DM's dice: the night's `death-save` line
+   * carries the face and what it came to, and is the roll's one line.
    */
   const rollDeathSave = async (combatant: Combatant) => {
-    const rolled = dice.roll(`${combatant.displayName} · Death save`, "1d20");
-    const face = rolled?.kept[0];
-    if (face === undefined) return;
+    const face = rollFace(20, Math.random);
     const written = await saves.submit(
       (client) =>
         client.combatants.rollDeathSave({
