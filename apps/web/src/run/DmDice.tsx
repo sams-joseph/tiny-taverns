@@ -1,16 +1,13 @@
-import { Icon, SectionHeading } from "@taverns/ui";
-import type { LocalRoll } from "../characters/rolls";
-import type { DmDice } from "./dice";
+import { Icon, SectionHeading, cn } from "@taverns/ui";
+import { DICE, TONE_TEXT, type DmDice } from "./dice";
 
 /**
- * The DM's dice card: the seven dice, and what the DM rolled here, from a die
- * or from the selected card (`run/dice.ts` says why none of it is sent).
+ * The DM's dice in a scene: the seven dice, and the newest six things the DM
+ * rolled here, from a die or from a card (`run/dice.ts` says why none of it is
+ * sent). A fight's are in its *Rolls* dock (`RollsDock.tsx`).
  */
 
-const DICE = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"] as const;
-
-/** `1d20+4 [10]`: the notation and the faces, which is what a DM checks a total against. */
-const faces = (roll: LocalRoll): string => `${roll.notation} [${roll.dice.join(", ")}]`;
+const SHOWN = 6;
 
 export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
   return (
@@ -37,13 +34,13 @@ export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
           </button>
         ))}
       </div>
-      {dice.rolls.length === 0 ? (
+      {dice.entries.length === 0 ? (
         <p className="text-body-s leading-body text-faint">
           Rolls show up here. Tap a die, a stat or an attack.
         </p>
       ) : (
         <ol aria-label="Your rolls" className="flex flex-col gap-1.5">
-          {dice.rolls.map((roll, index) => (
+          {dice.entries.slice(0, SHOWN).map((roll, index) => (
             <li
               key={roll.id}
               className={`flex items-center gap-2 rounded-control bg-surface-sunken px-2.5 py-2 ${
@@ -54,16 +51,13 @@ export function DmDiceCard({ dice }: { readonly dice: DmDice }) {
                 {roll.label}
               </span>
               <span className="font-mono text-micro leading-none whitespace-nowrap text-faint">
-                {faces(roll)}
+                {roll.detail}
               </span>
               <span
-                className={`min-w-7 text-right font-display text-subtitle leading-none font-semibold ${
-                  roll.natural === 20
-                    ? "text-success"
-                    : roll.natural === 1
-                      ? "text-danger"
-                      : "text-accent-ink"
-                }`}
+                className={cn(
+                  "min-w-7 text-right font-display text-subtitle leading-none font-semibold",
+                  TONE_TEXT[roll.tone],
+                )}
               >
                 {roll.total}
               </span>

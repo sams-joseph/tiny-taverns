@@ -35,11 +35,12 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
-import { actionsOf } from "./actions";
+import { actionsOf, type ActionLine } from "./actions";
+import { attackLine, resolveAttack, rollActionLine, type AttackOutcome } from "./attack";
+import { TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { useDmDice } from "./dice";
-import { DmDiceCard } from "./DmDice";
 import { EndRunDialog } from "./EndRunDialog";
 import { InitiativePhase } from "./InitiativePhase";
 import { InitiativeStrip } from "./InitiativeStrip";
@@ -62,6 +63,8 @@ import {
   upLine,
   type RunPath,
 } from "./load";
+import { RollsDock } from "./RollsDock";
+import { dockLines } from "./rollsLog";
 import { SessionLog } from "./SessionLog";
 import { newRequestId, useRunState } from "./state";
 import { useLiveStream } from "./stream";
@@ -71,15 +74,16 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
 /**
  * The encounter runner — the runner redesign's fight (`Campaign Overview.dc.html`),
  * against the real API and a real stream: a framed header with the round and
- * who is up, then initiative, the battle map and the selected creature's card
- * with the DM's own dice. At a desktop width the board is a canvas filling the
+ * who is up, then initiative, the battle map, the selected creature's card
+ * (where whoever is up attacks, `attack.ts`) and the *Rolls* dock, which
+ * merges the DM's own dice with the players' tray and the night's log
+ * (`RollsDock.tsx`). At a desktop width the board is a canvas filling the
  * viewport under the header with the rest floating over it (`RunStage.tsx`,
  * from `Encounter Runner.dc.html`); narrower, or with no board, the cards are
  * the window-scrolling grid of `RunLayout.tsx`. Everything the drawings leave
  * out that the runner already did — adding and editing combatants, *Make it
- * their turn*, Hob's spends and their undo, NPCs at the table, the players'
- * dice tray and the session log — stays, under the drawn cards (the captain's
- * call of 2026-09-25).
+ * their turn*, Hob's spends and their undo, NPCs at the table — stays, under
+ * the drawn cards (the captain's call of 2026-09-25).
  *
  * **A run that is not a fight is run as its kind** (`EncounterRun.mode`): a
  * conversation, a skill challenge or a hazard takes no turns, so its body is
@@ -686,6 +690,20 @@ export function RunScreen() {
   const [removing, setRemoving] = useState<Combatant | undefined>();
   const [ending, setEnding] = useState(false);
   const [npcProposalRefreshToken, setNpcProposalRefreshToken] = useState(0);
+  // The attack (`attack.ts`): the line whose target is being picked, then what
+  // it came to. Both are this tab's, and both go when the turn moves.
+  const [targeting, setTargeting] = useState<
+    { readonly attackerId: CombatantId; readonly line: ActionLine } | undefined
+  >();
+  const [attack, setAttack] = useState<
+    | {
+        readonly attackerId: CombatantId;
+        readonly targetId: CombatantId;
+        readonly outcome: AttackOutcome;
+        readonly applied: boolean;
+      }
+    | undefined
+  >();
 
   const turn = useMutation();
   const share = useMutation();
@@ -742,6 +760,12 @@ export function RunScreen() {
   const selected =
     state?.combatants.find((row) => row.id === selectedId) ??
     (selectedId === undefined ? active : undefined);
+  // A target is picked only while the attacker is up and the screen takes
+  // writes; a dialog or the fight ending puts the pick away.
+  const picking =
+    targeting !== undefined && !frozen && targeting.attackerId === active?.id
+      ? targeting
+      : undefined;
 
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
@@ -757,6 +781,9 @@ export function RunScreen() {
       // Following the turn again: the DM asked for the next creature, so the
       // panel should be showing it rather than whoever they last read about.
       setSelectedId(undefined);
+      // And the last creature's attack is over with its turn.
+      setTargeting(undefined);
+      setAttack(undefined);
     }
   }, [state, turn, path, controller]);
 
@@ -770,6 +797,8 @@ export function RunScreen() {
     if (Result.isSuccess(begun)) {
       controller.applyRun(begun.success);
       setSelectedId(undefined);
+      setTargeting(undefined);
+      setAttack(undefined);
     }
   };
 
@@ -839,9 +868,14 @@ export function RunScreen() {
     if (Result.isSuccess(saved)) controller.applyRun(saved.success);
   };
 
-  const damage = async (combatant: Combatant, amount: number) => {
+  /** Resolves true once the server has the hit. */
+  const damage = async (
+    combatant: Combatant,
+    amount: number,
+    critical: boolean,
+  ): Promise<boolean> => {
     const before = controller.hpOf(combatant);
-    const applied = await controller.applyDamage(combatant, amount);
+    const applied = await controller.applyDamage(combatant, amount, critical);
 
     if (Result.isFailure(applied)) {
       toast.add({
@@ -849,7 +883,7 @@ export function RunScreen() {
         title: `${combatant.displayName} is unchanged`,
         description: "That did not reach the server. The hit points are back to what it holds.",
       });
-      return;
+      return false;
     }
 
     // The prototype's own toast, word for word (`:107`) — it is the product
@@ -863,6 +897,49 @@ export function RunScreen() {
         description: "Still in initiative — remove them when you're ready.",
       });
     }
+    return true;
+  };
+
+  /** The waiting attack against whoever was picked; the attacker itself is no target, and picks nothing. */
+  const strike = (combatant: Combatant) => {
+    if (picking === undefined) return;
+    const attacker = state?.combatants.find((row) => row.id === picking.attackerId);
+    if (attacker === undefined || combatant.id === attacker.id) return;
+    const outcome = resolveAttack({
+      attacker: attacker.displayName,
+      line: picking.line,
+      target: { name: combatant.displayName, ac: combatant.ac, conditions: combatant.conditions },
+    });
+    dice.log(attackLine(outcome));
+    setTargeting(undefined);
+    setAttack({ attackerId: attacker.id, targetId: combatant.id, outcome, applied: false });
+  };
+
+  /** A row of the order: the attack's target while one is picked, otherwise the creature the panel shows. */
+  const choose = (combatant: Combatant) => {
+    if (picking === undefined) setSelectedId(combatant.id);
+    else strike(combatant);
+  };
+
+  /**
+   * The result card's *Apply* or *Half*: the existing damage delta, once, with
+   * the critical flag a natural 20 carries. A refused write puts the buttons
+   * back with the hit points.
+   */
+  const applyAttack = async (amount: number) => {
+    if (attack === undefined) return;
+    const target = state?.combatants.find((row) => row.id === attack.targetId);
+    if (target === undefined) {
+      toast.add({
+        type: "destructive",
+        title: `${attack.outcome.target} is no longer in the fight`,
+        description: "Nothing was applied.",
+      });
+      return;
+    }
+    setAttack({ ...attack, applied: true });
+    const landed = await damage(target, amount, attack.outcome.verdict === "critical");
+    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: false }));
   };
 
   /**
@@ -1104,7 +1181,7 @@ export function RunScreen() {
         board={boardResource.state === "ready" && boardResource.value !== null}
         floating={canvas}
         disabled={frozen}
-        onSelect={(combatant) => setSelectedId(combatant.id)}
+        onSelect={choose}
         onAdd={() => setAdding(true)}
         onReroll={() => void reroll()}
       />
@@ -1135,12 +1212,42 @@ export function RunScreen() {
           : undefined
       }
       onRemove={() => setRemoving(selected)}
-      onDamage={(amount) => selected !== undefined && void damage(selected, amount)}
+      onDamage={(amount) => selected !== undefined && void damage(selected, amount, false)}
       onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
       onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
       onRoll={dice.roll}
       onDeathSaves={(next) => selected !== undefined && void setDeathSaves(selected, next)}
       onDeathSaveRoll={() => selected !== undefined && void rollDeathSave(selected)}
+      targeting={
+        picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
+      }
+      result={attack !== undefined && attack.attackerId === selected?.id ? attack : undefined}
+      onAttack={(line) => {
+        if (selected === undefined) return;
+        setAttack(undefined);
+        setTargeting({ attackerId: selected.id, line });
+      }}
+      onRollAction={(line) =>
+        selected !== undefined && dice.log(rollActionLine({ attacker: selected.displayName, line }))
+      }
+      onApplyResult={(amount) => void applyAttack(amount)}
+      onDismissResult={() => setAttack(undefined)}
+    />
+  );
+  const banner =
+    picking === undefined ? undefined : (
+      <TargetBanner action={picking.line.name} onCancel={() => setTargeting(undefined)} />
+    );
+  const rollsDock = state !== undefined && (
+    <RollsDock
+      lines={dockLines({
+        dm: dice.entries,
+        tray: trayRolls,
+        events: log,
+        combatants: state.combatants,
+        noun: sceneNoun(state.run.mode),
+      })}
+      dice={dice}
     />
   );
   const boardProps: RunBoardProps | undefined =
@@ -1160,6 +1267,8 @@ export function RunScreen() {
             diagonals: view.campaign.diagonalRule,
             movable: !frozen,
             onSelect: (combatant) => setSelectedId(combatant.id),
+            // While a target is picked a token's click is the target, never a move or a selection.
+            onTarget: picking === undefined ? undefined : strike,
             onMove: move,
           },
           hostileTokensHidden: state.run.hostileTokensHidden,
@@ -1177,7 +1286,24 @@ export function RunScreen() {
         className={cn(
           canvas &&
             "flex h-[calc(100dvh_-_var(--chrome-height)_-_2_*_var(--spacing-page))] flex-col",
+          // Picking a target: whatever can be the target says so.
+          picking !== undefined &&
+            "[&_[data-slot=board-canvas]]:cursor-crosshair [&_[data-slot=run-board-squares]]:cursor-crosshair [&_[data-slot=token]]:cursor-crosshair [&_[data-combatant]]:cursor-crosshair",
         )}
+        // Esc puts a pending target away — only while there is one, only for a
+        // key pressed in this screen (never one meant for the Hob panel, which
+        // lives outside it), and claimed so nothing else closes on it too.
+        onKeyDown={(event) => {
+          if (
+            event.key !== "Escape" ||
+            picking === undefined ||
+            event.defaultPrevented ||
+            !event.currentTarget.contains(event.target as Node)
+          )
+            return;
+          event.preventDefault();
+          setTargeting(undefined);
+        }}
       >
         {stage.probe}
         <TopBar
@@ -1313,37 +1439,36 @@ export function RunScreen() {
               <RunStage
                 strip={strip}
                 rolling={rollPanel}
+                banner={banner}
                 panel={
                   <>
                     {card}
                     {tableCards}
                   </>
                 }
-                rolls={
-                  <>
-                    <DmDiceCard dice={dice} />
-                    {rollCards}
-                  </>
-                }
+                rolls={rollsDock}
                 board={(freeArea) => <RunBoardStage {...boardProps} freeArea={freeArea} />}
               />
             ) : (
-              <RunLayout
-                initiative={strip ?? rollPanel}
-                strip={strip !== null}
-                map={
-                  hasBoard(boardResource) && boardProps !== undefined ? (
-                    <RunBoardCard {...boardProps} />
-                  ) : null
-                }
-                card={card}
-                rest={
-                  <>
-                    <DmDiceCard dice={dice} />
-                    {extras}
-                  </>
-                }
-              />
+              <>
+                {banner}
+                <RunLayout
+                  initiative={strip ?? rollPanel}
+                  strip={strip !== null}
+                  map={
+                    hasBoard(boardResource) && boardProps !== undefined ? (
+                      <RunBoardCard {...boardProps} />
+                    ) : null
+                  }
+                  card={card}
+                  rest={
+                    <>
+                      {rollsDock}
+                      {tableCards}
+                    </>
+                  }
+                />
+              </>
             )}
           </div>
         )}

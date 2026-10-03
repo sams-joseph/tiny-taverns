@@ -44,7 +44,13 @@ const rowFor = (name: string): HTMLElement => {
   if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
 };
-const logRows = () => within(screen.getByRole("log")).queryAllByRole("listitem");
+/** How many lines the *Rolls* dock holds: one per log line delivered, here. */
+const logRows = () => {
+  const toggle = within(screen.getByRole("region", { name: "Rolls" })).getByRole("button", {
+    name: /^Rolls/,
+  });
+  return Array.from({ length: Number(/(\d+) in log/.exec(toggle.textContent ?? "")?.[1] ?? 0) });
+};
 
 /** Point every route matching a fragment at a new answer. */
 const reaim = (fragment: string, answer: { status: number; body: unknown }) => {

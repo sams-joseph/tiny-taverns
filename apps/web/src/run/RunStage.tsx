@@ -30,7 +30,10 @@ import { RunTokens, TokenTray } from "./RunTokens";
  *   chip.
  * - **panel** — the right-hand column: the selected creature's card, then the
  *   table's own cards the drawing leaves out (Hob's spends, NPCs at the table).
- * - **rolls** — bottom left: the DM's dice, the players' tray and the log.
+ * - **rolls** — bottom left: the *Rolls* dock, the DM's dice with the
+ *   players' tray and the night's log merged into it (`RollsDock.tsx`).
+ * - **banner** — under the strip, between the columns, while a tool waits for
+ *   a token: the attack's *Pick a target*.
  * - **tools** — bottom centre, over the board: *Grid*, *Names*, *Hide from
  *   players*, zoom, the hint and the tokens nobody has put down
  *   (`RunBoardStage`).
@@ -43,6 +46,7 @@ import { RunTokens, TokenTray } from "./RunTokens";
 export function RunStage({
   strip,
   rolling,
+  banner,
   panel,
   rolls,
   board,
@@ -51,6 +55,8 @@ export function RunStage({
   readonly strip: ReactNode | null;
   /** *Roll initiative*, top left; `null` once turns are taken. */
   readonly rolling: ReactNode | null;
+  /** A line over the board between the columns while a tool asks for a square: the attack's target. */
+  readonly banner: ReactNode | undefined;
   readonly panel: ReactNode;
   readonly rolls: ReactNode;
   /** The board, told which part of the stage no panel covers. */
@@ -109,6 +115,11 @@ export function RunStage({
               {rolls}
             </div>
           </div>
+          {banner !== undefined && (
+            <div data-slot="run-hud-banner" className="flex min-w-0 flex-1 justify-center">
+              {banner}
+            </div>
+          )}
           <div
             ref={right}
             data-slot="run-hud-panel"

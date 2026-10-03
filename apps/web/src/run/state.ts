@@ -147,9 +147,14 @@ export interface RunController {
    */
   readonly applyCombatant: (row: Combatant) => void;
   /** Positive damages, negative heals. Clamped into `[0, hpMax]` both ends. */
+  /**
+   * `critical` is an attack's natural 20: a hit on a player character already
+   * at zero is then two death-save failures rather than one (`CombatantDamage`).
+   */
   readonly applyDamage: (
     combatant: Combatant,
     amount: number,
+    critical: boolean,
   ) => Promise<Result.Result<Combatant, ApiFailure>>;
   /** The last failed re-read, if the screen is showing rows older than it should. */
   readonly staleness: ApiFailure | undefined;
@@ -294,7 +299,7 @@ export function useRunState(path: RunPath): RunController {
   );
 
   const applyDamage = useCallback(
-    async (combatant: Combatant, amount: number) => {
+    async (combatant: Combatant, amount: number, critical: boolean) => {
       const from = pending.get(combatant.id)?.hpCurrent ?? combatant.hpCurrent;
       const next = clamp(from - amount, combatant.hpMax);
 
@@ -312,7 +317,7 @@ export function useRunState(path: RunPath): RunController {
         (client) =>
           client.combatants.damage({
             params: { ...path, combatantId: combatant.id },
-            payload: { amount, requestId: newRequestId() },
+            payload: { amount, ...(critical ? { critical } : {}), requestId: newRequestId() },
           }),
         token,
       );

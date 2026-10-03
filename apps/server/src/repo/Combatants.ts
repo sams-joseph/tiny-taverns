@@ -5,6 +5,7 @@ import {
   Combatant,
   type CombatantCreate,
   type CombatantDamage,
+  type CombatantDamagedPayload,
   type CombatantDeathSaveRoll,
   type CombatantDeathSaves,
   CombatantId,
@@ -12,9 +13,11 @@ import {
   CombatantPosition,
   type CombatantTurn,
   type CombatantUpdate,
+  type CombatantUpdatedPayload,
   concentrationDc,
   Conflict,
   deathSaveRolled,
+  type DeathSavePayload,
   type DeathSaves,
   type DiagonalRule,
   EncounterRunId,
@@ -475,7 +478,7 @@ export class Combatants extends Context.Service<
               ...saves,
               hpCurrent: written.hpCurrent,
               ...woke,
-            },
+            } satisfies typeof DeathSavePayload.Encoded,
             requestId,
             visibility: written.visibility,
           });
@@ -673,7 +676,10 @@ export class Combatants extends Context.Service<
                     encounterRunId: runId,
                     combatantId: id,
                     characterId: combatant.characterId ?? undefined,
-                    payload: { ...patch, ...crossed },
+                    payload: {
+                      ...patch,
+                      ...(crossed satisfies typeof CombatantUpdatedPayload.Encoded),
+                    },
                     visibility: combatant.visibility,
                   });
                   // Only what the patch actually named, or moved. A PATCH that
@@ -775,7 +781,7 @@ export class Combatants extends Context.Service<
                         ? {}
                         : { deathSaves: combatant.deathSaves }),
                       ...crossed,
-                    },
+                    } satisfies typeof CombatantDamagedPayload.Encoded,
                     requestId: payload.requestId,
                     visibility: combatant.visibility,
                   });

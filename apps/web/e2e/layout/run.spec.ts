@@ -11,11 +11,11 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * Below it (760 and 390) it is the window-scrolling grid of named areas
  * (`run/RunLayout.tsx`) with the board to look at, the strip heading it, which
  * re-deals the cards rather than leaving a blank beside any. Then the selected
- * card's controls inside its edges, the DM's dice taking a click, a long order
- * scrolling sideways inside the strip, every chip in reach of the keyboard,
- * and, on the canvas, a token dragged onto its square with its ruler on the
- * way. All of it is layout, stacking and hit-testing, which jsdom does not
- * compute.
+ * card's controls inside its edges, the *Rolls* dock taking a click, a long
+ * order scrolling sideways inside the strip, every chip in reach of the
+ * keyboard, and, on the canvas, a token dragged onto its square with its ruler
+ * on the way and an attack picked on the board. All of it is layout, stacking,
+ * cursors and hit-testing, which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`'s
  * `liveFight`): Brannoc standing on a 24 × 16 board with no picture, and a
@@ -161,7 +161,7 @@ for (const width of WIDTHS) {
       const list = page.getByRole("region", { name: "Initiative", exact: true });
       const map = page.getByRole("region", { name: "Battle map" });
       const card = page.getByRole("region", { name: "Selected combatant" });
-      const dice = page.getByRole("region", { name: "Dice", exact: true });
+      const dice = page.getByRole("region", { name: "Rolls", exact: true });
       await expect(map).toBeVisible();
       await expect(card).toContainText("Brannoc");
 
@@ -243,11 +243,11 @@ for (const width of WIDTHS) {
           for (const [name, part] of [
             ["list", at.list],
             ["card", at.card],
-            ["dice", at.dice],
+            ["the Rolls dock", at.dice],
           ] as const) {
             expect
               .soft(await landsOn(page, part.x + part.width / 2, part.y + 8), `${name} is on top`)
-              .toMatch(/^run-hud-|^Roll|^Brannoc|^Goblin/);
+              .toMatch(/^run-hud-|^Roll|^Brannoc|^Goblin|^rolls-toggle$/);
           }
           // And the chrome is over the HUD: the stack is z-chrome (10).
           await expect.soft(page.locator(".sticky.top-0").first()).toHaveCSS("z-index", "10");
@@ -420,7 +420,7 @@ for (const width of WIDTHS) {
         await expect(item).toBeHidden();
       });
 
-      await test.step("a stat on the card rolls into the DM's dice", async () => {
+      await test.step("a stat on the card rolls into the Rolls dock", async () => {
         // The whole block is folded under the Actions until it is asked for.
         await card.getByRole("button", { name: "Stat block" }).click();
         const dex = card.getByRole("button", { name: "Roll DEX check, 1d20+2" });
@@ -435,7 +435,7 @@ for (const width of WIDTHS) {
           .soft(hit, "the DEX tile is what a click there lands on")
           .toBe("Roll DEX check, 1d20+2");
         await dex.click();
-        await expect(dice.getByRole("list", { name: "Your rolls" })).toContainText(
+        await expect(dice.getByRole("status", { name: "Latest roll" })).toContainText(
           "Goblin Boss · DEX",
         );
         // On the canvas the panel scrolled itself to reach it; the window did not move.
@@ -715,6 +715,138 @@ for (const width of WIDTHS) {
         });
       }
     });
+
+    if (canvas) {
+      test("an attack picked on the board", async ({ app, page }) => {
+        // Brannoc is up with a Longsword on his sheet, and the Goblin Boss
+        // stands two squares to his right, where no panel covers him.
+        await page.route(
+          (url) => /\/stub\/campaigns\/[^/]+\/party$/.test(url.pathname),
+          async (route) => {
+            const response = await route.fetch();
+            const seats = (await response.json()) as ReadonlyArray<{
+              readonly character?: { readonly sheet: object } | null;
+            }>;
+            await route.fulfill({
+              response,
+              json: seats.map((seat) =>
+                seat.character === null || seat.character === undefined
+                  ? seat
+                  : {
+                      ...seat,
+                      character: {
+                        ...seat.character,
+                        sheet: {
+                          ...seat.character.sheet,
+                          actions: [
+                            {
+                              id: "atk:longsword",
+                              name: "Longsword",
+                              cost: "action",
+                              hit: "+7",
+                              dice: "1d8+4",
+                              damageType: "Slashing",
+                              source: "weapon",
+                            },
+                          ],
+                        },
+                      },
+                    },
+              ),
+            });
+          },
+        );
+        await page.route(
+          (url) =>
+            /\/stub\/campaigns\/[^/]+\/sessions\/[^/]+\/runs\/[^/]+\/combatants$/.test(
+              url.pathname,
+            ),
+          async (route) => {
+            const response = await route.fetch();
+            const rows = (await response.json()) as ReadonlyArray<Record<string, unknown>>;
+            await route.fulfill({
+              response,
+              json: rows.map((row) =>
+                row["displayName"] === "Goblin Boss"
+                  ? { ...row, position: { column: 7, row: 4 } }
+                  : row,
+              ),
+            });
+          },
+        );
+        let writes = 0;
+        page.on("request", (request) => {
+          if (request.method() !== "GET" && request.url().includes("/stub/")) writes++;
+        });
+        await app.open(run);
+        const card = page.getByRole("region", { name: "Selected combatant" });
+        const map = page.getByRole("region", { name: "Battle map" });
+        const attack = card.getByRole("button", { name: "Attack with Longsword" });
+        const goblin = map.getByRole("button", { name: /^Goblin Boss, column/ });
+        await expect(attack).toBeVisible();
+        await expect(goblin).toBeVisible();
+
+        await test.step("Attack asks for a target over the board, under a crosshair", async () => {
+          await attack.click();
+          const banner = page.locator('[data-slot="run-target-banner"]');
+          await expect(banner).toContainText("Pick a target for Longsword");
+          const at = await box(banner);
+          const left = await box(page.locator('[data-slot="run-hud-left"]'));
+          const panel = await box(page.locator('[data-slot="run-hud-panel"]'));
+          expect.soft(at.x, "banner after the left column").toBeGreaterThanOrEqual(right(left));
+          expect.soft(right(at), "banner before the panel").toBeLessThanOrEqual(panel.x);
+          expect
+            .soft(await landsOn(page, at.x + 24, at.y + at.height / 2), "the banner is on top")
+            .toBe("run-hud-banner");
+          for (const [name, locator] of [
+            ["the target's token", goblin],
+            ["the board", page.locator('[data-slot="board-canvas"]')],
+          ] as const) {
+            await expect.soft(locator, `${name}'s cursor`).toHaveCSS("cursor", "crosshair");
+          }
+          // Still the one peach: Attack is outline.
+          const primaries = await page
+            .locator('[data-slot="button"].bg-accent')
+            .filter({ visible: true })
+            .allTextContents();
+          expect.soft(primaries, "primaries").toEqual(["Next turn"]);
+        });
+
+        await test.step("Esc puts the pick away", async () => {
+          await page.keyboard.press("Escape");
+          await expect(page.locator('[data-slot="run-target-banner"]')).toHaveCount(0);
+          await attack.click();
+          await expect(page.locator('[data-slot="run-target-banner"]')).toHaveCount(1);
+        });
+
+        await test.step("a click on the token resolves it on the attacker's card, and sends nothing", async () => {
+          const at = await box(goblin);
+          expect
+            .soft(await landsOn(page, at.x + at.width / 2, at.y + at.height / 2), "token on top")
+            .toMatch(/^Goblin Boss, column/);
+          await page.mouse.click(at.x + at.width / 2, at.y + at.height / 2);
+          await expect(page.locator('[data-slot="run-target-banner"]')).toHaveCount(0);
+          const result = card.getByRole("region", {
+            name: "Attack result, Longsword → Goblin Boss",
+          });
+          await expect(result).toBeVisible();
+          await expect(result).toContainText(/Critical hit|Hit|Natural 1|Miss/);
+          await expect(result).toContainText(/^.*d20 \d+ \+7 = \d+ vs AC 17/);
+          await expect(card).toContainText("Brannoc");
+          // The card's controls sit inside it.
+          const edge = await box(card);
+          const inside = await box(result);
+          expect.soft(inside.x, "result left").toBeGreaterThanOrEqual(edge.x);
+          expect.soft(right(inside), "result right").toBeLessThanOrEqual(right(edge) + 0.5);
+          await expect(
+            page
+              .getByRole("region", { name: "Rolls", exact: true })
+              .getByRole("status", { name: "Latest roll" }),
+          ).toContainText("Brannoc · Longsword → Goblin Boss");
+          expect.soft(writes, "nothing was written").toBe(0);
+        });
+      });
+    }
 
     test("rolling initiative", async ({ app, page }) => {
       await rolling(page);
