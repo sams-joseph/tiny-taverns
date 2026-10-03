@@ -1,6 +1,7 @@
 import { expect } from "@effect/vitest";
 import {
   type BoardFogUpdate,
+  CurrentActor,
   type CombatantPosition,
   type EncounterRun,
   type PlayerLiveTable,
@@ -12,6 +13,7 @@ import { HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import { applicationOver, servicesOver } from "../src/app.js";
+import { NpcThreads } from "../src/repo/NpcThreads.js";
 import { type Person, aCharacterAt, admittedTo, aPerson } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
 import { testServer } from "./support/http.js";
@@ -500,6 +502,58 @@ describeLayer("run-fog", shared, (it) => {
       // Reset goes back to the fight's start, which was clear.
       expect((yield* fog(next, { reset: true })).fog).toEqual([]);
       yield* endNight(second);
+    }),
+  );
+
+  it.effect("names nothing under fog in an NPC's table chat", () =>
+    Effect.gen(function* () {
+      const { jo, ilse, table } = yield* Fixture;
+      const session = yield* night();
+      const { params, tamsin, wren, archer, sentry } = yield* aFight(session);
+      for (const [row, initiative] of [
+        [archer, 20],
+        [sentry, 15],
+        [tamsin, 10],
+        [wren, 5],
+      ] as const) {
+        yield* as(jo.token, (client) =>
+          client.combatants.update({
+            params: { ...params, combatantId: row.id },
+            payload: { initiative },
+          }),
+        );
+      }
+      yield* as(jo.token, (client) => client.runs.begin({ params, payload: {} }));
+      const npc = yield* as(jo.token, (client) =>
+        client.npcs.create({
+          params: { campaignId: table },
+          payload: { name: "Cazril", role: "a ferryman", visibility: "shared" },
+        }),
+      );
+      yield* as(jo.token, (client) =>
+        client.npcs.openSession({
+          params: { campaignId: table, npcId: npc.id, sessionId: session },
+          payload: {},
+        }),
+      );
+      const threads = yield* NpcThreads;
+      const context = () =>
+        Effect.provideService(
+          threads.sessionPromptContext(table, session, npc.id),
+          CurrentActor,
+          ilse.actor,
+        ).pipe(Effect.orDie);
+
+      const clear = yield* context();
+      expect(clear.fight?.upNext).toBe(archer.displayName);
+      expect(clear.fight?.order).toContain(archer.displayName);
+
+      yield* fog(params, { hide: [ARCHER, SENTRY] });
+      const fogged = yield* context();
+      expect(fogged.fight?.upNext).toBeNull();
+      expect([...(fogged.fight?.order ?? [])].sort()).toEqual(["Tamsin", "Wren"]);
+      expect(fogged.fight?.order).not.toContain(sentry.displayName);
+      yield* endNight(session);
     }),
   );
 });
