@@ -139,8 +139,9 @@ const areaFeet = Schema.Int.check(Schema.isBetween({ minimum: 5, maximum: 120 })
  * An area template pinned on a fight's board: a spell's sphere, cone, line or
  * cube, shown to the DM and, while the board is on their table, to the players
  * until the DM clears it. **Temporary**: it is where the spell lands right
- * now, not part of the fight's record, so nothing keeps it once the fight ends
- * and a resumed fight starts with nothing pinned (`0090_run_board_area.ts`).
+ * now, so the board keeps nothing once the fight ends and a resumed fight
+ * starts with nothing pinned (`0090_run_board_area.ts`). The session log does
+ * keep a `board-area-updated` line per pin and clear, carrying the template.
  *
  * A sphere or a cube is centred on `origin`. A cone or a line starts at
  * `origin` and points at `toward`, which is never `origin` itself. Which
