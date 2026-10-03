@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   account,
+  allyCombatantId,
   brannoc,
   brannocId,
   brannocSeatRef,
@@ -129,6 +130,8 @@ describe("PlayerTableScreen", () => {
   it("draws the player projection without NPC armour class or exact hit points", async () => {
     server.routes.set(
       ...playing(campaignId, {
+        // No marker, so no turn banner naming a row a second time.
+        upNext: null,
         order: [
           {
             kind: "you",
@@ -267,6 +270,7 @@ describe("PlayerTableScreen", () => {
   it("lays an ally's portrait on its row, and draws none where there is none", async () => {
     server.routes.set(
       ...playing(campaignId, {
+        upNext: null,
         order: [
           {
             kind: "you",
@@ -705,5 +709,89 @@ describe("the fight's read-aloud", () => {
     const paths = server.calls.map((call) => call.pathname);
     expect(paths).toContain(`/campaigns/${campaignId}/player-notes`);
     expect(paths).not.toContain(`/campaigns/${campaignId}/notes`);
+  });
+});
+
+describe("the turn banner", () => {
+  const banner = async () => within(await screen.findByRole("status", { name: "Turn" }));
+
+  it("names whose turn it is and the next row the player can see", async () => {
+    server.routes.set(...playing(campaignId, { order: tableOrder }));
+    await renderTable();
+
+    const turn = await banner();
+    expect(turn.getByText("Round 3")).toBeInTheDocument();
+    expect(turn.getByText("Brannoc Duskharrow's turn")).toBeInTheDocument();
+    expect(turn.getByText("Up next")).toBeInTheDocument();
+    expect(turn.getByText("Nessa")).toBeInTheDocument();
+  });
+
+  it("wraps to the top of the order after the last row", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder,
+        round: 4,
+        upNext: { kind: "visible", combatantId: hagCombatantId, displayName: "Marsh Hag" },
+      }),
+    );
+    await renderTable();
+
+    const turn = await banner();
+    expect(turn.getByText("Round 4")).toBeInTheDocument();
+    expect(turn.getByText("Marsh Hag's turn")).toBeInTheDocument();
+    expect(turn.getByText("Brannoc Duskharrow")).toBeInTheDocument();
+  });
+
+  it("says only that something moves when the creature that is up is hidden", async () => {
+    // The hag is hidden: absent from the order, and the marker on her arrives
+    // as the hidden arm, which carries no id and no name.
+    const visible = tableOrder.filter((row) => row.kind !== "npc");
+    server.routes.set(...playing(campaignId, { order: visible, upNext: { kind: "hidden" } }));
+    await renderTable();
+
+    const turn = await banner();
+    expect(turn.getByText("Round 3")).toBeInTheDocument();
+    expect(turn.getByText("Something moves")).toBeInTheDocument();
+    // Where the hidden row stands is not on the wire, so nobody follows it.
+    expect(turn.queryByText("Up next")).toBeNull();
+    expect(turn.queryByText(/Brannoc|Nessa|Marsh Hag/)).toBeNull();
+    expect(screen.queryByText("Marsh Hag")).toBeNull();
+    expect(screen.queryByText("Your turn")).toBeNull();
+  });
+
+  it("has no up next when the player can see one row alone", async () => {
+    server.routes.set(...playing(campaignId, {}));
+    await renderTable();
+
+    const turn = await banner();
+    expect(turn.getByText("Brannoc Duskharrow's turn")).toBeInTheDocument();
+    expect(turn.queryByText("Up next")).toBeNull();
+  });
+
+  it("follows the ally whose turn it is to the next row", async () => {
+    server.routes.set(
+      ...playing(campaignId, {
+        order: tableOrder,
+        upNext: { kind: "visible", combatantId: allyCombatantId, displayName: "Nessa" },
+      }),
+    );
+    await renderTable();
+
+    const turn = await banner();
+    expect(turn.getByText("Nessa's turn")).toBeInTheDocument();
+    expect(turn.getByText("Marsh Hag")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["no marker is set", { order: tableOrder, upNext: null }],
+    ["the fight is rolling initiative", { order: tableOrder, phase: "initiative", upNext: null }],
+    ["the scene has no order", { mode: "social", order: [], upNext: null }],
+  ] as const)("draws no banner when %s", async (_, fight) => {
+    server.routes.set(...playing(campaignId, fight));
+    await renderTable();
+
+    await screen.findByText(/Session 12/);
+    expect(screen.queryByRole("status", { name: "Turn" })).toBeNull();
+    expect(screen.queryByText(/'s turn$|^Something moves$/)).toBeNull();
   });
 });

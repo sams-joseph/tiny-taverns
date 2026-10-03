@@ -9,8 +9,8 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * compute.
  *
  * Read over the `seated` scenario (`test/scenarios.ts`): Brannoc, Nessa and a
- * Marsh Hag in the order, and a 24 × 16 board of 64px squares on a 1536 × 1024
- * picture with Brannoc and the hag standing on it.
+ * Marsh Hag in the order, Brannoc up, and a 24 × 16 board of 64px squares on a
+ * 1536 × 1024 picture with Brannoc and the hag standing on it.
  */
 
 const table = screens.find((screen) => screen.name === "player-table-fight")!;
@@ -38,6 +38,24 @@ for (const width of WIDTHS) {
       });
 
       const at = { card: await box(card), board: await box(board), list: await box(initiative) };
+
+      await test.step("the turn banner heads the order's column and holds its words", async () => {
+        const banner = page.getByRole("status", { name: "Turn" });
+        await expect.soft(banner).toContainText("Brannoc Duskharrow's turn");
+        await expect.soft(banner).toContainText("Up next");
+        const turn = await box(banner);
+        expect.soft(turn.x, "in the order's column").toBeCloseTo(at.list.x, 0);
+        expect.soft(turn.width, "as wide as the order").toBeCloseTo(at.list.width, 0);
+        expect.soft(turn.y + turn.height, "above the order").toBeLessThan(at.list.y);
+        const spill = await banner.evaluate((el) =>
+          [...el.querySelectorAll("span")].some((span) => {
+            const inner = span.getBoundingClientRect();
+            const outer = el.getBoundingClientRect();
+            return inner.left < outer.left || inner.right > outer.right;
+          }),
+        );
+        expect.soft(spill, "no line runs out of the banner").toBe(false);
+      });
 
       await test.step("the board fills its card at the picture's shape, under the order", async () => {
         expect.soft(at.board.x, "board x").toBeCloseTo(at.card.x + 1, 0);
