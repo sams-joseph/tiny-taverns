@@ -217,6 +217,10 @@ export type CombatantUpdate = typeof CombatantUpdate.Type;
  * write from a stale screen silently undoes whatever happened in between.
  *
  * The result is clamped into `[0, hpMax]`, matching `Math.max(0, c.hp - 5)`.
+ * Crossing zero moves the conditions with it, on both copies: dropping to zero
+ * ends `Concentrating` and a player character falls `Unconscious`; a player
+ * character healed off zero loses `Unconscious`. Both are ordinary conditions
+ * the DM can toggle back (`apps/server/src/repo/vitals.ts`).
  */
 export const CombatantDamage = Schema.Struct({
   /** Positive damages, negative heals. Zero is legal and does nothing. */

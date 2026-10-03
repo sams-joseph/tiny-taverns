@@ -608,7 +608,11 @@ export class Party extends Context.Service<
                         sessionId,
                         characterId,
                         live: applied.live,
-                        detail: { amount: payload.amount, hpCurrent: applied.hpCurrent },
+                        detail: {
+                          amount: payload.amount,
+                          hpCurrent: applied.hpCurrent,
+                          ...applied.conditions,
+                        },
                         requestId: payload.requestId,
                       });
                     }

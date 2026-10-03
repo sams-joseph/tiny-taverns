@@ -42,7 +42,14 @@ import {
 } from "./rows.js";
 import { levelOrClassMoved, recomputeForLevel, validateSubrace } from "./sheetLevel.js";
 import { appendEvent } from "./SessionEvents.js";
-import { appendCharacterUpdated, characterDeathSavesAfter, clampedCharacterHp } from "./vitals.js";
+import {
+  appendCharacterUpdated,
+  characterConditionsAfter,
+  characterDeathSavesAfter,
+  clampedCharacterHp,
+  type ConditionsChange,
+  conditionsChange,
+} from "./vitals.js";
 import {
   characterSeatedAt,
   characterVocabulary,
@@ -495,7 +502,8 @@ export const liveFightsOf = (sql: SqlClient.SqlClient, characterIds: ReadonlyArr
  * recharging counter, returns half the hit dice and ends concentration; other
  * conditions stay. A short rest resets short counters and spends up to the
  * requested hit dice on rolled healing. Either one that lifts the character
- * off zero hit points clears its death saves, as any healing does.
+ * off zero hit points clears its death saves and wakes it, as any healing
+ * does (`vitals.ts`).
  *
  * Runs inside the caller's transaction, after its fight check and retry claim.
  * `before` is the character the caller read under the same reach, and
@@ -516,7 +524,7 @@ export const restCharacterRow = (
       readonly rest: CharacterRest["kind"];
       readonly hitDiceSpent: number;
       readonly healing: number;
-    };
+    } & ConditionsChange;
   },
   SqlError.SqlError | Schema.SchemaError
 > =>
@@ -551,7 +559,7 @@ export const restCharacterRow = (
             hp_current = ${hpCurrent},
             ${characterDeathSavesAfter(sql, hpCurrent, 0)},
             temp_hp = ${tempHp},
-            conditions = ${textArray(nextConditions)},
+            conditions = ${characterConditionsAfter(sql, hpCurrent, sql`${textArray(nextConditions)}::text[]`)},
             version = character.version + 1,
             updated_at = now()
         where character.id = ${id}
@@ -564,7 +572,15 @@ export const restCharacterRow = (
     const character = yield* rested(before.id).pipe(
       Effect.catchTag("NoSuchElementError", Effect.die),
     );
-    return { character, detail: { rest: kind, hitDiceSpent, healing } };
+    return {
+      character,
+      detail: {
+        rest: kind,
+        hitDiceSpent,
+        healing,
+        ...conditionsChange(before.conditions, character.conditions),
+      },
+    };
   });
 
 export class Characters extends Context.Service<

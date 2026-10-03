@@ -164,6 +164,39 @@ const monsterOf = (sessionId: SessionId, runId: EncounterRunId) =>
     return list.find((row) => row.kind === "npc")!;
   });
 
+/** The character's conditions, read straight off the row. */
+const conditionsOf = (characterId: CharacterId) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ readonly conditions: ReadonlyArray<string> }>`
+      select conditions from character where id = ${characterId}
+    `.pipe(Effect.orDie);
+    return rows[0]!.conditions;
+  });
+
+/** The payload of the newest line of `kind` about this combatant. */
+const lastLine = (sessionId: SessionId, kind: string, combatantId: CombatantId) =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const events = yield* SessionEvents;
+    const log = yield* as(events.list(fixture.asDm, sessionId, { limit: 500 }));
+    return [...log]
+      .reverse()
+      .find((event) => event.kind === kind && event.combatantId === combatantId)?.payload;
+  });
+
+/** The payload of the newest `character-updated` line about this character, any night. */
+const lastCharacterLine = (characterId: CharacterId) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ readonly payload: Record<string, unknown> }>`
+      select payload from session_event
+      where character_id = ${characterId} and kind = 'character-updated'
+      order by seq desc limit 1
+    `.pipe(Effect.orDie);
+    return rows[0]?.payload;
+  });
+
 /** The character's own two columns, read straight off the row. */
 const columnsOf = (characterId: CharacterId) =>
   Effect.gen(function* () {
@@ -236,6 +269,26 @@ const setSaves = (
   });
 
 const savesOf = (combatant: Combatant) => combatant.deathSaves;
+
+const edit = (
+  at: { readonly night: { readonly id: SessionId }; readonly run: { readonly id: EncounterRunId } },
+  id: CombatantId,
+  patch: { readonly hpCurrent?: number; readonly conditions?: ReadonlyArray<string> },
+) =>
+  Effect.gen(function* () {
+    const fixture = yield* Fixture;
+    const combatants = yield* Combatants;
+    return yield* as(combatants.update(fixture.asDm, at.night.id, at.run.id, id, patch));
+  });
+
+/** A PC in a fresh fight, holding a spell and lying prone, at full hit points. */
+const aConcentratingPc = Effect.gen(function* () {
+  const { character, seatId } = yield* aCharacter(20);
+  const { night, run } = yield* aFight;
+  const row = yield* rowOf(night.id, run.id, character.id);
+  yield* edit({ night, run }, row.id, { conditions: ["Concentrating", "Prone"] });
+  return { character, seatId, night, run, id: row.id };
+});
 
 describeLayer("death-saves", shared, (it) => {
   describe("the rolled rule", () => {
@@ -610,6 +663,159 @@ describeLayer("death-saves", shared, (it) => {
         const ally = theirs?.fight?.order.find((row) => row.combatantId === dying.id);
         expect(ally?.kind).toBe("ally");
         expect(ally).not.toHaveProperty("deathSaves");
+      }),
+    );
+  });
+  describe("the conditions zero brings", () => {
+    it.effect("drops a PC Unconscious and ends their concentration, on both copies", () =>
+      Effect.gen(function* () {
+        const pc = yield* aConcentratingPc;
+        const down = yield* damage(pc, pc.id, { amount: 25 });
+        expect(down.hpCurrent).toBe(0);
+        expect(down.conditions).toEqual(["Prone", "Unconscious"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone", "Unconscious"]);
+        const line = yield* lastLine(pc.night.id, "combatant-damaged", pc.id);
+        expect(line).toMatchObject({
+          conditionsAdded: ["Unconscious"],
+          conditionsRemoved: ["Concentrating"],
+        });
+        // Dropping is not a save: the DC is owed only by a row still up.
+        expect(line).not.toHaveProperty("concentrationDc");
+      }),
+    );
+
+    it.effect("ends a monster's concentration at zero and adds nothing", () =>
+      Effect.gen(function* () {
+        const { night, run } = yield* aFight;
+        const goblin = yield* monsterOf(night.id, run.id);
+        yield* edit({ night, run }, goblin.id, { conditions: ["Concentrating", "Hostile"] });
+        const down = yield* damage({ night, run }, goblin.id, { amount: 7 });
+        expect(down.conditions).toEqual(["Hostile"]);
+        const line = yield* lastLine(night.id, "combatant-damaged", goblin.id);
+        expect(line).toMatchObject({ conditionsRemoved: ["Concentrating"] });
+        expect(line).not.toHaveProperty("conditionsAdded");
+
+        // Healing a monster off zero wakes nothing, because nothing slept.
+        const healed = yield* damage({ night, run }, goblin.id, { amount: -3 });
+        expect(healed.conditions).toEqual(["Hostile"]);
+      }),
+    );
+
+    it.effect("wakes a PC healed off zero, on both copies, and says so", () =>
+      Effect.gen(function* () {
+        const pc = yield* aConcentratingPc;
+        yield* damage(pc, pc.id, { amount: 25 });
+        const healed = yield* damage(pc, pc.id, { amount: -4 });
+        expect(healed.conditions).toEqual(["Prone"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone"]);
+        const line = yield* lastLine(pc.night.id, "combatant-damaged", pc.id);
+        expect(line).toMatchObject({ conditionsRemoved: ["Unconscious"] });
+        expect(line).not.toHaveProperty("conditionsAdded");
+      }),
+    );
+
+    it.effect("moves nothing for a hit that does not cross zero", () =>
+      Effect.gen(function* () {
+        const pc = yield* aConcentratingPc;
+        const hurt = yield* damage(pc, pc.id, { amount: 6 });
+        expect(hurt.conditions).toEqual(["Concentrating", "Prone"]);
+        const line = yield* lastLine(pc.night.id, "combatant-damaged", pc.id);
+        expect(line).not.toHaveProperty("conditionsAdded");
+        expect(line).not.toHaveProperty("conditionsRemoved");
+        expect(line).toMatchObject({ concentrationDc: 10 });
+      }),
+    );
+
+    it.effect("leaves the DM's toggles alone for a further hit at zero", () =>
+      Effect.gen(function* () {
+        const pc = yield* aConcentratingPc;
+        yield* damage(pc, pc.id, { amount: 25 });
+        // The DM rules the PC conscious and still holding the spell.
+        yield* edit(pc, pc.id, { conditions: ["Concentrating"] });
+        const hit = yield* damage(pc, pc.id, { amount: 3 });
+        expect(hit.conditions).toEqual(["Concentrating"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Concentrating"]);
+      }),
+    );
+
+    it.effect("applies to the DM's typed total, unless the patch names its own list", () =>
+      Effect.gen(function* () {
+        const pc = yield* aConcentratingPc;
+        const zeroed = yield* edit(pc, pc.id, { hpCurrent: 0 });
+        expect(zeroed.conditions).toEqual(["Prone", "Unconscious"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone", "Unconscious"]);
+        expect(yield* lastLine(pc.night.id, "combatant-updated", pc.id)).toMatchObject({
+          hpCurrent: 0,
+          conditionsAdded: ["Unconscious"],
+          conditionsRemoved: ["Concentrating"],
+        });
+
+        const raised = yield* edit(pc, pc.id, { hpCurrent: 8 });
+        expect(raised.conditions).toEqual(["Prone"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone"]);
+
+        const named = yield* edit(pc, pc.id, { hpCurrent: 0, conditions: ["Prone"] });
+        expect(named.conditions).toEqual(["Prone"]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone"]);
+      }),
+    );
+
+    it.effect("wakes a PC brought back by a natural 20", () =>
+      Effect.gen(function* () {
+        const dying = yield* aDyingPc;
+        expect(yield* conditionsOf(dying.character.id)).toEqual(["Unconscious"]);
+        const up = yield* roll(dying, dying.id, 20).pipe(Effect.orDie);
+        expect(up.conditions).toEqual([]);
+        expect(yield* conditionsOf(dying.character.id)).toEqual([]);
+        expect(yield* lastLine(dying.night.id, "death-save", dying.id)).toMatchObject({
+          conditionsRemoved: ["Unconscious"],
+        });
+      }),
+    );
+
+    it.effect("moves both copies the same way through the seat's delta", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const party = yield* Party;
+        const pc = yield* aConcentratingPc;
+        yield* as(party.damage(fixture.campaign.id, pc.seatId, { amount: 30 }));
+        expect((yield* rowOf(pc.night.id, pc.run.id, pc.character.id)).conditions).toEqual([
+          "Prone",
+          "Unconscious",
+        ]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone", "Unconscious"]);
+        expect(yield* lastCharacterLine(pc.character.id)).toMatchObject({
+          conditionsAdded: ["Unconscious"],
+          conditionsRemoved: ["Concentrating"],
+        });
+
+        yield* as(party.damage(fixture.campaign.id, pc.seatId, { amount: -2 }));
+        expect((yield* rowOf(pc.night.id, pc.run.id, pc.character.id)).conditions).toEqual([
+          "Prone",
+        ]);
+        expect(yield* conditionsOf(pc.character.id)).toEqual(["Prone"]);
+      }),
+    );
+
+    it.effect("applies to a character with no fight, and a rest off zero wakes them", () =>
+      Effect.gen(function* () {
+        const fixture = yield* Fixture;
+        const party = yield* Party;
+        const characters = yield* Characters;
+        const { character, seatId } = yield* aCharacter(20);
+        yield* as(
+          party.update(fixture.campaign.id, seatId as CampaignCharacterId, {
+            conditions: ["Concentrating"],
+          }),
+        );
+        yield* as(party.damage(fixture.campaign.id, seatId, { amount: 20 }));
+        expect(yield* conditionsOf(character.id)).toEqual(["Unconscious"]);
+
+        const rested = yield* withActor(fixture.player)(
+          characters.rest(character.id, { kind: "long" }),
+        ).pipe(Effect.orDie);
+        expect(rested.hpCurrent).toBe(20);
+        expect(rested.conditions).toEqual([]);
       }),
     );
   });
