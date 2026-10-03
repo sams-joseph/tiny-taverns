@@ -2997,6 +2997,51 @@ describe("the DM's rolls, kept by the server", () => {
     expect(latest().getByText(totals[0]!)).toBeInTheDocument();
   });
 
+  it("keeps forty lines of acts that took more than forty throws, each with its to-hit", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(dock().getByRole("button", { name: "Roll a d6" }));
+    await waitFor(() => expect(server.rolls).toHaveLength(1));
+    const template = server.rolls[0]!;
+    server.rolls.length = 0;
+    // Fifty attacks, a to-hit and a damage throw each: a hundred rows, as many as the read takes.
+    for (let act = 0; act < 50; act++) {
+      const at = new Date(Date.UTC(2026, 7, 4, 19, 0, 50 - act)).toISOString();
+      const part = (index: number, over: Record<string, unknown>) => ({
+        ...template,
+        id: `2b1f2a1e-0000-4000-8000-${String(880000000000 + act * 2 + index)}`,
+        label: "Goblin Boss · Scimitar → Brannoc",
+        combatantId: goblinBoss.id,
+        targetCombatantId: brannoc.id,
+        requestId: `act${String(act)}:${String(index)}`,
+        createdAt: at,
+        updatedAt: at,
+        ...over,
+      });
+      server.rolls.push(
+        part(1, { notation: "1d6+2", dice: [3], kept: [3], modifier: 2, total: 5, kind: "damage" }),
+        part(0, {
+          notation: "1d20+4",
+          dice: [16],
+          kept: [16],
+          modifier: 4,
+          total: 20,
+          kind: "attack",
+          targetAc: 18,
+          outcome: "hit",
+        }),
+      );
+    }
+    server.emit(sessionEvent(7, "roll-made"));
+
+    await waitFor(() => expect(inLog()).toHaveTextContent("40 in log"));
+    await openDock();
+    const older = within(dock().getByRole("list", { name: "Earlier rolls" })).getAllByRole(
+      "listitem",
+    );
+    for (const line of older) expect(line).toHaveTextContent("d20 16 +4 = 20 vs AC 18 · 1d6+2 = 5");
+  });
+
   it("shows what a second tab rolled when the doorbell rings, and nothing twice", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));

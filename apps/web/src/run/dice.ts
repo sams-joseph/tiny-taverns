@@ -181,9 +181,7 @@ export function useDmDice(
     return [
       ...ours.map(fromServer),
       ...pending.filter(({ payload }) => !landed.has(payload.requestId)).map(fromPending),
-    ]
-      .sort((a, b) => b.at - a.at)
-      .slice(0, DOCK_KEPT);
+    ].sort((a, b) => b.at - a.at);
   }, [ours, pending]);
 
   const file = useCallback(
