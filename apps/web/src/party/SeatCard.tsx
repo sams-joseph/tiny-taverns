@@ -1,13 +1,22 @@
 import type { Character, PartySeat, SeatPrep } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Badge, Button, Card, cardLinkClassName, Icon, SectionHeading } from "@taverns/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  cardLinkClassName,
+  hpBand,
+  HpBar,
+  Icon,
+  SectionHeading,
+  type HpBand,
+} from "@taverns/ui";
 import { DateTime, Result } from "effect";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { reads } from "../api/keys";
 import { useMutation } from "../api/mutation";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
-import { hitPoints, hpBand, hpFraction } from "../characters/sheet";
-import { HpBar } from "../characters/SheetParts";
+import { hitPoints, hpFraction } from "../characters/sheet";
 import { newRequestId } from "../run/state";
 import { SaveFailure } from "../ui/form";
 import { hpAfter, pressed, type SeatCard as SeatCardModel } from "./cards";
@@ -219,6 +228,13 @@ const newer = (a: Character, b: Character | undefined): Character =>
     ? b
     : a;
 
+/** The heart beside the number, in the colour of the bar under it. */
+const HEART_TINT: Readonly<Record<HpBand, string>> = {
+  down: "text-danger-ink",
+  low: "text-accent-ink",
+  well: "text-muted-foreground",
+};
+
 /**
  * The hit points and their − and +, batched.
  *
@@ -312,13 +328,7 @@ function HitPoints({
         <Icon
           name="heart-pulse"
           size={14}
-          className={
-            fraction === undefined
-              ? "text-faint"
-              : hpBand(fraction) === "low" || hpBand(fraction) === "down"
-                ? "text-danger-ink"
-                : "text-muted-foreground"
-          }
+          className={fraction === undefined ? "text-faint" : HEART_TINT[hpBand(fraction)]}
         />
         <span className="font-mono text-mono-l leading-none text-heading">{words}</span>
         <span className="ml-auto flex items-center gap-0.5">

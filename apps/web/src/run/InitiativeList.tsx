@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Card,
+  HpBar,
   Icon,
   Tooltip,
   TooltipContent,
@@ -47,17 +48,11 @@ const CONDITION_VARIANT: Record<string, "destructive" | "magic" | "info"> = {
 };
 
 /**
- * Hit points, as a number over a bar.
- *
- * The colour steps the way the drawing's does — success above half, the accent
- * above a quarter, danger below — because that is the one thing on the row a
- * DM reads without looking at it. Named for the semantic slots, so a palette
- * change does not date it.
+ * Hit points, as a number over a bar. The bar's colour steps are `HpBar`'s, the
+ * one rule the sheet and Party also read, because it is the one thing on the
+ * row a DM reads without looking at it.
  */
-function HpBar({ hp, max }: { readonly hp: number; readonly max: number }) {
-  const percent = max <= 0 ? 0 : Math.max(0, Math.min(100, (hp / max) * 100));
-  const fill = percent > 50 ? "bg-success" : percent > 25 ? "bg-accent" : "bg-danger";
-
+function HitPoints({ hp, max }: { readonly hp: number; readonly max: number }) {
   return (
     <div className="flex w-16 shrink-0 flex-col items-end gap-1.5">
       <span
@@ -67,14 +62,7 @@ function HpBar({ hp, max }: { readonly hp: number; readonly max: number }) {
       >
         {hp}/{max}
       </span>
-      <div className="h-1 w-full overflow-hidden rounded-pill bg-surface-sunken">
-        <div
-          className={`h-full transition-[width] duration-(--dur-base) ease-out ${fill}`}
-          // A percentage of the track, which is the one measurement that cannot
-          // come from a token: it is the datum.
-          style={{ width: `${String(percent)}%` }}
-        />
-      </div>
+      <HpBar fraction={max <= 0 ? 0 : hp / max} className="h-1 w-full" />
     </div>
   );
 }
@@ -175,7 +163,7 @@ function CombatantRow({
         </div>
       </div>
 
-      <HpBar hp={hp} max={combatant.hpMax} />
+      <HitPoints hp={hp} max={combatant.hpMax} />
     </div>
   );
 }

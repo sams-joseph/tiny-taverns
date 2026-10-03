@@ -60,19 +60,6 @@ export const hpFraction = (current: number | null, max: number | null): number |
 };
 
 /**
- * Which band a hit-point fraction sits in — the one rule the bar's colour and a
- * header's *"is down"* / *"is low"* words both read, so the two cannot name
- * different thresholds.
- *
- * `down` is exactly zero; `low` is at most a third; `hurt` at most two thirds;
- * `well` above that.
- */
-export type HpBand = "down" | "low" | "hurt" | "well";
-
-export const hpBand = (fraction: number): HpBand =>
-  fraction === 0 ? "down" : fraction <= 0.34 ? "low" : fraction <= 0.67 ? "hurt" : "well";
-
-/**
  * `"Half-orc Paladin"` — the descriptor without its level, for a card that
  * draws the level somewhere of its own.
  *
