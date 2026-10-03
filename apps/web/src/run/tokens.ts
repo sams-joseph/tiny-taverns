@@ -16,8 +16,8 @@ import {
  * Everything here is about squares on the fight's own board
  * (`EncounterRunBoard`) and the feet each one is; where a square falls on the
  * picture, and how far apart two are, is the board's one geometry
- * (`BattleMap.ts`). The runner counts a diagonal as one square: the five-foot
- * rule.
+ * (`BattleMap.ts`). The runner counts a diagonal by the campaign's
+ * `diagonalRule`, as the server counts a move.
  */
 
 /**
