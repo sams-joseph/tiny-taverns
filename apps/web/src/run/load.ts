@@ -280,6 +280,16 @@ export const subtitleOf = (combatant: Combatant): string | undefined => {
 export const combatantWrites = (campaignId: CampaignId): Invalidation => [reads.party(campaignId)];
 
 /**
+ * What hiding a combatant from players, or showing it again, changes outside
+ * the fight: only what a seated player's table answers, where the server drops
+ * a hidden row in SQL. Not the party — visibility is the fight's row alone and
+ * is not written through to the character.
+ */
+export const combatantVisibilityWrites = (campaignId: CampaignId): Invalidation => [
+  reads.playerTable(campaignId),
+];
+
+/**
  * "Brannoc is up · Goblin Boss next": the marker, and the row after it in the
  * server's order, which is the row `nextTurn` walks to — the order is the
  * server's and is never re-sorted here (`load.ts`).

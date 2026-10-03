@@ -8,6 +8,7 @@ import type {
   NpcSessionMonitor,
   Roll,
   SessionEvent,
+  Visibility,
 } from "@taverns/api";
 import { Link, useParams, type LinkProps } from "@tanstack/react-router";
 import {
@@ -33,7 +34,8 @@ import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
-import { CombatantDialog } from "./CombatantDialog";
+import { actionsOf } from "./actions";
+import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
 import { useDmDice } from "./dice";
 import { DmDiceCard } from "./DmDice";
@@ -48,6 +50,7 @@ import { useStage } from "./stage";
 import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
 import {
+  combatantVisibilityWrites,
   combatantWrites,
   hasBoard,
   rollsAtom,
@@ -678,6 +681,7 @@ export function RunScreen() {
   const [selectedId, setSelectedId] = useState<CombatantId | undefined>();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Combatant | undefined>();
+  const [removing, setRemoving] = useState<Combatant | undefined>();
   const [ending, setEnding] = useState(false);
   const [npcProposalRefreshToken, setNpcProposalRefreshToken] = useState(0);
 
@@ -685,6 +689,7 @@ export function RunScreen() {
   const share = useMutation();
   const direct = useMutation();
   const conditions = useMutation();
+  const hiding = useMutation();
   const moves = useMutation();
   const mapShare = useMutation();
 
@@ -724,7 +729,7 @@ export function RunScreen() {
     },
   });
 
-  const dialogOpen = adding || editing !== undefined || ending;
+  const dialogOpen = adding || editing !== undefined || removing !== undefined || ending;
   const frozen = over || dialogOpen;
 
   const active = state?.combatants.find((row) => row.id === state.run.activeCombatantId);
@@ -883,6 +888,31 @@ export function RunScreen() {
   };
 
   /**
+   * The panel's eye: hide a row from the players' table, or show it again
+   * (`combatantVisibilityWrites` says what that changes). The fight takes the
+   * row the write answers with.
+   */
+  const setVisibility = async (combatant: Combatant, visibility: Visibility) => {
+    const written = await hiding.submit(
+      (client) =>
+        client.combatants.update({
+          params: { ...path, combatantId: combatant.id },
+          payload: { visibility },
+        }),
+      combatantVisibilityWrites(campaignId),
+    );
+    if (Result.isSuccess(written)) {
+      controller.applyCombatant(written.success);
+      return;
+    }
+    toast.add({
+      type: "destructive",
+      title: `${combatant.displayName} is ${combatant.visibility === "dm" ? "still hidden" : "still shown"}`,
+      description: "That did not reach the server. The eye shows what it holds.",
+    });
+  };
+
+  /**
    * Put a token on a square, move it, or take it off. Not optimistic: the token
    * slides when the server has the square, which on a table's network is the
    * blink of the slide itself, and a failed move leaves it where it stands.
@@ -914,19 +944,26 @@ export function RunScreen() {
    * a creature, the sheet's for a party member, nothing for a row the DM typed.
    */
   const party = partyResource.state === "ready" ? partyResource.value : [];
+  /** The stat block a row was seeded from, and the sheet, through reads the runner holds. */
+  const sourceOf = (combatant: Combatant) => ({
+    statBlock:
+      combatant.creatureId === null
+        ? undefined
+        : view?.creatures.get(combatant.creatureId)?.statBlock,
+    sheet:
+      combatant.characterId === null
+        ? undefined
+        : party.find((seat) => seat.character?.id === combatant.characterId)?.character?.sheet,
+  });
   const speedOf = (combatant: Combatant): number | undefined => {
-    if (combatant.creatureId !== null) {
-      return leadingFeet(view?.creatures.get(combatant.creatureId)?.statBlock.speed);
-    }
-    if (combatant.characterId === null) return undefined;
-    const character = party.find((seat) => seat.character?.id === combatant.characterId)?.character;
-    return leadingFeet(character?.sheet.identity?.speed);
+    const { statBlock, sheet } = sourceOf(combatant);
+    return leadingFeet(statBlock?.speed ?? sheet?.identity?.speed);
   };
   const labels = useMemo(() => tokenLabels(state?.combatants ?? []), [state?.combatants]);
   // Only a fight shows a player its board (`boardShown`, the server's), and
   // only one that has a board; anywhere else the switch would move nothing.
-  const mapToShare =
-    state?.run.mode === "combat" && boardResource.state === "ready" && boardResource.value !== null;
+  const boardReady = boardResource.state === "ready" && boardResource.value !== null;
+  const mapToShare = state?.run.mode === "combat" && boardReady;
 
   const saved = useCallback(() => {
     setAdding(false);
@@ -1007,17 +1044,30 @@ export function RunScreen() {
     <CombatantPanel
       combatant={selected}
       hp={selected === undefined ? 0 : controller.hpOf(selected)}
+      label={selected === undefined ? "" : (labels.get(selected.id) ?? "")}
+      speed={selected === undefined ? undefined : speedOf(selected)}
+      actions={selected === undefined ? [] : actionsOf(sourceOf(selected))}
       creatures={view.creatures}
       active={selected !== undefined && selected.id === state.run.activeCombatantId}
       following={selectedId === undefined}
       disabled={frozen || share.busy}
       conditionsBusy={conditions.busy}
+      hiding={hiding.busy}
       rolling={rolling}
       onTheirTurn={() => selected !== undefined && void setActive(selected)}
       onEdit={() => setEditing(selected)}
       onFollow={() => setSelectedId(undefined)}
+      onTakeOff={
+        // Only a token standing on a board the DM can play on: below `@3xl`
+        // the board is read-only, so its tokens stay where they stand.
+        selected !== undefined && selected.position !== null && stage.wide === true && boardReady
+          ? () => void move(selected, null)
+          : undefined
+      }
+      onRemove={() => setRemoving(selected)}
       onDamage={(amount) => selected !== undefined && void damage(selected, amount)}
       onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
+      onVisibility={(next) => selected !== undefined && void setVisibility(selected, next)}
       onRoll={dice.roll}
     />
   );
@@ -1244,6 +1294,20 @@ export function RunScreen() {
           combatant={editing}
           onClose={() => setEditing(undefined)}
           onSaved={saved}
+        />
+      )}
+      {removing !== undefined && (
+        <RemoveCombatantDialog
+          key={removing.id}
+          path={path}
+          combatant={removing}
+          onClose={() => setRemoving(undefined)}
+          onRemoved={() => {
+            setRemoving(undefined);
+            // Back to whoever is up: the row the panel was showing is gone.
+            setSelectedId(undefined);
+            refresh();
+          }}
         />
       )}
       {ending && view !== undefined && (

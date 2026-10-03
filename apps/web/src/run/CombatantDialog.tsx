@@ -22,6 +22,7 @@ import {
 } from "@taverns/ui";
 import { Result } from "effect";
 import { useState } from "react";
+import type { TavernsClient } from "../api/client";
 import { useMutation } from "../api/mutation";
 import { Field, SaveFailure, VisibilityField } from "../ui/form";
 import { combatantWrites, type RunPath } from "./load";
@@ -137,6 +138,14 @@ const KINDS: ReadonlyArray<{ readonly value: CombatantKind; readonly label: stri
   { value: "pc", label: "Party member" },
 ];
 
+/**
+ * The one removal both ways in send: the edit dialog's red button and the
+ * creature panel's menu. It names no reads — a combatant is the fight's own row
+ * and its `character_id` is provenance rather than a write-through.
+ */
+const removeFromFight = (path: RunPath, combatant: Combatant) => (client: TavernsClient) =>
+  client.combatants.remove({ params: { ...path, combatantId: combatant.id } });
+
 export function CombatantDialog({
   path,
   combatant,
@@ -233,10 +242,7 @@ export function CombatantDialog({
     // A combatant is the fight's own row and its `character_id` is provenance
     // rather than a write-through, so removing one reaches nothing outside this
     // screen. The list's new shape comes back through `onSaved`'s re-read.
-    const gone = await submit(
-      (client) => client.combatants.remove({ params: { ...path, combatantId: combatant.id } }),
-      [],
-    );
+    const gone = await submit(removeFromFight(path, combatant), []);
     if (Result.isSuccess(gone)) onSaved();
   };
 
@@ -421,6 +427,61 @@ export function CombatantDialog({
           </Button>
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? "Saving…" : combatant === undefined ? "Add to the fight" : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * *Remove from the fight* from the creature panel's menu. Outside the edit
+ * dialog the press is not itself a deliberate act, so it asks first: hit
+ * points reaching zero never removes anybody ("Still in initiative — remove
+ * them when you're ready"), and this is the one way a row leaves the order.
+ */
+export function RemoveCombatantDialog({
+  path,
+  combatant,
+  onClose,
+  onRemoved,
+}: {
+  readonly path: RunPath;
+  readonly combatant: Combatant;
+  readonly onClose: () => void;
+  /** Re-reads the fight: a removed row changes the shape of the list. */
+  readonly onRemoved: () => void;
+}) {
+  const { busy, failure, submit } = useMutation();
+
+  const remove = async () => {
+    const gone = await submit(removeFromFight(path, combatant), []);
+    if (Result.isSuccess(gone)) onRemoved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-label="Remove a combatant">
+        <DialogHeader>
+          <DialogTitle>Remove {combatant.displayName} from the fight?</DialogTitle>
+          <DialogDescription>
+            {`They leave the initiative order${combatant.position === null ? "" : " and the board"}${
+              combatant.characterId === null ? "" : "; their character is not touched"
+            }. This cannot be undone.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          {failure !== undefined && (
+            <div className="mr-auto min-w-0 flex-1 text-left">
+              <SaveFailure failure={failure} />
+            </div>
+          )}
+          <Button variant="secondary" size="sm" disabled={busy} onClick={onClose}>
+            Keep them
+          </Button>
+          <Button variant="destructive" size="sm" disabled={busy} onClick={() => void remove()}>
+            {busy ? "Removing…" : "Remove from the fight"}
           </Button>
         </DialogFooter>
       </DialogContent>
