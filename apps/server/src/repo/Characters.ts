@@ -16,6 +16,7 @@ import {
   CombatantId,
   Conflict,
   CurrentActor,
+  type DeathSavePayload,
   DeathSaves,
   EncounterRunId,
   NotFound,
@@ -896,7 +897,7 @@ export class Characters extends Context.Service<
             encounterRunId: runId,
             combatantId,
             characterId,
-            payload: { ...saves, by: "player" },
+            payload: { ...saves, by: "player" } satisfies typeof DeathSavePayload.Encoded,
             requestId,
             visibility: row.visibility,
           }).pipe(Effect.orDie);

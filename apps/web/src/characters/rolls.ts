@@ -41,7 +41,8 @@ export const notationForD20 = (modifier: string): string | undefined => {
   return `1d20${signed(parsed)}`;
 };
 
-const rollFace = (faces: number, random: Random): number =>
+/** One die: a face from 1 to `faces`. */
+export const rollFace = (faces: number, random: Random): number =>
   Math.floor(Math.max(0, Math.min(0.999_999_999, random())) * faces) + 1;
 
 export const rollDiceExpression = (

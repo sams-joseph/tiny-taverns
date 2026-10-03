@@ -15,6 +15,7 @@ import {
   installRunServer,
   liveRun,
   renderRunner,
+  sessionEvent,
 } from "./run.fixtures";
 
 /**
@@ -194,8 +195,15 @@ describe("death saves on the runner", () => {
     // The rule is the server's: the screen sends a face, never counts.
     expect(bodyOf(server, "POST", "/death-save-roll")).not.toHaveProperty("successes");
     await waitFor(() => expect(dot("successes", 1)).toHaveAttribute("aria-pressed", "true"));
-    // And the roll is the DM's like any other, in their dice.
-    expect(screen.getByText("Brannoc · Death save")).toBeInTheDocument();
+    // The roll's one line in the dock is the night's, once it arrives.
+    expect(screen.queryByText("Brannoc · Death save")).toBeNull();
+    server.emit({
+      ...sessionEvent(21, "death-save", brannoc.id),
+      payload: { face: 13, successes: 1, failures: 1, hpCurrent: 0 },
+    });
+    const dock = within(screen.getByRole("region", { name: "Rolls" }));
+    await waitFor(() => expect(dock.getAllByText("Brannoc · Death save")).toHaveLength(1));
+    expect(dock.getByText("1d20 = 13 · 1 success · 1 failure")).toBeInTheDocument();
   });
 
   it("puts the block away when a natural 20 brings them back", async () => {

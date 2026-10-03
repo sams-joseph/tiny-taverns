@@ -20,7 +20,7 @@ Any live client must implement this against `GET …/runs/:runId/events` (`handl
 - `GET …/log?since=` is the same query over a non-streaming transport.
 - Authorization happens before a stream exists, so a denial is a JSON 404 rather than a failure event inside a 200.
 
-`seq` comes from one global sequence (`session_event_seq`), not `max(seq)+1` per session: a cursor only has to increase. It is `integer` (`0081`), so it reads as the wire's number. `payload` is the human-legible remainder, not a contract; a client re-reads rows rather than applying it.
+`seq` comes from one global sequence (`session_event_seq`), not `max(seq)+1` per session: a cursor only has to increase. It is `integer` (`0081`), so it reads as the wire's number. `payload` is the human-legible remainder, not state; a client re-reads rows rather than applying it. The hit-point, death-save and condition lines are the declared exceptions (`SessionEventPayload.ts`, which the server writes them through): the runner's _Rolls_ dock prints them, and nothing applies them.
 
 ## Modelling decisions
 

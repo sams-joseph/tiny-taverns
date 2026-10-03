@@ -17,6 +17,8 @@ import { DrawnImage } from "../hob/DrawnImage";
 import { ActionsMenu, type ActionsMenuItem } from "../ui/ActionsMenu";
 import { actionDetail, type ActionLine } from "./actions";
 import { deathStatusOf, dotPressed, type DeathStatus } from "./deathSaves";
+import { attacks, rolls, type AttackOutcome } from "./attack";
+import { AttackResultCard } from "./AttackResult";
 import { subtitleOf } from "./load";
 
 /**
@@ -25,8 +27,9 @@ import { subtitleOf } from "./load";
  * grid). Its header is the creature — a disc ringed by side, the name, *Party*
  * or *Hostile*, the subtitle — with the eye that hides it from players and an
  * overflow menu for the acts the drawing leaves out; then its numbers, the
- * damage box, a party member's death saves while they are at zero, what it
- * rolls for, its stat block and its conditions.
+ * damage box, a party member's death saves while they are at zero, its last
+ * attack's result (`AttackResult.tsx`), what it rolls for — *Attack* for
+ * whoever is up, *Roll* otherwise — its stat block and its conditions.
  *
  * The panel is layered honestly, because a combatant is a *snapshot* and its
  * creature is a template that may have been edited, deleted, or never been
@@ -307,26 +310,70 @@ function DeathSaveBlock({
   );
 }
 
-/** What the selected creature rolls for, one line each (`actionsOf`). */
+/**
+ * What the selected creature rolls for, one line each (`actionsOf`). Whoever is
+ * up attacks: *Attack* asks for a target and the result lands on this card.
+ * Anyone else, and a line with no to-hit, *Roll*s into the dock — the to-hit
+ * and the damage together, with no target. *Attack* is `outline` so that *Next
+ * turn* stays the screen's one peach.
+ */
 function Actions({
   combatant,
   actions,
+  active,
+  disabled,
+  targeting,
+  onAttack,
+  onRoll,
 }: {
   readonly combatant: Combatant;
   readonly actions: ReadonlyArray<ActionLine>;
+  readonly active: boolean;
+  readonly disabled: boolean;
+  /** The line whose target is being picked, if one is. */
+  readonly targeting: ActionLine | undefined;
+  readonly onAttack: (action: ActionLine) => void;
+  readonly onRoll: (action: ActionLine) => void;
 }) {
   return (
     <section aria-label={`Actions of ${combatant.displayName}`} className="flex flex-col gap-2">
       <SectionTitle title="Actions" />
       <ul className="flex flex-col">
         {actions.map((action) => (
-          <li key={action.key} className="flex flex-col gap-0.5 border-t border-hairline py-2">
-            <span className="text-body-s leading-snug font-semibold text-heading">
-              {action.name}
-            </span>
-            <span className="font-mono text-caption leading-snug text-muted-foreground">
-              {actionDetail(action)}
-            </span>
+          <li key={action.key} className="flex items-center gap-2.5 border-t border-hairline py-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-body-s leading-snug font-semibold text-heading">
+                {action.name}
+              </span>
+              <span className="font-mono text-caption leading-snug text-muted-foreground">
+                {actionDetail(action)}
+              </span>
+            </div>
+            {active && attacks(action) ? (
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={`Attack with ${action.name}`}
+                aria-pressed={targeting?.key === action.key}
+                disabled={disabled}
+                onClick={() => onAttack(action)}
+              >
+                <Icon name="swords" size={14} />
+                Attack
+              </Button>
+            ) : (
+              rolls(action) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`Roll ${action.name}`}
+                  onClick={() => onRoll(action)}
+                >
+                  <Icon name="dice-5" size={14} />
+                  Roll
+                </Button>
+              )
+            )}
           </li>
         ))}
       </ul>
@@ -463,6 +510,12 @@ export function CombatantPanel({
   onRoll,
   onDeathSaves,
   onDeathSaveRoll,
+  targeting,
+  result,
+  onAttack,
+  onRollAction,
+  onApplyResult,
+  onDismissResult,
 }: {
   readonly combatant: Combatant | undefined;
   readonly hp: number;
@@ -502,6 +555,23 @@ export function CombatantPanel({
   readonly onDeathSaves: (saves: DeathSaves) => void;
   /** *Roll death save*: the d20 is rolled by the caller, the rule applied by the server. */
   readonly onDeathSaveRoll: () => void;
+  /** The line this combatant is picking a target for, if it is. */
+  readonly targeting: ActionLine | undefined;
+  /** This combatant's last attack, until it is dismissed or the turn moves. */
+  readonly result:
+    | {
+        readonly outcome: AttackOutcome;
+        readonly applied: boolean;
+        readonly concentrationDc: number | undefined;
+      }
+    | undefined;
+  /** Start picking a target for one of its lines (`attack.ts`). */
+  readonly onAttack: (action: ActionLine) => void;
+  /** Roll a line with no target, into the dock. */
+  readonly onRollAction: (action: ActionLine) => void;
+  /** Send the attack's damage, whole or halved, to its target. */
+  readonly onApplyResult: (amount: number) => void;
+  readonly onDismissResult: () => void;
 }) {
   if (combatant === undefined) {
     return (
@@ -625,9 +695,28 @@ export function CombatantPanel({
           />
         )}
 
+        {result !== undefined && (
+          <AttackResultCard
+            outcome={result.outcome}
+            applied={result.applied}
+            concentrationDc={result.concentrationDc}
+            disabled={disabled}
+            onApply={onApplyResult}
+            onDismiss={onDismissResult}
+          />
+        )}
+
         {actions.length > 0 && (
           <div className="border-t border-hairline pt-3.5">
-            <Actions combatant={combatant} actions={actions} />
+            <Actions
+              combatant={combatant}
+              actions={actions}
+              active={active}
+              disabled={disabled}
+              targeting={targeting}
+              onAttack={onAttack}
+              onRoll={onRollAction}
+            />
           </div>
         )}
 

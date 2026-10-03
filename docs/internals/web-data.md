@@ -87,7 +87,7 @@ Three things stay in React in `run/state.ts`:
 - `onReconnected` fires on every connection after the first, so the rows are re-read too; resuming the log alone leaves a client that missed a re-read quietly behind.
 - `SILENCE_MS` (45 s) is paired with the server's `LIVE_HEARTBEAT_SECONDS` (default 20); a heartbeat above 45 s makes every healthy connection reconnect on a timer.
 - The loop uses `Effect.result`, never `Effect.exit`, so React's cleanup interrupt unwinds it rather than being retried; `Effect.catchDefect` turns defects into failures so one cannot leave the screen silently stale. `strikes` grows only for attempts that heard nothing, so a long-lived connection restarts backoff from the top (`[250 ms … 30 s]`).
-- The event's `payload` is never applied; the screen re-reads the rows.
+- The event's `payload` is never applied; the screen re-reads the rows. The fight's _Rolls_ dock prints the few declared shapes (`run/rollsLog.ts`) and says every other line from its `kind`.
 
 ## Test harness traps
 

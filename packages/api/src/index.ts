@@ -61,3 +61,4 @@ export * from "./Session.js";
 export * from "./Spell.js";
 export * from "./Spellbook.js";
 export * from "./SessionEvent.js";
+export * from "./SessionEventPayload.js";

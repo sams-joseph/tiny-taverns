@@ -89,6 +89,11 @@ export interface TokenProps {
   /** Which tokens wear their name (`useTokenNames`). */
   readonly names: TokenNames;
   readonly onSelect: (combatant: Combatant) => void;
+  /**
+   * Set while an attack waits for its target: a token's click is the target
+   * and nothing else, so no press selects, drags, steps or puts a token down.
+   */
+  readonly onTarget: ((combatant: Combatant) => void) | undefined;
   /** Put it on a square, or `null` to take it off the board; settles once the server answers. */
   readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<unknown>;
 }
@@ -261,8 +266,10 @@ export function RunTokens(props: TokenProps) {
     hostileTokensHidden,
     names,
     onSelect,
+    onTarget,
     onMove,
   } = props;
+  const targeting = onTarget !== undefined;
   const plane = battleMapPlane(board, board.image);
   const layer = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>();
@@ -281,7 +288,7 @@ export function RunTokens(props: TokenProps) {
     standing.filter((other) => other.id !== id).map(squareOf);
 
   // A token in the tray goes down on the square clicked.
-  const placing = movable && selected !== undefined && selected.position === null;
+  const placing = movable && !targeting && selected !== undefined && selected.position === null;
   const at = (square: BoardSquare) => percentOf(cellRect(board, square), plane);
 
   /** The square under a point on the screen, or `undefined` off the board. */
@@ -301,7 +308,7 @@ export function RunTokens(props: TokenProps) {
   };
 
   const press = (combatant: Placed) => (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || targeting) return;
     onSelect(combatant);
     if (!movable) return;
     // Held by the token, so a pointer that outruns it still drags it.
@@ -338,7 +345,7 @@ export function RunTokens(props: TokenProps) {
   const step = (combatant: Placed) =>
     function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
       const delta = STEP[event.key];
-      if (delta === undefined || !movable) return;
+      if (delta === undefined || !movable || targeting) return;
       event.preventDefault();
       const to = {
         column: Math.min(board.columns - 1, Math.max(0, combatant.position.column + delta[0])),
@@ -414,7 +421,7 @@ export function RunTokens(props: TokenProps) {
           data-slot="run-board-squares"
           aria-hidden
           onClick={place}
-          className={cn("absolute inset-0", placing && "cursor-crosshair")}
+          className={cn("absolute inset-0", (placing || targeting) && "cursor-crosshair")}
         />
         {range}
         {standing.map((combatant) => {
@@ -433,12 +440,18 @@ export function RunTokens(props: TokenProps) {
                     onPointerMove={follow}
                     onPointerUp={drop(combatant)}
                     onPointerCancel={cancel}
-                    onClick={() => onSelect(combatant)}
+                    onClick={() => (onTarget ?? onSelect)(combatant)}
                     onKeyDown={step(combatant)}
                     className={cn(
                       "absolute rounded-circle outline-none focus-visible:ring-focus",
                       "transition-[left,top] duration-(--dur-fast) ease-out",
-                      movable ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-pointer",
+                      targeting
+                        ? "cursor-crosshair"
+                        : movable
+                          ? dragging
+                            ? "cursor-grabbing"
+                            : "cursor-grab"
+                          : "cursor-pointer",
                       (active || dragging) && "z-lifted",
                       fade,
                     )}

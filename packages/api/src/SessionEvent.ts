@@ -131,13 +131,14 @@ export class SessionEvent extends Schema.Class<SessionEvent>("SessionEvent")({
   /**
    * The details, shaped by `kind`.
    *
-   * Deliberately untyped on the wire. Filterable context lives in columns
+   * Untyped on the wire. Filterable context lives in columns
    * (`encounter_run_id`, `combatant_id`, and now `character_id` in the database),
    * and the state a consumer actually renders is read from the state tables —
    * so this is the human-legible remainder ("12 damage", "round 4"), not a
-   * contract anything branches on. Typing it as a tagged union of eight payload
-   * shapes would be a second declaration of the live surface to keep in step
-   * with the first, bought for a consumer that does not exist yet.
+   * contract anything branches on. The exceptions are the hit-point, death-save
+   * and condition lines the runner's *Rolls* dock prints, whose shapes are
+   * declared in `SessionEventPayload.ts` and which the server writes through
+   * those declarations; every other kind's remainder is nobody's contract.
    */
   payload: Schema.Unknown,
   /**
