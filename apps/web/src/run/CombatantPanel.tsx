@@ -1,4 +1,4 @@
-import type { Combatant, Creature, CreatureId, Visibility } from "@taverns/api";
+import type { Combatant, Creature, CreatureId, DeathSaves, Visibility } from "@taverns/api";
 import {
   Badge,
   Button,
@@ -16,6 +16,7 @@ import { StatBlockBody } from "../bestiary/StatBlock";
 import { DrawnImage } from "../hob/DrawnImage";
 import { ActionsMenu, type ActionsMenuItem } from "../ui/ActionsMenu";
 import { actionDetail, type ActionLine } from "./actions";
+import { deathStatusOf, dotPressed, type DeathStatus } from "./deathSaves";
 import { subtitleOf } from "./load";
 
 /**
@@ -24,7 +25,8 @@ import { subtitleOf } from "./load";
  * grid). Its header is the creature — a disc ringed by side, the name, *Party*
  * or *Hostile*, the subtitle — with the eye that hides it from players and an
  * overflow menu for the acts the drawing leaves out; then its numbers, the
- * damage box, what it rolls for, its stat block and its conditions.
+ * damage box, a party member's death saves while they are at zero, what it
+ * rolls for, its stat block and its conditions.
  *
  * The panel is layered honestly, because a combatant is a *snapshot* and its
  * creature is a template that may have been edited, deleted, or never been
@@ -200,6 +202,111 @@ function HitPoints({
   );
 }
 
+const STATUS: Record<DeathStatus, { readonly word: string; readonly tone: string }> = {
+  dying: { word: "Dying", tone: "text-muted-foreground" },
+  stable: { word: "Stable", tone: "text-success" },
+  dead: { word: "Dead", tone: "text-danger" },
+};
+
+/** One row of three dots, each a button that sets the row's count (`dotPressed`). */
+function SaveDots({
+  kind,
+  count,
+  disabled,
+  onSet,
+}: {
+  readonly kind: "Success" | "Fail";
+  readonly count: number;
+  readonly disabled: boolean;
+  readonly onSet: (count: number) => void;
+}) {
+  const plural = kind === "Success" ? "successes" : "failures";
+  return (
+    <div className="flex items-center" role="group" aria-label={`Death save ${plural}`}>
+      <span className="min-w-12 text-label-s leading-none text-muted-foreground">{kind}</span>
+      {/* The drawing's 14px dot inside a button a pointer can hit (24px, WCAG 2.5.8). */}
+      {[0, 1, 2].map((index) => (
+        <button
+          key={index}
+          type="button"
+          aria-label={`${kind} ${String(index + 1)} of 3`}
+          aria-pressed={count > index}
+          disabled={disabled}
+          onClick={() => onSet(dotPressed(count, index))}
+          className="flex size-6 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-3.5 rounded-full border-2 transition-control",
+              kind === "Success" ? "border-success" : "border-danger",
+              count > index && (kind === "Success" ? "bg-success" : "bg-danger"),
+            )}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A party member at zero hit points: three successes, three failures, where
+ * that leaves them, and a roll. The dots set the counts outright (the DM's
+ * `setDeathSaves`); *Roll death save* rolls the d20 in the browser and the server reads
+ * it (`deathSaveRolled`), so the rule has one home. At three of either there
+ * is nothing left to roll for. A stable character hit again starts dying
+ * again — the server's rule, which the row it answers with carries here.
+ */
+function DeathSaveBlock({
+  combatant,
+  saves,
+  disabled,
+  onSet,
+  onRoll,
+}: {
+  readonly combatant: Combatant;
+  readonly saves: DeathSaves;
+  readonly disabled: boolean;
+  readonly onSet: (saves: DeathSaves) => void;
+  readonly onRoll: () => void;
+}) {
+  const status = STATUS[deathStatusOf(saves)];
+  const settled = saves.successes >= 3 || saves.failures >= 3;
+  return (
+    <section
+      aria-label={`Death saves of ${combatant.displayName}`}
+      className="-mx-panel flex flex-col gap-2.5 border-t border-hairline bg-danger/6 px-panel py-3.5"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <SectionHeading as="h3" className="text-label leading-none font-semibold text-danger">
+          Death saves
+        </SectionHeading>
+        <span className={cn("text-label-s leading-none font-medium", status.tone)}>
+          {status.word}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <SaveDots
+          kind="Success"
+          count={saves.successes}
+          disabled={disabled}
+          onSet={(successes) => onSet({ ...saves, successes })}
+        />
+        <SaveDots
+          kind="Fail"
+          count={saves.failures}
+          disabled={disabled}
+          onSet={(failures) => onSet({ ...saves, failures })}
+        />
+      </div>
+      <Button variant="outline" size="sm" disabled={disabled || settled} onClick={onRoll}>
+        <Icon name="dice-5" size={14} />
+        Roll death save
+      </Button>
+    </section>
+  );
+}
+
 /** What the selected creature rolls for, one line each (`actionsOf`). */
 function Actions({
   combatant,
@@ -342,6 +449,7 @@ export function CombatantPanel({
   following,
   disabled,
   conditionsBusy,
+  deathSavesBusy,
   hiding,
   rolling,
   onTheirTurn,
@@ -353,6 +461,8 @@ export function CombatantPanel({
   onConditions,
   onVisibility,
   onRoll,
+  onDeathSaves,
+  onDeathSaveRoll,
 }: {
   readonly combatant: Combatant | undefined;
   readonly hp: number;
@@ -369,6 +479,8 @@ export function CombatantPanel({
   readonly disabled: boolean;
   /** A condition write is in flight; the chips wait for its answer. */
   readonly conditionsBusy: boolean;
+  /** A death-save write or roll is in flight; the dots and the roll wait for its answer. */
+  readonly deathSavesBusy: boolean;
   /** A visibility write is in flight; the eye waits for its answer. */
   readonly hiding: boolean;
   /** Rolling initiative: nobody is up yet, so nobody can be made up. */
@@ -386,6 +498,10 @@ export function CombatantPanel({
   readonly onVisibility: (visibility: Visibility) => void;
   /** Roll into the DM's local dice, under a label that already names the combatant. */
   readonly onRoll: (label: string, notation: string) => void;
+  /** The dots: both counts, set outright. */
+  readonly onDeathSaves: (saves: DeathSaves) => void;
+  /** *Roll death save*: the d20 is rolled by the caller, the rule applied by the server. */
+  readonly onDeathSaveRoll: () => void;
 }) {
   if (combatant === undefined) {
     return (
@@ -496,6 +612,18 @@ export function CombatantPanel({
         </div>
 
         <HitPoints combatant={combatant} disabled={disabled} onApply={onDamage} />
+
+        {/* Only at zero: above it a party member makes no saves, and healing
+            off zero clears them (the server's rule). An NPC has none. */}
+        {combatant.deathSaves !== null && hp === 0 && (
+          <DeathSaveBlock
+            combatant={combatant}
+            saves={combatant.deathSaves}
+            disabled={disabled || deathSavesBusy}
+            onSet={onDeathSaves}
+            onRoll={onDeathSaveRoll}
+          />
+        )}
 
         {actions.length > 0 && (
           <div className="border-t border-hairline pt-3.5">

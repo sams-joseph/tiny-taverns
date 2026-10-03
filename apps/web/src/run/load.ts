@@ -19,6 +19,7 @@ import { apiAtom, writableApiAtom } from "../api/atoms";
 import type { TavernsClient } from "../api/client";
 import type { Resource } from "../api/failure";
 import { reads, type Invalidation } from "../api/keys";
+import { isDead } from "./deathSaves";
 
 /**
  * What the runner reads, split by how often it changes — and the atoms over it.
@@ -290,6 +291,16 @@ export const combatantVisibilityWrites = (campaignId: CampaignId): Invalidation 
 ];
 
 /**
+ * What setting or rolling a party member's death saves changes outside the
+ * fight: the character, which the server writes through to (the party), and
+ * the seated player's table, which draws them on that player's own row.
+ */
+export const deathSaveWrites = (campaignId: CampaignId): Invalidation => [
+  reads.party(campaignId),
+  reads.playerTable(campaignId),
+];
+
+/**
  * The row after `at` in an initiative order, wrapping to the top: who is up
  * next. Nothing when the order is that one row alone. The order is the
  * server's and is never re-sorted here, so this is the row `nextTurn` walks to
@@ -314,14 +325,14 @@ export const upLine = (
 };
 
 /**
- * Whether a combatant is out of the fight, which the initiative strip draws
- * faded and struck through: an NPC at zero hit points, which
- * `nextTurn` skips, or a PC with three failed death saves. A PC at zero who is
+ * Whether a combatant is out of the fight, which the initiative strip and the
+ * tokens (`tokenState`) draw faded and struck through: an NPC at zero hit points, which
+ * `nextTurn` skips, or a PC with three failed death saves (`isDead`). A PC at zero who is
  * still making them is not out — they still get a turn
  * (`Combatant.deathSaves`, `repo/vitals.ts`).
  */
 export const outOfTheFight = (combatant: Combatant, hp: number): boolean =>
-  combatant.kind === "npc" ? hp === 0 : (combatant.deathSaves?.failures ?? 0) >= 3;
+  combatant.kind === "npc" ? hp === 0 : isDead(combatant);
 
 /** The bar's line while the fight is rolling initiative: `Rolling initiative · 4 players, 7 monsters`. */
 export const rollingLine = (combatants: ReadonlyArray<Combatant>): string => {
