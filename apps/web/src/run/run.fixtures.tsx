@@ -120,6 +120,7 @@ export const runBoard = {
   alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
   image: null,
   imagePending: false,
+  fog: [],
 };
 
 /**

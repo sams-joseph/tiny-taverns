@@ -35,6 +35,11 @@ export const SessionEventKind = Schema.Literals([
   "death-save",
   /** A token was put on the board, moved, or taken off it. Carries `{from, to}`. */
   "combatant-moved",
+  /**
+   * The DM hid or revealed squares of the fight's board under fog. Carries
+   * `{hidden}`, how many squares are under fog now.
+   */
+  "board-fog-updated",
   "turn-advanced",
   /** A conversation turned into a fight: the run's mode became `combat`. */
   "run-escalated",

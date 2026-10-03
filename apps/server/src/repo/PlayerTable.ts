@@ -30,6 +30,7 @@ import {
   alignmentColumn,
   battleMapPicture,
   boardColumns,
+  fogColumn,
   pictureFromColumn,
 } from "./BattleMaps.js";
 import {
@@ -39,7 +40,14 @@ import {
   seatedPortraitColumn,
 } from "./Characters.js";
 import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
-import { boardShown, COMBATANT, initiativeOrder, RUNS, tokenShown } from "./liveTables.js";
+import {
+  boardShown,
+  COMBATANT,
+  hiddenByFog,
+  initiativeOrder,
+  RUNS,
+  tokenShown,
+} from "./liveTables.js";
 import { dieOnSqlError, fromColumns } from "./rows.js";
 import { playerLiveHitPointColumns } from "./playerCombatant.js";
 import { appendEvent } from "./SessionEvents.js";
@@ -152,6 +160,9 @@ export const liveOrderStatement = (
     where combatant.encounter_run_id = ${runId}
       and ${containedRowReadable(sql, COMBATANT, campaignId, actor)}
       and (combatant.kind = 'npc' or seated.id is not null)
+      -- What stands under fog is not on this player's board, so it is not in
+      -- their order either; their own character always is.
+      and not ${hiddenByFog(sql, campaignId, actor)}
       -- A conversation, a skill challenge or a hazard has no
       -- initiative order to show: only the asker's own rows are
       -- read, for their seats, and nobody else's at all.
@@ -183,7 +194,9 @@ const playerBoardRow = (sign: ImageSigner | undefined) =>
  * turned on *Share map* (`0067_run_map_sharing.ts`), and never its setting
  * line. A token is a position selected beside a row of the order under the
  * same condition, and not at all for an NPC while hostile tokens are hidden,
- * so a row the order drops takes its token with it.
+ * so a row the order drops takes its token with it. **Fog** drops the row of
+ * whatever stands under it, token and all, but the player's own character
+ * (`liveTables.ts`' `hiddenByFog`); the board carries the fogged squares.
  */
 export class PlayerTable extends Context.Service<
   PlayerTable,
@@ -274,7 +287,7 @@ export class PlayerTable extends Context.Service<
           select encounter_run_board.grid, encounter_run_board.board_columns,
                  encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
                  ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}
+                 ${battleMapPicture(sql)}, ${fogColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
           left join battle_map on battle_map.id = encounter_run_board.map_id

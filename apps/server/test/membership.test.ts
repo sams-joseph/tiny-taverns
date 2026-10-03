@@ -305,7 +305,7 @@ const services = Layer.mergeAll(
   Characters.layer,
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   ClassProgression.layer,
-  BattleMaps.layer,
+  BattleMaps.layer.pipe(Layer.provide(LiveEvents.layer)),
   Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Creatures.layer,
   CampaignCreatorActors.layer,

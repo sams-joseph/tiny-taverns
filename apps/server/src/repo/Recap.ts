@@ -26,7 +26,7 @@ import { combatantColumns, combatantRow } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { CheckRow, SceneRow } from "./RunScenes.js";
-import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
+import { COMBATANT, fightLive, hiddenByFog, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { noteColumns, NoteRow, playerNoteColumns, PlayerNoteRow } from "./Notes.js";
 import { playerCombatantColumns, PlayerCombatantRow } from "./playerCombatant.js";
 import { PREP, PrepItemRow } from "./PrepItems.js";
@@ -306,7 +306,11 @@ export class Recap extends Context.Service<
       /**
        * The player projection of the fights' rows: the same predicate, a
        * different select list, and only a fight's — a conversation, a skill
-       * challenge or a hazard had no initiative order at the table.
+       * challenge or a hazard had no initiative order at the table — less,
+       * while the fight is live (`fightLive`, carried runs included), what
+       * stands under its fog, as at the table. Fog is a live-board tool: once
+       * the fight's last run ends other than carried, its rows follow the
+       * ordinary per-row rule alone.
        */
       const playerCombatantsOf = SqlSchema.findAll({
         Request: RunsRequest,
@@ -319,6 +323,7 @@ export class Recap extends Context.Service<
               select 1 from encounter_run
               where encounter_run.id = combatant.encounter_run_id
                 and encounter_run.mode = 'combat'
+                and (not ${fightLive(sql)} or not ${hiddenByFog(sql, campaignId, actor)})
             )
           ${initiativeOrder(sql)}
         `,

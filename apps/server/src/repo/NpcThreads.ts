@@ -21,7 +21,7 @@ import { Array as Arr, Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
-import { initiativeOrder } from "./liveTables.js";
+import { initiativeOrder, underFog } from "./liveTables.js";
 import { npcImageSigner, playerNpcColumns, playerNpcReadable, playerNpcRow } from "./Npcs.js";
 import {
   classFromColumns,
@@ -771,9 +771,10 @@ export class NpcThreads extends Context.Service<
           }),
         ),
         execute: (sessionId) => sql`
-          select encounter_run.id::text as id, encounter_run.round, active.display_name as active_name
+          select encounter_run.id::text as id, encounter_run.round, combatant.display_name as active_name
           from encounter_run
-          left join combatant active on active.id = encounter_run.active_combatant_id and active.visibility = 'shared'
+          left join combatant on combatant.id = encounter_run.active_combatant_id
+            and combatant.visibility = 'shared' and not ${underFog(sql)}
           where encounter_run.session_id = ${sessionId}
             and encounter_run.ended_at is null
             and encounter_run.visibility = 'shared'
@@ -789,6 +790,7 @@ export class NpcThreads extends Context.Service<
           from combatant
           where combatant.encounter_run_id = ${runId}
             and combatant.visibility = 'shared'
+            and not ${underFog(sql)}
           ${initiativeOrder(sql)}
         `,
       });

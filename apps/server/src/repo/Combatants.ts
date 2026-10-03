@@ -915,9 +915,10 @@ export class Combatants extends Context.Service<
          *
          * The log line is shared only while a player's board shows this
          * token: the fight and the combatant are both shared, the map is
-         * shown, and it is not a monster while hostile tokens are hidden
-         * (`liveTables.ts`'s `tokenShown`, which the player's table selects
-         * positions under). So a move no player can see leaves no shared line.
+         * shown, and it is not a monster while hostile tokens are hidden or
+         * one standing under fog where it landed (`liveTables.ts`'s
+         * `tokenShown`, which the player's table selects positions under). So
+         * a move no player can see leaves no shared line.
          * It carries `from` and `to` for the DM's own log.
          */
         move: ({ actor, campaign: campaignId }, sessionId, runId, id, payload) =>

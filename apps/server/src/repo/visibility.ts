@@ -1260,12 +1260,26 @@ export const ownSeatedCombatant = (
   sql.and([
     containedRowReadable(sql, combatant, campaignId, actor),
     sql`combatant.kind = 'pc'`,
-    sql`exists (select 1 from campaign_character
-                where campaign_character.campaign_id = ${campaignId}
-                  and campaign_character.character_id = combatant.character_id
-                  and campaign_character.account_id = ${actor.accountId}
-                  and campaign_character.left_at is null)`,
+    seatedByActor(sql, campaignId, actor),
   ]);
+
+/**
+ * Over `combatant` in scope: its character sits in an active seat this account
+ * holds at this campaign — the seat test half of `ownSeatedCombatant`, and the
+ * one fog never hides from (`liveTables.ts`' `hiddenByFog`). It grants no
+ * reach on its own: a caller composes it under a row predicate or uses it to
+ * keep a row the predicate already allowed.
+ */
+export const seatedByActor = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment =>
+  sql`exists (select 1 from campaign_character
+              where campaign_character.campaign_id = ${campaignId}
+                and campaign_character.character_id = combatant.character_id
+                and campaign_character.account_id = ${actor.accountId}
+                and campaign_character.left_at is null)`;
 
 /** Whether the named campaign accepts writes from this actor. */
 export const campaignWritableById = (

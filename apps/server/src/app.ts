@@ -591,8 +591,9 @@ export const servicesOver = <E>(
     Encounters.layer,
     // Every encounter's battle map: creator-only, every method behind the
     // `CampaignCreatorActor` proof. A read signs the picture's URLs, and only
-    // the handlers hold this repository — no toolkit has a map tool.
-    BattleMaps.layer.pipe(Layer.provide(imageUrls)),
+    // the handlers hold this repository — no toolkit has a map tool. A fight's
+    // fog is a live write, so it rings the doorbell too.
+    BattleMaps.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
     // The conversation with Hob, as rows. An ordinary campaign-scoped
     // repository — it is here rather than under `assistant` because the panel
     // reads a thread back over HTTP whether or not a model is configured.

@@ -1640,6 +1640,9 @@ const RunsLive = HttpApiBuilder.group(
       .handle("board", ({ params }) =>
         dm(params.campaignId, (as) => maps.forRun(as, params.sessionId, params.runId)),
       )
+      .handle("updateFog", ({ params, payload }) =>
+        dm(params.campaignId, (as) => maps.updateFog(as, params.sessionId, params.runId, payload)),
+      )
       .handle("hobDirectUpdates", ({ params }) =>
         dm(params.campaignId, (as) => direct.list(as, params.sessionId, params.runId)),
       )

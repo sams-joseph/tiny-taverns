@@ -153,8 +153,15 @@ export const PlayerLiveBoard = Schema.Struct({
   /** The map's picture, or `null` when there is none to show. */
   image: Schema.NullOr(BattleMapImages),
   /**
+   * The squares under fog of war, in reading order (row by row): drawn opaque,
+   * since nothing standing on one is on this player's table — neither its
+   * token nor its row of the order — but the player's own character.
+   */
+  fog: Schema.Array(CombatantPosition),
+  /**
    * The tokens on the board: only rows in this player's `order`, only those the
-   * DM has put down, and no NPC's while the DM hides hostile tokens.
+   * DM has put down, no NPC's while the DM hides hostile tokens, and none under
+   * fog but the player's own.
    */
   tokens: Schema.Array(PlayerLiveToken),
 });
