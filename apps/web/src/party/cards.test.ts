@@ -2,7 +2,8 @@ import { CampaignMember, PartySeat, type CharacterSheet } from "@taverns/api";
 import { emptyCharacterSheet } from "@taverns/api";
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { hpBand, hpFraction, passiveOf, passivePerceptionOf, savesOf } from "../characters/sheet";
+import { hpBand } from "@taverns/ui";
+import { hpFraction, passiveOf, passivePerceptionOf, savesOf } from "../characters/sheet";
 import {
   bestInParty,
   betweenThem,

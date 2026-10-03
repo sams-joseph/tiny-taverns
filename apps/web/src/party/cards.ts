@@ -1,13 +1,12 @@
 import type { CampaignCharacterId, CampaignMember, CharacterSheet, PartySeat } from "@taverns/api";
 import { partyLevel } from "../campaign/overview";
+import { hpBand, type HpBand } from "@taverns/ui";
 import {
   hitPoints,
-  hpBand,
   hpFraction,
   lineageLine,
   passiveOf,
   passivePerceptionOf,
-  type HpBand,
 } from "../characters/sheet";
 
 /**

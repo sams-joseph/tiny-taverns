@@ -73,7 +73,7 @@ describe("your characters", () => {
     expect(card.getByText("The Salt Road")).toBeTruthy();
     expect(card.getByText("Hit points")).toBeTruthy();
     expect(card.getByText("44 / 52")).toBeTruthy();
-    // The bar fills to the same two numbers, and green above two thirds.
+    // The bar fills to the same two numbers, and green above half.
     const fill = (brannoc as HTMLElement).querySelector<HTMLElement>("[data-slot=hp-fill]");
     expect(fill?.style.width).toBe("85%");
     expect(fill?.className).toContain("bg-success");

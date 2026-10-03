@@ -9,6 +9,7 @@ import {
   Icon,
   sectionHeadingVariants,
   EmptyState,
+  HpBar,
   Loading,
 } from "@taverns/ui";
 import { useState } from "react";
@@ -28,7 +29,6 @@ import {
   passivePerceptionOf,
   rosterSummary,
 } from "./sheet";
-import { HpBar } from "./SheetParts";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 /**

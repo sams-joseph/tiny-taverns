@@ -18,17 +18,21 @@ import {
   ChevronsUp,
   ChevronsUpDown,
   CircleCheck,
+  CircleDashed,
   CircleHelp,
   Clock,
+  Cloud,
   Coins,
   Copy,
   CornerDownRight,
   Crown,
+  Crosshair,
   Dice5,
   Dice6,
   Dices,
   Droplet,
   Ellipsis,
+  Eye,
   EyeOff,
   Flag,
   Flame,
@@ -57,6 +61,8 @@ import {
   Mic,
   Minus,
   Moon,
+  MousePointer2,
+  Move,
   OctagonX,
   Package,
   PanelLeft,
@@ -66,6 +72,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Ruler,
   Scale,
   ScrollText,
   Search,
@@ -153,6 +160,14 @@ import {
  * `grip-vertical` is another captain's request (2026-09-28): the handle on an
  * unplayed encounter's row that opens its *Move to top / up / down / bottom*
  * menu, and later the one a pointer drags.
+ *
+ * The encounter runner redesign (`Encounter Runner.dc.html`) adds seven: `eye`
+ * (the panel header's hide-from-players button, the counterpart of `eye-off`),
+ * `crosshair` (the attack's *Pick a target* banner), `mouse-pointer-2` (the
+ * panel's *Nothing selected*), and the board's tool dock: `move`, `ruler`
+ * (Measure), `circle-dashed` (Area) and `cloud` (Fog). It also draws `monitor`
+ * on a *Player view* toggle; that toggle was dropped, so the glyph is not here
+ * until something draws it.
  */
 export const icons = {
   archive: Archive,
@@ -173,16 +188,20 @@ export const icons = {
   "chevrons-up": ChevronsUp,
   "chevrons-up-down": ChevronsUpDown,
   "circle-check": CircleCheck,
+  "circle-dashed": CircleDashed,
   clock: Clock,
+  cloud: Cloud,
   coins: Coins,
   copy: Copy,
   "corner-down-right": CornerDownRight,
   crown: Crown,
+  crosshair: Crosshair,
   "dice-5": Dice5,
   "dice-6": Dice6,
   dices: Dices,
   droplet: Droplet,
   ellipsis: Ellipsis,
+  eye: Eye,
   "eye-off": EyeOff,
   flag: Flag,
   flame: Flame,
@@ -214,6 +233,8 @@ export const icons = {
   mic: Mic,
   minus: Minus,
   moon: Moon,
+  "mouse-pointer-2": MousePointer2,
+  move: Move,
   "octagon-x": OctagonX,
   package: Package,
   "panel-left": PanelLeft,
@@ -223,6 +244,7 @@ export const icons = {
   play: Play,
   plus: Plus,
   "refresh-cw": RefreshCw,
+  ruler: Ruler,
   scale: Scale,
   "scroll-text": ScrollText,
   search: Search,

@@ -22,6 +22,8 @@ export {
   cardLinkClassName,
   CardTitle,
 } from "./components/ui/card";
+export { HpBar, hpBand } from "./components/ui/hp-bar";
+export type { HpBand, HpBarProps } from "./components/ui/hp-bar";
 export { Icon, icons } from "./components/ui/icon";
 export type { IconName, IconProps } from "./components/ui/icon";
 export { Kbd, kbdVariants } from "./components/ui/kbd";

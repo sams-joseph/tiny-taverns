@@ -1,8 +1,7 @@
 import type { CampaignId, PartySeat } from "@taverns/api";
 import { Link } from "@tanstack/react-router";
-import { Icon } from "@taverns/ui";
+import { HpBar, Icon } from "@taverns/ui";
 import { CharacterPortrait } from "../characters/CharacterPortrait";
-import { HpBar } from "../characters/SheetParts";
 import { hitPoints, hpFraction, lineageLine } from "../characters/sheet";
 import { partyLevel } from "./overview";
 import { OverviewCard, OverviewEmpty, sectionLink } from "./OverviewParts";
@@ -13,7 +12,7 @@ import { OverviewCard, OverviewEmpty, sectionLink } from "./OverviewParts";
  * Each stat is drawn only when the character has it — `ac` and `hpMax` are null
  * until somebody writes them, and a stubbed *AC —* is the absent line this
  * product refuses. The hit points are the sheet's own words and bar
- * (`characters/sheet.ts`, `SheetParts.HpBar`), so a character reads the same
+ * (`characters/sheet.ts`, `@taverns/ui`'s `HpBar`), so a character reads the same
  * here as on its sheet and on *My characters*.
  */
 function PartyRow({ row }: { readonly row: PartySeat }) {

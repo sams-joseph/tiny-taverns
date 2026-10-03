@@ -48,6 +48,7 @@ describe("design-system adherence", () => {
       "dialog",
       "dropdown-menu",
       "filter-input",
+      "hp-bar",
       "icon",
       "input",
       "kbd",

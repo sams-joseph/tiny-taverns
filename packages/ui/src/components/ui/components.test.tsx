@@ -19,7 +19,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
-import { Icon } from "./icon";
+import { HpBar, hpBand } from "./hp-bar";
+import { Icon, icons } from "./icon";
 import { Input } from "./input";
 import {
   NavigationMenu,
@@ -111,6 +112,68 @@ describe("Icon", () => {
     expect(svg).toBeTruthy();
     expect(svg).toHaveAttribute("aria-hidden", "true");
     expect(svg).toHaveAttribute("stroke", "currentColor");
+  });
+
+  it("carries every glyph the encounter runner's drawing names, and not the dropped toggle's", () => {
+    for (const name of [
+      "eye",
+      "crosshair",
+      "move",
+      "ruler",
+      "circle-dashed",
+      "cloud",
+      "mouse-pointer-2",
+    ]) {
+      expect(icons).toHaveProperty(name);
+    }
+    expect(icons).not.toHaveProperty("monitor");
+  });
+});
+
+/**
+ * The bar's output, pinned at every step edge. These are the encounter runner
+ * drawing's bands, which every hit-point bar in the product reads: the sheet,
+ * *My characters*, Party, the Overview's party card and the initiative list.
+ */
+describe("HpBar", () => {
+  const fillOf = (fraction: number) => {
+    const { container, unmount } = render(<HpBar fraction={fraction} />);
+    const fill = container.querySelector<HTMLElement>("[data-slot=hp-fill]");
+    const drawn = {
+      fill: ["bg-danger", "bg-accent", "bg-success"].filter((name) =>
+        fill?.classList.contains(name),
+      ),
+      width: fill?.style.width,
+    };
+    unmount();
+    return drawn;
+  };
+
+  it.each([
+    [0, "bg-danger", "0%"],
+    [0.01, "bg-accent", "1%"],
+    [0.5, "bg-accent", "50%"],
+    [0.51, "bg-success", "51%"],
+    [1, "bg-success", "100%"],
+  ])("at %s fills %s to %s", (fraction, fill, width) => {
+    expect(fillOf(fraction)).toEqual({ fill: [fill], width });
+  });
+
+  it("clamps a fraction outside the track rather than overflowing it", () => {
+    expect(fillOf(-0.2)).toEqual({ fill: ["bg-danger"], width: "0%" });
+    expect(fillOf(1.4)).toEqual({ fill: ["bg-success"], width: "100%" });
+  });
+
+  it("is presentational, and takes a thinner track from the caller", () => {
+    const { container } = render(<HpBar fraction={0.4} className="h-1 w-full" />);
+    const track = container.querySelector("[data-slot=hp-bar]");
+    expect(track).toHaveAttribute("aria-hidden", "true");
+    expect(track).toHaveClass("h-1", "w-full");
+    expect(track).not.toHaveClass("h-2");
+  });
+
+  it("names the same bands the bar draws, for the words a screen says beside it", () => {
+    expect([0, 0.25, 0.5, 0.5001, 1].map(hpBand)).toEqual(["down", "low", "low", "well", "well"]);
   });
 });
 
