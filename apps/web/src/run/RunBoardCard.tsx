@@ -1,8 +1,21 @@
-import { Card, Icon, SectionHeading, Toggle } from "@taverns/ui";
+import {
+  Button,
+  Card,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  Icon,
+  SectionHeading,
+  Toggle,
+} from "@taverns/ui";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 import { BattleMapBoard } from "../campaign/BattleMapBoard";
 import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
 import { RunTokens, TokenTray } from "./RunTokens";
+import { TOKEN_NAMES, type TokenNames } from "./tokens";
 
 /**
  * The fight's board: **open, and the DM's own.** The runner is the creator's
@@ -24,15 +37,22 @@ import { RunTokens, TokenTray } from "./RunTokens";
  *
  * *Grid* is the DM's view of it, not a write: it hides the lines on this screen
  * and nowhere else, and the squares still measure and still take a token.
+ * *Names* is too: which tokens wear their name, kept on this browser
+ * (`tokenNames.ts`).
  * *Hide from players* is a write (`EncounterRun.hostileTokensHidden`): every
  * token but the party's comes off the players' board at once, while their rows
  * stay in the players' order. It can be set before the map is shared, so a
  * fight can open with the monsters already hidden.
  */
-/** The DM's two board switches: *Grid* (this screen's view) and *Hide from players* (a write). */
+/**
+ * The DM's board switches: *Grid* and *Names* (this screen's view) and *Hide
+ * from players* (a write).
+ */
 export function BoardToggles({
   gridShown,
   setGrid,
+  names,
+  setNames,
   over,
   hostileTokensHidden,
   hiding,
@@ -40,6 +60,8 @@ export function BoardToggles({
 }: {
   readonly gridShown: boolean;
   readonly setGrid: (shown: boolean) => void;
+  readonly names: TokenNames;
+  readonly setNames: (names: TokenNames) => void;
   readonly over: boolean;
   readonly hostileTokensHidden: boolean;
   readonly hiding: boolean;
@@ -51,6 +73,7 @@ export function BoardToggles({
         <Icon name="grid-3x3" size={13} />
         Grid
       </Toggle>
+      <TokenNamesMenu names={names} onChange={setNames} />
       <Toggle
         size="sm"
         pressed={hostileTokensHidden}
@@ -64,9 +87,53 @@ export function BoardToggles({
   );
 }
 
+const LABEL: Readonly<Record<TokenNames, string>> = {
+  active: "Active and selected",
+  all: "Every token",
+  none: "None",
+};
+
+/** The board's *Names* menu (`useTokenNames`): the three choices, the current one checked. */
+function TokenNamesMenu({
+  names,
+  onChange,
+}: {
+  readonly names: TokenNames;
+  readonly onChange: (names: TokenNames) => void;
+}) {
+  const name = `Names on tokens — ${LABEL[names]}`;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={name}
+        title={name}
+        render={<Button variant="ghost" size="sm" />}
+      >
+        Names
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center">
+        <DropdownMenuRadioGroup
+          value={names}
+          onValueChange={(next) => {
+            const chosen = TOKEN_NAMES.find((option) => option === next);
+            if (chosen !== undefined) onChange(chosen);
+          }}
+        >
+          <DropdownMenuLabel>Names on tokens</DropdownMenuLabel>
+          {TOKEN_NAMES.map((option) => (
+            <DropdownMenuRadioItem key={option} value={option} closeOnClick>
+              {LABEL[option]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function RunBoardCard(props: RunBoardProps) {
   const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
-  const { board, gridShown, setGrid, hint, withBoard } = useRunBoard(props);
+  const { board, gridShown, setGrid, names, setNames, hint, withBoard } = useRunBoard(props);
 
   if (resource.state === "loading") return null;
   if (resource.state === "ready" && board === null) return null;
@@ -98,6 +165,8 @@ export function RunBoardCard(props: RunBoardProps) {
               <BoardToggles
                 gridShown={gridShown}
                 setGrid={setGrid}
+                names={names}
+                setNames={setNames}
                 over={over}
                 hostileTokensHidden={hostileTokensHidden}
                 hiding={hiding}

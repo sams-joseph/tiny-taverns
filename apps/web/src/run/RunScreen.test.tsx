@@ -1354,18 +1354,52 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
   const bossMove = () => `POST ${serverRunBase()}/combatants/${goblinBoss.id}/move`;
 
   /**
-   * Click the board at a square. jsdom lays nothing out, so the squares' layer
-   * is given the box a browser would: 240 × 160 for the fixture's 24 × 16
-   * board, ten pixels a square, and the click lands in the middle of one.
+   * jsdom lays nothing out, so the tokens' layer is given the box a browser
+   * would: 240 × 160 for the fixture's 24 × 16 board, ten pixels a square.
    */
+  const layOut = () => {
+    const layer = document.querySelector<HTMLElement>("[data-slot=run-tokens]");
+    if (layer === null) throw new Error("no board");
+    vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    );
+  };
+  /** The middle of a square, on that laid-out board. */
+  const middle = (column: number, row: number) => ({
+    clientX: column * 10 + 5,
+    clientY: row * 10 + 5,
+  });
+
+  /** Click the board at a square: where a token from the tray goes down. */
   const clickSquare = (column: number, row: number) => {
     const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]");
     if (squares === null) throw new Error("no board to click");
-    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
-    );
-    fireEvent.click(squares, { clientX: column * 10 + 5, clientY: row * 10 + 5 });
+    layOut();
+    fireEvent.click(squares, middle(column, row));
   };
+
+  /** Press a token, carry it over each square in turn, and leave it on the last (or don't). */
+  const drag = (
+    from: HTMLElement,
+    path: ReadonlyArray<readonly [number, number]>,
+    end: "drop" | "hold" = "drop",
+  ) => {
+    layOut();
+    const start = path[0]!;
+    fireEvent.pointerDown(from, { pointerId: 7, button: 0, ...middle(...start) });
+    for (const [column, row] of path.slice(1)) {
+      fireEvent.pointerMove(from, { pointerId: 7, ...middle(column, row) });
+    }
+    if (end === "drop") {
+      const last = path.at(-1)!;
+      fireEvent.pointerUp(from, { pointerId: 7, ...middle(...last) });
+    }
+  };
+  const ruler = () => document.querySelector<HTMLElement>("[data-slot=ruler-reading]");
+  const range = () =>
+    [
+      ...document.querySelectorAll<SVGElement>("[data-slot=run-tokens] [data-slot=range-square]"),
+    ].map((square) => square.dataset.square);
 
   /** The runner, once its board has answered. */
   const open = async () => {
@@ -1435,29 +1469,45 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(card().queryByRole("group", { name: "Not on the board" })).toBeNull();
   });
 
-  it("moves the selected token, says how far, and says when it went past their speed", async () => {
+  it("moves a dragged token, with a ruler on the way, and says how far it went", async () => {
+    let answer: (value: void) => void = () => {};
+    const answered = new Promise<void>((resolve) => (answer = resolve));
     server.routes.set(brannocMove(), {
       status: 200,
       body: { ...brannocPlaced, position: { column: 11, row: 2 } },
+      until: answered,
     });
     await open();
-    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
-    // His sheet says 25 ft: five squares every way from where he stands.
-    const reach = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>("[data-slot=token-reach]");
-      expect(found).not.toBeNull();
-      return found!;
-    });
-    expect(reach.style.left).toBe("0%");
-    expect(reach.style.top).toBe("0%");
-    expect(reach.style.width).toMatch(/^45\.8333/);
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
 
-    clickSquare(11, 2);
-
-    await waitFor(() =>
-      expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 11, row: 2 } }),
+    drag(
+      brannocToken,
+      [
+        [5, 4],
+        [8, 3],
+        [11, 2],
+      ],
+      "hold",
     );
-    // Six squares on the diagonal's long side is 30 ft, past his 25.
+    // He is up, so the ruler counts against his 25 ft: six squares is 30.
+    await waitFor(() => expect(ruler()).toHaveTextContent("30 ft · 5 over"));
+    expect(ruler()).toHaveAttribute("data-verdict", "over");
+    // The token rides under the pointer, and wears its name while carried.
+    expect(brannocToken.style.left).toMatch(/^45\.8333/);
+    expect(within(brannocToken).getByText("Brannoc")).toBeInTheDocument();
+    expect(moves()).toEqual([]);
+
+    fireEvent.pointerUp(brannocToken, { pointerId: 7, ...middle(11, 2) });
+    await waitFor(() => expect(moves()).toHaveLength(1));
+    expect(bodyOf(server, "POST", "/move")).toMatchObject({
+      position: { column: 11, row: 2 },
+      requestId: expect.any(String),
+    });
+    expect(ruler()).toBeNull();
+    // Until the server answers, the token stays where it was dropped.
+    expect(brannocToken.style.left).toMatch(/^45\.8333/);
+
+    answer();
     await waitFor(() =>
       expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
     );
@@ -1474,17 +1524,196 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
       body: { ...brannocPlaced, position: { column: 9, row: 8 } },
     });
     await open();
-    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
 
-    clickSquare(9, 8);
-
+    drag(
+      brannocToken,
+      [
+        [5, 4],
+        [9, 8],
+      ],
+      "hold",
+    );
     // Four squares on each side alternate 5, 10, 5, 10: 30 ft, not 20.
+    await waitFor(() => expect(ruler()).toHaveTextContent("30 ft · 5 over"));
+    fireEvent.pointerUp(brannocToken, { pointerId: 7, ...middle(9, 8) });
     await waitFor(() =>
       expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
     );
   });
 
+  it("reads plain feet for a creature whose turn it is not, and what is left for the one up", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 20, row: 10 } }],
+    });
+    await open();
+    drag(
+      await card().findByRole("button", { name: /^Goblin Boss,/ }),
+      [
+        [20, 10],
+        [17, 10],
+      ],
+      "hold",
+    );
+    await waitFor(() => expect(ruler()).toHaveTextContent(/^15 ft$/));
+    expect(ruler()).toHaveAttribute("data-verdict", "distance");
+    fireEvent.pointerCancel(token("Goblin Boss"), { pointerId: 7 });
+    await waitFor(() => expect(ruler()).toBeNull());
+
+    drag(
+      token("Brannoc"),
+      [
+        [5, 4],
+        [7, 4],
+      ],
+      "hold",
+    );
+    await waitFor(() => expect(ruler()).toHaveTextContent("10 ft · 15 left"));
+    expect(ruler()).toHaveAttribute("data-verdict", "left");
+  });
+
+  it("refuses a drop on a square someone holds, and a drag that ends where it began", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 7, row: 4 } }],
+    });
+    await open();
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+
+    drag(
+      brannocToken,
+      [
+        [5, 4],
+        [7, 4],
+      ],
+      "hold",
+    );
+    await waitFor(() => expect(ruler()).toHaveTextContent("Occupied"));
+    fireEvent.pointerUp(brannocToken, { pointerId: 7, ...middle(7, 4) });
+    // Back on his own square, and nothing sent.
+    await waitFor(() => expect(brannocToken.style.left).toMatch(/^20\.8333/));
+
+    drag(brannocToken, [
+      [5, 4],
+      [9, 4],
+      [5, 4],
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(moves()).toEqual([]);
+  });
+
+  it("tints the squares the active creature can reach, less the ones others hold", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 6, row: 4 } }],
+    });
+    await open();
+    // He is up and followed: his 25 ft is five squares every way from (5, 4),
+    // cut at the board's top edge, less his own square and the boss's.
+    await waitFor(() => expect(range()).toHaveLength(11 * 10 - 2));
+    expect(range()).toContain("0,0");
+    expect(range()).toContain("10,9");
+    expect(range()).not.toContain("5,4");
+    expect(range()).not.toContain("6,4");
+    expect(range()).not.toContain("11,4");
+
+    // A creature whose turn it is not shows no range when selected.
+    await userEvent.click(token("Goblin Boss"));
+    await waitFor(() => expect(panel().getByText("Goblin Boss")).toBeInTheDocument());
+    expect(range()).toEqual([]);
+  });
+
+  it("dresses each token: hit points, conditions, a hidden ring and a struck-out monster", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        { ...brannocPlaced, conditions: ["Blessed", "Concentrating"], visibility: "shared" },
+        {
+          ...goblinBoss,
+          position: { column: 20, row: 10 },
+          hpCurrent: 0,
+          conditions: [],
+          visibility: "dm",
+        },
+      ],
+    });
+    await open();
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+    const boss = token("Goblin Boss");
+
+    expect(brannocToken.querySelectorAll("[data-slot=hp-bar]")).toHaveLength(1);
+    expect(boss.querySelectorAll("[data-slot=hp-bar]")).toHaveLength(1);
+    expect(within(brannocToken).getByText("2")).toHaveAttribute("data-slot", "token-conditions");
+    expect(boss.querySelector("[data-slot=token-conditions]")).toBeNull();
+    // The boss is down and held back: faded, struck, and dashed on the DM's board.
+    expect(boss.className).toMatch(/(^|\s)opacity-45(\s|$)/);
+    expect(boss.querySelector("text")?.getAttribute("class")).toMatch(/line-through/);
+    expect(boss.querySelector("[data-ring=hidden]")).not.toBeNull();
+    expect(brannocToken.querySelector("[data-ring=hidden]")).toBeNull();
+    // He is up and followed: the active ring, and his name under him.
+    expect(brannocToken.querySelector("[data-ring=active]")).not.toBeNull();
+    expect(within(brannocToken).getByText("Brannoc")).toHaveAttribute("data-slot", "token-name");
+    expect(within(boss).queryByText("Goblin Boss")).toBeNull();
+  });
+
+  it("names every token, or none, by the DM's choice, kept on this browser", async () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => kept.set(key, value),
+    });
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [brannocPlaced, { ...goblinBoss, position: { column: 20, row: 10 } }],
+    });
+    await open();
+    await card().findByRole("button", { name: /^Goblin Boss,/ });
+    const named = () =>
+      [...document.querySelectorAll("[data-slot=run-tokens] [data-slot=token-name]")].map(
+        (name) => name.textContent,
+      );
+    expect(named()).toEqual(["Brannoc"]);
+
+    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Every token" }));
+    await waitFor(() => expect(named()).toEqual(["Brannoc", "Goblin Boss"]));
+    expect(kept.get("taverns:run:token-names")).toBe("all");
+
+    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
+    await waitFor(() => expect(named()).toEqual([]));
+    // A view, not a write.
+    expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it("opens on the choice this browser kept", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "none", setItem: () => undefined });
+    await open();
+    await card().findByRole("button", { name: /^Brannoc,/ });
+    expect(document.querySelector("[data-slot=run-tokens] [data-slot=token-name]")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("draws the board, and keeps a choice for the visit, when this browser keeps no storage", async () => {
+    const blocked = () => {
+      throw new Error("blocked");
+    };
+    vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked });
+    await open();
+    await card().findByRole("button", { name: /^Brannoc,/ });
+    const name = () => document.querySelector("[data-slot=run-tokens] [data-slot=token-name]");
+    // The drawing's default stands in.
+    expect(name()?.textContent).toBe("Brannoc");
+    await userEvent.click(card().getByRole("button", { name: /^Names on tokens/ }));
+    await userEvent.click(await screen.findByRole("menuitemradio", { name: "None" }));
+    await waitFor(() => expect(name()).toBeNull());
+    vi.unstubAllGlobals();
+  });
+
   it("reaches as far as a stat block's speed, and draws no range where none is written", async () => {
+    const guard = "2b1f2a1e-0000-4000-8000-000000000c99";
     server.routes.set(`GET ${serverRunBase()}/combatants`, {
       status: 200,
       body: [
@@ -1492,25 +1721,30 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
         { ...goblinBoss, position: { column: 20, row: 10 } },
         {
           ...goblinBoss,
-          id: "2b1f2a1e-0000-4000-8000-000000000c99",
+          id: guard,
           creatureId: null,
           displayName: "Guard",
           position: { column: 1, row: 1 },
         },
       ],
     });
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
     await open();
-    await userEvent.click(await card().findByRole("button", { name: /^Goblin Boss,/ }));
     // "30 ft." is six squares: from column 14 to the board's last, 23.
-    await waitFor(() =>
-      expect(document.querySelector<HTMLElement>("[data-slot=token-reach]")?.style.left).toMatch(
-        /^58\.3333/,
-      ),
-    );
+    await waitFor(() => expect(range()).toContain("14,10"));
+    expect(range()).not.toContain("13,10");
+    expect(range()).toContain("23,15");
 
+    server.routes.set(`GET ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: guard },
+    });
     await userEvent.click(token("Guard"));
     await waitFor(() => expect(panel().getByText("Guard")).toBeInTheDocument());
-    expect(document.querySelector("[data-slot=token-reach]")).toBeNull();
+    expect(range()).toEqual([]);
   });
 
   it("walks a focused token a square with the arrow keys", async () => {
@@ -1566,12 +1800,16 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
       body: { _tag: "Conflict", message: "that square is off the board" },
     });
     await open();
-    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
-    clickSquare(9, 9);
+    const brannocToken = await card().findByRole("button", { name: /^Brannoc,/ });
+    drag(brannocToken, [
+      [5, 4],
+      [9, 9],
+    ]);
 
     await screen.findByText("Brannoc did not move");
     expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 6, row 5");
-    expect(hint()).toHaveTextContent("Click a square to move Brannoc.");
+    await waitFor(() => expect(brannocToken.style.left).toMatch(/^20\.8333/));
+    expect(hint()).toHaveTextContent("Drag Brannoc to a square, or step with the arrow keys.");
   });
 
   it("hides the grid on this screen only, and the squares still take a token", async () => {
@@ -1584,8 +1822,10 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     expect(document.querySelectorAll("[data-line=column]")).toHaveLength(0);
     expect(server.calls.filter((call) => call.method !== "GET")).toEqual([]);
 
-    await userEvent.click(token("Brannoc"));
-    clickSquare(7, 4);
+    drag(token("Brannoc"), [
+      [5, 4],
+      [7, 4],
+    ]);
     await waitFor(() => expect(moves()).toHaveLength(1));
   });
 
@@ -1597,8 +1837,11 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     }
     await open();
     await screen.findByText(/came off the table/);
-    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
-    clickSquare(9, 9);
+    drag(await card().findByRole("button", { name: /^Brannoc,/ }), [
+      [5, 4],
+      [9, 9],
+    ]);
+    expect(ruler()).toBeNull();
     token("Brannoc").focus();
     await userEvent.keyboard("{ArrowRight}");
 
@@ -1672,7 +1915,10 @@ describe.each(layouts)("what the table sees of the map, on $layout", ({ wide }) 
   it("hides every monster token from the players at once, and fades them here", async () => {
     server.routes.set(`GET ${serverRunBase()}/combatants`, {
       status: 200,
-      body: [brannocPlaced, { ...goblinBoss, position: { column: 9, row: 4 } }],
+      body: [
+        { ...brannocPlaced, visibility: "shared" },
+        { ...goblinBoss, position: { column: 9, row: 4 }, visibility: "shared" },
+      ],
     });
     await renderRunner();
     await screen.findByRole("region", { name: "Battle map" });
@@ -1680,17 +1926,19 @@ describe.each(layouts)("what the table sees of the map, on $layout", ({ wide }) 
     const hide = card().getByRole("button", { name: "Hide from players" });
     expect(hide).toHaveAttribute("aria-pressed", "false");
     expect(boss.className).not.toMatch(/opacity-/);
+    expect(boss.querySelector("[data-ring=hidden]")).toBeNull();
 
     answerRun({ hostileTokensHidden: true });
     await userEvent.click(hide);
     await waitFor(() => expect(hide).toHaveAttribute("aria-pressed", "true"));
     expect(runPatches()).toEqual([{ hostileTokensHidden: true }]);
-    expect(card().getByRole("button", { name: /^Goblin Boss, column/ }).className).toMatch(
-      /opacity-60/,
-    );
-    expect(card().getByRole("button", { name: /^Brannoc, column/ }).className).not.toMatch(
-      /opacity-/,
-    );
+    // Off the players' board: faded and dashed here, the party untouched.
+    const hidden = card().getByRole("button", { name: /^Goblin Boss, column/ });
+    expect(hidden.className).toMatch(/opacity-70/);
+    expect(hidden.querySelector("[data-ring=hidden]")).not.toBeNull();
+    const brannocToken = card().getByRole("button", { name: /^Brannoc, column/ });
+    expect(brannocToken.className).not.toMatch(/opacity-/);
+    expect(brannocToken.querySelector("[data-ring=hidden]")).toBeNull();
 
     answerRun({ hostileTokensHidden: false });
     await userEvent.click(hide);
@@ -1770,7 +2018,10 @@ describe("the canvas", () => {
     expect(tools.getByRole("button", { name: "Grid" })).toBeInTheDocument();
     expect(tools.getByRole("button", { name: "Hide from players" })).toBeInTheDocument();
     expect(tools.getByRole("group", { name: "Zoom" })).toBeInTheDocument();
-    expect(tools.getByRole("status")).toHaveTextContent("Click a square to move Brannoc.");
+    expect(tools.getByRole("button", { name: /^Names on tokens/ })).toBeInTheDocument();
+    expect(tools.getByRole("status")).toHaveTextContent(
+      "Drag Brannoc to a square, or step with the arrow keys.",
+    );
     expect(tools.getByRole("group", { name: "Not on the board" })).toBeInTheDocument();
     expect(hud("tools")).toHaveTextContent("24 × 16 squares · 5 ft each · 120 × 80 ft");
     // The header keeps the fight's switches and its one peach.
@@ -1815,11 +2066,23 @@ describe("the canvas", () => {
     expect(zoomOf()).toBeGreaterThan(zoom);
   });
 
-  it("pans on a drag over the board, and the drag's click moves nobody", async () => {
+  it("pans on a drag over the board, and the drag's click puts nobody down", async () => {
+    server.routes.set(`POST ${serverRunBase()}/combatants/${goblinBoss.id}/move`, {
+      status: 200,
+      body: { ...goblinBoss, position: { column: 1, row: 1 } },
+    });
     await open();
     await waitFor(() =>
       expect(within(board()).getByRole("button", { name: /^Brannoc,/ })).toBeInTheDocument(),
     );
+    // The Goblin Boss is in the tray, so a click on a square would put him down.
+    await userEvent.click(
+      within(hud("tools")).getByRole("button", { name: "Goblin Boss, not on the board" }),
+    );
+    vi.spyOn(
+      document.querySelector<HTMLElement>("[data-slot=run-tokens]")!,
+      "getBoundingClientRect",
+    ).mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }));
     const squares = document.querySelector<HTMLElement>("[data-slot=run-board-squares]")!;
 
     fireEvent.pointerDown(squares, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
@@ -1831,20 +2094,34 @@ describe("the canvas", () => {
     expect(panOf().y).toBeCloseTo(30);
     expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(false);
 
-    // A press that does not travel is still the click that moves the token.
-    server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/move`, {
-      status: 200,
-      body: { ...brannocPlaced, position: { column: 1, row: 1 } },
-    });
-    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
-    );
+    // A press that does not travel is still the click that puts him down.
     fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
     fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
     fireEvent.click(squares, { detail: 1, clientX: 15, clientY: 15 });
     await waitFor(() =>
       expect(server.calls.some((call) => call.pathname.endsWith("/move"))).toBe(true),
     );
+    expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 1, row: 1 } });
+  });
+
+  it("moves a token dragged on the canvas, and pans nothing", async () => {
+    await open();
+    const brannocToken = await within(board()).findByRole("button", { name: /^Brannoc,/ });
+    const before = panOf();
+    vi.spyOn(
+      document.querySelector<HTMLElement>("[data-slot=run-tokens]")!,
+      "getBoundingClientRect",
+    ).mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }));
+
+    fireEvent.pointerDown(brannocToken, { pointerId: 3, button: 0, clientX: 55, clientY: 45 });
+    fireEvent.pointerMove(brannocToken, { pointerId: 3, clientX: 75, clientY: 45 });
+    fireEvent.pointerUp(brannocToken, { pointerId: 3, clientX: 75, clientY: 45 });
+    fireEvent.click(brannocToken, { detail: 1, clientX: 75, clientY: 45 });
+
+    await waitFor(() =>
+      expect(bodyOf(server, "POST", "/move")).toMatchObject({ position: { column: 7, row: 4 } }),
+    );
+    expect(panOf()).toEqual(before);
   });
 
   it("lets the next click through after a drag that was cancelled", async () => {
@@ -1859,13 +2136,17 @@ describe("the canvas", () => {
     fireEvent.pointerCancel(squares, { pointerId: 1, clientX: 160, clientY: 130 });
     expect(panOf().x).toBeCloseTo(60);
 
-    server.routes.set(`POST ${serverRunBase()}/combatants/${brannoc.id}/move`, {
+    server.routes.set(`POST ${serverRunBase()}/combatants/${goblinBoss.id}/move`, {
       status: 200,
-      body: { ...brannocPlaced, position: { column: 1, row: 1 } },
+      body: { ...goblinBoss, position: { column: 1, row: 1 } },
     });
-    vi.spyOn(squares, "getBoundingClientRect").mockReturnValue(
-      DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }),
+    await userEvent.click(
+      within(hud("tools")).getByRole("button", { name: "Goblin Boss, not on the board" }),
     );
+    vi.spyOn(
+      document.querySelector<HTMLElement>("[data-slot=run-tokens]")!,
+      "getBoundingClientRect",
+    ).mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 240, height: 160 }));
     fireEvent.pointerDown(squares, { pointerId: 2, button: 0, clientX: 15, clientY: 15 });
     fireEvent.pointerUp(squares, { pointerId: 2, clientX: 15, clientY: 15 });
     fireEvent.click(squares, { detail: 1, clientX: 15, clientY: 15 });

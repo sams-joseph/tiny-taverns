@@ -4,6 +4,7 @@ import type { Resource } from "../api/failure";
 import { describeBoard } from "../campaign/BattleMapBoard";
 import { useHobDrawingPolling } from "../hob/drawingPolling";
 import type { TokenProps } from "./RunTokens";
+import { useTokenNames } from "./tokenNames";
 import { moveLine } from "./tokens";
 
 export interface RunBoardProps {
@@ -12,7 +13,7 @@ export interface RunBoardProps {
   /** The fight is off the table: the board is where everyone finished. */
   readonly over: boolean;
   /** Everything but the board, which this card reads. */
-  readonly tokens: Omit<TokenProps, "board" | "onMove" | "hostileTokensHidden"> & {
+  readonly tokens: Omit<TokenProps, "board" | "onMove" | "hostileTokensHidden" | "names"> & {
     /** The move's write; resolves true once the server has the square. */
     readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<boolean>;
   };
@@ -25,8 +26,9 @@ export interface RunBoardProps {
 
 /**
  * What both forms of the board share — the card below `@3xl` and the canvas
- * above it (`RunStage.tsx`): the board itself, the local *Grid*, the hint and
- * the last move's line, and the tokens' props with the move wired through it.
+ * above it (`RunStage.tsx`): the board itself, the local *Grid* and *Names*,
+ * the hint and the last move's line, and the tokens' props with the move wired
+ * through it.
  */
 export function useRunBoard({
   resource,
@@ -41,6 +43,7 @@ export function useRunBoard({
   useHobDrawingPolling(board?.imagePending === true, reload);
   const [grid, setGrid] = useState<boolean>();
   const [lastMove, setLastMove] = useState<string>();
+  const [names, setNames] = useTokenNames();
 
   const gridShown = grid ?? board?.grid === "square";
   const { selected } = tokens;
@@ -48,12 +51,12 @@ export function useRunBoard({
     ? "Where everyone stood when it ended."
     : (lastMove ??
       (selected === undefined
-        ? "Select a token, then click a square to move it."
+        ? "Drag a token to its square."
         : selected.position === null
           ? `Click a square to put ${selected.displayName} on the board.`
-          : `Click a square to move ${selected.displayName}.`));
+          : `Drag ${selected.displayName} to a square, or step with the arrow keys.`));
 
-  const onMove = (combatant: Combatant, to: BoardSquare | null) => {
+  const onMove = async (combatant: Combatant, to: BoardSquare | null) => {
     if (board === null) return;
     const line = moveLine({
       name: combatant.displayName,
@@ -63,13 +66,11 @@ export function useRunBoard({
       diagonals: tokens.diagonals,
       speed: tokens.speedOf(combatant),
     });
-    void tokens.onMove(combatant, to).then((moved) => {
-      if (moved) setLastMove(line);
-    });
+    if (await tokens.onMove(combatant, to)) setLastMove(line);
   };
   const withBoard: TokenProps | undefined =
-    board === null ? undefined : { ...tokens, board, onMove, hostileTokensHidden };
-  return { board, gridShown, setGrid, hint, withBoard };
+    board === null ? undefined : { ...tokens, board, onMove, hostileTokensHidden, names };
+  return { board, gridShown, setGrid, names, setNames, hint, withBoard };
 }
 
 /** The board's size in the DM's units, and what a deleted encounter took with it. */

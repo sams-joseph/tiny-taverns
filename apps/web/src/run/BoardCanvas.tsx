@@ -28,9 +28,10 @@ import {
  * panels, and the DM pans it and zooms it (`canvas.ts` is the arithmetic).
  *
  * - **Pan**: drag anywhere but a token, or scroll (a wheel, a trackpad's two
- *   fingers). A drag that moved is a pan and its click is swallowed, so letting
- *   go over a square never moves the selected token there; a press that did
- *   not move is still the click that places it (`RunTokens.tsx`).
+ *   fingers). A drag that starts on a token moves the token (`RunTokens.tsx`)
+ *   and never reaches the canvas. A drag that moved is a pan and its click is
+ *   swallowed, so letting go over a square never puts a token from the tray
+ *   there; a press that did not move is still the click that places it.
  * - **Zoom**: ⌘/Ctrl and the wheel, a trackpad pinch (which the browser sends
  *   as exactly that), two fingers on a touch screen, or the dock's −, + and
  *   *Fit*. The wheel and the fingers zoom about the point under them.
@@ -175,7 +176,7 @@ export function BoardCanvas({
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     swallowClick.current = false;
-    // A token is pressed, not dragged, until the board learns to drag tokens.
+    // A press on a token is the token's own drag, not a pan.
     if (event.button !== 0 || (event.target as Element).closest("button") !== null) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     gesture.current = {

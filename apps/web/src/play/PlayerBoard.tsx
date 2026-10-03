@@ -8,7 +8,7 @@ import {
 import { Card, Icon, SectionHeading, cn } from "@taverns/ui";
 import { useMemo } from "react";
 import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
-import { TokenFace } from "../run/RunTokens";
+import { TokenFace } from "../run/TokenFace";
 import { labelsInOrder, percentOf } from "../run/tokens";
 
 /**
@@ -24,10 +24,11 @@ import { labelsInOrder, percentOf } from "../run/tokens";
  *
  * A token is a row of the player's order standing on a square: the server
  * sends only those (`tokenShown`), so a hidden creature, or every monster while
- * the DM hides them, is simply not here. Each wears the DM's face — the party's
- * colour or everyone else's, the one whose turn it is ringed, yours ringed
- * twice as the DM's selected token is — and fades when it is down. Nothing
- * takes a click: players do not move tokens.
+ * the DM hides them, is simply not here. Each wears the DM's face
+ * (`run/TokenFace.tsx`) — ringed in the party's colour or everyone else's, the
+ * one whose turn it is ringed peach, yours ringed as the DM's selected token
+ * is — and fades when it is down. Nothing takes a click: players do not move
+ * tokens.
  *
  * The numbers on two tokens of one name follow this player's order, since the
  * table answers no creation time; they need not match the DM's board.
