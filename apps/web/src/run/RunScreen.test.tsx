@@ -702,6 +702,29 @@ describe("the runner", () => {
     );
   });
 
+  it("shows each chip's armour class beside its disc", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(rowFor("Brannoc").querySelector("[data-slot=strip-ac]")).toHaveTextContent("AC 18");
+    expect(rowFor("Goblin Boss").querySelector("[data-slot=strip-ac]")).toHaveTextContent("AC 17");
+  });
+
+  it("names a chip's conditions in a tooltip on hover and on focus", async () => {
+    // Base UI's tooltip popup carries no role, so it is found by its slot.
+    const tooltip = () => document.querySelector("[data-slot=tooltip-content]");
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.hover(rowFor("Goblin Boss"));
+    await waitFor(() => expect(tooltip()).toHaveTextContent("Hostile"));
+    await userEvent.unhover(rowFor("Goblin Boss"));
+    await waitFor(() => expect(tooltip()).toBeNull());
+
+    rowFor("Brannoc").focus();
+    await userEvent.tab();
+    expect(rowFor("Goblin Boss")).toHaveFocus();
+    await waitFor(() => expect(tooltip()).toHaveTextContent("Hostile"));
+  });
+
   it("adds a combatant from the strip's trailing chip", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));

@@ -44,8 +44,8 @@ import { outOfTheFight } from "./load";
  *   the DM can find who still needs a square: select the chip, then click one.
  *
  * Too many chips for the width scroll sideways with the scrollbar hidden, as
- * drawn: every chip is a button the keyboard reaches, scrolled into view as it
- * takes focus; whoever is up is scrolled into view when the turn moves; and on
+ * drawn: every chip is a button the keyboard reaches, brought onto the strip as
+ * it takes focus; whoever is up is brought onto it when the turn moves; and on
  * the canvas, where no page scrolls under the pointer, a wheel walks the strip
  * along. In the window-scrolling grid the wheel stays the page's, and a
  * trackpad, a finger or shift and the wheel scroll the strip sideways.
@@ -93,8 +93,7 @@ export function InitiativeStrip({
   useEffect(() => {
     if (activeId === null) return;
     const chip = scroller.current?.querySelector<HTMLElement>(`[data-combatant="${activeId}"]`);
-    // `nearest` moves the strip only when the chip is off it, and never the page.
-    chip?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    if (chip) reveal(chip);
   }, [activeId]);
 
   // A mouse wheel has no sideways axis, and on the canvas nothing scrolls
@@ -237,7 +236,7 @@ function StripChip({
     .filter((part) => part !== undefined)
     .join(", ");
 
-  return (
+  const chip = (
     <button
       type="button"
       data-combatant={combatant.id}
@@ -246,9 +245,7 @@ function StripChip({
       aria-current={active ? "step" : undefined}
       onClick={onSelect}
       // The browser's own focus scroll can stop short of the strip's end.
-      onFocus={(event) =>
-        event.currentTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" })
-      }
+      onFocus={(event) => reveal(event.currentTarget)}
       className={cn(
         "flex h-13 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md border px-1.5 text-left",
         "transition-control outline-none focus-visible:ring-focus",
@@ -268,13 +265,24 @@ function StripChip({
       >
         {combatant.initiative ?? "—"}
       </span>
-      <StripDisc
-        label={label}
-        party={party}
-        hidden={hidden}
-        conditions={combatant.conditions.length}
-        portrait={party && combatant.portrait !== null ? combatant.portrait.thumbUrl : undefined}
-      />
+      <span className="flex shrink-0 flex-col items-center gap-0.5">
+        <StripDisc
+          label={label}
+          party={party}
+          hidden={hidden}
+          conditions={combatant.conditions.length}
+          portrait={party && combatant.portrait !== null ? combatant.portrait.thumbUrl : undefined}
+        />
+        {combatant.ac !== null && (
+          <span
+            aria-hidden="true"
+            data-slot="strip-ac"
+            className="text-micro leading-none whitespace-nowrap text-muted-foreground"
+          >
+            AC {combatant.ac}
+          </span>
+        )}
+      </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="flex min-w-0 items-center gap-1">
           <span
@@ -308,7 +316,25 @@ function StripChip({
       </span>
     </button>
   );
+
+  if (combatant.conditions.length === 0) return chip;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={chip} />
+      <TooltipContent>{combatant.conditions.join(", ")}</TooltipContent>
+    </Tooltip>
+  );
 }
+
+/** Scroll the strip, and never the page under it, so a chip stands whole on it. */
+const reveal = (chip: HTMLElement) => {
+  const strip = chip.closest("ol");
+  if (strip === null) return;
+  const box = strip.getBoundingClientRect();
+  const at = chip.getBoundingClientRect();
+  if (at.left < box.left) strip.scrollLeft -= box.left - at.left;
+  else if (at.right > box.right) strip.scrollLeft += at.right - box.right;
+};
 
 /**
  * The drawing's disc: the board's initials, ringed in the side's colour — the
@@ -316,7 +342,7 @@ function StripChip({
  * players. A PC's portrait, when its seat lets the DM see one, is laid over the
  * initials, which stand under one still loading or failed (`DrawnImage`).
  * The conditions it carries are counted on its shoulder, as the drawing counts
- * them on a token; the words are the selected card's and the chip's name.
+ * them on a token; the chip's tooltip and name say which.
  */
 function StripDisc({
   label,
