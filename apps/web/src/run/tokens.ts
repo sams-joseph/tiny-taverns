@@ -3,6 +3,7 @@ import {
   type BoardSquare,
   type Combatant,
   type CombatantId,
+  type DiagonalRule,
   type PictureRect,
   cellRect,
   feetBetween,
@@ -112,17 +113,19 @@ export const moveLine = ({
   from,
   to,
   feetPerCell,
+  diagonals,
   speed,
 }: {
   readonly name: string;
   readonly from: BoardSquare | null;
   readonly to: BoardSquare | null;
   readonly feetPerCell: number;
+  readonly diagonals: DiagonalRule;
   readonly speed: number | undefined;
 }): string => {
   if (to === null) return `${name} is off the board`;
   if (from === null) return `${name} is on the board`;
-  const feet = feetBetween(from, to, { feetPerCell, diagonals: "five" });
+  const feet = feetBetween(from, to, { feetPerCell, diagonals });
   const past = speed !== undefined && feet > speed ? `, past their ${String(speed)} ft speed` : "";
   return `${name} moved ${String(feet)} ft${past}`;
 };

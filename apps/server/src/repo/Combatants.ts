@@ -1018,7 +1018,6 @@ export class Combatants extends Context.Service<
                     action_used: ticks.actionUsed,
                     bonus_used: ticks.bonusUsed,
                     reaction_used: ticks.reactionUsed,
-                    feet_moved: ticks.feetMoved,
                   });
                   if (Object.keys(columns).length === 0) {
                     return yield* readCombatant(campaignId, runId, id, actor);

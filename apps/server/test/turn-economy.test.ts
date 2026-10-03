@@ -282,17 +282,12 @@ describeLayer("turn-economy", shared, (it) => {
           reactionUsed: true,
           feetMoved: 0,
         });
-        // A hand-set count, the way back from a move counted in error.
-        const corrected = yield* tick(jo, params, tamsin, { feetMoved: 10 });
-        expect(corrected).toMatchObject({ ok: true, value: { feetMoved: 10 } });
-        expect(spent((yield* rowsOf(params)).get(tamsin.id))).toMatchObject({ feetMoved: 10 });
 
         // One line a write, each the DM's alone whatever the row's visibility.
         const log = yield* updatesIn(fight.id);
         expect(log.map((event) => [event.combatant_id, event.visibility, event.payload])).toEqual([
           [tamsin.id, "dm", { actionUsed: true, bonusUsed: true }],
           [tamsin.id, "dm", { bonusUsed: false, reactionUsed: true }],
-          [tamsin.id, "dm", { feetMoved: 10 }],
         ]);
         yield* endNight(session);
       }),
@@ -368,7 +363,9 @@ describeLayer("turn-economy", shared, (it) => {
         const { jo } = yield* Fixture;
         const session = yield* night;
         const { params, tamsin, archer, other } = yield* underWay(session);
-        yield* tick(jo, params, tamsin, { actionUsed: true, feetMoved: 25 });
+        yield* tick(jo, params, tamsin, { actionUsed: true });
+        yield* move(params, tamsin, { column: 0, row: 0 });
+        yield* move(params, tamsin, { column: 5, row: 0 });
         // Spent on somebody else's turn: the archer's reaction, the other's bonus.
         yield* tick(jo, params, archer, { reactionUsed: true, actionUsed: true });
         yield* tick(jo, params, other, { reactionUsed: true });
@@ -515,7 +512,9 @@ describeLayer("turn-economy", shared, (it) => {
             }),
           );
         }
-        yield* tick(jo, params, tamsin, { actionUsed: true, feetMoved: 15 });
+        yield* tick(jo, params, tamsin, { actionUsed: true });
+        yield* move(params, tamsin, { column: 0, row: 0 });
+        yield* move(params, tamsin, { column: 3, row: 0 });
 
         const tableRead = yield* wire(ilse.token, `/campaigns/${table}/table`);
         expect(tableRead.status).toBe(200);
@@ -544,7 +543,9 @@ describeLayer("turn-economy", shared, (it) => {
         const { jo, table } = yield* Fixture;
         const first = yield* night;
         const { fight, params, tamsin } = yield* underWay(first);
-        yield* tick(jo, params, tamsin, { actionUsed: true, feetMoved: 20 });
+        yield* tick(jo, params, tamsin, { actionUsed: true });
+        yield* move(params, tamsin, { column: 0, row: 0 });
+        yield* move(params, tamsin, { column: 4, row: 0 });
         yield* endNight(first);
 
         const second = yield* night;

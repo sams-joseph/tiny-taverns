@@ -83,9 +83,28 @@ describe("the reach", () => {
 describe("the move line", () => {
   it("counts a diagonal as one square, and says when it went past the speed", () => {
     const line = (to: { column: number; row: number }, speed?: number) =>
-      moveLine({ name: "Wren", from: { column: 0, row: 0 }, to, feetPerCell: 5, speed });
+      moveLine({
+        name: "Wren",
+        from: { column: 0, row: 0 },
+        to,
+        feetPerCell: 5,
+        diagonals: "five",
+        speed,
+      });
     expect(line({ column: 3, row: 6 }, 30)).toBe("Wren moved 30 ft");
     expect(line({ column: 7, row: 1 }, 30)).toBe("Wren moved 35 ft, past their 30 ft speed");
     expect(line({ column: 7, row: 1 })).toBe("Wren moved 35 ft");
+  });
+
+  it("counts by the campaign's rule when diagonals alternate", () => {
+    const line = moveLine({
+      name: "Wren",
+      from: { column: 0, row: 0 },
+      to: { column: 4, row: 4 },
+      feetPerCell: 5,
+      diagonals: "alternating",
+      speed: 25,
+    });
+    expect(line).toBe("Wren moved 30 ft, past their 25 ft speed");
   });
 });

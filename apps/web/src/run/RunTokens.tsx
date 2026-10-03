@@ -2,6 +2,7 @@ import {
   type BoardSquare,
   type Combatant,
   type CombatantId,
+  type DiagonalRule,
   type EncounterRunBoard,
   battleMapPlane,
   cellRect,
@@ -51,6 +52,8 @@ export interface TokenProps {
   readonly activeId: CombatantId | null;
   /** Feet the combatant can walk, when its sheet or stat block says. */
   readonly speedOf: (combatant: Combatant) => number | undefined;
+  /** How the campaign counts a diagonal step, as the server counts a move. */
+  readonly diagonals: DiagonalRule;
   /** False once the fight is over or a dialog is open: tokens select, nothing moves. */
   readonly movable: boolean;
   /**
@@ -127,7 +130,7 @@ const placed = (
 
 /** The dashed box around the selected token: the squares its speed reaches. */
 function Reach({ props }: { readonly props: TokenProps }) {
-  const { board, selected, speedOf } = props;
+  const { board, selected, speedOf, diagonals } = props;
   if (selected === undefined || selected.position === null) return null;
   const speed = speedOf(selected);
   const rect =
@@ -140,7 +143,7 @@ function Reach({ props }: { readonly props: TokenProps }) {
             feet: speed,
             occupied: [],
             feetPerCell: board.feetPerCell,
-            diagonals: "five",
+            diagonals,
           }),
         );
   if (rect === undefined) return null;

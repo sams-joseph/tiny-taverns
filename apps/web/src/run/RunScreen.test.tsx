@@ -5,6 +5,7 @@ import {
   bodyOf,
   brannoc,
   brannocPlaced,
+  campaign,
   campaignId,
   cazril,
   directUpdate,
@@ -1207,6 +1208,26 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
       expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
     );
     await waitFor(() => expect(token("Brannoc")).toHaveAccessibleName("Brannoc, column 12, row 3"));
+  });
+
+  it("measures a move by the campaign's diagonal rule, as the server counts it", async () => {
+    server.routes.set(`GET /campaigns/${campaignId}`, {
+      status: 200,
+      body: { ...campaign, diagonalRule: "alternating" },
+    });
+    server.routes.set(brannocMove(), {
+      status: 200,
+      body: { ...brannocPlaced, position: { column: 9, row: 8 } },
+    });
+    await open();
+    await userEvent.click(await card().findByRole("button", { name: /^Brannoc,/ }));
+
+    clickSquare(9, 8);
+
+    // Four squares on each side alternate 5, 10, 5, 10: 30 ft, not 20.
+    await waitFor(() =>
+      expect(hint()).toHaveTextContent("Brannoc moved 30 ft, past their 25 ft speed"),
+    );
   });
 
   it("reaches as far as a stat block's speed, and draws no range where none is written", async () => {

@@ -60,6 +60,7 @@ export function useRunBoard({
       from: combatant.position,
       to,
       feetPerCell: board.feetPerCell,
+      diagonals: tokens.diagonals,
       speed: tokens.speedOf(combatant),
     });
     void tokens.onMove(combatant, to).then((moved) => {

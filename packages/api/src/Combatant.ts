@@ -151,9 +151,9 @@ export class Combatant extends Schema.Class<Combatant>("Combatant")({
    * moves the marker, a round starts or the DM puts the marker on somebody, so
    * a reaction spent off-turn comes back at the start of its own turn, as the
    * SRD has it. `feetMoved` is counted by `move` while this combatant is up
-   * and the fight is taking turns, under the campaign's `diagonalRule`; the
-   * DM's ticks are `CombatantTurn`. The creator's alone: no player read
-   * carries any of it.
+   * and the fight is taking turns, under the campaign's `diagonalRule`, and
+   * reset by the server alone; the DM's ticks on the other three are
+   * `CombatantTurn`. The creator's alone: no player read carries any of it.
    */
   actionUsed: Schema.Boolean,
   bonusUsed: Schema.Boolean,
@@ -288,9 +288,9 @@ export const CombatantMove = Schema.Struct({
 export type CombatantMove = typeof CombatantMove.Type;
 
 /**
- * The DM's ticks on a combatant's turn — *Action*, *Bonus*, *Reaction* — and
- * a hand-set count of feet moved, each an absolute value, so marking one used
- * twice is the same as once and unmarking is the same write.
+ * The DM's ticks on a combatant's turn — *Action*, *Bonus*, *Reaction* — each
+ * an absolute value, so marking one used twice is the same as once and
+ * unmarking is the same write. Feet moved is not here: only `move` counts it.
  *
  * Its own endpoint rather than fields on `CombatantUpdate`, for the reason
  * `CombatantMove` is: it is pressed over and over while the fight runs, so it
@@ -302,7 +302,6 @@ export const CombatantTurn = Schema.Struct({
   actionUsed: Schema.optional(Schema.Boolean),
   bonusUsed: Schema.optional(Schema.Boolean),
   reactionUsed: Schema.optional(Schema.Boolean),
-  feetMoved: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }))),
   requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
 });
 export type CombatantTurn = typeof CombatantTurn.Type;
