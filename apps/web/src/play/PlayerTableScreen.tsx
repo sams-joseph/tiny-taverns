@@ -50,6 +50,7 @@ import { loadPlayerTableView } from "./load";
 import { PlayerBattleMap } from "./PlayerBoard";
 import { SceneOnTheTable } from "./SceneOnTheTable";
 import { usePlayerTableStream } from "./tableStream";
+import { type TurnBanner, turnBanner } from "./turnBanner";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
 
 interface PendingRoll extends LocalRoll {
@@ -126,6 +127,38 @@ function CombatantRow({ row }: { readonly row: PlayerLiveCombatant }) {
         </Badge>
       ))}
     </div>
+  );
+}
+
+/**
+ * Whose turn it is, at the head of the fight: the round, the creature that is
+ * up — or *"Something moves"* — and the next one this player can see
+ * (`turnBanner.ts`). A live region, so the turn moving is said aloud.
+ */
+function TurnBannerCard({ banner }: { readonly banner: TurnBanner }) {
+  return (
+    <Card
+      role="status"
+      aria-label="Turn"
+      className="flex-row flex-wrap items-center gap-x-5 gap-y-3 border-t-3 border-t-accent px-panel py-3.5"
+    >
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <span className="text-label-s leading-none text-muted-foreground">
+          Round {String(banner.round)}
+        </span>
+        <span className="font-display text-display-m leading-tight font-semibold tracking-display text-heading">
+          {banner.title}
+        </span>
+      </div>
+      {banner.upNext !== undefined && (
+        <div className="flex min-w-0 flex-col gap-1.5 border-l border-hairline pl-5">
+          <span className="text-label-s leading-none text-muted-foreground">Up next</span>
+          <span className="text-body leading-snug font-medium text-foreground">
+            {banner.upNext}
+          </span>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -455,6 +488,7 @@ export function PlayerTableScreen() {
   const actions = owned === undefined ? [] : actionRows(owned.character.sheet);
   const upNextId = fight?.upNext?.kind === "visible" ? fight.upNext.combatantId : undefined;
   const yourTurn = you !== undefined && upNextId === you.combatantId;
+  const banner = turnBanner(fight);
   const { failure, submit } = useMutation();
   const [rollMode, setRollMode] = useState<RollMode>("normal");
   const [pendingRolls, setPendingRolls] = useState<ReadonlyArray<PendingRoll>>([]);
@@ -579,6 +613,7 @@ export function PlayerTableScreen() {
           ) : (
             <div className="grid gap-5 @4xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
               <div className="flex min-w-0 flex-col gap-5">
+                {banner !== undefined && <TurnBannerCard banner={banner} />}
                 {fight.phase === "initiative" && you !== undefined && (
                   <YourInitiative
                     campaignId={campaignId}

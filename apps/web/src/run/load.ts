@@ -290,10 +290,16 @@ export const combatantVisibilityWrites = (campaignId: CampaignId): Invalidation 
 ];
 
 /**
- * "Brannoc is up · Goblin Boss next": the marker, and the row after it in the
- * server's order, which is the row `nextTurn` walks to — the order is the
- * server's and is never re-sorted here (`load.ts`).
+ * The row after `at` in an initiative order, wrapping to the top: who is up
+ * next. Nothing when the order is that one row alone. The order is the
+ * server's and is never re-sorted here, so this is the row `nextTurn` walks to
+ * on the DM's order, and on a player's (`play/turnBanner.ts`) the next row that
+ * player may see.
  */
+export const nextAfter = <Row>(order: ReadonlyArray<Row>, at: number): Row | undefined =>
+  order.length > 1 && at >= 0 ? order[(at + 1) % order.length] : undefined;
+
+/** "Brannoc is up · Goblin Boss next": the marker, and the row after it (`nextAfter`). */
 export const upLine = (
   combatants: ReadonlyArray<Combatant>,
   activeId: CombatantId | null,
@@ -301,7 +307,7 @@ export const upLine = (
   const at = combatants.findIndex((row) => row.id === activeId);
   const active = combatants[at];
   if (active === undefined) return "Nobody is up";
-  const next = combatants.length > 1 ? combatants[(at + 1) % combatants.length] : undefined;
+  const next = nextAfter(combatants, at);
   return next === undefined
     ? `${active.displayName} is up`
     : `${active.displayName} is up · ${next.displayName} next`;
