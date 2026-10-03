@@ -271,7 +271,11 @@ export class RunScenes extends Context.Service<
                     if (repeat !== undefined) return repeat;
                   }
                   if (run.mode === "combat") {
-                    return yield* new Conflict({ message: "a fight logs no checks" });
+                    // A save in a fight (concentration, say) is a roll of its kind
+                    // (`RollKind`), not a row here: checks are the scenes'.
+                    return yield* new Conflict({
+                      message: "a fight logs no checks; log a save in a fight as a roll",
+                    });
                   }
 
                   const combatants = yield* sql<{

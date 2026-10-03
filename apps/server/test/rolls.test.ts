@@ -1,21 +1,31 @@
-import { expect } from "@effect/vitest";
-import { Conflict, CurrentActor, NotFound, type Actor, type CharacterId } from "@taverns/api";
+import { describe, expect } from "@effect/vitest";
+import {
+  Conflict,
+  CurrentActor,
+  NotFound,
+  type Actor,
+  type CharacterId,
+  type RollCreate,
+} from "@taverns/api";
 import { Effect, Layer } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
 import { Characters } from "../src/repo/Characters.js";
+import { Combatants } from "../src/repo/Combatants.js";
 import { CampaignCreatorActors } from "../src/repo/CreatorActor.js";
 import { EncounterRuns } from "../src/repo/EncounterRuns.js";
 import { Encounters } from "../src/repo/Encounters.js";
 import { Groups } from "../src/repo/Groups.js";
 import { Invites } from "../src/repo/Invites.js";
 import { Party } from "../src/repo/Party.js";
+import { PlayerTable } from "../src/repo/PlayerTable.js";
 import { Rolls } from "../src/repo/Rolls.js";
 import { SessionEvents } from "../src/repo/SessionEvents.js";
 import { Sessions } from "../src/repo/Sessions.js";
 import { aCampaignBy, aCharacterAt, aPlayerAt, anAccount, asDm } from "./support/actors.js";
 import { migratedDatabase } from "./support/database.js";
+import { aFightUnderWay } from "./support/fights.js";
 import { describeLayer } from "./support/suite.js";
 
 const services = Layer.mergeAll(
@@ -25,10 +35,12 @@ const services = Layer.mergeAll(
   Characters.layer.pipe(Layer.provide(LiveEvents.layer)),
   Party.layer.pipe(Layer.provide(LiveEvents.layer)),
   CampaignCreatorActors.layer,
+  Combatants.layer.pipe(Layer.provide(LiveEvents.layer)),
   Encounters.layer,
   EncounterRuns.layer.pipe(Layer.provide(LiveEvents.layer)),
   Invites.layer,
   LiveEvents.layer,
+  PlayerTable.layer.pipe(Layer.provide(LiveEvents.layer)),
   Rolls.layer.pipe(Layer.provide(LiveEvents.layer)),
   SessionEvents.layer,
   Sessions.layer.pipe(Layer.provide(LiveEvents.layer)),
@@ -171,4 +183,246 @@ describeLayer("rolls", services, (it) => {
       expect(seen.wrongOwner).toBeInstanceOf(NotFound);
     }),
   );
+
+  describe("the DM's rolls", () => {
+    /** The DM's d20 at the Goblin Boss, as the runner sends it. */
+    const dmRoll = (extra: Partial<RollCreate> = {}): RollCreate => ({
+      label: "Goblin Boss · Scimitar",
+      notation: "1d20+4",
+      dice: [15],
+      kept: [15],
+      modifier: 4,
+      total: 19,
+      mode: "normal",
+      ...extra,
+    });
+
+    /** A fight on the shared night: the party's Brannoc and a hidden Marsh Hag. */
+    const aFight = Effect.gen(function* () {
+      const f = yield* fixture;
+      const encounters = yield* Encounters;
+      const combatants = yield* Combatants;
+      const dm = yield* asDm(f.dm, f.campaign.id);
+      const encounter = yield* as(f.dm, encounters.create(f.campaign.id, { name: "Reeds" }));
+      const run = yield* aFightUnderWay(dm, f.sessionId, { encounterId: encounter.id });
+      yield* (yield* EncounterRuns).update(dm, f.sessionId, run.id, { visibility: "shared" });
+      const brannoc = yield* combatants.create(dm, f.sessionId, run.id, {
+        displayName: "Brannoc",
+        kind: "pc",
+        ac: 17,
+        visibility: "shared",
+      });
+      const hag = yield* combatants.create(dm, f.sessionId, run.id, {
+        displayName: "Marsh Hag",
+        ac: 15,
+        visibility: "dm",
+      });
+      return { ...f, dmProof: dm, run, brannoc, hag };
+    });
+
+    it.effect(
+      "keeps a roll with no character to the creator on a shared night, in the list, by id and in ticks",
+      () =>
+        Effect.gen(function* () {
+          const f = yield* fixture;
+          const rolls = yield* Rolls;
+          const table = yield* PlayerTable;
+          const events = yield* SessionEvents;
+          const dm = yield* asDm(f.dm, f.campaign.id);
+          const before = yield* table.ticks(f.player, f.campaign.id, f.sessionId, 0, 50);
+          const roll = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll()));
+
+          // The night is shared; the roll is not.
+          expect(roll.visibility).toBe("dm");
+          expect(roll.kind).toBe("plain");
+          const creatorList = yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}));
+          expect(creatorList.map((row) => row.id)).toEqual([roll.id]);
+          expect((yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, roll.id))).id).toBe(
+            roll.id,
+          );
+
+          for (const player of [f.player, f.other]) {
+            expect(yield* as(player, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+            const byId = yield* as(
+              player,
+              Effect.flip(rolls.findById(f.campaign.id, f.sessionId, roll.id)),
+            );
+            expect(byId).toBeInstanceOf(NotFound);
+          }
+
+          // The creator's log has the line; a player's ticks do not move for it.
+          const log = yield* events.list(dm, f.sessionId, { since: 0, limit: 50 });
+          const line = log.find((event) => event.kind === "roll-made");
+          expect(line?.visibility).toBe("dm");
+          const after = yield* table.ticks(f.player, f.campaign.id, f.sessionId, 0, 50);
+          expect(after).toEqual(before);
+          expect(after).not.toContain(line?.seq);
+        }),
+    );
+
+    it.effect("keeps a roll asked as dm to the creator, and refuses a player who asks", () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const rolls = yield* Rolls;
+        const refused = yield* as(
+          f.player,
+          Effect.flip(
+            rolls.create(f.campaign.id, { ...payload(f.character.id), visibility: "dm" }),
+          ),
+        );
+        expect(refused).toBeInstanceOf(NotFound);
+        // Nothing was written by the refusal.
+        expect(yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+
+        const asked = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll({ visibility: "dm" })));
+        expect(asked.visibility).toBe("dm");
+      }),
+    );
+
+    it.effect("dedupes a DM roll by its request", () =>
+      Effect.gen(function* () {
+        const f = yield* fixture;
+        const rolls = yield* Rolls;
+        const events = yield* SessionEvents;
+        const dm = yield* asDm(f.dm, f.campaign.id);
+        const first = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll({ requestId: "die-1" })));
+        const again = yield* as(f.dm, rolls.create(f.campaign.id, dmRoll({ requestId: "die-1" })));
+        expect(again.id).toBe(first.id);
+        expect(yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}))).toHaveLength(1);
+        const log = yield* events.list(dm, f.sessionId, { since: 0, limit: 50 });
+        expect(log.filter((event) => event.kind === "roll-made")).toHaveLength(1);
+      }),
+    );
+
+    it.effect("logs an attack with who, at whom, the target's AC and the outcome", () =>
+      Effect.gen(function* () {
+        const f = yield* aFight;
+        const rolls = yield* Rolls;
+        const attack = yield* as(
+          f.dm,
+          rolls.create(
+            f.campaign.id,
+            dmRoll({
+              kind: "attack",
+              combatantId: f.hag.id,
+              targetCombatantId: f.brannoc.id,
+              targetAc: 17,
+              outcome: "hit",
+            }),
+          ),
+        );
+        const read = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, attack.id));
+        expect(read).toMatchObject({
+          kind: "attack",
+          combatantId: f.hag.id,
+          targetCombatantId: f.brannoc.id,
+          targetAc: 17,
+          outcome: "hit",
+          visibility: "dm",
+          encounterRunId: f.run.id,
+        });
+        expect(yield* as(f.player, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+      }),
+    );
+
+    it.effect("logs a concentration save in a fight as a roll, for the DM and for a player", () =>
+      Effect.gen(function* () {
+        const f = yield* aFight;
+        const rolls = yield* Rolls;
+        const dmSave = yield* as(
+          f.dm,
+          rolls.create(
+            f.campaign.id,
+            dmRoll({
+              label: "Marsh Hag · Concentration",
+              kind: "concentration",
+              combatantId: f.hag.id,
+            }),
+          ),
+        );
+        expect(dmSave).toMatchObject({ kind: "concentration", combatantId: f.hag.id });
+        const playerSave = yield* as(
+          f.player,
+          rolls.create(f.campaign.id, { ...payload(f.character.id), kind: "concentration" }),
+        );
+        expect(playerSave).toMatchObject({ kind: "concentration", visibility: "shared" });
+        const seen = yield* as(f.other, rolls.list(f.campaign.id, f.sessionId, {}));
+        expect(seen.map((row) => row.id)).toEqual([playerSave.id]);
+      }),
+    );
+
+    it.effect(
+      "refuses a combatant outside tonight's fight, with no fight, or named by a player",
+      () =>
+        Effect.gen(function* () {
+          const f = yield* aFight;
+          const rolls = yield* Rolls;
+          const elsewhere = yield* aFight;
+
+          const otherFight = yield* as(
+            f.dm,
+            Effect.flip(
+              rolls.create(f.campaign.id, dmRoll({ targetCombatantId: elsewhere.brannoc.id })),
+            ),
+          );
+          expect(otherFight).toBeInstanceOf(NotFound);
+
+          const byPlayer = yield* as(
+            f.player,
+            Effect.flip(
+              rolls.create(f.campaign.id, {
+                ...payload(f.character.id),
+                kind: "attack",
+                targetCombatantId: f.brannoc.id,
+              }),
+            ),
+          );
+          expect(byPlayer).toBeInstanceOf(NotFound);
+
+          const quiet = yield* fixture;
+          const noFight = yield* as(
+            quiet.dm,
+            Effect.flip(rolls.create(quiet.campaign.id, dmRoll({ combatantId: f.hag.id }))),
+          );
+          expect(noFight).toBeInstanceOf(NotFound);
+          expect(yield* as(f.dm, rolls.list(f.campaign.id, f.sessionId, {}))).toEqual([]);
+        }),
+    );
+
+    it.effect(
+      "names a hidden combatant on a shared roll to the creator alone, and clears it when removed",
+      () =>
+        Effect.gen(function* () {
+          const f = yield* aFight;
+          const rolls = yield* Rolls;
+          const combatants = yield* Combatants;
+          // The creator's own seat, so their roll is shared on a shared night.
+          const own = yield* aCharacterAt(f.campaign.id, f.dm, { name: "Fen's ranger" });
+          const shot = yield* as(
+            f.dm,
+            rolls.create(f.campaign.id, {
+              ...payload(own.character.id),
+              kind: "attack",
+              combatantId: f.brannoc.id,
+              targetCombatantId: f.hag.id,
+              outcome: "miss",
+            }),
+          );
+          expect(shot.visibility).toBe("shared");
+          // The shared Brannoc is named; the hidden hag is not.
+          const asPlayer = yield* as(f.player, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+          expect(asPlayer).toMatchObject({
+            outcome: "miss",
+            combatantId: f.brannoc.id,
+            targetCombatantId: null,
+          });
+          const asCreator = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+          expect(asCreator.targetCombatantId).toBe(f.hag.id);
+
+          yield* combatants.remove(f.dmProof, f.sessionId, f.run.id, f.hag.id);
+          const after = yield* as(f.dm, rolls.findById(f.campaign.id, f.sessionId, shot.id));
+          expect(after).toMatchObject({ targetCombatantId: null, outcome: "miss" });
+        }),
+    );
+  });
 });

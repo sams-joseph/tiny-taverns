@@ -365,6 +365,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 85, name: "death_saves" },
         { migration_id: 86, name: "turn_economy" },
         { migration_id: 87, name: "run_board_fog" },
+        { migration_id: 89, name: "roll_attack_log" },
       ]);
     }),
   );
@@ -463,6 +464,7 @@ describeLayer("migrations", database, (it) => {
         { migration_id: 85, name: "death_saves" },
         { migration_id: 86, name: "turn_economy" },
         { migration_id: 87, name: "run_board_fog" },
+        { migration_id: 89, name: "roll_attack_log" },
       ]);
     }),
   );
