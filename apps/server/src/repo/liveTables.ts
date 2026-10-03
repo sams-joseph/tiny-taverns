@@ -114,22 +114,25 @@ export const hiddenByFog = (
 ): Statement.Fragment => sql`(${underFog(sql)} and not ${seatedByActor(sql, campaignId, actor)})`;
 
 /**
- * Over `encounter_run` in scope: its fight is still on the table — the run is
- * unended, or it was carried and some run after it, through any number of
- * carries, is unended. Fog is a live-board tool, so a reader that outlasts
- * the fight (the recap) composes `hiddenByFog` only under this. Following
- * `continued_from` here only narrows what a reader sees; it grants no reach.
+ * Over `encounter_run` in scope: its fight is still on the table — the tail of
+ * its carried chain (`continued_from` followed forward, through any number of
+ * carries, to the run nothing continues) is unended, or was carried and waits
+ * to be resumed. Only a tail that ended any other way ends the fight. Fog is a
+ * live-board tool, so a reader that outlasts the fight (the recap) composes
+ * `hiddenByFog` only under this. Following `continued_from` here only narrows
+ * what a reader sees; it grants no reach.
  */
 export const fightLive = (sql: SqlClient.SqlClient): Statement.Fragment =>
-  sql`(encounter_run.ended_at is null or exists (
-    with recursive successor as (
-      select next.id, next.ended_at from encounter_run next
-      where next.continued_from = encounter_run.id
+  sql`exists (
+    with recursive chain as (
+      select encounter_run.id, encounter_run.ended_at, encounter_run.ended_reason
       union all
-      select next.id, next.ended_at from encounter_run next
-      join successor on next.continued_from = successor.id
+      select next.id, next.ended_at, next.ended_reason from encounter_run next
+      join chain on next.continued_from = chain.id
     )
-    select 1 from successor where successor.ended_at is null))`;
+    select 1 from chain
+    where not exists (select 1 from encounter_run next where next.continued_from = chain.id)
+      and (chain.ended_at is null or chain.ended_reason = 'carried'))`;
 
 /**
  * Over `combatant` and its `encounter_run` in scope: this row's token is on a

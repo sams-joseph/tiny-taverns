@@ -309,8 +309,8 @@ export class Recap extends Context.Service<
        * challenge or a hazard had no initiative order at the table — less,
        * while the fight is live (`fightLive`, carried runs included), what
        * stands under its fog, as at the table. Fog is a live-board tool: once
-       * the fight's last run ends, its rows follow the ordinary per-row rule
-       * alone.
+       * the fight's last run ends other than carried, its rows follow the
+       * ordinary per-row rule alone.
        */
       const playerCombatantsOf = SqlSchema.findAll({
         Request: RunsRequest,

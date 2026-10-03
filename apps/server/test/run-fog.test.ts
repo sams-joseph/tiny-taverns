@@ -621,10 +621,12 @@ describeLayer("run-fog", shared, (it) => {
         });
 
       yield* endNight(first);
+      expect(yield* firstRecap()).toEqual(visible);
       const second = yield* carryTo(fight.id);
       expect(yield* firstRecap()).toEqual(visible);
 
       yield* endNight(second.sessionId);
+      expect(yield* firstRecap()).toEqual(visible);
       const third = yield* carryTo(second.runId);
       expect(yield* firstRecap()).toEqual(visible);
 
