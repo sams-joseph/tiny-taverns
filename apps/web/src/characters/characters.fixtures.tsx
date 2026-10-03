@@ -389,7 +389,10 @@ export const quiet = (of: string): [string, Answer] => [
 export const playing = (
   of: string,
   fight: {
-    readonly upNext?: { readonly combatantId: string; readonly displayName: string } | null;
+    readonly upNext?:
+      | { readonly kind: "visible"; readonly combatantId: string; readonly displayName: string }
+      | { readonly kind: "hidden" }
+      | null;
     readonly seats?: ReadonlyArray<{
       readonly characterId: string;
       readonly campaignCharacterId: string;
@@ -421,7 +424,11 @@ export const playing = (
               phase: fight.phase ?? "turns",
               upNext:
                 fight.upNext === undefined
-                  ? { combatantId: yourCombatantId, displayName: "Brannoc Duskharrow" }
+                  ? {
+                      kind: "visible",
+                      combatantId: yourCombatantId,
+                      displayName: "Brannoc Duskharrow",
+                    }
                   : fight.upNext,
               seats: fight.seats ?? [
                 {
@@ -488,7 +495,10 @@ export const tableOrder: ReadonlyArray<Record<string, unknown>> = [
     subtitle: "Level 4 Ranger",
     playerName: "Wren",
     initiative: 14,
+    hpCurrent: 30,
+    hpMax: 34,
     conditions: [],
+    deathSaves: { successes: 0, failures: 0 },
     portrait: null,
   },
   {

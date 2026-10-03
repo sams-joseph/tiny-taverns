@@ -155,7 +155,10 @@ describe("PlayerTableScreen", () => {
             subtitle: "Level 4 Ranger",
             playerName: "Wren",
             initiative: 14,
+            hpCurrent: 30,
+            hpMax: 34,
             conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
             portrait: null,
           },
           {
@@ -227,7 +230,7 @@ describe("PlayerTableScreen", () => {
     server.routes.set(
       ...playing(campaignId, {
         order: tableOrder.map((row) => (row.kind === "npc" ? { ...row, hpBand: "down" } : row)),
-        upNext: { combatantId: hagCombatantId, displayName: "Marsh Hag" },
+        upNext: { kind: "visible", combatantId: hagCombatantId, displayName: "Marsh Hag" },
         board: sharedBoard,
       }),
     );
@@ -287,7 +290,10 @@ describe("PlayerTableScreen", () => {
             subtitle: null,
             playerName: "Wren",
             initiative: 14,
+            hpCurrent: 30,
+            hpMax: 34,
             conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
             portrait: drawnPortrait,
           },
         ],

@@ -25,10 +25,25 @@ import {
 export const PlayerLiveHpBand = Schema.Literals(["unhurt", "hurt", "bloodied", "down", "unknown"]);
 export type PlayerLiveHpBand = typeof PlayerLiveHpBand.Type;
 
-export const PlayerLiveTurn = Schema.Struct({
+/** Whose turn it is, when the player may see that creature. */
+export const PlayerLiveTurnVisible = Schema.Struct({
+  kind: Schema.Literal("visible"),
   combatantId: CombatantId,
   displayName: Schema.String,
 });
+export type PlayerLiveTurnVisible = typeof PlayerLiveTurnVisible.Type;
+
+/**
+ * The DM's marker is on a row this player may not see: a creature the DM has
+ * hidden, or a character whose seat is not shared. The table can say that
+ * something moves; it is not told what, so there is no id and no name.
+ */
+export const PlayerLiveTurnHidden = Schema.Struct({
+  kind: Schema.Literal("hidden"),
+});
+export type PlayerLiveTurnHidden = typeof PlayerLiveTurnHidden.Type;
+
+export const PlayerLiveTurn = Schema.Union([PlayerLiveTurnVisible, PlayerLiveTurnHidden]);
 export type PlayerLiveTurn = typeof PlayerLiveTurn.Type;
 
 export const PlayerLiveSeat = Schema.Struct({
@@ -77,7 +92,16 @@ export const PlayerLiveCombatantAlly = Schema.Struct({
   subtitle: Schema.NullOr(Schema.String),
   playerName: Schema.NullOr(Schema.String),
   initiative: Schema.NullOr(Schema.Int),
+  /**
+   * The ally's exact hit points and death saves: a party shares them openly.
+   * Selected in SQL through the same seat that makes the row visible at all,
+   * so a character the asker may not see is not in the order to carry them.
+   * Temporary hit points stay the owner's (`you`).
+   */
+  hpCurrent: Schema.Int,
+  hpMax: Schema.Int,
   conditions: Schema.Array(Schema.String),
+  deathSaves: DeathSaves,
   /**
    * The ally's portrait, computed in SQL through the seat that makes the row
    * visible at all, so a character the asker may not see has no URL here.
@@ -154,7 +178,11 @@ export const PlayerLiveFight = Schema.Struct({
    * seated player may enter their own (`table.setInitiative`) — else `turns`.
    */
   phase: EncounterRunPhase,
-  /** `null` when the DM has set no marker, or has hidden the row it names. */
+  /**
+   * Whose turn it is: `visible` names the row, `hidden` says only that the
+   * marker is on a row this player may not see, and `null` means the DM has
+   * set no marker (and always while rolling initiative, or outside a fight).
+   */
   upNext: Schema.NullOr(PlayerLiveTurn),
   /** This account's active campaign-character seats in this fight. */
   seats: Schema.Array(PlayerLiveSeat),

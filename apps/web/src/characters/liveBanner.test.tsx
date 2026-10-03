@@ -68,7 +68,7 @@ describe("when the table is playing", () => {
   it("says who is up when it is somebody else's turn", async () => {
     server.routes.set(
       ...playing(campaignId, {
-        upNext: { combatantId: hagCombatantId, displayName: "Marsh Hag" },
+        upNext: { kind: "visible", combatantId: hagCombatantId, displayName: "Marsh Hag" },
       }),
     );
     await renderSheet();
@@ -80,7 +80,7 @@ describe("when the table is playing", () => {
   it("says so when the fight on the table is not this character's", async () => {
     server.routes.set(
       ...playing(campaignId, {
-        upNext: { combatantId: hagCombatantId, displayName: "Marsh Hag" },
+        upNext: { kind: "visible", combatantId: hagCombatantId, displayName: "Marsh Hag" },
         seats: [],
       }),
     );
@@ -111,7 +111,7 @@ describe("when the table is playing", () => {
     // *shape* stayed narrow rather than that this render happened to be tidy.
     server.routes.set(
       ...playing(campaignId, {
-        upNext: { combatantId: hagCombatantId, displayName: "Marsh Hag" },
+        upNext: { kind: "visible", combatantId: hagCombatantId, displayName: "Marsh Hag" },
       }),
     );
     await renderSheet();
