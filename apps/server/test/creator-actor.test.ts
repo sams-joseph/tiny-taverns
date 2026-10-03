@@ -571,7 +571,10 @@ describeLayer("creator-actor", shared, (it) => {
       // A hundred and thirty-five is `Combatants.turn`: a turn's spending is
       // the runner's, gated with the rest of the order from the day declared,
       // and no player read selects it.
-      expect(gated).toBe(135);
+      // A hundred and thirty-six is `BattleMaps.updateFog`: a fight's fog of
+      // war is written on the board `forRun` reads, the creator's alone, and a
+      // player sees only its squares, on `PlayerLiveBoard`.
+      expect(gated).toBe(136);
       // Every ungated service method, plus `CampaignCreatorActors.of` itself — which requires
       // `CurrentActor` like any other read and is what turns one into a proof —
       // plus the inner helper in `Proposals.ts` that restates its own service

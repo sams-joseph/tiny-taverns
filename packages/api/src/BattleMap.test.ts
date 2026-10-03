@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BattleMapAlignment,
   BattleMapUpdate,
+  BoardFogUpdate,
   battleMapHasSubject,
   battleMapPromptFor,
   ENCOUNTER_SETTING_MAX,
@@ -158,6 +159,17 @@ describe("the grid on the wire", () => {
     expect(update({ columns: 2.5 })._tag).toBe("Failure");
     expect(update({ feetPerCell: 0 })._tag).toBe("Failure");
     expect(update({ alignment: { cellPx: 50, offsetXPx: 50, offsetYPx: 0 } })._tag).toBe("Failure");
+  });
+
+  it("takes at most one whole-board fog change, beside squares on the largest board", () => {
+    const fog = Schema.decodeUnknownExit(BoardFogUpdate);
+    const square = { column: 3, row: 4 };
+    expect(fog({ hide: [square], reveal: [square], requestId: "stroke" })._tag).toBe("Success");
+    expect(fog({ reset: true, hide: [square] })._tag).toBe("Success");
+    expect(fog({ revealAll: true, coverAll: true })._tag).toBe("Failure");
+    expect(fog({ coverAll: true, reset: true })._tag).toBe("Failure");
+    expect(fog({ revealAll: false })._tag).toBe("Failure");
+    expect(fog({ hide: [{ column: 200, row: 0 }] })._tag).toBe("Failure");
   });
 
   it("bounds the setting line on the encounter's own payload", () => {

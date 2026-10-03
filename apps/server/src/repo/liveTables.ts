@@ -1,5 +1,12 @@
+import type { Actor, CampaignId } from "@taverns/api";
 import type { SqlClient, Statement } from "effect/sql";
-import { type Containment, inCampaign, type NestedTable, under } from "./visibility.js";
+import {
+  type Containment,
+  inCampaign,
+  type NestedTable,
+  seatedByActor,
+  under,
+} from "./visibility.js";
 
 /**
  * Where the live tables sit relative to the campaign that scopes them.
@@ -79,15 +86,47 @@ export const boardShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
     and encounter_run.visibility = 'shared' and encounter_run.map_shown)`;
 
 /**
+ * Over `combatant` in scope: its token stands on a square of its fight's board
+ * that is under fog (`0087_run_board_fog.ts`). A token off the board stands
+ * nowhere, so it is under no fog.
+ */
+export const underFog = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`exists (select 1 from encounter_run_board
+    where encounter_run_board.run_id = combatant.encounter_run_id
+      and combatant.board_row * encounter_run_board.board_columns + combatant.board_column
+          = any(encounter_run_board.fog_hidden))`;
+
+/**
+ * Over `combatant` in scope: fog hides this row from this reader — **its token
+ * and its row of the order both**, so what a player cannot see on the board is
+ * not in their initiative either. It stands under fog and is not the reader's
+ * own character: a player always knows where they are, and their own row is
+ * their seat at the table.
+ *
+ * It holds whether or not the DM shows the map. Fog says the party cannot see
+ * what stands there, and turning off *Share map* takes the board away without
+ * showing anybody what was under it.
+ */
+export const hiddenByFog = (
+  sql: SqlClient.SqlClient,
+  campaignId: CampaignId,
+  actor: Actor,
+): Statement.Fragment => sql`(${underFog(sql)} and not ${seatedByActor(sql, campaignId, actor)})`;
+
+/**
  * Over `combatant` and its `encounter_run` in scope: this row's token is on a
- * player's board, if the row is in their order at all — the board is shown,
- * and it is not a monster while hostile tokens are hidden. The player's table
- * selects positions under it and a move's log line is shared under it, so the
- * two cannot disagree about which moves a player can see.
+ * player's board, if the row is in their order at all — the board is shown, it
+ * is not a monster while hostile tokens are hidden, and it is not a monster
+ * under fog. The player's table selects positions under it and a move's log
+ * line is shared under it, so the two cannot disagree about which moves a
+ * player can see. A player character under fog is still on its owner's board,
+ * so it passes here and `hiddenByFog` takes it off everybody else's with its
+ * row.
  */
 export const tokenShown = (sql: SqlClient.SqlClient): Statement.Fragment =>
   sql`(${boardShown(sql)}
-    and (combatant.kind = 'pc' or not encounter_run.hostile_tokens_hidden))`;
+    and (combatant.kind = 'pc'
+      or (not encounter_run.hostile_tokens_hidden and not ${underFog(sql)})))`;
 
 /**
  * A fresh turn for whoever the marker just landed on: nothing spent, no feet

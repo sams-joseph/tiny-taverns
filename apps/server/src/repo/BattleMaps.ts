@@ -2,6 +2,8 @@ import {
   BattleMap,
   BattleMapImages,
   type BattleMapUpdate,
+  type BoardFogUpdate,
+  Conflict,
   EncounterId,
   EncounterRunBoard,
   EncounterRunId,
@@ -9,19 +11,22 @@ import {
   SessionId,
 } from "@taverns/api";
 import { Context, Effect, Layer, Option, Schema, SchemaGetter, SchemaTransformation } from "effect";
-import { SqlClient, SqlSchema } from "effect/sql";
+import { SqlClient, SqlError, SqlSchema } from "effect/sql";
 import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
+import { LiveEvents } from "../live/LiveEvents.js";
 import { asked, type CampaignCreatorActor, creatorFields } from "./CreatorActor.js";
-import { RUNS } from "./liveTables.js";
+import { boardShown, RUNS } from "./liveTables.js";
 import {
   classFromColumns,
   defined,
   dieOnSqlError,
   fromColumns,
+  intArray,
   orNotFound,
   setClause,
   timestampColumns,
 } from "./rows.js";
+import { appendEvent, requestAlreadyApplied } from "./SessionEvents.js";
 import { nestedRowWritable, rowWritable } from "./visibility.js";
 
 /**
@@ -41,7 +46,8 @@ import { nestedRowWritable, rowWritable } from "./visibility.js";
  *
  * A fight's board (`encounter_run_board`, `0058_encounter_run_boards.ts`) is
  * read here too, because it carries the map's picture and this file is where a
- * map's URL is minted.
+ * map's URL is minted; and its fog of war is written here, because the write
+ * answers with the board.
  */
 
 /**
@@ -94,6 +100,23 @@ export const alignmentColumn = (sql: SqlClient.SqlClient, table: string) => sql`
     'offsetXPx', ${sql(`${table}.offset_x_px`)},
     'offsetYPx', ${sql(`${table}.offset_y_px`)}
   ) as alignment
+`;
+
+/**
+ * A fight's fog as the wire spells it: the squares in `fog_hidden`, each
+ * `row * board_columns + column` (`0087_run_board_fog.ts`), as `{column, row}`
+ * in reading order. `encounter_run_board` must be in scope.
+ */
+export const fogColumn = (sql: SqlClient.SqlClient) => sql`
+  coalesce(
+    (select jsonb_agg(
+       jsonb_build_object(
+         'column', square % encounter_run_board.board_columns,
+         'row', square / encounter_run_board.board_columns)
+       order by square)
+     from unnest(encounter_run_board.fog_hidden) as square),
+    '[]'::jsonb
+  ) as fog
 `;
 
 /** A board's two dimensions, which the wire calls `columns` and `rows`. */
@@ -194,11 +217,28 @@ export class BattleMaps extends Context.Service<
       sessionId: SessionId,
       runId: EncounterRunId,
     ) => Effect.Effect<EncounterRunBoard | null, NotFound>;
+    /**
+     * Hide or reveal squares of a fight's board under fog of war — the DM's
+     * alone, as the board is. `Conflict` for a fight with no board and for a
+     * square off it. A repeated `requestId` changes nothing and answers the
+     * board as it stands.
+     *
+     * The log line is shared while a player's table shows the board
+     * (`liveTables.ts`' `boardShown`), so their doorbell rings and they re-read
+     * a table that fog has changed; otherwise it is the DM's own.
+     */
+    readonly updateFog: (
+      creator: CampaignCreatorActor,
+      sessionId: SessionId,
+      runId: EncounterRunId,
+      update: BoardFogUpdate,
+    ) => Effect.Effect<EncounterRunBoard, NotFound | Conflict>;
   }
 >()("BattleMaps") {
   static readonly layer = Layer.effect(this)(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const live = yield* LiveEvents;
       const sign = yield* imageSigner;
       const BattleMapRow = battleMapRow(sign);
       const RunBoardRow = runBoardRow(sign);
@@ -272,11 +312,49 @@ export class BattleMaps extends Context.Service<
                  encounter_run_board.grid, encounter_run_board.board_columns,
                  encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
                  ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}
+                 ${battleMapPicture(sql)}, ${battleMapPending(sql)}, ${fogColumn(sql)}
           from encounter_run_board
           left join battle_map on battle_map.id = encounter_run_board.map_id
             and ${rowWritable(sql, "battle_map", campaign, actor)}
           where encounter_run_board.run_id = ${runId}
+        `,
+      });
+
+      /**
+       * The fight's fog, rewritten as one set: the whole-board change first,
+       * then `hide` added and `reveal` taken out, distinct and in order. A
+       * square is `row * board_columns + column`, the column's own spelling.
+       */
+      const fog = SqlSchema.findOne({
+        Request: Schema.toType(
+          Schema.Struct({
+            runId: EncounterRunId,
+            whole: Schema.Literals(["revealAll", "coverAll", "reset", "none"]),
+            hide: Schema.Array(Schema.Int),
+            reveal: Schema.Array(Schema.Int),
+          }),
+        ),
+        Result: fromColumns(Schema.Struct({ hidden: Schema.Int, shown: Schema.Boolean })),
+        execute: ({ runId, whole, hide, reveal }) => sql`
+          update encounter_run_board
+          set fog_hidden = array(
+            select distinct square
+            from unnest(
+              case ${whole}::text
+                when 'revealAll' then '{}'::integer[]
+                when 'coverAll' then array(
+                  select generate_series(0, board_columns * board_rows - 1))
+                when 'reset' then fog_start
+                else fog_hidden
+              end || ${intArray([...hide])}
+            ) as square
+            where square <> all(${intArray([...reveal])})
+            order by square
+          )
+          where run_id = ${runId}
+          returning cardinality(fog_hidden) as hidden,
+            (select ${boardShown(sql)} from encounter_run
+              where encounter_run.id = encounter_run_board.run_id) as shown
         `,
       });
 
@@ -321,6 +399,87 @@ export class BattleMaps extends Context.Service<
               return Option.getOrNull(yield* board({ ...asked(creator), runId }));
             }),
           ),
+
+        updateFog: (creator, sessionId, runId, update) => {
+          const current = Effect.flatMap(board({ ...asked(creator), runId }), (found) =>
+            Option.match(found, {
+              onNone: () => Effect.fail(new Conflict({ message: "this fight has no board" })),
+              onSome: Effect.succeed,
+            }),
+          );
+          return dieOnSqlError(
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  yield* run({ ...asked(creator), sessionId, runId }).pipe(
+                    orNotFound("encounter_run", runId),
+                  );
+                  if (yield* requestAlreadyApplied(sql, runId, update.requestId)) {
+                    return yield* current;
+                  }
+
+                  // The board's size, locked for the rest of this write, so
+                  // two strokes of the brush land one after the other.
+                  const boards = yield* sql<{
+                    readonly board_columns: number;
+                    readonly board_rows: number;
+                  }>`
+                    select encounter_run_board.board_columns, encounter_run_board.board_rows
+                    from encounter_run_board
+                    where encounter_run_board.run_id = ${runId}
+                    for update
+                  `;
+                  const size = boards[0];
+                  if (size === undefined) {
+                    return yield* new Conflict({ message: "this fight has no board" });
+                  }
+                  const squares = [...(update.hide ?? []), ...(update.reveal ?? [])];
+                  if (
+                    squares.some(
+                      (square) =>
+                        square.column >= size.board_columns || square.row >= size.board_rows,
+                    )
+                  ) {
+                    return yield* new Conflict({ message: "that square is off the board" });
+                  }
+                  const index = (square: { readonly column: number; readonly row: number }) =>
+                    square.row * size.board_columns + square.column;
+
+                  const changed = yield* fog({
+                    runId,
+                    whole: update.revealAll
+                      ? "revealAll"
+                      : update.coverAll
+                        ? "coverAll"
+                        : update.reset
+                          ? "reset"
+                          : "none",
+                    hide: (update.hide ?? []).map(index),
+                    reveal: (update.reveal ?? []).map(index),
+                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+                  yield* appendEvent(sql, {
+                    sessionId,
+                    kind: "board-fog-updated",
+                    encounterRunId: runId,
+                    payload: { hidden: changed.hidden },
+                    requestId: update.requestId,
+                    visibility: changed.shown ? "shared" : "dm",
+                  });
+                  return yield* current;
+                }),
+              )
+              .pipe(
+                // Two sends of one stroke that raced past the idempotency
+                // check; the unique index refuses the second, as for a move.
+                Effect.catch((error) =>
+                  SqlError.isSqlError(error) && error.reason._tag === "UniqueViolation"
+                    ? current
+                    : Effect.fail(error),
+                ),
+                Effect.tap(() => live.touched(sessionId)),
+              ),
+          );
+        },
       };
     }),
   );

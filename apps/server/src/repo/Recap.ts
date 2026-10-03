@@ -26,7 +26,7 @@ import { combatantColumns, combatantRow } from "./Combatants.js";
 import type { CampaignCreatorActor } from "./CreatorActor.js";
 import { EncounterRunRow, runColumns } from "./EncounterRuns.js";
 import { CheckRow, SceneRow } from "./RunScenes.js";
-import { COMBATANT, initiativeOrder, RUN, RUNS } from "./liveTables.js";
+import { COMBATANT, hiddenByFog, initiativeOrder, RUN, RUNS } from "./liveTables.js";
 import { noteColumns, NoteRow, playerNoteColumns, PlayerNoteRow } from "./Notes.js";
 import { playerCombatantColumns, PlayerCombatantRow } from "./playerCombatant.js";
 import { PREP, PrepItemRow } from "./PrepItems.js";
@@ -306,7 +306,8 @@ export class Recap extends Context.Service<
       /**
        * The player projection of the fights' rows: the same predicate, a
        * different select list, and only a fight's — a conversation, a skill
-       * challenge or a hazard had no initiative order at the table.
+       * challenge or a hazard had no initiative order at the table — less
+       * what stands under the fight's fog, as at the table.
        */
       const playerCombatantsOf = SqlSchema.findAll({
         Request: RunsRequest,
@@ -320,6 +321,9 @@ export class Recap extends Context.Service<
               where encounter_run.id = combatant.encounter_run_id
                 and encounter_run.mode = 'combat'
             )
+            -- The table's rule: what stands under fog is not in a player's
+            -- order, so a recap read mid-fight does not name it either.
+            and not ${hiddenByFog(sql, campaignId, actor)}
           ${initiativeOrder(sql)}
         `,
       });

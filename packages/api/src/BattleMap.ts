@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CombatantPosition } from "./Combatant.js";
 import { BattleMapId, CampaignId, EncounterId } from "./Ids.js";
 
 /**
@@ -140,6 +141,9 @@ export class BattleMap extends Schema.Class<BattleMap>("BattleMap")({
  * has been deleted; the fight keeps its grid, with no picture. Everything the
  * board draws has the same meaning as on `BattleMap`, so one component draws
  * both.
+ *
+ * `fog` is the fight's own too: it starts clear, is carried to a resumed fight
+ * with the grid, and is written through `BoardFogUpdate`.
  */
 export class EncounterRunBoard extends Schema.Class<EncounterRunBoard>("EncounterRunBoard")({
   mapId: Schema.NullOr(BattleMapId),
@@ -152,7 +156,46 @@ export class EncounterRunBoard extends Schema.Class<EncounterRunBoard>("Encounte
   alignment: BattleMapAlignment,
   image: Schema.NullOr(BattleMapImages),
   imagePending: Schema.Boolean,
+  /**
+   * The squares under fog of war, in reading order (row by row). The DM sees
+   * through it; a player's table draws these squares and nothing that stands
+   * on them but the player's own character (`PlayerLiveBoard.fog`).
+   */
+  fog: Schema.Array(CombatantPosition),
 }) {}
+
+/** The most squares one fog write names: every square of the largest board. */
+const fogSquares = Schema.Array(CombatantPosition).check(
+  Schema.isBetweenLength(0, BATTLE_MAP_SQUARES_MAX * BATTLE_MAP_SQUARES_MAX),
+);
+
+/**
+ * The DM's fog of war on a fight's board, changed in place: the Fog tool's one
+ * write, answered with the board.
+ *
+ * At most one of `revealAll` (clear the board), `coverAll` (fog every square)
+ * and `reset` (back to the fog the fight started with, which is none until fog
+ * is authored in prep) applies first; then `hide` puts squares under fog and
+ * `reveal` takes them out, `reveal` last. A stroke of the brush is one of the
+ * two lists. A square off the fight's board, or a fight with no board, is a
+ * `Conflict`. It is written over and over while the DM paints, so it carries
+ * a `requestId`, as a move does.
+ */
+export const BoardFogUpdate = Schema.Struct({
+  hide: Schema.optional(fogSquares),
+  reveal: Schema.optional(fogSquares),
+  revealAll: Schema.optional(Schema.Literal(true)),
+  coverAll: Schema.optional(Schema.Literal(true)),
+  reset: Schema.optional(Schema.Literal(true)),
+  requestId: Schema.optional(Schema.NonEmptyString.check(Schema.isBetweenLength(1, 128))),
+}).check(
+  Schema.makeFilter((update) =>
+    [update.revealAll, update.coverAll, update.reset].filter((whole) => whole === true).length > 1
+      ? "at most one of revealAll, coverAll and reset"
+      : undefined,
+  ),
+);
+export type BoardFogUpdate = typeof BoardFogUpdate.Type;
 
 /**
  * The grid, changed in place. The setting line is not here: it is written on

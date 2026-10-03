@@ -903,16 +903,17 @@ export class EncounterRuns extends Context.Service<
                     }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
                     // The same fight on the same board: the predecessor's own
-                    // copy, not the encounter's map as it stands tonight. The
-                    // predecessor was proved this campaign's above, and its
-                    // board is what it was played on.
+                    // copy, not the encounter's map as it stands tonight, and
+                    // its fog as the DM left it. The predecessor was proved
+                    // this campaign's above, and its board is what it was
+                    // played on.
                     yield* sql`
                       insert into encounter_run_board (
                         run_id, map_id, grid, board_columns, board_rows, feet_per_cell,
-                        cell_px, offset_x_px, offset_y_px
+                        cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start
                       )
                       select ${run.id}, map_id, grid, board_columns, board_rows, feet_per_cell,
-                             cell_px, offset_x_px, offset_y_px
+                             cell_px, offset_x_px, offset_y_px, fog_hidden, fog_start
                       from encounter_run_board
                       where encounter_run_board.run_id = ${from.id}
                     `;

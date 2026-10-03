@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { AccountIdentity } from "./Account.js";
 import { Authorization } from "./Actor.js";
-import { BattleMap, BattleMapUpdate, EncounterRunBoard } from "./BattleMap.js";
+import { BattleMap, BattleMapUpdate, BoardFogUpdate, EncounterRunBoard } from "./BattleMap.js";
 import { Beat, BeatCreate, BeatUpdate } from "./Beat.js";
 import { Campaign, CampaignCreate, CampaignUpdate } from "./Campaign.js";
 import { CampaignAct, CampaignActCreate, CampaignActUpdate } from "./CampaignAct.js";
@@ -3165,6 +3165,17 @@ class RunsGroup extends HttpApiGroup.make("runs")
       params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
       success: Schema.NullOr(EncounterRunBoard),
       error: NotFound,
+    }),
+    /**
+     * Hide or reveal squares of the fight's board under fog of war, answered
+     * with the board. `Conflict` for a square off the board and for a fight
+     * with no board. See `BoardFogUpdate`.
+     */
+    HttpApiEndpoint.patch("updateFog", "/:runId/board/fog", {
+      params: { campaignId: CampaignId, sessionId: SessionId, runId: EncounterRunId },
+      payload: BoardFogUpdate,
+      success: EncounterRunBoard,
+      error: [NotFound, Conflict],
     }),
     /** Audit rows for Hob's direct resource spends in this fight, newest first. */
     HttpApiEndpoint.get("hobDirectUpdates", "/:runId/hob-direct-updates", {

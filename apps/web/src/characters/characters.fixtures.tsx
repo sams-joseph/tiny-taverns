@@ -524,6 +524,7 @@ export const sharedBoard = {
   feetPerCell: 5,
   alignment: { cellPx: 64, offsetXPx: 0, offsetYPx: 0 },
   image: drawnMapPicture,
+  fog: [],
   tokens: [
     { combatantId: yourCombatantId, position: { column: 5, row: 4 } },
     { combatantId: hagCombatantId, position: { column: 11, row: 6 } },
