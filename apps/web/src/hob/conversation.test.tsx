@@ -16,7 +16,12 @@ import {
   worldId,
 } from "../campaign/campaign.fixtures";
 import { castNightsAtom, npcPrepAtom, npcsAtom, npcSheetAtom, npcSheetsAtom } from "../cast/load";
-import { characterProposal } from "../characters/characters.fixtures";
+import {
+  brannoc,
+  brannocId,
+  characterProposal,
+  ownedBrannoc,
+} from "../characters/characters.fixtures";
 import { apiAtom, useApiAtom } from "../api/atoms";
 import { reads } from "../api/keys";
 import type { HobScope } from "./conversation";
@@ -1859,6 +1864,90 @@ describe("the account's own Hob, outside any campaign", () => {
     expect(screen.getByText(/mud to the knees/)).toBeInTheDocument();
     expect(screen.getByText(/Wisdom is highest because druid casting/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Keep it" })).toBeEnabled();
+  });
+
+  it("draws a level-up read back from the sheet's composer, keeps it, and opens the sheet", async () => {
+    const styleId = "2b1f2a1e-0000-4000-8000-00000000d001";
+    const defenseId = "2b1f2a1e-0000-4000-8000-00000000d002";
+    const opened: Array<HobKept> = [];
+    server.threads = [
+      {
+        id: threadId,
+        campaignId: null,
+        worldId: null,
+        title: "Choose my next level for me.",
+        createdAt: stamp,
+        updatedAt: stamp,
+      },
+    ];
+    server.turns = [
+      {
+        id: turnId,
+        threadId,
+        who: "hob",
+        text: "Level 6, with Defense.",
+        proposal: {
+          target: "levelUp",
+          characterId: brannocId,
+          characterName: brannoc.name,
+          className: "Paladin",
+          fromLevel: 5,
+          toLevel: 6,
+          hitPointGain: 9,
+          payload: {
+            expectedVersion: 1,
+            toLevel: 6,
+            hitPoints: "fixed",
+            picks: [{ offeredBy: styleId, featureId: defenseId }],
+          },
+          choices: {
+            picks: [
+              {
+                kind: "feature",
+                offeredBy: { featureId: styleId, name: "Fighting Style" },
+                featureId: defenseId,
+                name: "Defense",
+              },
+            ],
+            spells: [],
+          },
+          rationale: [],
+        },
+        acceptedAt: null,
+        discardedAt: null,
+        kept: null,
+        createdAt: stamp,
+      },
+    ];
+    server.acceptBody = {
+      accepted: "levelUp",
+      owned: { ...ownedBrannoc, character: { ...brannoc, level: 6, version: 2 } },
+      advancement: {
+        id: "2b1f2a1e-0000-4000-8000-00000000d003",
+        characterId: brannocId,
+        level: 6,
+        className: "Paladin",
+        hitPoints: { method: "fixed", die: 6, gain: 9 },
+        choices: { picks: [], spells: [] },
+        note: null,
+        origin: "assistant",
+        assistantTurnId: turnId,
+        createdAt: stamp,
+      },
+    };
+    renderHob({ account: true, onOpen: (made) => opened.push(made) });
+
+    expect(await screen.findByText("Paladin · Level 5 → 6")).toBeInTheDocument();
+    expect(screen.getByText("+9 (fixed)")).toBeInTheDocument();
+    expect(screen.getByText("Defense")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+
+    await waitFor(() =>
+      expect(server.accepts).toEqual([`/me/hob/threads/${threadId}/turns/${turnId}/accept`]),
+    );
+    expect(await screen.findByText("On the sheet")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Open it" }));
+    expect(opened).toEqual([{ accepted: "levelUp", characterId: brannocId }]);
   });
 
   it("cannot open a card kept before its keep was recorded, so does not offer to", async () => {

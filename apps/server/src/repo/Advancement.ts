@@ -56,10 +56,11 @@ import { spellbookRulesFor } from "./Spells.js";
 import { characterVocabulary, ownCharacter, type Vocabulary } from "./visibility.js";
 
 /** The character as the offer reads it: the columns a level-up starts from, and the sheet. */
-type OfferCharacter = typeof OfferCharacterRow.Type;
+type OfferCharacter = Omit<typeof OfferCharacterRow.Type, "name">;
 const OfferCharacterRow = fromColumns(
   Schema.Struct({
     id: CharacterId,
+    name: Schema.String,
     version: Schema.Int,
     level: Schema.NullOr(Schema.Int),
     className: Schema.NullOr(Schema.String),
@@ -69,6 +70,13 @@ const OfferCharacterRow = fromColumns(
   }),
   { sheet: "body" },
 );
+
+/** What the level-up composer's Hob is built over: the offer, and the character it is for. */
+export interface LevelUpDraftSources {
+  readonly offer: LevelUpOffer;
+  readonly name: string;
+  readonly sheet: CharacterSheet;
+}
 
 const FeatureRow = fromColumns(
   Schema.Struct({
@@ -183,6 +191,7 @@ const SubclassIdsRequest = Schema.toType(Schema.Array(SubclassId));
  * | method        | predicate                                               |
  * | ------------- | ------------------------------------------------------- |
  * | `offer`       | `ownCharacter`, then `characterVocabulary`              |
+ * | `offerToDraft`| `ownCharacter`, then `characterVocabulary`              |
  * | `levelUp`     | `ownCharacter` (row locked), then `characterVocabulary` |
  * | `undoLevelUp` | `ownCharacter` (row locked), then `characterVocabulary` |
  * | `levelUps`    | `ownCharacter`                                          |
@@ -203,6 +212,16 @@ export class Advancement extends Context.Service<
       id: CharacterId,
     ) => Effect.Effect<LevelUpOffer, NotFound | Conflict, CurrentActor>;
     /**
+     * `offer`, with the character's name and sheet from the same read: what
+     * the level-up composer's Hob is built over (`HobDraftAsk.intent:
+     * "levelUp"`). The name is the prompt's, and the sheet is what a proposal
+     * is held to (`levelUpChosen`) before it is offered, so the card shows the
+     * record the keep will write.
+     */
+    readonly offerToDraft: (
+      id: CharacterId,
+    ) => Effect.Effect<LevelUpDraftSources, NotFound | Conflict, CurrentActor>;
+    /**
      * **The level-up**: one level, in one transaction. The row is locked and
      * its version checked; a character on the table in a live fight at any
      * campaign is refused (the fight holds its copy of the hit points); the
@@ -220,12 +239,24 @@ export class Advancement extends Context.Service<
     readonly levelUp: (
       id: CharacterId,
       payload: LevelUpPayload,
-      /**
-       * The turn that proposed it, when the owner kept a Hob proposal. Only
-       * an accept passes it; a confirmed level-up is `authored`.
-       */
-      from?: AssistantOrigin,
     ) => Effect.Effect<CharacterLeveledUp, NotFound | Conflict, CurrentActor>;
+    /**
+     * **The level-up, for a kept Hob proposal**: `levelUp` with the turn that
+     * proposed it stamped on the record (`origin = 'assistant'`), for a caller
+     * already inside a transaction of its own — the accept, which locks the
+     * turn and marks it kept in the same one. The doorbell is handed back
+     * rather than rung: an open night must hear it once the caller's
+     * transaction has committed, not when this savepoint does.
+     */
+    readonly levelUpForAccept: (
+      id: CharacterId,
+      payload: LevelUpPayload,
+      from: AssistantOrigin,
+    ) => Effect.Effect<
+      { readonly leveled: CharacterLeveledUp; readonly ring: Effect.Effect<void> },
+      NotFound | Conflict,
+      CurrentActor
+    >;
     /**
      * **The undo**: the latest level-up taken back, in one transaction. The
      * row is locked; a character in a live fight is refused, as the level-up
@@ -471,120 +502,132 @@ export class Advancement extends Context.Service<
         `,
         });
 
-      return {
-        offer: (id) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const character = yield* SqlSchema.findOneOption({
-                Request: Schema.Void,
-                Result: OfferCharacterRow,
-                execute: () => sql`
-                  select id, version, level, class_name, race, subrace, body
-                  from character
-                  where character.id = ${id} and ${ownCharacter(sql, actor)}
-                `,
-              })(undefined);
-              if (Option.isNone(character)) {
-                return yield* new NotFound({ resource: "character", id });
-              }
-              return (yield* offerFor(character.value, actor)).offer;
-            }),
-          ),
+      /** The offer for a character this actor owns, with its name and sheet from the same read. */
+      const ownedOffer = (
+        id: CharacterId,
+      ): Effect.Effect<LevelUpDraftSources, NotFound | Conflict, CurrentActor> =>
+        dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            const character = yield* SqlSchema.findOneOption({
+              Request: Schema.Void,
+              Result: OfferCharacterRow,
+              execute: () => sql`
+                select id, name, version, level, class_name, race, subrace, body
+                from character
+                where character.id = ${id} and ${ownCharacter(sql, actor)}
+              `,
+            })(undefined);
+            if (Option.isNone(character)) {
+              return yield* new NotFound({ resource: "character", id });
+            }
+            const { offer } = yield* offerFor(character.value, actor);
+            return { offer, name: character.value.name, sheet: character.value.sheet };
+          }),
+        );
 
-        levelUp: (id, payload, from) =>
-          dieOnSqlError(
-            Effect.gen(function* () {
-              const actor = yield* CurrentActor;
-              const done = yield* sql.withTransaction(
-                Effect.gen(function* () {
-                  const locked = yield* SqlSchema.findOneOption({
-                    Request: Schema.Void,
-                    Result: CharacterRow,
-                    execute: () => sql`
+      /**
+       * The level-up's one transaction, answering the open nights to ring
+       * rather than ringing them: `levelUp` rings once it commits, and the
+       * accept once its own transaction (of which this is a savepoint) does.
+       */
+      const levelUpWithin = (
+        id: CharacterId,
+        payload: LevelUpPayload,
+        from: AssistantOrigin | undefined,
+      ) =>
+        dieOnSqlError(
+          Effect.gen(function* () {
+            const actor = yield* CurrentActor;
+            return yield* sql.withTransaction(
+              Effect.gen(function* () {
+                const locked = yield* SqlSchema.findOneOption({
+                  Request: Schema.Void,
+                  Result: CharacterRow,
+                  execute: () => sql`
                       select character.*, ${portraitColumns(sql)} from character
                       where character.id = ${id} and ${ownCharacter(sql, actor)}
                       for update of character
                     `,
-                  })(undefined);
-                  if (Option.isNone(locked)) {
-                    return yield* new NotFound({ resource: "character", id });
-                  }
-                  const before = locked.value;
-                  if (payload.expectedVersion !== before.version) {
-                    return yield* staleVersion(payload.expectedVersion, before.version);
-                  }
-                  const fight = (yield* liveFightsOf(sql, [id])).get(id);
-                  if (fight !== undefined) return yield* levelUpWhileFighting(fight.campaignName);
+                })(undefined);
+                if (Option.isNone(locked)) {
+                  return yield* new NotFound({ resource: "character", id });
+                }
+                const before = locked.value;
+                if (payload.expectedVersion !== before.version) {
+                  return yield* staleVersion(payload.expectedVersion, before.version);
+                }
+                const fight = (yield* liveFightsOf(sql, [id])).get(id);
+                if (fight !== undefined) return yield* levelUpWhileFighting(fight.campaignName);
 
-                  const { offer, vocabulary } = yield* offerFor(
-                    {
-                      id,
-                      version: before.version,
-                      level: before.level,
-                      className: before.className,
-                      race: before.race,
-                      subrace: before.subrace,
-                      sheet: before.sheet,
-                    },
-                    actor,
-                  );
-                  const hitPoints = offer.hitPoints;
-                  if (hitPoints === undefined || offer.className === null) {
-                    return yield* new Conflict({
-                      message:
-                        "This character's class is not in its rules, so there is no hit die to level up with. Change its level in Edit your character instead.",
-                    });
-                  }
-                  const chosen = levelUpChosen(offer, before.sheet, payload);
-                  if (Result.isFailure(chosen)) {
-                    return yield* new Conflict({ message: chosen.failure.join(" ") });
-                  }
-                  const { body, choices, applied, constitution } = chosen.success;
-
-                  const method = payload.hitPoints ?? DEFAULT_HIT_POINT_METHOD;
-                  const die =
-                    method === "fixed"
-                      ? averageHitDie(hitPoints.die)
-                      : yield* Effect.provideService(
-                          Random.nextIntBetween(1, hitPoints.die),
-                          Random.Random,
-                          random,
-                        );
-                  const gain = levelUpHitPointGain(hitPoints, die, constitution, offer.toLevel);
-                  const hpMax = before.hpMax === null ? null : before.hpMax + gain;
-
-                  const sheet = yield* recomputeForLevel(sql, {
-                    body,
-                    level: offer.toLevel,
+                const { offer, vocabulary } = yield* offerFor(
+                  {
+                    id,
+                    version: before.version,
+                    level: before.level,
                     className: before.className,
                     race: before.race,
                     subrace: before.subrace,
-                    from: { level: before.level, className: before.className, body: before.sheet },
-                    vocabulary,
-                    actor,
+                    sheet: before.sheet,
+                  },
+                  actor,
+                );
+                const hitPoints = offer.hitPoints;
+                if (hitPoints === undefined || offer.className === null) {
+                  return yield* new Conflict({
+                    message:
+                      "This character's class is not in its rules, so there is no hit die to level up with. Change its level in Edit your character instead.",
                   });
+                }
+                const chosen = levelUpChosen(offer, before.sheet, payload);
+                if (Result.isFailure(chosen)) {
+                  return yield* new Conflict({ message: chosen.failure.join(" ") });
+                }
+                const { body, choices, applied, constitution } = chosen.success;
 
-                  // A record at or above the level reached is one the Level box
-                  // has since taken back: this level-up replaces it.
-                  yield* sql`
+                const method = payload.hitPoints ?? DEFAULT_HIT_POINT_METHOD;
+                const die =
+                  method === "fixed"
+                    ? averageHitDie(hitPoints.die)
+                    : yield* Effect.provideService(
+                        Random.nextIntBetween(1, hitPoints.die),
+                        Random.Random,
+                        random,
+                      );
+                const gain = levelUpHitPointGain(hitPoints, die, constitution, offer.toLevel);
+                const hpMax = before.hpMax === null ? null : before.hpMax + gain;
+
+                const sheet = yield* recomputeForLevel(sql, {
+                  body,
+                  level: offer.toLevel,
+                  className: before.className,
+                  race: before.race,
+                  subrace: before.subrace,
+                  from: { level: before.level, className: before.className, body: before.sheet },
+                  vocabulary,
+                  actor,
+                });
+
+                // A record at or above the level reached is one the Level box
+                // has since taken back: this level-up replaces it.
+                yield* sql`
                     delete from character_advancement
                     where character_id = ${id} and level >= ${offer.toLevel}
                   `;
-                  const character = yield* levelledRow(actor)({
-                    id,
-                    level: offer.toLevel,
-                    hpMax,
-                    body: JSON.stringify(sheet),
-                  }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
-                  const record: AdvancementApplied = {
-                    ...applied,
-                    hpMax: { from: before.hpMax, to: hpMax },
-                  };
-                  const advancement = yield* SqlSchema.findOne({
-                    Request: Schema.Void,
-                    Result: AdvancementRow,
-                    execute: () => sql`
+                const character = yield* levelledRow(actor)({
+                  id,
+                  level: offer.toLevel,
+                  hpMax,
+                  body: JSON.stringify(sheet),
+                }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+                const record: AdvancementApplied = {
+                  ...applied,
+                  hpMax: { from: before.hpMax, to: hpMax },
+                };
+                const advancement = yield* SqlSchema.findOne({
+                  Request: Schema.Void,
+                  Result: AdvancementRow,
+                  execute: () => sql`
                       insert into character_advancement ${sql.insert({
                         character_id: id,
                         level: offer.toLevel,
@@ -601,23 +644,37 @@ export class Advancement extends Context.Service<
                       })}
                       returning ${advancementColumns(sql)}
                     `,
-                  })(undefined).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+                })(undefined).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
-                  const sessions = yield* openSeatSessionsOf(sql, id, actor);
-                  yield* appendSeatSessionsTouched(
-                    sql,
-                    id,
-                    sessions,
-                    { levelUp: { level: offer.toLevel } },
-                    undefined,
-                  );
-                  return { result: { character, advancement }, sessions };
-                }),
-              );
-              yield* ringSeatSessions(live, done.sessions);
-              return done.result;
-            }),
+                const sessions = yield* openSeatSessionsOf(sql, id, actor);
+                yield* appendSeatSessionsTouched(
+                  sql,
+                  id,
+                  sessions,
+                  { levelUp: { level: offer.toLevel } },
+                  undefined,
+                );
+                return { result: { character, advancement }, sessions };
+              }),
+            );
+          }),
+        );
+
+      return {
+        offer: (id) => Effect.map(ownedOffer(id), ({ offer }) => offer),
+
+        offerToDraft: ownedOffer,
+
+        levelUp: (id, payload) =>
+          Effect.flatMap(levelUpWithin(id, payload, undefined), ({ result, sessions }) =>
+            Effect.as(ringSeatSessions(live, sessions), result),
           ),
+
+        levelUpForAccept: (id, payload, from) =>
+          Effect.map(levelUpWithin(id, payload, from), ({ result, sessions }) => ({
+            leveled: result,
+            ring: ringSeatSessions(live, sessions),
+          })),
 
         undoLevelUp: (id, level) =>
           dieOnSqlError(

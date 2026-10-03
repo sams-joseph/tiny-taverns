@@ -18,6 +18,7 @@ import { makeClient, runApiResult, type TavernsClient } from "../api/client";
 import { reads, type ReadKey } from "../api/keys";
 import { classifyFailure, type ApiFailure } from "../api/failure";
 import { useCredential } from "../auth/credential";
+import { levelUpWrites } from "../characters/write";
 import {
   ARTIFACT_KINDS,
   artifactFrom,
@@ -415,13 +416,17 @@ const callsFor = (scope: HobScope): ScopeCalls => {
         // A kept campaign is a row on the Campaigns list, and a card in its
         // Shared World's directory when it named one; a kept Shared World is
         // a card on the Shared Worlds list (and a world the campaign forms can
-        // now name); a kept character is a card on the roster.
+        // now name); a kept character is a card on the roster; a kept
+        // level-up moves what the wizard's own confirm moves, at every table
+        // the character sits at — which is why its answer is the roster's row.
         keeps: (accepted) =>
           accepted.accepted === "campaign"
             ? [reads.myCampaigns, reads.sharedWorld(accepted.campaign.contextId)]
             : accepted.accepted === "sharedWorld"
               ? [reads.mySharedWorlds]
-              : [reads.myCharacters],
+              : accepted.accepted === "levelUp"
+                ? levelUpWrites(accepted.owned)
+                : [reads.myCharacters],
       };
   }
 };

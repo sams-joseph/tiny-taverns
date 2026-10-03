@@ -188,6 +188,7 @@ export const assistantFromConfig: Layer.Layer<
   Hob,
   Config.ConfigError,
   | Acts
+  | Advancement
   | Campaigns
   | CampaignStories
   | Creatures
@@ -423,6 +424,7 @@ export const servicesOver = <E>(
     Hob,
     E | Config.ConfigError,
     | Acts
+    | Advancement
     | Campaigns
     | CampaignStories
     | Creatures
@@ -707,6 +709,10 @@ export const servicesOver = <E>(
         // accept path holds `Characters` as well now — the same statement a
         // typed one takes, with `assistant_turn_id` on it.
         Characters.layer.pipe(Layer.provide(imageUrls)),
+        // A kept level-up goes through the owner's own level-up write, which
+        // rings the open nights where the character sits once the accept
+        // commits: the same memoised doorbell everything else rings.
+        Advancement.layer.pipe(Layer.provide([LiveEvents.layer, imageUrls])),
         Encounters.layer,
         // A Shared World kept from the account's own Hob is founded through
         // the same `Groups.create` the form's POST uses. The bare layer: a new
@@ -763,6 +769,10 @@ export const servicesOver = <E>(
       Layer.provide([
         // The acts, which `proposeAct` reads before offering one.
         Acts.layer,
+        // An owned character's next-level offer, which the level-up
+        // composer's toolkit is built from. The bare layer: an offer carries
+        // no picture, and nothing Hob holds may sign one.
+        Advancement.layer.pipe(Layer.provide(LiveEvents.layer)),
         Campaigns.layer,
         // The story so far, which the creator's Hob reads before it drafts one.
         CampaignStories.layer,

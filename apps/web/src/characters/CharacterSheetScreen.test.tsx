@@ -303,14 +303,16 @@ describe("a character sheet", () => {
     // *Ask Hob* is the shell's own chrome on every campaign-less screen — the
     // bar the designers drew, with no handler here — not a sheet control. The
     // vitals toggle opens the narrow summary and writes nothing. Everything
-    // else is a write the payload carries: the bar's *Edit*, *Level up* and
-    // *Delete*, the resource spend/rest controls, the five section actions,
-    // and the six death-save pips.
+    // else is a write the payload carries: the bar's *Edit*, *Level up*, *Level
+    // up with Hob* (whose keep is the same write) and *Delete*, the resource
+    // spend/rest controls, the five section actions, and the six death-save
+    // pips.
     expect(pressable()).toEqual([
       "Ask Hob⌘K",
       "Add to campaign",
       "Delete Brannoc Duskharrow",
       "Level up",
+      "Level up with Hob",
       "Edit",
       "Show vitals",
       "−",

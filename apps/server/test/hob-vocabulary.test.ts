@@ -12,6 +12,7 @@ import { Context, Effect, Layer, Stream } from "effect";
 import { Accounts } from "../src/Accounts.js";
 import { Hob } from "../src/assistant/Hob.js";
 import { LiveEvents } from "../src/live/LiveEvents.js";
+import { Advancement } from "../src/repo/Advancement.js";
 import { PrepItems } from "../src/repo/PrepItems.js";
 import { Acts } from "../src/repo/Acts.js";
 import { Campaigns } from "../src/repo/Campaigns.js";
@@ -73,6 +74,7 @@ import { describeLayer } from "./support/suite.js";
 
 const services = Layer.mergeAll(
   Accounts.layer,
+  Advancement.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   CampaignStories.layer,
   Groups.layer,
@@ -326,6 +328,7 @@ const enumOf = (request: ChatRequest | undefined, tool: string, parameter: strin
  */
 const bare = Layer.mergeAll(
   Accounts.layer,
+  Advancement.layer.pipe(Layer.provide(LiveEvents.layer)),
   Campaigns.layer,
   CampaignStories.layer,
   Groups.layer,

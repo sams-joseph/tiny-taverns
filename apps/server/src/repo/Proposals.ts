@@ -18,6 +18,7 @@ import {
 import { Context, Effect, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 import { Acts } from "./Acts.js";
+import { Advancement } from "./Advancement.js";
 import { Beats } from "./Beats.js";
 import { Campaigns } from "./Campaigns.js";
 import { CampaignStories } from "./CampaignStories.js";
@@ -92,13 +93,21 @@ import type { ConversationReach } from "./visibility.js";
  * core rules, or a campaign, through `Campaigns.createStandalone` or
  * `Campaigns.create` with the payload `campaignCreateFrom` builds for the form
  * too, or a Shared World, through `Groups.create` with the payload
- * `sharedWorldCreateFrom` builds for the form. The asker becomes the
+ * `sharedWorldCreateFrom` builds for the form, or a level-up of a character
+ * the asker owns, through `Advancement.levelUpForAccept` (the wizard's own
+ * write) with the version the proposal read. The asker becomes the
  * campaign's creator, or the world's owner, exactly as by the form.
  *
  * The whole accept is one transaction, so an encounter whose roster fails
  * halfway leaves nothing behind — unlike the client-side compositions in
  * `apps/web`, which have no transaction across requests and say so.
  */
+
+/** What a kept draft made, and what to do once its transaction has committed. */
+interface AcceptedDraft {
+  readonly accepted: HobAccepted;
+  readonly after: Effect.Effect<void>;
+}
 
 /** A proposal is one accept, and a second one is a conflict rather than a second row. */
 const alreadyAccepted = new Conflict({
@@ -212,8 +221,9 @@ export class Proposals extends Context.Service<
      * own account-scoped thread, materialised with the turn on it — a
      * character through `Characters.createCore`, a campaign through
      * `Campaigns.create` or `createStandalone`, a Shared World through
-     * `Groups.create`. Only those can live in such a thread; anything else is
-     * refused rather than filed somewhere its card never named.
+     * `Groups.create`, a level-up through the owner's own level-up write.
+     * Only those can live in such a thread; anything else is refused rather
+     * than filed somewhere its card never named.
      */
     readonly acceptDraft: (
       threadId: AssistantThreadId,
@@ -239,6 +249,7 @@ export class Proposals extends Context.Service<
       const npcPreps = yield* NpcPreps;
       const prepItems = yield* PrepItems;
       const acts = yield* Acts;
+      const advancement = yield* Advancement;
 
       const materialise = (
         campaignId: CampaignId,
@@ -455,6 +466,15 @@ export class Proposals extends Context.Service<
               }),
             );
 
+          case "levelUp":
+            // The same: only the sheet's level-up composer offers one, into
+            // the owner's own thread.
+            return Effect.fail(
+              new Conflict({
+                message: "that is a level-up — keep it from your own Hob conversation",
+              }),
+            );
+
           case "sharedWorldHistory":
           case "sharedWorldSummary":
             // Only a group thread ever carries one — the group toolkit is the
@@ -499,70 +519,103 @@ export class Proposals extends Context.Service<
 
         acceptDraft: (threadId, turnId) =>
           dieOnSqlError(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const actor = yield* CurrentActor;
-                const turn = yield* lockTurnForAccept(
-                  sql,
-                  "account",
-                  actor.accountId,
-                  threadId,
-                  turnId,
-                );
-                if (turn.proposal === null) {
-                  return yield* new NotFound({ resource: "proposal", id: turnId });
-                }
-                if (turn.acceptedAt !== null) return yield* alreadyKept;
-                if (turn.discardedAt !== null) return yield* discardedConflict;
-                const from = { assistantTurnId: turnId };
-                const proposal = turn.proposal;
-                const accepted: HobAccepted | undefined =
-                  proposal.target === "character"
-                    ? {
-                        accepted: "character" as const,
-                        character: yield* characters.createCore(ownCreateFrom(proposal), from),
-                      }
-                    : proposal.target === "campaign"
+            sql
+              .withTransaction(
+                Effect.gen(function* () {
+                  const actor = yield* CurrentActor;
+                  const turn = yield* lockTurnForAccept(
+                    sql,
+                    "account",
+                    actor.accountId,
+                    threadId,
+                    turnId,
+                  );
+                  if (turn.proposal === null) {
+                    return yield* new NotFound({ resource: "proposal", id: turnId });
+                  }
+                  if (turn.acceptedAt !== null) return yield* alreadyKept;
+                  if (turn.discardedAt !== null) return yield* discardedConflict;
+                  const from = { assistantTurnId: turnId };
+                  const proposal = turn.proposal;
+                  if (proposal.target === "levelUp") {
+                    // Through the owner's own level-up write, with the version
+                    // the proposal read: a sheet changed since is its
+                    // stale-version `Conflict`, a character in a live fight its
+                    // refusal, and one that is not the asker's its `NotFound`.
+                    // The open nights where it sits hear it once this commits.
+                    const { leveled, ring } = yield* advancement.levelUpForAccept(
+                      proposal.characterId,
+                      proposal.payload,
+                      from,
+                    );
+                    const owned = (yield* characters.mine).find(
+                      (row) => row.character.id === leveled.character.id,
+                    );
+                    if (owned === undefined) {
+                      return yield* new NotFound({
+                        resource: "character",
+                        id: proposal.characterId,
+                      });
+                    }
+                    const kept: HobAccepted = {
+                      accepted: "levelUp",
+                      owned,
+                      advancement: leveled.advancement,
+                    };
+                    yield* markAccepted(sql, turnId, keptFrom(kept));
+                    return { accepted: kept, after: ring } as AcceptedDraft;
+                  }
+                  const accepted: HobAccepted | undefined =
+                    proposal.target === "character"
                       ? {
-                          accepted: "campaign" as const,
-                          // The world was one the asker could create in when
-                          // Hob offered it; the ordinary create asks again, so
-                          // a world left or archived since is its `NotFound`.
-                          campaign:
-                            proposal.world === null
-                              ? yield* campaigns.createStandalone(
-                                  campaignCreateFrom(proposal),
-                                  from,
-                                )
-                              : yield* campaigns.create(
-                                  proposal.world.id,
-                                  campaignCreateFrom(proposal),
-                                  from,
-                                ),
+                          accepted: "character" as const,
+                          character: yield* characters.createCore(ownCreateFrom(proposal), from),
                         }
-                      : proposal.target === "sharedWorld"
+                      : proposal.target === "campaign"
                         ? {
-                            accepted: "sharedWorld" as const,
-                            // The asker founds it and owns it, as by the form.
-                            sharedWorld: yield* groups.create(
-                              sharedWorldCreateFrom(proposal),
-                              from,
-                            ),
+                            accepted: "campaign" as const,
+                            // The world was one the asker could create in when
+                            // Hob offered it; the ordinary create asks again, so
+                            // a world left or archived since is its `NotFound`.
+                            campaign:
+                              proposal.world === null
+                                ? yield* campaigns.createStandalone(
+                                    campaignCreateFrom(proposal),
+                                    from,
+                                  )
+                                : yield* campaigns.create(
+                                    proposal.world.id,
+                                    campaignCreateFrom(proposal),
+                                    from,
+                                  ),
                           }
-                        : undefined;
-                if (accepted === undefined) {
-                  // Only the account's own toolkits write into these threads
-                  // and they propose nothing else; the refusal is the same
-                  // guard the two accepts above keep against each other's
-                  // members.
-                  return yield* new Conflict({
-                    message: "that belongs to a campaign or a Shared World — accept it there",
-                  });
-                }
-                yield* markAccepted(sql, turnId, keptFrom(accepted));
-                return accepted;
-              }),
-            ),
+                        : proposal.target === "sharedWorld"
+                          ? {
+                              accepted: "sharedWorld" as const,
+                              // The asker founds it and owns it, as by the form.
+                              sharedWorld: yield* groups.create(
+                                sharedWorldCreateFrom(proposal),
+                                from,
+                              ),
+                            }
+                          : undefined;
+                  if (accepted === undefined) {
+                    // Only the account's own toolkits write into these threads
+                    // and they propose nothing else; the refusal is the same
+                    // guard the two accepts above keep against each other's
+                    // members.
+                    return yield* new Conflict({
+                      message: "that belongs to a campaign or a Shared World — accept it there",
+                    });
+                  }
+                  yield* markAccepted(sql, turnId, keptFrom(accepted));
+                  return { accepted, after: Effect.void } as AcceptedDraft;
+                }),
+              )
+              .pipe(
+                Effect.tap(({ after }) => after),
+                Effect.map(({ accepted }) => accepted),
+              ),
           ),
 
         acceptSharedWorld: (groupId, threadId, turnId) =>
