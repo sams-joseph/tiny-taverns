@@ -1119,9 +1119,6 @@ export class Characters extends Context.Service<
                       return { character: yield* readOwn(id), sessions: [] };
                     }
 
-                    const character = yield* markDeathSaves({ id, ...saves }).pipe(
-                      orNotFound("character", id),
-                    );
                     const sessions = yield* openSeatSessions(id, actor);
                     yield* Effect.forEach(
                       sessions,
@@ -1137,6 +1134,9 @@ export class Characters extends Context.Service<
                               payload.requestId,
                             ),
                       { discard: true },
+                    );
+                    const character = yield* markDeathSaves({ id, ...saves }).pipe(
+                      orNotFound("character", id),
                     );
                     return { character, sessions };
                   }),
