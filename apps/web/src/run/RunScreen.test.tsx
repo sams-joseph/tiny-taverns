@@ -614,6 +614,47 @@ describe("the runner", () => {
     expect(rows()).toHaveLength(2);
   });
 
+  it("counts the enemies still standing when the fight is ended", async () => {
+    const goblin = (id: string, hpCurrent: number) => ({
+      ...goblinBoss,
+      id,
+      displayName: "Goblin",
+      hpCurrent,
+    });
+    for (const [key, answer] of [...server.routes]) {
+      if (key.startsWith("GET") && key.endsWith("/combatants")) {
+        server.routes.set(key, {
+          ...answer,
+          body: [
+            // A downed PC is not an enemy: the line counts the NPC rows only.
+            { ...brannoc, hpCurrent: 0 },
+            { ...goblinBoss, hpCurrent: 0 },
+            goblin("2b1f2a1e-0000-4000-8000-0000000d0a01", 7),
+            goblin("2b1f2a1e-0000-4000-8000-0000000d0a02", 0),
+          ],
+        });
+      }
+      if (key.startsWith("GET") && key.endsWith(liveRun.id)) {
+        server.routes.set(key, { ...answer, body: { ...liveRun, round: 3 } });
+      }
+    }
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(4));
+
+    await userEvent.click(screen.getByRole("button", { name: "End" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(
+      dialog.getByText(/^2 of 3 enemies are down after 3 rounds\. 1 still standing\./),
+    ).toBeInTheDocument();
+    // The line is added, not swapped in: the title, the switch and both
+    // endings are the dialog's own, and nothing offers to award anything.
+    expect(dialog.getByText("End this fight?")).toBeInTheDocument();
+    expect(dialog.getByRole("switch", { name: /Finish session 12 too/ })).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Keep playing" })).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "End the fight" })).toBeInTheDocument();
+    expect(dialog.queryByText(/XP/)).toBeNull();
+  });
+
   /**
    * **A combatant write reaches a row that is not in a fight.**
    *
