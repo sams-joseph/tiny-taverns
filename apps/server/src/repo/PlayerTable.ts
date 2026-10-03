@@ -28,6 +28,7 @@ import { type ImageSigner, imageSigner } from "../images/ImageUrls.js";
 import { LiveEvents } from "../live/LiveEvents.js";
 import {
   alignmentColumn,
+  areaColumn,
   battleMapPicture,
   boardColumns,
   fogColumn,
@@ -196,7 +197,9 @@ const playerBoardRow = (sign: ImageSigner | undefined) =>
  * same condition, and not at all for an NPC while hostile tokens are hidden,
  * so a row the order drops takes its token with it. **Fog** drops the row of
  * whatever stands under it, token and all, but the player's own character
- * (`liveTables.ts`' `hiddenByFog`); the board carries the fogged squares.
+ * (`liveTables.ts`' `hiddenByFog`); the board carries the fogged squares. The
+ * DM's pinned area template rides on the board, so it is shown exactly when
+ * the board is.
  */
 export class PlayerTable extends Context.Service<
   PlayerTable,
@@ -287,7 +290,7 @@ export class PlayerTable extends Context.Service<
           select encounter_run_board.grid, encounter_run_board.board_columns,
                  encounter_run_board.board_rows, encounter_run_board.feet_per_cell,
                  ${alignmentColumn(sql, "encounter_run_board")},
-                 ${battleMapPicture(sql)}, ${fogColumn(sql)}
+                 ${battleMapPicture(sql)}, ${fogColumn(sql)}, ${areaColumn(sql)}
           from encounter_run_board
           join encounter_run on encounter_run.id = encounter_run_board.run_id
           left join battle_map on battle_map.id = encounter_run_board.map_id

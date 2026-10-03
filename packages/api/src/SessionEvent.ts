@@ -40,6 +40,11 @@ export const SessionEventKind = Schema.Literals([
    * `{hidden}`, how many squares are under fog now.
    */
   "board-fog-updated",
+  /**
+   * The DM pinned an area template on the fight's board, or cleared it.
+   * Carries `{area}`, the template now pinned or `null`.
+   */
+  "board-area-updated",
   "turn-advanced",
   /** A conversation turned into a fight: the run's mode became `combat`. */
   "run-escalated",

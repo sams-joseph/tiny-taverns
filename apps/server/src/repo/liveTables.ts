@@ -167,3 +167,21 @@ export const freshTurn = (sql: SqlClient.SqlClient, runId: string, combatantId: 
         updated_at = now()
     where combatant.id = ${combatantId} and combatant.encounter_run_id = ${runId}
   `;
+
+/**
+ * Take the area template off a fight's board (`0090_run_board_area.ts`),
+ * answering the board's run id when there was one to take off and no row when
+ * nothing was pinned. The DM's clear runs it, and so does each way a fight
+ * ends — `EncounterRuns.end` and the night carrying it — because a template is
+ * where a spell lands now, and a fight that is over has no now.
+ *
+ * Beneath the caller's gate, which has already proved the run writable.
+ */
+export const clearArea = (sql: SqlClient.SqlClient, runId: string) =>
+  sql<{ readonly run_id: string }>`
+    update encounter_run_board
+    set area_shape = null, area_feet = null, area_origin_column = null,
+        area_origin_row = null, area_toward_column = null, area_toward_row = null
+    where encounter_run_board.run_id = ${runId} and encounter_run_board.area_shape is not null
+    returning encounter_run_board.run_id
+  `;

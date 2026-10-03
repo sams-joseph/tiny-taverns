@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { BattleMapAlignment, BattleMapGrid, BattleMapImages } from "./BattleMap.js";
+import { BattleMapAlignment, BattleMapGrid, BattleMapImages, BoardArea } from "./BattleMap.js";
 import { CharacterPortraitImages, DeathSaves } from "./Character.js";
 import { CombatantPosition, InitiativeSetBy } from "./Combatant.js";
 import { EncounterKind } from "./EncounterKind.js";
@@ -158,6 +158,11 @@ export const PlayerLiveBoard = Schema.Struct({
    * token nor its row of the order — but the player's own character.
    */
   fog: Schema.Array(CombatantPosition),
+  /**
+   * The area template the DM has pinned, or `null`: the same template the DM's
+   * board carries, shown while the board is.
+   */
+  area: Schema.NullOr(BoardArea),
   /**
    * The tokens on the board: only rows in this player's `order`, only those the
    * DM has put down, no NPC's while the DM hides hostile tokens, and none under

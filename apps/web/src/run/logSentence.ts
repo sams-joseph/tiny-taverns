@@ -27,6 +27,7 @@ export const SENTENCE: Record<SessionEventKind, (who: string | undefined, noun: 
     "combatant-moved": (who) => `${who ?? "A combatant"} moved on the board`,
     "death-save": (who) => `Death saves for ${who ?? "someone"} changed`,
     "board-fog-updated": () => "The fog on the board shifted",
+    "board-area-updated": () => "An area on the board was pinned or cleared",
     "turn-advanced": (who) => `${who ?? "Nobody"} is up`,
     "run-escalated": () => "The conversation turned into a fight",
     // The scene is the DM's alone; these say only that it moved, never how.
