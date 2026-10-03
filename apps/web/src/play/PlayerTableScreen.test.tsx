@@ -240,8 +240,11 @@ describe("PlayerTableScreen", () => {
     const hag = map.getByRole("img", { name: /^Marsh Hag/ });
     expect(hag.className).toMatch(/opacity-45/);
     expect(map.getByRole("img", { name: /^Brannoc/ }).className).not.toMatch(/opacity-/);
-    // The turn's ring is the one extra circle on the hag's face.
-    expect(hag.querySelectorAll("circle")).toHaveLength(2);
+    // The turn's ring is on the hag's face, and on nobody else's.
+    expect(hag.querySelector("[data-ring=active]")).not.toBeNull();
+    expect(
+      map.getByRole("img", { name: /^Brannoc/ }).querySelector("[data-ring=active]"),
+    ).toBeNull();
   });
 
   it("draws no token for a row the table did not send, whatever the board says", async () => {

@@ -656,7 +656,7 @@ export function RunScreen() {
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
   const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
   // The party's sheets, for a character's speed on the board. A miss is no
-  // range box, never a guessed one.
+  // range, never a guessed one.
   const [partyResource] = useApiAtom(partyAtom(campaignId));
   const dice = useDmDice();
   const stage = useStage();

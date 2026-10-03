@@ -9,8 +9,9 @@ import { HEIGHT, WIDTHS, box, expect, screens, test } from "../support/app";
  * over it on the `hud` rung, and the window does not scroll. Below it (760 and
  * 390) it is the window-scrolling grid of named areas (`run/RunLayout.tsx`)
  * with the board to look at, which re-deals the cards rather than leaving a
- * blank beside the list. Then the selected card's controls inside its edges and
- * the DM's dice taking a click. All of it is layout, stacking and hit-testing,
+ * blank beside the list. Then the selected card's controls inside its edges,
+ * the DM's dice taking a click and, on the canvas, a token dragged onto its
+ * square with its ruler on the way. All of it is layout, stacking and hit-testing,
  * which jsdom does not compute.
  *
  * Read over the creator scenario's fight (`run/run.fixtures.tsx`'s
@@ -362,7 +363,7 @@ for (const width of WIDTHS) {
       });
 
       if (canvas) {
-        await test.step("a token is a target a pointer can hit, and a square moves it", async () => {
+        await test.step("a token is a target a pointer can hit, dressed as drawn", async () => {
           const token = map.getByRole("button", { name: /^Brannoc, column/ });
           const at = await box(token);
           expect.soft(at.width, "token width").toBeGreaterThanOrEqual(TARGET);
@@ -373,33 +374,90 @@ for (const width of WIDTHS) {
               "the token is on top",
             )
             .toMatch(/^Brannoc, column/);
+          // He is up and followed: his name and hit points are drawn under him,
+          // inside the board, scaled with his square.
+          const name = await box(token.locator('[data-slot="token-name"]'));
+          expect.soft(name.width, "name drawn").toBeGreaterThan(0);
+          expect.soft(name.y, "name under the token").toBeGreaterThan(at.y + at.height * 0.9);
+          const hp = await box(token.locator('[data-slot="hp-bar"]'));
+          expect.soft(hp.width, "hit points drawn").toBeGreaterThan(at.width * 0.5);
+          expect.soft(hp.y, "hit points under the disc").toBeGreaterThan(at.y + at.height * 0.9);
+          // His sheet says a speed and it is his turn, so selected, his range is tinted.
           await token.click();
           await expect(card).toContainText("Brannoc");
-          // His sheet says a speed, so the reach is drawn round him.
           await expect
-            .soft(map.locator('[data-slot="run-tokens"] [data-slot="token-reach"]'))
+            .soft(map.locator('[data-slot="run-tokens"] [data-slot="range-square"]').first())
             .toBeVisible();
+        });
 
+        await test.step("a dragged token lands on its square, on top, with the ruler on the way", async () => {
+          // The server answers a move with the square it was sent.
+          await page.route(
+            (url) => url.pathname.endsWith("/move"),
+            async (route) => {
+              const response = await route.fetch();
+              const row = (await response.json()) as Record<string, unknown>;
+              const { position } = route.request().postDataJSON() as { position: unknown };
+              await route.fulfill({ response, json: { ...row, position } });
+            },
+          );
+          const token = map.getByRole("button", { name: /^Brannoc, column/ });
+          const at = await box(token);
+          const centre = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
           // Three squares to his right, which nobody stands on and no panel covers.
-          const target = { x: at.x + at.width * 3.5, y: at.y + at.height / 2 };
+          const target = { x: centre.x + at.width * 3, y: centre.y };
           expect
             .soft(await landsOn(page, target.x, target.y), "the square is clear")
             .toBe("board-canvas");
+          const view = await viewOf(page);
+
+          await page.mouse.move(centre.x, centre.y);
+          await page.mouse.down();
+          await page.mouse.move(centre.x + at.width, centre.y, { steps: 4 });
+          await page.mouse.move(target.x, target.y, { steps: 6 });
+          const reading = map.locator('[data-slot="ruler-reading"]');
+          // He is up: three squares, against what his speed leaves.
+          await expect.soft(reading).toHaveText(/^15 ft · \d+ left$/);
+          const label = await box(reading);
+          expect.soft(label.width, "the reading is drawn").toBeGreaterThan(0);
+          expect.soft(label.x, "beside the far end").toBeGreaterThan(target.x);
           const moved = page.waitForRequest(
             (request) => request.method() === "POST" && request.url().endsWith("/move"),
           );
-          await page.mouse.click(target.x, target.y);
+          await page.mouse.up();
           const body = (await moved).postDataJSON() as { position: unknown };
-          expect.soft(body.position, "the square clicked").toEqual({ column: 8, row: 4 });
+          expect.soft(body.position, "the square it was dropped on").toEqual({ column: 8, row: 4 });
+          await expect(token).toHaveAccessibleName(/^Brannoc, column 9, row 5/);
+          await expect.soft(reading).toHaveCount(0);
+          expect.soft(await viewOf(page), "the drag panned nothing").toEqual(view);
+
+          await page.waitForTimeout(400);
+          const landed = await box(token);
+          expect.soft(landed.x, "on the square").toBeCloseTo(at.x + at.width * 3, 0);
+          expect.soft(landed.y, "same row").toBeCloseTo(at.y, 0);
+          expect
+            .soft(
+              await landsOn(page, landed.x + landed.width / 2, landed.y + landed.height / 2),
+              "the token is on top",
+            )
+            .toMatch(/^Brannoc, column 9/);
+        });
+
+        await test.step("the arrow keys still walk a focused token", async () => {
+          const token = map.getByRole("button", { name: /^Brannoc, column/ });
+          await token.focus();
+          const moved = page.waitForRequest(
+            (request) => request.method() === "POST" && request.url().endsWith("/move"),
+          );
+          await page.keyboard.press("ArrowLeft");
+          const body = (await moved).postDataJSON() as { position: unknown };
+          expect.soft(body.position, "a square to the left").toEqual({ column: 7, row: 4 });
+          await expect(token).toHaveAccessibleName(/^Brannoc, column 8, row 5/);
         });
 
         await test.step("a drag on the board pans it, and moves nobody", async () => {
-          // The click above moved him (the stub answers with column 7), and he
-          // slides there: measure the board,
-          // which a pan carries whole, rather than a token mid-slide.
           const board = map.locator('[data-slot="battle-map"]');
           const token = map.getByRole("button", { name: /^Brannoc, column/ });
-          await expect(token).toHaveAccessibleName(/^Brannoc, column 7, row 5/);
           await page.waitForTimeout(400);
           const before = await box(token);
           const boardBefore = await box(board);

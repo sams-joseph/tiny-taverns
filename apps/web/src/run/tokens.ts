@@ -1,11 +1,9 @@
 import {
-  type BattleMapBoard,
   type BoardSquare,
   type Combatant,
   type CombatantId,
   type DiagonalRule,
   type PictureRect,
-  cellRect,
   feetBetween,
 } from "@taverns/api";
 
@@ -83,27 +81,6 @@ export const leadingFeet = (speed: string | undefined): number | undefined => {
 };
 
 /**
- * The rectangle round a set of squares, in the picture's pixels: from the
- * first column and row any of them is in to the last. `undefined` for none.
- */
-export const extentRect = (
-  board: BattleMapBoard,
-  squares: ReadonlyArray<BoardSquare>,
-): PictureRect | undefined => {
-  if (squares.length === 0) return undefined;
-  const columns = squares.map((square) => square.column);
-  const rows = squares.map((square) => square.row);
-  const first = cellRect(board, { column: Math.min(...columns), row: Math.min(...rows) });
-  const last = cellRect(board, { column: Math.max(...columns), row: Math.max(...rows) });
-  return {
-    x: first.x,
-    y: first.y,
-    width: last.x + last.width - first.x,
-    height: last.y + last.height - first.y,
-  };
-};
-
-/**
  * The board's line about the DM's last move: `"Goblin Boss moved 30 ft"`, and
  * `", past their 30 ft speed"` when it went further than that — said, not
  * refused, because the DM moves a miniature wherever the table agrees it went.
@@ -140,3 +117,54 @@ export const percentOf = (
   width: `${String((rect.width / plane.width) * 100)}%`,
   height: `${String((rect.height / plane.height) * 100)}%`,
 });
+
+/**
+ * How a token is drawn, from its row: the drawing's rules (`Encounter
+ * Runner.dc.html`, `renderVals`), in one place for the DM's board.
+ *
+ * - **out**: a creature that is finished — a monster at zero hit points, or a
+ *   party member with three failed death saves. It fades, as its row does. A
+ *   party member at zero who is still making saves is not out: they are dying,
+ *   still in the fight, and drawn as anyone else.
+ * - **struck**: a creature that is out has its name struck through, monster
+ *   and dead PC alike.
+ * - **hidden**: the token is off the players' board — its row is held back
+ *   (`visibility: "dm"`), or it is a monster while the DM hides them all — so
+ *   the DM's board draws its ring dashed.
+ */
+export interface TokenState {
+  readonly out: boolean;
+  readonly struck: boolean;
+  readonly hidden: boolean;
+  /** Hit points over maximum, 0–1. */
+  readonly health: number;
+}
+
+export const tokenState = (
+  combatant: Combatant,
+  { hp, hostileTokensHidden }: { readonly hp: number; readonly hostileTokensHidden: boolean },
+): TokenState => {
+  const monster = combatant.kind !== "pc";
+  const out = monster ? hp === 0 : (combatant.deathSaves?.failures ?? 0) >= 3;
+  return {
+    out,
+    struck: out,
+    hidden: combatant.visibility === "dm" || (monster && hostileTokensHidden),
+    health: combatant.hpMax > 0 ? Math.max(0, Math.min(1, hp / combatant.hpMax)) : 0,
+  };
+};
+
+/**
+ * Which tokens wear their name under them: the one whose turn it is and the
+ * one selected (the drawing's default), every token, or none. A token being
+ * dragged always does. The DM's own preference on this browser
+ * (`useTokenNames`), not the fight's.
+ */
+export const TOKEN_NAMES = ["active", "all", "none"] as const;
+export type TokenNames = (typeof TOKEN_NAMES)[number];
+
+export const nameShown = (
+  names: TokenNames,
+  token: { readonly active: boolean; readonly selected: boolean; readonly dragging: boolean },
+): boolean =>
+  token.dragging || names === "all" || (names === "active" && (token.active || token.selected));

@@ -28,8 +28,9 @@ import { RunTokens, TokenTray } from "./RunTokens";
  * - **panel** — the right-hand column: the selected creature's card, then the
  *   table's own cards the drawing leaves out (Hob's spends, NPCs at the table).
  * - **rolls** — bottom left: the DM's dice, the players' tray and the log.
- * - **tools** — bottom centre, over the board: *Grid*, *Hide from players*,
- *   zoom, the hint and the tokens nobody has put down (`RunBoardStage`).
+ * - **tools** — bottom centre, over the board: *Grid*, *Names*, *Hide from
+ *   players*, zoom, the hint and the tokens nobody has put down
+ *   (`RunBoardStage`).
  *
  * Below `@3xl` of `main` the board is too small to play on and the runner is
  * the window-scrolling grid it always was (`RunLayout.tsx`); `useStage` asks
@@ -112,7 +113,7 @@ export function RunBoardStage({
   ...props
 }: RunBoardProps & { readonly freeArea: (canvas: DOMRect) => PictureRect }) {
   const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
-  const { board, gridShown, setGrid, hint, withBoard } = useRunBoard(props);
+  const { board, gridShown, setGrid, names, setNames, hint, withBoard } = useRunBoard(props);
   const controls = useRef<CanvasControls | null>(null);
   const dock = useRef<HTMLDivElement>(null);
 
@@ -165,6 +166,8 @@ export function RunBoardStage({
             <BoardToggles
               gridShown={gridShown}
               setGrid={setGrid}
+              names={names}
+              setNames={setNames}
               over={over}
               hostileTokensHidden={hostileTokensHidden}
               hiding={hiding}
