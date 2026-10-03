@@ -2667,7 +2667,7 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
   });
 
-  it("puts the pick away on Cancel and on Esc in the runner, and the attacker is no target", async () => {
+  it("puts the pick away on Cancel and on Esc, and the attacker is no target", async () => {
     await open();
     const attack = actions().getByRole("button", { name: "Attack with Longsword" });
     await userEvent.click(attack);
@@ -2678,14 +2678,50 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     // The attacker picks nothing and the pick waits.
     await pick("Brannoc");
     expect(banner()).toBeInTheDocument();
-    // An Esc that is not the runner's — the Hob panel lives outside it — is left alone.
-    fireEvent.keyDown(document.body, { key: "Escape" });
+    // An Esc meant for the Hob panel is the panel's, and is left alone.
+    const hob = document.createElement("section");
+    hob.setAttribute("aria-label", "Hob");
+    const field = hob.appendChild(document.createElement("textarea"));
+    document.body.append(hob);
+    fireEvent.keyDown(field, { key: "Escape" });
     expect(banner()).toBeInTheDocument();
+    hob.remove();
+    // Any other Esc puts it away, wherever focus has gone.
+    expect(fireEvent.keyDown(document.body, { key: "Escape" })).toBe(false);
+    expect(banner()).toBeNull();
+    await userEvent.click(attack);
     fireEvent.keyDown(attack, { key: "Escape" });
     expect(banner()).toBeNull();
     // With no pick, a click selects again.
     await pick("Goblin Boss");
     expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
+  });
+
+  it("ends the attack when Make it their turn moves the turn", async () => {
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
+    seed(0.9, 0.5);
+    await pick("Goblin Boss");
+    expect(result().getByText("Hit")).toBeInTheDocument();
+
+    server.routes.set(`PATCH ${serverRunBase()}`, {
+      status: 200,
+      body: { ...liveRun, activeCombatantId: goblinBoss.id },
+    });
+    await userEvent.click(rowFor("Goblin Boss"));
+    await userEvent.click(
+      (await panelMenu("Goblin Boss")).getByRole("menuitem", { name: "Make it their turn" }),
+    );
+    await waitFor(() => expect(rowFor("Goblin Boss")).toHaveAttribute("aria-current", "step"));
+
+    // Back to Brannoc's turn: the card went with the turn and does not return.
+    server.routes.set(`PATCH ${serverRunBase()}`, { status: 200, body: liveRun });
+    await userEvent.click(rowFor("Brannoc"));
+    await userEvent.click(
+      (await panelMenu("Brannoc")).getByRole("menuitem", { name: "Make it their turn" }),
+    );
+    await waitFor(() => expect(rowFor("Brannoc")).toHaveAttribute("aria-current", "step"));
+    expect(screen.queryByRole("region", { name: /Attack result/ })).toBeNull();
   });
 
   it("ends the attack with the turn", async () => {

@@ -774,6 +774,31 @@ export function RunScreen() {
       ? targeting
       : undefined;
 
+  // The pick and the card are the turn's: whichever way the turn moves (this
+  // tab's *Next turn*, *Make it their turn*, another tab's write), they go.
+  const activeId = active?.id;
+  useEffect(() => {
+    setTargeting(undefined);
+    setAttack(undefined);
+  }, [activeId]);
+
+  // Esc puts a pending target away, wherever focus is, except a key meant for
+  // the Hob panel (Esc is its own) or one something else already claimed; and
+  // claims it, so the Hob panel's window listener does not close on it too.
+  const isPicking = picking !== undefined;
+  useEffect(() => {
+    if (!isPicking) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('section[aria-label="Hob"]'))
+        return;
+      event.preventDefault();
+      setTargeting(undefined);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isPicking]);
+
   const advance = useCallback(async () => {
     if (state === undefined || turn.busy || state.run.phase === "initiative") return;
     // Nothing outside this screen is a function of whose turn it is, so this
@@ -1240,7 +1265,13 @@ export function RunScreen() {
       targeting={
         picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
       }
-      result={attack !== undefined && attack.attackerId === selected?.id ? result : undefined}
+      result={
+        attack !== undefined &&
+        attack.attackerId === selected?.id &&
+        attack.attackerId === active?.id
+          ? result
+          : undefined
+      }
       onAttack={(line) => {
         if (selected === undefined) return;
         setAttack(undefined);
@@ -1309,20 +1340,6 @@ export function RunScreen() {
           picking !== undefined &&
             "[&_[data-slot=board-canvas]]:cursor-crosshair [&_[data-slot=run-board-squares]]:cursor-crosshair [&_[data-slot=token]]:cursor-crosshair [&_[data-combatant]]:cursor-crosshair",
         )}
-        // Esc puts a pending target away — only while there is one, only for a
-        // key pressed in this screen (never one meant for the Hob panel, which
-        // lives outside it), and claimed so nothing else closes on it too.
-        onKeyDown={(event) => {
-          if (
-            event.key !== "Escape" ||
-            picking === undefined ||
-            event.defaultPrevented ||
-            !event.currentTarget.contains(event.target as Node)
-          )
-            return;
-          event.preventDefault();
-          setTargeting(undefined);
-        }}
       >
         {stage.probe}
         <TopBar
