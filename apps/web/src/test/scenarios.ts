@@ -38,7 +38,7 @@ import {
   sorrelSheetSeat,
 } from "../party/party.fixtures";
 import { fullRules } from "../rules/rules.fixtures";
-import { liveFight, liveScene, type SceneMode } from "../run/run.fixtures";
+import { liveFight, liveRun, liveScene, type SceneMode } from "../run/run.fixtures";
 import { sseFrames } from "../characters/characters.fixtures";
 import { brannocId, hobThreadId, hobTurnId, olderHobThreadId } from "./ids";
 import type { Scenario } from "./screens";
@@ -290,6 +290,17 @@ const creatorHobThreads = (): Map<string, Answer> => {
 
 export const scenarios = {
   creator,
+  // The runner's own wire: the night lists the fight on the table, as the
+  // real server would, so the campaign row knows it is on that fight and
+  // draws no press beside the runner's own *Next turn*.
+  "creator-fight": () =>
+    new Map([
+      ...creator(),
+      [
+        `GET /campaigns/${campaignId}/sessions/${liveRun.sessionId}/runs`,
+        { status: 200, body: [liveRun] },
+      ],
+    ]),
   "creator-hob": creatorHob,
   "creator-hob-threads": creatorHobThreads,
   // Cazril with no sheet yet: the Stats tab's empty state and its quick

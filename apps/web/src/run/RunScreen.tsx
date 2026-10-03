@@ -17,13 +17,11 @@ import {
   Label,
   Switch,
   Toaster,
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
   toast,
   SectionHeading,
   Loading,
+  cn,
 } from "@taverns/ui";
 import { Result } from "effect";
 import { Atom } from "effect/reactivity";
@@ -43,7 +41,10 @@ import { EndRunDialog } from "./EndRunDialog";
 import { InitiativeList } from "./InitiativeList";
 import { InitiativePhase } from "./InitiativePhase";
 import { RunBoardCard } from "./RunBoardCard";
+import type { RunBoardProps } from "./runBoard";
 import { RunLayout } from "./RunLayout";
+import { RunBoardStage, RunStage } from "./RunStage";
+import { useStage } from "./stage";
 import { runSceneAtom, sceneBadge, sceneNoun, sceneUpLine } from "./scene";
 import { SceneRunner } from "./SceneRunner";
 import {
@@ -66,11 +67,14 @@ import { ApiFailureNotice } from "../api/ApiFailureNotice";
  * The encounter runner — the runner redesign's fight (`Campaign Overview.dc.html`),
  * against the real API and a real stream: a framed header with the round and
  * who is up, then initiative, the battle map and the selected creature's card
- * with the DM's own dice, laid out by `RunLayout.tsx`. Everything the drawing
- * leaves out that the runner already did — adding and editing combatants,
- * *Make it their turn*, Hob's spends and their undo, NPCs at the table, the
- * players' dice tray and the session log — stays, in the aside under the drawn
- * cards (the captain's call of 2026-09-25).
+ * with the DM's own dice. At a desktop width the board is a canvas filling the
+ * viewport under the header with the rest floating over it (`RunStage.tsx`,
+ * from `Encounter Runner.dc.html`); narrower, or with no board, the cards are
+ * the window-scrolling grid of `RunLayout.tsx`. Everything the drawings leave
+ * out that the runner already did — adding and editing combatants, *Make it
+ * their turn*, Hob's spends and their undo, NPCs at the table, the players'
+ * dice tray and the session log — stays, under the drawn cards (the captain's
+ * call of 2026-09-25).
  *
  * **A run that is not a fight is run as its kind** (`EncounterRun.mode`): a
  * conversation, a skill challenge or a hazard takes no turns, so its body is
@@ -546,12 +550,6 @@ function DiceTray({
   );
 }
 
-/** Space advances the turn — the prototype's own shortcut (`:127`). */
-const isTypingTarget = (target: EventTarget | null): boolean =>
-  target instanceof Element &&
-  target.closest("button, input, textarea, select, [role='switch'], [contenteditable='true']") !==
-    null;
-
 /**
  * Whether Hob may spend a character's resources in this fight without asking,
  * and every spend it made, each with its undo.
@@ -658,6 +656,7 @@ export function RunScreen() {
   // range box, never a guessed one.
   const [partyResource] = useApiAtom(partyAtom(campaignId));
   const dice = useDmDice();
+  const stage = useStage();
   const view = resource.state === "ready" ? resource.value : undefined;
   const trayRolls = rollsResource.state === "ready" ? rollsResource.value : [];
 
@@ -752,17 +751,6 @@ export function RunScreen() {
       setSelectedId(undefined);
     }
   }, [state, turn, path, controller]);
-
-  useEffect(() => {
-    if (frozen || state === undefined || scene !== undefined) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== " " || event.repeat || isTypingTarget(event.target)) return;
-      event.preventDefault();
-      void advance();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [advance, frozen, state, scene]);
 
   /** *Start round N*: out of the initiative phase, the marker on the first in the order. */
   const begin = async () => {
@@ -948,8 +936,12 @@ export function RunScreen() {
 
   const back: LinkProps = { to: "/campaigns/$campaignId", params: { campaignId } };
 
-  /** What the fight's aside keeps under the drawn cards, and a scene's does too. */
-  const extras = state !== undefined && (
+  /**
+   * What the fight's aside keeps under the drawn cards, and a scene's does too:
+   * the table's own cards, then the players' rolls and the log. On the canvas
+   * the first go under the selected card and the second into the rolls dock.
+   */
+  const tableCards = state !== undefined && (
     <>
       <HobSpendsCard
         allowed={state.run.allowHobDirectWrites}
@@ -963,6 +955,10 @@ export function RunScreen() {
       {!over && <ShareNpcCard path={path} />}
       {!over && <SessionNpcMonitorPanel path={path} refreshToken={npcProposalRefreshToken} />}
       {!over && <SessionNpcProposalWatch path={path} refreshToken={npcProposalRefreshToken} />}
+    </>
+  );
+  const rollCards = state !== undefined && (
+    <>
       <DiceTray rolls={trayRolls} status={over ? "stopped" : connection.status} />
       <SessionLog
         events={log}
@@ -972,227 +968,265 @@ export function RunScreen() {
       />
     </>
   );
+  const extras = (
+    <>
+      {tableCards}
+      {rollCards}
+    </>
+  );
+
+  /** The fight's pieces, which the canvas and the narrow grid each lay out. */
+  const initiative =
+    state !== undefined &&
+    (rolling && !over ? (
+      <InitiativePhase
+        path={path}
+        run={state.run}
+        combatants={state.combatants}
+        selectedId={selected?.id}
+        disabled={frozen}
+        starting={turn.busy}
+        onSelect={(combatant) => setSelectedId(combatant.id)}
+        onAdd={() => setAdding(true)}
+        onWritten={refresh}
+        onBegin={() => void begin()}
+      />
+    ) : (
+      <InitiativeList
+        run={state.run}
+        combatants={state.combatants}
+        hpOf={controller.hpOf}
+        selectedId={selected?.id}
+        disabled={frozen}
+        onSelect={(combatant) => setSelectedId(combatant.id)}
+        onAdd={() => setAdding(true)}
+        onReroll={() => void reroll()}
+      />
+    ));
+  const card = state !== undefined && view !== undefined && (
+    <CombatantPanel
+      combatant={selected}
+      hp={selected === undefined ? 0 : controller.hpOf(selected)}
+      creatures={view.creatures}
+      active={selected !== undefined && selected.id === state.run.activeCombatantId}
+      following={selectedId === undefined}
+      disabled={frozen || share.busy}
+      conditionsBusy={conditions.busy}
+      rolling={rolling}
+      onTheirTurn={() => selected !== undefined && void setActive(selected)}
+      onEdit={() => setEditing(selected)}
+      onFollow={() => setSelectedId(undefined)}
+      onDamage={(amount) => selected !== undefined && void damage(selected, amount)}
+      onConditions={(next) => selected !== undefined && void setConditions(selected, next)}
+      onRoll={dice.roll}
+    />
+  );
+  const boardProps: RunBoardProps | undefined =
+    state === undefined
+      ? undefined
+      : {
+          resource: boardResource,
+          reload: reloadBoard,
+          over,
+          tokens: {
+            combatants: state.combatants,
+            labels,
+            hpOf: controller.hpOf,
+            selected,
+            activeId: state.run.activeCombatantId,
+            speedOf,
+            movable: !frozen,
+            onSelect: (combatant) => setSelectedId(combatant.id),
+            onMove: move,
+          },
+          hostileTokensHidden: state.run.hostileTokensHidden,
+          hiding: mapShare.busy,
+          onHideHostile: (hidden) => void setShown(mapShare, { hostileTokensHidden: hidden }),
+        };
+  // The canvas is for a fight with a board on a screen wide enough to play
+  // on it; anything else is the grid, which closes the gap a missing board
+  // leaves.
+  const canvas = scene === undefined && stage.wide === true && hasBoard(boardResource);
 
   return (
     <TooltipProvider>
-      <TopBar
-        framed
-        title={state?.run.encounterName ?? "The fight"}
-        {...(state !== undefined &&
-          scene !== undefined && {
-            badge: <Badge variant="secondary">{sceneBadge(scene)}</Badge>,
-            ...(over
-              ? { subtitle: `This ${sceneNoun(scene)} is over` }
-              : sceneResource.state === "ready" &&
-                sceneResource.value !== null && {
-                  subtitle: sceneUpLine(scene, sceneResource.value),
-                }),
-          })}
-        {...(state !== undefined &&
-          scene === undefined && {
-            badge: (
-              <Badge variant="secondary">
-                {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
-              </Badge>
-            ),
-            subtitle: over
-              ? "This fight is over"
-              : rolling
-                ? rollingLine(state.combatants)
-                : upLine(state.combatants, state.run.activeCombatantId),
-          })}
+      {/* On the canvas the screen is the viewport under the chrome, and the
+          stage takes what the header leaves (`RunStage.tsx`); otherwise it is
+          a document like every other screen. */}
+      <div
+        data-slot="run-screen"
+        className={cn(
+          canvas &&
+            "flex h-[calc(100dvh_-_var(--chrome-height)_-_2_*_var(--spacing-page))] flex-col",
+        )}
       >
-        {state !== undefined && !over && (
-          <>
-            {connection.status !== "live" && (
-              <Button variant="outline" size="sm" onClick={connection.reconnect}>
-                <Icon name="octagon-x" size={13} />
-                {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
-              </Button>
-            )}
-            <span className="flex items-center gap-2">
-              <Switch
-                id="run-share"
-                checked={state.run.visibility === "shared"}
-                disabled={share.busy}
-                onCheckedChange={(next) =>
-                  void setShown(share, { visibility: next ? "shared" : "dm" })
-                }
-              />
-              <Label htmlFor="run-share">Share</Label>
-            </span>
-            {mapToShare && (
-              // A narrowing of *Share*, not a second way in: players see the
-              // map only while they see the fight, so it waits for that. Off,
-              // it keeps what the DM left it at for when the fight is shared.
+        {stage.probe}
+        <TopBar
+          framed
+          title={state?.run.encounterName ?? "The fight"}
+          {...(state !== undefined &&
+            scene !== undefined && {
+              badge: <Badge variant="secondary">{sceneBadge(scene)}</Badge>,
+              ...(over
+                ? { subtitle: `This ${sceneNoun(scene)} is over` }
+                : sceneResource.state === "ready" &&
+                  sceneResource.value !== null && {
+                    subtitle: sceneUpLine(scene, sceneResource.value),
+                  }),
+            })}
+          {...(state !== undefined &&
+            scene === undefined && {
+              badge: (
+                <Badge variant="secondary">
+                  {rolling && !over ? "Initiative" : `Round ${String(state.run.round)}`}
+                </Badge>
+              ),
+              subtitle: over
+                ? "This fight is over"
+                : rolling
+                  ? rollingLine(state.combatants)
+                  : upLine(state.combatants, state.run.activeCombatantId),
+            })}
+        >
+          {state !== undefined && !over && (
+            <>
+              {connection.status !== "live" && (
+                <Button variant="outline" size="sm" onClick={connection.reconnect}>
+                  <Icon name="octagon-x" size={13} />
+                  {connection.status === "stopped" ? "Not listening" : "Reconnecting…"}
+                </Button>
+              )}
               <span className="flex items-center gap-2">
                 <Switch
-                  id="run-share-map"
-                  checked={state.run.mapShown}
-                  disabled={mapShare.busy || state.run.visibility !== "shared"}
-                  onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
+                  id="run-share"
+                  checked={state.run.visibility === "shared"}
+                  disabled={share.busy}
+                  onCheckedChange={(next) =>
+                    void setShown(share, { visibility: next ? "shared" : "dm" })
+                  }
                 />
-                <Label htmlFor="run-share-map">Share map</Label>
+                <Label htmlFor="run-share">Share</Label>
               </span>
-            )}
-            {/* While rolling, the round's one start is the panel's *Start
+              {mapToShare && (
+                // A narrowing of *Share*, not a second way in: players see the
+                // map only while they see the fight, so it waits for that. Off,
+                // it keeps what the DM left it at for when the fight is shared.
+                <span className="flex items-center gap-2">
+                  <Switch
+                    id="run-share-map"
+                    checked={state.run.mapShown}
+                    disabled={mapShare.busy || state.run.visibility !== "shared"}
+                    onCheckedChange={(next) => void setShown(mapShare, { mapShown: next })}
+                  />
+                  <Label htmlFor="run-share-map">Share map</Label>
+                </span>
+              )}
+              {/* While rolling, the round's one start is the panel's *Start
                 round N*, so the bar carries no second peach button. */}
-            {!rolling && scene === undefined && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
-                      {turn.busy ? "Advancing…" : "Next turn"}
-                      <Icon name="chevron-right" size={14} />
-                    </Button>
-                  }
-                />
-                <TooltipContent shortcut="SPACE">Advance initiative</TooltipContent>
-              </Tooltip>
-            )}
-            <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
-              End
-            </Button>
-          </>
-        )}
-        {over && (
-          <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
-            Back to the campaign
-          </Button>
-        )}
-      </TopBar>
-      {resource.state === "loading" && <Loading label="Reading the fight…" />}
-      {resource.state === "failed" && (
-        <div className="max-w-3xl">
-          <ApiFailureNotice failure={resource.failure} onRetry={reload} />
-        </div>
-      )}
-
-      {state !== undefined && view !== undefined && (
-        <div className="flex flex-col gap-4">
+              {!rolling && scene === undefined && (
+                // No key advances the turn: the table's own call (D13), so a
+                // stray key press mid-fight never moves the marker.
+                <Button size="sm" disabled={turn.busy} onClick={() => void advance()}>
+                  {turn.busy ? "Advancing…" : "Next turn"}
+                  <Icon name="chevron-right" size={14} />
+                </Button>
+              )}
+              <Button variant="destructive" size="sm" onClick={() => setEnding(true)}>
+                End
+              </Button>
+            </>
+          )}
           {over && (
-            <p
-              role="status"
-              className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
-            >
-              {scene === undefined
-                ? `This fight came off the table. The order and the hit points below are how it finished — they are saved to Session ${String(view.session.number)}.`
-                : `This ${sceneNoun(scene)} came off the table. Its checks below are how it finished — they are saved to Session ${String(view.session.number)}.`}
-            </p>
+            <Button variant="secondary" size="sm" nativeButton={false} render={<Link {...back} />}>
+              Back to the campaign
+            </Button>
           )}
-          {controller.staleness !== undefined && (
-            <p
-              role="status"
-              className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
-            >
-              The last re-read did not answer, so this may be a moment behind. Everything below is
-              the last thing the server said.
-            </p>
-          )}
+        </TopBar>
+        {resource.state === "loading" && <Loading label="Reading the fight…" />}
+        {resource.state === "failed" && (
+          <div className="max-w-3xl">
+            <ApiFailureNotice failure={resource.failure} onRetry={reload} />
+          </div>
+        )}
 
-          {scene !== undefined ? (
-            <SceneRunner
-              path={path}
-              run={state.run}
-              combatants={state.combatants}
-              scene={sceneResource}
-              reloadScene={reloadScene}
-              over={over}
-              dice={dice}
-              conditionsBusy={conditions.busy}
-              onConditions={(combatant, next) => void setConditions(combatant, next)}
-              onEscalated={(run) => {
-                controller.applyRun(run);
-                // The rows seat into initiative order and the marker moves.
-                refresh();
-              }}
-              onEnd={() => setEnding(true)}
-              extras={extras}
-            />
-          ) : (
-            <RunLayout
-              initiative={
-                rolling && !over ? (
-                  <InitiativePhase
-                    path={path}
-                    run={state.run}
-                    combatants={state.combatants}
-                    selectedId={selected?.id}
-                    disabled={frozen}
-                    starting={turn.busy}
-                    onSelect={(combatant) => setSelectedId(combatant.id)}
-                    onAdd={() => setAdding(true)}
-                    onWritten={refresh}
-                    onBegin={() => void begin()}
-                  />
-                ) : (
-                  <InitiativeList
-                    run={state.run}
-                    combatants={state.combatants}
-                    hpOf={controller.hpOf}
-                    selectedId={selected?.id}
-                    disabled={frozen}
-                    onSelect={(combatant) => setSelectedId(combatant.id)}
-                    onAdd={() => setAdding(true)}
-                    onReroll={() => void reroll()}
-                  />
-                )
-              }
-              map={
-                hasBoard(boardResource) ? (
-                  <RunBoardCard
-                    resource={boardResource}
-                    reload={reloadBoard}
-                    over={over}
-                    tokens={{
-                      combatants: state.combatants,
-                      labels,
-                      hpOf: controller.hpOf,
-                      selected,
-                      activeId: state.run.activeCombatantId,
-                      speedOf,
-                      movable: !frozen,
-                      onSelect: (combatant) => setSelectedId(combatant.id),
-                      onMove: move,
-                    }}
-                    hostileTokensHidden={state.run.hostileTokensHidden}
-                    hiding={mapShare.busy}
-                    onHideHostile={(hidden) =>
-                      void setShown(mapShare, { hostileTokensHidden: hidden })
-                    }
-                  />
-                ) : null
-              }
-              card={
-                <CombatantPanel
-                  combatant={selected}
-                  hp={selected === undefined ? 0 : controller.hpOf(selected)}
-                  creatures={view.creatures}
-                  active={selected !== undefined && selected.id === state.run.activeCombatantId}
-                  following={selectedId === undefined}
-                  disabled={frozen || share.busy}
-                  conditionsBusy={conditions.busy}
-                  rolling={rolling}
-                  onTheirTurn={() => selected !== undefined && void setActive(selected)}
-                  onEdit={() => setEditing(selected)}
-                  onFollow={() => setSelectedId(undefined)}
-                  onDamage={(amount) => selected !== undefined && void damage(selected, amount)}
-                  onConditions={(next) =>
-                    selected !== undefined && void setConditions(selected, next)
-                  }
-                  onRoll={dice.roll}
-                />
-              }
-              rest={
-                <>
-                  <DmDiceCard dice={dice} />
-                  {extras}
-                </>
-              }
-            />
-          )}
-        </div>
-      )}
+        {state !== undefined && view !== undefined && stage.wide !== undefined && (
+          <div className={cn("flex flex-col gap-4", canvas && "min-h-0 flex-1")}>
+            {over && (
+              <p
+                role="status"
+                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-muted-foreground"
+              >
+                {scene === undefined
+                  ? `This fight came off the table. The order and the hit points below are how it finished — they are saved to Session ${String(view.session.number)}.`
+                  : `This ${sceneNoun(scene)} came off the table. Its checks below are how it finished — they are saved to Session ${String(view.session.number)}.`}
+              </p>
+            )}
+            {controller.staleness !== undefined && (
+              <p
+                role="status"
+                className="rounded-card border border-hairline bg-surface-card px-card py-2.5 text-body-s leading-body text-danger"
+              >
+                The last re-read did not answer, so this may be a moment behind. Everything below is
+                the last thing the server said.
+              </p>
+            )}
+
+            {scene !== undefined ? (
+              <SceneRunner
+                path={path}
+                run={state.run}
+                combatants={state.combatants}
+                scene={sceneResource}
+                reloadScene={reloadScene}
+                over={over}
+                dice={dice}
+                conditionsBusy={conditions.busy}
+                onConditions={(combatant, next) => void setConditions(combatant, next)}
+                onEscalated={(run) => {
+                  controller.applyRun(run);
+                  // The rows seat into initiative order and the marker moves.
+                  refresh();
+                }}
+                onEnd={() => setEnding(true)}
+                extras={extras}
+              />
+            ) : canvas && boardProps !== undefined ? (
+              <RunStage
+                strip={initiative}
+                panel={
+                  <>
+                    {card}
+                    {tableCards}
+                  </>
+                }
+                rolls={
+                  <>
+                    <DmDiceCard dice={dice} />
+                    {rollCards}
+                  </>
+                }
+                board={(freeArea) => <RunBoardStage {...boardProps} freeArea={freeArea} />}
+              />
+            ) : (
+              <RunLayout
+                initiative={initiative}
+                map={
+                  hasBoard(boardResource) && boardProps !== undefined ? (
+                    <RunBoardCard {...boardProps} />
+                  ) : null
+                }
+                card={card}
+                rest={
+                  <>
+                    <DmDiceCard dice={dice} />
+                    {extras}
+                  </>
+                }
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {adding && (
         <CombatantDialog

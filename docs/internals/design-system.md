@@ -53,6 +53,7 @@ Every z-index comes from §3 of `packages/ui/src/styles.css`. Reach for a rung, 
 | rung      | value | why here                                                                          |
 | --------- | ----- | --------------------------------------------------------------------------------- |
 | `lifted`  | 1     | a dropped list row sliding over its neighbours; page content, so under the chrome |
+| `hud`     | 5     | the live runner's panels floating over the fight's board; under the chrome        |
 | `chrome`  | 10    | sticky page furniture and the inline Hob panel; must lose to the scrim            |
 | `scrim`   | 100   | the modal backdrop                                                                |
 | `dialog`  | 110   | above its own backdrop by number, not by document order                           |

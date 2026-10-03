@@ -23,11 +23,13 @@ import {
 /**
  * One account's view of the wire; `test/scenarios.ts` holds the maps. The
  * three `creator-*` scenes are the creator's wire with the run on the table
- * played as that kind of scene instead of a fight; `creator-unsheeted` is
- * the creator's wire with Cazril's sheet not yet written.
+ * played as that kind of scene instead of a fight; `creator-fight` is it as
+ * the fight, listed on the night; `creator-unsheeted` is the creator's wire
+ * with Cazril's sheet not yet written.
  */
 export type Scenario =
   | "creator"
+  | "creator-fight"
   | "creator-hob"
   | "creator-hob-threads"
   | "creator-unsheeted"
@@ -66,7 +68,7 @@ export const screens: ReadonlyArray<Screen> = [
   { name: "chronicle", scenario: "creator", path: `${c}/chronicle` },
   { name: "party", scenario: "creator", path: `${c}/party` },
   { name: "party-seat", scenario: "creator", path: `${c}/party/${seatId}` },
-  { name: "run", scenario: "creator", path: `${c}/sessions/${sessionId}/runs/${runId}` },
+  { name: "run", scenario: "creator-fight", path: `${c}/sessions/${sessionId}/runs/${runId}` },
   {
     name: "run-social",
     scenario: "creator-social",

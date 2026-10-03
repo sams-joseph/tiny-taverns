@@ -1,12 +1,8 @@
-import type { BoardSquare, Combatant, EncounterRunBoard } from "@taverns/api";
 import { Card, Icon, SectionHeading, Toggle } from "@taverns/ui";
-import { useState } from "react";
-import type { Resource } from "../api/failure";
 import { ApiFailureNotice } from "../api/ApiFailureNotice";
-import { BattleMapBoard, describeBoard } from "../campaign/BattleMapBoard";
-import { useHobDrawingPolling } from "../hob/drawingPolling";
-import { RunTokens, TokenTray, type TokenProps } from "./RunTokens";
-import { moveLine } from "./tokens";
+import { BattleMapBoard } from "../campaign/BattleMapBoard";
+import { boardCaption, useRunBoard, type RunBoardProps } from "./runBoard";
+import { RunTokens, TokenTray } from "./RunTokens";
 
 /**
  * The fight's board: **open, and the DM's own.** The runner is the creator's
@@ -16,7 +12,9 @@ import { moveLine } from "./tokens";
  *
  * The redesign puts it at the centre of the fight rather than in a band under
  * the list, so it is drawn open, as wide as its column (`RunLayout.tsx`), with
- * the fight's tokens on it (`RunTokens.tsx`).
+ * the fight's tokens on it (`RunTokens.tsx`). This card is the board below
+ * `@3xl`; above it the same board is the canvas (`RunStage.tsx`), and the two
+ * share everything but their frame (`runBoard.ts`).
  *
  * The board is the fight's own (`EncounterRunBoard`): its grid was copied when
  * the fight began, so it says nothing about the encounter's map as it stands.
@@ -31,65 +29,47 @@ import { moveLine } from "./tokens";
  * stay in the players' order. It can be set before the map is shared, so a
  * fight can open with the monsters already hidden.
  */
-export function RunBoardCard({
-  resource,
-  reload,
+/** The DM's two board switches: *Grid* (this screen's view) and *Hide from players* (a write). */
+export function BoardToggles({
+  gridShown,
+  setGrid,
   over,
-  tokens,
   hostileTokensHidden,
   hiding,
   onHideHostile,
 }: {
-  readonly resource: Resource<EncounterRunBoard | null>;
-  readonly reload: () => void;
-  /** The fight is off the table: the board is where everyone finished. */
+  readonly gridShown: boolean;
+  readonly setGrid: (shown: boolean) => void;
   readonly over: boolean;
-  /** Everything but the board, which this card reads. */
-  readonly tokens: Omit<TokenProps, "board" | "onMove" | "hostileTokensHidden"> & {
-    /** The move's write; resolves true once the server has the square. */
-    readonly onMove: (combatant: Combatant, to: BoardSquare | null) => Promise<boolean>;
-  };
-  /** The map's *Hide from players*, as the fight holds it. */
   readonly hostileTokensHidden: boolean;
-  /** Its write is in flight. */
   readonly hiding: boolean;
   readonly onHideHostile: (hidden: boolean) => void;
 }) {
-  const board = resource.state === "ready" ? resource.value : null;
-  // A fight started straight after its encounter was made may begin before
-  // Hob finishes the picture.
-  useHobDrawingPolling(board?.imagePending === true, reload);
-  const [grid, setGrid] = useState<boolean>();
-  const [lastMove, setLastMove] = useState<string>();
+  return (
+    <>
+      <Toggle size="sm" pressed={gridShown} onPressedChange={(pressed) => setGrid(pressed)}>
+        <Icon name="grid-3x3" size={13} />
+        Grid
+      </Toggle>
+      <Toggle
+        size="sm"
+        pressed={hostileTokensHidden}
+        disabled={over || hiding}
+        onPressedChange={(pressed) => onHideHostile(pressed)}
+      >
+        <Icon name="eye-off" size={13} />
+        Hide from players
+      </Toggle>
+    </>
+  );
+}
+
+export function RunBoardCard(props: RunBoardProps) {
+  const { resource, reload, over, hostileTokensHidden, hiding, onHideHostile } = props;
+  const { board, gridShown, setGrid, hint, withBoard } = useRunBoard(props);
 
   if (resource.state === "loading") return null;
   if (resource.state === "ready" && board === null) return null;
-
-  const gridShown = grid ?? board?.grid === "square";
-  const { selected } = tokens;
-  const hint = over
-    ? "Where everyone stood when it ended."
-    : (lastMove ??
-      (selected === undefined
-        ? "Select a token, then click a square to move it."
-        : selected.position === null
-          ? `Click a square to put ${selected.displayName} on the board.`
-          : `Click a square to move ${selected.displayName}.`));
-
-  const onMove = (combatant: Combatant, to: BoardSquare | null) => {
-    if (board === null) return;
-    const line = moveLine({
-      name: combatant.displayName,
-      from: combatant.position,
-      to,
-      feetPerCell: board.feetPerCell,
-      speed: tokens.speedOf(combatant),
-    });
-    void tokens.onMove(combatant, to).then((moved) => {
-      if (moved) setLastMove(line);
-    });
-  };
-  const withBoard = board === null ? undefined : { ...tokens, board, onMove, hostileTokensHidden };
 
   return (
     <Card aria-label="Battle map" role="region" data-slot="run-board" className="overflow-clip">
@@ -115,19 +95,14 @@ export function RunBoardCard({
                 : "Select from the initiative list. Tokens move on a wider screen."}
             </span>
             <div className="ml-auto flex gap-1.5">
-              <Toggle size="sm" pressed={gridShown} onPressedChange={(pressed) => setGrid(pressed)}>
-                <Icon name="grid-3x3" size={13} />
-                Grid
-              </Toggle>
-              <Toggle
-                size="sm"
-                pressed={hostileTokensHidden}
-                disabled={over || hiding}
-                onPressedChange={(pressed) => onHideHostile(pressed)}
-              >
-                <Icon name="eye-off" size={13} />
-                Hide from players
-              </Toggle>
+              <BoardToggles
+                gridShown={gridShown}
+                setGrid={setGrid}
+                over={over}
+                hostileTokensHidden={hostileTokensHidden}
+                hiding={hiding}
+                onHideHostile={onHideHostile}
+              />
             </div>
           </>
         )}
@@ -145,9 +120,7 @@ export function RunBoardCard({
             </BattleMapBoard>
             <TokenTray {...withBoard} />
             <p className="mb-0 border-t border-hairline px-panel py-2.5 text-caption leading-body text-muted-foreground">
-              {describeBoard(board)}
-              {board.mapId === null &&
-                ". This fight's encounter was deleted, and its picture with it. The board keeps its squares."}
+              {boardCaption(board)}
             </p>
           </>
         )
