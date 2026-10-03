@@ -3212,6 +3212,20 @@ describe("the Fog tool, on the canvas", () => {
     expect(fogCalls()).toEqual([]);
   });
 
+  it("tries the board's read again, and says how the new try went", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 409, body: {} });
+    await renderRunner();
+    await screen.findByText(/\(409 GET .*\/board\)/);
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 410, body: {} });
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByText(/\(410 GET .*\/board\)/);
+
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: runBoard });
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await screen.findByRole("region", { name: "Battle map" });
+    expect(screen.queryByText(/\(410 GET .*\/board\)/)).toBeNull();
+  });
+
   it("re-reads the board when another of the DM's tabs paints the fog", async () => {
     await renderRunner();
     await screen.findByRole("region", { name: "Battle map" });

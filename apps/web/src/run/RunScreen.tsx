@@ -25,14 +25,12 @@ import {
   Loading,
   cn,
 } from "@taverns/ui";
-import { useAtomSet } from "@effect/atom-react";
-import { Result } from "effect";
-import { AsyncResult, Atom } from "effect/reactivity";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RegistryContext, useAtomSet } from "@effect/atom-react";
+import { Effect, Result } from "effect";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiAtom, useApiAtom } from "../api/atoms";
-import { runApiResult } from "../api/client";
 import { useMutation } from "../api/mutation";
-import { useCredential } from "../auth/credential";
 import { reads } from "../api/keys";
 import { TopBar } from "../shell/TopBar";
 import { SaveFailure } from "../ui/form";
@@ -674,15 +672,15 @@ export function RunScreen() {
 
   const [resource, reload] = useApiAtom(runViewAtom(path));
   const [rollsResource, reloadRolls] = useApiAtom(rollsAtom(path));
-  const [boardResource] = useApiAtom(runBoardAtom(path));
+  const [boardResource, reloadBoard] = useApiAtom(runBoardAtom(path));
   const writeBoard = useAtomSet(runBoardAtom(path));
-  const fetchCredential = useCredential();
+  const registry = useContext(RegistryContext);
   /**
-   * The board's one line: the Fog tool's writes and every re-read of the board
-   * go through it one at a time, in the order they were asked for. So answers
-   * land in the order the server applied them, and a re-read never lands older
-   * fog over a stroke this tab wrote after it was asked for. A task that fails
-   * leaves the line open for the next.
+   * The board's fog line: the Fog tool's writes and the doorbell's re-reads of
+   * the board go through it one at a time, in the order they were asked for.
+   * So answers land in the order the server applied them, and a re-read never
+   * lands older fog over a stroke this tab wrote after it was asked for. A task
+   * that fails leaves the line open for the next.
    */
   const boardLine = useRef<Promise<void>>(Promise.resolve());
   const inBoardLine = useCallback((task: () => Promise<void>): Promise<void> => {
@@ -690,16 +688,15 @@ export function RunScreen() {
     boardLine.current = done;
     return done;
   }, []);
-  const reloadBoard = useCallback(
+  const rereadBoard = useCallback(
     () =>
       void inBoardLine(async () => {
-        const read = await runApiResult(
-          (client) => client.runs.board({ params: path }),
-          await fetchCredential(),
+        reloadBoard();
+        await Effect.runPromise(
+          AtomRegistry.getResult(registry, runBoardAtom(path), { suspendOnWaiting: true }),
         );
-        if (Result.isSuccess(read)) writeBoard(AsyncResult.success(read.success));
       }),
-    [inBoardLine, fetchCredential, path, writeBoard],
+    [inBoardLine, reloadBoard, registry, path],
   );
   // The party's sheets, for a character's speed on the board. A miss is no
   // range, never a guessed one.
@@ -773,10 +770,10 @@ export function RunScreen() {
       reloadRolls();
       // The fog is the board's, which nothing else re-reads: another of the
       // DM's tabs painted it.
-      if (event.kind === "board-fog-updated") reloadBoard();
+      if (event.kind === "board-fog-updated") rereadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
-    [refresh, reloadScene, reloadRolls, reloadBoard],
+    [refresh, reloadScene, reloadRolls, rereadBoard],
   );
 
   const over = state !== undefined && state.run.endedAt !== null;
@@ -793,7 +790,7 @@ export function RunScreen() {
       refresh();
       reloadScene();
       reloadRolls();
-      reloadBoard();
+      rereadBoard();
       setNpcProposalRefreshToken((token) => token + 1);
     },
   });
