@@ -401,3 +401,201 @@ export const squareAt = (
     ? undefined
     : { column, row };
 };
+
+/**
+ * ## Distance, reach and areas on the board
+ *
+ * The rules a fight's board measures by, in squares and the feet each one is
+ * (`feetPerCell`), never in pixels: where a square falls is {@link cellRect}'s.
+ * Every function takes the diagonal rule as an argument, because which one a
+ * table plays is the campaign's call, not the board's.
+ */
+
+/**
+ * How a diagonal step is counted. `five`: every square costs its feet,
+ * diagonal or not, the SRD's grid rule. `alternating`: the first diagonal costs
+ * one square, the second two, and so on alternately, the optional rule that
+ * keeps a diagonal near its true length.
+ */
+export const DiagonalRule = Schema.Literals(["five", "alternating"]);
+export type DiagonalRule = typeof DiagonalRule.Type;
+
+/**
+ * Squares walked from one square to another. Under `five` a diagonal is one
+ * square, so it is the longer side; under `alternating` every second diagonal
+ * is one more, which is the longer side plus half the shorter, rounded down.
+ */
+export const squaresBetween = (from: BoardSquare, to: BoardSquare, rule: DiagonalRule): number => {
+  const across = Math.abs(from.column - to.column);
+  const down = Math.abs(from.row - to.row);
+  const longer = Math.max(across, down);
+  return rule === "five" ? longer : longer + Math.floor(Math.min(across, down) / 2);
+};
+
+/** What measuring on a board needs: how many feet a square is, and how diagonals count. */
+export interface BoardMeasure {
+  readonly feetPerCell: number;
+  readonly diagonals: DiagonalRule;
+}
+
+/** Feet from one square to another: {@link squaresBetween} at the board's feet per square. */
+export const feetBetween = (from: BoardSquare, to: BoardSquare, measure: BoardMeasure): number =>
+  squaresBetween(from, to, measure.diagonals) * measure.feetPerCell;
+
+const sameSquare = (a: BoardSquare, b: BoardSquare): boolean =>
+  a.column === b.column && a.row === b.row;
+
+/** Every square on the board, column by column, that `keep` keeps. */
+const squaresWhere = (
+  board: Pick<BattleMapBoard, "columns" | "rows">,
+  keep: (square: BoardSquare) => boolean,
+): ReadonlyArray<BoardSquare> => {
+  const out: Array<BoardSquare> = [];
+  for (let column = 0; column < board.columns; column++) {
+    for (let row = 0; row < board.rows; row++) {
+      const square = { column, row };
+      if (keep(square)) out.push(square);
+    }
+  }
+  return out;
+};
+
+/**
+ * The squares a creature standing on `from` can end a move on with `feet` to
+ * walk: every square on the board no further than that, other than its own and
+ * any square in `occupied`. Distance is straight-line under the rule, not a
+ * path: a creature in the way is a square you cannot stop on, not a wall.
+ */
+export const reachableSquares = (
+  board: Pick<BattleMapBoard, "columns" | "rows">,
+  {
+    from,
+    feet,
+    occupied,
+    ...measure
+  }: BoardMeasure & {
+    readonly from: BoardSquare;
+    readonly feet: number;
+    readonly occupied: ReadonlyArray<BoardSquare>;
+  },
+): ReadonlyArray<BoardSquare> =>
+  squaresWhere(
+    board,
+    (square) =>
+      !sameSquare(square, from) &&
+      feetBetween(from, square, measure) <= feet &&
+      !occupied.some((taken) => sameSquare(taken, square)),
+  );
+
+/** The shapes an area of effect takes on the board. */
+export type AreaShape = "sphere" | "cone" | "line" | "cube";
+
+/**
+ * The squares an area of effect `feet` big covers, cut at the board's edge.
+ *
+ * A sphere is every square whose centre is within `feet` of `origin`'s centre.
+ * A cube is `feet` on a side with `origin` at its middle (the square left and
+ * up of the middle when the side is an even number of squares). A cone and a
+ * line start at `origin` and point at `toward`, `feet` long, never covering
+ * `origin` itself: a line is one square wide, and a cone is as wide as it is
+ * far from its point.
+ * A cone or a line with nowhere to point (`toward` is `origin`) covers nothing.
+ *
+ * A cone or a line measures each square's centre along its axis and across
+ * it, in squares: a square counts from three tenths of a square out (so not
+ * `origin`) to three tenths past the end, and across within half a square for
+ * a line or half the distance out plus a third of a square for a cone. The
+ * margins take in a square the edge runs through, so a cone aimed off the grid's
+ * lines is not ragged. They are the drawing's, and its catch lists hold with them.
+ */
+export const areaSquares = (
+  board: Pick<BattleMapBoard, "columns" | "rows">,
+  {
+    shape,
+    feet,
+    feetPerCell,
+    origin,
+    toward,
+  }: {
+    readonly shape: AreaShape;
+    readonly feet: number;
+    readonly feetPerCell: number;
+    readonly origin: BoardSquare;
+    readonly toward: BoardSquare;
+  },
+): ReadonlyArray<BoardSquare> => {
+  const size = feet / feetPerCell;
+  if (shape === "sphere") {
+    return squaresWhere(
+      board,
+      (square) => Math.hypot(square.column - origin.column, square.row - origin.row) <= size + 0.01,
+    );
+  }
+  if (shape === "cube") {
+    const side = Math.floor(size);
+    const first = {
+      column: origin.column - Math.floor((side - 1) / 2),
+      row: origin.row - Math.floor((side - 1) / 2),
+    };
+    return squaresWhere(
+      board,
+      (square) =>
+        square.column >= first.column &&
+        square.column < first.column + side &&
+        square.row >= first.row &&
+        square.row < first.row + side,
+    );
+  }
+  const length = Math.hypot(toward.column - origin.column, toward.row - origin.row);
+  if (length === 0) return [];
+  const along = {
+    column: (toward.column - origin.column) / length,
+    row: (toward.row - origin.row) / length,
+  };
+  return squaresWhere(board, (square) => {
+    const column = square.column - origin.column;
+    const row = square.row - origin.row;
+    const ahead = column * along.column + row * along.row;
+    const aside = Math.abs(column * along.row - row * along.column);
+    if (ahead <= 0.3 || ahead > size + 0.3) return false;
+    return shape === "cone" ? aside <= ahead / 2 + 0.35 : aside <= 0.5;
+  });
+};
+
+/** What a ruler laid from one square to another says. */
+export interface RulerReading {
+  readonly feet: number;
+  /**
+   * `distance` is a plain measure; `left` and `over` are a move against what the
+   * mover has left to walk; `occupied` is a move onto a square someone holds.
+   */
+  readonly verdict: "distance" | "left" | "over" | "occupied";
+  /** `"35 ft"`, `"20 ft · 10 left"`, `"35 ft · 5 over"` or `"Occupied"`. */
+  readonly text: string;
+}
+
+/**
+ * The ruler's words. `remaining` is the feet the mover has left this turn, or
+ * `null` when the ruler is a plain measure or moves somebody whose turn it is
+ * not; `occupied` says the far end is a square someone else holds, which wins.
+ */
+export const rulerReading = ({
+  from,
+  to,
+  remaining,
+  occupied,
+  ...measure
+}: BoardMeasure & {
+  readonly from: BoardSquare;
+  readonly to: BoardSquare;
+  readonly remaining: number | null;
+  readonly occupied: boolean;
+}): RulerReading => {
+  const feet = feetBetween(from, to, measure);
+  const distance = `${String(feet)} ft`;
+  if (occupied) return { feet, verdict: "occupied", text: "Occupied" };
+  if (remaining === null) return { feet, verdict: "distance", text: distance };
+  return feet > remaining
+    ? { feet, verdict: "over", text: `${distance} · ${String(feet - remaining)} over` }
+    : { feet, verdict: "left", text: `${distance} · ${String(remaining - feet)} left` };
+};
