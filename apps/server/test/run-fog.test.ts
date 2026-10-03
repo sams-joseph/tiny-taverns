@@ -589,4 +589,50 @@ describeLayer("run-fog", shared, (it) => {
       yield* endNight(session);
     }),
   );
+
+  it.effect("keeps fog in a carried fight's recap until its last run ends", () =>
+    Effect.gen(function* () {
+      const { jo, ilse, table } = yield* Fixture;
+      const first = yield* night();
+      const { fight, params, tamsin, wren, archer, sentry } = yield* aFight(first);
+      yield* fog(params, { hide: [ARCHER] });
+      const firstRecap = () =>
+        Effect.map(
+          as(ilse.token, (client) =>
+            client.recap.readAsPlayer({ params: { campaignId: table, sessionId: first } }),
+          ),
+          (recap) =>
+            recap.fights
+              .find((one) => one.run.id === fight.id)!
+              .combatants.map((row) => row.id)
+              .sort(),
+        );
+      const visible = [tamsin.id, wren.id, sentry.id].sort();
+      const carryTo = (from: EncounterRun["id"]) =>
+        Effect.gen(function* () {
+          const sessionId = yield* night();
+          const resumed = yield* as(jo.token, (client) =>
+            client.runs.resume({
+              params: { campaignId: table, sessionId },
+              payload: { continuedFrom: from },
+            }),
+          );
+          return { sessionId, runId: resumed.id };
+        });
+
+      yield* endNight(first);
+      const second = yield* carryTo(fight.id);
+      expect(yield* firstRecap()).toEqual(visible);
+
+      yield* endNight(second.sessionId);
+      const third = yield* carryTo(second.runId);
+      expect(yield* firstRecap()).toEqual(visible);
+
+      yield* as(jo.token, (client) =>
+        client.runs.end({ params: { campaignId: table, ...third }, payload: {} }),
+      );
+      expect(yield* firstRecap()).toEqual([...visible, archer.id].sort());
+      yield* endNight(third.sessionId);
+    }),
+  );
 });

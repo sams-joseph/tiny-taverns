@@ -114,6 +114,24 @@ export const hiddenByFog = (
 ): Statement.Fragment => sql`(${underFog(sql)} and not ${seatedByActor(sql, campaignId, actor)})`;
 
 /**
+ * Over `encounter_run` in scope: its fight is still on the table — the run is
+ * unended, or it was carried and some run after it, through any number of
+ * carries, is unended. Fog is a live-board tool, so a reader that outlasts
+ * the fight (the recap) composes `hiddenByFog` only under this. Following
+ * `continued_from` here only narrows what a reader sees; it grants no reach.
+ */
+export const fightLive = (sql: SqlClient.SqlClient): Statement.Fragment =>
+  sql`(encounter_run.ended_at is null or exists (
+    with recursive successor as (
+      select next.id, next.ended_at from encounter_run next
+      where next.continued_from = encounter_run.id
+      union all
+      select next.id, next.ended_at from encounter_run next
+      join successor on next.continued_from = successor.id
+    )
+    select 1 from successor where successor.ended_at is null))`;
+
+/**
  * Over `combatant` and its `encounter_run` in scope: this row's token is on a
  * player's board, if the row is in their order at all — the board is shown, it
  * is not a monster while hostile tokens are hidden, and it is not a monster
