@@ -159,7 +159,7 @@ export function RunBoardCard(props: RunBoardProps) {
             <span className="order-last min-w-0 basis-full text-body-s leading-snug text-muted-foreground @3xl:hidden">
               {over
                 ? "Where everyone stood when it ended."
-                : "Select from the initiative list. Tokens move on a wider screen."}
+                : "Select from the initiative. Tokens move on a wider screen."}
             </span>
             <div className="ml-auto flex gap-1.5">
               <BoardToggles

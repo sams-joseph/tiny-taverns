@@ -40,11 +40,12 @@ import { combatantVisibilityWrites, combatantWrites } from "./load";
 
 const server = installRunServer();
 
-/** The combatant list, which is the only thing with `role="row"` in it. */
-const rows = () => screen.getAllByRole("row");
+/** The initiative strip's order, whose chips are the only buttons in it. */
+const initiative = () => within(screen.getByRole("list", { name: "Initiative order" }));
+const rows = () => initiative().getAllByRole("button");
 const rowFor = (name: string): HTMLElement => {
   const found = rows().find((row) => row.textContent?.includes(name));
-  if (found === undefined) throw new Error(`no row for ${name}`);
+  if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
 };
 const panel = () => within(screen.getByRole("region", { name: "Selected combatant" }));
@@ -57,9 +58,13 @@ const panelMenu = async (name: string) => {
 const openStatBlock = async () => {
   await userEvent.click(panel().getByRole("button", { name: "Stat block" }));
 };
-const initiative = () => within(screen.getByRole("table", { name: "Initiative order" }));
-/** The header, whose card the two sentences about visibility live on. */
-const listCard = () => screen.getByText("Initiative").closest("[data-slot=card]") as HTMLElement;
+/** The strip itself: the round, the order and its trailing controls. */
+const strip = () => within(screen.getByRole("region", { name: "Initiative" }));
+/** Open the strip's overflow menu, where the visibility sentence and *Reroll* live. */
+const stripMenu = async () => {
+  await userEvent.click(strip().getByRole("button", { name: "More about the order" }));
+  return within(await screen.findByRole("menu"));
+};
 
 /** Point every route matching a fragment at a new answer. */
 const reaim = (fragment: string, answer: { status: number; body: unknown }) => {
@@ -102,7 +107,7 @@ const layouts = [
 ] as const;
 
 describe("the runner", () => {
-  it("renders the initiative list in the order the server sent it", async () => {
+  it("renders the initiative strip in the order the server sent it", async () => {
     await renderRunner();
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
 
@@ -115,6 +120,11 @@ describe("the runner", () => {
         .getAllByText(/Brannoc|Goblin Boss/)
         .map((el) => el.textContent),
     ).toEqual(["Brannoc", "Goblin Boss"]);
+    // The round is boxed at the strip's head, and whoever is up is marked.
+    expect(strip().getByText("Round")).toBeInTheDocument();
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-current", "step");
+    expect(rowFor("Goblin Boss")).not.toHaveAttribute("aria-current");
+    expect(rowFor("Brannoc").className).toContain("border-accent");
     // The header: the round beside the title, and who is up and who is next in
     // the server's order, which is what `nextTurn` walks.
     const header = within(document.querySelector("[data-slot=page-heading]") as HTMLElement);
@@ -124,13 +134,21 @@ describe("the runner", () => {
     expect(panel().getByText("Half-orc paladin · Ilse")).toBeInTheDocument();
   });
 
-  it("marks every row with its icon when nobody has a portrait", async () => {
+  it("rings every chip's initials by side when nobody has a portrait", async () => {
     await renderRunner();
     await waitFor(() => expect(rows()).toHaveLength(2));
     expect(rows().some((row) => row.querySelector("img") !== null)).toBe(false);
+    // The board's initials, so a chip and its token read alike.
+    const disc = (name: string) => rowFor(name).querySelector("[data-slot=strip-disc]")!;
+    expect(disc("Brannoc")).toHaveTextContent("B");
+    expect(disc("Brannoc").className).toContain("border-info");
+    expect(disc("Goblin Boss")).toHaveTextContent("GB");
+    expect(disc("Goblin Boss").className).toContain("border-danger");
+    // The fight is not shared, so nothing is held back from anyone yet.
+    expect(disc("Goblin Boss").className).toContain("border-solid");
   });
 
-  it("lays a PC's portrait on its row, and leaves the monster its skull", async () => {
+  it("lays a PC's portrait on its chip's disc, and leaves the monster its initials", async () => {
     server.routes.set(`GET ${serverRunBase()}/combatants`, {
       status: 200,
       body: [{ ...brannoc, portrait: drawnPortrait }, goblinBoss],
@@ -144,7 +162,7 @@ describe("the runner", () => {
     expect(rowFor("Goblin Boss").querySelector("img")).toBeNull();
   });
 
-  it("keeps a combatant at zero hit points in the order, struck through", async () => {
+  it("keeps an NPC at zero hit points in the order, struck through", async () => {
     for (const [key, answer] of [...server.routes]) {
       if (key.startsWith("GET") && key.endsWith("/combatants")) {
         server.routes.set(key, { ...answer, body: [brannoc, { ...goblinBoss, hpCurrent: 0 }] });
@@ -159,10 +177,48 @@ describe("the runner", () => {
     expect(within(row).getByText("0/21")).toBeInTheDocument();
     expect(row.className).toContain("opacity-45");
     expect(within(row).getByText("Goblin Boss").className).toContain("line-through");
-    // Nothing on the row offers to tidy it away: removal is an explicit act,
+    // Nothing on the strip offers to tidy it away: removal is an explicit act,
     // inside the edit dialog. `EncounterRunner.jsx:107` says so in the
     // product's own voice and `Combatant.ts` repeats it.
-    expect(within(row).queryByRole("button", { name: /remove/i })).toBeNull();
+    expect(strip().queryByRole("button", { name: /remove/i })).toBeNull();
+  });
+
+  describe("a PC at zero hit points", () => {
+    const answerWith = (failures: number) => {
+      for (const [key, route] of [...server.routes]) {
+        if (key.startsWith("GET") && key.endsWith("/combatants")) {
+          server.routes.set(key, {
+            ...route,
+            body: [
+              { ...brannoc, hpCurrent: 0, deathSaves: { successes: 1, failures } },
+              goblinBoss,
+            ],
+          });
+        }
+      }
+    };
+
+    it("stays as they are while they make death saves", async () => {
+      answerWith(2);
+      await renderRunner();
+      await waitFor(() => expect(rows()).toHaveLength(2));
+      // Down, not out: they still take a turn, and the DM still has to look.
+      expect(within(rowFor("Brannoc")).getByText("0/52").className).toContain("text-danger");
+      expect(rowFor("Brannoc").className).not.toContain("opacity-45");
+      expect(within(rowFor("Brannoc")).getByText("Brannoc").className).not.toContain(
+        "line-through",
+      );
+      expect(rowFor("Brannoc")).not.toHaveAccessibleName(/out of the fight/);
+    });
+
+    it("is struck through once they have failed three", async () => {
+      answerWith(3);
+      await renderRunner();
+      await waitFor(() => expect(rows()).toHaveLength(2));
+      expect(rowFor("Brannoc").className).toContain("opacity-45");
+      expect(within(rowFor("Brannoc")).getByText("Brannoc").className).toContain("line-through");
+      expect(rowFor("Brannoc")).toHaveAccessibleName(/out of the fight/);
+    });
   });
 
   it("moves hit points before the round trip, and sends a delta with a request id", async () => {
@@ -399,16 +455,30 @@ describe("the runner", () => {
     await screen.findByRole("heading", { name: "Ambush in the reeds" });
     await waitFor(() => expect(rows()).toHaveLength(2));
 
-    // Both levels default to `dm` on the server, deliberately.
-    expect(within(listCard()).getByText(/DM only — nothing here is on the players/)).toBeVisible();
+    // Both levels default to `dm` on the server, deliberately. The sentence
+    // is one press away, in the strip's own menu, with who is left standing.
+    let menu = await stripMenu();
+    expect(menu.getByText(/DM only — nothing here is on the players/)).toBeVisible();
+    expect(menu.getByText(/1 hostile standing/)).toBeVisible();
+    // While nothing is shared, a dashed ring on every chip would mark nothing.
+    for (const row of rows()) {
+      expect(row.querySelector("[data-slot=strip-disc]")?.className).toContain("border-solid");
+    }
+    await userEvent.keyboard("{Escape}");
 
     await userEvent.click(screen.getByRole("switch", { name: "Share" }));
     expect(bodyOf(server, "PATCH", `/runs/${liveRun.id}`)).toEqual({ visibility: "shared" });
 
     // Every row is still `dm`. Saying "shared" and leaving it there would imply
-    // the players can see two combatants they cannot.
-    await within(listCard()).findByText(/every line in it is hidden from them/);
-    expect(screen.getAllByLabelText("Hidden from players")).toHaveLength(2);
+    // the players can see two combatants they cannot: the rings go dashed.
+    await waitFor(() =>
+      expect(rowFor("Brannoc").querySelector("[data-slot=strip-disc]")?.className).toContain(
+        "border-dashed",
+      ),
+    );
+    for (const row of rows()) expect(row).toHaveAccessibleName(/hidden from players/);
+    menu = await stripMenu();
+    expect(menu.getByText(/every line in it is hidden from them/)).toBeVisible();
   });
 
   it("draws the persisted dice tray and re-reads it when the stream rings", async () => {
@@ -579,6 +649,66 @@ describe("the runner", () => {
     expect(panel().getByRole("button", { name: "Roll Scimitar, 1d6+2" })).toBeInTheDocument();
   });
 
+  it("selects from a chip, and Next turn puts the selection back on whoever is up", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    // Following the turn: whoever is up is the one shown, and pressed.
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(rowFor("Goblin Boss"));
+    expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
+    expect(rowFor("Goblin Boss")).toHaveAttribute("aria-pressed", "true");
+    expect(rowFor("Goblin Boss").className).toContain("border-faint");
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-pressed", "false");
+    // Choosing is not a turn: the marker stays where the server has it.
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-current", "step");
+
+    // Back on Brannoc by hand, then the turn moves: the card follows it.
+    await userEvent.click(rowFor("Brannoc"));
+    await userEvent.click(screen.getByRole("button", { name: "Next turn" }));
+    await screen.findByText("Goblin Boss is up · Brannoc next");
+    expect(rowFor("Goblin Boss")).toHaveAttribute("aria-current", "step");
+    expect(rowFor("Goblin Boss")).toHaveAttribute("aria-pressed", "true");
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-pressed", "false");
+    expect(panel().getByText("Goblin Boss")).toBeInTheDocument();
+    expect(panel().queryByRole("button", { name: "Follow the turn" })).toBeNull();
+  });
+
+  it("marks the chip of a token nobody has put down", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    // Brannoc stands on the board; the Goblin Boss waits for a square.
+    await waitFor(() =>
+      expect(rowFor("Goblin Boss").querySelector("[data-slot=strip-unplaced]")).not.toBeNull(),
+    );
+    expect(rowFor("Goblin Boss")).toHaveAccessibleName(/not on the board/);
+    expect(rowFor("Brannoc").querySelector("[data-slot=strip-unplaced]")).toBeNull();
+    expect(rowFor("Brannoc")).not.toHaveAccessibleName(/not on the board/);
+  });
+
+  it("marks nobody unplaced on a fight with no board", async () => {
+    server.routes.set(`GET ${serverRunBase()}/board`, { status: 200, body: null });
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(document.querySelector("[data-slot=strip-unplaced]")).toBeNull();
+  });
+
+  it("names the conditions a chip's creature carries, and counts them on its disc", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(rowFor("Goblin Boss")).toHaveAccessibleName(/Hostile/);
+    expect(rowFor("Goblin Boss").querySelector("[data-slot=strip-conditions]")).toHaveTextContent(
+      "1",
+    );
+  });
+
+  it("adds a combatant from the strip's trailing chip", async () => {
+    await renderRunner();
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await userEvent.click(strip().getByRole("button", { name: "Add combatant" }));
+    expect(await screen.findByRole("dialog", { name: "Add a combatant" })).toBeInTheDocument();
+  });
+
   // Heights are the browser's (`pnpm -F web e2e` measures the runner);
   // what jsdom can pin is who scrolls. The window does, and only the window:
   // the runner is a document screen (no `fill`), so nothing between these
@@ -589,9 +719,9 @@ describe("the runner", () => {
 
     const sheet = screen.getByRole("region", { name: "Selected combatant" });
     const log = screen.getByRole("log", { name: "What just happened" });
-    // The sheet is the aside's first area; the drawn dice follow it, and every
-    // card the drawing leaves out follows those, in the aside's second area
-    // (`RunLayout.tsx`, which a phone splits around the map).
+    // The sheet is its own area; the drawn dice lead the next, and every card
+    // the drawing leaves out follows them there (`RunLayout.tsx`, which puts
+    // the rest beside the card from `@2xl` and a phone splits around the map).
     const area = sheet.parentElement as HTMLElement;
     expect(area.firstElementChild).toBe(sheet);
     const rest = area.nextElementSibling as HTMLElement;
@@ -604,14 +734,15 @@ describe("the runner", () => {
       expect(rest).toContainElement(kept);
 
     const classOf = (element: Element): string => element.getAttribute("class") ?? "";
-    // Nothing inside the cards scrolls on its own…
+    // Nothing inside the cards scrolls on its own — the strip's chips scroll
+    // sideways, as the drawing does, but never up and down…
     const scroller = /(^|\s)(overflow(-y)?-(auto|scroll)|max-h-\S+)(\s|$)/;
     // …and nothing from them up to the page bounds a height to hand one. The
     // frame's `min-h-screen` is it growing with the document, and `clip` is not
     // a scroll container.
     const bound =
       /(^|\s)(overflow(-y)?-(auto|scroll|hidden)|max-h-\S+|h-screen|min-h-(?!screen)\S+)(\s|$)/;
-    for (const card of [sheet, log, screen.getByRole("table", { name: "Initiative order" })]) {
+    for (const card of [sheet, log, screen.getByRole("region", { name: "Initiative" })]) {
       for (const inside of card.querySelectorAll("*"))
         expect(classOf(inside)).not.toMatch(scroller);
       for (let at: Element | null = card; at !== null; at = at.parentElement) {
@@ -710,8 +841,11 @@ describe("the runner", () => {
         conditions: ["Hostile", "Prone"],
       }),
     );
-    // The answer is merged into the fight: the row wears it without a re-read.
-    await within(rowFor("Goblin Boss")).findByText("Prone");
+    // The answer is merged into the fight: the chip wears it without a re-read.
+    await waitFor(() => expect(rowFor("Goblin Boss")).toHaveAccessibleName(/Hostile, Prone/));
+    expect(rowFor("Goblin Boss").querySelector("[data-slot=strip-conditions]")).toHaveTextContent(
+      "2",
+    );
     expect(chips.getByRole("button", { name: "Prone" })).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -1168,18 +1302,18 @@ describe("rolling initiative", () => {
   type Sent = { entries: ReadonlyArray<{ combatantId: string; initiative: number }> };
   const sentAt = (index: number): Sent => JSON.parse(initiativeWrites()[index]!.body) as Sent;
 
-  it("takes the initiative list's place, and waits for every number before round 1", async () => {
+  it("takes the initiative strip's place, and waits for every number before round 1", async () => {
     rollingWith(unrolled);
     await renderRunner();
 
     await screen.findByText("Rolling initiative · 1 player, 1 monster");
-    expect(screen.queryByRole("table", { name: "Initiative order" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Initiative order" })).toBeNull();
     expect(rollPanel().getByRole("button", { name: "Start round 1" })).toBeDisabled();
     expect(rollPanel().getByText("1 player to go · monsters not rolled")).toBeInTheDocument();
     // One way into the round, the panel's; the bar has no second one.
     expect(screen.getAllByRole("button", { name: /Start round/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reroll initiative" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "More about the order" })).toBeNull();
     expect(boxFor("Brannoc")).toHaveValue("");
     // The name opens the row on the card; nobody is up, so nobody can be made up.
     await userEvent.click(rollPanel().getByRole("button", { name: "Brannoc" }));
@@ -1320,7 +1454,7 @@ describe("rolling initiative", () => {
 
     await screen.findByText("Brannoc is up · Goblin Boss next");
     expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Initiative order" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Initiative order" })).toBeInTheDocument();
     expect((bodyOf(server, "POST", "/begin") as { requestId: string }).requestId).toMatch(/.+/);
   });
 
@@ -1332,7 +1466,7 @@ describe("rolling initiative", () => {
     await renderRunner();
     await screen.findByText("Brannoc is up · Goblin Boss next");
 
-    await userEvent.click(screen.getByRole("button", { name: "Reroll initiative" }));
+    await userEvent.click((await stripMenu()).getByRole("menuitem", { name: "Reroll initiative" }));
 
     await screen.findByText("Rolling initiative · 1 player, 1 monster");
     expect(rollPanel().getByRole("button", { name: "Start round 3" })).toBeEnabled();
@@ -1438,7 +1572,7 @@ describe.each(layouts)("the fight's tokens, on $layout", ({ wide }) => {
     await userEvent.click(token("Brannoc"));
     await waitFor(() => expect(panel().getByText("Brannoc")).toBeInTheDocument());
     expect(token("Brannoc")).toHaveAttribute("aria-pressed", "true");
-    expect(rowFor("Brannoc")).toHaveAttribute("aria-selected", "true");
+    expect(rowFor("Brannoc")).toHaveAttribute("aria-pressed", "true");
     expect(moves()).toEqual([]);
   });
 
@@ -1998,8 +2132,9 @@ describe("the canvas", () => {
     expect(content()).toContainElement(board().querySelector("[data-slot=battle-map]"));
     expect(content().style.getPropertyValue("--board-w")).toBe(`${String(24 * 64)}px`);
 
-    // Initiative, top left.
-    expect(hud("strip")).toContainElement(screen.getByRole("table", { name: "Initiative order" }));
+    // Initiative, across the top; nothing rolls initiative in the column under it.
+    expect(hud("strip")).toContainElement(screen.getByRole("list", { name: "Initiative order" }));
+    expect(document.querySelector("[data-slot=run-hud-rolling]")).toBeNull();
     // The selected creature leads the right-hand panel, the table's own cards under it.
     const sheet = screen.getByRole("region", { name: "Selected combatant" });
     expect(hud("panel").firstElementChild).toBe(sheet);
@@ -2028,7 +2163,8 @@ describe("the canvas", () => {
     expect(screen.getByRole("switch", { name: "Share" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next turn" })).toBeInTheDocument();
     // Every floating region is on the one HUD rung.
-    for (const name of ["left", "panel"]) expect(hud(name).className).toMatch(/(^|\s)z-hud(\s|$)/);
+    expect(hud("strip").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
+    for (const name of ["left", "panel"]) expect(hud(name).closest(".z-hud")).not.toBeNull();
     expect(hud("tools").parentElement?.className).toMatch(/(^|\s)z-hud(\s|$)/);
   });
 
@@ -2036,8 +2172,7 @@ describe("the canvas", () => {
     await open();
     const screenBox = document.querySelector<HTMLElement>("[data-slot=run-screen]")!;
     expect(screenBox.className).toContain("var(--chrome-height)");
-    for (const name of ["strip", "rolls", "panel"])
-      expect(hud(name).className).toMatch(/overflow-y-auto/);
+    for (const name of ["rolls", "panel"]) expect(hud(name).className).toMatch(/overflow-y-auto/);
   });
 
   it("zooms from the dock and fits the board back", async () => {
@@ -2214,14 +2349,18 @@ describe("the canvas", () => {
     expect(screen.queryByRole("region", { name: "Battle map" })).toBeNull();
   });
 
-  it("puts Roll initiative where the list stands, and keeps Start round as the one way in", async () => {
+  it("puts Roll initiative top left in the strip's place, and keeps Start round as the one way in", async () => {
     server.routes.set(`GET ${serverRunBase()}`, {
       status: 200,
       body: { ...liveRun, phase: "initiative", activeCombatantId: null },
     });
     await open();
     const roll = await screen.findByRole("region", { name: "Roll initiative" });
-    expect(hud("strip")).toContainElement(roll);
+    expect(hud("rolling")).toContainElement(roll);
+    expect(hud("left").firstElementChild).toBe(hud("rolling"));
+    // A box per row wants a column: nothing runs across the top while rolling.
+    expect(document.querySelector("[data-slot=run-hud-strip]")).toBeNull();
+    expect(hud("rolling").className).toMatch(/overflow-y-auto/);
     expect(screen.getAllByRole("button", { name: /Start round/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Next turn" })).toBeNull();
   });

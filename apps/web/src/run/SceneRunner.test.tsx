@@ -52,7 +52,7 @@ describe("a conversation", () => {
     expect(header().getByText("Social")).toBeInTheDocument();
     expect(header().getByText("Attitude: hostile · 1 check")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Next turn/ })).toBeNull();
-    expect(screen.queryByRole("table", { name: "Initiative order" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Initiative order" })).toBeNull();
     // The read-aloud attached to its encounter, and none of the drawing's
     // invented DCs by attitude.
     expect(region("Read aloud").getByText(/legs of driftwood/)).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe("a conversation", () => {
     await waitFor(() =>
       expect(server.calls.some((call) => call.pathname.endsWith("/escalate"))).toBe(true),
     );
-    await screen.findByRole("table", { name: "Initiative order" });
+    await screen.findByRole("list", { name: "Initiative order" });
     expect(header().getByText("Round 1")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "The conversation" })).toBeNull();
   });
@@ -353,6 +353,6 @@ describe("a hazard", () => {
 
 it("keeps the fight's own runner for a fight", async () => {
   await renderRunner();
-  await screen.findByRole("table", { name: "Initiative order" });
+  await screen.findByRole("list", { name: "Initiative order" });
   expect(server.calls.some((call) => call.pathname.endsWith("/scene"))).toBe(false);
 });

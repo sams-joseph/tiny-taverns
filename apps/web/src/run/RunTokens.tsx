@@ -46,7 +46,7 @@ import { type TokenNames, nameShown, percentOf, tokenState } from "./tokens";
  *
  * Below `@3xl` a square is too small to hit on purpose (a 24 × 16 board is 13px
  * squares on a phone), so the board is a picture of where everyone stands — the
- * same tokens, rings and range, with nothing to press — and the initiative list
+ * same tokens, rings and range, with nothing to press — and the initiative strip
  * is how the DM selects. The two are separate layers shown by the container
  * query rather than one layer with its pointer events switched off, so the
  * narrow one also has nothing to tab to.

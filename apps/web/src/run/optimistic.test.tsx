@@ -36,10 +36,12 @@ import { brannoc, goblinBoss, installRunServer, renderRunner, sessionEvent } fro
 
 const server = installRunServer();
 
-const rows = () => screen.getAllByRole("row");
+/** The initiative strip's chips, which are the only buttons in its order. */
+const rows = () =>
+  within(screen.getByRole("list", { name: "Initiative order" })).getAllByRole("button");
 const rowFor = (name: string): HTMLElement => {
   const found = rows().find((row) => row.textContent?.includes(name));
-  if (found === undefined) throw new Error(`no row for ${name}`);
+  if (found === undefined) throw new Error(`no chip for ${name}`);
   return found;
 };
 const logRows = () => within(screen.getByRole("log")).queryAllByRole("listitem");

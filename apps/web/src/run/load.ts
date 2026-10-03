@@ -307,6 +307,16 @@ export const upLine = (
     : `${active.displayName} is up · ${next.displayName} next`;
 };
 
+/**
+ * Whether a combatant is out of the fight, which the strip (and the board's
+ * token) draws faded and struck through: an NPC at zero hit points, which
+ * `nextTurn` skips, or a PC with three failed death saves. A PC at zero who is
+ * still making them is not out — they still get a turn
+ * (`Combatant.deathSaves`, `repo/vitals.ts`).
+ */
+export const outOfTheFight = (combatant: Combatant, hp: number): boolean =>
+  combatant.kind === "npc" ? hp === 0 : (combatant.deathSaves?.failures ?? 0) >= 3;
+
 /** The bar's line while the fight is rolling initiative: `Rolling initiative · 4 players, 7 monsters`. */
 export const rollingLine = (combatants: ReadonlyArray<Combatant>): string => {
   const party = combatants.filter((row) => row.kind === "pc").length;

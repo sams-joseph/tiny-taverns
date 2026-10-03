@@ -21,10 +21,13 @@ import { RunTokens, TokenTray } from "./RunTokens";
  * itself. A table's DM keeps the board in view while reading a stat block, and
  * a page that scrolled would carry the board away with it.
  *
- * Four regions, each a home a later piece of the redesign fills:
+ * The regions, each a home a later piece of the redesign fills:
  *
- * - **strip** — the initiative, top left: today's list (or *Roll initiative*
- *   while the fight rolls), which becomes the drawing's strip across the top.
+ * - **strip** — the initiative strip across the top while the fight takes
+ *   turns (`InitiativeStrip.tsx`); the columns start under it.
+ * - **rolling** — *Roll initiative* (`InitiativePhase.tsx`), top left, in the
+ *   strip's place while the fight rolls: a box per row needs a column, not a
+ *   chip.
  * - **panel** — the right-hand column: the selected creature's card, then the
  *   table's own cards the drawing leaves out (Hob's spends, NPCs at the table).
  * - **rolls** — bottom left: the DM's dice, the players' tray and the log.
@@ -39,27 +42,35 @@ import { RunTokens, TokenTray } from "./RunTokens";
  */
 export function RunStage({
   strip,
+  rolling,
   panel,
   rolls,
   board,
 }: {
-  readonly strip: ReactNode;
+  /** The initiative strip, across the top; `null` while the fight rolls. */
+  readonly strip: ReactNode | null;
+  /** *Roll initiative*, top left; `null` once turns are taken. */
+  readonly rolling: ReactNode | null;
   readonly panel: ReactNode;
   readonly rolls: ReactNode;
   /** The board, told which part of the stage no panel covers. */
   readonly board: (freeArea: (canvas: DOMRect) => PictureRect) => ReactNode;
 }) {
+  const top = useRef<HTMLDivElement>(null);
   const left = useRef<HTMLDivElement>(null);
   const right = useRef<HTMLDivElement>(null);
 
-  // Between the two columns, inset as far as they are from the stage's edge.
+  // Between the two columns and under the strip, inset as far as they are
+  // from the stage's edge.
   const freeArea = useCallback((canvas: DOMRect): PictureRect => {
+    const t = top.current?.getBoundingClientRect();
     const l = left.current?.getBoundingClientRect();
     const r = right.current?.getBoundingClientRect();
     const inset = l === undefined ? 0 : l.left - canvas.left;
     const x = l === undefined ? 0 : l.right - canvas.left + inset;
+    const y = t === undefined ? inset : t.bottom - canvas.top + inset;
     const end = r === undefined ? canvas.width : r.left - canvas.left - inset;
-    return { x, y: inset, width: end - x, height: canvas.height - 2 * inset };
+    return { x, y, width: end - x, height: canvas.height - inset - y };
   }, []);
 
   return (
@@ -69,32 +80,43 @@ export function RunStage({
     >
       {board(freeArea)}
       <div
-        ref={left}
-        data-slot="run-hud-left"
-        className="pointer-events-none absolute inset-y-3 left-3 z-hud flex w-aside flex-col gap-3"
+        data-slot="run-hud"
+        className="pointer-events-none absolute inset-3 z-hud flex flex-col gap-3"
       >
-        <div
-          data-slot="run-hud-strip"
-          className={cn(hudScroller, "max-h-1/2 shrink-0 rounded-card shadow-3")}
-        >
-          {strip}
-        </div>
-        <div
-          data-slot="run-hud-rolls"
-          className={cn(hudScroller, "mt-auto flex min-h-0 flex-col gap-3")}
-        >
-          {rolls}
-        </div>
-      </div>
-      <div
-        ref={right}
-        data-slot="run-hud-panel"
-        className={cn(
-          hudScroller,
-          "absolute top-3 right-3 z-hud flex max-h-[calc(100%-var(--spacing)*6)] w-aside flex-col gap-3",
+        {strip !== null && (
+          <div ref={top} data-slot="run-hud-strip" className="pointer-events-auto min-w-0 shrink-0">
+            {strip}
+          </div>
         )}
-      >
-        {panel}
+        <div className="flex min-h-0 flex-1 items-start justify-between gap-3">
+          <div
+            ref={left}
+            data-slot="run-hud-left"
+            className="flex w-aside shrink-0 flex-col gap-3 self-stretch"
+          >
+            {rolling !== null && (
+              <div
+                data-slot="run-hud-rolling"
+                className={cn(hudScroller, "max-h-1/2 shrink-0 rounded-card shadow-3")}
+              >
+                {rolling}
+              </div>
+            )}
+            <div
+              data-slot="run-hud-rolls"
+              className={cn(hudScroller, "mt-auto flex min-h-0 flex-col gap-3")}
+            >
+              {rolls}
+            </div>
+          </div>
+          <div
+            ref={right}
+            data-slot="run-hud-panel"
+            className={cn(hudScroller, "flex max-h-full w-aside shrink-0 flex-col gap-3")}
+          >
+            {panel}
+          </div>
+        </div>
       </div>
     </div>
   );

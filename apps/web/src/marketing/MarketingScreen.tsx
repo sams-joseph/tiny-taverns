@@ -145,9 +145,10 @@ function SiteHeader(): ReactNode {
  * **The kit's own note is the reason it exists**: instead of an illustration,
  * the hero shows the product. So this is the runner's row recipe rather than a
  * picture of it — the same `h-row`, the same 3px accent edge on whoever is up,
- * the same mono initiative column and the same semantic colours as
- * `run/InitiativeList.tsx`. Static, because there is no fight behind a homepage;
- * everything else about it is the real thing.
+ * the same mono initiative column and the same semantic colours the runner's
+ * vertical list had before its strip (`run/InitiativeStrip.tsx`). Static,
+ * because there is no fight behind a homepage; everything else about it is the
+ * real thing.
  */
 const HERO_ROWS: ReadonlyArray<{
   readonly initiative: string;
