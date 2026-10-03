@@ -3045,7 +3045,9 @@ describe("the DM's rolls, kept by the server", () => {
   });
 
   it("keeps the DM's rolls out of a scene's tray, and in its own dice", async () => {
-    server.routes = liveScene("social");
+    // The scene's wire, over the stub's own rolls.
+    for (const [key, answer] of liveScene("social"))
+      if (!key.endsWith("/rolls")) server.routes.set(key, answer);
     await renderRunner();
     const tray = await screen.findByRole("region", { name: "Dice tray" });
     await userEvent.click(screen.getByRole("button", { name: "Roll a d12" }));

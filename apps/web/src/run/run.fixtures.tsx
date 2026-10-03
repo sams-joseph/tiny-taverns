@@ -144,6 +144,36 @@ export const runParty = [
   },
 ];
 
+/** A DM roll as the server keeps it: no character, so `dm`. */
+export const savedDmRoll = {
+  id: "2b1f2a1e-0000-4000-8000-0000000000e1",
+  campaignId,
+  sessionId: sessionIdRaw,
+  encounterRunId: runIdRaw,
+  accountId: dmAccountId,
+  accountName: "Wren Alderby",
+  characterId: null,
+  characterName: null,
+  label: "d20",
+  notation: "1d20",
+  dice: [11],
+  kept: [11],
+  modifier: 0,
+  total: 11,
+  mode: "normal",
+  critical: null,
+  kind: "plain",
+  combatantId: null,
+  targetCombatantId: null,
+  targetAc: null,
+  outcome: null,
+  requestId: "saved-dm-roll",
+  visibility: "dm",
+  origin: "authored",
+  assistantTurnId: null,
+  ...stamps,
+};
+
 /** Everything a fight on the table answers, before a test re-aims it. */
 export const liveFight = (): Map<string, Answer> =>
   new Map<string, Answer>([
@@ -157,6 +187,9 @@ export const liveFight = (): Map<string, Answer> =>
     [`GET ${runBase}/combatants`, { status: 200, body: [brannocPlaced, goblinBoss] }],
     [`GET ${base}/party`, { status: 200, body: runParty }],
     [`GET ${base}/sessions/${sessionIdRaw}/rolls`, { status: 200, body: [] }],
+    // A wire that keeps nothing (the e2e stub) answers every DM roll with one
+    // saved d20; `installRunServer` files what was sent instead.
+    [`POST ${base}/rolls`, { status: 200, body: savedDmRoll }],
     [`GET ${base}/npcs`, { status: 200, body: [cazril] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}`, { status: 200, body: [] }],
     [`GET ${base}/npcs/-/sessions/${sessionIdRaw}/monitor`, { status: 200, body: [] }],
@@ -415,8 +448,10 @@ export const installRunServer = (): RunStubServer => {
 
   const rollsRoute = `GET ${base}/sessions/${sessionIdRaw}/rolls`;
   const createRoll = `POST ${base}/rolls`;
+  /** The write's answer while no test re-aims it: file what was sent. */
+  const filing: Answer = { status: 200 };
   const keepRolls = (routes: Map<string, Answer>) =>
-    routes.set(rollsRoute, { status: 200, body: () => [...server.rolls] });
+    routes.set(rollsRoute, { status: 200, body: () => [...server.rolls] }).set(createRoll, filing);
   /** A roll as the server files it: the DM's, on the fight, once per request. */
   const file = (payload: Record<string, unknown>): Record<string, unknown> => {
     const seen = server.rolls.find(
@@ -582,7 +617,7 @@ export const installRunServer = (): RunStubServer => {
     // while a held request is in flight answers with the new body.
     const answer = () => {
       // A roll is filed unless a test re-aimed the write.
-      if (`${method} ${pathname}` === createRoll && !server.routes.has(createRoll)) {
+      if (`${method} ${pathname}` === createRoll && server.routes.get(createRoll) === filing) {
         return new Response(JSON.stringify(file(JSON.parse(sent) as Record<string, unknown>)), {
           status: 200,
           headers: { "content-type": "application/json" },

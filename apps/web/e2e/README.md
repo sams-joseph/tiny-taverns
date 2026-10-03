@@ -51,7 +51,7 @@ The widths are 1440, 1024, 760 and 390: wide; just above Hob's inline breakpoint
 
 ## The authenticated suite
 
-Everything above runs signed in by the stand-in session against the stub. `e2e/auth/` signs in through Clerk's development instance with [`@clerk/testing`](https://clerk.com/docs/testing/playwright) against the real API server and a database of its own, and asserts through the real UI: signing in provisions an account, a DM's invitation brings a player (in a second browser context) into the Party, and signing out returns to the homepage.
+Everything above runs signed in by the stand-in session against the stub. `e2e/auth/` signs in through Clerk's development instance with [`@clerk/testing`](https://clerk.com/docs/testing/playwright) against the real API server and a database of its own, and asserts through the real UI: signing in provisions an account, a DM's invitation brings a player (in a second browser context) into the Party, signing out returns to the homepage, and the runner's DM dice are kept by the server: a reload and a second tab read the same _Rolls_ log, and the player is never answered one. A test sets up what it is not about (a night, a fight) through the API as each signed-in user (`api` in `support/fixtures.ts`).
 
 ```bash
 pnpm db:up                                  # or E2E_AUTH_DATABASE_URL=<a Postgres it may create databases on>

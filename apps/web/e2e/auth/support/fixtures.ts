@@ -54,3 +54,43 @@ export const accountName = async (page: Page): Promise<string> => {
   });
   return claimed === undefined || claimed === "" ? "Someone" : claimed;
 };
+
+/**
+ * Calls the API server as whoever `page` is signed in as, with that session's
+ * own token, for the setup a test is not about (a night, a fight). The server
+ * port is the one the config picked (`E2E_AUTH_API_PORT`); a request that is
+ * not answered with a 2xx fails the test with what the server said.
+ */
+export const api = async <A = unknown>(
+  page: Page,
+  method: "GET" | "POST" | "PATCH",
+  path: string,
+  data?: unknown,
+): Promise<A> => {
+  await clerk.loaded({ page });
+  const token = await page.evaluate(async () => (await window.Clerk.session?.getToken()) ?? "");
+  const response = await page.request.fetch(
+    `http://127.0.0.1:${String(process.env.E2E_AUTH_API_PORT)}${path}`,
+    {
+      method,
+      headers: { authorization: `Bearer ${token}` },
+      ...(data === undefined ? {} : { data }),
+    },
+  );
+  if (!response.ok())
+    throw new Error(
+      `${method} ${path} answered ${String(response.status())}: ${await response.text()}`,
+    );
+  return (await response.json()) as A;
+};
+
+/** The status a call as `page`'s account is answered with, for a refusal a test asserts. */
+export const apiStatus = async (page: Page, path: string): Promise<number> => {
+  await clerk.loaded({ page });
+  const token = await page.evaluate(async () => (await window.Clerk.session?.getToken()) ?? "");
+  const response = await page.request.get(
+    `http://127.0.0.1:${String(process.env.E2E_AUTH_API_PORT)}${path}`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  return response.status();
+};
