@@ -2642,6 +2642,31 @@ describe.each(layouts)("an attack, on $layout", ({ wide }) => {
     expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
   });
 
+  it("names the save for what Half sent, and none for a hit that drops the target", async () => {
+    server.routes.set(`GET ${serverRunBase()}/combatants`, {
+      status: 200,
+      body: [
+        brannocPlaced,
+        {
+          ...goblinBoss,
+          hpCurrent: 8,
+          position: { column: 7, row: 4 },
+          conditions: ["Concentrating"],
+        },
+      ],
+    });
+    await open();
+    await userEvent.click(actions().getByRole("button", { name: "Attack with Longsword" }));
+    // 9 damage against 8 hit points: down, and a creature at 0 owes no save.
+    seed(0.9, 0.5);
+    await pick("Goblin Boss");
+    expect(result().queryByText(/is concentrating/)).toBeNull();
+
+    await userEvent.click(result().getByRole("button", { name: "Apply half, 4 damage" }));
+    await waitFor(() => expect(damages()).toHaveLength(1));
+    expect(result().getByText("Goblin Boss is concentrating. Con save DC 10.")).toBeInTheDocument();
+  });
+
   it("puts the pick away on Cancel and on Esc in the runner, and the attacker is no target", async () => {
     await open();
     const attack = actions().getByRole("button", { name: "Attack with Longsword" });

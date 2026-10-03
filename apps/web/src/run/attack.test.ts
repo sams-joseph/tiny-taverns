@@ -3,6 +3,7 @@ import type { ActionLine } from "./actions";
 import {
   attackLine,
   attacks,
+  concentrationSave,
   damageLine,
   hitLine,
   resolveAttack,
@@ -43,7 +44,8 @@ describe("an attack", () => {
     expect(hitLine(outcome)).toBe("d20 19 +7 = 26 vs AC 17");
     expect(damageLine(outcome.damage)).toBe("1d8+4 [5] = 9 slashing");
     expect(outcome.amount).toBe(9);
-    expect(outcome.concentrationDc).toBeUndefined();
+    expect(outcome.concentrating).toBe(false);
+    expect(concentrationSave(outcome, outcome.amount, 21)).toBeUndefined();
     expect(attackLine(outcome)).toEqual({
       label: "Brannoc · Longsword → Goblin Boss",
       detail: "d20 19 +7 = 26 vs AC 17",
@@ -100,7 +102,10 @@ describe("an attack", () => {
       random: seeded(0.9, 0.99, 0.99, 0.99, 0.99),
     });
     expect(outcome.amount).toBe(24);
-    expect(outcome.concentrationDc).toBe(12);
+    expect(concentrationSave(outcome, outcome.amount, 40)).toBe(12);
+    // Half of it, 12, is DC 10; a hit that drops it to 0 owes no save.
+    expect(concentrationSave(outcome, 12, 40)).toBe(10);
+    expect(concentrationSave(outcome, outcome.amount, 24)).toBeUndefined();
   });
 
   it("leaves a target with no AC to the DM's judgement, damage rolled", () => {

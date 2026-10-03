@@ -46,8 +46,8 @@ export interface AttackOutcome {
   readonly damage: ReadonlyArray<DamageRoll>;
   /** Every damage roll together: what *Apply* sends. */
   readonly amount: number;
-  /** The save a concentrating target owes for the whole amount, when it lands. */
-  readonly concentrationDc: number | undefined;
+  /** The target held Concentrating when it was picked. */
+  readonly concentrating: boolean;
 }
 
 export const VERDICT: Record<Verdict, string> = {
@@ -144,12 +144,22 @@ export const resolveAttack = ({
     verdict,
     damage,
     amount,
-    concentrationDc:
-      amount > 0 && target.conditions.includes("Concentrating")
-        ? concentrationDc(amount)
-        : undefined,
+    concentrating: target.conditions.includes("Concentrating"),
   };
 };
+
+/**
+ * The save a concentrating target owes for `amount` taken from `hpBefore`, as
+ * the server rules it: none for nothing, and none for a hit that drops it to 0.
+ */
+export const concentrationSave = (
+  outcome: AttackOutcome,
+  amount: number,
+  hpBefore: number,
+): number | undefined =>
+  lands(outcome.verdict) && outcome.concentrating && amount > 0 && hpBefore - amount > 0
+    ? concentrationDc(amount)
+    : undefined;
 
 /** `d20 19 +7 = 26 vs AC 17`. */
 export const hitLine = (outcome: AttackOutcome): string =>

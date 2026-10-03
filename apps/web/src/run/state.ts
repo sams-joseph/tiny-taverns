@@ -146,8 +146,8 @@ export interface RunController {
    * the selected card — for the same reason as `applyRun`.
    */
   readonly applyCombatant: (row: Combatant) => void;
-  /** Positive damages, negative heals. Clamped into `[0, hpMax]` both ends. */
   /**
+   * Positive damages, negative heals. Clamped into `[0, hpMax]` both ends.
    * `critical` is an attack's natural 20: a hit on a player character already
    * at zero is then two death-save failures rather than one (`CombatantDamage`).
    */

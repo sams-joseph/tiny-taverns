@@ -170,14 +170,16 @@ const eventLines = (
             deathSaveLines(key, at, who, payload),
           )
         : event.kind === "combatant-updated"
-          ? Option.flatMap(decodeUpdated(event.payload), (payload) => {
-              const lines = conditionsLine(key, at, who, payload);
-              return lines.length === 0 ? Option.none() : Option.some(lines);
-            })
+          ? Option.map(decodeUpdated(event.payload), (payload) =>
+              conditionsLine(key, at, who, payload),
+            )
           : Option.none();
-  return Option.getOrElse(printed, () => [
-    { key, at, label: SENTENCE[event.kind](named, noun), detail: "", tone: "muted" as const },
-  ]);
+  return Option.getOrElse(
+    Option.filter(printed, (lines) => lines.length > 0),
+    () => [
+      { key, at, label: SENTENCE[event.kind](named, noun), detail: "", tone: "muted" as const },
+    ],
+  );
 };
 
 /** `Mara Voss · Brannoc Duskharrow`. */

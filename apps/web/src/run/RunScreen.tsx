@@ -36,7 +36,13 @@ import { SaveFailure } from "../ui/form";
 import { sessionNpcProposalSummaryAtom } from "../cast/load";
 import { partyAtom } from "../campaign/load";
 import { actionsOf, type ActionLine } from "./actions";
-import { attackLine, resolveAttack, rollActionLine, type AttackOutcome } from "./attack";
+import {
+  attackLine,
+  concentrationSave,
+  resolveAttack,
+  rollActionLine,
+  type AttackOutcome,
+} from "./attack";
 import { TargetBanner } from "./AttackResult";
 import { CombatantDialog, RemoveCombatantDialog } from "./CombatantDialog";
 import { CombatantPanel } from "./CombatantPanel";
@@ -700,7 +706,8 @@ export function RunScreen() {
         readonly attackerId: CombatantId;
         readonly targetId: CombatantId;
         readonly outcome: AttackOutcome;
-        readonly applied: boolean;
+        /** What was sent, and the target's hit points before it. */
+        readonly applied: { readonly amount: number; readonly hpBefore: number } | undefined;
       }
     | undefined
   >();
@@ -912,7 +919,7 @@ export function RunScreen() {
     });
     dice.log(attackLine(outcome));
     setTargeting(undefined);
-    setAttack({ attackerId: attacker.id, targetId: combatant.id, outcome, applied: false });
+    setAttack({ attackerId: attacker.id, targetId: combatant.id, outcome, applied: undefined });
   };
 
   /** A row of the order: the attack's target while one is picked, otherwise the creature the panel shows. */
@@ -937,9 +944,9 @@ export function RunScreen() {
       });
       return;
     }
-    setAttack({ ...attack, applied: true });
+    setAttack({ ...attack, applied: { amount, hpBefore: controller.hpOf(target) } });
     const landed = await damage(target, amount, attack.outcome.verdict === "critical");
-    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: false }));
+    if (!landed) setAttack((now) => (now === undefined ? now : { ...now, applied: undefined }));
   };
 
   /**
@@ -1186,6 +1193,18 @@ export function RunScreen() {
         onReroll={() => void reroll()}
       />
     ) : null;
+  // The save follows what was sent, from the hit points it was sent against;
+  // before that, the whole amount against the target as it stands.
+  const struck = state?.combatants.find((row) => row.id === attack?.targetId);
+  const result = attack && {
+    outcome: attack.outcome,
+    applied: attack.applied !== undefined,
+    concentrationDc: concentrationSave(
+      attack.outcome,
+      attack.applied?.amount ?? attack.outcome.amount,
+      attack.applied?.hpBefore ?? (struck === undefined ? 0 : controller.hpOf(struck)),
+    ),
+  };
   const card = state !== undefined && view !== undefined && (
     <CombatantPanel
       combatant={selected}
@@ -1221,7 +1240,7 @@ export function RunScreen() {
       targeting={
         picking !== undefined && picking.attackerId === selected?.id ? picking.line : undefined
       }
-      result={attack !== undefined && attack.attackerId === selected?.id ? attack : undefined}
+      result={attack !== undefined && attack.attackerId === selected?.id ? result : undefined}
       onAttack={(line) => {
         if (selected === undefined) return;
         setAttack(undefined);

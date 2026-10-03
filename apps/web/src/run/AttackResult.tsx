@@ -41,6 +41,7 @@ export function TargetBanner({
 export function AttackResultCard({
   outcome,
   applied,
+  concentrationDc,
   disabled,
   onApply,
   onDismiss,
@@ -48,6 +49,8 @@ export function AttackResultCard({
   readonly outcome: AttackOutcome;
   /** The damage was sent, whole or halved. */
   readonly applied: boolean;
+  /** The save a concentrating target owes for what was, or would be, sent. */
+  readonly concentrationDc: number | undefined;
   /** The fight is over or a dialog holds the screen. */
   readonly disabled: boolean;
   /** Half rounds down, as the SRD does. */
@@ -86,9 +89,9 @@ export function AttackResultCard({
         <span>{hitLine(outcome)}</span>
         {landed && outcome.damage.length > 0 && <span>{damageLine(outcome.damage)}</span>}
       </div>
-      {landed && outcome.concentrationDc !== undefined && (
+      {concentrationDc !== undefined && (
         <p className="mb-0 text-caption leading-snug text-magic-ink">
-          {outcome.target} is concentrating. Con save DC {outcome.concentrationDc}.
+          {outcome.target} is concentrating. Con save DC {concentrationDc}.
         </p>
       )}
       <div className="flex items-center gap-1.5">

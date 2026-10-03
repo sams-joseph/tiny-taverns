@@ -42,6 +42,19 @@ describe("the dock's lines from the night's log", () => {
     ]);
   });
 
+  it("falls back to the sentence for a hit of nothing", () => {
+    expect(
+      lines([
+        event(1, "combatant-damaged", goblinBoss.id, {
+          amount: 0,
+          hpBefore: 21,
+          hpCurrent: 21,
+          hpMax: 21,
+        }),
+      ]),
+    ).toEqual([{ label: "Goblin Boss took a hit", detail: "", total: undefined, tone: "muted" }]);
+  });
+
   it("prints a heal, and a critical hit as one", () => {
     expect(
       lines([

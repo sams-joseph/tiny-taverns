@@ -558,7 +558,13 @@ export function CombatantPanel({
   /** The line this combatant is picking a target for, if it is. */
   readonly targeting: ActionLine | undefined;
   /** This combatant's last attack, until it is dismissed or the turn moves. */
-  readonly result: { readonly outcome: AttackOutcome; readonly applied: boolean } | undefined;
+  readonly result:
+    | {
+        readonly outcome: AttackOutcome;
+        readonly applied: boolean;
+        readonly concentrationDc: number | undefined;
+      }
+    | undefined;
   /** Start picking a target for one of its lines (`attack.ts`). */
   readonly onAttack: (action: ActionLine) => void;
   /** Roll a line with no target, into the dock. */
@@ -693,6 +699,7 @@ export function CombatantPanel({
           <AttackResultCard
             outcome={result.outcome}
             applied={result.applied}
+            concentrationDc={result.concentrationDc}
             disabled={disabled}
             onApply={onApplyResult}
             onDismiss={onDismissResult}
